@@ -62,6 +62,21 @@ describe('resolution receipts', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('uses the SDK display name in the compact resolved receipt', () => {
+    render(
+      <NativeChatResolutionReceipt
+        body={{
+          ...approval,
+          title: 'Claude wants to present its implementation plan',
+          displayName: 'Present plan'
+        }}
+      />
+    )
+
+    expect(screen.getByText('Present plan')).toBeInTheDocument()
+    expect(screen.queryByText('Claude wants to present its implementation plan')).toBeNull()
+  })
+
   it('renders cancellation quietly without inventing a choice or resolver', () => {
     render(
       <NativeChatResolutionReceipt

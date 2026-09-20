@@ -17,6 +17,11 @@
  * records; every other surface says "chat session" / "terminal agent".
  */
 
+import type {
+  AgentLaunchMode,
+  AgentLaunchModeReason,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch-intent'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import {
@@ -27,31 +32,12 @@ import {
 } from '../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-export type AgentLaunchMode = 'structured' | 'terminal'
-
-export type AgentLaunchModeReason =
-  | 'user_default'
-  | 'remote_execution_host'
-  | 'reused_terminal'
-  | 'agent_without_structured_session'
-  | 'tui_launch_command'
-  | 'structured_sessions_unavailable'
-  | 'structured_support_unknown'
-  | 'wsl_execution_runtime'
-  | 'codex_on_windows'
-  | 'structured_unsupported_on_host'
-
-export type AgentLaunchModeReceipt = {
-  /** The mode the launch actually ran in. */
-  mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
-  preferred: AgentLaunchMode
-  reason: AgentLaunchModeReason
-  /** One sentence, always present, so a fallback is never silent. */
-  detail: string
-}
+// The receipt is part of the launch contract, so it is declared with the rest of it; re-exported
+// here because this module is where the decision that fills it lives.
+export type { AgentLaunchMode, AgentLaunchModeReason, AgentLaunchModeReceipt }
 
 /** What this caller calls the thing it is starting, so one decision serves every surface without
  *  a receipt reading "worker" on a phone. */
@@ -82,6 +68,10 @@ export type AgentLaunchModePlacement = {
   on?: string
   /** An existing terminal being reused. */
   terminal?: string
+  /** Which kind of workspace the launch lands in, derived by the host from the workspace it
+   *  resolved — never accepted from a caller, which would let one route around this decision.
+   *  Absent means the kind was never established, and is not read as any particular kind. */
+  workspaceKind?: WorkspaceLaunchKind
 }
 
 const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, string> = {
@@ -146,9 +136,11 @@ export function decideAgentLaunchMode(args: {
     executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // A resolved managed worktree or folder workspace is never a floating terminal. WSL is left to
-    // the executing host's own create-support probe, which reads the resolved workspace rather
-    // than guessing from a client-side project runtime.
+    // The floating workspace has nowhere to keep a session, so it is decided here rather than left
+    // to the host probe below, which cannot answer for a workspace with no record. WSL still is:
+    // the create-support probe reads the resolved workspace rather than guessing from a
+    // client-side project runtime.
+    ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
     requiresTuiLaunchCommand: hasExplicitTuiLaunchCommand(settings, agent)
   })
   if (!support.supported) {

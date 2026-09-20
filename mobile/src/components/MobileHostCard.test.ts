@@ -196,4 +196,49 @@ describe('MobileHostCard', () => {
       "Open Desk, Can't reach desktop, Update desktop Orca and sign in to connect from anywhere"
     )
   })
+
+  it('renders the verdict detail as a second line and announces it', async () => {
+    const consoleError = suppressRendererDeprecation()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileHostCard, {
+          host: {
+            id: 'desk',
+            name: 'Host 1',
+            endpoint: 'ws://192.168.1.2:6768',
+            deviceToken: 'token',
+            publicKeyB64: 'key',
+            lastConnected: 1,
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            relay: {
+              v: 1 as const,
+              directorUrl: 'https://relay-staging.onorca.dev',
+              cellUrl: 'https://c1.relay-staging.onorca.dev',
+              assignmentEpoch: 4,
+              relayHostId: 'AbCdEf0123_-xyZ9',
+              e2eeFraming: 2 as const
+            }
+          },
+          state: 'connecting',
+          verdict: {
+            kind: 'unreachable',
+            label: 'Host 1 is offline',
+            reason: 'never-connected',
+            detail: "Check it's awake, Orca is running, and you're signed in"
+          },
+          path: 'lan',
+          onPress: vi.fn(),
+          onLongPress: vi.fn(),
+          onOpenActions: vi.fn()
+        })
+      )
+    })
+    consoleError.mockRestore()
+
+    const texts = renderer.root.findAllByType('Text').map((node) => node.props.children)
+    expect(texts).toContainEqual("Check it's awake, Orca is running, and you're signed in")
+    expect(renderer.root.findAllByType('Pressable')[0]?.props.accessibilityLabel).toBe(
+      "Open Host 1, Host 1 is offline, Check it's awake, Orca is running, and you're signed in"
+    )
+  })
 })

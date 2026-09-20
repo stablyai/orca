@@ -80,7 +80,7 @@ export function SessionRowTrailingActions({
   onResumeInNewChat?: () => void
   onCopyResume?: () => void
   onCopyId: () => void
-  onCopyPath: () => void
+  onCopyPath?: () => void
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void

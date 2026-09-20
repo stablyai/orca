@@ -7,7 +7,7 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 
 export function normalizeOpenCodeFamilyEvent(
-  source: 'opencode' | 'mimo-code',
+  source: 'opencode' | 'opencode2' | 'mimo-code',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -22,7 +22,7 @@ export function normalizeOpenCodeFamilyEvent(
       ? 'working'
       : eventName === 'SessionIdle'
         ? 'done'
-        : source === 'opencode' && eventName === 'SessionStart'
+        : (source === 'opencode' || source === 'opencode2') && eventName === 'SessionStart'
           ? 'done'
           : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
             ? 'waiting'
@@ -52,6 +52,9 @@ export function normalizeOpenCodeFamilyEvent(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    sessionBoundary: source === 'opencode' && eventName === 'SessionStart' ? true : undefined
+    sessionBoundary:
+      (source === 'opencode' || source === 'opencode2') && eventName === 'SessionStart'
+        ? true
+        : undefined
   })
 }

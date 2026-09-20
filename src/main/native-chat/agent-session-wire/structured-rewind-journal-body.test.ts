@@ -16,6 +16,26 @@ describe('rewind recovery of newer durable records', () => {
       blocks: [{ type: 'text', text: '{"type":"future-block"}' }]
     })
   })
+
+  it('preserves background-task blocks across rewind recovery', () => {
+    const body = {
+      kind: 'message' as const,
+      role: 'system',
+      blocks: [
+        { type: 'text' as const, text: 'Started background command "sleep 20"' },
+        {
+          type: 'background-task' as const,
+          taskId: 'task-1',
+          kind: 'command',
+          label: 'sleep 20',
+          state: 'working'
+        }
+      ]
+    }
+
+    expect(restoreRewindJournalBody(body)).toEqual(body)
+  })
+
   it('preserves unknown state as evidence rather than inventing success or pending work', () => {
     const body = {
       kind: 'tool-call' as const,
@@ -67,6 +87,60 @@ describe('rewind recovery of newer durable records', () => {
       text: JSON.stringify(unknown)
     })
   })
+  it('keeps a known turn outcome across rewind recovery in both journal shapes', () => {
+    const turn = {
+      kind: 'turn' as const,
+      turnId: 'turn',
+      state: 'completed',
+      outcome: 'failure',
+      userItemId: 'codex:thread:turn:0',
+      startedAt: 10,
+      completedAt: 20
+    }
+    expect(restoreRewindJournalBody(turn)).toEqual(turn)
+    const status = {
+      kind: 'status' as const,
+      text: 'Claude turn completed',
+      turnLifecycle: { turnId: 'turn', state: 'interrupted', outcome: 'cancellation' }
+    }
+    expect(restoreRewindJournalBody(status)).toEqual(status)
+  })
+
+  it('drops a turn outcome from a later vocabulary but keeps the turn and its endpoints', () => {
+    // An unknown outcome costs nothing to discard, because absent already means
+    // unknown. Falling back to a status row the way an unknown STATE does would
+    // take the turn's endpoints with it, and every timing surface reads those.
+    expect(
+      restoreRewindJournalBody({
+        kind: 'turn',
+        turnId: 'turn',
+        state: 'completed',
+        outcome: 'partially-refused',
+        userItemId: 'codex:thread:turn:0',
+        startedAt: 10,
+        completedAt: 20
+      })
+    ).toEqual({
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'completed',
+      userItemId: 'codex:thread:turn:0',
+      startedAt: 10,
+      completedAt: 20
+    })
+    expect(
+      restoreRewindJournalBody({
+        kind: 'status',
+        text: 'Codex turn completed',
+        turnLifecycle: { turnId: 'turn', state: 'completed', outcome: 'partially-refused' }
+      })
+    ).toEqual({
+      kind: 'status',
+      text: 'Codex turn completed',
+      turnLifecycle: { turnId: 'turn', state: 'completed' }
+    })
+  })
+
   it('does not reject a saved recovery prefix over a newer refusal reason', () => {
     expect(
       AgentSessionRewindRecordSchema.safeParse({

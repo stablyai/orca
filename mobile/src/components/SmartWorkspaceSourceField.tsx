@@ -16,7 +16,7 @@ type Props = {
   composer: MobileComposerSource
   label: string
   disabled?: boolean
-  onOpenExternalUrl: (url: string) => Promise<unknown>
+  onOpenExternalUrl: (url: string) => void
   // Why: only the active form view may focus this field. While the source drawer
   // is open/closing this stays non-focusable so the drawer's dismiss (which
   // restores native focus back here) can't re-fire onFocus and reopen the drawer.
@@ -76,7 +76,11 @@ export function SmartWorkspaceSourceField({
               accessibilityRole="link"
               accessibilityLabel="Open selected source"
               hitSlop={6}
-              onPress={() => selection.url && void onOpenExternalUrl(selection.url).catch(() => {})}
+              onPress={() => {
+                if (selection.url) {
+                  onOpenExternalUrl(selection.url)
+                }
+              }}
             >
               <ExternalLink size={15} color={colors.textMuted} />
             </Pressable>

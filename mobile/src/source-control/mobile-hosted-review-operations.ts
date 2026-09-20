@@ -1,5 +1,16 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant, rpcResultVariants } from '../transport/rpc-operation-result-reader'
+import {
+  hostedReviewCreateFailedSchema,
+  hostedReviewCreateOkSchema,
+  hostedReviewEligibilitySchema,
+  type MobileHostedReviewCreateFailed,
+  type MobileHostedReviewCreateOk
+} from './hosted-review-reply-schema'
+
+export type MobileHostedReviewCreateReply =
+  | MobileHostedReviewCreateOk
+  | MobileHostedReviewCreateFailed
 
 /**
  * Eligibility is advisory: when the host cannot answer, mobile fails closed on its own rather
@@ -11,17 +22,25 @@ export const hostedReviewEligibilityRead = bindDeferredRpcOperation(
     method: 'hostedReview.getCreationEligibility',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('creation-eligibility')
+    read: rpcResultVariant('creation-eligibility', hostedReviewEligibilitySchema)
   })
 )
 
-/** Creation answers in-band too: an accepted reply can carry `ok: false` plus an existing review. */
+/**
+ * Creation answers in-band too: an accepted reply can carry `ok: false` plus an existing review.
+ * Two variants rather than one schema because the host's own result is a discriminated union and
+ * the arms require different members; the success arm is declared first so a reply carrying both
+ * `ok: true` and a stray `error` reads as the success it is.
+ */
 export const hostedReviewCreateRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'hostedReview.create',
     method: 'hostedReview.create',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('create-result')
+    read: rpcResultVariants<'create-succeeded' | 'create-refused', MobileHostedReviewCreateReply>([
+      rpcResultVariant('create-succeeded', hostedReviewCreateOkSchema),
+      rpcResultVariant('create-refused', hostedReviewCreateFailedSchema)
+    ])
   })
 )

@@ -1,9 +1,21 @@
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeHostStatusSnapshot
+} from '../../../shared/runtime-host-status'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
 
 type RuntimeMirrorStatus = {
-  status: { runtimeId: string } | null
+  status: RuntimeStatus | null
+  remoteControl?: RuntimeStatus['remoteControl'] | null
+  snapshot?: RuntimeHostStatusSnapshot
   connectionGeneration?: number
+  hostContactEpoch?: number
 }
 
 type RuntimeMirrorEnvironment = {
@@ -17,6 +29,7 @@ export type RuntimeSessionMirrorTarget = {
   runtimeId: string
   connectionGeneration: number
   pairingRevision: number
+  hostContactEpoch: number
 }
 
 export type RuntimeSessionMirrorTargetState = Omit<
@@ -35,8 +48,17 @@ export function getReachableRuntimeSessionMirrorTargets(
   )
   const targets: RuntimeSessionMirrorTarget[] = []
   for (const environmentId of getRuntimeSessionMirrorEnvironmentIds(state)) {
-    const status = state.runtimeStatusByEnvironmentId?.get(environmentId)
-    if (!status?.status) {
+    const entry = state.runtimeStatusByEnvironmentId?.get(environmentId)
+    // Why the shared verdict and not `entry.status`: a still-ready transport whose probe
+    // came back unverifiable nulls `entry.status` while the host keeps delivering. Reading
+    // that as "gone" tore the mirror down mid-flow, disagreeing with every host surface.
+    // Dropping the mirror is destructive, so only the one exit verdict earns it —
+    // 'checking' and 'reconnecting' are unverifiable (docs/reference/ssh-execution-boundary.md).
+    if (isDisconnectedRuntimeHostState(runtimeHostConnectionStateForEntry(entry))) {
+      continue
+    }
+    const runtimeId = lastVerifiedRuntimeStatus(entry)?.runtimeId
+    if (!runtimeId) {
       continue
     }
     const environment = environmentById.get(environmentId)
@@ -45,9 +67,10 @@ export function getReachableRuntimeSessionMirrorTargets(
     }
     targets.push({
       environmentId,
-      runtimeId: status.status.runtimeId,
-      connectionGeneration: status.connectionGeneration ?? 0,
-      pairingRevision: environment.pairingRevision ?? environment.createdAt
+      runtimeId,
+      connectionGeneration: entry?.connectionGeneration ?? 0,
+      pairingRevision: environment.pairingRevision ?? environment.createdAt,
+      hostContactEpoch: entry?.hostContactEpoch ?? 0
     })
   }
   return targets

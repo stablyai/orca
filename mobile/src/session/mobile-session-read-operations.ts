@@ -1,13 +1,21 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
+  detectedAgentsSchema,
+  markdownTabDocumentSchema,
+  runtimeRepoListSchema,
+  sessionForwardedReplySchema,
+  sessionTerminalInventorySchema,
+  sessionWorktreeRecordSchema,
+  terminalQuickCommandsSchema,
+  workspaceFilePathsSchema
+} from './session-read-reply-schema'
 
 // What the session screen reads: the terminal inventory, the repo list two screens resolve a
 // workspace's connection through, the session tab snapshot, native chat's workspace paths and
 // older-history page, the quick-command list, the whole `worktree.show` record and a markdown
-// tab's document.
+// tab's document. Each schema lives in session-read-reply-schema.ts with the consumer line behind
+// every requirement.
 
 /**
  * The terminal inventory. A refused list leaves the strip exactly as it was — the screen treats it
@@ -20,13 +28,13 @@ export const sessionTerminalListRead = bindDeferredRpcOperation(
     method: 'terminal.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-inventory')
+    read: rpcResultVariant('terminal-inventory', sessionTerminalInventorySchema)
   })
 )
 
 export type MobileRuntimeRepoSummary = { id: string; connectionId?: string | null }
 
-const repoListReader = rpcUncheckedMemberReader('runtime-repo-list', 'repos')
+const repoListReader = rpcResultVariant('runtime-repo-list', runtimeRepoListSchema)
 
 /**
  * The repo list. Call sites disagree about a refusal, so each of the two operations below declares
@@ -74,7 +82,7 @@ export const preflightDetectAgentsRead = bindDeferredRpcOperation(
     method: 'preflight.detectAgents',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('detected-agents')
+    read: rpcResultVariant('detected-agents', detectedAgentsSchema)
   })
 )
 
@@ -84,7 +92,7 @@ export const preflightDetectRemoteAgentsRead = bindDeferredRpcOperation(
     method: 'preflight.detectRemoteAgents',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('detected-agents')
+    read: rpcResultVariant('detected-agents', detectedAgentsSchema)
   })
 )
 
@@ -99,14 +107,14 @@ export const sessionTabsListRead = bindDeferredRpcOperation(
     method: 'session.tabs.list',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('session-tabs-snapshot')
+    read: rpcResultVariant('session-tabs-snapshot', sessionForwardedReplySchema)
   })
 )
 
 /**
- * The two ways native chat gets workspace paths. Both project the same `files[].relativePath` list,
- * and both refuse by leaving the suggestion list alone — the search's `method_not_found` is read
- * raw beforehand, because that code is what makes the composer fall back to the full inventory.
+ * The two ways native chat gets workspace paths. Both answer the same `relativePath` list, and
+ * both refuse by leaving the suggestion list alone — the search's `method_not_found` is read raw
+ * beforehand, because that code is what makes the composer fall back to the full inventory.
  */
 export const nativeChatFileSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -114,7 +122,7 @@ export const nativeChatFileSearchRead = bindDeferredRpcOperation(
     method: 'files.searchPaths',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('workspace-files', 'files')
+    read: rpcResultVariant('workspace-files', workspaceFilePathsSchema)
   })
 )
 
@@ -124,7 +132,7 @@ export const nativeChatFileInventoryRead = bindDeferredRpcOperation(
     method: 'files.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('workspace-files', 'files')
+    read: rpcResultVariant('workspace-files', workspaceFilePathsSchema)
   })
 )
 
@@ -145,12 +153,15 @@ export const nativeChatSessionPageRead = bindDeferredRpcOperation(
     method: 'nativeChat.readSession',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('native-chat-session-page')
+    read: rpcResultVariant('native-chat-session-page', sessionForwardedReplySchema)
   })
 )
 
 /** Shared with the save leg in the write module: one list read, so neither leg can adopt `[]`. */
-export const quickCommandsReader = rpcUncheckedPayloadReader('terminal-quick-commands')
+export const quickCommandsReader = rpcResultVariant(
+  'terminal-quick-commands',
+  terminalQuickCommandsSchema
+)
 
 /**
  * The quick-command list, read the same way on load and on save: the host re-normalizes and returns
@@ -187,7 +198,7 @@ export const sessionWorktreeRecordRead = bindDeferredRpcOperation(
     method: 'worktree.show',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('worktree-record', 'worktree')
+    read: rpcResultVariant('worktree-record', sessionWorktreeRecordSchema)
   })
 )
 
@@ -202,6 +213,6 @@ export const markdownTabRead = bindDeferredRpcOperation(
     method: 'markdown.readTab',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('markdown-tab-doc')
+    read: rpcResultVariant('markdown-tab-doc', markdownTabDocumentSchema)
   })
 )

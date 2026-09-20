@@ -17,6 +17,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { translate } from '@/i18n/i18n'
+import { buildPdfJsDocumentOptions } from './pdf-js-document-options'
 import {
   applyPdfScalePreference,
   stepPdfScalePreference,
@@ -240,7 +241,7 @@ export default function PdfViewer({
     // input listener above can see.
     eventBus.on('find', markUserMoved)
 
-    const loadingTask = pdfjsLib.getDocument({ data: bytes })
+    const loadingTask = pdfjsLib.getDocument(buildPdfJsDocumentOptions(bytes, document.baseURI))
 
     loadingTask.promise
       .then((doc) => {

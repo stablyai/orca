@@ -3,9 +3,9 @@
   "family": "components.codex-reset-capability",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "88570b9d2376863c7f88d7ed8c745a5fb771deddbc7409f8944fa861dd4bdce9",
   "platform": "darwin",
@@ -16,8 +16,9 @@
     "578b9d38ecc7": {
       "supported": true
     },
-    "6a0093a8288b": {
+    "83aeff886309": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -55,10 +56,10 @@
       "settledAt": 0,
       "value": true
     },
-    "852980e2efc0": {
+    "d08f74d65ee6": {
       "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -67,8 +68,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["6a0093a8288b"],
-          "payloads": ["852980e2efc0"],
+          "sender": ["83aeff886309"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "84e5ca07cb7a"
           },

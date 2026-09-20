@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
 import { sha256 } from '@noble/hashes/sha256'
+import * as lowlight from 'lowlight'
 import * as zod from 'zod'
 import {
   nativeStoreModule,
@@ -18,7 +19,8 @@ import { reactNativeScreenMembers, screenNativeSubstitutes } from './screen-nati
  * pairing modules: each builds a `defaultDependencies` object at module scope, so merely
  * *referencing* `Platform.OS` or a storage-backed loader throws before an adapter can override it.
  *
- * So the table separates reference from use. `react` and `zod` are the real libraries — pure, and
+ * So the table separates reference from use. `react`, `zod` and `lowlight` are the real libraries —
+ * pure, and
  * React additionally has to be the one instance the test renderer drives, which is also why
  * `react/jsx-runtime` is the real module: the automatic runtime a screen compiles to must build
  * elements for that instance. `@noble/hashes` is the same pure-JS digest the product would run on a
@@ -67,6 +69,9 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
     ['react', React],
     ['react/jsx-runtime', ReactJsxRuntime],
     ['zod', zod],
+    // Real, because a stand-in would fabricate the tokens the diff preview publishes; the branch
+    // diff's success arm highlights before it ever reaches state.
+    ['lowlight', lowlight],
     ['@noble/hashes/sha256', partialNativeModule('@noble/hashes/sha256', { sha256 })],
     [
       'expo-crypto',

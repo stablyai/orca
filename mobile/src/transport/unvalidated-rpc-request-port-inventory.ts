@@ -25,6 +25,16 @@ export type UnvalidatedRpcRequestPortEntry = {
 
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
+  // Forwards raw requests as a transport, reads no reply. Not a call site: it picks no method and
+  // decides no acceptance — the page names the method and runs the typed operation over it, exactly
+  // as a native screen does over a socket client. Split out of `bridge-host.ts`, which now holds
+  // none of them.
+  { file: 'src/mobile-web-shell/bridge-host-requests.ts', references: 3 },
+  // The far end of that transport: it offers the port to the page and posts what it is handed,
+  // reading neither the method nor the reply.
+  { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
+  // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
+  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.
@@ -45,8 +55,14 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   { file: 'src/transport/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
   { file: 'src/test-support/rpc-recording/recording-scenario.ts', references: 1 },
-  // Scripts the port for the recording oracle, over the real tracker and logical client.
-  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 5 }
+  // Scripts the port for the recording oracle, over the real tracker and logical client. Seven and
+  // not five because the oracle now records through a transport under test as well as without one,
+  // which needs one layer between the operation's call and the logical client: the wrapper's own
+  // `sendRequest` and its forward. The name each physical send is filed under has to be taken in
+  // that layer, because it is the only one that runs exactly once per logical call — below it the
+  // logical client replays a pending request through a fresh physical client after a cutover, and
+  // above it a wrapper that forwards asynchronously has already been passed the next call.
+  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 7 }
 ]
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
@@ -55,11 +71,12 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // Holdout behind two gates. The first is the mount: the screen reads
   // `expo-router.useFocusEffect` and `react-native.ScrollView`, neither is a substituted member, so
   // the trap refuses before any effect runs. Substituting exactly those two clears it and exposes
-  // the second gate — the mount effect that opens `accounts.subscribe`, which the request-only
-  // runner refuses, leaving `status.get` as the only send and taking the tree with it. So the
-  // refresh control and the account rows carrying `accounts.list` and the three `accounts.select*`
-  // methods never exist to be driven. Subscriptions are a later step, and the two members are left
-  // out here because the engine gains `useFocusEffect` on its own track.
+  // the second gate — the mount effect opens `accounts.subscribe`, and no scenario has been written
+  // for that stream, so `status.get` is the only send driven today and the refresh control and the
+  // account rows carrying `accounts.list` and the three `accounts.select*` methods never exist to be
+  // driven. The runner itself is no longer the blocker: `ScenarioStep` carries `frame`, and
+  // `notifications.desktop-stream` is a recorded stream family. The two members are left out here
+  // because the engine gains `useFocusEffect` on its own track.
   { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
 
   // app/ — Expo route screens
@@ -109,22 +126,22 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // the repo list through the new-tab operation. Step 6 also took the two requests that share an
   // effect with a subscribe: the header's live title (worktree.show-record-or-skip) and native
   // chat's older-history page (nativeChat.read-session-page-or-skip), both in
-  // mobile-session-read-operations.ts. Every holdout below opens or rides a subscription the
-  // recorder has no substitute for, or takes its method as a parameter.
+  // mobile-session-read-operations.ts. Step 6's second migration took the last three hooks that
+  // were listed here as blocked on a WebView-ref substitute: none of them imports the terminal
+  // WebView, and all three sent with no ref at all. The startup effect's two `worktree.activate`
+  // sends now reuse host-screen's `worktreeActivate`, and the New Tab create and the terminal
+  // menu's display-mode toggle go through session.tabs-create-terminal and
+  // terminal.set-display-mode-or-skip in mobile-session-write-operations.ts.
   // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
   // result type, and five call sites across two hooks pass their own, plus one inside this module's
   // own mutation wrapper; an operation fixes the method at definition time, so migrating it is a
   // restructure of those callers rather than of this send.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
-  // Holdout: unrecorded site, record-first rule. The startup effect drives 36 members of the
-  // session model including the terminal subscription lifecycle, which is a later step.
-  { file: 'src/session/use-mobile-session-startup.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. The create path subscribes to the terminal it
-  // makes, and the request-only runner refuses the subscription.
-  { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. The display-mode write is gated on an open
-  // terminal subscription, which is a later step.
-  { file: 'src/session/use-mobile-session-terminal-stream-display.ts', references: 1 },
+  // Holdout: the prompt `terminal.send` the create drops into the terminal it just made. Recorded
+  // (matrix-session.create-terminal-terminal.send-1), but it is the only `terminal.send` caller
+  // that falls back to its own copy when the host refuses with an empty message, so no existing
+  // operation carries its acceptance and inventing one was out of that migration's scope.
+  { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 1 },
 
   // src/source-control/ — one dynamic dispatcher left; the other 13 files migrated in step 4.
   // Its single reference multiplexes git.commit, git.status, git.upstreamStatus, git.fetch,

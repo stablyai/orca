@@ -1,11 +1,10 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import {
   hasExplicitTuiLaunchCommand,
   type AgentLaunchRoutingInput
@@ -57,12 +56,7 @@ export type AgentLaunchRouteArgs = {
   initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
-export function workspaceKindForWorktreeId(worktreeId: string): ProspectiveWorkspaceKind {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return 'floating'
-  }
-  return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
-}
+export { workspaceKindForWorktreeId }
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {

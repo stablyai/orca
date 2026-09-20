@@ -1,8 +1,22 @@
+import { z } from 'zod'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  agentLaunchCreateReceiptSchema,
+  worktreeCreateReceiptSchema,
+  worktreeHostedBaseSchema
+} from './workspace-create-reply-schema'
+import { taskRuntimeStatusSchema } from './task-runtime-reply-schema'
 
-// Creating a workspace from a task. Every reply here is one the call site only re-typed, so the
-// readers are unchecked: moving a shape check in would be a validation change, not a migration.
+// Creating a workspace from a task. Checked against workspace-create-reply-schema.ts; the
+// create-time status probe reads through the Tasks screen's own status schema, because the two
+// operations differ in acceptance and not in what the host sends. The replay-required launch keeps
+// the shared `isAgentLaunchResult` guard it shipped with rather than the receipt schema beside it:
+// a replayed receipt is the host's own record, so it is held to the full shared contract.
 
 /**
  * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
@@ -16,7 +30,32 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
     method: 'worktree.create',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('created-worktree')
+    read: rpcResultVariant('created-worktree', worktreeCreateReceiptSchema)
+  })
+)
+
+/**
+ * agent.launch carrying a create payload: the host settles whether the agent lands in a structured
+ * session or a terminal. Same reply discipline as worktreeCreateRun, and for the same reason — the
+ * two share one clientMutationId, so the retry loop must see an unlost reply either way.
+ */
+export const agentLaunchRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch',
+    method: 'agent.launch',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', agentLaunchCreateReceiptSchema)
+  })
+)
+
+export const agentLaunchReplayRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch-replay',
+    method: 'agent.launchReplay',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', z.custom<AgentLaunchResult>(isAgentLaunchResult))
   })
 )
 
@@ -30,7 +69,7 @@ export const worktreePrBaseResolve = bindDeferredRpcOperation(
     method: 'worktree.resolvePrBase',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('pr-start-point')
+    read: rpcResultVariant('pr-start-point', worktreeHostedBaseSchema)
   })
 )
 
@@ -41,7 +80,7 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
     method: 'worktree.resolveMrBase',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('mr-start-point')
+    read: rpcResultVariant('mr-start-point', worktreeHostedBaseSchema)
   })
 )
 
@@ -51,7 +90,7 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
  * Separately named because the callers disagree about what a refused status means: the
  * Tasks screen cannot hydrate without it and surfaces the host's message (`taskRuntimeStatusRead`),
  * while create-time capability probing degrades to "no capabilities" and creates anyway, so here a
- * refusal is a skip. One reader serves both — the payload is unchecked in each.
+ * refusal is a skip. One reader serves both, and it is now the same checked schema in each.
  */
 export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -59,6 +98,6 @@ export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
     method: 'status.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('runtime-status')
+    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
   })
 )

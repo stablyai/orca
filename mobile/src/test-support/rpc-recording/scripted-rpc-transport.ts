@@ -10,10 +10,27 @@ import {
   observeSettlement,
   type Settlement
 } from './recording-values'
+import { createWriteOrdinal, type WriteOrdinal } from './write-ordinal'
 import type { Rejection } from './recording-scenario'
 
 /** What a product stream listener threw on one delivered frame. */
 type FrameListenerCrash = { readonly error: unknown }
+
+/** Named once so the two layers of the seam spell the operation's own call the same way. */
+type SendRequestArgs = Parameters<RpcClient['sendRequest']>
+
+/**
+ * Puts another transport between the operation being recorded and this one. The recorder's own
+ * instrumentation stays underneath, so the wrapped client is a transport under test rather than a
+ * substitute for this one: `requests`, `payloads` and the scripted replies are all still observed
+ * here, and a golden recorded through a wrapper is comparable to the one recorded without it.
+ *
+ * Declared as a function rather than as an import of the thing that uses it. The page bridge lives
+ * in `mobile/src/mobile-web-shell/`, which is inside the recorder's own fence, so the engine naming
+ * it would put a product module in `recorderSha256`; `rpc-recording-through-bridge.test.ts` builds
+ * the pair and hands it in instead.
+ */
+export type ScriptedClientWrapper = (client: RpcClient) => RpcClient
 
 /** The one device identity every recorded frame carries; nothing here reads a keychain. */
 const DEVICE_TOKEN = 'recording-device'
@@ -21,10 +38,11 @@ const DEVICE_TOKEN = 'recording-device'
 export class ScriptedRpcTransport {
   readonly requests: {
     name: string
+    ordinal: number
     args: ReturnType<typeof captureArguments>
     settlement: Settlement
   }[] = []
-  readonly payloads: { name: string; json: string; sent: number }[] = []
+  readonly payloads: { name: string; ordinal: number; json: string }[] = []
   readonly client: RpcClient
   readonly logical
   private counts = new Map<string, number>()
@@ -34,7 +52,22 @@ export class ScriptedRpcTransport {
     string,
     { id: string; params: unknown; deliver: (response: RpcResponse) => boolean }
   >()
+  private readonly registries: RpcClientStreamRegistry[] = []
+  /**
+   * Wire id to the name of the last payload the registry published under it. Every frame it sends
+   * lands here, unsubscribes included, because `registeredStreams()` only ever looks up an id the
+   * registry still holds and an unsubscribed id is not one of those.
+   */
+  private readonly streamPayloads = new Map<string, string>()
   private activeName = ''
+  /**
+   * Logical request names waiting for the physical send that will carry them. A queue rather than
+   * one slot because a wrapped transport may forward a send asynchronously, and two sends issued in
+   * one turn would overwrite a slot before either reached the wire. Exactly one name is pushed per
+   * logical `sendRequest` and exactly one is taken by the physical call it wraps, in the order the
+   * operation made them.
+   */
+  private names: string[] = []
   private opening = false
   private listenerCrash: FrameListenerCrash | null = null
   private frameCount = 0
@@ -64,23 +97,54 @@ export class ScriptedRpcTransport {
   })
   private wireNames: string[] = []
 
-  /** `now` is the recording scheduler's virtual clock; every settlement is stamped from it. */
-  constructor(private readonly now: () => number = () => 0) {
+  /**
+   * `now` is the recording scheduler's virtual clock; every settlement is stamped from it.
+   * `nextWriteOrdinal` is the recording's one write counter, shared with its effects.
+   * `wrapClient` puts a transport under test between the operation and this one; see its type.
+   */
+  constructor(
+    private readonly now: () => number = () => 0,
+    private readonly nextWriteOrdinal: WriteOrdinal = createWriteOrdinal(),
+    wrapClient: ScriptedClientWrapper = (client) => client
+  ) {
     const session = this.session()
     this.logical = createStableLogicalRpcClient(session, 'lan')
-    this.client = {
+    // The sandwich the seam is: the recorder observes the operation's own call on the outside, the
+    // wrapper carries it, and the inside hands it to the logical client with its name attached.
+    const inner = wrapClient({
       ...this.logical,
-      sendRequest: (...args: Parameters<RpcClient['sendRequest']>) => {
-        const name = this.occurrence(args[0])
+      sendRequest: (...args: SendRequestArgs) => {
+        // Taken here rather than above the wrapper so `session()` still reads exactly one name per
+        // physical send: a wrapper that forwards on a microtask arrives after the next logical call
+        // has been made, and one slot would hand both sends the second name. Both ways of getting
+        // that wrong throw rather than guess: a wrapper that invents a send finds the queue empty,
+        // and one that swallows a send leaves a name whose method is not the one now on the wire.
+        const name = this.names.shift() ?? '(no logical request)'
+        if (name.slice(0, name.lastIndexOf('#')) !== args[0]) {
+          throw new Error(`A physical send of ${args[0]} cannot take the name ${name}`)
+        }
         this.activeName = name
+        return this.logical.sendRequest(...args)
+      }
+    })
+    this.client = {
+      ...inner,
+      // Outermost on purpose. `ordinal` orders this call against the recording's device writes and
+      // physical payloads, and the operation makes it at the same moment either way; stamping it
+      // under the wrapper would time the wrapper's forwarded send, an event the unwrapped recording
+      // has no counterpart for, and every send would read one write late.
+      sendRequest: (...args: SendRequestArgs) => {
+        const name = this.occurrence(args[0])
+        this.names.push(name)
         const request = {
           name,
+          ordinal: this.nextWriteOrdinal(),
           args: captureArguments(args),
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pending settlement has no settledAt yet.
           settlement: { status: 'pending', startedAt: this.now() } as Settlement
         }
         this.requests.push(request)
-        const promise = this.logical.sendRequest(...args)
+        const promise = inner.sendRequest(...args)
         observeSettlement(promise, this.now, (state) => {
           request.settlement = state
         })
@@ -94,7 +158,7 @@ export class ScriptedRpcTransport {
     // because a logical request outlives a cutover, a stream does not. Byte-neutral either way — the
     // re-send after a cutover comes from the logical client's own replay — but it keeps a frame
     // routed through the session that published its subscribe.
-    const streams = new RpcClientStreamRegistry({
+    const streams: RpcClientStreamRegistry = new RpcClientStreamRegistry({
       nextId: () => this.nextFrameId(),
       deviceToken: DEVICE_TOKEN,
       getState: () => this.state,
@@ -112,10 +176,15 @@ export class ScriptedRpcTransport {
             deliver: (response) => streams.handleResponse(response)
           })
         }
+        // Outside the `opening` guard on purpose: a replay after a cutover re-sends an
+        // already-registered id under a fresh occurrence, so the latest payload is the one a
+        // teardown observation should name.
+        this.streamPayloads.set(payload.id, name)
         this.publish(name, value)
         return true
       }
     })
+    this.registries.push(streams)
     return {
       sendRequest: (...args) => {
         const name = this.activeName
@@ -161,6 +230,38 @@ export class ScriptedRpcTransport {
   }
 
   /**
+   * Every stream each session's registry still holds, in registration order, named by the subscribe
+   * payload it was opened on. Read off the registry's own map rather than mirrored as the recorder
+   * watches subscribes and frames go by: the leak this exists to observe is precisely a divergence
+   * between what the product believes it closed and what the registry still holds, and a mirror
+   * would reproduce the product's bookkeeping instead of observing it.
+   */
+  registeredStreams(): { method: string; payload: string | null; cancelled: boolean }[] {
+    return this.registries.flatMap((registry) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is checked on the next line, and the registry is the one this transport constructed.
+      const streams = (registry as unknown as { streams?: unknown }).streams
+      if (!(streams instanceof Map)) {
+        throw new Error('RpcClientStreamRegistry no longer holds its open streams in `streams`')
+      }
+      return [...streams].map(
+        ([id, stream]: [string, { method?: unknown; cancelled?: unknown }]) => {
+          if (typeof stream.method !== 'string') {
+            throw new Error(`Registered stream ${id} has no method`)
+          }
+          // A cancelled record is the product having closed the stream and the registry holding it
+          // until the subscription id it needs to unsubscribe with arrives; only an uncancelled one
+          // is a cleanup that never ran.
+          return {
+            method: stream.method,
+            payload: this.streamPayloads.get(id) ?? null,
+            cancelled: stream.cancelled === true
+          }
+        }
+      )
+    })
+  }
+
+  /**
    * The product's stream listener, wrapped so `frame` can tell a dead listener from a dead registry.
    * The throw is stashed and rethrown unchanged: the registry has to see it the way a device's
    * message handler does, so what it skips after a listener dies is recorded rather than invented.
@@ -189,10 +290,7 @@ export class ScriptedRpcTransport {
   }
 
   private publish(name: string, value: unknown): void {
-    // Why the send count: `payloads` and `requests` are independent lists, and a subscribe publishes
-    // synchronously while a request first waits for connected — so swapping the two in product
-    // source moves neither list. Stamping the count at write time makes that swap a golden diff.
-    this.payloads.push({ name, json: JSON.stringify(value), sent: this.requests.length })
+    this.payloads.push({ name, ordinal: this.nextWriteOrdinal(), json: JSON.stringify(value) })
   }
 
   /**

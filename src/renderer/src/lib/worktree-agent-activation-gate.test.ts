@@ -415,15 +415,49 @@ describe('worktree agent activation gate', () => {
     })
   })
 
+  it.each(['present', 'unknown'] as const)(
+    'does not resume OMP when a surfaced %s agent lacks conversation ownership',
+    async (agentOwnership) => {
+      const record = {
+        ...sleepingRecord('old-tab', DEAD_LEAF_ID, 'omp-session'),
+        agent: 'omp' as const
+      }
+      const ptyId = `${WORKTREE_ID}@@current-omp`
+      const { deps, resume, createTab } = testDeps({
+        sessions: [{ ...listed(ptyId), title: 'OMP', agentOwnership }],
+        sleeping: [record],
+        surfaceOwners: new Map([
+          [
+            ptyId,
+            {
+              ptyId,
+              tabId: 'current-tab',
+              paneKey: `current-tab:${LIVE_LEAF_ID}`
+            }
+          ]
+        ])
+      })
+      seedExistingSurface(deps.getState(), {
+        tabId: 'current-tab',
+        leafId: LIVE_LEAF_ID,
+        boundPtyId: ptyId
+      })
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
+      expect(resume).not.toHaveBeenCalled()
+      expect(createTab).not.toHaveBeenCalled()
+      expect(deps.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toEqual(record)
+    }
+  )
+
   it('does not use an ambiguous tab binding as a live session claim', async () => {
     const live = sleepingRecord('tab-live', LIVE_LEAF_ID, 'live-session')
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, resume } = testDeps({ sessions: [listed(livePtyId)], sleeping: [live] })
     deps.getState().ptyIdsByTabId['tab-live'] = [livePtyId, `${WORKTREE_ID}@@other-agent`]
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('resumed')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
-    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
+    expect(resume).not.toHaveBeenCalled()
   })
 
   it('blocks when a structured TUI owner is absent from live inventory', async () => {

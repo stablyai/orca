@@ -117,7 +117,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
-    now
+    now,
+    (fileId) => state.editorDrafts?.[fileId] !== undefined
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,

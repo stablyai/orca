@@ -42,6 +42,7 @@ import {
   resolveDefaultBaseRefWithLocalGit
 } from '../git/repo'
 import { getBranchConflictKindViaExec } from '../git/repo-branch-conflict'
+import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import {
@@ -1990,7 +1991,7 @@ export async function createRemoteWorktree(
   }
   if (!remotePathResolved) {
     if (lastBranchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }
@@ -2658,12 +2659,12 @@ async function performLocalWorktreeCreate(
     // narrowing does not reach the message.
     const existingReviewNumber = lastExistingReviewNumber
     if (existingReviewNumber !== null) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already has PR #${String(existingReviewNumber)}. Pick a different ${branchConflictSubject}.`
       )
     }
     if (lastBranchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
       )
     }

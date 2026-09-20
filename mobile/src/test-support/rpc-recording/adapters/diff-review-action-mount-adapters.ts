@@ -142,6 +142,9 @@ export function diffReviewActionMountAdapters(
             if (name === 'stage-reviewed') {
               return interactions.stageReviewedFiles()
             }
+            if (name === 'open-send-sheet') {
+              return interactions.openSendSheet()
+            }
             if (name === 'open-in-session') {
               return interactions.openInSession()
             }

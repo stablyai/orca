@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
 
-type Props = {
+export type MermaidDiagramProps = {
   source: string
   base: number
 }
@@ -18,7 +18,7 @@ type Props = {
 // memo: both props are primitives; without it every mounted diagram re-renders
 // per frame during pinch-to-zoom (textScale updates), marshalling the full HTML
 // string across the Fabric boundary each time.
-export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Props) {
+export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
   const html = useMemo(() => buildHtml(source), [source])
@@ -65,7 +65,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Pro
   )
 })
 
-function MermaidFallback({ source, base }: Props) {
+function MermaidFallback({ source, base }: MermaidDiagramProps) {
   return (
     <View style={styles.frame}>
       <View style={styles.label}>

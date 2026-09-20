@@ -8,11 +8,11 @@ export type BrowserPageParams = { worktree: string; page: string }
  * options rather than choosing them, so the page guard, the busy flag and the 15 s default live
  * here for every command instead of once per call site.
  */
-export type BrowserPageCommandSend = (
+export type BrowserPageCommandSend<Value = unknown> = (
   client: RpcClient,
   base: BrowserPageParams,
   options: SendRequestOptions
-) => Promise<unknown>
+) => Promise<Value>
 
 type BrowserRequestArgs = {
   busyRef: { current: boolean }
@@ -34,11 +34,15 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
     }
   }, [pageId, worktreeId])
 
+  // Generic in the command's own value so a checked reply reaches its caller as what the reader
+  // decoded; a refused or failed command is the `null` every call site already tests for.
   const sendBrowserRequest = useCallback(
-    async (
-      send: BrowserPageCommandSend,
+    // A named function expression rather than a generic arrow: the recorder's module loader
+    // transpiles product sources with the JSX runtime on, where `<Value>` parses as an element.
+    async function sendBrowserCommand<Value>(
+      send: BrowserPageCommandSend<Value>,
       opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}
-    ): Promise<unknown | null> => {
+    ): Promise<Value | null> {
       const base = pageParams()
       if (!client || !base) {
         return null

@@ -1,6 +1,6 @@
 import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { parseAgentSessionFile, parserPublishesMessages } from './session-scanner-agent-parser'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 import {
@@ -8,6 +8,7 @@ import {
   type SessionParseResumePoint
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
+import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
 
 const NEWLINE_BYTE = 0x0a
 
@@ -135,7 +136,13 @@ export async function readResumableTranscript(args: {
         byteOffset: readResult.consumedThrough,
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes,
-        channel
+        channel,
+        // An append carries the earlier read's drops forward; a whole-file
+        // re-read starts from nothing, because it re-visits those records.
+        skippedRecords: mergeSkippedTranscriptRecords(
+          canResume ? resume.skippedRecords : [],
+          readResult.skippedRecords
+        )
       }
     }
   } catch (error) {
@@ -159,12 +166,11 @@ export async function readWholeTranscript(args: {
     args.stats.fullParses++
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
-  const publishes = parserPublishesMessages(args.candidate)
   const channel = new TranscriptMessageChannel()
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
     const session = await parseAgentSessionFile(args.candidate, args.platform, channel)
-    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: !publishes })
+    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: false })
     return session
   } catch (error) {
     channel.finishRead({ session: null, byteOffset: 0, incomplete: true })

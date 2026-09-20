@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -39,7 +39,8 @@ export function TroubleshootView({
   checks,
   runDiagnostics,
   onBack,
-  onConnectionLog
+  onConnectionLog,
+  developerRow
 }: {
   rootRef?: (node: View | null) => void
   diagnosticStatus: DiagnosticStatus
@@ -47,6 +48,8 @@ export function TroubleshootView({
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
+  /** Slot the route fills only under `__DEV__`; null in every shipped build. */
+  developerRow?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -107,6 +110,8 @@ export function TroubleshootView({
           <ScrollText size={16} color={colors.textPrimary} />
           <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
+
+        {developerRow}
 
         {checks.length > 0 && (
           <View style={styles.section}>

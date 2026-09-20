@@ -15,6 +15,7 @@ import {
   type AgentLaunchExecution
 } from './agent-launch-executor'
 import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
@@ -27,6 +28,7 @@ function harness(options: {
   createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
   createSupportThrows?: boolean
   structuredCreateError?: Error
+  deliveredMessageId?: string | null
 }) {
   const calls: string[] = []
   const createWorktree = vi.fn(
@@ -50,11 +52,15 @@ function harness(options: {
     if (options.structuredCreateError) {
       throw options.structuredCreateError
     }
-    return { sessionId: 'sess-1', handle: 'handle_structured' }
+    return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
   })
   const createTerminalAgent = vi.fn(async () => {
     calls.push('createTerminalAgent')
     return { handle: 'term_1' }
+  })
+  const deliverStructuredPrompt = vi.fn(async () => {
+    calls.push('deliverStructuredPrompt')
+    return options.deliveredMessageId === undefined ? 'msg-1' : options.deliveredMessageId
   })
   const runtime = {
     getClientSettings: () =>
@@ -66,12 +72,13 @@ function harness(options: {
     createWorktree,
     createStructuredSession,
     createTerminalAgent,
+    deliverStructuredPrompt,
     run: (intent: AgentLaunchIntent) =>
       executeAgentLaunch({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the two runtime methods the executor reaches, and each test asserts the calls made, so an omitted method throws rather than reading a wrong value.
         runtime: runtime as unknown as AgentLaunchExecution['runtime'],
         intent,
-        surfaces: { createStructuredSession, createTerminalAgent },
+        surfaces: { createStructuredSession, createTerminalAgent, deliverStructuredPrompt },
         workspaces: { createWorktree }
       })
   }
@@ -232,17 +239,114 @@ describe('an agent with no structured session', () => {
 })
 
 describe('the prompt receipt', () => {
-  it('reports a requested prompt as undelivered rather than omitting it', async () => {
+  const SUBMIT = { text: 'do the thing', delivery: 'submit' } as const
+
+  it('commits a submitted prompt to the session the launch created and names the row', async () => {
+    const h = harness({})
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
+    // Delivery is sequenced after the surface exists; there is nothing to send into before that.
+    expect(h.calls).toEqual([
+      'createWorktree(startupAgent=undefined)',
+      'createSupport',
+      'createStructuredSession',
+      'deliverStructuredPrompt'
+    ])
+    // The send must name the lease the create was admitted under, not one re-read later.
+    expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
+      sessionId: 'sess-1',
+      fence: 4,
+      prompt: SUBMIT
+    })
+  })
+
+  it('under-claims as not delivered when nothing was committed', async () => {
+    const h = harness({ deliveredMessageId: null })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+    // A resend costs a duplicate; claiming a row that does not exist loses the text silently.
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
+  })
+
+  it('leaves a draft with the caller, because the host has no composer to hold one', async () => {
     const h = harness({})
     const result = await h.run({
       ...CREATE_INTENT,
       prompt: { text: 'do the thing', delivery: 'draft' }
     })
-    expect(result.prompt).toEqual({ delivery: 'draft', delivered: false })
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+  })
+
+  it('leaves a terminal launch to the pane owner', async () => {
+    const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+    expect(result.outcome.kind).toBe('terminal')
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
+    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+  })
+
+  it('leaves a reused terminal to the pane owner', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      reuseTerminal: { handle: 'term_existing' },
+      prompt: SUBMIT
+    })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
+    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
   })
 
   it('omits the receipt when no prompt was requested', async () => {
     const h = harness({})
     expect((await h.run(CREATE_INTENT)).prompt).toBeUndefined()
+  })
+})
+
+/**
+ * The kind is read off the resolved workspace id, so a workspace with nowhere to keep a session is
+ * decided here rather than offered to a host probe that cannot answer for it.
+ */
+describe('a launch into an existing workspace, by workspace kind', () => {
+  it('runs the floating workspace as a terminal, never a structured session', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: FLOATING_TERMINAL_WORKTREE_ID }
+    })
+
+    // The invariant, not the call order: the floating sentinel has no session store to open into.
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+    expect(result.receipt).toMatchObject({
+      mode: 'terminal',
+      reason: 'structured_unsupported_on_host'
+    })
+  })
+
+  it('still opens a structured session in a folder workspace', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'folder:fw-1' }
+    })
+
+    // A folder workspace has no git worktree either; it must not be swept up with the sentinel.
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
+    expect(result.outcome).toEqual({
+      kind: 'structured',
+      sessionId: 'sess-1',
+      handle: 'handle_structured'
+    })
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
+  })
+
+  it('still opens a structured session in a git worktree', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: { kind: 'existing', worktree: 'wt-7' } })
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 })

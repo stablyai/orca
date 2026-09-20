@@ -58,9 +58,8 @@ export async function requestNotificationCatchup(
     if (!missed.accepted || isDisposed()) {
       return
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const result = missed.value as { dismissedPushes?: unknown } | undefined
-    if (!Array.isArray(result?.dismissedPushes)) {
+    const result = missed.value
+    if (!result?.dismissedPushes) {
       continue
     }
     const confirmed: OrcaPushPayload[] = []

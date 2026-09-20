@@ -15,9 +15,12 @@ import { resolvedTuiAgentArgsBypassPermissions } from '../../shared/tui-agent-la
  * rest of the arguments string is a terminal concern this path does not interpret.
  */
 export function claudeStructuredPermissionModeForSettings(
-  settings: Partial<Pick<GlobalSettings, 'agentDefaultArgs'>> | null | undefined
+  settings:
+    | Partial<Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell'>>
+    | null
+    | undefined
 ): PermissionMode {
-  return resolvedTuiAgentArgsBypassPermissions('claude', settings?.agentDefaultArgs)
+  return resolvedTuiAgentArgsBypassPermissions('claude', settings, process.platform)
     ? 'bypassPermissions'
     : 'default'
 }

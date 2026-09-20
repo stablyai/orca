@@ -3,18 +3,24 @@
   "family": "tasks.route-repo-list",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "b5f4b14e07fc7281b954ff5f16d5803e2dfb1bc2a97dcbe6a0991697a5980c49",
-  "adapterSha256": "d1810575d5f0e7a45f9f9a327c271f0ed483b16b21b65cfb5fcfa9dc90baf6c8",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "23f974df8b57c723069605de1db80c339ead286b18aae38e67fce03ea50c5180",
   "scenarioSha256": "b62ca571d4defcc2e53960033c5b4eb3f7e406b57664664cbc6a173041a9f803",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "26accd69bc48": {
+    "19b2979d7fc2": {
       "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "35f85fe3b71c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -38,8 +44,9 @@
         "startedAt": 0
       }
     },
-    "49bee46155dd": {
+    "7d0fa424be7c": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -79,11 +86,6 @@
           }
         }
       }
-    },
-    "5730368193ee": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -155,8 +157,8 @@
       {
         "id": "repos-pending",
         "observation": {
-          "sender": ["26accd69bc48"],
-          "payloads": ["5730368193ee"],
+          "sender": ["35f85fe3b71c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "9270aeb7d9c6"
@@ -168,8 +170,8 @@
       {
         "id": "repos-loaded",
         "observation": {
-          "sender": ["49bee46155dd"],
-          "payloads": ["5730368193ee"],
+          "sender": ["7d0fa424be7c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "ensure": "fcd8faa86ca8"

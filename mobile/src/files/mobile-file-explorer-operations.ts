@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { fileDirectoryEntriesSchema, legacyFileListSchema } from './file-explorer-reply-schema'
 
 /**
  * The Files tab's directory read and the capped list it falls back to.
@@ -9,6 +10,10 @@ import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
  * answers `method_not_found`), and the `files.list` refusal supplies the message the screen shows.
  * No acceptance policy exposes a refusal code, so the panel reads the envelope's own error the way
  * `mobile-file-preview-operations.ts` does, and only these two consumers want one.
+ *
+ * A malformed *accepted* reply is what moves: the panel's own catch already turns a throw into the
+ * inline directory error it drew for a failed load, so an unreadable listing now names the reply
+ * instead of crashing the row builder one render later.
  */
 export const fileDirectoryRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -16,7 +21,7 @@ export const fileDirectoryRead = bindDeferredRpcOperation(
     method: 'files.readDir',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('directory-entries')
+    read: rpcResultVariant('directory-entries', fileDirectoryEntriesSchema)
   })
 )
 
@@ -33,6 +38,6 @@ export const legacyFileListRead = bindDeferredRpcOperation(
     method: 'files.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('legacy-file-list')
+    read: rpcResultVariant('legacy-file-list', legacyFileListSchema)
   })
 )

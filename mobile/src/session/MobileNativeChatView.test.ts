@@ -262,7 +262,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'Starting')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       scrollToEnd.mockClear()
 
       await update({ folded, streaming: 'Streaming output' })
@@ -270,7 +272,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToOffset).toHaveBeenCalledOnce()
       expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToOffset).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
@@ -353,7 +357,9 @@ describe('MobileNativeChatView', () => {
         list().props.onContentSizeChange(320, 1_250)
         list().props.onMomentumScrollBegin?.({})
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 1_300))
 
       expect(scrollToEnd).not.toHaveBeenCalled()
@@ -439,7 +445,9 @@ describe('MobileNativeChatView', () => {
           }
         })
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 1_250))
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
@@ -471,7 +479,9 @@ describe('MobileNativeChatView', () => {
       expect(scrollToEnd).not.toHaveBeenCalled()
       expect(scrollToOffset).not.toHaveBeenCalled()
 
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
@@ -521,7 +531,9 @@ describe('MobileNativeChatView', () => {
           }
         })
       })
-      await act(async () => vi.advanceTimersByTime(200))
+      await act(async () => {
+        vi.advanceTimersByTime(200)
+      })
       act(() => list().props.onContentSizeChange(320, 950))
 
       expect(onLoadEarlier).toHaveBeenCalledOnce()
@@ -540,7 +552,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'History')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       await scrollAwayFromTail()
       scrollToEnd.mockClear()
 
@@ -548,7 +562,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToEnd).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
@@ -577,7 +593,9 @@ describe('MobileNativeChatView', () => {
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
-      await act(async () => vi.runOnlyPendingTimers())
+      await act(async () => {
+        vi.runOnlyPendingTimers()
+      })
       scrollToEnd.mockClear()
 
       await update({ folded, keyboardInset: 320 })
@@ -585,7 +603,9 @@ describe('MobileNativeChatView', () => {
 
       expect(scrollToEnd).toHaveBeenCalledOnce()
       expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
-      await act(async () => vi.advanceTimersByTime(60))
+      await act(async () => {
+        vi.advanceTimersByTime(60)
+      })
       expect(scrollToEnd).toHaveBeenCalledOnce()
 
       await scrollAwayFromTail()
@@ -611,14 +631,20 @@ describe('MobileNativeChatView', () => {
     vi.useFakeTimers()
     try {
       await render({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
       expect(composer().props.disabled).toBe(true)
 
       await update({ inputLockReason: null })
       expect(composer().props.disabled).toBe(true)
-      await act(async () => vi.advanceTimersByTime(300))
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+      })
       await update({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
 
       expect(composer().props.disabled).toBe(true)
       expect(composer().props.placeholder).toBe('Waiting for terminal…')
@@ -631,12 +657,18 @@ describe('MobileNativeChatView', () => {
     vi.useFakeTimers()
     try {
       await render({ inputLockReason: 'waiting' })
-      await act(async () => vi.advanceTimersByTime(600))
+      await act(async () => {
+        vi.advanceTimersByTime(600)
+      })
       await update({ inputLockReason: null })
-      await act(async () => vi.advanceTimersByTime(599))
+      await act(async () => {
+        vi.advanceTimersByTime(599)
+      })
       expect(composer().props.disabled).toBe(true)
 
-      await act(async () => vi.advanceTimersByTime(1))
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
 
       expect(composer().props.disabled).toBe(false)
       expect(composer().props.placeholder).toBe('Message, @files, /commands')

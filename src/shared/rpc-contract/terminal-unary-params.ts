@@ -173,6 +173,7 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: z
     .object({
       foreground: z.string().max(128).optional(),
@@ -234,5 +235,6 @@ export const AgentTeamsTmuxCompat = z.object({
 
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  prepareAuth: z.boolean().optional()
 })

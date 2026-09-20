@@ -34,7 +34,8 @@ describe('OrcaRuntimeService', () => {
       connected: true,
       connectionId: 'ssh-osc-1',
       tabId: 'ssh-tab',
-      paneKey: 'ssh-tab:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      paneKey: 'ssh-tab:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
     runtime.onPtyData(
       'ssh-osc-pty',

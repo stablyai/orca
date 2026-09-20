@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 // Regression guard for the SHIPPED inventory path. `pty.listProcesses` resolves
 // every managed pane's title from one batched host capture; a per-pane tree walk
 // would restore the O(panes x rows) scan on the relay's single event-loop thread,

@@ -11,7 +11,15 @@ import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
+import {
+  structuredAgentSessionTeardownTrigger,
+  tearDownRuntime,
+  type InstalledRuntime
+} from './structured-agent-session-runtime-teardown'
+import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
+import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionAdapterDeps
@@ -77,8 +85,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting for Claude; absent means prompting. */
   resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
-  /** The same setting for Codex, as app-server argv; absent means its approval prompts stay on. */
-  resolveCodexPermissionArgs?: () => string[]
+  /** The same setting for Codex, as app-server thread policy. */
+  resolveCodexPermissionPolicy?: () => CodexStructuredPermissionPolicy
   /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
   getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
@@ -91,14 +99,6 @@ export type StructuredAgentSessionRuntimeDeps = {
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
   handoffTransport?: StructuredAgentSessionHandoffTransport
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
-}
-
-type InstalledRuntime = {
-  host: StructuredAgentSessionHost
-  adapter: { closeAll(): Promise<void> }
-  /** Resolves after every observed adapter exit has published, and every
-   *  recovery callback it raised has settled. */
-  waitForRecovery: () => Promise<void>
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -144,7 +144,10 @@ export async function waitForStructuredAgentSessionRecovery(): Promise<void> {
  *  A teardown that fails is RETRIED by the next stop rather than forgotten: the
  *  host keeps every journal whose close rejected, and this is the only handle
  *  onto that host once the module slot is cleared. */
-export async function stopStructuredAgentSessionRuntime(): Promise<void> {
+export async function stopStructuredAgentSessionRuntime(options?: {
+  trigger?: AgentSessionResumeTrigger
+}): Promise<void> {
+  const trigger = options?.trigger ?? structuredAgentSessionTeardownTrigger()
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
@@ -158,53 +161,11 @@ export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const failures: unknown[] = []
   for (const runtime of outstanding) {
     try {
-      await tearDownRuntime(runtime)
+      await tearDownRuntime(runtime, trigger)
     } catch (error) {
       pendingTeardown.add(runtime)
       failures.push(error)
     }
-  }
-  if (failures.length === 1) {
-    throw failures[0]
-  }
-  if (failures.length > 1) {
-    throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
-  }
-}
-
-async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
-  // Drain an in-flight recovery before stopping children; recovery may still
-  // be writing lifecycle rows or acquiring a replacement child.
-  await installed.waitForRecovery()
-  const failures: unknown[] = []
-  // Host teardown runs FIRST, which inverts the older order. It is what stops this host's
-  // provider children now: it evicts each owned session through the adapter, and that eviction
-  // only releases the lease once `disposeSession` PROVES the child gone. Closing the adapter
-  // first would hand every one of those steps a vacuous receipt from an already-closed router,
-  // and would race the attach drain the host runs in the same teardown.
-  //
-  // Tail rows are protected by eviction's own per-session ordering — stop the child, drain what
-  // it already published, settle, then unbind the sink — not by which of the two teardowns runs
-  // first. `closeAll` is only a backstop for children eviction never took: an acquisition that
-  // failed before the host indexed it, or a session whose eviction was refused and left indexed.
-  // A row a child delivers during that backstop close is not captured, and was not captured
-  // under the old order either. The drain below keeps a late callback from outliving the runtime.
-  try {
-    await installed.host.flushAllStreamedEvents()
-  } catch (error) {
-    failures.push(error)
-  }
-  try {
-    // Backstop for children eviction never took: unindexed acquisitions and refused evictions.
-    await installed.adapter.closeAll()
-  } catch (error) {
-    failures.push(error)
-  }
-  // A backstop close can still deliver a final exit callback.
-  try {
-    await installed.waitForRecovery()
-  } catch (error) {
-    failures.push(error)
   }
   if (failures.length === 1) {
     throw failures[0]
@@ -266,8 +227,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
         resolveEnvironment: resolveCodexEnvironment,
-        ...(deps.resolveCodexPermissionArgs
-          ? { resolvePermissionArgs: deps.resolveCodexPermissionArgs }
+        ...(deps.resolveCodexPermissionPolicy
+          ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
           : {}),
         ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
       }),
@@ -330,6 +291,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     host = new StructuredAgentSessionHost({
       store,
       adapter,
+      recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
       journalRoot: deps.stateDirectory,
       claimKeyId: deps.claimKeyId,
       probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),

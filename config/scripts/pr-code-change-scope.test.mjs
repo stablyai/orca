@@ -255,6 +255,39 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the mobile web app job for the builder, the page source and the shell policy', () => {
+    for (const file of [
+      'config/scripts/build-mobile-web-app-bundle.mjs',
+      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'mobile/web-entry/index.tsx',
+      'mobile/app/h/[hostId]/index.tsx',
+      'mobile/src/transport/client-context.web.tsx',
+      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      // The vendored Expo module the page resolves a .web.ts out of.
+      'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
+    ]) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(true)
+    }
+  })
+
+  it('runs it on a mobile-only diff, which should_run alone would skip', () => {
+    const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
+    expect(classified.should_run).toBe(false)
+    expect(classified.mobile_web_app).toBe(true)
+  })
+
+  it('needs no package.json prefix, because package.json already forces every job', () => {
+    // build:mobile-web:app is defined there, so the job has to run on an edit to it. A prefix
+    // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
+    expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
+  })
+
+  it('leaves it off for changes that cannot reach the page', () => {
+    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-native-preflight.ts']) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(false)
+    }
+  })
+
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
@@ -456,13 +489,24 @@ describe('PR Checks skip wiring', () => {
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
     const steps = prWorkflow.jobs.static_analysis.steps
-    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-mobile-dependencies'
+    )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
     expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
-    expect(steps[install]['working-directory']).toBe('mobile')
-    expect(steps[install].run).toContain('--frozen-lockfile')
+    // The install itself moved into the action the packaging jobs share; assert it there so
+    // this job cannot keep the step while the action stops installing anything.
+    const action = parse(
+      readFileSync(
+        join(projectDir, '.github/actions/install-mobile-dependencies/action.yml'),
+        'utf8'
+      )
+    )
+    const [installStep] = action.runs.steps
+    expect(installStep['working-directory']).toBe('mobile')
+    expect(installStep.run).toContain('--frozen-lockfile')
   })
 
   it('keeps the cheap root-directory guard on docs-only PRs', () => {

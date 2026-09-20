@@ -1,3 +1,4 @@
+import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
@@ -23,4 +24,18 @@ export function normalizeAgentStatusEvent(
     turnCompletedAt: data.turnCompletedAt,
     subagents: data.subagents
   })
+}
+
+export function normalizeAgentStatusMetadata(
+  data: AgentStatusIpcPayload,
+  authorityRestartId?: string
+): AgentStatusMetadata | undefined {
+  if (!data.providerSession && !data.launchToken && !authorityRestartId) {
+    return undefined
+  }
+  return {
+    ...(authorityRestartId ? { authorityRestartId } : {}),
+    ...(data.providerSession ? { providerSession: data.providerSession } : {}),
+    ...(data.launchToken ? { launchToken: data.launchToken } : {})
+  }
 }

@@ -68,6 +68,7 @@ describe('cancelClaudeTurn', () => {
       clientMessageId: `client-${index}`,
       sentUuid,
       dispatchSequence: index + 1,
+      requestedAt: null,
       replayContentKey: `content-${index}`,
       resolve: resolutions[index]!
     }))

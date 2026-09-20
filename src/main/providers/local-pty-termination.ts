@@ -175,19 +175,8 @@ async function shutdownTrackedPty(
     operation.rootSignalled = true
     requestTrackedPtyShutdown(id, proc, operation.immediate)
   }
-  if (ptyAgentSessionIds.has(id)) {
-    // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
-    // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
-    // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
-    await killWithDescendantSweep(proc.pid, signalRoot, {
-      ownsRoot: () => ptyProcesses.get(id) === proc,
-      terminateOwnedTree: () => terminatePtyJob(proc)
-    })
-  } else if (process.platform === 'win32' && operation.immediate) {
-    // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
-    // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
-    // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
-    // otherwise root close alone, and detached children may block physical stop (#10004).
+  if (ptyAgentSessionIds.has(id) || operation.immediate) {
+    // Typed agents also detach tool process groups; immediate close must snapshot before root exit.
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc)
@@ -254,7 +243,13 @@ export function killAllLocalPtys(): void {
     disposePtyExitListener(id)
     if (!(process.platform === 'win32' && ptyTerminationMode.has(id))) {
       try {
-        proc.kill()
+        if (ptyAgentSessionIds.has(id) && process.platform !== 'win32') {
+          // App quit is synchronous, so sweep attached agent process groups before
+          // releasing node-pty; otherwise OMP workers can outlive the foreground PTY.
+          forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
+        } else {
+          proc.kill()
+        }
       } catch {
         /* Process may already be dead. */
       }

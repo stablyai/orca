@@ -37,7 +37,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
+      'opencode2',
       'pi'
     ])
   })
@@ -45,7 +47,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('uses the strongest available defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('default')
   })
 
   it('uses --prompt (not Claude --print) for Kimi non-interactive generation', () => {
@@ -570,6 +572,50 @@ describe('buildArgs (OpenCode)', () => {
   })
 })
 
+describe('buildArgs (OpenCode 2)', () => {
+  const spec = getCommitMessageAgentSpec('opencode2')!
+
+  it('runs `opencode2 run` with stdin delivery', () => {
+    const prompt = `PROMPT ${'x'.repeat(1024)}`
+    const args = spec.buildArgs({
+      prompt,
+      model: 'opencode/deepseek-v4-flash-free'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/deepseek-v4-flash-free',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain(prompt)
+    expect(args).not.toContain('')
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('inlines the thinking variant as model#variant (v1 --variant is removed in v2)', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'opencode/gpt-5.4-mini',
+      thinkingLevel: 'high'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/gpt-5.4-mini#high',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain('--variant')
+  })
+})
+
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
@@ -609,5 +655,26 @@ describe('buildArgs (Antigravity)', () => {
 
   it('uses Gemini 3.5 Flash (Medium) as default model', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
+  })
+})
+
+
+describe('Pi Source Control AI model selection', () => {
+  it('leaves provider selection to Pi for the config default', () => {
+    const args = getCommitMessageAgentSpec('pi')!.buildArgs({
+      prompt: 'Name a branch',
+      model: 'default'
+    })
+    expect(args).not.toContain('--model')
+  })
+
+  it('passes an explicit discovered Pi model through', () => {
+    const args = getCommitMessageAgentSpec('pi')!.buildArgs({
+      prompt: 'Name a branch',
+      model: 'openai-codex/gpt-5.5'
+    })
+    const modelFlagIndex = args.indexOf('--model')
+    expect(modelFlagIndex).toBeGreaterThanOrEqual(0)
+    expect(args[modelFlagIndex + 1]).toBe('openai-codex/gpt-5.5')
   })
 })

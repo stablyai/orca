@@ -16,6 +16,8 @@ on:
       expected-rehome-generation: { required: true, type: string }
       monitor-run-id: { required: true, type: string }
       monitor-run-attempt: { required: true, type: string }
+      gate-override-reason: { required: false, type: string, default: '' }
+      gate-override-confirmation: { required: false, type: string, default: '' }
       wave-index: { required: true, type: string }
 
 permissions:
@@ -52,7 +54,12 @@ jobs:
       WAVE_INDEX: ${{ inputs.wave-index }}
       MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
       MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
+      GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
       OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
+      # ~800 controls over 2 min is ~7 re-dials/s per cell, well under the director's
+      # 5 x 80 in-flight assign cap. A cell on an older image ignores it and drains at once.
+      DRAIN_PACE_WINDOW_MS: '120000'
     steps:
       - name: Require exact reusable-workflow configuration
         working-directory: .
@@ -72,12 +79,14 @@ jobs:
           [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
-          if test "${DEPLOY_MODE}" = verify; then
-            EFFECTIVE_SELECTOR_GENERATION="${EXPECTED_SELECTOR_GENERATION}"
-          else
-            EFFECTIVE_SELECTOR_GENERATION="$((EXPECTED_SELECTOR_GENERATION + (2 * WAVE_INDEX)))"
+          # The caller validated this too; re-check here so a malformed override
+          # can never reach a mutation through this reusable workflow.
+          if test -n "${GATE_OVERRIDE_REASON}${GATE_OVERRIDE_CONFIRMATION}"; then
+            test "${DEPLOY_MODE}" != verify
+            test "${GATE_OVERRIDE_CONFIRMATION}" = \
+              "SKIP_RELAY_MONITOR_GATE ${TARGET_IMAGE_DIGEST}"
+            [[ "${GATE_OVERRIDE_REASON}" =~ ^[[:print:]]{12,500}$ ]]
           fi
-          echo "EFFECTIVE_SELECTOR_GENERATION=${EFFECTIVE_SELECTOR_GENERATION}" >> "${GITHUB_ENV}"
           if test "${DEPLOY_MODE}" != verify && test "${GITHUB_RUN_ATTEMPT}" != 1; then
             echo "mutations are single-dispatch: re-runs replay aged evidence," >&2
             echo "so recover each remaining cell with its own fresh monitor" >&2
@@ -109,14 +118,34 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_wrapper: false }
 
+      # One approved-cell table, in the wave validator the dispatch gate already uses, so
+      # a cell's class and its wave's selector delta cannot drift apart between the two.
+      - name: Resolve this cell's admission class and wave selector delta
+        run: |
+          CELL_CLASS="$(node dev/scripts/relay-production-same-cap-wave.mjs cell-class \
+            --cell-id "${TARGET_CELL_ID}")"
+          ENTRY_ADMISSION="$(jq -er '.entryAdmission' <<< "${CELL_CLASS}")"
+          SELECTOR_WAVE_DELTA="$(jq -er '.selectorWaveDelta' <<< "${CELL_CLASS}")"
+          if test "${DEPLOY_MODE}" = verify; then
+            EFFECTIVE_SELECTOR_GENERATION="${EXPECTED_SELECTOR_GENERATION}"
+          else
+            EFFECTIVE_SELECTOR_GENERATION="$((EXPECTED_SELECTOR_GENERATION \
+              + (SELECTOR_WAVE_DELTA * WAVE_INDEX)))"
+          fi
+          {
+            echo "ENTRY_ADMISSION=${ENTRY_ADMISSION}"
+            echo "SELECTOR_WAVE_DELTA=${SELECTOR_WAVE_DELTA}"
+            echo "EFFECTIVE_SELECTOR_GENERATION=${EFFECTIVE_SELECTOR_GENERATION}"
+          } >> "${GITHUB_ENV}"
+
       - name: Require fresh aggregate monitor evidence reference
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           [[ "${MONITOR_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
           [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
 
       - name: Download private aggregate monitor evidence
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         uses: actions/download-artifact@v4
         with:
           name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
@@ -125,7 +154,7 @@ jobs:
           run-id: ${{ inputs.monitor-run-id }}
 
       - name: Verify monitor evidence provenance
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           node dev/scripts/relay-monitor-evidence.mjs verify-authority \
             --directory "${OUTPUT_DIRECTORY}" \
@@ -138,7 +167,7 @@ jobs:
             --wave-index "${WAVE_INDEX}"
 
       - name: Download this wave's single-use safety authority
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         uses: actions/download-artifact@v4
         with:
           name: relay-same-cap-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
@@ -147,7 +176,7 @@ jobs:
           run-id: ${{ github.run_id }}
 
       - name: Require safety evidence consumed by this workflow
-        if: ${{ inputs.mode != 'verify' }}
+        if: ${{ inputs.mode != 'verify' && inputs.gate-override-confirmation == '' }}
         run: |
           # Mutations are single-dispatch: a fresh dispatch cannot resume a
           # partial batch (the canary authority binds the batch-entry selector
@@ -184,9 +213,32 @@ jobs:
           # Freshness-only failures are publish lag, not health, on every wave
           # including the first; the CLI still caps the retry at the wave's
           # evidence-age budget, so this cannot mutate on aged evidence.
-          pnpm incident:relay-preflight -- \
-            --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
-            --wave-index "${WAVE_INDEX}" --retry-freshness
+          #
+          # This live recheck runs on every mutating wave, including a
+          # break-glass one. With the aggregate gate overridden there is no
+          # sealed state to read, so the expected selector comes from the
+          # dispatch inputs the rehome inspect below verifies against the live
+          # director; every threshold the sample is judged against is unchanged.
+          if test -n "${GATE_OVERRIDE_CONFIRMATION}"; then
+            jq -n \
+              --arg existingOnly "${EXPECTED_EXISTING_ONLY_CELLS/none/}" \
+              --arg migrationOnly "${EXPECTED_MIGRATION_ONLY_CELLS/none/}" \
+              --arg general "${EXPECTED_GENERAL_CELLS/none/}" \
+              '{existingOnly:$existingOnly,migrationOnly:$migrationOnly,general:$general}
+               | map_values(split(",") | map(select(length > 0)))' \
+              > "${RUNNER_TEMP}/relay-same-cap-selector.json"
+            pnpm incident:relay-preflight -- \
+              --no-monitor-state \
+              --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+              --selector-membership-file "${RUNNER_TEMP}/relay-same-cap-selector.json" \
+              --wave-index "${WAVE_INDEX}" \
+              --selector-wave-delta "${SELECTOR_WAVE_DELTA}" --retry-freshness
+          else
+            pnpm incident:relay-preflight -- \
+              --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
+              --wave-index "${WAVE_INDEX}" \
+              --selector-wave-delta "${SELECTOR_WAVE_DELTA}" --retry-freshness
+          fi
 
       - name: Require durable rehome disabled and exact selector
         env:
@@ -213,10 +265,17 @@ jobs:
             c7|c8|c9|c10|c13|c14|c15|c16|c19|c20|c21|c22|c23|c24|c25|c26)
               EXPECTED_HARD_CAP=1000
               EXPECTED_REGION=us-central1
+              EXPECTED_DATABASE_POOL_MAX=
+              ;;
+            c17|c18)
+              EXPECTED_HARD_CAP=600
+              EXPECTED_REGION=us-central1
+              EXPECTED_DATABASE_POOL_MAX=
               ;;
             c27|c28|c29)
               EXPECTED_HARD_CAP=3000
               EXPECTED_REGION=asia-east2
+              EXPECTED_DATABASE_POOL_MAX=16
               ;;
             *) exit 1 ;;
           esac
@@ -228,14 +287,14 @@ jobs:
           SOURCE_CELLS="$(terraform -chdir=infra/terraform console \
             -var-file=environments/production.tfvars \
             <<< 'jsonencode(var.relay_region_rehome_source_cell_ids)' | jq -er '.')"
-          if test "${EXPECTED_REGION}" = us-central1; then
-            jq -e --arg cell "${TARGET_CELL_ID}" 'index($cell) != null' \
-              <<< "${SOURCE_CELLS}" >/dev/null
-          fi
           CURRENT_SHAPE="$(jq -cer --arg cell "${TARGET_CELL_ID}" '.[$cell]' <<< "${CELLS_JSON}")"
           test "$(jq -r '.connection_hard_cap' <<< "${CURRENT_SHAPE}")" = "${EXPECTED_HARD_CAP}"
           test "$(jq -r '.connection_unobserved_bound' <<< "${CURRENT_SHAPE}")" = \
             "${EXPECTED_UNOBSERVED_BOUND}"
+          # The startup script emits a pool line only off the root default, so an unpinned cell
+          # must still be on that default or its plan would carry a line nothing reviews.
+          test "$(jq -r '.database_pool_max' <<< "${CURRENT_SHAPE}")" = \
+            "${EXPECTED_DATABASE_POOL_MAX:-10}"
           TARGET_ZONE="$(jq -r '.zone' <<< "${CURRENT_SHAPE}")"
           MIG_NAME="orca-cloud-relay-gce-${TARGET_HOSTNAME}"
           if test "${DEPLOY_MODE}" = rollback; then
@@ -248,6 +307,14 @@ jobs:
             CURRENT_IMAGE_DIGEST="${ROLLBACK_IMAGE_DIGEST}"
             DESIRED_REHOME_PROTOCOL="${TARGET_REHOME_PROTOCOL}"
             CURRENT_REHOME_PROTOCOL="${ROLLBACK_REHOME_PROTOCOL}"
+          fi
+          # The startup template emits rehome trust lines only for a declared source cell, so
+          # require membership exactly when either side of this roll expects those lines.
+          if test "${EXPECTED_REGION}" = us-central1 && {
+            test "${DESIRED_REHOME_PROTOCOL}" != 0 || test "${CURRENT_REHOME_PROTOCOL}" != 0
+          }; then
+            jq -e --arg cell "${TARGET_CELL_ID}" 'index($cell) != null' \
+              <<< "${SOURCE_CELLS}" >/dev/null
           fi
           DESIRED_IMAGE="${IMAGE_REPOSITORY}@${DESIRED_IMAGE_DIGEST}"
           OVERRIDE_CELLS_JSON="$(jq -ce --arg cell "${TARGET_CELL_ID}" \
@@ -264,6 +331,7 @@ jobs:
             echo "MIG_NAME=${MIG_NAME}"
             echo "EXPECTED_HARD_CAP=${EXPECTED_HARD_CAP}"
             echo "EXPECTED_UNOBSERVED_BOUND=${EXPECTED_UNOBSERVED_BOUND}"
+            echo "EXPECTED_DATABASE_POOL_MAX=${EXPECTED_DATABASE_POOL_MAX}"
             echo "EXPECTED_REGION=${EXPECTED_REGION}"
             echo "DESIRED_IMAGE=${DESIRED_IMAGE}"
             echo "DESIRED_IMAGE_DIGEST=${DESIRED_IMAGE_DIGEST}"
@@ -292,19 +360,65 @@ jobs:
           }
           CURRENT_RUNTIME="$(admin_post current-runtime \
             "${CELL_ORIGIN}/v1/admin/runtime-status" '{"v":1}')"
-          # A rollback that failed between template apply and admission restore
-          # leaves the cell already on the rollback image; resume from that
-          # state instead of demanding the pre-rollback predecessor.
+          # Two different failures leave the cell on the rollback image, and the image
+          # alone cannot tell them apart. A rollback that failed between its template
+          # apply and its admission restore restarted the cell, so that cell is not
+          # draining and resumes. A wave that stopped after its drain and before its
+          # template apply never restarted anything, so its cell is still draining and
+          # is stranded: the drain flag only clears on a restart, so it has to be rolled.
           LIVE_IMAGE_DIGEST="$(jq -r '.imageDigest' <<< "${CURRENT_RUNTIME}")"
+          LIVE_DRAINING="$(jq -r '.draining' <<< "${CURRENT_RUNTIME}")"
           if test "${DEPLOY_MODE}" = rollback \
             && test "${LIVE_IMAGE_DIGEST}" = "${DESIRED_IMAGE_DIGEST}"; then
-            ROLLBACK_RESUME=true
+            if test "${LIVE_DRAINING}" = true; then
+              ROLLBACK_STAGE=stranded
+            else
+              ROLLBACK_STAGE=resume
+            fi
             PREDECESSOR_IMAGE_DIGEST="${DESIRED_IMAGE_DIGEST}"
             PREDECESSOR_REHOME_PROTOCOL="${DESIRED_REHOME_PROTOCOL}"
           else
-            ROLLBACK_RESUME=false
+            ROLLBACK_STAGE=roll
             PREDECESSOR_IMAGE_DIGEST="${CURRENT_IMAGE_DIGEST}"
             PREDECESSOR_REHOME_PROTOCOL="${CURRENT_REHOME_PROTOCOL}"
+          fi
+          if test "${ROLLBACK_STAGE}" = resume; then
+            ROLLBACK_RESUME=true
+          else
+            ROLLBACK_RESUME=false
+          fi
+          # A stranded cell's template still carries the image the cell is serving, so that
+          # is the predecessor its plan is reviewed against. A template already moved on to
+          # the target is refused here rather than rolled backwards under a stale review.
+          if test "${ROLLBACK_STAGE}" = stranded; then
+            PLAN_ROLLBACK_IMAGE="${DESIRED_IMAGE}"
+          else
+            PLAN_ROLLBACK_IMAGE="${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}"
+          fi
+          # Rollback is the documented recovery from a failed canary, which
+          # leaves the cell migration-only (and possibly still marked
+          # draining); apply and verify still require the cell pristine in the
+          # class it is declared to serve in.
+          if test "${DEPLOY_MODE}" = rollback; then
+            PRECHECK_ADMISSION=general-or-migration-only
+          else
+            PRECHECK_ADMISSION="${ENTRY_ADMISSION}"
+          fi
+          # Draining sheds connections, and a migration-only cell holds none, so the flag
+          # carries no precondition there. It also outlives a failed wave, because the drain
+          # that set it is followed by no restart, which is the state a failed canary leaves.
+          if test "${DEPLOY_MODE}" = rollback \
+            || test "${ENTRY_ADMISSION}" = migration-only; then
+            PRECHECK_DRAINING=either
+          else
+            PRECHECK_DRAINING=forbidden
+          fi
+          # A resumed rollback already restarted, so its cell has to come back not draining;
+          # that is what separates it from a wave that stopped before its template apply.
+          if test "${PRECHECK_DRAINING}" = either && test "${ROLLBACK_RESUME}" != true; then
+            PREDECESSOR_DRAINING_OK=true
+          else
+            PREDECESSOR_DRAINING_OK=false
           fi
           RESTORED_MIGRATION_CELLS="$(jq -rn \
             --arg value "${EXPECTED_MIGRATION_ONLY_CELLS/none/}" \
@@ -326,8 +440,19 @@ jobs:
             '$value | split(",") | map(select(length > 0 and . != $target)) | unique | join(",")')"
           test -n "${ISOLATED_MIGRATION_CELLS}" || ISOLATED_MIGRATION_CELLS=none
           test -n "${ISOLATED_GENERAL_CELLS}" || ISOLATED_GENERAL_CELLS=none
+          # A migration-only cell is already isolated and is handed back isolated, so both
+          # halves of its wave see exactly the membership it entered with.
+          if test "${ENTRY_ADMISSION}" = migration-only; then
+            RESTORED_MIGRATION_CELLS="${ISOLATED_MIGRATION_CELLS}"
+            RESTORED_GENERAL_CELLS="${ISOLATED_GENERAL_CELLS}"
+          fi
           {
             echo "ROLLBACK_RESUME=${ROLLBACK_RESUME}"
+            echo "ROLLBACK_STAGE=${ROLLBACK_STAGE}"
+            echo "PLAN_ROLLBACK_IMAGE=${PLAN_ROLLBACK_IMAGE}"
+            # The drain wait and the plan review both read the image this cell actually
+            # serves, which is the rollback image on a stranded cell and not the current one.
+            echo "PREDECESSOR_IMAGE_DIGEST=${PREDECESSOR_IMAGE_DIGEST}"
             # The failsafe consumes these; deriving them here keeps them
             # defined for a failure in any later step.
             echo "ISOLATED_MIGRATION_CELLS=${ISOLATED_MIGRATION_CELLS}"
@@ -346,8 +471,7 @@ jobs:
             --argjson hardCap "${EXPECTED_HARD_CAP}" \
             --argjson unobservedBound "${EXPECTED_UNOBSERVED_BOUND}" \
             --argjson protocol "${PREDECESSOR_REHOME_PROTOCOL}" \
-            --argjson drainingOk "$(test "${DEPLOY_MODE}" = rollback \
-              && test "${ROLLBACK_RESUME}" != true && echo true || echo false)" \
+            --argjson drainingOk "${PREDECESSOR_DRAINING_OK}" \
             '.role == "cell" and .cellId == $cell and .cellUrl == $origin and
              (.region == $region or
               ($region == "us-central1" and $protocol == 0 and .region == null)) and
@@ -363,8 +487,7 @@ jobs:
               --argjson hardCap "${EXPECTED_HARD_CAP}" \
               --argjson unobservedBound "${EXPECTED_UNOBSERVED_BOUND}" \
               --argjson protocol "${PREDECESSOR_REHOME_PROTOCOL}" \
-              --argjson drainingOk "$(test "${DEPLOY_MODE}" = rollback \
-              && test "${ROLLBACK_RESUME}" != true && echo true || echo false)" \
+              --argjson drainingOk "${PREDECESSOR_DRAINING_OK}" \
               '[
                 if .role != "cell" then "role" else empty end,
                 if .cellId != $cell then "cellId" else empty end,
@@ -400,16 +523,6 @@ jobs:
           fi
           [[ "${SOURCE_INCARNATION}" =~ ^[0-9a-f-]{36}$ ]]
           echo "SOURCE_INCARNATION=${SOURCE_INCARNATION}" >> "${GITHUB_ENV}"
-          # Rollback is the documented recovery from a failed canary, which
-          # leaves the cell migration-only (and possibly still marked
-          # draining); apply and verify still require a pristine general cell.
-          if test "${DEPLOY_MODE}" = rollback; then
-            PRECHECK_ADMISSION=general-or-migration-only
-            PRECHECK_DRAINING=either
-          else
-            PRECHECK_ADMISSION=general
-            PRECHECK_DRAINING=forbidden
-          fi
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
@@ -435,18 +548,25 @@ jobs:
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
+          # Isolating a migration-only cell must be a read-only no-op; a change here would
+          # mean the live class is not the one this wave planned around.
+          if test "${ENTRY_ADMISSION}" = migration-only; then
+            jq -e '.changed == false' <<< "${ISOLATE_RESULT}" >/dev/null
+          fi
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain \
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}"
+          # The wait has to outlast the pacing window as well as the leases it waits on.
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
             --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
             --heartbeat either --admission migration-only --draining required \
-            --activity restart-safe --expected-image-digests "${CURRENT_IMAGE_DIGEST}" \
-            --timeout-ms 900000
+            --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
+            --timeout-ms 1020000
 
       - id: capacity-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -459,8 +579,14 @@ jobs:
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME == 'true' }}
         shell: bash
         env:
+          CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
           DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
         run: |
+          # A cell on the root pool default emits no pool line, so pin one only where it exists.
+          POOL_ARGUMENTS=()
+          if test -n "${EXPECTED_DATABASE_POOL_MAX}"; then
+            POOL_ARGUMENTS=(--database-pool-max "${EXPECTED_DATABASE_POOL_MAX}")
+          fi
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
@@ -499,9 +625,11 @@ jobs:
                 --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
                 --image "${DESIRED_IMAGE}" \
                 --rollback-image "${DESIRED_IMAGE}" \
+                --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
+                "${POOL_ARGUMENTS[@]}" \
               | jq -e '.changes == 2' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -514,25 +642,48 @@ jobs:
           CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
           DIRECTOR_RUNTIME_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DIRECTOR_RUNTIME_SERVICE_ACCOUNT }}
         run: |
+          # A cell on the root pool default emits no pool line, so pin one only where it exists.
+          POOL_ARGUMENTS=()
+          if test -n "${EXPECTED_DATABASE_POOL_MAX}"; then
+            POOL_ARGUMENTS=(--database-pool-max "${EXPECTED_DATABASE_POOL_MAX}")
+          fi
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
-          terraform -chdir=infra/terraform show -json "${RUNNER_TEMP}/relay-same-cap.tfplan" \
+          PLAN_REVIEW="$(terraform -chdir=infra/terraform show -json \
+            "${RUNNER_TEMP}/relay-same-cap.tfplan" \
             | node dev/scripts/validate-relay-capacity-plan.mjs \
               --mode same-cap-cell --cell-id "${TARGET_CELL_ID}" \
               --hard-cap "${EXPECTED_HARD_CAP}" \
               --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" --image "${DESIRED_IMAGE}" \
-              --rollback-image "${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}" \
+              --rollback-image "${PLAN_ROLLBACK_IMAGE}" \
+              --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
               --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
               --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
-              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
+              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
+              "${POOL_ARGUMENTS[@]}")"
+          echo "${PLAN_REVIEW}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          # A stranded cell already runs the reviewed template, so the apply above replaces
+          # no instance and the drain flag, which only a restart clears, would survive the
+          # whole wave. Roll the MIG explicitly on exactly the policy a template change uses.
+          # Every field is passed: gcloud persists these into the MIG's update policy, and it
+          # defaults the method to substitute on a group with no stateful config, so omitting
+          # one drifts the policy off the reviewed one and fails every later targeted plan.
+          if test "${ROLLBACK_STAGE}" = stranded \
+            && test "$(jq -er '.changes' <<< "${PLAN_REVIEW}")" = 0; then
+            gcloud compute instance-groups managed rolling-action replace "${MIG_NAME}" \
+              --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" \
+              --replacement-method recreate --max-surge 0 --max-unavailable 1
+            gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+              --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          fi
 
       - id: post-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -607,28 +758,36 @@ jobs:
             --director-origin "${DIRECTOR_ORIGIN}" --cell-id "${TARGET_CELL_ID}" \
             --cell-incarnation "${TARGET_INCARNATION}"
 
-      - name: Restore only the verified selected cell to general admission
+      - name: Restore only the verified selected cell to its entry admission
         if: ${{ inputs.mode != 'verify' }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
-          ACTIVATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+          # Activating a migration-only cell would promote it to a serving cell for good, so
+          # restore it with the idempotent isolate that reports the authoritative generation.
+          if test "${ENTRY_ADMISSION}" = migration-only; then
+            RESTORE_MODE=isolate
+          else
+            RESTORE_MODE=activate
+          fi
+          RESTORE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode activate)"
-          echo "${ACTIVATE_RESULT}"
-          SELECTOR_GENERATION_AFTER_ACTIVATE="$(jq -er '.generation' \
-            <<< "${ACTIVATE_RESULT}")"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode "${RESTORE_MODE}")"
+          echo "${RESTORE_RESULT}"
+          SELECTOR_GENERATION_AFTER_RESTORE="$(jq -er '.generation' \
+            <<< "${RESTORE_RESULT}")"
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
             --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
-            --heartbeat fresh --admission general --draining forbidden --activity allowed \
+            --heartbeat fresh --admission "${ENTRY_ADMISSION}" \
+            --draining forbidden --activity allowed \
             --expected-image-digests "${DESIRED_IMAGE_DIGEST}" \
             --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
           node dev/scripts/operate-relay-regional-rehome.mjs \
             --mode inspect --director-origin "${DIRECTOR_ORIGIN}" \
-            --expected-selector-generation "${SELECTOR_GENERATION_AFTER_ACTIVATE}" \
+            --expected-selector-generation "${SELECTOR_GENERATION_AFTER_RESTORE}" \
             --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
             --expected-migration-only-cells "${RESTORED_MIGRATION_CELLS}" \
             --expected-general-cells "${RESTORED_GENERAL_CELLS}" \

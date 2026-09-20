@@ -35,7 +35,7 @@ export function NativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
-  const title = body.kind === 'approval' ? body.title : body.question
+  const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   const answers = nativeChatReceiptAnswers(body)
   return (
     <div

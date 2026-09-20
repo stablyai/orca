@@ -122,7 +122,6 @@ describe('claude structured launch resolution', () => {
       supportedDialogKinds: [],
       extraArgs: { 'replay-user-messages': null },
       systemPrompt: { type: 'preset', preset: 'claude_code' },
-      permissionMode: 'default',
       sessionId: first.providerSessionId
     })
     expect(first.options.resume).toBeUndefined()
@@ -203,9 +202,12 @@ describe('claude structured launch resolution', () => {
   ])('starts a Yolo session in bypassPermissions for args %s', async (claude) => {
     const launch = await resolverFor(record(), undefined, false, { claude })({ identity: IDENTITY })
 
-    expect(launch.options.permissionMode).toBe('bypassPermissions')
-    // The SDK refuses bypassPermissions unless the allow flag rides with it.
-    expect(launch.options.allowDangerouslySkipPermissions).toBe(true)
+    expect(launch.options.extraArgs).toEqual({
+      'replay-user-messages': null,
+      'dangerously-skip-permissions': null
+    })
+    expect(launch.options.permissionMode).toBeUndefined()
+    expect(launch.options.allowDangerouslySkipPermissions).toBeUndefined()
   })
 
   // The common profile: the toggle has never been used, so it has written nothing, and the
@@ -214,8 +216,10 @@ describe('claude structured launch resolution', () => {
   it('starts a session that never opened Agent settings in bypassPermissions', async () => {
     const launch = await resolverFor(record(), undefined, false, {})({ identity: IDENTITY })
 
-    expect(launch.options.permissionMode).toBe('bypassPermissions')
-    expect(launch.options.allowDangerouslySkipPermissions).toBe(true)
+    expect(launch.options.extraArgs).toEqual({
+      'replay-user-messages': null,
+      'dangerously-skip-permissions': null
+    })
   })
 
   // Manual is stored as an empty string, which owns the key and so beats the shipped default.
@@ -226,7 +230,8 @@ describe('claude structured launch resolution', () => {
         identity: IDENTITY
       })
 
-      expect(launch.options.permissionMode).toBe('default')
+      expect(launch.options.permissionMode).toBeUndefined()
+      expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
       expect(launch.options.allowDangerouslySkipPermissions).toBeUndefined()
     }
   )
@@ -242,7 +247,7 @@ describe('claude structured launch resolution', () => {
 
     expect(launch.options.model).toBeUndefined()
     expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
-    expect(launch.options.permissionMode).toBe('default')
+    expect(launch.options.permissionMode).toBeUndefined()
   })
 
   it('keeps the session launch environment pinned after account settings change', async () => {

@@ -89,6 +89,7 @@ export async function acquireCodexStructuredSession(input: {
         sessionId,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: () => primaryThreadId,
+        dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
@@ -132,10 +133,19 @@ export async function acquireCodexStructuredSession(input: {
         onNotification: (method, params) => {
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
           const observedAt = isCodexTurnBoundary(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const dispatchSequenceAtReceipt =
+            method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
           input.deliver(
             acquisition,
             sessionId,
-            () => notificationRetries.handle(sessionId, method, params, observedAt),
+            () =>
+              notificationRetries.handle(
+                sessionId,
+                method,
+                params,
+                observedAt,
+                dispatchSequenceAtReceipt
+              ),
             Buffer.byteLength(JSON.stringify(params ?? null), 'utf8')
           )
         },

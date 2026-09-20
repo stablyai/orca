@@ -12,10 +12,12 @@ import {
   structuredTuiRecoveryProofIsAdmissible
 } from './structured-agent-session-handoff-status'
 import type { StructuredTuiOwner } from './structured-agent-session-handoff-types'
+import { StructuredTuiCatchupStoppedError } from './structured-agent-session-handoff-types'
 import {
   persistReprovedTuiOwner,
   recoverTuiOwnerOrContinue,
   recoverUnavailableTuiAsNative,
+  startRecoveredTuiCatchup,
   type StructuredAgentSessionRestartAccess
 } from './structured-agent-session-handoff-restart-tui'
 
@@ -57,6 +59,15 @@ export async function restoreStructuredAgentSessionHandoff(
       }
       return
     } catch (error) {
+      if (error instanceof StructuredTuiCatchupStoppedError) {
+        if (operationId) {
+          await input.deps.store.recordOperationOutcome({
+            operationId,
+            outcome: { status: 'failed', code: 'agent_session_handoff_failed' }
+          })
+        }
+        throw error
+      }
       lastError = error
       if (attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt))
@@ -276,14 +287,6 @@ async function restoreProving(input: RestartAccess, record: AgentSessionRecord):
     now: input.deps.now()
   })
   await continueHandoff(input, stopped)
-}
-
-async function startRecoveredTuiCatchup(
-  input: RestartAccess,
-  record: AgentSessionRecord
-): Promise<void> {
-  await input.deps.recoverTuiHistoryCatchup?.(record.sessionId, record.lease.runtimeFence)
-  await input.deps.activateTuiHistoryCatchup?.(record.sessionId)
 }
 
 async function continueHandoff(input: RestartAccess, record: AgentSessionRecord): Promise<void> {

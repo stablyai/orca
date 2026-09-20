@@ -64,6 +64,9 @@ export function useAiVaultSessionLaunchActions({
 
   const copyResumeCommand = useCallback(
     async (session: AiVaultSession, worktreeId?: string | null): Promise<void> => {
+      if (session.structuredSession) {
+        return
+      }
       try {
         const preparedSession = await prepareAiVaultSessionForResume(session)
         await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))

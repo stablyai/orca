@@ -182,6 +182,53 @@ describe('constrained idle regional assignment transaction', () => {
     })
   })
 
+  it.each(['next_dispatch_at', 'paused_until'] as const)(
+    'skips the candidate join while %s holds the durable dispatch budget closed',
+    async (column) => {
+      const { store, database, safety } = await setup()
+      const query = vi.spyOn(database, 'query')
+      // One assignment only: setup leaves both fields at 0, and naming the other
+      // one too would assign this column twice, which Postgres rejects.
+      await database.query(
+        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
+        [safety.observedAt + 1]
+      )
+      for (let tick = 0; tick < 3; tick++) {
+        query.mockClear()
+        expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+        expect(query).toHaveBeenCalledTimes(2)
+        expect(query.mock.calls[1]![0]).toMatch(/FROM relay_region_rehome_worker_state/s)
+      }
+      await database.query(
+        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
+        [safety.observedAt]
+      )
+      query.mockClear()
+      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+      expect(query.mock.calls.length).toBeGreaterThan(2)
+    }
+  )
+
+  it('polls when the worker state row has never been written', async () => {
+    const { store, database, safety } = await setup()
+    await database.query('DELETE FROM relay_region_rehome_worker_state')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+  })
+
+  it('leaves the candidate page offset untouched across a closed dispatch budget', async () => {
+    const { store, database, safety } = await setup()
+    const first = await store.selectIdleRegionalRehomeCandidates(safety)
+    await database.query(
+      `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = ? WHERE worker_id = 'global'`,
+      [safety.observedAt + 1]
+    )
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+    await database.query(
+      `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = 0 WHERE worker_id = 'global'`
+    )
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(first)
+  })
+
   it('progresses past a full page of busy candidates without writing eligibility state', async () => {
     const { store, database, safety } = await setup()
     for (const table of [

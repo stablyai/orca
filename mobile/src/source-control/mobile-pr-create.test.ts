@@ -7,6 +7,7 @@ import {
   buildMobilePrCreateParams,
   getMobilePrCreateBlockMessage,
   mobileRepoSelectorFromWorktreeId,
+  createMobilePr,
   resolveMobilePrPrefill,
   shouldPushBeforeMobilePrCreate,
   type MobilePrPrefill
@@ -252,6 +253,38 @@ describe('resolveMobilePrPrefill', () => {
     behind: 0
   }
 
+  it('sends back a provider token this build does not list, unchanged', async () => {
+    // The regression this pins: an enum fallback on the eligibility reply put 'unsupported' on the
+    // wire, and the host that named 'codeberg' refused its own provider.
+    const client = clientWith([
+      ok({
+        provider: 'codeberg',
+        canCreate: true,
+        review: null,
+        blockedReason: null,
+        nextAction: null,
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'not_found'
+      }),
+      ok({ ok: true, number: 12, url: 'https://codeberg.test/pr/12' }),
+      ok({ worktree: { id: 'wt' } })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.provider).toBe('codeberg')
+
+    await createMobilePr(client, 'repo-1::/tmp/wt', {
+      provider: prefill.provider,
+      base: prefill.base,
+      title: prefill.title,
+      body: prefill.body,
+      draft: false
+    })
+    const created = client.calls.find((call) => call.method === 'hostedReview.create')
+    expect(created?.params).toMatchObject({ provider: 'codeberg' })
+  })
+
   it('derives provider/base/title/body from eligibility (non-GitHub honored)', async () => {
     const client = clientWith([
       ok({
@@ -323,7 +356,8 @@ describe('resolveMobilePrPrefill', () => {
       base: 'main',
       title: 'feature/x',
       body: '',
-      canCreate: false,
+      // No `canCreate`: nobody determined anything. A false one would route the copy through
+      // blockedReason and tell the user the branch is not ready.
       blockedReason: null,
       nextAction: null,
       // Eligibility could not be resolved, so the review lookup is unproven.
@@ -331,6 +365,50 @@ describe('resolveMobilePrPrefill', () => {
     })
     // A prefill Orca could not resolve must not offer create.
     expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
+  })
+
+  // Three ways eligibility fails to arrive, one answer: say so, rather than claim the branch is
+  // not ready. Only a host that actually determined `canCreate: false` gets the blocked copy.
+  const UNCONFIRMED =
+    'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+
+  it.each([
+    { name: 'a malformed reply', responses: [ok({ provider: 7 })] },
+    { name: 'a refusal', responses: [fail('nope')] }
+  ])('asks the user to retry after $name', async ({ responses }) => {
+    const prefill = await resolveMobilePrPrefill(clientWith(responses), 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBeUndefined()
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(UNCONFIRMED)
+  })
+
+  it('asks the user to retry after a transport rejection', async () => {
+    const rejecting = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('offline')
+      })
+    }
+    const prefill = await resolveMobilePrPrefill(rejecting, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBeUndefined()
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(UNCONFIRMED)
+  })
+
+  it('still blocks when the host determined the branch is not ready', async () => {
+    const client = clientWith([
+      ok({
+        provider: 'github',
+        canCreate: false,
+        review: null,
+        blockedReason: 'dirty',
+        nextAction: 'commit',
+        defaultBaseRef: 'main',
+        reviewLookupOutcome: 'not_found'
+      })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.canCreate).toBe(false)
+    expect(getMobilePrCreateBlockMessage(prefill)).toBe(
+      'Commit changes before creating a pull request.'
+    )
   })
 
   it('threads reviewLookupOutcome from eligibility into the prefill and blocks needs_push', async () => {

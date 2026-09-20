@@ -270,15 +270,15 @@ export class RelaySessionBroker {
   private async refreshAuthorization(): Promise<void> {
     this.refreshTimer = null
     try {
-      const accessToken = await this.options.refreshAccessToken()
+      const refresh = await this.options.refreshAccessToken()
       this.assertCurrent()
-      if (!accessToken) {
-        this.closeNow()
+      if (refresh.accessToken === null) {
+        this.closeNow(refresh.hostCloseReason)
         return
       }
       const authorization = await exchangeRelayAuthorization({
         endpoint: this.options.authConfig.relayTokenEndpoint,
-        accessToken,
+        accessToken: refresh.accessToken,
         keypair: this.options.keypair,
         fetch: this.options.fetch
       })

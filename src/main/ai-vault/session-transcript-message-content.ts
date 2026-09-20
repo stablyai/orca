@@ -93,7 +93,8 @@ export function transcriptMessagesFromContent(
     if (!item) {
       continue
     }
-    const type = typeof item.type === 'string' ? item.type : null
+    // Codex 0.153+ item_completed blocks are typed `Text`; the set is lowercase.
+    const type = typeof item.type === 'string' ? item.type.toLowerCase() : null
     if (type === 'tool_use') {
       pushMessage(messages, 'tool', toolCallText(item.name, item.input), timestamp)
       continue

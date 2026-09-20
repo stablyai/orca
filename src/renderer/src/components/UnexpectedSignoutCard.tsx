@@ -48,7 +48,6 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const persistedDismissedVersion = useAppStore((s) => s.dismissedUnexpectedSignoutVersion)
   const dismissedVersions = useAppStore((s) => s.unexpectedSignoutDismissedVersions)
   const dismissForVersion = useAppStore((s) => s.dismissUnexpectedSignoutCard)
-  const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [authRefreshReady, setAuthRefreshReady] = useState(false)
@@ -60,6 +59,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   useEffect(() => {
     let cancelled = false
     let attempts = 0
+    let retryTimer: number | null = null
     const refresh = (): void => {
       attempts += 1
       void useAppStore
@@ -72,13 +72,19 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           if (status != null) {
             setAuthRefreshReady(true)
           } else if (attempts < 3) {
-            window.setTimeout(refresh, 500)
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null
+              refresh()
+            }, 500)
           }
         })
     }
     refresh()
     return () => {
       cancelled = true
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer)
+      }
     }
   }, [])
 
@@ -236,12 +242,10 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
               variant="default"
               size="sm"
               className="flex-1"
-              disabled={!canConnect || connecting}
+              disabled={!canConnect}
               onClick={() => void connect()}
             >
-              {connecting
-                ? translate('auto.components.UnexpectedSignoutCard.7e1a9c4d2f', 'Signing in…')
-                : translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
+              {translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
             </Button>
           </div>
         </div>

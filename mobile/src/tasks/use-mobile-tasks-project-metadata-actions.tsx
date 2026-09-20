@@ -59,11 +59,7 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectIssueUpdate.interpret(reply) as {
-          ok?: boolean
-          error?: { message?: string }
-        }
+        const result = githubProjectIssueUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
@@ -182,8 +178,7 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
                   { timeoutMs: 30_000 }
                 )
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = written as { ok?: boolean; error?: { message?: string } }
+        const result = written
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update project field')
         }
@@ -246,11 +241,7 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectIssueTypeUpdate.interpret(reply) as {
-          ok?: boolean
-          error?: { message?: string }
-        }
+        const result = githubProjectIssueTypeUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update issue type')
         }

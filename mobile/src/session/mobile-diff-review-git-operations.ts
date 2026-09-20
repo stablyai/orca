@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { reviewGitMutationSchema } from './diff-review-reply-schema'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 
 // The three file-level git mutations the review screen runs. Each is its own operation because an
@@ -19,7 +20,7 @@ function reviewGitMutation(name: string, method: GitMutationMethod) {
       method,
       acceptance: 'require-result-or-throw-message',
       barrier: 'after-caller-barrier',
-      read: rpcUncheckedPayloadReader('review-git-mutation')
+      read: rpcResultVariant('review-git-mutation', reviewGitMutationSchema)
     })
   )
 }
@@ -35,7 +36,7 @@ export const reviewGitStageRun = bindDeferredRpcOperation(
     method: 'git.stage',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('review-git-mutation')
+    read: rpcResultVariant('review-git-mutation', reviewGitMutationSchema)
   })
 )
 

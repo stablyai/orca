@@ -37,6 +37,15 @@ export type RequestLease<Value> = {
   readonly [LEASE_VALUE]?: (value: Value) => void
 }
 
+/**
+ * Handed to a loader so it can stop before sending a request whose scope has already moved. A probe
+ * and nothing else: it answers the same question `commit` asks and carries no way to publish, so the
+ * loader still has only its return value to say anything with.
+ */
+export type RequestCurrency = {
+  readonly isCurrent: () => boolean
+}
+
 /** Named rather than boolean: a refused publish says which fence refused it. */
 type RequestCommitVerdict = 'committed' | 'retired-generation' | 'foreign-owner'
 
@@ -91,12 +100,14 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
 
   /**
    * Coalesces on the owner-built key and hands back a lease pinned to the generation the request
-   * started in. `fn` returns the value; it is given nothing it could publish with.
+   * started in. `fn` returns the value; the currency probe it is given is read-only, so it still has
+   * nothing it could publish with. A loader that stops on a stale probe returns null and publishes
+   * nothing, which is how a superseded attempt stays off the wire instead of being refused at commit.
    */
   load(
     scope: RequestScope,
     parameters: Params,
-    fn: () => Promise<Value | null>
+    fn: (currency: RequestCurrency) => Promise<Value | null>
   ): Promise<LoadedRequest<Value> | null> {
     const key = this.enter(scope, parameters)
     return this.inFlight.get(key) ?? this.start(key, fn)
@@ -122,16 +133,20 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
 
   private start(
     key: string,
-    fn: () => Promise<Value | null>
+    fn: (currency: RequestCurrency) => Promise<Value | null>
   ): Promise<LoadedRequest<Value> | null> {
-    const lease: RequestLease<Value> = {
-      [LEASE_STATE]: { key, generation: this.currentGeneration, owner: this.owner }
+    const state: RequestLeaseState = { key, generation: this.currentGeneration, owner: this.owner }
+    const lease: RequestLease<Value> = { [LEASE_STATE]: state }
+    // One probe per physical request. A joiner never sees it: its `fn` is never invoked, it awaits
+    // this promise, and `retire()` clears `inFlight`, so no joiner can join across a generation bump.
+    const currency: RequestCurrency = {
+      isCurrent: () => state.generation === this.currentGeneration
     }
     let loaded: Promise<Value | null>
     try {
       // Called here rather than off a microtask so the request reaches the wire in the turn the
       // caller asked for it, which is what orders it against its siblings.
-      loaded = fn()
+      loaded = fn(currency)
     } catch (error) {
       loaded = Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }

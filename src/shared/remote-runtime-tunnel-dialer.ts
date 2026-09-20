@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream'
 import WebSocket from 'ws'
 import type { PairingOffer, PairingTunnel } from './mobile-relay-pairing-offer'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { remoteRuntimeConnectOptions } from './remote-runtime-connect-bound'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
@@ -81,11 +82,12 @@ export function createRemoteRuntimeWebSocket(
   if (pairing.tunnel && !dialer && isLoopbackEndpoint(pairing.endpoint)) {
     throw remoteRuntimeUnavailableError(TUNNEL_DIALER_UNAVAILABLE_MESSAGE)
   }
+  const boundedOptions = remoteRuntimeConnectOptions(options, options.handshakeTimeout)
   return new WebSocket(
     pairing.tunnel && dialer ? tunneledWebSocketEndpoint(pairing.endpoint) : pairing.endpoint,
     pairing.tunnel && dialer
-      ? { ...options, agent: new RemoteRuntimeTunnelAgent(pairing.tunnel, dialer) }
-      : options
+      ? { ...boundedOptions, agent: new RemoteRuntimeTunnelAgent(pairing.tunnel, dialer) }
+      : boundedOptions
   )
 }
 

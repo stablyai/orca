@@ -23,7 +23,6 @@ import { StructuredAgentSessionHostRuntimeState } from './structured-agent-sessi
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import {
   createStructuredAgentSessionHolds,
-  evictOwnedStructuredAgentSessions,
   evictHeldStructuredAgentSession,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -38,10 +37,7 @@ import {
   settleStructuredAgentSessionLateDispatch,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
-import {
-  structuredAgentSessionHostTeardownPhases,
-  tearDownStructuredAgentSessionHost
-} from './structured-agent-session-host-teardown'
+import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -52,6 +48,11 @@ import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import {
+  createStructuredAgentSessionRestartResume,
+  type StructuredAgentSessionRestartResume
+} from './structured-agent-session-restart-resume-host'
+import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -76,6 +77,8 @@ export class StructuredAgentSessionHost {
   private readonly holds: StructuredAgentSessionHolds
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
+  /** Public because the RPC surface addresses it directly; see the restart-resume collaborator. */
+  readonly restartResume: StructuredAgentSessionRestartResume
 
   constructor(readonly deps: StructuredAgentSessionHostDeps) {
     this.backgroundTasks = new StructuredAgentSessionBackgroundTaskChannel(
@@ -144,6 +147,10 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       attachContext: () => this.attachContext(),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
+    })
+    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
+      ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
+      publish: this.subscribers.publish.bind(this.subscribers)
     })
     this.runtimeState.startLeaseRenewal()
   }
@@ -244,21 +251,17 @@ export class StructuredAgentSessionHost {
   flushStreamedEvents = (sessionId: string): Promise<void> =>
     this.runtimeState.flushEventSink(sessionId)
 
-  async flushAllStreamedEvents(): Promise<void> {
-    const retainSessionIds = new Set<string>()
-    await tearDownStructuredAgentSessionHost({
-      phases: structuredAgentSessionHostTeardownPhases({
-        holds: this.holds,
-        runtimeState: this.runtimeState,
-        handoffs: this.handoffs,
-        tasks: this.tasks,
-        evictOwnedSessions: () =>
-          evictOwnedStructuredAgentSessions(this.lifetimeContext(), retainSessionIds)
-      }),
-      sessions: this.sessions,
-      retainSessionIds,
-      acknowledgeSessionRelease: (sessionId) =>
-        this.deps.adapter.acknowledgeSessionRelease?.(sessionId)
+  // Trigger inlined rather than imported: `AgentSessionResumeTrigger` in shared is the canonical
+  // type, and this file has no line budget left for the import.
+  async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
+    await flushStructuredAgentSessionHost({
+      ...this.lifetimeContext(),
+      holds: this.holds,
+      handoffs: this.handoffs,
+      tasks: this.tasks,
+      restartResume: this.restartResume,
+      serialize: this.serialize,
+      trigger: options?.trigger ?? 'quit'
     }).finally(() => this.clientDelivery.closeAll())
   }
 
@@ -268,6 +271,8 @@ export class StructuredAgentSessionHost {
       sessions: this.sessions,
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
       flushStreamedEvents: this.flushStreamedEvents,
+      hasPendingStreamedEvents: (sessionId) =>
+        this.runtimeState.hasPendingStreamedEvents(sessionId),
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       now: () => this.now()

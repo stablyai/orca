@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* History recovery / quarantine / reconcile regressions for DaemonPtyAdapter. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'

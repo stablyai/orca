@@ -1,4 +1,4 @@
-import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
+import type { MobileGitHistoryItem, MobileGitHistoryResult } from './git-history-reply-schema'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { gitHistoryRead } from './mobile-git-read-operations'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
@@ -14,7 +14,7 @@ export type MobileCommitRow = {
 
 // Short relative time for a commit list (just now / Xm / Xh / Xd / Xmo / Xy).
 // `timestampMs` is epoch ms, the unit GitHistoryItem.timestamp already carries.
-export function formatCommitTime(timestampMs: number | undefined, nowMs: number): string {
+export function formatCommitTime(timestampMs: number | null | undefined, nowMs: number): string {
   // Nullish — not falsy — so a real epoch-0 timestamp still formats.
   if (timestampMs == null) {
     return ''
@@ -42,7 +42,7 @@ export function formatCommitTime(timestampMs: number | undefined, nowMs: number)
   return `${Math.floor(months / 12)}y`
 }
 
-export function toMobileCommitRow(item: GitHistoryItem, nowMs: number): MobileCommitRow {
+export function toMobileCommitRow(item: MobileGitHistoryItem, nowMs: number): MobileCommitRow {
   return {
     id: item.id,
     shortId: item.displayId ?? item.id.slice(0, 7),
@@ -53,7 +53,10 @@ export function toMobileCommitRow(item: GitHistoryItem, nowMs: number): MobileCo
   }
 }
 
-export function mapMobileCommitRows(result: GitHistoryResult, nowMs: number): MobileCommitRow[] {
+export function mapMobileCommitRows(
+  result: MobileGitHistoryResult,
+  nowMs: number
+): MobileCommitRow[] {
   return result.items.map((item) => toMobileCommitRow(item, nowMs))
 }
 
@@ -61,12 +64,11 @@ export async function fetchMobileGitHistory(
   client: RpcOperationSender,
   worktreeId: string,
   limit = 50
-): Promise<GitHistoryResult> {
+): Promise<MobileGitHistoryResult> {
   // Not inside the try: a transport rejection must reach the caller as the original error object.
   const reply = await gitHistoryRead.request(client, { worktree: `id:${worktreeId}`, limit })
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    return gitHistoryRead.interpret(reply) as GitHistoryResult
+    return gitHistoryRead.interpret(reply)
   } catch (error) {
     throw new Error(refusedRpcMessageOrFallback(error, 'Failed to load commit history'))
   }

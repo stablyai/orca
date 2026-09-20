@@ -1,10 +1,11 @@
-import { AlertTriangle, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { OpenAIIcon } from '../status-bar/icons'
+import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from './SearchableSetting'
 import { getAccountsCodexSearchEntries } from './accounts-search'
 import { getCodexSystemDefaultSubtitle } from './accounts-pane-runtime'
@@ -152,36 +153,52 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                   )}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() =>
-              void runCodexAccountAction('adding', () =>
-                window.api.codexAccounts.add({
-                  runtime: accountRuntime.runtime,
-                  wslDistro: accountRuntime.wslDistro
-                })
-              )
-            }
-            disabled={
-              // Why: interactive `codex login` needs a desktop browser and
-              // would authenticate against this device, not the server.
-              isRemoteAccountScope ||
-              codexAction !== 'idle' ||
-              wslCapabilitiesLoading ||
-              accountRuntimeUnavailable
-            }
-            className="gap-1.5"
-          >
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() =>
+                void runCodexAccountAction('adding', () =>
+                  window.api.codexAccounts.add({
+                    runtime: accountRuntime.runtime,
+                    wslDistro: accountRuntime.wslDistro
+                  })
+                )
+              }
+              disabled={
+                // Why: interactive `codex login` needs a desktop browser and
+                // would authenticate against this device, not the server.
+                isRemoteAccountScope ||
+                codexAction !== 'idle' ||
+                wslCapabilitiesLoading ||
+                accountRuntimeUnavailable
+              }
+              className="gap-1.5"
+            >
+              {codexAction === 'adding' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Plus className="size-3" />
+              )}
+              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+            </Button>
             {codexAction === 'adding' ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <Plus className="size-3" />
-            )}
-            {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-          </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void window.api.codexAccounts.cancelPendingLogin()}
+                className="gap-1.5"
+              >
+                <X />
+                {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              </Button>
+            ) : null}
+          </div>
         </div>
         {remoteAccountScopeNotice}
+        {/* Why not in a remote scope: the link belongs to a login running on
+        this desktop, which has nothing to do with the server named above. */}
+        {isRemoteAccountScope ? null : <CodexLoginLinkNotice />}
 
         <div className="space-y-2">
           <button

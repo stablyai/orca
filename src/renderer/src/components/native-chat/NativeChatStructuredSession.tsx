@@ -104,6 +104,23 @@ export function NativeChatStructuredSession(
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
   const prompt = controller.prompts[0] ?? null
+  const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
+  const approval = approvalBody
+    ? {
+        title: approvalBody.title,
+        ...(approvalBody.displayName ? { displayName: approvalBody.displayName } : {}),
+        ...(approvalBody.description ? { description: approvalBody.description } : {}),
+        ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
+        ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
+        ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
+        ...(approvalBody.subject ? { subject: approvalBody.subject } : {}),
+        ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
+        options: approvalBody.options.map((option) => ({
+          label: option.label,
+          send: option.id
+        }))
+      }
+    : null
   const cancelPrompt = () => {
     if (controller.turnId && prompt) {
       void controller.cancel(controller.turnId, {
@@ -222,18 +239,15 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
-      {prompt?.body.kind === 'approval' ? (
+      {prompt && approval ? (
         <NativeChatApprovalCard
-          approval={{
-            title: prompt.body.title,
-            ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
-            options: prompt.body.options.map((option) => ({
-              label: option.label,
-              send: option.id
-            }))
-          }}
+          key={`${prompt.itemId}:${prompt.revision}`}
+          approval={approval}
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
           onCancel={cancelPrompt}
+          shouldFocus={props.isVisible && props.isFocusedGroup}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={onLinkClick !== undefined}
         />
       ) : null}
       {prompt && questionBody ? (

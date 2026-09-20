@@ -9,6 +9,9 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  // Why: repeatability is per-command vocabulary. `--agent` repeats for `search`
+  // and is single-valued for `worktree create`, which one global set cannot say.
+  repeatableFlags?: string[]
   positionalArgs?: string[]
   examples?: string[]
   notes?: string[]

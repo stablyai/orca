@@ -34,6 +34,52 @@ export function readOutbox(
   }
 }
 
+type UndeliveredSessionSubscription = {
+  undelivered: boolean
+  listeners: Set<() => void>
+}
+
+const undeliveredSessions = new Map<string, UndeliveredSessionSubscription>()
+
+function publishUndelivered(sessionId: string, undelivered: boolean): void {
+  const subscription = undeliveredSessions.get(sessionId)
+  if (!subscription || subscription.undelivered === undelivered) {
+    return
+  }
+  subscription.undelivered = undelivered
+  for (const listener of subscription.listeners) {
+    listener()
+  }
+}
+
+/** Keep the journal subscription alive while this session still owes delivery. */
+export function hasUndeliveredStructuredAgentSessionOutbox(sessionId: string): boolean {
+  return undeliveredSessions.get(sessionId)?.undelivered ?? readOutbox(sessionId).length > 0
+}
+
+export function subscribeToUndeliveredStructuredAgentSessionOutbox(
+  sessionId: string,
+  listener: () => void
+): () => void {
+  let subscription = undeliveredSessions.get(sessionId)
+  if (!subscription) {
+    subscription = { undelivered: readOutbox(sessionId).length > 0, listeners: new Set() }
+    undeliveredSessions.set(sessionId, subscription)
+  }
+  const owned = subscription
+  owned.listeners.add(listener)
+  return () => {
+    owned.listeners.delete(listener)
+    if (owned.listeners.size === 0 && undeliveredSessions.get(sessionId) === owned) {
+      undeliveredSessions.delete(sessionId)
+    }
+  }
+}
+
+export function resetUndeliveredStructuredAgentSessionOutboxForTests(): void {
+  undeliveredSessions.clear()
+}
+
 export function writeOutbox(
   sessionId: string,
   entries: readonly StructuredAgentSessionOutboxEntry[]
@@ -44,6 +90,7 @@ export function writeOutbox(
     } else {
       localStorage.setItem(storageKey(sessionId), JSON.stringify(entries))
     }
+    publishUndelivered(sessionId, entries.length > 0)
     return true
   } catch {
     return false

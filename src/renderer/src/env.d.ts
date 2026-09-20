@@ -39,6 +39,17 @@ declare module 'monaco-editor/esm/vs/editor/browser/controller/editContext/clipb
   }
 }
 
+// The same class the public `monaco.Uri` re-exports, reachable without loading the editor bundle.
+declare module 'monaco-editor/esm/vs/base/common/uri.js' {
+  export class URI {
+    static file(path: string): URI
+    static parse(value: string): URI
+    readonly scheme: string
+    readonly fsPath: string
+    toString(skipEncoding?: boolean): string
+  }
+}
+
 declare module 'monaco-editor/esm/vs/base/common/async.js' {
   export class Delayer<T = unknown> {
     constructor(defaultDelay: number)

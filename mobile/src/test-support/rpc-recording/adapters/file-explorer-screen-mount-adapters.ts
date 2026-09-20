@@ -1,6 +1,7 @@
-import { createElement, type Context } from 'react'
+import { createElement } from 'react'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
+import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
@@ -14,7 +15,7 @@ const WORKTREE = 'wt-files'
  * release — over a scripted client, instead of reconstructing the hook against a prop.
  */
 export const fileExplorerScreenMountExposures: readonly OperationExposure[] = [
-  ['client-context.tsx', '\nexports.recorderHostClientContext = Ctx;']
+  hostClientContextExposure
 ]
 
 /** The mobile files tab: the directory read, and the capped legacy list it falls back to. */
@@ -26,9 +27,7 @@ export function fileExplorerScreenMountAdapters(
       const Panel = modules.load<typeof import('../../../files/MobileFileExplorerPanel')>(
         'mobile/src/files/MobileFileExplorerPanel.tsx'
       ).MobileFileExplorerPanel
-      const { recorderHostClientContext } = modules.load<{
-        recorderHostClientContext: Context<RpcClientContextValue | null>
-      }>('mobile/src/transport/client-context.tsx')
+      const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
         acquire: () => client,
         release: () => {},
@@ -46,7 +45,7 @@ export function fileExplorerScreenMountAdapters(
       const screen = screenMount(
         () =>
           createElement(
-            recorderHostClientContext.Provider,
+            hostClientContext.Provider,
             { value: context },
             createElement(Panel, { hostId: HOST, worktreeId: WORKTREE, name: 'orca-files' })
           ),

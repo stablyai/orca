@@ -7,12 +7,14 @@ import type { RuntimeMobileDictationController } from './runtime-mobile-dictatio
 import type { RuntimeMobileNotificationController } from './runtime-mobile-notification-controller'
 import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
+import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
+  setSessionSearchEnabled: RuntimeSessionSearchSettingsController['setEnabled']
   onClientEvent: RuntimeClientEventBus['on']
   notifyNativeChatLaunchDraftResolved: RuntimeNativeChatDraftResolutions['notify']
   registerSubscriptionCleanup: RuntimeSubscriptionRegistry['register']
@@ -69,6 +71,7 @@ export type RuntimeServiceCommandSurface = {
 
 type RuntimeServiceCommandOwners = {
   aiVault: RuntimeAiVaultCommands
+  sessionSearchSettings: RuntimeSessionSearchSettingsController
   clientEvents: RuntimeClientEventBus
   nativeChatDraftResolutions: RuntimeNativeChatDraftResolutions
   subscriptions: RuntimeSubscriptionRegistry
@@ -85,6 +88,7 @@ export function installRuntimeServiceCommandSurface(
   owners: RuntimeServiceCommandOwners
 ): void {
   const vault = owners.aiVault
+  const sessionSearchSettings = owners.sessionSearchSettings
   const events = owners.clientEvents
   const drafts = owners.nativeChatDraftResolutions
   const subscriptions = owners.subscriptions
@@ -98,6 +102,7 @@ export function installRuntimeServiceCommandSurface(
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
+    setSessionSearchEnabled: sessionSearchSettings.setEnabled.bind(sessionSearchSettings),
     onClientEvent: events.on.bind(events),
     notifyNativeChatLaunchDraftResolved: drafts.notify.bind(drafts),
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),

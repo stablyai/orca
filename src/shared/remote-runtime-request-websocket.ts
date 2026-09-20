@@ -8,6 +8,11 @@ import {
 } from './e2ee-crypto'
 import { RemoteRuntimeClientError } from './remote-runtime-client'
 import {
+  isRemoteRuntimeConnectTimeout,
+  remoteRuntimeConnectFailureMessage,
+  remoteRuntimeConnectOptions
+} from './remote-runtime-connect-bound'
+import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
@@ -37,9 +42,12 @@ export type RemoteRuntimeWebSocketCallbacks = {
 
 export function openRemoteRuntimeWebSocket(
   pairing: PairingOffer,
-  callbacks: RemoteRuntimeWebSocketCallbacks
+  callbacks: RemoteRuntimeWebSocketCallbacks,
+  // Why: overridable so the connect-bound regression test can pin the behaviour
+  // without spending the production budget of wall-clock time.
+  connectTimeoutMs?: number
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
-  const opened = createSocket(pairing)
+  const opened = createSocket(pairing, connectTimeoutMs)
   if (!opened.ok) {
     return opened
   }
@@ -59,7 +67,11 @@ export function openRemoteRuntimeWebSocket(
   const onError = (error: Error): void => {
     callbacks.onError(
       ws,
-      remoteRuntimeUnavailableError(describeRemoteRuntimeSocketError(pairing, error))
+      remoteRuntimeUnavailableError(
+        isRemoteRuntimeConnectTimeout(error)
+          ? remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
+          : describeRemoteRuntimeSocketError(pairing, error)
+      )
     )
   }
   const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
@@ -107,7 +119,8 @@ export function openRemoteRuntimeWebSocket(
 function ignoreLateSocketError(): void {}
 
 function createSocket(
-  pairing: PairingOffer
+  pairing: PairingOffer,
+  connectTimeoutMs?: number
 ):
   | { ok: true; ws: WebSocket; keyPair: ReturnType<typeof generateKeyPair> }
   | { ok: false; error: RemoteRuntimeClientError } {
@@ -126,7 +139,14 @@ function createSocket(
     }
   }
   try {
-    return { ok: true, ws: createRemoteRuntimeWebSocket(pairing), keyPair }
+    return {
+      ok: true,
+      ws: createRemoteRuntimeWebSocket(
+        pairing,
+        remoteRuntimeConnectOptions(undefined, connectTimeoutMs)
+      ),
+      keyPair
+    }
   } catch (error) {
     return { ok: false, error: remoteRuntimeSocketCreationError(error) }
   }

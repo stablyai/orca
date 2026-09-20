@@ -1,5 +1,9 @@
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision
+} from '@/runtime/runtime-environment-revision'
 import type { AppState } from '../types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import {
   classifyTerminalRetirementWorktree,
@@ -11,13 +15,15 @@ export function startTerminalTabProviderRetirement({
   remoteCloseOwnedByHost,
   retirementPlan,
   state,
-  tabId
+  tabId,
+  canRetireRuntimeTerminal
 }: {
   localPtyTeardownOwnedExternally: boolean
   remoteCloseOwnedByHost: boolean
   retirementPlan: TerminalTabRetirementPlan
   state: AppState
   tabId: string
+  canRetireRuntimeTerminal?: () => boolean
 }): void {
   const fallbackWorktreeRoute = retirementPlan.worktreeId
     ? resolveTerminalWorktreeRoute(state, retirementPlan.worktreeId)
@@ -33,11 +39,7 @@ export function startTerminalTabProviderRetirement({
       }
       const environmentId = terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
       retirementTasks.push(
-        callRuntimeRpc(
-          environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
-          'terminal.close',
-          { terminal: terminal.handle }
-        )
+        retireRuntimeTerminal(environmentId, terminal.handle, canRetireRuntimeTerminal)
       )
     }
   }
@@ -65,4 +67,41 @@ export function startTerminalTabProviderRetirement({
       })
     }
   })
+}
+
+async function retireRuntimeTerminal(
+  environmentId: string | null | undefined,
+  handle: string,
+  canRetire?: () => boolean
+): Promise<unknown> {
+  const target = environmentId
+    ? { kind: 'environment' as const, environmentId }
+    : { kind: 'local' as const }
+  if (!canRetire) {
+    return callRuntimeRpc(target, 'terminal.close', { terminal: handle })
+  }
+  const revision = environmentId
+    ? captureRuntimeEnvironmentRequestRevision(environmentId)
+    : undefined
+  if (environmentId) {
+    await ensureRuntimeEnvironmentCompatible(environmentId, {
+      expectedEnvironmentPairingRevision: revision
+    })
+  }
+  if (
+    (environmentId && getRuntimeEnvironmentRevision(environmentId) !== revision) ||
+    !canRetire()
+  ) {
+    return
+  }
+  // Compatibility was checked above; recheck pane ownership at the actual dispatch boundary.
+  return callRuntimeRpc(
+    target,
+    'terminal.close',
+    { terminal: handle },
+    {
+      skipCompatibilityCheck: true,
+      expectedEnvironmentPairingRevision: revision
+    }
+  )
 }

@@ -97,7 +97,9 @@ async function finalizeClaudePublishedSession(
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
-  if ((await session.connection.close()) !== true) {
+  const connectionClosed = await session.connection.close()
+  session.unbindReadingControl?.()
+  if (connectionClosed !== true) {
     const cleanupError = claudeAcquisitionCleanupError(
       session.connection,
       new Error('provider close unproven')

@@ -1,5 +1,4 @@
 import type {
-  RuntimeFileOpenResult,
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
@@ -184,8 +183,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     reportOpenFailure(options)
     return
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  if (!(opened.value as RuntimeFileOpenResult).opened) {
+  if (!opened.value.opened) {
     reportOpenFailure(options)
     return
   }

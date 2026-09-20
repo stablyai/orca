@@ -28,6 +28,13 @@ export class StructuredTuiLaunchCleanupError extends Error {
   }
 }
 
+export class StructuredTuiCatchupStoppedError extends Error {
+  constructor() {
+    super('TUI transcript catchup was stopped.')
+    this.name = 'StructuredTuiCatchupStoppedError'
+  }
+}
+
 export type StructuredAgentSessionHandoffTransport = {
   hostLabel: string
   launchTui(input: {
@@ -84,8 +91,8 @@ export type StructuredAgentSessionHandoffDeps = {
     transcriptPath?: string
   }) => Promise<void>
   retryPendingSettlement: (sessionId: string) => Promise<boolean>
-  prepareTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
-  recoverTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
+  prepareTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<AbortSignal | void>
+  recoverTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<AbortSignal | void>
   activateTuiHistoryCatchup?: (sessionId: string) => Promise<void>
   stopTuiHistoryCatchup?: (sessionId: string) => void
   publish: (sessionId: string, status: AgentSessionHandoffStatus) => void

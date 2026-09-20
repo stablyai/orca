@@ -88,7 +88,10 @@ export class SessionScannerServiceSearch {
     return {
       operation: 'searchSessions',
       value: instance
-        ? await instance.search(AiVaultSearchRequestSchema.parse(request.request))
+        ? await instance.search(
+            AiVaultSearchRequestSchema.parse(request.request),
+            request.hostScope
+          )
         : { kind: 'unavailable', reason: 'disabled' }
     }
   }

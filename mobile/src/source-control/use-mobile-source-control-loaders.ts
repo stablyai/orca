@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import {
+  GenerationScopedRequestOwner,
+  type RequestScope
+} from '../transport/generation-scoped-request-owner'
 import type { ConnectionState } from '../transport/types'
-import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
-import { gitBranchCompareRead, gitStatusHostPayloadRead } from './mobile-git-read-operations'
+import {
+  nextBranchCompareState,
+  readBranchCompareOutcome,
+  type BranchCompareOutcome
+} from './mobile-branch-compare-outcome'
+import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
   isMobileGitTransientRefreshError,
   isMobileGitUnavailableReply,
-  readMobileGitRefusal,
-  type MobileGitStatusResult
+  readMobileGitRefusal
 } from './mobile-git-status'
-import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import {
   SELECTOR_RETRY_COUNT,
   SELECTOR_RETRY_DELAY_MS,
@@ -30,6 +35,10 @@ type Params = {
   setActionError: (message: string | null) => void
   onStatusLoadSuccess?: () => void
 }
+
+/** The compare is the whole worktree against its base, so its request carries no further parameters. */
+type BranchCompareParameters = Readonly<Record<string, never>>
+const WHOLE_WORKTREE: BranchCompareParameters = {}
 
 export type MobileSourceControlLoaders = {
   screenState: ScreenState
@@ -53,11 +62,12 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     kind: 'idle'
   })
   const currentStatusIdentityRef = useRef('')
-  const currentBranchCompareIdentityRef = useRef('')
   const loadGenerationRef = useRef(0)
-  const branchCompareGenerationRef = useRef(0)
   const mountedRef = useRef(true)
   const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
+  const branchCompare = useRef(
+    new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareOutcome>()
+  ).current
   // Why: the same route can be reused for another worktree/host (identity change);
   // a kept-on-failure `ready` state would otherwise show the previous worktree's
   // data until the fresh load resolves. Reset to loading in the render phase (the
@@ -65,106 +75,65 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   const lastResetIdentityRef = useRef(statusIdentityKey)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
+    // Retire here rather than leaving it to the next load's scope: that load only starts once the
+    // fresh status returns, and an in-flight compare would publish the old worktree's commits first.
+    branchCompare.reset()
     setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
   }
   currentStatusIdentityRef.current = statusIdentityKey
-  currentBranchCompareIdentityRef.current = statusIdentityKey
 
-  const setRootRef = useCallback((node: View | null): void => {
-    if (node !== null) {
-      mountedRef.current = true
-      return
-    }
-    // Why: source-control RPC loads can outlive the route; invalidate pending
-    // writes when the screen detaches without a passive cleanup-only Effect.
-    mountedRef.current = false
-    loadGenerationRef.current += 1
-    branchCompareGenerationRef.current += 1
-  }, [])
+  const setRootRef = useCallback(
+    (node: View | null): void => {
+      if (node !== null) {
+        mountedRef.current = true
+        return
+      }
+      // Why: source-control RPC loads can outlive the route; invalidate pending
+      // writes when the screen detaches without a passive cleanup-only Effect.
+      mountedRef.current = false
+      loadGenerationRef.current += 1
+      branchCompare.reset()
+    },
+    [branchCompare]
+  )
 
   const loadBranchCompare = useCallback(
     async (options?: { preserveReadyOnFailure?: boolean }) => {
-      const loadKey = statusIdentityKey
-      const generation = branchCompareGenerationRef.current + 1
-      branchCompareGenerationRef.current = generation
-      const isCurrentLoad = () =>
-        mountedRef.current &&
-        branchCompareGenerationRef.current === generation &&
-        currentBranchCompareIdentityRef.current === loadKey
-
+      // A compare is a refresh, so nothing it holds is reusable and no attempt may share another's
+      // reply: retiring first is what makes the newest attempt the only one that can still publish.
+      branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
-        if (isCurrentLoad()) {
+        if (mountedRef.current) {
           setBranchCompareState({ kind: 'idle' })
         }
         return false
       }
+      // What retires a compare: this host and this route identity, which is `${hostId}\0${worktreeId}`
+      // and so carries the workspace already. It is in the scope as well as in the render-phase
+      // retire, so a scope the owner has not seen still retires on its own if a load ever reaches it
+      // before that block does.
+      const scope: RequestScope = [client, statusIdentityKey]
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
-      try {
-        const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-        if (!isCurrentLoad()) {
-          return false
-        }
-        if (!baseRef) {
-          // Why: wiping a prior ready compare to idle makes Changes say "No
-          // Changes" even when commits still exist (e.g. after abort-merge refresh).
-          setBranchCompareState((prev) => {
-            if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
-              return prev
-            }
-            return {
-              kind: 'error',
-              message: 'Unable to resolve the base branch for comparison.'
-            }
-          })
-          return false
-        }
-        const reply = await gitBranchCompareRead.request(client, {
-          worktree: `id:${worktreeId}`,
-          baseRef
-        })
-        if (!isCurrentLoad()) {
-          return false
-        }
-        // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
-        // screen degrades on, and no acceptance policy carries the code and message through.
-        if (isMobileGitUnavailableReply(reply)) {
-          setBranchCompareState((prev) => {
-            if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
-              return prev
-            }
-            return { kind: 'idle' }
-          })
-          return false
-        }
-        let compared: unknown
-        try {
-          compared = gitBranchCompareRead.interpret(reply)
-        } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed changes'))
-        }
-        setBranchCompareState({
-          kind: 'ready',
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          result: compared as MobileGitBranchCompareResult
-        })
-        return true
-      } catch (err) {
-        if (!isCurrentLoad()) {
-          return false
-        }
-        const message = err instanceof Error ? err.message : 'Unable to load committed changes'
-        setBranchCompareState((prev) => {
-          if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
-            return prev
-          }
-          return { kind: 'error', message }
-        })
+      const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
+        readBranchCompareOutcome(client, worktreeId, currency)
+      )
+      // The mount latch is not the owner's to keep: a detached route has no screen to publish to,
+      // which is a fact about the view, not about which reply is current.
+      if (!loaded || !mountedRef.current) {
         return false
       }
+      if (branchCompare.commit(loaded.lease, loaded.value) !== 'committed') {
+        return false
+      }
+      const outcome = loaded.value
+      setBranchCompareState((prev) =>
+        nextBranchCompareState(outcome, prev, options?.preserveReadyOnFailure === true)
+      )
+      return outcome.kind === 'ready'
     },
-    [client, connState, statusIdentityKey, worktreeId]
+    [branchCompare, client, connState, statusIdentityKey, worktreeId]
   )
 
   const loadStatus = useCallback(
@@ -214,8 +183,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             // refusal's code, which no acceptance policy carries through.
             const refusal = readMobileGitRefusal(reply)
             if (!refusal) {
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-              const result = gitStatusHostPayloadRead.interpret(reply) as MobileGitStatusResult
+              const result = gitStatusHostPayloadRead.interpret(reply)
               setScreenState({ kind: 'ready', status: result })
               void loadBranchCompare({ preserveReadyOnFailure: true })
               if (options?.clearActionErrorOnSuccess !== false) {

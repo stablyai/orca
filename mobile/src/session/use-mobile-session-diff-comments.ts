@@ -38,9 +38,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     if (!response.accepted) {
       return
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this member unread; the reader hands back the same `worktree` value.
-    const worktree = response.value as { diffComments?: unknown } | undefined
-    setDiffComments(normalizeMobileDiffComments(worktree?.diffComments, worktreeId))
+    setDiffComments(normalizeMobileDiffComments(response.value?.diffComments, worktreeId))
   }, [client, connState, worktreeId, isFloatingWorkspaceRoute])
 
   const persistDiffComments = useCallback(

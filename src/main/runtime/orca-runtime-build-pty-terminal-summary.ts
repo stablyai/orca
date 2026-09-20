@@ -5,12 +5,20 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../shared/runtime-types'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { ptyHoldsRecordedSurface, type PtySurfaceTopology } from './pty-recorded-surface-topology'
 import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import { readTerminalTail } from './terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from './structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
 
 export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+  protected ptySurfaceTopology(): PtySurfaceTopology {
+    return {
+      graphSequence: this.graphSequence,
+      ptyIdHoldingPane: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId))?.ptyId
+    }
+  }
+
   protected buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
@@ -19,7 +27,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
 
     const title = getLatestPtyTitle(pty)
     const pane = parsePaneKey(pty.paneKey ?? '')
-    const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
+    const orphaned = !ptyHoldsRecordedSurface(pty, this.ptySurfaceTopology())
     return {
       handle: this.issuePtyHandle(pty),
       ptyId: pty.ptyId,

@@ -9,6 +9,48 @@ export type PostgresPoolPressureCounts = {
   databasePoolWaitMsMax: number
 }
 
+// A pool that cannot hand out a client throws a bare Error with no SQLSTATE, so
+// the message is all node-postgres gives us. Both of these come only from
+// pg-pool's connect path, so neither can be a statement that already ran.
+const POOL_CONNECT_TIMEOUT_MESSAGES = [
+  // No pooled client came free within connectionTimeoutMillis.
+  'timeout exceeded when trying to connect',
+  // A new client's own handshake outran connectionTimeoutMillis.
+  'Connection terminated due to connection timeout'
+]
+// pg raises this whenever a socket ends early, during the handshake and mid
+// statement alike, so only the acquire boundary can tell the two apart.
+const CONNECTION_TERMINATED_MESSAGE = 'Connection terminated unexpectedly'
+
+// Membership is tracked beside the error rather than on it: an error object may
+// be frozen, and a mutated one would leak the marker into logs.
+const poolAcquireFailures = new WeakSet<object>()
+
+function errorMessage(error: unknown): string {
+  return String((error as { message?: unknown } | null)?.message)
+}
+
+function isPostgresPoolAcquireFailure(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && poolAcquireFailures.has(error)
+}
+
+// connectionTimeoutMillis firing, either waiting in the queue or dialling.
+export function isPostgresPoolConnectTimeout(error: unknown): boolean {
+  const message = errorMessage(error)
+  return POOL_CONNECT_TIMEOUT_MESSAGES.some((known) => message.includes(known))
+}
+
+// Every way the pool can fail to hand out a usable client. An early-ended
+// socket counts only at the acquire boundary: retrying a statement whose commit
+// outcome is unknown is not safe.
+export function isPostgresPoolConnectFailure(error: unknown): boolean {
+  if (isPostgresPoolConnectTimeout(error)) return true
+  return (
+    errorMessage(error).includes(CONNECTION_TERMINATED_MESSAGE) &&
+    isPostgresPoolAcquireFailure(error)
+  )
+}
+
 const emptyCounts = (): PostgresPoolPressureCounts => ({
   databasePoolTotal: 0,
   databasePoolIdle: 0,
@@ -32,14 +74,14 @@ export class PostgresPoolPressure {
   async connect(): Promise<pg.PoolClient> {
     const waitingBefore = this.pool.waitingCount
     const connection = this.pool.connect()
-    if (this.pool.waitingCount <= waitingBefore) return await connection
+    if (this.pool.waitingCount <= waitingBefore) return await markedAcquire(connection)
 
     const waiter = Symbol()
     const startedAt = this.now()
     this.waiters.set(waiter, startedAt)
     this.waitersMax = Math.max(this.waitersMax, this.waiters.size)
     try {
-      return await connection
+      return await markedAcquire(connection)
     } finally {
       this.waitMsMax = Math.max(this.waitMsMax, this.now() - startedAt)
       this.waiters.delete(waiter)
@@ -85,6 +127,15 @@ export class PostgresPoolPressure {
       databasePoolOldestWaitMs: oldestWaitMs,
       databasePoolWaitMsMax: Math.max(this.waitMsMax, oldestWaitMs)
     }
+  }
+}
+
+async function markedAcquire(connection: Promise<pg.PoolClient>): Promise<pg.PoolClient> {
+  try {
+    return await connection
+  } catch (error) {
+    if (typeof error === 'object' && error !== null) poolAcquireFailures.add(error)
+    throw error
   }
 }
 

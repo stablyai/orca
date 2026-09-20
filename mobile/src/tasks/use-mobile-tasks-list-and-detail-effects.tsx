@@ -6,12 +6,7 @@ import {
   useCallback,
   useEffect
 } from './mobile-tasks-dependencies'
-import {
-  type LinearState,
-  type LinearTeam,
-  getTaskPresetQuery,
-  scopeGitHubTaskSearch
-} from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
 import {
   linearComposerTeamListRead,
   linearTeamStateListRead
@@ -202,8 +197,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
         }
         const accepted = linearComposerTeamListRead.interpret(response)
         if (accepted.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          const teams = accepted.value as LinearTeam[]
+          const teams = accepted.value
           setLinearTeams(teams)
           setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
         } else {
@@ -244,8 +238,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
           return
         }
         const accepted = linearTeamStateListRead.interpret(statesResponse)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        setLinearStates(accepted.accepted ? (accepted.value as LinearState[]) : [])
+        setLinearStates(accepted.accepted ? accepted.value : [])
       })
       .catch(() => {
         if (!stale) {

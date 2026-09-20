@@ -182,9 +182,11 @@ export abstract class AgentHookServerState {
     }
   ): 'accept' | 'restart' | 'suppress'
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
+  protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined
   protected abstract recordRetiredPaneFence(
     paneKeys: ReadonlySet<string>,
-    aliases: readonly RetiredPaneAlias[]
+    aliases: readonly RetiredPaneAlias[],
+    retirementId?: string
   ): void
   protected abstract markPaneClosedForAgentStatus(paneKey: string): void
   protected abstract attachStatusTiming(

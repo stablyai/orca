@@ -1,5 +1,13 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
-import { IDLE_REHOME_PAGE_SIZE, selectIdleRegionalRehomes } from './idle-regional-rehome-selection.js'
+import {
+  selectIdleRegionalRehomes,
+  type IdleRegionalRehomeCandidate,
+  type IdleRehomeHostCursor
+} from './idle-regional-rehome-selection.js'
+import {
+  RegionalRehomePollTelemetry,
+  type RegionalRehomePollGate
+} from './regional-rehome-poll-telemetry.js'
 import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
 import {
   previewRegionalRehomeEligibility,
@@ -45,6 +53,15 @@ import {
   ASSIGNMENT_CONNECTION_HEADROOM_QUERY
 } from './assignment-connection-headroom-query.js'
 import { AssignmentIdentityQueue } from './assignment-identity-queue.js'
+import {
+  CONTROL_RENEWAL_BATCH_SQL,
+  CONTROL_RENEWAL_STATEMENT_OUTCOMES,
+  controlRenewalBatchParams,
+  orderedControlRenewalRows,
+  readControlRenewalOutcomes,
+  type ControlRenewalOutcome,
+  type ControlRenewalRequest
+} from './control-renewal-statement.js'
 import {
   REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
 } from './database.js'
@@ -101,21 +118,8 @@ type RelayAssignmentStoreOptions = {
   recordControlRenewal?: (durationMs: number, outcome: ControlRenewalOutcome) => void
 }
 
-export type ControlRenewalOutcome =
-  | 'renewed'
-  | 'assignment_not_found'
-  | 'activity_cell_not_authoritative'
-  | 'control_activity_not_found'
-  | 'control_activity_moved'
-  | 'database_error'
+export type { ControlRenewalOutcome, ControlRenewalRequest }
 
-const CONTROL_RENEWAL_OUTCOMES = new Set<ControlRenewalOutcome>([
-  'renewed',
-  'assignment_not_found',
-  'activity_cell_not_authoritative',
-  'control_activity_not_found',
-  'control_activity_moved'
-])
 export type RelayAssignment = AssignmentIdentity & {
   cellId: string
   cellUrl: string
@@ -338,6 +342,26 @@ const ACTIVITY_REQUEST_UNITS: Record<AssignmentActivityKind, number> = {
 }
 
 const ASSIGNMENT_LOCK_RETRY_DEADLINE_MS = 15_000
+
+// THE ROW LOCK ORDER. Every transaction that takes more than one of these
+// takes them in this order, whichever role it runs on:
+//
+//   1. relay_assignments               (the host's row)
+//   2. relay_assignment_migrations
+//      relay_assignment_activity_leases
+//   3. relay_control_connection_reservations   (lockControlConnectionReservations)
+//   4. relay_cells                     (lockCellInventory / lockCellRows / the
+//                                       conditional reservation UPDATE)
+//
+// relay_cells is last because it is the only row shared by every host on a
+// cell: a transaction that takes it early holds it across every round trip
+// that follows, and on a cell far from PostgreSQL that is what turns accepts
+// into a queue. Everything above it is per-host, so holding it longer costs
+// only that host. Paths that read the inventory to make a placement decision
+// cannot defer relay_cells, so they lock the host's rows from tiers 1-3 up
+// front instead, before the inventory, and re-check what they read afterwards.
+// Tier 1 is what serialises two transactions on the same host; the tiers below
+// it keep transactions on *different* hosts from cycling through relay_cells.
 // Why: one global FOR UPDATE over a 23-row table serialises every director and
 // cell. At the 1s pool lock_timeout each blocked waiter also holds a pooled
 // client for a full second, so the queue converts contention into pool
@@ -392,6 +416,25 @@ class AssignmentInventoryLockUnavailable extends Error {
 class AssignmentInventoryScopeChanged extends Error {
   constructor() {
     super('assignment_inventory_scope_changed')
+  }
+}
+
+// Why a reason of its own: a host whose home cell is fenced-but-unattested is
+// refused regardless of fleet headroom, so reporting it as capacity sends
+// operators after capacity that was never short. Every cell boot and every
+// readiness dip produces these.
+export type RelayHomeCellUnavailableCause =
+  | 'draining'
+  | 'booting'
+  | 'unheard'
+  | 'not_ready'
+
+export class RelayHomeCellUnavailableError extends Error {
+  constructor(
+    readonly cellId: string,
+    readonly unavailableCause: RelayHomeCellUnavailableCause
+  ) {
+    super('relay_home_cell_unavailable')
   }
 }
 
@@ -831,6 +874,9 @@ export class RelayAssignmentStore {
     let retryScope: RetriedAssignmentInventoryScope =
       inventoryScope === 'all' ? 'all' : 'general'
     return await this.database.transaction(async (transaction) => {
+      // The retry paths below open with the inventory, so this path takes its
+      // host rows before any of them rather than where the others do.
+      await this.lockControlConnectionReservations(transaction, identity, lockMode)
       let lockedCells =
         inventoryScope === 'all'
           ? await this.lockCellInventory(transaction, lockMode)
@@ -925,7 +971,10 @@ export class RelayAssignmentStore {
             )) &&
             !(await this.cellHasCommittedFence(transaction, current.cellId, now))
           ) {
-            throw new Error('relay_capacity_exhausted')
+            throw new RelayHomeCellUnavailableError(
+              current.cellId,
+              await this.homeCellUnavailableCause(transaction, current.cellId, now)
+            )
           }
           forcedDeadReassignment = true
         }
@@ -2677,7 +2726,13 @@ export class RelayAssignmentStore {
         )
         if (assignment.cellId !== text(row, 'cell_id')) moved++
       } catch (error) {
-        if (!(error instanceof Error && error.message === 'relay_capacity_exhausted')) throw error
+        // One unplaceable host must not end the sweep for the rest.
+        if (
+          !(error instanceof RelayHomeCellUnavailableError) &&
+          !(error instanceof Error && error.message === 'relay_capacity_exhausted')
+        ) {
+          throw error
+        }
       }
     }
     return moved
@@ -3333,28 +3388,57 @@ export class RelayAssignmentStore {
     return previewRegionCorrection(this.database, this.now())
   }
 
-  private idleRegionalCandidateOffset = 0
+  private idleRegionalCandidateCursor: IdleRehomeHostCursor = null
+  private readonly regionalRehomePollTelemetry = new RegionalRehomePollTelemetry()
 
   async selectIdleRegionalRehomeCandidates(
     processSafety?: RegionalRehomeSafetySnapshot
-  ): Promise<Array<IdleRegionalRehomeRequest & { sourceCellUrl: string }>> {
+  ): Promise<IdleRegionalRehomeCandidate[]> {
     const now = this.now()
-    if (!processSafety || this.regionalRehomeCohortPercent === 0) return []
+    const gated = (gate: RegionalRehomePollGate): IdleRegionalRehomeCandidate[] => {
+      this.regionalRehomePollTelemetry.record({ now, gate, candidates: 0 })
+      return []
+    }
+    if (!processSafety) return gated('process-safety-unavailable')
+    if (this.regionalRehomeCohortPercent === 0) return gated('cohort-zero')
     const control = (await this.database.query(
-      "SELECT enabled, not_before FROM relay_region_rehome_control WHERE control_id = 'global'"
+      `SELECT enabled, not_before, preference_max_age_ms, host_cooldown_ms
+       FROM relay_region_rehome_control WHERE control_id = 'global'`
     ))[0]
-    if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) return []
+    if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) {
+      return gated('control-closed')
+    }
+    // The dispatch budget is durable and global, but until now only
+    // `commitIdleRegionalRehome` consulted it -- after the join had already run and
+    // the worker had already POSTed every candidate to its source cell. An absent
+    // row means the budget has never been spent, so it opens the gate.
+    const worker = (await this.database.query(
+      `SELECT paused_until, next_dispatch_at FROM relay_region_rehome_worker_state
+       WHERE worker_id = 'global'`
+    ))[0]
+    if (worker && (Number(worker.paused_until) > now || Number(worker.next_dispatch_at) > now)) {
+      return gated('budget-closed')
+    }
     const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
-    if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return []
-    const candidates = await selectIdleRegionalRehomes({
+    if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return gated('fleet-safety')
+    const startedAt = performance.now()
+    const selection = await selectIdleRegionalRehomes({
       database: this.database, now, heartbeatTtlMs: this.heartbeatTtlMs,
-      cohortPercent: this.regionalRehomeCohortPercent, offset: this.idleRegionalCandidateOffset,
+      cohortPercent: this.regionalRehomeCohortPercent,
+      preferenceMaxAgeMs: Number(control.preference_max_age_ms),
+      hostCooldownMs: Number(control.host_cooldown_ms),
+      cursor: this.idleRegionalCandidateCursor,
       connectionHeadroom: await this.connectionHeadroomByCell(this.database),
       cellIsClean: regionalRehomeCellSafetyIsClean
     })
-    this.idleRegionalCandidateOffset = candidates.length < IDLE_REHOME_PAGE_SIZE
-      ? 0 : this.idleRegionalCandidateOffset + candidates.length
-    return candidates
+    this.idleRegionalCandidateCursor = selection.cursor
+    this.regionalRehomePollTelemetry.record({
+      now,
+      gate: 'open',
+      candidates: selection.candidates.length,
+      selectionMs: performance.now() - startedAt
+    })
+    return selection.candidates
   }
 
   async commitIdleRegionalRehome(
@@ -3478,132 +3562,149 @@ export class RelayAssignmentStore {
     })
   }
 
+  // Kept as the single-row contract for callers and tests: resolves on a
+  // renewal and throws the outcome (or the driver's own error) otherwise.
   async renewControlActivity(
     identity: AssignmentIdentity,
     input: { activityId: string; cellId: string; expiresAt: number }
   ): Promise<void> {
     validateActivityId(input.activityId)
     const now = this.now()
-    const maximumExpiresAt =
-      now +
-      ASSIGNMENT_LIMITS.activityLeaseMs +
-      RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2
-    if (
-      !Number.isSafeInteger(input.expiresAt) ||
-      input.expiresAt <= now ||
-      input.expiresAt > maximumExpiresAt
-    ) {
+    if (!controlRenewalExpiryIsValid(input.expiresAt, now)) {
       throw new Error('invalid_activity_expiry')
     }
     const startedAt = performance.now()
     let outcome: ControlRenewalOutcome = 'database_error'
     try {
-      outcome =
-        this.database.dialect === 'postgres'
-          ? await this.renewPostgresControlActivity(identity, input, now)
-          : await this.renewTransactionalControlActivity(identity, input, now)
+      outcome = await this.renewOneControlActivity({ identity, ...input }, now)
       if (outcome !== 'renewed') throw new Error(outcome)
     } catch (error) {
-      const message = String((error as { message?: unknown }).message)
-      if (CONTROL_RENEWAL_OUTCOMES.has(message as ControlRenewalOutcome)) {
-        outcome = message as ControlRenewalOutcome
-      }
+      outcome = controlRenewalOutcomeOfError(error)
       throw error
     } finally {
       this.recordControlRenewal?.(performance.now() - startedAt, outcome)
     }
   }
 
-  private async renewPostgresControlActivity(
-    identity: AssignmentIdentity,
-    input: { activityId: string; cellId: string; expiresAt: number },
+  // Renews every due control lease on a cell in one write transaction, returning
+  // one outcome per input row in input order. Never throws for a multi-row batch:
+  // a caller routes its own session on its own outcome.
+  async renewControlActivities(
+    rows: readonly ControlRenewalRequest[]
+  ): Promise<ControlRenewalOutcome[]> {
+    const now = this.now()
+    const outcomes = new Array<ControlRenewalOutcome>(rows.length)
+    const accepted: Array<ControlRenewalRequest & { index: number }> = []
+    for (const [index, row] of rows.entries()) {
+      const rejection = controlRenewalRejection(row, now)
+      if (rejection) outcomes[index] = rejection
+      else accepted.push({ ...row, index })
+    }
+    const startedAt = performance.now()
+    try {
+      if (accepted.length === 0) return outcomes
+      let results: ControlRenewalOutcome[]
+      try {
+        results = await this.executeControlRenewals(accepted, now)
+      } catch (error) {
+        if (rows.length === 1) {
+          outcomes[accepted[0]!.index] = controlRenewalOutcomeOfError(error)
+          throw error
+        }
+        results = accepted.map(() => 'database_error')
+      }
+      for (const [position, row] of accepted.entries()) outcomes[row.index] = results[position]!
+      return outcomes
+    } finally {
+      // Every path, so a rethrown lone renewal and an all-invalid batch are
+      // counted the same as a batch that reached PostgreSQL.
+      const durationMs = performance.now() - startedAt
+      for (const outcome of outcomes) this.recordControlRenewal?.(durationMs, outcome)
+    }
+  }
+
+  private async executeControlRenewals(
+    rows: readonly ControlRenewalRequest[],
+    now: number
+  ): Promise<ControlRenewalOutcome[]> {
+    if (rows.length === 1) return [await this.renewOneControlActivity(rows[0]!, now)]
+    if (this.database.dialect !== 'postgres') {
+      // Correctness over throughput: the SQLite writer is serialized anyway, and
+      // this is the dialect the unit suites run on.
+      return await this.renewControlActivitiesInSeries(rows, now)
+    }
+    const ordered = orderedControlRenewalRows(rows.map((row, index) => ({ ...row, index })))
+    const outcomes = new Array<ControlRenewalOutcome>(rows.length)
+    try {
+      const parsed = readControlRenewalOutcomes(
+        await this.database.query(
+          CONTROL_RENEWAL_BATCH_SQL,
+          controlRenewalBatchParams(ordered, now)
+        ),
+        ordered.length
+      )
+      for (const [position, row] of ordered.entries()) outcomes[row.index] = parsed[position]!
+      return outcomes
+    } catch (error) {
+      // One statement means one contended assignment row can fail the whole
+      // batch, so a failure degrades to the per-host statements this replaced
+      // rather than costing every other host on the cell its renewal.
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_control_renewal_batch_failed',
+          rows: ordered.length,
+          message: String((error as { message?: unknown }).message)
+        })
+      )
+      await Promise.all(
+        ordered.map(async (row) => {
+          try {
+            outcomes[row.index] = await this.renewOneControlActivity(row, now)
+          } catch {
+            outcomes[row.index] = 'database_error'
+          }
+        })
+      )
+      return outcomes
+    }
+  }
+
+  private async renewControlActivitiesInSeries(
+    rows: readonly ControlRenewalRequest[],
+    now: number
+  ): Promise<ControlRenewalOutcome[]> {
+    const outcomes: ControlRenewalOutcome[] = []
+    for (const row of rows) {
+      try {
+        outcomes.push(await this.renewOneControlActivity(row, now))
+      } catch {
+        outcomes.push('database_error')
+      }
+    }
+    return outcomes
+  }
+
+  // Returns the outcome; a driver or pool failure reaches the caller unchanged.
+  private async renewOneControlActivity(
+    row: ControlRenewalRequest,
     now: number
   ): Promise<ControlRenewalOutcome> {
-    const row = (
-      await this.database.query(
-        `WITH assignment_state AS MATERIALIZED (
-           SELECT cell_id, assignment_epoch
-           FROM relay_assignments
-           WHERE user_id = ? AND relay_host_id = ?
-           FOR UPDATE
-         ), migration_state AS MATERIALIZED (
-           SELECT migration.assignment_epoch
-           FROM relay_assignment_migrations migration
-           JOIN assignment_state assignment
-             ON migration.target_cell_id = assignment.cell_id
-            AND migration.assignment_epoch = assignment.assignment_epoch
-           WHERE migration.user_id = ? AND migration.relay_host_id = ?
-             AND migration.source_cell_id = ?
-             AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
-           FOR UPDATE OF migration
-         ), authorization_state AS MATERIALIZED (
-           SELECT 1 AS authorized
-           FROM assignment_state assignment
-           WHERE assignment.cell_id = ? OR EXISTS (SELECT 1 FROM migration_state)
-         ), lease_state AS MATERIALIZED (
-           SELECT lease.activity_kind, lease.cell_id
-           FROM relay_assignment_activity_leases lease
-           CROSS JOIN authorization_state
-           WHERE lease.user_id = ? AND lease.relay_host_id = ? AND lease.activity_id = ?
-           FOR UPDATE OF lease
-         ), renewed_lease AS (
-           UPDATE relay_assignment_activity_leases lease
-           SET expires_at = GREATEST(lease.expires_at, ?),
-               updated_at = GREATEST(lease.updated_at, ?)
-           FROM lease_state state
-           WHERE lease.user_id = ? AND lease.relay_host_id = ? AND lease.activity_id = ?
-             AND state.activity_kind = 'control' AND state.cell_id = ?
-           RETURNING 1
-         ), renewed_assignment AS (
-           UPDATE relay_assignments assignment
-           SET lease_expires_at = GREATEST(assignment.lease_expires_at, ?),
-               last_activity_at = GREATEST(assignment.last_activity_at, ?)
-           WHERE assignment.user_id = ? AND assignment.relay_host_id = ?
-             AND EXISTS (SELECT 1 FROM renewed_lease)
-           RETURNING 1
-         )
-         SELECT CASE
-           WHEN NOT EXISTS (SELECT 1 FROM assignment_state)
-             THEN 'assignment_not_found'
-           WHEN NOT EXISTS (SELECT 1 FROM authorization_state)
-             THEN 'activity_cell_not_authoritative'
-           WHEN NOT EXISTS (SELECT 1 FROM lease_state)
-             THEN 'control_activity_not_found'
-           WHEN EXISTS (
-             SELECT 1 FROM lease_state
-             WHERE activity_kind <> 'control' OR cell_id <> ?
-           ) THEN 'control_activity_moved'
-           WHEN EXISTS (SELECT 1 FROM renewed_assignment) THEN 'renewed'
-           ELSE 'control_activity_not_found'
-         END AS outcome`,
-        [
-          identity.userId,
-          identity.relayHostId,
-          identity.userId,
-          identity.relayHostId,
-          input.cellId,
-          input.cellId,
-          identity.userId,
-          identity.relayHostId,
-          input.activityId,
-          input.expiresAt,
-          now,
-          identity.userId,
-          identity.relayHostId,
-          input.activityId,
-          input.cellId,
-          input.expiresAt,
-          now,
-          identity.userId,
-          identity.relayHostId,
-          input.cellId
-        ]
-      )
-    )[0]
-    if (!row) throw new Error('missing_control_renewal_outcome')
-    const outcome = text(row, 'outcome') as ControlRenewalOutcome
-    if (!CONTROL_RENEWAL_OUTCOMES.has(outcome)) throw new Error('invalid_control_renewal_outcome')
-    return outcome
+    if (this.database.dialect === 'postgres') {
+      return readControlRenewalOutcomes(
+        await this.database.query(
+          CONTROL_RENEWAL_BATCH_SQL,
+          controlRenewalBatchParams([row], now)
+        ),
+        1
+      )[0]!
+    }
+    try {
+      return await this.renewTransactionalControlActivity(row.identity, row, now)
+    } catch (error) {
+      const message = String((error as { message?: unknown }).message)
+      if (!CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)) throw error
+      return message as ControlRenewalOutcome
+    }
   }
 
   private async renewTransactionalControlActivity(
@@ -3743,14 +3844,16 @@ export class RelayAssignmentStore {
               ? activityId
               : pendingId
             : activityId
-        await this.removeSupersededSameCellControls(
+        // Accumulated, not applied: every cell-row write on this path is folded
+        // into one conditional statement issued last, below.
+        let reservationDelta = -(await this.removeSupersededSameCellControls(
           transaction,
           identity,
           activityLeases,
           input.cellId,
           retainedActivityId,
           now
-        )
+        ))
         if (existing) {
           await transaction.query(
             `UPDATE relay_assignment_activity_leases SET expires_at = ?, updated_at = ?
@@ -3768,7 +3871,7 @@ export class RelayAssignmentStore {
             )
             await this.touchAssignment(transaction, identity, expiresAt, now)
           } else {
-            await this.adjustCellReservationAtomically(transaction, input.cellId, 1)
+            reservationDelta += ACTIVITY_REQUEST_UNITS.control
             await this.adjustActivityCount(transaction, identity, 'control', 1, expiresAt, now)
             await transaction.query(
               `INSERT INTO relay_assignment_activity_leases
@@ -3824,6 +3927,17 @@ export class RelayAssignmentStore {
             input.idleRegionalRehome && input.cellIncarnation ? 1 : 0
           ]
         )
+        // Last, and only if the count actually moved: the cell row is shared by
+        // every host on the cell, and this transaction spans a dozen round
+        // trips. Holding its write lock from the first of them capped a
+        // far-from-Postgres cell at a couple of accepts a second.
+        if (reservationDelta !== 0) {
+          await this.adjustCellReservationAtomically(
+            transaction,
+            input.cellId,
+            reservationDelta
+          )
+        }
         return activityId
       })
     })
@@ -3868,6 +3982,7 @@ export class RelayAssignmentStore {
       }
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
       await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
       const target = cells.find((row) => text(row, 'cell_id') === targetCellId)
       if (!target || integer(target, 'enabled') !== 1) throw new Error('target_cell_unavailable')
@@ -4073,6 +4188,7 @@ export class RelayAssignmentStore {
   ): Promise<DeadSourceCompletionResult> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
       let lockedCells: SqlRow[] | undefined
       if (inventoryFirst) {
         try {
@@ -4220,6 +4336,7 @@ export class RelayAssignmentStore {
   ): Promise<RelayAssignmentMigration> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
+      await this.lockControlConnectionReservations(transaction, identity)
       const lockedCells = inventoryFirst
         ? await this.lockCellInventory(transaction, 'request')
         : undefined
@@ -4712,7 +4829,10 @@ export class RelayAssignmentStore {
             throw new Error('migration_activity_topology_mismatch')
           }
         }
-        if (obsoleteLeases.length > 0) await this.lockCellInventory(transaction, 'request')
+        if (obsoleteLeases.length > 0) {
+          await this.lockControlConnectionReservations(transaction, identity)
+          await this.lockCellInventory(transaction, 'request')
+        }
         for (const lease of obsoleteLeases) {
           await this.removeActivityLease(transaction, identity, lease, now)
         }
@@ -5055,6 +5175,7 @@ export class RelayAssignmentStore {
       const sourceCellId = text(assignment, 'cell_id')
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
       await this.lockAssignmentActivities(transaction, identity)
+      await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
       const admission = await cellAdmissionStates(transaction)
       const targetRow = cells.find(
@@ -5386,6 +5507,7 @@ export class RelayAssignmentStore {
     }
     const activityLeases = await this.lockAssignmentActivities(transaction, input.identity)
     assertAssignmentActivityCounts(assignment, activityLeases, 0)
+    await this.lockControlConnectionReservations(transaction, input.identity, 'nowait')
     const cells = await this.lockCellInventory(transaction, 'nowait')
     const admission = await cellAdmissionStates(transaction)
     const regions = new Map(
@@ -6305,6 +6427,7 @@ export class RelayAssignmentStore {
             integer(lease, 'expires_at') > now
         )
         if (targetActive) return false
+        await this.lockControlConnectionReservations(transaction, identity, 'nowait')
         const cells = await this.lockCellInventory(transaction, 'nowait')
         const source = cells.find((cell) => text(cell, 'cell_id') === sourceCellId)
         const admission = await cellAdmissionStates(transaction)
@@ -6471,7 +6594,10 @@ export class RelayAssignmentStore {
             ]
               .map((activityId) => activityLeaseById(activityLeases, activityId))
               .filter((lease): lease is SqlRow => lease !== undefined)
-            if (obsoleteLeases.length > 0) await this.lockCellInventory(transaction, 'nowait')
+            if (obsoleteLeases.length > 0) {
+              await this.lockControlConnectionReservations(transaction, identity, 'nowait')
+              await this.lockCellInventory(transaction, 'nowait')
+            }
             for (const lease of obsoleteLeases) {
               await this.removeActivityLease(transaction, identity, lease, now)
             }
@@ -6489,6 +6615,7 @@ export class RelayAssignmentStore {
             )
             return true
           }
+          await this.lockControlConnectionReservations(transaction, identity, 'nowait')
           const cells = await this.lockCellInventory(transaction, 'nowait')
           const sourceCellId = text(row, 'source_cell_id')
           const admissionRows = await transaction.query(
@@ -6908,6 +7035,24 @@ export class RelayAssignmentStore {
     )
   }
 
+  // Tier 3 of the row lock order: a path that will take relay_cells and also
+  // touch this host's reservations takes them here, before the cell rows. The
+  // set is the host's own rows, so it is small and known before any placement
+  // decision is read.
+  private async lockControlConnectionReservations(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    mode: CellInventoryLockMode = 'request'
+  ): Promise<void> {
+    const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
+    await database.queryLocked(
+      `SELECT reservation_id FROM relay_control_connection_reservations
+       WHERE user_id = ? AND relay_host_id = ? ORDER BY reservation_id ASC`,
+      [identity.userId, identity.relayHostId],
+      wait
+    )
+  }
+
   // Unlocked on purpose: this only names the row to lock next, and the caller
   // re-checks the pin once the assignment row is held.
   private async pinnedCellId(
@@ -7109,6 +7254,31 @@ export class RelayAssignmentStore {
       [cellId, 1, now - this.heartbeatTtlMs]
     )
     return rows.length === 1
+  }
+
+  // Reports which of `cellIsLive`'s conditions failed, so the rejection log
+  // separates an expected drain or boot from a cell whose readiness went out
+  // from under its hosts.
+  private async homeCellUnavailableCause(
+    database: RelayDatabase,
+    cellId: string,
+    now: number
+  ): Promise<RelayHomeCellUnavailableCause> {
+    const row = (
+      await database.query(
+        `SELECT cell.enabled, runtime.last_heartbeat_at
+         FROM relay_cells cell
+         LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+         WHERE cell.cell_id = ?`,
+        [cellId]
+      )
+    )[0]
+    if (!row) return 'booting'
+    if (integer(row, 'enabled') === 0) return 'draining'
+    const heartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+    if (heartbeatAt === undefined) return 'booting'
+    // Readiness is all that is left: `cellIsLive` already refused this cell.
+    return heartbeatAt <= now - this.heartbeatTtlMs ? 'unheard' : 'not_ready'
   }
 
   private async cellHasActiveFence(cellId: string): Promise<boolean> {
@@ -7538,6 +7708,9 @@ export class RelayAssignmentStore {
     await this.adjustActivityCount(database, identity, kind, -1, now, now)
   }
 
+  // Returns the request units this removal frees on `cellId`. The caller folds
+  // them into the one conditional cell-row write it makes just before COMMIT,
+  // so no statement here touches the fleet's most contended row.
   private async removeSupersededSameCellControls(
     database: RelayDatabase,
     identity: AssignmentIdentity,
@@ -7545,14 +7718,14 @@ export class RelayAssignmentStore {
     cellId: string,
     retainedActivityId: string,
     now: number
-  ): Promise<void> {
+  ): Promise<number> {
     const superseded = leases.filter(
       (lease) =>
         activityKind(lease) === 'control' &&
         text(lease, 'cell_id') === cellId &&
         text(lease, 'activity_id') !== retainedActivityId
     )
-    if (superseded.length === 0) return
+    if (superseded.length === 0) return 0
     if (
       superseded.some(
         (lease) => integer(lease, 'request_units') !== ACTIVITY_REQUEST_UNITS.control
@@ -7560,10 +7733,6 @@ export class RelayAssignmentStore {
     ) {
       throw new Error('activity_lease_shape_mismatch')
     }
-    // Why: this recomputes one cell's reservation from its leases, so only that
-    // row needs to be held; the 23-row inventory lock here serialised every
-    // desktop control rebind in the fleet behind every other one.
-    const cellRow = (await this.lockCellRows(database, [cellId]))[0]
     await database.query(
       `DELETE FROM relay_assignment_activity_leases
        WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'
@@ -7577,22 +7746,9 @@ export class RelayAssignmentStore {
        WHERE user_id = ? AND relay_host_id = ?`,
       [remainingControls, now, identity.userId, identity.relayHostId]
     )
-    const cellUnitsRow = (
-      await database.query(
-        `SELECT COALESCE(SUM(request_units), 0) AS request_units
-         FROM relay_assignment_activity_leases WHERE cell_id = ?`,
-        [cellId]
-      )
-    )[0]!
-    const cellUnits = integer(cellUnitsRow, 'request_units')
-    if (!cellRow) throw new Error('assigned_cell_missing')
-    if (cellUnits > integer(cellRow, 'capacity_requests')) {
-      throw new Error('relay_capacity_exhausted')
-    }
-    await database.query(
-      `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
-      [cellUnits, now, cellId]
-    )
+    // The shape check above proved every superseded lease holds exactly the
+    // control unit, so the freed units are exact without re-summing the cell.
+    return superseded.length * ACTIVITY_REQUEST_UNITS.control
   }
 
   private async adjustActivityCount(
@@ -7898,6 +8054,33 @@ function pendingControlActivityId(assignmentEpoch: number): string {
 
 function validateActivityId(activityId: string): void {
   if (!activityId || activityId.length > 256) throw new Error('invalid_activity_id')
+}
+
+function controlRenewalExpiryIsValid(expiresAt: number, now: number): boolean {
+  const maximumExpiresAt =
+    now + ASSIGNMENT_LIMITS.activityLeaseMs + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2
+  return Number.isSafeInteger(expiresAt) && expiresAt > now && expiresAt <= maximumExpiresAt
+}
+
+// A renewal that threw still owes the metric an outcome: the message carries one
+// when the statement decided it, and anything else is the driver failing.
+function controlRenewalOutcomeOfError(error: unknown): ControlRenewalOutcome {
+  const message = String((error as { message?: unknown }).message)
+  return CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)
+    ? (message as ControlRenewalOutcome)
+    : 'database_error'
+}
+
+function controlRenewalRejection(
+  row: ControlRenewalRequest,
+  now: number
+): ControlRenewalOutcome | null {
+  try {
+    validateActivityId(row.activityId)
+  } catch {
+    return 'invalid_activity_id'
+  }
+  return controlRenewalExpiryIsValid(row.expiresAt, now) ? null : 'invalid_activity_expiry'
 }
 
 function activityKind(row: SqlRow): AssignmentActivityKind {

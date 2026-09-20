@@ -17,6 +17,11 @@ import {
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
+  isRemoteRuntimeConnectTimeout,
+  remoteRuntimeConnectFailureMessage,
+  remoteRuntimeConnectOptions
+} from './remote-runtime-connect-bound'
+import {
   createRemoteRuntimeWebSocket,
   describeRemoteRuntimeSocketError,
   remoteRuntimeSocketCreationError
@@ -188,9 +193,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     try {
-      ws = createRemoteRuntimeWebSocket(pairing, {
+      const connectOptions = remoteRuntimeConnectOptions({
         maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
       })
+      ws = createRemoteRuntimeWebSocket(pairing, connectOptions)
     } catch (error) {
       finishError(remoteRuntimeSocketCreationError(error))
       return
@@ -209,7 +215,9 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       finishError(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          describeRemoteRuntimeSocketError(pairing, error),
+          isRemoteRuntimeConnectTimeout(error)
+            ? remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
+            : describeRemoteRuntimeSocketError(pairing, error),
           { pairingStage: router.pairingStage }
         )
       )

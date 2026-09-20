@@ -15,6 +15,7 @@ import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -23,6 +24,7 @@ export type CodexStructuredLaunch = {
   codexHome: string | null
   resumeThreadId: string | null
   resumePath?: string | null
+  permissionPolicy?: CodexStructuredPermissionPolicy
   env?: Record<string, string>
 }
 
@@ -35,6 +37,8 @@ export type CodexStructuredSessionEvent =
       params: unknown
       /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
       observedAt?: number
+      /** Highest dispatch sequence armed when this turn-start was first received. */
+      dispatchSequenceAtReceipt?: number
     }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }

@@ -1,3 +1,4 @@
+import { writeMirroredStorage } from '../storage/mirrored-storage-keys'
 import { getRepoIdFromMobileWorktreeId } from '../session/mobile-session-route-helpers'
 
 export const LAST_VISITED_WORKTREE_STORAGE_KEY = 'orca:last-visited-worktree'
@@ -45,4 +46,15 @@ export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string
   }
   const repoId = getRepoIdFromMobileWorktreeId(record.worktreeId).trim()
   return repoId || null
+}
+
+/**
+ * The one writer of this key, so the hybrid shell's mirror sees it as it is written.
+ *
+ * The page is handed this key on every `init`, built synchronously from that mirror; a write that
+ * went straight to the store would reach the page one `init` later, and the New Workspace drawer
+ * would open on the repo the user left rather than the one they just came from.
+ */
+export function writeLastVisitedWorktree(record: LastVisitedWorktreeRecord): void {
+  writeMirroredStorage(LAST_VISITED_WORKTREE_STORAGE_KEY, JSON.stringify(record))
 }

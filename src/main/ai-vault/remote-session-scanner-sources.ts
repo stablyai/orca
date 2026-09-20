@@ -6,7 +6,6 @@ import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
-import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
@@ -20,6 +19,7 @@ import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
+import { remoteDevinSource } from './remote-session-scanner-devin-source'
 import type {
   RemoteParserOptions,
   RemoteScannerContext,
@@ -89,14 +89,8 @@ export function remoteSessionSources(
       ['.json'],
       parseHermesSessionContent
     ),
-    source(
-      'devin',
-      remoteHome,
-      hostPlatform,
-      ['.local', 'share', 'devin', 'cli', 'transcripts'],
-      ['.json'],
-      parseDevinSessionContent
-    ),
+    remoteDevinSource(remoteHome, hostPlatform),
+    remoteDevinSource(remoteHome, hostPlatform, 'agent_logs'),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     {
       ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),

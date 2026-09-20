@@ -13,7 +13,7 @@ import {
   reviewFileDiffRead,
   reviewWorktreeMetadataRead
 } from './mobile-diff-review-operations'
-import type { MobileReviewGitDiffResult } from './mobile-diff-review-rpc'
+import type { MobileReviewGitDiffResult } from './diff-review-reply-schema'
 import {
   canOpenMobileBranchCompareDiff,
   type MobileGitBranchCompareResult
@@ -43,7 +43,7 @@ type DiffLoadInput = {
 /** One settled file diff and the operation that reads it; the two methods share a reader. */
 type PendingFileDiff = {
   reply: RpcResponse
-  interpret: (reply: RpcResponse) => MobileReviewGitDiffResult | null
+  interpret: (reply: RpcResponse) => MobileReviewGitDiffResult
 }
 
 export async function loadMobileDiffReviewBranchCompare(
@@ -64,18 +64,16 @@ export async function loadMobileDiffReviewBranchCompare(
     if (!reply.ok && isMobileGitUnavailable(reply.error?.code, reply.error?.message)) {
       return { result: null }
     }
-    let parsed: MobileGitBranchCompareResult | null
+    // The reader refuses a compare it cannot normalize, so the "response was invalid" branch main
+    // kept here is gone: an unreadable compare arrives as the incompatible-reply message instead.
     try {
-      parsed = reviewBranchCompareRead.interpret(reply)
+      return { result: reviewBranchCompareRead.interpret(reply) }
     } catch (error) {
       return {
         result: null,
         error: refusedRpcMessageOrFallback(error, 'Committed changes unavailable')
       }
     }
-    return parsed
-      ? { result: parsed }
-      : { result: null, error: 'Committed changes response was invalid' }
   } catch (err) {
     // A transport drop surfaces its own message verbatim; only a refusal falls back above.
     return { result: null, error: err instanceof Error ? err.message : 'Committed changes failed' }
@@ -122,7 +120,7 @@ export async function loadMobileDiffReviewSnapshot(
   const normalizedReviewState = normalizeMobileDiffReviewState(metadata.mobileDiffReview)
   const branchEntries =
     branch.result && canOpenMobileBranchCompareDiff(branch.result.summary)
-      ? branch.result.entries
+      ? (branch.result.entries ?? [])
       : []
   const queue = buildMobileDiffReviewQueue({
     worktreeId,
@@ -164,14 +162,11 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
       return { kind: 'deleted', itemKey: item.key }
     }
   }
-  let result: MobileReviewGitDiffResult | null
+  let result: MobileReviewGitDiffResult
   try {
     result = pending.interpret(pending.reply)
   } catch (error) {
     throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load diff'))
-  }
-  if (!result) {
-    throw new Error('Diff response was invalid')
   }
   if (result.kind === 'binary') {
     return { kind: 'binary', itemKey: item.key }

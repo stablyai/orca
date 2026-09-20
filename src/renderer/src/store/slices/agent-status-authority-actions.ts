@@ -31,8 +31,19 @@ export function createAgentStatusAuthorityActions(
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
     retireAgentPaneAuthority: (paneKey, options) => {
+      const retirementId = crypto.randomUUID()
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
-      const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
+      const previousRetirement = get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey]
+      const retiredPaneKeys = [
+        ...new Set([
+          ...retireAgentPaneAuthorityAliases(paneKey),
+          ...Object.keys(get().recentlyRetiredAgentStatusPaneKeys).filter(
+            (key) =>
+              typeof previousRetirement === 'string' &&
+              get().recentlyRetiredAgentStatusPaneKeys[key] === previousRetirement
+          )
+        ])
+      ]
       const retiredPaneKeySet = new Set(retiredPaneKeys)
       for (const key of retiredPaneKeys) {
         rendererAgentStatusObservations.forget(key)
@@ -97,7 +108,14 @@ export function createAgentStatusAuthorityActions(
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
             s.recentlyRetiredAgentStatusPaneKeys,
-            retiredPaneKeys
+            retiredPaneKeys,
+            s.recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === true ||
+              isRecentlyClosedAgentStatusTab(
+                s.recentlyClosedAgentStatusTabIds,
+                getTabIdFromPaneKey(ownerPaneKey)
+              )
+              ? true
+              : retirementId
           ),
           agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
@@ -107,7 +125,12 @@ export function createAgentStatusAuthorityActions(
         freshness.scheduleDeferred()
       }
       if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.retirePaneAuthority?.(ownerPaneKey)
+        window.api?.agentStatus?.retirePaneAuthority?.(
+          ownerPaneKey,
+          get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === retirementId
+            ? retirementId
+            : undefined
+        )
       }
     },
 

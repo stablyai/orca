@@ -1,6 +1,7 @@
 import { isAdmissibleAgentJournalItemBody } from '../../../shared/agent-session-journal-schemas'
 import {
   AGENT_JOURNAL_TURN_LIFECYCLE_STATES,
+  AGENT_JOURNAL_TURN_OUTCOMES,
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
@@ -21,7 +22,12 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
           (block.type === 'text' && 'text' in block) ||
           (block.type === 'tool-call' && 'name' in block && !('state' in block)) ||
           (block.type === 'tool-result' && 'output' in block) ||
-          block.type === 'image-ref'
+          block.type === 'image-ref' ||
+          (block.type === 'background-task' &&
+            'taskId' in block &&
+            'kind' in block &&
+            'label' in block &&
+            'state' in block)
         ) {
           return block
         }
@@ -56,9 +62,36 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
     )
   ) {
     normalized = fallback()
+  } else if (body.kind === 'turn' || (body.kind === 'status' && body.turnLifecycle)) {
+    normalized = withKnownTurnOutcome(body)
   }
   if (!isAdmissibleAgentJournalItemBody(normalized)) {
     throw new Error('agent_session_rewind:invalid-retained-body')
   }
   return normalized
+}
+
+/** A verdict from a later vocabulary is dropped, never coerced and never fatal.
+ *  Unlike an unknown `state`, an unplaceable outcome costs nothing to discard —
+ *  absent already means unknown — and discarding it keeps the turn's endpoints,
+ *  which a status fallback would throw away along with the timing every surface
+ *  reads. */
+function withKnownTurnOutcome(
+  body: Extract<StoredBody, { kind: 'turn' } | { kind: 'status' }>
+): StoredBody {
+  const known = (outcome: string | undefined): boolean =>
+    outcome === undefined || AGENT_JOURNAL_TURN_OUTCOMES.some((arm) => arm === outcome)
+  if (body.kind === 'turn') {
+    if (known(body.outcome)) {
+      return body
+    }
+    const { outcome: _outcome, ...rest } = body
+    return rest
+  }
+  const lifecycle = body.turnLifecycle
+  if (!lifecycle || known(lifecycle.outcome)) {
+    return body
+  }
+  const { outcome: _outcome, ...rest } = lifecycle
+  return { ...body, turnLifecycle: rest }
 }

@@ -164,9 +164,11 @@ export class AgentSessionJournal {
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
   /** Visits reduced items without allocating and sorting a full snapshot. */
-  visitItems = (visit: (itemId: string, sequence: number) => void): void => {
+  visitItems = (
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+  ): void => {
     for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence)
+      visit(item.itemId, item.sequence, item.body)
     }
   }
 

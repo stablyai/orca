@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillUploadRetainedPaths } from './skill-upload-retained-paths'
 import { SkillUploadSessionService } from './skill-upload-session-service'
+import type { SkillUploadStagingOwnership } from './skill-upload-staging-ownership'
 
 const roots: string[] = []
 
@@ -13,6 +14,9 @@ const openGate = vi.hoisted(() => ({
   release: null as Promise<void> | null,
   started: null as (() => void) | null
 }))
+
+// Models Windows delete-pending rmdir: the first removal wins and every later one gets EPERM.
+const deletePendingGate = vi.hoisted((): { removed: Set<string> | null } => ({ removed: null }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -27,6 +31,16 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         await release
       }
       return handle
+    },
+    rm: async (path: string, options?: Parameters<typeof actual.rm>[1]) => {
+      const removed = deletePendingGate.removed
+      if (removed?.has(path)) {
+        throw Object.assign(new Error(`EPERM: operation not permitted, rmdir '${path}'`), {
+          code: 'EPERM'
+        })
+      }
+      removed?.add(path)
+      await actual.rm(path, options)
     }
   }
 })
@@ -35,6 +49,7 @@ afterEach(async () => {
   vi.useRealTimers()
   openGate.release = null
   openGate.started = null
+  deletePendingGate.removed = null
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -50,6 +65,30 @@ function identity(bytes: Buffer) {
 
 function retainedPathCleanup(service: SkillUploadSessionService): SkillUploadRetainedPaths {
   return service['retainedPaths']
+}
+
+function stagingOwnership(service: SkillUploadSessionService): SkillUploadStagingOwnership {
+  return service['ownership']
+}
+
+function initializationGate(uploads: string) {
+  let releaseInitialization!: () => void
+  const initializationReleased = new Promise<void>((resolve) => {
+    releaseInitialization = resolve
+  })
+  let markInitializationStarted!: () => void
+  const initializationStarted = new Promise<void>((resolve) => {
+    markInitializationStarted = resolve
+  })
+  return {
+    initializationStarted,
+    releaseInitialization,
+    initializeRoot: async () => {
+      await mkdir(uploads, { recursive: true })
+      markInitializationStarted()
+      await initializationReleased
+    }
+  }
 }
 
 async function stagedArchiveCount(uploads: string): Promise<number> {
@@ -144,6 +183,42 @@ describe('SkillUploadSessionService admission regressions', () => {
     ).resolves.toMatchObject({ acknowledgedOffset: 0 })
     expect(await stagedArchiveCount(uploads)).toBe(1)
     await service.dispose()
+  })
+
+  it('reports disposal, not the staging cleanup failure, to a begin racing disposal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-admission-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const gate = initializationGate(uploads)
+    const service = new SkillUploadSessionService(uploads, { initializeRoot: gate.initializeRoot })
+    const cleanupFailure = new Error('injected-staging-rmdir-failure')
+    vi.spyOn(stagingOwnership(service), 'remove').mockRejectedValue(cleanupFailure)
+
+    const begin = service.begin({ package: identity(Buffer.from('closing package')) })
+    await gate.initializationStarted
+    const disposal = service.dispose()
+    gate.releaseInitialization()
+
+    await expect(begin).rejects.toThrow('skill-upload-service-disposed')
+    await expect(disposal).rejects.toBe(cleanupFailure)
+  })
+
+  it('removes disposed staging once when a begin and disposal race the same directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-admission-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const gate = initializationGate(uploads)
+    const service = new SkillUploadSessionService(uploads, { initializeRoot: gate.initializeRoot })
+    deletePendingGate.removed = new Set<string>()
+
+    const begin = service.begin({ package: identity(Buffer.from('closing package')) })
+    await gate.initializationStarted
+    const disposal = service.dispose()
+    gate.releaseInitialization()
+
+    await expect(begin).rejects.toThrow('skill-upload-service-disposed')
+    await disposal
+    expect(await readdir(uploads)).toEqual([])
   })
 
   it('removes an unpublished archive when disposal starts during open', async () => {

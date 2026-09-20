@@ -24,11 +24,13 @@ it('forwards every call to the child and returns what it answered', async () => 
   const calls = stubCalls()
   const service = createChildSessionSearchService(calls)
 
-  expect(await service.search({ query: 'ledger' })).toEqual({
+  const hostScope = { kind: 'resolved', paths: ['/work/app'] } as const
+  expect(await service.search({ query: 'ledger' }, hostScope)).toEqual({
     kind: 'unavailable',
     reason: 'disabled'
   })
-  expect(calls.search).toHaveBeenCalledWith({ query: 'ledger' })
+  // The scope verdict rides beside the request, never inside it.
+  expect(calls.search).toHaveBeenCalledWith({ query: 'ledger' }, hostScope)
   expect(await service.status()).toEqual(indexingStatus)
   await service.reconcile()
   expect(calls.reconcile).toHaveBeenCalledTimes(1)

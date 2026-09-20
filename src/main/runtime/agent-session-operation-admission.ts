@@ -3,9 +3,13 @@
 
 import {
   agentSessionOperationKey,
+  claimAgentSessionOperation,
   evaluateAgentSessionOperation,
   pruneAgentSessionOperationRows,
+  settleAgentSessionOperation,
+  type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
@@ -106,4 +110,44 @@ export function admitAgentSessionMutationOperation(
   }
   state.operations = ledger.rows
   return { admission, record }
+}
+
+/**
+ * Admit into the store's own rows, replacing them in place.
+ *
+ * The three admit paths and the claim path all did the same read-modify-return dance at the call
+ * site; keeping it here means the rows map is only ever swapped by the module that owns its shape.
+ */
+export function admitAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: AgentSessionOperationAdmission
+): AgentSessionOperationDecision {
+  const admitted = admitAgentSessionOperationRow(state.operations, args)
+  state.operations = admitted.rows
+  return admitted.decision
+}
+
+export function admitAgentSessionGlobalOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: AgentSessionOperationAdmission
+): AgentSessionOperationDecision {
+  const admitted = admitAgentSessionGlobalOperationRow(state.operations, args)
+  state.operations = admitted.rows
+  return admitted.decision
+}
+
+export function claimAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: { callerKey: string; operationId: string }
+): AgentSessionOperationClaim {
+  const claimed = claimAgentSessionOperation(state.operations, args)
+  state.operations = claimed.rows
+  return claimed.claim
+}
+
+export function settleAgentSessionOperationInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: { callerKey?: string; operationId: string; outcome: AgentSessionOperationOutcome }
+): void {
+  state.operations = settleAgentSessionOperation(state.operations, args)
 }

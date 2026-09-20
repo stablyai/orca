@@ -1,6 +1,7 @@
 import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
 import { declaredDeviceSubstitutes, type DeclaredDeviceState } from './declared-device-state'
 import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
+import { bindSalvageObserver } from './salvage-observation'
 import type { MountOptions } from './mounted-operation-module'
 import type { MountAdapter } from './recording-scenario'
 
@@ -32,6 +33,9 @@ export function pilotMountAdapters(
       // scenario records one without its adapter having to wire the sink itself.
       adapters[operation] = (context) => {
         device.bind(context.effect)
+        // Same reason as the device sink: the reply classifier is loaded per adapter module, and
+        // the mount is what knows which recording a salvaged read belongs to.
+        bindSalvageObserver(context.effect)
         return adapter(context)
       }
     }

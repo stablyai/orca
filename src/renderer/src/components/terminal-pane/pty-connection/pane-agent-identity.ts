@@ -170,6 +170,13 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
+      // Why: a confirmed local shell proves any hibernation record for this pane is stale;
+      // otherwise the tab resolver can repaint the exited agent from sleeping occupancy.
+      const state = useAppStore.getState()
+      const sleepingRecord = session.getSleepingRecordForPane(state)
+      if (sleepingRecord) {
+        session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
+      }
       session.clearStaleAgentTabTitleOnConfirmedShell()
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
@@ -183,7 +190,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
       })
       if (reason === 'visible-pty') {
-        useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
+        state.clearAgentLaunchConfig(session.cacheKey)
         return
       }
       session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })

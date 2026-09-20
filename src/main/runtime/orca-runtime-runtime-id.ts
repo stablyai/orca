@@ -277,6 +277,10 @@ export class OrcaRuntimeWithRuntimeId {
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
   protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
 
+  // Why: counts authoritative graph statements so a PTY's recorded surface can be told apart
+  // from one the graph has simply not published yet (pty-recorded-surface-topology.ts).
+  protected graphSequence = 0
+
   protected leaves = new Map<string, RuntimeLeafRecord>()
 
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by

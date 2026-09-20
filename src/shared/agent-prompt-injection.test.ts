@@ -4,6 +4,7 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
+  agentPromptSubmitJoinsPasteFrame,
   getAgentPromptSubmitDelayMs,
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
@@ -15,6 +16,13 @@ const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
+  it('joins submit only for OMP', () => {
+    expect(agentPromptSubmitJoinsPasteFrame('omp')).toBe(true)
+    expect(agentPromptSubmitJoinsPasteFrame('claude')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame('codex')).toBe(false)
+    expect(agentPromptSubmitJoinsPasteFrame(undefined)).toBe(false)
+  })
+
   it('always bracket-pastes prompts so agent TUIs treat newlines as content', () => {
     expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
       `${BEGIN}line one\nline two${END}`
