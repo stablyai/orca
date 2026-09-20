@@ -25,19 +25,20 @@ describe('parseCodesignDisplayOutput', () => {
     })
   })
 
-  it('treats the two unlinked-executable diagnostics as unresolvable', () => {
-    expect(
-      parseCodesignDisplayOutput('+3337: host has no guest with the requested attributes\n', 1)
-    ).toEqual({ status: 'unresolvable' })
+  it('treats the unlinked-executable diagnostic as unresolvable', () => {
     expect(parseCodesignDisplayOutput('+3337: No such file or directory\n', 1)).toEqual({
       status: 'unresolvable'
     })
   })
 
-  it('fails open on a dead pid, unsigned code, or an unexpected failure', () => {
+  it('fails open on a dead pid, an exiting pid, unsigned code, or an unexpected failure', () => {
     expect(parseCodesignDisplayOutput('+999999: No such process\n', 1)).toEqual({
       status: 'unavailable'
     })
+    // errSecCSNoSuchCode: proc_pidpath resolved, the pid is just on its way out.
+    expect(
+      parseCodesignDisplayOutput('+3337: host has no guest with the requested attributes\n', 1)
+    ).toEqual({ status: 'unavailable' })
     expect(parseCodesignDisplayOutput('/opt/tool: code object is not signed at all\n', 1)).toEqual({
       status: 'unavailable'
     })
@@ -74,9 +75,19 @@ describe('inspectMacProcessCodeIdentity', () => {
       inspectMacProcessCodeIdentity(3337, async () => ({
         code: 1,
         stdout: '',
-        stderr: '+3337: host has no guest with the requested attributes\n'
+        stderr: '+3337: No such file or directory\n'
       }))
     ).resolves.toEqual({ status: 'unresolvable' })
+  })
+
+  it('fails open on an exiting pid rather than calling it severed', async () => {
+    await expect(
+      inspectMacProcessCodeIdentity(3337, async () => ({
+        code: 1,
+        stdout: '',
+        stderr: '+3337: host has no guest with the requested attributes\n'
+      }))
+    ).resolves.toEqual({ status: 'unavailable' })
   })
 
   it('fails open when codesign cannot be spawned or the pid is invalid', async () => {

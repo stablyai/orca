@@ -24,10 +24,10 @@ export type MacCodeIdentityCommandRunner = (
 const CODESIGN_PATH = '/usr/bin/codesign'
 const CODESIGN_TIMEOUT_MS = 3_000
 
-// errSecCSNoSuchCode and ENOENT are the two ways SecCodeCopyGuestWithAttributes(pid) reports an
-// unlinked executable; anything else (unsigned code, a dead pid) is not evidence of severing.
-const UNLINKED_EXECUTABLE_PATTERN =
-  /host has no guest with the requested attributes|No such file or directory/
+// Only ENOENT: on --display the guest lookup fails at proc_pidpath when the executable is
+// unlinked. errSecCSNoSuchCode ('host has no guest') means proc_pidpath resolved but the pid is
+// exiting - it is what --verify reports for a severed daemon, and here it is not evidence.
+const UNLINKED_EXECUTABLE_PATTERN = /No such file or directory/
 
 const defaultRunner: MacCodeIdentityCommandRunner = (program, args, timeoutMs) =>
   runProcess({ program, args, timeoutMs, stdio: ['ignore', 'pipe', 'pipe'] })

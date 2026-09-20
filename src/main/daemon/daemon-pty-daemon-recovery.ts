@@ -143,7 +143,10 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] macOS system resolver unavailable - preserving daemon because live session state could not be verified'
           : `[daemon] macOS system resolver unavailable - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
-      recordDaemonReplacementDeferral('unhealthy_resolver', daemonLiveSessionCount)
+      recordDaemonReplacementDeferral(
+        'unhealthy_resolver',
+        daemonLiveSessionCount === null ? null : liveSessionCount
+      )
       return
     }
 
@@ -199,7 +202,10 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] Packaged daemon is stale - preserving it because live session state could not be verified'
           : `[daemon] Packaged daemon is stale - preserving it because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
-      recordDaemonReplacementDeferral('stale_bundle', daemonLiveSessionCount)
+      recordDaemonReplacementDeferral(
+        'stale_bundle',
+        daemonLiveSessionCount === null ? null : liveSessionCount
+      )
       return
     }
 
@@ -240,7 +246,10 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] macOS TCC attribution severed - preserving daemon because live session state could not be verified'
           : `[daemon] macOS TCC attribution severed - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; restart from Manage Sessions when ready`
       )
-      recordDaemonReplacementDeferral('severed_tcc_attribution', daemonLiveSessionCount)
+      recordDaemonReplacementDeferral(
+        'severed_tcc_attribution',
+        daemonLiveSessionCount === null ? null : liveSessionCount
+      )
       return
     }
 
