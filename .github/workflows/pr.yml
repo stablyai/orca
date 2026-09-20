@@ -461,7 +461,9 @@ jobs:
       - name: Verify xterm patches match the pinned upstream build
         env:
           WORK_DIR: ${{ runner.temp }}/xterm-patch-build
-        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+        run: |
+          node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+          node config/scripts/regenerate-xterm-patches-mobile.mjs --check --work-dir="$WORK_DIR"
 
   shell_contracts:
     name: shell contracts

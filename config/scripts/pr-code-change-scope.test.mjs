@@ -181,6 +181,12 @@ describe('per-job path classification', () => {
     expectClassification(['config/patches/@xterm__xterm@6.1.0-beta.287.patch'], {
       xterm_patch_sync: true
     })
+    expectClassification(['config/scripts/xterm-patch-text.mjs'], {
+      xterm_patch_sync: true
+    })
+    expectClassification(['config/scripts/regenerate-xterm-patches-mobile.mjs'], {
+      xterm_patch_sync: true
+    })
   })
 
   it('runs native package jobs only for the platform that ships the changed native', () => {

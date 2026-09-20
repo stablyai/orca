@@ -2,13 +2,14 @@
 
 ## Scope
 
-Orca ships `@xterm/xterm` with four source changes it needs and upstream has
+Orca ships `@xterm/xterm` with source changes it needs and upstream has
 not taken: the IME composition hooks, the `xterm-composition-*` custom events
 they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
+fix, plus a bound on contrast-cache entries. pnpm applies them through
+`config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches eight files. Four are hand-authored source
-(`src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
+That patch touches nine files. Five are hand-authored source
+(`src/browser/ColorContrastCache.ts`, `src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
 `src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`) and four
 are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
 and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
@@ -121,6 +122,27 @@ than fighting `--check` forever.
 Run the checkout outside this repository. A build tree underneath it makes
 `tsgo` walk up into Orca's own `node_modules` and fail with `TS2300: Duplicate
 identifier`, which is a symptom of where the tree sits and not of the patch.
+
+## Mobile Contrast Cache Patch
+
+Mobile installs xterm in a separate pnpm project. Its patch includes only
+`ColorContrastCache.ts`; the desktop IME and `SortedList` changes are excluded.
+`regenerate-xterm-patches-mobile.mjs` derives that source stanza and reuses the
+desktop manifest's version, upstream commit, toolchain, and build steps. It fails
+if mobile pins a different version or the contrast stanza is missing or duplicated.
+
+After editing the desktop contrast source and regenerating the desktop patch:
+
+```sh
+node config/scripts/regenerate-xterm-patches-mobile.mjs --write
+pnpm exec pnpm --dir mobile install
+node config/scripts/regenerate-xterm-patches-mobile.mjs --check
+```
+
+Commit the derived mobile source patch, full patch, and mobile lockfile together.
+Mobile's postinstall rebuilds its gitignored terminal engine from that patched
+package. Do not copy desktop's full patch or hand-edit the generated engine.
+The existing xterm patch-sync CI job verifies both variants.
 
 ## How the Commit Is Known
 

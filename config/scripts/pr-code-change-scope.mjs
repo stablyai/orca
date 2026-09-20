@@ -73,7 +73,8 @@ const XTERM_PREFIXES = [
   'config/patches/xterm-upstream.json',
   'config/patches/@xterm',
   'config/patches/xterm-src/',
-  'config/scripts/regenerate-xterm-patches'
+  'config/scripts/regenerate-xterm-patches',
+  'config/scripts/xterm-patch-text'
 ]
 
 const SHELL_PREFIXES = [

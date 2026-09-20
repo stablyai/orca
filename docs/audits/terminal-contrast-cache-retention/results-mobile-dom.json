@@ -1,0 +1,708 @@
+{
+  "node": "v26.6.0",
+  "browser": "147.0.7727.15",
+  "headless": true,
+  "renderer": "DOM",
+  "mobile": true,
+  "pagesOpened": 8,
+  "pagesClosed": 8,
+  "browserClosed": true,
+  "results": [
+    {
+      "phase": "before",
+      "format": "mobile-webview",
+      "theme": "dark",
+      "mode": "normal",
+      "sha256": "96cb91487352f919c4c374da16305f9074c4a866bf5ad90fbd087a3cc0e83077",
+      "initial": {
+        "minimumContrastRatio": 3,
+        "rawColor": "rgb(5, 50, 25)",
+        "color": "rgb(74, 107, 88)",
+        "opacity": "1",
+        "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 2,
+        "dimContrast": 0,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 4096,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 4097,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 4098,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 5000,
+          "contrast": 5002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 10000,
+          "contrast": 10002,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(74, 107, 88)",
+          "opacity": "1",
+          "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 10002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(74, 107, 88)",
+          "opacity": "1",
+          "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "before",
+      "format": "mobile-webview",
+      "theme": "dark",
+      "mode": "dim",
+      "sha256": "96cb91487352f919c4c374da16305f9074c4a866bf5ad90fbd087a3cc0e83077",
+      "initial": {
+        "minimumContrastRatio": 3,
+        "rawColor": "rgb(5, 50, 25)",
+        "color": "rgb(30, 71, 48)",
+        "opacity": "1",
+        "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 1,
+        "dimContrast": 1,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1,
+          "dimContrast": 1001,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 1,
+          "dimContrast": 4095,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 1,
+          "dimContrast": 4096,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 1,
+          "dimContrast": 4097,
+          "probeCached": true
+        },
+        {
+          "updates": 5000,
+          "contrast": 1,
+          "dimContrast": 5001,
+          "probeCached": true
+        },
+        {
+          "updates": 10000,
+          "contrast": 1,
+          "dimContrast": 10001,
+          "probeCached": true
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(30, 71, 48)",
+          "opacity": "1",
+          "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 10001,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(30, 71, 48)",
+          "opacity": "1",
+          "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "before",
+      "format": "mobile-webview",
+      "theme": "light",
+      "mode": "normal",
+      "sha256": "96cb91487352f919c4c374da16305f9074c4a866bf5ad90fbd087a3cc0e83077",
+      "initial": {
+        "minimumContrastRatio": 4.5,
+        "rawColor": "rgb(245, 250, 240)",
+        "color": "rgb(116, 117, 113)",
+        "opacity": "1",
+        "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 2,
+        "dimContrast": 0,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 4096,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 4097,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 4098,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 5000,
+          "contrast": 5002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 10000,
+          "contrast": 10002,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(116, 117, 113)",
+          "opacity": "1",
+          "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 10002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(116, 117, 113)",
+          "opacity": "1",
+          "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "before",
+      "format": "mobile-webview",
+      "theme": "light",
+      "mode": "dim",
+      "sha256": "96cb91487352f919c4c374da16305f9074c4a866bf5ad90fbd087a3cc0e83077",
+      "initial": {
+        "minimumContrastRatio": 4.5,
+        "rawColor": "rgb(245, 250, 240)",
+        "color": "rgb(160, 162, 156)",
+        "opacity": "1",
+        "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 1,
+        "dimContrast": 1,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1,
+          "dimContrast": 1001,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 1,
+          "dimContrast": 4095,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 1,
+          "dimContrast": 4096,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 1,
+          "dimContrast": 4097,
+          "probeCached": true
+        },
+        {
+          "updates": 5000,
+          "contrast": 1,
+          "dimContrast": 5001,
+          "probeCached": true
+        },
+        {
+          "updates": 10000,
+          "contrast": 1,
+          "dimContrast": 10001,
+          "probeCached": true
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(160, 162, 156)",
+          "opacity": "1",
+          "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 10001,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(160, 162, 156)",
+          "opacity": "1",
+          "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "format": "mobile-webview",
+      "theme": "dark",
+      "mode": "normal",
+      "sha256": "0da8b0e571e1325f5af62e990318a3dd31c444dab6a260563952498ce1fc9932",
+      "initial": {
+        "minimumContrastRatio": 3,
+        "rawColor": "rgb(5, 50, 25)",
+        "color": "rgb(74, 107, 88)",
+        "opacity": "1",
+        "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 2,
+        "dimContrast": 0,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 4096,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 4096,
+          "contrast": 3,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 5000,
+          "contrast": 907,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 10000,
+          "contrast": 1812,
+          "dimContrast": 0,
+          "probeCached": false
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(74, 107, 88)",
+          "opacity": "1",
+          "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1813,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(74, 107, 88)",
+          "opacity": "1",
+          "html": "<span style=\"color:#4a6b58;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "format": "mobile-webview",
+      "theme": "dark",
+      "mode": "dim",
+      "sha256": "0da8b0e571e1325f5af62e990318a3dd31c444dab6a260563952498ce1fc9932",
+      "initial": {
+        "minimumContrastRatio": 3,
+        "rawColor": "rgb(5, 50, 25)",
+        "color": "rgb(30, 71, 48)",
+        "opacity": "1",
+        "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 1,
+        "dimContrast": 1,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1,
+          "dimContrast": 1001,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 1,
+          "dimContrast": 4095,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 1,
+          "dimContrast": 4096,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": false
+        },
+        {
+          "updates": 5000,
+          "contrast": 1,
+          "dimContrast": 905,
+          "probeCached": false
+        },
+        {
+          "updates": 10000,
+          "contrast": 1,
+          "dimContrast": 1809,
+          "probeCached": false
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(30, 71, 48)",
+          "opacity": "1",
+          "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1810,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(30, 71, 48)",
+          "opacity": "1",
+          "html": "<span style=\"color:#1e4730;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "format": "mobile-webview",
+      "theme": "light",
+      "mode": "normal",
+      "sha256": "0da8b0e571e1325f5af62e990318a3dd31c444dab6a260563952498ce1fc9932",
+      "initial": {
+        "minimumContrastRatio": 4.5,
+        "rawColor": "rgb(245, 250, 240)",
+        "color": "rgb(116, 117, 113)",
+        "opacity": "1",
+        "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 2,
+        "dimContrast": 0,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1002,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 4096,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 4096,
+          "contrast": 3,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 5000,
+          "contrast": 907,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        {
+          "updates": 10000,
+          "contrast": 1812,
+          "dimContrast": 0,
+          "probeCached": false
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(116, 117, 113)",
+          "opacity": "1",
+          "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1813,
+          "dimContrast": 0,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(116, 117, 113)",
+          "opacity": "1",
+          "html": "<span style=\"color:#747571;\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 2,
+          "dimContrast": 0,
+          "probeCached": true
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "format": "mobile-webview",
+      "theme": "light",
+      "mode": "dim",
+      "sha256": "0da8b0e571e1325f5af62e990318a3dd31c444dab6a260563952498ce1fc9932",
+      "initial": {
+        "minimumContrastRatio": 4.5,
+        "rawColor": "rgb(245, 250, 240)",
+        "color": "rgb(160, 162, 156)",
+        "opacity": "1",
+        "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+        "text": "M",
+        "contrast": 1,
+        "dimContrast": 1,
+        "probeCached": true
+      },
+      "samples": [
+        {
+          "updates": 0,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        },
+        {
+          "updates": 1000,
+          "contrast": 1,
+          "dimContrast": 1001,
+          "probeCached": true
+        },
+        {
+          "updates": 4094,
+          "contrast": 1,
+          "dimContrast": 4095,
+          "probeCached": true
+        },
+        {
+          "updates": 4095,
+          "contrast": 1,
+          "dimContrast": 4096,
+          "probeCached": true
+        },
+        {
+          "updates": 4096,
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": false
+        },
+        {
+          "updates": 5000,
+          "contrast": 1,
+          "dimContrast": 905,
+          "probeCached": false
+        },
+        {
+          "updates": 10000,
+          "contrast": 1,
+          "dimContrast": 1809,
+          "probeCached": false
+        }
+      ],
+      "checks": {
+        "revisited": {
+          "color": "rgb(160, 162, 156)",
+          "opacity": "1",
+          "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1810,
+          "probeCached": true
+        },
+        "cleared": {
+          "contrast": 0,
+          "dimContrast": 0,
+          "probeCached": false
+        },
+        "recomputed": {
+          "color": "rgb(160, 162, 156)",
+          "opacity": "1",
+          "html": "<span style=\"color:#a0a29c;\" class=\"xterm-dim\">M</span><span> </span>",
+          "text": "M",
+          "contrast": 1,
+          "dimContrast": 1,
+          "probeCached": true
+        }
+      }
+    }
+  ]
+}

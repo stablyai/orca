@@ -1,3 +1,51 @@
+diff --git a/src/browser/ColorContrastCache.ts b/src/browser/ColorContrastCache.ts
+index fdcd9d133199a6cd6ba9bea9606a02c03ad03b3d..ae8e06e77ba077aa5a47f0217dedaaaec0962a2f 100644
+--- a/src/browser/ColorContrastCache.ts
++++ b/src/browser/ColorContrastCache.ts
+@@ -7,11 +7,15 @@ import { IColorContrastCache } from './Types';
+ import { IColor } from '../common/Types';
+ import { TwoKeyMap } from '../common/MultiKeyMap';
+ 
++const CONTRAST_CACHE_MAX_ENTRIES = 4096;
++
+ export class ColorContrastCache implements IColorContrastCache {
+   private _color: TwoKeyMap</* bg */number, /* fg */number, IColor | null> = new TwoKeyMap();
+   private _css: TwoKeyMap</* bg */number, /* fg */number, string | null> = new TwoKeyMap();
++  private _entryCount = 0;
+ 
+   public setCss(bg: number, fg: number, value: string | null): void {
++    this._admitPair(bg, fg);
+     this._css.set(bg, fg, value);
+   }
+ 
+@@ -20,6 +24,7 @@ export class ColorContrastCache implements IColorContrastCache {
+   }
+ 
+   public setColor(bg: number, fg: number, value: IColor | null): void {
++    this._admitPair(bg, fg);
+     this._color.set(bg, fg, value);
+   }
+ 
+@@ -30,5 +35,19 @@ export class ColorContrastCache implements IColorContrastCache {
+   public clear(): void {
+     this._color.clear();
+     this._css.clear();
++    this._entryCount = 0;
++  }
++
++  private _admitPair(bg: number, fg: number): void {
++    // Both setters admit, and the two maps only ever clear together, so either one
++    // already holding the pair means it was counted.
++    if (this._color.get(bg, fg) !== undefined || this._css.get(bg, fg) !== undefined) {
++      return;
++    }
++    // Color pairs outlive atlas pages, including cached misses and DOM-rendered colors.
++    if (this._entryCount >= CONTRAST_CACHE_MAX_ENTRIES) {
++      this.clear();
++    }
++    this._entryCount++;
+   }
+ }
 diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
 index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a688d34fd 100644
 --- a/src/browser/CoreBrowserTerminal.ts
