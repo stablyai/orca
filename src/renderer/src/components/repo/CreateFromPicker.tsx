@@ -1,5 +1,5 @@
 import React from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, GitBranch, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -8,10 +8,17 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import {
@@ -20,6 +27,7 @@ import {
 } from '@/runtime/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
+import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
 
@@ -33,14 +41,20 @@ export function CreateFromPicker({
   worktrees,
   value,
   triggerClassName,
-  onValueChange
+  compact = false,
+  readOnly = false,
+  onValueChange,
+  onSetDefault
 }: {
   repoId: string
   repoMap: Map<string, Repo>
   worktrees: Worktree[]
   value: string
   triggerClassName?: string
+  compact?: boolean
+  readOnly?: boolean
   onValueChange: (baseBranch: string) => void
+  onSetDefault?: (baseBranch: string) => void | Promise<void>
 }): React.JSX.Element {
   // Per-repo evidence, not the ambient active-runtime setting; the base-ref helpers
   // just take a settings-shaped object, so it is synthesized at each call below.
@@ -48,6 +62,7 @@ export function CreateFromPicker({
     getRuntimeEnvironmentIdForRepo(state, repoId)
   )
   const repo = repoMap.get(repoId)
+  const repoHostId = repo ? getRepoExecutionHostId(repo) : undefined
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -57,8 +72,13 @@ export function CreateFromPicker({
   const [isSearching, setIsSearching] = React.useState(false)
   const effectiveDefault = repo?.worktreeBaseRef ?? defaultBaseRef
   const selectedValue = value || DEFAULT_VALUE
+  const projectDefaultLabel = translate(
+    'auto.components.automations.CreateFromPicker.ef6d762538',
+    'Project default'
+  )
   const selectedLabel =
-    value || (effectiveDefault ? `${effectiveDefault} (default)` : 'Project default')
+    value || (effectiveDefault ? `${effectiveDefault} (default)` : projectDefaultLabel)
+  const compactLabel = value || effectiveDefault || projectDefaultLabel
   const branchOptions = React.useMemo(() => {
     const options = new Set<string>()
     if (effectiveDefault) {
@@ -75,6 +95,34 @@ export function CreateFromPicker({
     }
     return Array.from(options).sort((left, right) => left.localeCompare(right))
   }, [effectiveDefault, searchResults, worktrees])
+
+  const renderBranchContextMenu = React.useCallback(
+    (branch: string, row: React.ReactNode): React.ReactNode => {
+      if (!onSetDefault || !branch) {
+        return row
+      }
+      const isDefault = branch === effectiveDefault
+      return (
+        <ContextMenu key={branch}>
+          <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+          <ContextMenuContent className="z-[70]">
+            <ContextMenuItem
+              disabled={isDefault}
+              onSelect={() => {
+                void onSetDefault(branch)
+              }}
+            >
+              <Star className="size-3.5" />
+              {isDefault
+                ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+                : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      )
+    },
+    [effectiveDefault, onSetDefault]
+  )
 
   const cancelFocusFrame = React.useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -119,7 +167,8 @@ export function CreateFromPicker({
     setDefaultBaseRef(null)
     void getRuntimeRepoBaseRefDefault(
       { activeRuntimeEnvironmentId: repoRuntimeEnvironmentId },
-      repoId
+      repoId,
+      repoHostId
     )
       .then((result) => {
         if (!stale) {
@@ -134,7 +183,7 @@ export function CreateFromPicker({
     return () => {
       stale = true
     }
-  }, [repoRuntimeEnvironmentId, repoId])
+  }, [repoHostId, repoRuntimeEnvironmentId, repoId])
 
   React.useEffect(() => {
     if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
@@ -158,7 +207,8 @@ export function CreateFromPicker({
         { activeRuntimeEnvironmentId: repoRuntimeEnvironmentId },
         repoId,
         trimmedQuery,
-        30
+        30,
+        repoHostId
       )
         .then((results) => {
           if (!stale) {
@@ -181,108 +231,154 @@ export function CreateFromPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [repoRuntimeEnvironmentId, open, query, repoId])
+  }, [repoHostId, repoRuntimeEnvironmentId, open, query, repoId])
+
+  const trigger = compact ? (
+    <button
+      type="button"
+      role="combobox"
+      aria-expanded={!readOnly && open}
+      aria-readonly={readOnly || undefined}
+      aria-label={translate(
+        'auto.components.automations.CreateFromPicker.dd3841b442',
+        'Branch from'
+      )}
+      title={
+        readOnly
+          ? translate(
+              'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
+              'Connect this project first'
+            )
+          : translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')
+      }
+      className={cn(
+        'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground',
+        readOnly
+          ? 'cursor-default opacity-70'
+          : 'cursor-pointer hover:bg-accent hover:text-foreground',
+        'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        triggerClassName
+      )}
+    >
+      <GitBranch className="size-3 shrink-0" aria-hidden="true" />
+      <FilePathCursorTooltip path={compactLabel}>
+        <span className="min-w-0 truncate font-mono">{compactLabel}</span>
+      </FilePathCursorTooltip>
+      {!readOnly ? <ChevronsUpDown className="size-3 shrink-0 opacity-60" /> : null}
+    </button>
+  ) : (
+    <Button
+      type="button"
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="shrink-0 text-muted-foreground">
+          {translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}
+        </span>
+        <span className="truncate">{selectedLabel}</span>
+      </span>
+      <ChevronsUpDown className="size-4 opacity-50" />
+    </Button>
+  )
 
   return (
     <div className="space-y-2">
-      <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
+      {readOnly ? (
+        trigger
+      ) : (
+        <Popover open={open} onOpenChange={handleOpenChange}>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+              focusSearchInput()
+            }}
           >
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-muted-foreground">
-                {translate(
-                  'auto.components.automations.CreateFromPicker.dd3841b442',
-                  'Branch from'
+            <Command>
+              <CommandInput
+                ref={setInputNode}
+                value={query}
+                onValueChange={setQuery}
+                placeholder={translate(
+                  'auto.components.automations.CreateFromPicker.f061f49e3f',
+                  'Search repo branches...'
                 )}
-              </span>
-              <span className="truncate">{selectedLabel}</span>
-            </span>
-            <ChevronsUpDown className="size-4 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            focusSearchInput()
-          }}
-        >
-          <Command>
-            <CommandInput
-              ref={setInputNode}
-              value={query}
-              onValueChange={setQuery}
-              placeholder={translate(
-                'auto.components.automations.CreateFromPicker.f061f49e3f',
-                'Search repo branches...'
-              )}
-            />
-            <CommandList className="max-h-72">
-              <CommandEmpty>
-                {isSearching
-                  ? translate(
-                      'auto.components.automations.CreateFromPicker.9ce96621f4',
-                      'Searching branches...'
-                    )
-                  : translate(
-                      'auto.components.automations.CreateFromPicker.79512f22a7',
-                      'No branches found.'
-                    )}
-              </CommandEmpty>
-              <CommandItem
-                value={effectiveDefault ? `${effectiveDefault} default` : 'project default'}
-                onSelect={() => {
-                  onValueChange('')
-                  setOpen(false)
-                }}
-              >
-                <Check
-                  className={cn(
-                    'size-4',
-                    selectedValue === DEFAULT_VALUE ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-                <span className="truncate">
-                  {effectiveDefault
+              />
+              <CommandList className="max-h-72">
+                <CommandEmpty>
+                  {isSearching
                     ? translate(
-                        'auto.components.automations.CreateFromPicker.e53d306056',
-                        '{{value0}} (default)',
-                        { value0: effectiveDefault }
+                        'auto.components.automations.CreateFromPicker.9ce96621f4',
+                        'Searching branches...'
                       )
                     : translate(
-                        'auto.components.automations.CreateFromPicker.ef6d762538',
-                        'Project default'
+                        'auto.components.automations.CreateFromPicker.79512f22a7',
+                        'No branches found.'
                       )}
-                </span>
-              </CommandItem>
-              {branchOptions
-                .filter((branch) => branch !== effectiveDefault)
-                .map((branch) => (
+                </CommandEmpty>
+                {renderBranchContextMenu(
+                  effectiveDefault ?? '',
                   <CommandItem
-                    key={branch}
-                    value={branch}
+                    value={effectiveDefault ? `${effectiveDefault} default` : 'project default'}
                     onSelect={() => {
-                      onValueChange(branch)
+                      onValueChange('')
                       setOpen(false)
                     }}
                   >
                     <Check
-                      className={cn('size-4', value === branch ? 'opacity-100' : 'opacity-0')}
+                      className={cn(
+                        'size-4',
+                        selectedValue === DEFAULT_VALUE ? 'opacity-100' : 'opacity-0'
+                      )}
                     />
-                    <span className="truncate">{branch}</span>
+                    <FilePathCursorTooltip path={effectiveDefault ?? projectDefaultLabel}>
+                      <span className="min-w-0 truncate">
+                        {effectiveDefault
+                          ? translate(
+                              'auto.components.automations.CreateFromPicker.e53d306056',
+                              '{{value0}} (default)',
+                              { value0: effectiveDefault }
+                            )
+                          : translate(
+                              'auto.components.automations.CreateFromPicker.ef6d762538',
+                              'Project default'
+                            )}
+                      </span>
+                    </FilePathCursorTooltip>
                   </CommandItem>
-                ))}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+                )}
+                {branchOptions
+                  .filter((branch) => branch !== effectiveDefault)
+                  .map((branch) =>
+                    renderBranchContextMenu(
+                      branch,
+                      <CommandItem
+                        key={branch}
+                        value={branch}
+                        onSelect={() => {
+                          onValueChange(branch)
+                          setOpen(false)
+                        }}
+                      >
+                        <Check
+                          className={cn('size-4', value === branch ? 'opacity-100' : 'opacity-0')}
+                        />
+                        <FilePathCursorTooltip path={branch}>
+                          <span className="min-w-0 truncate">{branch}</span>
+                        </FilePathCursorTooltip>
+                      </CommandItem>
+                    )
+                  )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   )
 }

@@ -1,12 +1,15 @@
 import React from 'react'
 import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
+import { useAppStore } from '@/store'
 import { useRepoMap, useWorktreesForRepo } from '@/store/selectors'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 type ComposerBaseRefPickerProps = {
   repoId: string
   baseBranch: string | undefined
   onBaseBranchChange: (value: string | undefined) => void
   resetHint: string | null | undefined
+  readOnly?: boolean
 }
 
 /**
@@ -19,12 +22,15 @@ export function ComposerBaseRefPicker({
   repoId,
   baseBranch,
   onBaseBranchChange,
-  resetHint
+  resetHint,
+  readOnly = false
 }: ComposerBaseRefPickerProps): React.JSX.Element {
   const repoMap = useRepoMap()
+  const repo = repoMap.get(repoId)
   const repoWorktrees = useWorktreesForRepo(repoId)
+  const updateRepo = useAppStore((state) => state.updateRepo)
   return (
-    <div className="space-y-1 pt-1">
+    <div className="space-y-1">
       <CreateFromPicker
         // Why: branch search state is repo-scoped, so a project switch must drop it before the next paint.
         key={repoId}
@@ -32,7 +38,20 @@ export function ComposerBaseRefPicker({
         repoMap={repoMap}
         worktrees={repoWorktrees}
         value={baseBranch ?? ''}
+        compact
+        readOnly={readOnly}
         onValueChange={(nextBaseBranch) => onBaseBranchChange(nextBaseBranch || undefined)}
+        onSetDefault={
+          readOnly
+            ? undefined
+            : async (nextBaseBranch) => {
+                await updateRepo(
+                  repoId,
+                  { worktreeBaseRef: nextBaseBranch },
+                  repo ? { hostId: getRepoExecutionHostId(repo) } : undefined
+                )
+              }
+        }
       />
       {resetHint ? <p className="text-[11px] text-muted-foreground">{resetHint}</p> : null}
     </div>

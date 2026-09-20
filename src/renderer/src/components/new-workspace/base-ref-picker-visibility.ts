@@ -1,4 +1,5 @@
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from './smart-workspace-source-results'
 
 /**
  * Whether the composer offers a base ref for the worktree it is about to create.
@@ -10,9 +11,13 @@ import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/Sma
 export function shouldShowComposerBaseRefPicker(args: {
   selectedRepoIsGit: boolean
   branchesEnabled: boolean
+  smartNameMode: SmartNameMode
   smartNameSelectionKind: SmartWorkspaceNameSelection['kind'] | null
 }): boolean {
   if (!args.selectedRepoIsGit || !args.branchesEnabled) {
+    return false
+  }
+  if (args.smartNameMode === 'branches') {
     return false
   }
   // Why: these already carry a base — a PR/MR pins its own head, and a branch pick IS the base,

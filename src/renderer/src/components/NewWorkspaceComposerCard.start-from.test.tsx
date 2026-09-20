@@ -55,12 +55,18 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
 vi.mock('@/components/repo/CreateFromPicker', () => ({
   CreateFromPicker: ({
     value,
-    onValueChange
+    onValueChange,
+    readOnly
   }: {
     value: string
     onValueChange: (next: string) => void
+    readOnly?: boolean
   }) => (
-    <div data-testid="base-ref-picker" data-value={value}>
+    <div
+      data-testid="base-ref-picker"
+      data-value={value}
+      data-readonly={readOnly ? 'true' : 'false'}
+    >
       <button type="button" onClick={() => onValueChange('release/1.2')}>
         Pick release
       </button>
@@ -172,6 +178,14 @@ describe('NewWorkspaceComposerCard start from', () => {
     clickButton(container, 'Pick release')
 
     expect(picks).toEqual(['release/1.2'])
+  })
+
+  it('renders the base ref as read-only while the project needs a connection', () => {
+    container = renderCard({ selectedRepoRequiresConnection: true })
+
+    expect(
+      container.querySelector('[data-testid="base-ref-picker"]')?.getAttribute('data-readonly')
+    ).toBe('true')
   })
 
   it('reports the project default as no base at all', () => {
