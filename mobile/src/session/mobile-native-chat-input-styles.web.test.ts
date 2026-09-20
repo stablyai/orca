@@ -14,13 +14,11 @@ vi.mock(
 )
 
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE_FLOOR } from '../platform/text-input-font-size.web'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { mobileNativeChatInputBase } from './mobile-native-chat-input-base-styles'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
 import { mobileNativeChatInputStyles as onWeb } from './mobile-native-chat-input-styles.web'
-
-/** Below this an iOS browser zooms the page when an input takes focus, and does not zoom back. */
-const IOS_FOCUS_ZOOM_FLOOR = 16
 
 /** Every property the two fields carried before the split, read off the commit that split them. */
 const BEFORE_THE_SPLIT = {
@@ -64,14 +62,14 @@ describe('the chat composer and question fields natively', () => {
   it('sits one point under the floor, which is why the split exists', () => {
     // The premise, not a restatement: if the body size ever rose to 15 this whole pair collapses
     // into an in-place move and someone should be told rather than left maintaining three files.
-    expect(BEFORE_THE_SPLIT.input.fontSize).toBeLessThan(IOS_FOCUS_ZOOM_FLOOR)
+    expect(BEFORE_THE_SPLIT.input.fontSize).toBeLessThan(TEXT_INPUT_FONT_SIZE_FLOOR)
   })
 })
 
 describe('the chat composer and question fields on the web', () => {
   it.each(KEYS)('takes its size from the seam, clear of the focus-zoom floor: %s', (key) => {
     expect(onWeb[key].fontSize).toBe(TEXT_INPUT_FONT_SIZE)
-    expect(onWeb[key].fontSize).toBeGreaterThanOrEqual(IOS_FOCUS_ZOOM_FLOOR)
+    expect(onWeb[key].fontSize).toBeGreaterThanOrEqual(TEXT_INPUT_FONT_SIZE_FLOOR)
     expect(onWeb[key].fontSize).toBeGreaterThan(BEFORE_THE_SPLIT[key].fontSize)
   })
 

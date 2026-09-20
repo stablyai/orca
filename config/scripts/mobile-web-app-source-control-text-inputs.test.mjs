@@ -20,6 +20,7 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   TEXT_INPUT_FONT_SIZE_SEAM,
+  textInputFontSizeFloor,
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
 } from './mobile-web-app-text-input-font-size-seam.mjs'
@@ -34,12 +35,26 @@ const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 const SEAM_SOURCE = {
   'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14'
 }
+
+/**
+ * The seam's web half, seeded into every scratch tree below.
+ *
+ * Not a fixture detail: the floor is declared here and the census reads it here, so a tree without
+ * this file is one the rule refuses to judge at all. Seeding it makes every case a tree with a
+ * seam, which is what a real one is; the case that checks the refusal writes its own over the top.
+ */
+const FLOOR_SOURCE = {
+  'src/platform/text-input-font-size.web.ts': [
+    'export const TEXT_INPUT_FONT_SIZE_FLOOR = 16',
+    'export const TEXT_INPUT_FONT_SIZE = 16'
+  ].join('\n')
+}
 const SEAM_IMPORT = "import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'"
 
 /** A scratch module tree, so a planted offender never lands in the tree other censuses walk. */
 function plant(files) {
   const root = mkdtempSync(join(tmpdir(), 'orca-text-input-census-'))
-  for (const [path, source] of Object.entries(files)) {
+  for (const [path, source] of Object.entries({ ...FLOOR_SOURCE, ...files })) {
     mkdirSync(join(root, path.slice(0, path.lastIndexOf('/'))), { recursive: true })
     writeFileSync(join(root, path), source)
   }
@@ -186,6 +201,58 @@ describe('the size a text input declares, as the census reads it', () => {
       }
       expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Mixed.tsx:3'])
       expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The floor is the rule and the seam is the mechanism, so a literal already clear of the floor
+   * satisfies it without binding to anything.
+   *
+   * Written as three sizes rather than one: a rule that only proved 22 passes would also be
+   * satisfied by a census that stopped reading literals at all, and the 15 is the case the whole
+   * seam exists for. The boundary is included because "at or above" is where an off-by-one lives.
+   */
+  it.each([
+    ['under the floor, which is the offence the seam exists for', 15, ['src/ui/Sized.tsx:1']],
+    ['exactly the floor', 16, []],
+    ['well above the floor, which no binding could keep', 22, []]
+  ])('reads a literal %s', (_label, size, expected) => {
+    const root = plant({
+      'src/ui/Sized.tsx': `export const Sized = () => <TextInput style={{ fontSize: ${size} }} />`,
+      ...SEAM_SOURCE
+    })
+    try {
+      const closure = { local: ['src/ui/Sized.tsx'] }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(expected)
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads the floor out of the seam rather than carrying its own copy of 16', () => {
+    // The half that keeps the rule honest: a census with its own number would go on passing after
+    // the seam's moved, and the two copies would disagree in the direction nobody reads again.
+    const root = plant({})
+    try {
+      expect(textInputFontSizeFloor(root)).toBe(16)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses to judge a tree whose seam declares no floor, rather than assuming one', () => {
+    const root = plant({
+      'src/ui/Sized.tsx': 'export const Sized = () => <TextInput style={{ fontSize: 22 }} />',
+      'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14',
+      'src/platform/text-input-font-size.web.ts': 'export const TEXT_INPUT_FONT_SIZE = 16'
+    })
+    try {
+      expect(() => textInputFontSizeOffenders(root, { local: ['src/ui/Sized.tsx'] })).toThrow(
+        /declares no numeric/
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

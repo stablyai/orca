@@ -30,7 +30,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 const SESSION = 'app/h/[hostId]/session/[worktreeId].tsx'
 
 /**
- * The two style modules this screen splits, as the page bundle resolves them.
+ * The style module this screen splits, as the page bundle resolves it.
  *
  * Named rather than left to the offender list because a split is the one fix that can be undone
  * without reopening the offence: delete the `.web.ts` and the native sibling's size is what the
@@ -38,10 +38,7 @@ const SESSION = 'app/h/[hostId]/session/[worktreeId].tsx'
  * so — but only the next time someone reads it. Listed here, the closure says which file the page
  * loads.
  */
-const SPLIT_WEB_STYLES = [
-  'src/components/custom-key-input-styles.web.ts',
-  'src/session/mobile-native-chat-input-styles.web.ts'
-]
+const SPLIT_WEB_STYLES = ['src/session/mobile-native-chat-input-styles.web.ts']
 
 describeClosure(
   'the text inputs the session screen reaches',

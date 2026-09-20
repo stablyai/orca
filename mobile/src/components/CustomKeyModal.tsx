@@ -12,7 +12,6 @@ import {
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
 import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
-import { customKeyInputStyles } from './custom-key-input-styles'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
@@ -294,7 +293,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Key</Text>
             <TextInput
-              style={customKeyInputStyles.keyInput}
+              style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
               placeholder={SPECIAL_KEY_BY_ID[shortcutKey]?.label ?? 'C'}

@@ -86,10 +86,6 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page: a screencast frame crosses the bridge as one message under BRIDGE_MAX_MESSAGE_BYTES, and a phone's mobile view at the native device scale factor produces a worst-case JPEG larger than that. This file budgets the mobile view's area against the cap, the envelope it measures rather than names, and one worst-case bytes-per-pixel constant. Web view mode is untouched, because a letterboxed desktop viewport is not an area the page can predict."
     },
     {
-      "file": "src/components/custom-key-input-styles.web.ts",
-      "reason": "The custom-key capture field renders one character at 22px, which already clears the 16px floor below which iOS zooms the page on focus \u2014 so unlike every other input on the session screen this sibling lowers the size rather than raising it. The text-input census reads the seam as a binding and not as a number, on purpose: a literal that happens to be large enough and a 14 somebody left behind are the same thing to a reader, and a per-site exemption is what the next 14 would inherit. Native keeps 22, where no page can zoom."
-    },
-    {
       "file": "src/session/mobile-native-chat-input-styles.web.ts",
       "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps 15."
     },

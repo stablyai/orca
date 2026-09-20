@@ -19,7 +19,10 @@ import { customKeyModalStyles } from '../components/CustomKeyModal.styles'
 import { mobileSessionCommandInputStyles } from '../session/mobile-session-command-input-styles'
 import { typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from './text-input-font-size'
-import { TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE } from './text-input-font-size.web'
+import {
+  TEXT_INPUT_FONT_SIZE_FLOOR,
+  TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE
+} from './text-input-font-size.web'
 
 /**
  * The size every page-served text input carries, on each platform.
@@ -53,9 +56,9 @@ const STYLE_MODULES = [
  */
 const SPLIT_STYLE_MODULES = [
   'src/browser/browser-address-field-styles.web.ts',
-  // The session screen's two: a capture field at 22 and the chat's two fields at 15, none of
-  // which is the body size, so each keeps its own native sibling.
-  'src/components/custom-key-input-styles.web.ts',
+  // The session screen's one: the chat's two fields sit at 15, under the floor and not the body
+  // size, so they keep a native sibling. The custom-key capture field needed no split — 22 clears
+  // the floor, and the census reads a literal that does as satisfying the rule (C7 ruling 12).
   'src/session/mobile-native-chat-input-styles.web.ts'
 ]
 
@@ -64,9 +67,11 @@ const SEAM_EXPORT_NAME = 'TEXT_INPUT_FONT_SIZE'
 
 describe('the font size the page-served text inputs carry', () => {
   it('clears the size iOS zooms the page for, on the web', () => {
-    // 16 is the floor; below it a focus zooms the document and the keyboard seam, which reads a
-    // scale other than 1 as no keyboard, stops lifting for the rest of the session.
-    expect(WEB_TEXT_INPUT_FONT_SIZE).toBeGreaterThanOrEqual(16)
+    // Below the floor a focus zooms the document, and the keyboard seam reads a scale other than
+    // 1 as no keyboard and stops lifting for the rest of the session. The number is the seam's
+    // own, read rather than restated, because the census over every page route reads it too.
+    expect(WEB_TEXT_INPUT_FONT_SIZE).toBeGreaterThanOrEqual(TEXT_INPUT_FONT_SIZE_FLOOR)
+    expect(TEXT_INPUT_FONT_SIZE_FLOOR).toBe(16)
   })
 
   it('leaves a phone rendering exactly what it rendered before', () => {
@@ -75,6 +80,11 @@ describe('the font size the page-served text inputs carry', () => {
     expect(mobileDiffReviewControlStyles.composerInput.fontSize).toBe(typography.bodySize)
     expect(mobileBrowserPaneStyles.keyboardInput.fontSize).toBe(typography.bodySize)
     expect(customKeyModalStyles.fieldInput.fontSize).toBe(typography.bodySize)
+    // The capture field beside it, which is the one input on this screen no seam touches.
+    expect(customKeyModalStyles.keyInput.fontSize).toBe(22)
+    expect(customKeyModalStyles.keyInput.fontSize).toBeGreaterThanOrEqual(
+      TEXT_INPUT_FONT_SIZE_FLOOR
+    )
     expect(mobileSessionCommandInputStyles.textInput.fontSize).toBe(typography.bodySize)
     // The pane's address bar is the one that is split: it keeps the compact size natively, so the
     // seam reaches it through the `.web.ts` sibling rather than through this constant.

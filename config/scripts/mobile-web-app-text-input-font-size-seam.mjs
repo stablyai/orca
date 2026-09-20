@@ -18,7 +18,45 @@ export const TEXT_INPUT_FONT_SIZE_SEAM = 'src/platform/text-input-font-size.web.
 const SEAM_EXPORT = 'TEXT_INPUT_FONT_SIZE'
 const SEAM_MODULE = 'src/platform/text-input-font-size.ts'
 
+/** The floor's name in the seam's web half, which is the only place the number is written. */
+const FLOOR_EXPORT = 'TEXT_INPUT_FONT_SIZE_FLOOR'
+
 const parse = (file, source) => ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
+
+/** One read per tree: the file does not change under a run, and every style asks for it. */
+const floorByRoot = new Map()
+
+/**
+ * The size at or above which an input cannot make iOS zoom the page, read from the seam itself.
+ *
+ * Read rather than restated, and that is the whole reason this rule can exist: the seam's web half
+ * already computes `Math.max(bodySize, floor)`, so a census that wrote `16` beside it would be a
+ * second copy of the one number the seam is for, and the two would drift in the direction nobody
+ * reads again.
+ *
+ * Absent is a throw rather than a default. A census that silently fell back to a number of its own
+ * would go on passing while the thing it measures against had moved or gone.
+ */
+export function textInputFontSizeFloor(mobileDir) {
+  const cached = floorByRoot.get(mobileDir)
+  if (cached !== undefined) {
+    return cached
+  }
+  const source = readOrNull(join(mobileDir, TEXT_INPUT_FONT_SIZE_SEAM))
+  if (source === null) {
+    throw new Error(`[text-input-font-size-seam] no seam at ${TEXT_INPUT_FONT_SIZE_SEAM}`)
+  }
+  const parsed = parse(TEXT_INPUT_FONT_SIZE_SEAM, source)
+  const declared = declarationOf(parsed, FLOOR_EXPORT)
+  if (declared === null || !ts.isNumericLiteral(declared)) {
+    throw new Error(
+      `[text-input-font-size-seam] ${TEXT_INPUT_FONT_SIZE_SEAM} declares no numeric ${FLOOR_EXPORT}`
+    )
+  }
+  const floor = Number(declared.text)
+  floorByRoot.set(mobileDir, floor)
+  return floor
+}
 
 function readOrNull(path) {
   try {
@@ -371,7 +409,25 @@ function resolveStyleKey(mobileDir, file, exportName, key, seen = new Set()) {
   return null
 }
 
-/** The `fontSize` a style object literal declares, with whether it came through the seam. */
+/**
+ * Whether a size is a literal that already clears the floor.
+ *
+ * The floor is the rule and the seam is the mechanism, so a style that declares a number at or
+ * above it satisfies the rule without binding to anything: 22 on a capture field cannot zoom a
+ * page, and making it read the seam would have lowered it to 16 to satisfy a census. A literal
+ * under the floor is still an offence, which is the case the rule was written for.
+ *
+ * Literals only. `typography.bodySize + 1` is 15 today and whatever the theme says tomorrow, and a
+ * census that evaluated expressions would be a second renderer.
+ */
+function isLiteralAtOrAboveFloor(mobileDir, initializer) {
+  return (
+    ts.isNumericLiteral(initializer) &&
+    Number(initializer.text) >= textInputFontSizeFloor(mobileDir)
+  )
+}
+
+/** The `fontSize` a style object literal declares, with whether the rule is satisfied. */
 function fontSizeIn(mobileDir, parsed, file, object) {
   for (const entry of object.properties) {
     if (ts.isPropertyAssignment(entry) && entry.name.getText() === 'fontSize') {
@@ -379,7 +435,9 @@ function fontSizeIn(mobileDir, parsed, file, object) {
         file,
         text: entry.initializer.getText(),
         line: parsed.getLineAndCharacterOfPosition(entry.getStart(parsed)).line + 1,
-        onSeam: isSeamBinding(mobileDir, parsed, file, entry.initializer)
+        onSeam:
+          isSeamBinding(mobileDir, parsed, file, entry.initializer) ||
+          isLiteralAtOrAboveFloor(mobileDir, entry.initializer)
       }
     }
   }
