@@ -9,6 +9,7 @@ import {
   configureElectronNetworkCompatibility,
   configureOrcaUserDataPathEnv,
   disableUnsupportedChromiumFeatures,
+  selectLinuxPasswordStore,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -309,6 +310,8 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     ...getMainProcessLifecycleIdentity()
   })
   disableUnsupportedChromiumFeatures()
+  // Why: before any safeStorage use — Chromium resolves the password store once.
+  selectLinuxPasswordStore()
   // Why: unconditional — a GPU-fallback launch skips enableMainProcessGpuFeatures() below.
   optOutOfHiddenPageWakeUpThrottling()
   configureElectronNetworkCompatibility()
