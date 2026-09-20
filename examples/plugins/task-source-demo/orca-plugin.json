@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "task-source-demo",
+  "publisher": "orca-samples",
+  "name": "Task Source Demo",
+  "version": "1.0.0",
+  "description": "Sample plugin contributing a task source backed by static items.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "taskSources": [{ "id": "demo-tasks", "title": "Demo Tasks", "icon": "kanban" }]
+  },
+  "capabilities": []
+}
