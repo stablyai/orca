@@ -66,10 +66,16 @@ export function useClipboardReader(): ClipboardReader {
       // Swallowed here rather than at each caller, which is where it already was: a probe that
       // threw would disable the paste button, and every platform reason for it to throw is one
       // the read itself reports better.
-      contents: async () => ({
-        text: await Clipboard.hasStringAsync().catch(() => false),
-        image: await Clipboard.hasImageAsync().catch(() => false)
-      })
+      // Both probes started before either is awaited, which is what the call sites did before this
+      // seam existed. Awaiting them in turn puts an IPC round trip on the critical path of every
+      // mount, every foreground and every select-mode toggle.
+      contents: async () => {
+        const [text, image] = await Promise.all([
+          Clipboard.hasStringAsync().catch(() => false),
+          Clipboard.hasImageAsync().catch(() => false)
+        ])
+        return { text, image }
+      }
     }),
     []
   )

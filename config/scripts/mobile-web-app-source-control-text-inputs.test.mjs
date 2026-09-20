@@ -232,12 +232,27 @@ describe('the size a text input declares, as the census reads it', () => {
     }
   })
 
-  it('reads the floor out of the seam rather than carrying its own copy of 16', () => {
-    // The half that keeps the rule honest: a census with its own number would go on passing after
-    // the seam's moved, and the two copies would disagree in the direction nobody reads again.
-    const root = plant({})
+  /**
+   * The floor really is the seam's, checked against a seam that does not say 16.
+   *
+   * The first version of this case planted a floor of 16 and asserted the census read 16, which a
+   * census carrying its own copy of the number passes just as happily. A tree whose seam says 20
+   * is the only fixture that can tell the two apart, and the 18 below is the size that is clean
+   * under one floor and an offence under the other.
+   */
+  it('judges against the floor the seam declares, not against a number of its own', () => {
+    const root = plant({
+      'src/ui/Sized.tsx': 'export const Sized = () => <TextInput style={{ fontSize: 18 }} />',
+      'src/platform/text-input-font-size.web.ts': [
+        'export const TEXT_INPUT_FONT_SIZE_FLOOR = 20',
+        'export const TEXT_INPUT_FONT_SIZE = 20'
+      ].join('\n')
+    })
     try {
-      expect(textInputFontSizeFloor(root)).toBe(16)
+      expect(textInputFontSizeFloor(root)).toBe(20)
+      expect(textInputFontSizeOffenders(root, { local: ['src/ui/Sized.tsx'] })).toEqual([
+        'src/ui/Sized.tsx:1'
+      ])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

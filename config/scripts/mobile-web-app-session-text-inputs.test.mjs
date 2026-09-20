@@ -62,7 +62,7 @@ describeClosure(
       expect(closure.local.length).toBeGreaterThan(900)
     })
 
-    it('loads the web half of both split style modules, not the native one', async () => {
+    it('loads the web half of the split style module, not the native one', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
       expect(closure.local).toEqual(expect.arrayContaining(SPLIT_WEB_STYLES))
       expect(

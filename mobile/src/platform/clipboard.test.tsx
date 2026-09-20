@@ -93,6 +93,30 @@ describe('reading the clipboard on a phone', () => {
     expect(clipboard.getImageAsync.mock.calls).toEqual([[{ format: 'png' }]])
   })
 
+  it('starts both probes before either has answered', async () => {
+    // Awaiting them in turn puts an IPC round trip on the critical path of every mount, every
+    // foreground and every select-mode toggle, which is where these callers run. The order is the
+    // subject, so neither probe resolves until both have been called.
+    const started: string[] = []
+    let releaseString = (): void => {}
+    clipboard.hasStringAsync.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          started.push('string')
+          releaseString = () => resolve(true)
+        })
+    )
+    clipboard.hasImageAsync.mockImplementation(() => {
+      started.push('image')
+      // The image probe answers first: with a sequential await this line is never reached, because
+      // nothing would have called it before the text probe settled.
+      releaseString()
+      return Promise.resolve(false)
+    })
+    await expect(mountReader().contents()).resolves.toEqual({ text: true, image: false })
+    expect(started).toEqual(['string', 'image'])
+  })
+
   it('probes both kinds without reading either', async () => {
     clipboard.hasImageAsync.mockImplementation(() => Promise.resolve(true))
     await expect(mountReader().contents()).resolves.toEqual({ text: false, image: true })
