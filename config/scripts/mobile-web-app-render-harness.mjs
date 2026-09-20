@@ -95,7 +95,9 @@ export function installShellDouble({
   faultGrant,
   grants,
   pageRoutes = null,
-  replies
+  replies,
+  streams = [],
+  frameCapBytes = 0
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -104,6 +106,16 @@ export function installShellDouble({
   // something to the shell and a control that did nothing look identical on the document; this is
   // the only thing that tells them apart.
   globalThis.__orcaRenderCheckNotifies = []
+  // Every request the page issued, whole and in order, so a check can say which verb a gesture
+  // produced and with what geometry rather than only that something was sent.
+  globalThis.__orcaRenderCheckRequests = []
+  // The subscriptions the double accepted, with the `wantsBinary` each one asked for: the negative
+  // case is "the page did not ask", which no assertion on the frames can see.
+  globalThis.__orcaRenderCheckSubscribes = []
+  // Binary events this double refused to post because they exceeded the frame cap, which is the
+  // shell's drop rule reproduced where the page can watch it survive one.
+  globalThis.__orcaRenderCheckDroppedFrames = []
+  const openStreams = new Map()
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -151,6 +163,25 @@ export function installShellDouble({
       // The result the caller named for this method, carried in the envelope a real host uses.
       // Anything unnamed still takes the refusal below, so a screen only ever sees data a test
       // asked for.
+      if (frame.type === 'subscribe' && streams.includes(frame.method)) {
+        globalThis.__orcaRenderCheckSubscribes.push({
+          id: frame.id,
+          method: frame.method,
+          params: frame.params,
+          wantsBinary: frame.wantsBinary === true
+        })
+        // Accepted by saying nothing, exactly as the real host does: a subscription is open until
+        // an `error` or an `end` closes it, and the first thing the page hears is an event.
+        openStreams.set(frame.id, { seq: 0 })
+        return
+      }
+      if (frame.type === 'cancel') {
+        openStreams.delete(frame.id)
+        return
+      }
+      if (frame.type === 'request') {
+        globalThis.__orcaRenderCheckRequests.push({ method: frame.method, params: frame.params })
+      }
       if (frame.type === 'request' && replies && Object.hasOwn(replies, frame.method)) {
         answer({
           v: version,
@@ -174,6 +205,28 @@ export function installShellDouble({
       }
     },
     onmessage: null
+  }
+  /**
+   * One screencast frame from the shell, priced the way `BridgeHostSubscriptions` prices it.
+   *
+   * The cap check is here rather than in the caller because it is the behaviour under test: an
+   * event the shell cannot post is dropped, the stream stays open, and the next frame paints. A
+   * double that posted it anyway would prove the page decodes a frame no shell could send.
+   */
+  globalThis.__orcaRenderCheckEmitBinary = (id, binary) => {
+    const stream = openStreams.get(id)
+    if (!stream) {
+      return 'no-stream'
+    }
+    const seq = stream.seq + 1
+    const json = JSON.stringify({ v: version, type: 'event', id, seq, binary })
+    if (frameCapBytes > 0 && new TextEncoder().encode(json).length > frameCapBytes) {
+      globalThis.__orcaRenderCheckDroppedFrames.push(binary.frameSeq)
+      return 'dropped'
+    }
+    stream.seq = seq
+    channel.onmessage?.({ data: json })
+    return 'posted'
   }
   globalThis.orcaBridge = channel
 }
