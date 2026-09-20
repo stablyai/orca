@@ -374,8 +374,8 @@ describeBundling('the app bundle', () => {
 
   it('fails the named shim, not the whole build, when its option goes missing', async () => {
     const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // Each shim reads a different option, so removing one leaves the other five true. Without
-    // that, the list could name a shim the build stopped applying.
+    // Each shim reads an option of its own (two read `banner.js`), so stripping every option
+    // leaves none applying. Without that, the list could name a shim the build stopped applying.
     const stripped = {
       ...options,
       alias: {},

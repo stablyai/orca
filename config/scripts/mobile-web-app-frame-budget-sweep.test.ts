@@ -43,6 +43,7 @@ async function loadSweepModules() {
     mobileBrowserFrameAreaBudget: request.mobileBrowserFrameAreaBudget,
     WORST_CASE_JPEG_BYTES_PER_PIXEL: request.WORST_CASE_JPEG_BYTES_PER_PIXEL,
     MOBILE_VIEW_DEVICE_SCALE_FACTOR: parameters.MOBILE_VIEW_DEVICE_SCALE_FACTOR,
+    BROWSER_FRAME_QUALITY: parameters.BROWSER_FRAME_QUALITY,
     BRIDGE_MAX_MESSAGE_BYTES: caps.BRIDGE_MAX_MESSAGE_BYTES,
     utf8ByteLength: caps.utf8ByteLength,
     clientFrame: fakes.clientFrame,
@@ -105,13 +106,17 @@ afterAll(async () => {
   await browser?.close()
 })
 
-/** A noise JPEG at quality 72, encoded by Chromium, returned as the base64 the bridge carries. */
+/**
+ * A noise JPEG at the quality the pane ships, encoded by Chromium, returned as the base64 the
+ * bridge carries. The quality is read, not retyped: at 90 every budgeted viewport posts over the cap.
+ */
 async function encodeNoiseJpeg(size: { width: number; height: number }, seed: number) {
   if (page === null) {
     throw new Error('the sweep has no page')
   }
+  const quality = sweep().BROWSER_FRAME_QUALITY / 100
   return await page.evaluate(
-    ({ width, height, seed }) => {
+    ({ width, height, seed, quality }) => {
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
@@ -129,9 +134,9 @@ async function encodeNoiseJpeg(size: { width: number; height: number }, seed: nu
         image.data[index + 3] = 255
       }
       context.putImageData(image, 0, 0)
-      return canvas.toDataURL('image/jpeg', 0.72).split(',')[1] ?? ''
+      return canvas.toDataURL('image/jpeg', quality).split(',')[1] ?? ''
     },
-    { ...size, seed }
+    { ...size, seed, quality }
   )
 }
 
@@ -243,7 +248,8 @@ describeSweep('the frame budget across the viewport range', () => {
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
     // The exception the split above names. These are real: a 1400x1180 viewport posts 1.2 MB.
     const tooLarge = VIEWPORTS.filter((viewport) => !withinBudget(viewport))
-    expect(tooLarge.length).toBeGreaterThan(0)
+    // The 32 of the 143 the budget leaves at scale 1, a fixed number because the set is fixed.
+    expect(tooLarge.length).toBe(32)
 
     const largest = tooLarge.reduce((left, right) =>
       left.width * left.height > right.width * right.height ? left : right

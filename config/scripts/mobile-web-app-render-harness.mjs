@@ -91,6 +91,22 @@ export async function readBridgeWindowCaps() {
   }
 }
 
+/**
+ * The JPEG quality the pane asks Chromium for, read from the module that sends it. A test that
+ * encoded its fixtures at a retyped quality would certify the budget at a number nothing ships.
+ */
+export async function readBrowserFrameQuality() {
+  const source = await readFile(
+    join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
+    'utf8'
+  )
+  const match = /BROWSER_FRAME_QUALITY = (\d+)/.exec(source)
+  if (!match) {
+    throw new Error('could not read BROWSER_FRAME_QUALITY')
+  }
+  return Number(match[1]) / 100
+}
+
 /** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(

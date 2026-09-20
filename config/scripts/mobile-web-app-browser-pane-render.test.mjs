@@ -29,6 +29,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readBridgeWindowCaps,
+  readBrowserFrameQuality,
   readShellCsp
 } from './mobile-web-app-render-harness.mjs'
 
@@ -207,9 +208,10 @@ async function openPane({ grants }) {
 }
 
 /** A JPEG of deterministic noise, encoded in the page, returned as the base64 the bridge carries. */
-function encodeNoiseJpeg(page, { width, height, seed }) {
+async function encodeNoiseJpeg(page, { width, height, seed }) {
+  const quality = await readBrowserFrameQuality()
   return page.evaluate(
-    ({ width, height, seed }) => {
+    ({ width, height, seed, quality }) => {
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
@@ -224,9 +226,9 @@ function encodeNoiseJpeg(page, { width, height, seed }) {
         image.data[index + 3] = 255
       }
       context.putImageData(image, 0, 0)
-      return canvas.toDataURL('image/jpeg', 0.72).split(',')[1]
+      return canvas.toDataURL('image/jpeg', quality).split(',')[1]
     },
-    { width, height, seed }
+    { width, height, seed, quality }
   )
 }
 
@@ -299,7 +301,7 @@ const waitForPaint = (page, count) =>
 
 describePane('the browser pane in a page', () => {
   /**
-   * Zero, which it was not until `page-zod-jitless.ts` landed.
+   * Zero, which it was not until the Zod jitless flag moved into the bundler banner.
    *
    * Zod decided whether it could compile by constructing `new Function('')`, which the shell's
    * `script-src 'self'` reports even though Zod catches the throw — once on load and again on
@@ -414,6 +416,7 @@ describePane('the browser pane in a page', () => {
 
       expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckDroppedFrames)).toEqual([2])
       expect(await view.page.evaluate(() => globalThis.__orcaRenderCheckSubscribes.length)).toBe(1)
+      expect(await view.csp()).toEqual([])
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()
@@ -457,6 +460,7 @@ describePane('the browser pane in a page', () => {
       // And the acks are real rather than the window merely being generous.
       const acks = await view.page.evaluate(() => globalThis.__orcaRenderCheckAcks)
       expect(acks.length).toBeGreaterThan(0)
+      expect(await view.csp()).toEqual([])
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()
@@ -500,6 +504,7 @@ describePane('the browser pane in a page', () => {
       // is a scale, an axis or a letterbox offset being wrong, which is what this is here for.
       expect(Math.abs(requests[0].params.x - SOURCE.deviceWidth / 2)).toBeLessThanOrEqual(1)
       expect(Math.abs(requests[0].params.y - SOURCE.deviceHeight / 2)).toBeLessThanOrEqual(1)
+      expect(await view.csp()).toEqual([])
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()

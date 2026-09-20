@@ -30,7 +30,7 @@ export type {
  * It was 0.545 before that sweep, taken from one 2400x2160 frame. A single large frame is the
  * cheapest per pixel in the whole range, so the number it gave was under 90 of those 143 viewports
  * and the budget it produced posted a frame over the cap on a phone. A worst case measured at one
- * point is not a worst case; `mobile-browser-frame-budget-sweep.test.ts` is what holds this one to
+ * point is not a worst case; `mobile-web-app-frame-budget-sweep.test.ts` is what holds this one to
  * the whole range, and re-running it is how this number is changed.
  */
 export const WORST_CASE_JPEG_BYTES_PER_PIXEL = 0.56

@@ -156,7 +156,7 @@ describe('the envelope bound against a real posted frame', () => {
  * itself produced — so they cannot falsify the constant, only the expansion and the drop rule
  * around it. Said plainly because the earlier version of this block read as if it validated the
  * worst case: it did not, and the constant it agreed with was wrong by enough to post a phone's
- * frame over the cap. `config/scripts/mobile-browser-frame-budget-sweep.test.ts` is what encodes
+ * frame over the cap. `config/scripts/mobile-web-app-frame-budget-sweep.test.ts` is what encodes
  * real Chromium JPEGs across the viewport range and holds the constant to them.
  */
 describe('a frame at exactly the budgeted area', () => {
