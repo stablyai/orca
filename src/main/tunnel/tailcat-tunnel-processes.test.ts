@@ -191,6 +191,46 @@ describe('TailcatTunnelServer', () => {
     await server.stop()
   })
 
+  it('cancels and settles key generation before stop() returns', async () => {
+    const { spawn, children } = fakeSpawner()
+    let keygenSettled = false
+    const run = vi.fn(
+      (spec: ProcessSpec) =>
+        new Promise<{
+          code: null
+          signal: null
+          stdout: string
+          stderr: string
+          timedOut: boolean
+        }>((resolve) => {
+          spec.signal?.addEventListener(
+            'abort',
+            () => {
+              setTimeout(() => {
+                keygenSettled = true
+                resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
+              }, 10)
+            },
+            { once: true }
+          )
+        })
+    )
+    const keyPath = join(
+      mkdtempSync(join(tmpdir(), 'orca-tailcat-key-')),
+      'orca-server.private.json'
+    )
+    const server = new TailcatTunnelServer({ binary: 'tailcat', keyPath, spawn, run })
+
+    const pending = server.start(6768)
+    await vi.waitFor(() => expect(run).toHaveBeenCalled())
+    await server.stop()
+
+    expect(run.mock.calls[0]![0].signal?.aborted).toBe(true)
+    expect(keygenSettled).toBe(true)
+    await expect(pending).rejects.toThrow(/was stopped/)
+    expect(children).toHaveLength(0)
+  })
+
   it('fails when the child exits before announcing a listener', async () => {
     const { spawn, children } = fakeSpawner()
     const server = new TailcatTunnelServer({
@@ -407,20 +447,26 @@ describe('TailcatSocksProxy', () => {
 
   it('does not spawn a proxy when stopped during key generation', async () => {
     const { spawn, children } = fakeSpawner()
-    let releaseKeygen: () => void = () => {}
+    let keygenSettled = false
     const run = vi.fn(
       (spec: ProcessSpec) =>
         new Promise<{
-          code: number
+          code: null
           signal: null
           stdout: string
           stderr: string
           timedOut: boolean
         }>((resolve) => {
-          releaseKeygen = () => {
-            writeFileSync(spec.args![2]!.slice('--key='.length), '{}')
-            resolve({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false })
-          }
+          spec.signal?.addEventListener(
+            'abort',
+            () => {
+              setTimeout(() => {
+                keygenSettled = true
+                resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
+              }, 10)
+            },
+            { once: true }
+          )
         })
     )
     const keyPath = join(
@@ -430,10 +476,12 @@ describe('TailcatSocksProxy', () => {
     const proxy = new TailcatSocksProxy({ binary: 'tailcat', keyPath, spawn, run })
     const tunnel = { v: 1 as const, kind: 'tailcat' as const, token: 'tcTOKEN', port: 6768 }
     const dialed = proxy.dial(tunnel)
+    const dialFailure = dialed.catch((error: unknown) => error)
     await vi.waitFor(() => expect(run).toHaveBeenCalled())
     await proxy.stop()
-    releaseKeygen()
-    await expect(dialed).rejects.toThrow(/has been stopped/)
+    expect(run.mock.calls[0]![0].signal?.aborted).toBe(true)
+    expect(keygenSettled).toBe(true)
+    await expect(dialFailure).resolves.toMatchObject({ message: 'Tailcat proxy has been stopped' })
     expect(children).toHaveLength(0)
   })
 

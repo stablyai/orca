@@ -4,7 +4,11 @@ import type { Duplex } from 'node:stream'
 import WebSocket from 'ws'
 import type { PairingOffer, PairingTunnel } from './mobile-relay-pairing-offer'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
-import { remoteRuntimeConnectOptions } from './remote-runtime-connect-bound'
+import {
+  REMOTE_RUNTIME_CONNECT_TIMEOUT_MS,
+  remoteRuntimeConnectOptions,
+  WS_HANDSHAKE_TIMEOUT_MESSAGE
+} from './remote-runtime-connect-bound'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
@@ -12,7 +16,10 @@ export const TUNNEL_DIALER_UNAVAILABLE_MESSAGE =
   'This server is shared over Tailcat. Install the tailcat CLI on this computer to connect.'
 
 /** Opens a raw TCP stream to the runtime's WebSocket port through the tunnel named in a pairing offer. */
-export type RemoteRuntimeTunnelDialer = (tunnel: PairingTunnel) => Promise<Socket>
+export type RemoteRuntimeTunnelDialer = (
+  tunnel: PairingTunnel,
+  signal: AbortSignal
+) => Promise<Socket>
 
 // Why process-global: the shared client runs in Electron main and the CLI, and neither can import the
 // process that owns the tunnel helper. Each host registers its dialer once at startup; a host that
@@ -45,7 +52,8 @@ function rejectConnection(callback: CreateConnectionCallback, error: unknown): v
 export class RemoteRuntimeTunnelAgent extends Agent {
   constructor(
     private readonly tunnel: PairingTunnel,
-    private readonly dial: RemoteRuntimeTunnelDialer
+    private readonly dial: RemoteRuntimeTunnelDialer,
+    private readonly connectTimeoutMs = REMOTE_RUNTIME_CONNECT_TIMEOUT_MS
   ) {
     super({ keepAlive: false })
   }
@@ -59,9 +67,46 @@ export class RemoteRuntimeTunnelAgent extends Agent {
         'RemoteRuntimeTunnelAgent only supports the callback form of createConnection'
       )
     }
-    this.dial(this.tunnel).then(
-      (socket) => callback(null, socket),
-      (error: unknown) => rejectConnection(callback, error)
+    let finished = false
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      if (finished) {
+        return
+      }
+      finished = true
+      controller.abort()
+      rejectConnection(callback, new Error(WS_HANDSHAKE_TIMEOUT_MESSAGE))
+    }, this.connectTimeoutMs)
+    timeout.unref()
+
+    let pendingSocket: Promise<Socket>
+    try {
+      pendingSocket = this.dial(this.tunnel, controller.signal)
+    } catch (error) {
+      finished = true
+      clearTimeout(timeout)
+      rejectConnection(callback, error)
+      return undefined
+    }
+
+    void pendingSocket.then(
+      (socket) => {
+        if (finished) {
+          socket.destroy()
+          return
+        }
+        finished = true
+        clearTimeout(timeout)
+        callback(null, socket)
+      },
+      (error: unknown) => {
+        if (finished) {
+          return
+        }
+        finished = true
+        clearTimeout(timeout)
+        rejectConnection(callback, error)
+      }
     )
     return undefined
   }
@@ -86,7 +131,14 @@ export function createRemoteRuntimeWebSocket(
   return new WebSocket(
     pairing.tunnel && dialer ? tunneledWebSocketEndpoint(pairing.endpoint) : pairing.endpoint,
     pairing.tunnel && dialer
-      ? { ...boundedOptions, agent: new RemoteRuntimeTunnelAgent(pairing.tunnel, dialer) }
+      ? {
+          ...boundedOptions,
+          agent: new RemoteRuntimeTunnelAgent(
+            pairing.tunnel,
+            dialer,
+            boundedOptions.handshakeTimeout
+          )
+        }
       : boundedOptions
   )
 }

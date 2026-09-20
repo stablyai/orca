@@ -50,6 +50,8 @@ export class TailcatTunnelServer {
   private restartTimer: NodeJS.Timeout | null = null
   private restartAttempt = 0
   private starting: Promise<string> | null = null
+  private startingAbort: AbortController | null = null
+  private readonly launches = new Set<Promise<string>>()
 
   constructor(private readonly options: TailcatTunnelServerOptions) {}
 
@@ -77,6 +79,7 @@ export class TailcatTunnelServer {
     }
     // Why: a start inside a backoff window must own the relaunch, or two children race for the port.
     this.clearRestartTimer()
+    this.startingAbort?.abort()
     const generation = ++this.generation
     const previous = this.child
     this.child = null
@@ -89,32 +92,46 @@ export class TailcatTunnelServer {
   async stop(): Promise<void> {
     this.generation += 1
     this.clearRestartTimer()
+    const launches = [...this.launches]
+    this.startingAbort?.abort()
     const child = this.child
     this.child = null
     this.port = null
     this.setState('stopped')
-    if (child) {
-      await terminateChild(child, this.options.terminateGraceMs)
-    }
+    await Promise.all([
+      child ? terminateChild(child, this.options.terminateGraceMs) : Promise.resolve(),
+      ...launches.map((launch) => launch.catch(() => {}))
+    ])
   }
 
   private launch(generation: number, previous: TailcatChild | null = null): Promise<string> {
-    const pending = this.launchAttempt(generation, previous).finally(() => {
+    const controller = new AbortController()
+    this.startingAbort = controller
+    const pending = this.launchAttempt(generation, previous, controller.signal).finally(() => {
       if (this.starting === pending) {
         this.starting = null
       }
+      if (this.startingAbort === controller) {
+        this.startingAbort = null
+      }
+      this.launches.delete(pending)
     })
     this.starting = pending
+    this.launches.add(pending)
     return pending
   }
 
-  private async launchAttempt(generation: number, previous: TailcatChild | null): Promise<string> {
+  private async launchAttempt(
+    generation: number,
+    previous: TailcatChild | null,
+    signal: AbortSignal
+  ): Promise<string> {
     this.setState('starting')
     try {
       if (previous) {
         await terminateChild(previous, this.options.terminateGraceMs)
       }
-      await this.ensureServerKey()
+      await this.ensureServerKey(signal)
       this.assertCurrent(generation)
       const token = await this.spawnServe(generation)
       this.restartAttempt = 0
@@ -237,7 +254,7 @@ export class TailcatTunnelServer {
     }
   }
 
-  private async ensureServerKey(): Promise<void> {
+  private async ensureServerKey(signal: AbortSignal): Promise<void> {
     if (existsSync(this.options.keyPath)) {
       return
     }
@@ -245,8 +262,12 @@ export class TailcatTunnelServer {
     const result = await run({
       program: this.options.binary,
       args: ['genkey', `--key=${tailcatKeyPathArgument(this.options.keyPath)}`, '--fixed-region'],
-      timeoutMs: KEYGEN_TIMEOUT_MS
+      timeoutMs: KEYGEN_TIMEOUT_MS,
+      signal
     })
+    if (signal.aborted) {
+      throw new TunnelServerCancelledError()
+    }
     if (result.code !== 0) {
       throw new Error(`tailcat genkey failed: ${result.stderr.trim() || result.code}`)
     }

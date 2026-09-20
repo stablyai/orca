@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProcessSpec } from '../../shared/child-process/run-process'
 import {
+  Socks5NegotiationAbortedError,
   Socks5NegotiationError,
   Socks5NegotiationTimeoutError,
   Socks5RefusalError,
@@ -81,6 +82,28 @@ async function ready(children: FakeChild[], index: number, port: number): Promis
 }
 
 describe('TailcatSocksProxy stale-child recovery', () => {
+  it('cancels a retry wait without dialing again or starting recovery', async () => {
+    let receivedSignal: AbortSignal | undefined
+    const connect = vi.fn((options: Socks5ConnectOptions): Promise<Socket> => {
+      receivedSignal = options.signal
+      return Promise.reject(genericFailure())
+    })
+    const { proxy, children } = harness(connect, undefined, 10_000)
+    const controller = new AbortController()
+    const dialed = proxy.dial(tunnel, controller.signal)
+    await ready(children, 0, 7)
+    await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce())
+
+    controller.abort()
+
+    await expect(dialed).rejects.toBeInstanceOf(Socks5NegotiationAbortedError)
+    expect(receivedSignal?.aborted).toBe(true)
+    expect(connect).toHaveBeenCalledOnce()
+    expect(children).toHaveLength(1)
+    expect(children[0]!.killed).toBe(false)
+    await proxy.stop()
+  })
+
   it('aborts an in-flight negotiation and destroys a late socket on stop', async () => {
     let finish: ((stream: Socket) => void) | undefined
     let receivedSignal: AbortSignal | undefined

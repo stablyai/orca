@@ -15,6 +15,7 @@ export type TailcatCompatibilityProbeOptions = {
   run?: TailcatProcessRunner
   spawn?: TailcatProcessSpawner
   timeoutMs?: number
+  signal?: AbortSignal
   /** Where the throwaway probe keys go; defaults to a fresh temp directory that is removed afterwards. */
   probeDirectory?: string
 }
@@ -38,18 +39,23 @@ export async function probeTailcatBinary(
   const run = options.run ?? runProcess
   const spawn = options.spawn ?? spawnProcess
   const timeoutMs = options.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS
+  const signal = options.signal
   const ownsDirectory = options.probeDirectory === undefined
   const directory = options.probeDirectory ?? mkdtempSync(join(tmpdir(), 'orca-tailcat-probe-'))
-  const version = await readVersion(binary, run, timeoutMs)
+  let version: string | null = null
   try {
+    signal?.throwIfAborted()
+    version = await readVersion(binary, run, timeoutMs, signal)
     const serverKey = join(directory, 'probe-server.private.json')
     const clientKey = join(directory, 'probe-client.private.json')
 
     const serverKeygen = await run({
       program: binary,
       args: ['genkey', `--key=${tailcatKeyPathArgument(serverKey)}`, `--region=${PROBE_REGION_ID}`],
-      timeoutMs
+      timeoutMs,
+      signal
     })
+    signal?.throwIfAborted()
     const token = serverKeygen.stdout.trim().split(/\r?\n/).pop() ?? ''
     if (serverKeygen.code !== 0 || !existsSync(serverKey) || !token.startsWith('tc')) {
       return failure(
@@ -58,7 +64,8 @@ export async function probeTailcatBinary(
       )
     }
 
-    const parsed = await run({ program: binary, args: ['parse', token], timeoutMs })
+    const parsed = await run({ program: binary, args: ['parse', token], timeoutMs, signal })
+    signal?.throwIfAborted()
     if (parsed.code !== 0 || !parsed.stdout.includes('"ServerPublic"')) {
       return failure(version, `tailcat parse did not decode its own token: ${detail(parsed)}`)
     }
@@ -66,18 +73,23 @@ export async function probeTailcatBinary(
     const clientKeygen = await run({
       program: binary,
       args: ['genkey', '--client', `--key=${tailcatKeyPathArgument(clientKey)}`],
-      timeoutMs
+      timeoutMs,
+      signal
     })
+    signal?.throwIfAborted()
     if (clientKeygen.code !== 0 || !existsSync(clientKey)) {
       return failure(version, `tailcat genkey --client failed: ${detail(clientKeygen)}`)
     }
 
-    const socks = await probeSocksReadiness(binary, clientKey, spawn, timeoutMs)
+    const socks = await probeSocksReadiness(binary, clientKey, spawn, timeoutMs, signal)
     if (socks !== null) {
       return failure(version, socks)
     }
     return { ok: true, version }
   } catch (error) {
+    if (signal?.aborted) {
+      throw error
+    }
     return failure(version, error instanceof Error ? error.message : String(error))
   } finally {
     if (ownsDirectory) {
@@ -89,13 +101,16 @@ export async function probeTailcatBinary(
 async function readVersion(
   binary: string,
   run: TailcatProcessRunner,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<string | null> {
   try {
-    const result = await run({ program: binary, args: ['version'], timeoutMs })
+    const result = await run({ program: binary, args: ['version'], timeoutMs, signal })
+    signal?.throwIfAborted()
     const version = result.stdout.trim().split(/\r?\n/)[0] ?? ''
     return result.code === 0 && version ? version : null
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }
@@ -104,8 +119,10 @@ function probeSocksReadiness(
   binary: string,
   clientKey: string,
   spawn: TailcatProcessSpawner,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<string | null> {
+  signal?.throwIfAborted()
   const child = spawn({
     program: binary,
     args: [`--key=${tailcatKeyPathArgument(clientKey)}`, 'socks', '--listen=127.0.0.1:0'],
@@ -113,7 +130,7 @@ function probeSocksReadiness(
   })
   guardChildStreams(child)
   child.stdout.resume()
-  return new Promise<string | null>((resolve) => {
+  return new Promise<string | null>((resolve, reject) => {
     let settled = false
     const stderrTail: string[] = []
     const detach = onProcessOutputLines(child.stderr, (line) => {
@@ -133,7 +150,9 @@ function probeSocksReadiness(
         `tailcat socks exited (${signal ?? code ?? 'unknown'}) before reporting a listener: ${stderrTail.join(' | ')}`
       )
     }
-    const finish = (reason: string | null): void => {
+    const onAbort = (): void =>
+      finish(null, signal?.reason ?? new Error('Tailcat compatibility probe was cancelled'))
+    const finish = (reason: string | null, error?: unknown): void => {
       if (settled) {
         return
       }
@@ -141,11 +160,21 @@ function probeSocksReadiness(
       clearTimeout(timer)
       detach()
       child.off('exit', onExit)
-      void terminateChild(child, 2_000)
-      resolve(reason)
+      signal?.removeEventListener('abort', onAbort)
+      void terminateChild(child, 2_000).then(() => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(reason)
+        }
+      }, reject)
     }
     child.on('exit', onExit)
     child.on('error', (error) => finish(error.message))
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }
 

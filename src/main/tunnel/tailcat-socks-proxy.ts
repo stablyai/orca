@@ -2,15 +2,11 @@ import { existsSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import type { PairingTunnel } from '../../shared/mobile-relay-pairing-offer'
 import { runProcess, spawnProcess, type ProcessSpec } from '../../shared/child-process/run-process'
-import {
-  connectThroughSocks5,
-  Socks5NegotiationAbortedError,
-  Socks5NegotiationError,
-  Socks5RefusalError
-} from './socks5-connect'
+import { connectThroughSocks5 } from './socks5-connect'
 import { tailcatKeyPathArgument } from './tailcat-binary'
 import { guardChildStreams, terminateChild, type TailcatChild } from './tailcat-child-lifecycle'
 import { onProcessOutputLines } from './tailcat-process-output'
+import { dialTailcatSocks, type RunningTailcatSocksProxy } from './tailcat-socks-dial'
 
 export type TailcatProcessSpawner = (spec: ProcessSpec) => ReturnType<typeof spawnProcess>
 export type TailcatProcessRunner = (spec: ProcessSpec) => ReturnType<typeof runProcess>
@@ -33,13 +29,7 @@ export type TailcatSocksProxyOptions = {
 const SOCKS_LISTEN_PATTERN = /socks5h:\/\/127\.0\.0\.1:(\d+)/
 const DEFAULT_START_TIMEOUT_MS = 20_000
 const KEYGEN_TIMEOUT_MS = 30_000
-// Why: a host that just (re)started is briefly unknown to its relay, and tailcat reports that as a
-// generic SOCKS failure. A short retry hides the gap; anything longer is left to the caller's reconnect.
-const DIAL_ATTEMPTS = 3
-const DEFAULT_DIAL_RETRY_DELAY_MS = 1_500
 const DEFAULT_RECOVERY_COOLDOWN_MS = 30_000
-
-type RunningProxy = { generation: number; port: number }
 
 /**
  * One `tailcat socks` child per Orca process. Destinations are address blobs, so a single proxy
@@ -49,7 +39,8 @@ export class TailcatSocksProxy {
   private child: TailcatChild | null = null
   private port: number | null = null
   private generation = 0
-  private starting: Promise<RunningProxy> | null = null
+  private starting: Promise<RunningTailcatSocksProxy> | null = null
+  private startingAbort: AbortController | null = null
   private recovery: { generation: number; promise: Promise<boolean> } | null = null
   private readonly pendingDials = new Map<number, number>()
   private readonly activeStreams = new Map<number, number>()
@@ -59,71 +50,37 @@ export class TailcatSocksProxy {
 
   constructor(private readonly options: TailcatSocksProxyOptions) {}
 
-  async dial(tunnel: PairingTunnel): Promise<Socket> {
-    const connect = this.options.connect ?? connectThroughSocks5
-    let recoveryAttempted = false
-    let attempt = 0
-    let consecutiveGenericFailures = 0
-    let attemptGeneration: number | null = null
-    for (;;) {
-      if (this.recovery) {
-        await this.recovery.promise
+  async dial(tunnel: PairingTunnel, signal?: AbortSignal): Promise<Socket> {
+    const controller = new AbortController()
+    const onAbort = (): void => controller.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      controller.abort()
+    }
+    this.pendingNegotiations.add(controller)
+    try {
+      return await dialTailcatSocks({
+        tunnel,
+        signal: controller.signal,
+        connect: this.options.connect ?? connectThroughSocks5,
+        currentRecovery: () => this.recovery?.promise ?? null,
+        ensureStarted: () => this.ensureStarted(),
+        beginAttempt: (generation) => this.increment(this.pendingDials, generation),
+        endAttempt: (generation) => this.decrement(this.pendingDials, generation),
+        acceptSocket: (socket, proxy) => this.acceptSocket(socket, proxy),
+        recoverIdleProxy: (generation) => this.recoverIdleProxy(generation),
+        isStopped: () => this.stopped,
+        retryDelayMs: this.options.dialRetryDelayMs,
+        logf: this.options.logf
+      })
+    } catch (error) {
+      if (this.stopped) {
+        throw new Error('Tailcat proxy has been stopped')
       }
-      const proxy = await this.ensureStarted()
-      if (proxy.generation !== attemptGeneration) {
-        attemptGeneration = proxy.generation
-        attempt = 0
-        consecutiveGenericFailures = 0
-      }
-      attempt += 1
-      this.increment(this.pendingDials, proxy.generation)
-      const controller = new AbortController()
-      this.pendingNegotiations.add(controller)
-      let failure: unknown
-      try {
-        const socket = await connect({
-          proxyPort: proxy.port,
-          host: tunnel.token,
-          port: tunnel.port,
-          signal: controller.signal
-        })
-        if (this.stopped || proxy.generation !== this.generation || proxy.port !== this.port) {
-          socket.destroy()
-          throw new Error(
-            this.stopped ? 'Tailcat proxy has been stopped' : 'Tailcat proxy generation changed'
-          )
-        }
-        this.trackStream(socket, proxy.generation)
-        return socket
-      } catch (error) {
-        failure = this.stopped ? new Error('Tailcat proxy has been stopped') : error
-      } finally {
-        this.pendingNegotiations.delete(controller)
-        this.decrement(this.pendingDials, proxy.generation)
-      }
-
-      consecutiveGenericFailures =
-        failure instanceof Socks5RefusalError && failure.replyCode === 0x01
-          ? consecutiveGenericFailures + 1
-          : 0
-      if (attempt < DIAL_ATTEMPTS && failure instanceof Socks5RefusalError) {
-        this.options.logf?.(`[tailcat socks] dial attempt ${attempt} failed: ${String(failure)}`)
-        await new Promise((resolve) =>
-          setTimeout(resolve, this.options.dialRetryDelayMs ?? DEFAULT_DIAL_RETRY_DELAY_MS)
-        )
-        continue
-      }
-      const recoverable =
-        (failure instanceof Socks5NegotiationError &&
-          !(failure instanceof Socks5NegotiationAbortedError)) ||
-        consecutiveGenericFailures >= DIAL_ATTEMPTS
-      if (!recoveryAttempted && recoverable) {
-        recoveryAttempted = true
-        if (await this.recoverIdleProxy(proxy.generation)) {
-          continue
-        }
-      }
-      throw failure
+      throw error
+    } finally {
+      this.pendingNegotiations.delete(controller)
+      signal?.removeEventListener('abort', onAbort)
     }
   }
 
@@ -138,21 +95,26 @@ export class TailcatSocksProxy {
       controller.abort()
     }
     const child = this.child
+    const starting = this.starting
     const recovery = this.recovery?.promise
+    this.startingAbort?.abort()
     this.child = null
     this.port = null
     await Promise.all([
       child ? terminateChild(child, this.options.terminateGraceMs) : Promise.resolve(),
+      starting?.catch(() => {}) ?? Promise.resolve(),
       recovery?.catch(() => {}) ?? Promise.resolve()
     ])
   }
 
-  private ensureStarted(): Promise<RunningProxy> {
+  private ensureStarted(): Promise<RunningTailcatSocksProxy> {
     if (this.port !== null) {
       return Promise.resolve({ generation: this.generation, port: this.port })
     }
     if (!this.starting) {
-      const starting = this.start().finally(() => {
+      const controller = new AbortController()
+      this.startingAbort = controller
+      const starting = this.start(controller.signal).finally(() => {
         if (this.starting === starting) {
           this.starting = null
         }
@@ -162,9 +124,9 @@ export class TailcatSocksProxy {
     return this.starting
   }
 
-  private async start(): Promise<RunningProxy> {
+  private async start(signal: AbortSignal): Promise<RunningTailcatSocksProxy> {
     this.assertNotStopped()
-    await this.ensureClientKey()
+    await this.ensureClientKey(signal)
     // Why: a stop that landed during key generation must not leave an unowned proxy behind.
     this.assertNotStopped()
     const spawn = this.options.spawn ?? spawnProcess
@@ -181,7 +143,7 @@ export class TailcatSocksProxy {
     guardChildStreams(child, this.options.logf)
     this.child = child
     child.stdout.resume()
-    return new Promise<RunningProxy>((resolve, reject) => {
+    return new Promise<RunningTailcatSocksProxy>((resolve, reject) => {
       const timeout = setTimeout(() => {
         finish(new Error('Timed out waiting for tailcat socks to start'))
       }, this.options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS)
@@ -275,6 +237,16 @@ export class TailcatSocksProxy {
     return true
   }
 
+  private acceptSocket(socket: Socket, proxy: RunningTailcatSocksProxy): void {
+    if (this.stopped || proxy.generation !== this.generation || proxy.port !== this.port) {
+      socket.destroy()
+      throw new Error(
+        this.stopped ? 'Tailcat proxy has been stopped' : 'Tailcat proxy generation changed'
+      )
+    }
+    this.trackStream(socket, proxy.generation)
+  }
+
   private trackStream(socket: Socket, generation: number): void {
     if (socket.destroyed) {
       return
@@ -302,7 +274,7 @@ export class TailcatSocksProxy {
     }
   }
 
-  private async ensureClientKey(): Promise<void> {
+  private async ensureClientKey(signal: AbortSignal): Promise<void> {
     if (existsSync(this.options.keyPath)) {
       return
     }
@@ -310,9 +282,10 @@ export class TailcatSocksProxy {
     const result = await run({
       program: this.options.binary,
       args: ['genkey', '--client', `--key=${tailcatKeyPathArgument(this.options.keyPath)}`],
-      timeoutMs: KEYGEN_TIMEOUT_MS
+      timeoutMs: KEYGEN_TIMEOUT_MS,
+      signal
     })
-    if (result.code !== 0) {
+    if (result.code !== 0 && !signal.aborted) {
       throw new Error(`tailcat genkey --client failed: ${result.stderr.trim() || result.code}`)
     }
   }

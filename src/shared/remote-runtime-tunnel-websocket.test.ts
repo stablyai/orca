@@ -1,5 +1,5 @@
-import { connect } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { connect, Socket } from 'node:net'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import {
   PAIRING_OFFER_VERSION,
@@ -13,11 +13,16 @@ import {
 } from './remote-runtime-request-websocket'
 import {
   createRemoteRuntimeWebSocket,
+  RemoteRuntimeTunnelAgent,
   setRemoteRuntimeTunnelDialer
 } from './remote-runtime-tunnel-dialer'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { sendRemoteRuntimeRequest } from './remote-runtime-client'
 import { subscribeRemoteRuntimeTransport } from './remote-runtime-subscription-transport'
+import {
+  REMOTE_RUNTIME_CONNECT_TIMEOUT_MS,
+  WS_HANDSHAKE_TIMEOUT_MESSAGE
+} from './remote-runtime-connect-bound'
 
 const tunnel: PairingTunnel = { v: 1, kind: 'tailcat', token: 'tcTOKEN', port: 6768 }
 
@@ -39,6 +44,92 @@ function pairingOffer(endpoint: string): PairingOffer {
     tunnel
   }
 }
+
+describe('RemoteRuntimeTunnelAgent connect deadline', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('rejects a tunnel dial that never resolves at the caller-provided deadline', async () => {
+    const never = Promise.withResolvers<Socket>().promise
+    let receivedSignal: AbortSignal | undefined
+    const agent = new RemoteRuntimeTunnelAgent(
+      tunnel,
+      (_tunnel, signal) => {
+        receivedSignal = signal
+        return never
+      },
+      37
+    )
+    const result = Promise.withResolvers<Error | null>()
+    let callbackCount = 0
+
+    agent.createConnection({}, (error) => {
+      callbackCount += 1
+      result.resolve(error)
+    })
+    await vi.advanceTimersByTimeAsync(36)
+    expect(callbackCount).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(result.promise).resolves.toMatchObject({
+      message: WS_HANDSHAKE_TIMEOUT_MESSAGE
+    })
+    expect(callbackCount).toBe(1)
+    expect(receivedSignal?.aborted).toBe(true)
+  })
+
+  it('uses the default deadline and destroys a socket that arrives after it', async () => {
+    const pending = Promise.withResolvers<Socket>()
+    const agent = new RemoteRuntimeTunnelAgent(tunnel, () => pending.promise)
+    const callbackErrors: (Error | null)[] = []
+    const callbackFinished = Promise.withResolvers<void>()
+
+    agent.createConnection({}, (error) => {
+      callbackErrors.push(error)
+      callbackFinished.resolve()
+    })
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_CONNECT_TIMEOUT_MS - 1)
+    expect(callbackErrors).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    await callbackFinished.promise
+
+    const lateSocket = new Socket()
+    const destroy = vi.spyOn(lateSocket, 'destroy')
+    pending.resolve(lateSocket)
+    await Promise.resolve()
+
+    expect(callbackErrors).toHaveLength(1)
+    expect(callbackErrors[0]?.message).toBe(WS_HANDSHAKE_TIMEOUT_MESSAGE)
+    expect(destroy).toHaveBeenCalledOnce()
+  })
+
+  it('cancels the deadline when the tunnel dial resolves in time', async () => {
+    const pending = Promise.withResolvers<Socket>()
+    const agent = new RemoteRuntimeTunnelAgent(tunnel, () => pending.promise, 25)
+    const callbackResults: { error: Error | null; socket: Socket }[] = []
+    const socket = new Socket()
+    const destroy = vi.spyOn(socket, 'destroy')
+
+    agent.createConnection({}, (error, stream) => {
+      if (!(stream instanceof Socket)) {
+        throw new Error('Expected tunnel dialer to return a Socket')
+      }
+      callbackResults.push({ error, socket: stream })
+    })
+    pending.resolve(socket)
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(25)
+
+    expect(callbackResults).toEqual([{ error: null, socket }])
+    expect(destroy).not.toHaveBeenCalled()
+    socket.destroy()
+  })
+})
 
 describe('openRemoteRuntimeWebSocket with a tunnel offer', () => {
   const cleanups: (() => Promise<void> | void)[] = []
