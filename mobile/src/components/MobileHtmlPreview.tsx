@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
+import { openExternalLink } from '../platform/external-link'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 type Props = {
@@ -50,7 +51,7 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
             if (request.url === 'about:blank' || request.url.startsWith('data:')) {
               return true
             }
-            void Linking.openURL(request.url).catch(() => {})
+            openExternalLink(request.url)
             return false
           }}
         />
