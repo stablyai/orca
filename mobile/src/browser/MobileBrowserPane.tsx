@@ -21,6 +21,7 @@ import {
   type PinchGesture
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
 import {
   browserGoBack,
   browserGoForward,
@@ -62,11 +63,6 @@ type PanGesture = {
   y: number
   offsetX: number
   offsetY: number
-}
-
-type BrowserDialogState = {
-  dialogType: string
-  message: string
 }
 
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
