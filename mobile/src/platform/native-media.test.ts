@@ -89,6 +89,7 @@ function harness(
     },
     openFile: (uri) => fakeFile(files.get(uri) ?? new Uint8Array()),
     discard: (uri) => discarded.push(uri),
+    ownsStagedUri: (uri: string) => uri.startsWith('file:'),
     ...overrides
   })
   return { serve, registry, discarded, files, written }
@@ -277,5 +278,36 @@ describe('what the largest reply weighs', () => {
     expect(bytes).toBeLessThan(BRIDGE_MAX_REPLY_BYTES)
     // The measured number, so a cap or an envelope field that moves shows up here as a diff.
     expect(bytes).toBe(524_427)
+  })
+})
+
+describe('a uri this shell could not own', () => {
+  it('refuses to mint a handle over one, rather than leaking the file behind it', async () => {
+    // The Android hazard. Both pickers are configured to hand back a `file:` copy in this app's
+    // own cache, and the whole handle contract rests on that: `release` is a delete and the TTL
+    // sweep is a delete. A provider that answered `content://media/...` instead would mint a
+    // handle over a file this shell can neither size nor delete, and every sweep would be a
+    // silent no-op. Refused where the assumption is made.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const probe = harness({
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
+        })
+    })
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: false })
+    ).rejects.toThrow(/this shell does not own/)
+    expect(probe.registry.liveCount()).toBe(0)
+    warn.mockRestore()
+  })
+
+  it('takes the cache copy both pickers are configured to produce', async () => {
+    const probe = harness()
+    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: false })
+    ).resolves.toMatchObject({ items: [{ byteLength: 4 }] })
   })
 })

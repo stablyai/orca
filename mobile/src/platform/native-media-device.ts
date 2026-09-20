@@ -15,6 +15,19 @@ import type { NativeMediaDeps } from './native-media'
  * skip on a recent enough API, and both pickers are configured here to hand back a `file:` uri in
  * this app's own cache, which is what makes deleting one the shell's business.
  */
+/**
+ * Whether a picked uri is one this shell can size and delete.
+ *
+ * The scheme is the whole test. `expo-image-picker` always copies the selected asset into this
+ * app's cache, and `expo-document-picker` does the same under `copyToCacheDirectory`, so both
+ * answer `file:` on iOS and Android alike. Android is where the assumption could break: a provider
+ * uri (`content://media/...`) is readable through a resolver and is not a file this app may unlink,
+ * so a handle over one would never release.
+ */
+export function ownsStagedMediaUri(uri: string): boolean {
+  return uri.startsWith('file:')
+}
+
 /** Deletes one staged file. Its own export because the registry needs it before a server exists. */
 export function discardStagedMedia(uri: string): void {
   new FsFile(uri).delete()
@@ -42,6 +55,7 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
       return file.uri
     },
     openFile: (uri) => new FsFile(uri),
+    ownsStagedUri: ownsStagedMediaUri,
     discard: discardStagedMedia
   }
 }

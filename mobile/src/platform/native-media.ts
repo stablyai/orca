@@ -62,6 +62,8 @@ export type NativeMediaDeps = {
   /** Writes base64 into a cache file this shell owns and answers its uri. */
   readonly stageBase64: (base64: string) => string
   readonly openFile: (uri: string) => NativeMediaFile
+  /** Whether this shell can size and delete what that uri names. */
+  readonly ownsStagedUri: (uri: string) => boolean
   /** Deletes one staged file. The registry owns the ones it minted; this is for the pick that
    *  was refused before a handle existed, whose files nothing else would ever sweep. */
   readonly discard: (uri: string) => void
@@ -89,6 +91,14 @@ export function createNativeMediaVerbServer(
     const staged: StagedMedia[] = []
     try {
       for (const asset of assets) {
+        // Both pickers are configured to answer a copy in this app's own cache, and the handle
+        // contract rests on it: `release` is a delete and so is the TTL sweep. A provider that
+        // answered a `content:` uri instead would mint a handle over a file this shell can neither
+        // size nor delete, and every sweep would be a silent no-op. Refused where the assumption
+        // is made rather than discovered as a cache that never empties.
+        if (!deps.ownsStagedUri(asset.uri)) {
+          throw new Error(`a picker answered a uri this shell does not own: ${asset.uri}`)
+        }
         const { size } = deps.openFile(asset.uri)
         if (size > MEDIA_STAGED_MAX_BYTES) {
           throw new BridgeNativeVerbRefusedError(
