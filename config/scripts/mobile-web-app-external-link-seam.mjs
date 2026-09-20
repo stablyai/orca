@@ -31,26 +31,43 @@ export const EXTERNAL_LINK_SEAM = 'src/platform/external-link.web.ts'
  * project's interop settings accept `import RN from 'react-native'` (checked with tsc), so it is a
  * binding the whole namespace hangs off exactly as `* as RN` is.
  *
+ * A re-export is reported at the export statement. `export { Linking } from 'react-native'` puts
+ * the name back in reach of anything that imports this module, and so does `export *`, which
+ * carries it along with everything else; the statement is the line to delete, exactly as an import
+ * is.
+ *
  * Lines rather than a boolean because a red census that names `path:line` is read once, and one
  * that names a file is grepped for. The boolean below is derived from this, so there is one rule.
+ *
+ * `fileName` decides the script kind, and the default is only for callers holding a source with no
+ * path. In a `.ts` file `const id = <T>(value: T) => value` is a generic arrow; parsed as TSX it is
+ * an unclosed JSX element, and everything after it — a later `RN.Linking.openURL` included — is
+ * swallowed into the error node and never walked.
  */
-export function reactNativeLinkingSites(source) {
-  const parsed = ts.createSourceFile(
-    'module.tsx',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX
-  )
+export function reactNativeLinkingSites(source, fileName = 'module.tsx') {
+  // No explicit script kind: TypeScript reads it off the extension, which is the whole point.
+  const parsed = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true)
   const lineOf = (node) => parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1
   const sites = []
   const aliases = new Set()
+  const fromReactNative = (statement) =>
+    statement.moduleSpecifier !== undefined &&
+    ts.isStringLiteral(statement.moduleSpecifier) &&
+    statement.moduleSpecifier.text === 'react-native'
+  /** `propertyName` is the exported/imported name when the clause renames it, `name` when it does not. */
+  const namesLinking = (elements) =>
+    elements.some((element) => (element.propertyName ?? element.name).text === 'Linking')
   for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== 'react-native'
-    ) {
+    if (ts.isExportDeclaration(statement) && fromReactNative(statement)) {
+      const clause = statement.exportClause
+      // No clause is `export *`, which carries `Linking` with everything else; a namespace export
+      // hands the whole module over under one name. Both put it back in reach.
+      if (clause === undefined || ts.isNamespaceExport(clause) || namesLinking(clause.elements)) {
+        sites.push(lineOf(statement))
+      }
+      continue
+    }
+    if (!ts.isImportDeclaration(statement) || !fromReactNative(statement)) {
       continue
     }
     const clause = statement.importClause
@@ -68,10 +85,7 @@ export function reactNativeLinkingSites(source) {
       aliases.add(bindings.name.text)
       continue
     }
-    // `propertyName` is the imported name when the import renames it, `name` when it does not.
-    if (
-      bindings.elements.some((element) => (element.propertyName ?? element.name).text === 'Linking')
-    ) {
+    if (namesLinking(bindings.elements)) {
       sites.push(lineOf(statement))
     }
   }
@@ -94,8 +108,8 @@ export function reactNativeLinkingSites(source) {
 }
 
 /** Whether a module reaches react-native's own `Linking`. */
-export function reachesReactNativeLinking(source) {
-  return reactNativeLinkingSites(source).length > 0
+export function reachesReactNativeLinking(source, fileName = 'module.tsx') {
+  return reactNativeLinkingSites(source, fileName).length > 0
 }
 
 /**
@@ -122,7 +136,8 @@ export function externalLinkOffenders(mobileDir, closure) {
         } catch {
           return []
         }
-        return reactNativeLinkingSites(source).map((line) => [file, line])
+        // The path, so the parser takes the script kind from the extension rather than assuming TSX.
+        return reactNativeLinkingSites(source, file).map((line) => [file, line])
       })
       // By path, then by line as a number: sorting the rendered strings puts `:10` before `:2`, and
       // a red list is read top to bottom against the file it names.

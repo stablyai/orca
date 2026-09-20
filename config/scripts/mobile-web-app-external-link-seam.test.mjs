@@ -93,6 +93,40 @@ describe('where the seam predicate says a module reaches Linking', () => {
     )
   })
 
+  it('parses a .ts module as TypeScript, where a generic arrow is not an unclosed tag', () => {
+    // `const id = <T>(value: T) => value` is a generic arrow in a `.ts` file and an unclosed JSX
+    // element in a `.tsx` one. Parsed as TSX, everything after it falls into the error node, so
+    // the call below was never walked and the module reported nothing at all.
+    expect(
+      reactNativeLinkingSites(
+        "import * as RN from 'react-native'\nconst id = <T>(value: T) => value\nRN.Linking.openURL(u)\n",
+        'module.ts'
+      )
+    ).toEqual([3])
+  })
+
+  it.each([
+    ["export { Linking } from 'react-native'\n", 'a named re-export'],
+    ["export { Linking as L } from 'react-native'\n", 'a renamed re-export'],
+    ["export * from 'react-native'\n", 'a wildcard re-export, which carries it with the rest'],
+    ["export * as RN from 'react-native'\n", 'a namespace re-export']
+  ])('names %# : %s', (source) => {
+    // A re-export puts `Linking` back in reach of whatever imports this module, so the route's
+    // closure reaches it through a file that never imported it. The export statement is the line
+    // to delete, exactly as an import is.
+    expect(reactNativeLinkingSites(source, 'module.ts')).toEqual([1])
+  })
+
+  it.each([
+    ["export { View } from 'react-native'\n", 're-exports something else'],
+    [
+      "export { Linking } from './local'\n",
+      're-exports the name from somewhere that is not react-native'
+    ]
+  ])('leaves alone a module that %# : %s', (source) => {
+    expect(reactNativeLinkingSites(source, 'module.ts')).toEqual([])
+  })
+
   it('ignores the name inside a comment, which text matching cannot', () => {
     // A module that talks about the rule is not breaking it, and a census that names a comment is
     // one whose red list the next reader learns to skip.
