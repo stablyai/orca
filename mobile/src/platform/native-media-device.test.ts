@@ -6,8 +6,8 @@ const expo = vi.hoisted(() => ({
   requestMediaLibraryPermissionsAsync: vi.fn(() => Promise.resolve({ granted: true })),
   getDocumentAsync: vi.fn(() => Promise.resolve({ canceled: true })),
   getImageAsync: vi.fn(() => Promise.resolve(null)),
-  deleted: [] as string[],
-  written: [] as { uri: string; base64: string }[]
+  deleted: new Array<string>(),
+  written: new Array<{ uri: string; base64: string }>()
 }))
 
 vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))

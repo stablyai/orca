@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 const device = vi.hoisted(() => ({
   clipboard: { getStringAsync: vi.fn(() => Promise.resolve('on the pasteboard')) },
   picker: { launchImageLibraryAsync: vi.fn(() => Promise.resolve({ canceled: true })) },
-  deleted: [] as string[]
+  deleted: new Array<string>()
 }))
 
 vi.mock('expo-clipboard', () => ({
@@ -45,16 +45,21 @@ import { useNativeDeviceVerbs } from './use-native-device-verbs'
 type Serve = ReturnType<typeof useNativeDeviceVerbs>
 
 function mount(sessionId: string | null): { serve: Serve; unmount: () => void } {
-  let held: Serve | null = null
+  const held: { serve: Serve | null } = { serve: null }
   function Probe({ session }: { session: string | null }): ReactElement | null {
-    held = useNativeDeviceVerbs(session)
+    held.serve = useNativeDeviceVerbs(session)
     return null
   }
   let tree: ReturnType<typeof create> | null = null
   act(() => {
     tree = create(<Probe session={sessionId} />)
   })
-  const serve: Serve = (verb, params) => (held as Serve)(verb, params)
+  const serve: Serve = (verb, params) => {
+    if (held.serve === null) {
+      throw new Error('the probe rendered without a handler')
+    }
+    return held.serve(verb, params)
+  }
   return {
     serve,
     unmount: () => {
