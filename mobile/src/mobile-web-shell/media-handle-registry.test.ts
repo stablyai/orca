@@ -175,6 +175,35 @@ describe('ending a handle', () => {
     expect(registry.liveCount()).toBe(0)
   })
 
+  it('answers false for a handle the TTL already expired, as the wire contract says', () => {
+    // `release` was the one lifetime path that did not sweep first, so an expired handle was still
+    // in the map when it looked and the page was told `released: true` for a file the next sweep
+    // would have taken anyway. `mediaReleaseParamsSchema`'s own docstring promises the opposite.
+    let clock = 1_000
+    const swept: string[] = []
+    const ageing = new MediaHandleRegistry({
+      now: () => clock,
+      discard: (uri) => swept.push(uri)
+    })
+    const [item] = ageing.mint([staged(1)])
+    clock += MEDIA_HANDLE_TTL_MS + 1
+    expect(ageing.release(item?.handle ?? '')).toBe(false)
+    // Swept, not leaked: the file goes either way, and only the answer differs.
+    expect(swept).toEqual(['file:///cache/orca-media-1.png'])
+  })
+
+  it('is gone at exactly the TTL, not one millisecond after', () => {
+    let clock = 1_000
+    const ageing = new MediaHandleRegistry({ now: () => clock, discard: () => {} })
+    const [item] = ageing.mint([staged(1)])
+    const handle = item?.handle ?? ''
+    clock += MEDIA_HANDLE_TTL_MS - 1
+    expect(ageing.liveCount()).toBe(1)
+    clock += 1
+    expect(ageing.liveCount()).toBe(0)
+    expect(ageing.release(handle)).toBe(false)
+  })
+
   it('answers false for a handle it no longer holds, rather than refusing', () => {
     // Releasing twice, or after the TTL swept, asks for the state the page already has. A refusal
     // there would make an unmount path that cannot know which handles survived look like a fault.

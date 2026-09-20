@@ -134,8 +134,16 @@ export class MediaHandleRegistry {
     return { uri: record.uri, start: offset, end, eof: end >= record.byteLength }
   }
 
-  /** False for a handle this session no longer holds: releasing twice is not a fault. */
+  /**
+   * False for a handle this session no longer holds: releasing twice is not a fault.
+   *
+   * Swept first, like every other path that reads the map. Without it this was the one lifetime
+   * path that could still see an expired handle, so a page releasing after the TTL was told
+   * `released: true` for a file the next sweep would have taken anyway — the opposite of what
+   * `mediaReleaseParamsSchema` promises the page.
+   */
   release(handle: string): boolean {
+    this.sweep()
     const record = this.live.get(handle)
     if (record === undefined) {
       return false

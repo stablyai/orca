@@ -5,10 +5,11 @@ import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/
 /**
  * The wire shapes of `native.media.pick`, `native.media.read` and `native.media.release`.
  *
- * A picked image is up to `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES` of raw bytes, which is three times the
- * reply ceiling and twenty-eight times the frame cap, so the value never crosses as a value. `pick`
- * answers a handle the shell owns, `read` moves the bytes a chunk at a time, and `release` ends
- * it. Split from `bridge-native-verbs.ts` because these three are one contract of their own and
+ * A picked image is up to `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES` of raw bytes: twenty-eight times the
+ * frame cap, and two and a quarter times the reply ceiling before anything encodes it. Base64 is
+ * what makes that three times the ceiling, which is a different basis and is why both are named.
+ * Either way the value never crosses as a value. `pick` answers a handle the shell owns, `read`
+ * moves the bytes a chunk at a time, and `release` ends it. Split from `bridge-native-verbs.ts` because these three are one contract of their own and
  * that module is the table every verb is listed in.
  *
  * The verb is `read` and not `readChunk` for a reason a rename cannot be undone from: a manifest

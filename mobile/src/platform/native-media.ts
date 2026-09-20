@@ -20,8 +20,8 @@ import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-acc
  * The OS picker opens here, inside the shell, which is the whole reason these are verbs: a page
  * served from a custom scheme has no photo library and no Files app, and a picker is the one thing
  * that cannot be handed over as a value. What crosses back is a handle — the bytes follow a chunk
- * at a time, because a picked image reaches `MEDIA_STAGED_MAX_BYTES` and that is three times the
- * reply ceiling.
+ * at a time, because a picked image reaches `MEDIA_STAGED_MAX_BYTES`, which is two and a quarter
+ * times the reply ceiling in raw bytes and three times it once base64 has expanded them.
  *
  * Every device call is injectable for the same reason the clipboard verb's is not: these have no
  * honest fake inside `expo-image-picker`, and the arms worth pinning — a cancel, a provider uri, an
