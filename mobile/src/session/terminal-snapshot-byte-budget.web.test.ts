@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
 import { mobileTerminalSnapshotByteBudget as nativeBudget } from './terminal-snapshot-byte-budget'
-import { bridgeEventEnvelopeBytes } from '../mobile-web-shell/bridge/bridge-envelope'
+import { bridgeEventEnvelopeBytes } from '../mobile-web-shell/bridge/bridge-event-envelope-bytes'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget.web'
 
 /** An id of the length the protocol's own pattern admits, which is what the bound is written for. */

@@ -1,5 +1,5 @@
 import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
-import { bridgeEventEnvelopeBytes } from '../mobile-web-shell/bridge/bridge-envelope'
+import { bridgeEventEnvelopeBytes } from '../mobile-web-shell/bridge/bridge-event-envelope-bytes'
 
 /**
  * Web sibling: one bridge frame, less what the frame costs around it.

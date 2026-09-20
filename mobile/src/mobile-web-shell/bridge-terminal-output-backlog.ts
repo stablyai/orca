@@ -1,6 +1,6 @@
 import { terminalStreamJsonByteLength } from '../../../src/shared/terminal-stream-json-byte-length'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION, bridgeEventEnvelopeBytes } from './bridge/bridge-envelope'
+import { bridgeEventEnvelopeBytes } from './bridge/bridge-event-envelope-bytes'
 
 /**
  * What the shell does with terminal output the page has not caught up with.
