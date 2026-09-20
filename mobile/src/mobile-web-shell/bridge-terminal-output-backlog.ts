@@ -107,6 +107,11 @@ type Held =
  * Drop-free by construction: nothing here removes an entry that was not handed to the caller, and
  * merging concatenates rather than chooses. The only exit that loses bytes is ending the stream,
  * which the page is told about and can resubscribe from.
+ *
+ * One subscription's, which is why the merge run below compares no stream ids: every `data`
+ * payload reaching a backlog carries that subscription's single stream id, and a change that
+ * multiplexed two streams onto one record would merge their output into one payload under the
+ * first one's id.
  */
 export class BridgeTerminalOutputBacklog {
   private readonly queue: Held[] = []
