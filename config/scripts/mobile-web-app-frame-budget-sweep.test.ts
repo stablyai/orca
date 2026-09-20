@@ -21,22 +21,45 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, type Browser, type Page } from 'playwright-core'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import {
-  budgetedMobileViewDeviceScaleFactor,
-  mobileBrowserFrameAreaBudget,
-  WORST_CASE_JPEG_BYTES_PER_PIXEL
-} from '../../mobile/src/browser/browser-screencast-request.web'
-import { MOBILE_VIEW_DEVICE_SCALE_FACTOR } from '../../mobile/src/browser/browser-screencast-request-parameters'
-import {
-  BRIDGE_MAX_MESSAGE_BYTES,
-  utf8ByteLength
-} from '../../mobile/src/mobile-web-shell/bridge/bridge-caps'
-import { clientFrame } from '../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
-import { harness, ID } from '../../mobile/src/mobile-web-shell/bridge-host-test-harness'
-import {
-  BrowserScreencastOpcode,
-  type BrowserScreencastFrame
-} from '../../mobile/src/transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../../mobile/src/transport/browser-screencast-protocol'
+
+/**
+ * The mobile modules load lazily, after the dependency check, never at the top of the file: vite
+ * transforms anything under `mobile/` against `mobile/tsconfig.json`, which extends
+ * `expo/tsconfig.base.json`, so a static import fails at load in the sharded `test` job before
+ * `describe.skip` gets a say. Type-only imports are erased and stay static.
+ */
+async function loadSweepModules() {
+  const [request, parameters, caps, fakes, harnessModule, protocol] = await Promise.all([
+    import('../../mobile/src/browser/browser-screencast-request.web'),
+    import('../../mobile/src/browser/browser-screencast-request-parameters'),
+    import('../../mobile/src/mobile-web-shell/bridge/bridge-caps'),
+    import('../../mobile/src/mobile-web-shell/bridge-host-test-fakes'),
+    import('../../mobile/src/mobile-web-shell/bridge-host-test-harness'),
+    import('../../mobile/src/transport/browser-screencast-protocol')
+  ])
+  return {
+    budgetedMobileViewDeviceScaleFactor: request.budgetedMobileViewDeviceScaleFactor,
+    mobileBrowserFrameAreaBudget: request.mobileBrowserFrameAreaBudget,
+    WORST_CASE_JPEG_BYTES_PER_PIXEL: request.WORST_CASE_JPEG_BYTES_PER_PIXEL,
+    MOBILE_VIEW_DEVICE_SCALE_FACTOR: parameters.MOBILE_VIEW_DEVICE_SCALE_FACTOR,
+    BRIDGE_MAX_MESSAGE_BYTES: caps.BRIDGE_MAX_MESSAGE_BYTES,
+    utf8ByteLength: caps.utf8ByteLength,
+    clientFrame: fakes.clientFrame,
+    harness: harnessModule.harness,
+    ID: harnessModule.ID,
+    BrowserScreencastOpcode: protocol.BrowserScreencastOpcode
+  }
+}
+
+let loaded: Awaited<ReturnType<typeof loadSweepModules>> | null = null
+
+function sweep() {
+  if (loaded === null) {
+    throw new Error('the sweep modules are not loaded')
+  }
+  return loaded
+}
 
 /** The viewport range the pane is mounted in, phone through tablet, in CSS pixels. */
 const VIEWPORT_WIDTHS = [320, 360, 390, 393, 412, 430, 480, 600, 768, 834, 1024, 1280, 1400]
@@ -68,6 +91,7 @@ beforeAll(async () => {
   if (!mobileWebAppDependenciesPresent()) {
     return
   }
+  loaded = await loadSweepModules()
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({
     headless: true,
@@ -119,7 +143,7 @@ function base64ByteLength(b64: string): number {
 
 function screencastFrame(image: Uint8Array, frame: { width: number; height: number }) {
   return {
-    opcode: BrowserScreencastOpcode.Frame,
+    opcode: sweep().BrowserScreencastOpcode.Frame,
     seq: 1,
     format: 'jpeg',
     metadata: {
@@ -142,11 +166,11 @@ function postThroughShell(
   image: Uint8Array,
   frame: { width: number; height: number }
 ): number | null {
-  const bridge = harness({ ready: true })
+  const bridge = sweep().harness({ ready: true })
   bridge.host.receive(
-    clientFrame({
+    sweep().clientFrame({
       type: 'subscribe',
-      id: ID,
+      id: sweep().ID,
       method: 'browser.screencast',
       params: { worktree: 'id:w', page: 'p' },
       wantsBinary: true
@@ -163,12 +187,12 @@ function postThroughShell(
   if (bridge.posted.length === before) {
     return null
   }
-  return utf8ByteLength(bridge.posted.at(-1) ?? '')
+  return sweep().utf8ByteLength(bridge.posted.at(-1) ?? '')
 }
 
 /** The device-pixel frame the budget asks this viewport for. */
 function budgetedFrame(viewport: Viewport) {
-  const scale = budgetedMobileViewDeviceScaleFactor(viewport)
+  const scale = sweep().budgetedMobileViewDeviceScaleFactor(viewport)
   return {
     scale,
     width: Math.round(viewport.width * scale),
@@ -199,7 +223,7 @@ describeSweep('the frame budget across the viewport range', () => {
       worstBytesPerPixel = Math.max(worstBytesPerPixel, bytesPerPixel)
       bestBytesPerPixel = Math.min(bestBytesPerPixel, bytesPerPixel)
       const posted = postThroughShell(new Uint8Array(imageBytes), frame)
-      if (posted === null || posted > BRIDGE_MAX_MESSAGE_BYTES) {
+      if (posted === null || posted > sweep().BRIDGE_MAX_MESSAGE_BYTES) {
         overCap.push(
           `${viewport.width}x${viewport.height} at scale ${frame.scale}: ${String(posted)}`
         )
@@ -209,7 +233,7 @@ describeSweep('the frame budget across the viewport range', () => {
     expect(overCap).toEqual([])
     // And the constant is above every cost that sweep just measured, with the margin stated in its
     // docstring. Without this the assertion above passes by the budget being merely generous.
-    expect(worstBytesPerPixel).toBeLessThanOrEqual(WORST_CASE_JPEG_BYTES_PER_PIXEL)
+    expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
     expect(worstBytesPerPixel).toBeLessThanOrEqual(MEASURED_WORST_BYTES_PER_PIXEL)
     // The low end too, so a sweep that silently stopped encoding real images is visible: every
     // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
@@ -232,7 +256,9 @@ describeSweep('the frame budget across the viewport range', () => {
 
   it('never asks for more density than native, anywhere in the range', () => {
     for (const viewport of VIEWPORTS) {
-      expect(budgetedFrame(viewport).scale).toBeLessThanOrEqual(MOBILE_VIEW_DEVICE_SCALE_FACTOR)
+      expect(budgetedFrame(viewport).scale).toBeLessThanOrEqual(
+        sweep().MOBILE_VIEW_DEVICE_SCALE_FACTOR
+      )
     }
   })
 
@@ -242,6 +268,6 @@ describeSweep('the frame budget across the viewport range', () => {
     expect(VIEWPORTS).toContainEqual({ width: 393, height: 720 })
     expect(VIEWPORTS).toContainEqual({ width: 360, height: 640 })
     expect(VIEWPORTS.length).toBe(143)
-    expect(mobileBrowserFrameAreaBudget()).toBeGreaterThan(0)
+    expect(sweep().mobileBrowserFrameAreaBudget()).toBeGreaterThan(0)
   })
 })
