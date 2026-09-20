@@ -18,8 +18,7 @@ vi.mock('expo-document-picker', () => ({
   getDocumentAsync: () => Promise.resolve({ canceled: true })
 }))
 vi.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: device.picker.launchImageLibraryAsync,
-  requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: true })
+  launchImageLibraryAsync: device.picker.launchImageLibraryAsync
 }))
 vi.mock('expo-file-system', () => ({
   File: class {

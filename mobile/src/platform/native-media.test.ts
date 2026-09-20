@@ -121,7 +121,7 @@ beforeEach(() => {
 })
 
 describe('picking', () => {
-  it('runs the library permission prompt and answers a handle per asset', async () => {
+  it('answers a handle per asset for a library pick', async () => {
     const probe = harness()
     probe.files.set(`${CACHE}/lib.png`, bytesOf(64))
     const result = await probe.serve('native.media.pick', { source: 'library', multiple: false })
