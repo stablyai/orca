@@ -36,6 +36,7 @@ import {
 import type { PendingSafeFitContinuation } from './pane-fit-continuation-registry'
 import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { recordPaneFitClientSize } from './pane-fit-client-size'
+import { refreshTerminalMouseWheelHandling } from './pane-terminal-mouse-wheel'
 
 export {
   canApplyPaneMetricOptions,
@@ -181,6 +182,7 @@ export function safeFit(pane: ManagedPane): boolean {
     // successful ordinary fit is the event that makes their PTY grid authoritative.
     flushPendingSafeFitContinuations(pane)
     clearPaneFitContinuationRetry(pane)
+    refreshTerminalMouseWheelHandling(pane.terminal)
   }
   return completed
 }

@@ -3,6 +3,7 @@ import {
   resumeTerminalCursorBlink,
   suspendTerminalCursorBlink
 } from './pane-cursor-blink-suspension'
+import { refreshTerminalMouseWheelHandling } from './pane-terminal-mouse-wheel'
 import { safeFit } from './pane-tree-ops'
 import {
   attachWebgl,
@@ -113,9 +114,11 @@ export function resumePaneRendering(
     }
     if (rebuildDeferred && pane.webglAddon) {
       rebuildAttachedWebgl(pane)
+      refreshTerminalMouseWheelHandling(pane.terminal)
       continue
     }
     reattachWebglIfNeeded(pane)
+    refreshTerminalMouseWheelHandling(pane.terminal)
   }
 }
 
