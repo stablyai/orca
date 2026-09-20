@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
+import { createTerminalTouchHarness } from './terminal-webview-touch-test-harness'
 
 // The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
@@ -28,6 +29,137 @@ function sliceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('TerminalWebView scroll routing', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('yields an iOS left-edge back swipe without panning, scrolling, tapping, or momentum', () => {
+    const { touch, context, descendantTouchMove, descendantTouchEnd } = createTerminalTouchHarness()
+    context.shouldRouteScrollToTerminalInput = () => true
+    touch('touchstart', [[4, 200]])
+    const move = touch('touchmove', [[84, 204]])
+    expect(move.defaultPrevented).toBe(false)
+    expect(move.preventDefault).not.toHaveBeenCalled()
+    expect(move.stopPropagation).toHaveBeenCalled()
+    expect(descendantTouchMove).not.toHaveBeenCalled()
+    expect(context.tapCandidate).toBeNull()
+    expect(context.longPressTimer).toBeNull()
+    expect(touch('touchmove', [[2, 200]]).preventDefault).not.toHaveBeenCalled()
+    const end = touch('touchend', [])
+    expect(end.defaultPrevented).toBe(false)
+    expect(end.preventDefault).not.toHaveBeenCalled()
+    expect(descendantTouchEnd).not.toHaveBeenCalled()
+    expect(end.stopPropagation).toHaveBeenCalled()
+    vi.advanceTimersByTime(600)
+    expect(context.notifyTerminalSurfaceTap).not.toHaveBeenCalled()
+    expect(context.enterSelect).not.toHaveBeenCalled()
+    expect(context.enqueueNormalBufferScrollDelta).not.toHaveBeenCalled()
+    expect(context.routeScrollLines).not.toHaveBeenCalled()
+    expect(context.updateTransform).not.toHaveBeenCalled()
+    expect(context.requestAnimationFrame).not.toHaveBeenCalled()
+  })
+
+  it('waits through initial finger jitter before handing a back swipe to iOS', () => {
+    const { touch } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    expect(touch('touchmove', [[3, 203]]).preventDefault).not.toHaveBeenCalled()
+    expect(touch('touchmove', [[84, 200]]).preventDefault).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['Android edge swipe', false, 4, 84, 204],
+    ['iOS interior swipe', true, 25, 105, 204],
+    ['iOS edge scroll', true, 4, 6, 280],
+    ['iOS leftward pan', true, 20, 2, 204]
+  ] as const)('preserves terminal handling for %s', (_name, ios, startX, endX, endY) => {
+    const { touch, context, descendantTouchEnd } = createTerminalTouchHarness(ios)
+    touch('touchstart', [[startX, 200]])
+    expect(touch('touchmove', [[endX, endY]]).preventDefault).toHaveBeenCalled()
+    expect(context.enqueueNormalBufferScrollDelta).toHaveBeenCalled()
+    touch('touchend', [])
+    expect(descendantTouchEnd).toHaveBeenCalledOnce()
+  })
+
+  it('keeps an edge-origin vertical scroll in the terminal after a horizontal turn', () => {
+    const { touch } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    touch('touchmove', [[4, 230]])
+    expect(touch('touchmove', [[84, 230]]).preventDefault).toHaveBeenCalled()
+  })
+
+  it('dispatches edge taps and clears their pending long press', () => {
+    const { touch, context } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    touch('touchmove', [[6, 202]])
+    touch('touchend', [])
+    expect(context.notifyTerminalSurfaceTap).toHaveBeenCalledExactlyOnceWith(4, 200, true)
+    expect(context.tapCandidate).toBeNull()
+    expect(context.longPressTimer).toBeNull()
+    vi.advanceTimersByTime(600)
+    expect(context.enterSelect).not.toHaveBeenCalled()
+  })
+
+  it('enters selection after a long press at the edge without dispatching a tap', () => {
+    const { touch, context } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    touch('touchmove', [[6, 202]])
+    vi.advanceTimersByTime(500)
+    expect(context.enterSelect).toHaveBeenCalledExactlyOnceWith(0, 0)
+    touch('touchend', [])
+    expect(context.notifyTerminalSurfaceTap).not.toHaveBeenCalled()
+    expect(context.longPressOrigin).toBeNull()
+  })
+
+  it('clears the tap and long press as soon as a back swipe crosses its threshold', () => {
+    const { touch, context } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    touch('touchmove', [[12, 200]])
+    vi.advanceTimersByTime(500)
+    touch('touchend', [])
+    expect(context.enterSelect).not.toHaveBeenCalled()
+    expect(context.notifyTerminalSurfaceTap).not.toHaveBeenCalled()
+  })
+
+  it('leaves selection-handle drags to the document dispatcher', () => {
+    const { touch, context, handleStart } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    vi.advanceTimersByTime(500)
+    touch('touchend', [])
+    touch('touchstart', [[4, 200]], handleStart)
+    expect(touch('touchmove', [[84, 200]], handleStart).defaultPrevented).toBe(true)
+    expect(context.handleDragMove).toHaveBeenCalledWith('start', 84, 200)
+    touch('touchcancel', [], handleStart)
+    expect(context.sel?.activeHandle).toBeNull()
+  })
+
+  it('preserves pinch zoom when a second finger joins an edge touch', () => {
+    const { touch, context } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    touch('touchstart', [[4, 200], [100, 200]])
+    expect(touch('touchmove', [[4, 200], [150, 200]]).preventDefault).toHaveBeenCalled()
+    expect(context.updateTransform).toHaveBeenCalled()
+  })
+
+  it.each([false, true])('cleans up a cancelled edge touch (back swipe active: %s)', (active) => {
+    const { touch, context } = createTerminalTouchHarness()
+    touch('touchstart', [[4, 200]])
+    if (active) {
+      touch('touchmove', [[84, 200]])
+    }
+    touch('touchcancel', [])
+    expect(context.tapCandidate).toBeNull()
+    expect(context.longPressTimer).toBeNull()
+    expect(context.longPressOrigin).toBeNull()
+    expect(context.stopEdgeScroll).toHaveBeenCalled()
+    vi.advanceTimersByTime(600)
+    expect(context.enterSelect).not.toHaveBeenCalled()
+    expect(context.notifyTerminalSurfaceTap).not.toHaveBeenCalled()
+    touch('touchstart', [[100, 200]])
+    expect(touch('touchmove', [[100, 250]]).preventDefault).toHaveBeenCalled()
+  })
+
   it('keeps Android touch drags inside the terminal WebView', () => {
     expect(source).toContain('nestedScrollEnabled')
   })
