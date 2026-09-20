@@ -46,7 +46,7 @@ export type ClipboardContents = { text: boolean; image: boolean }
 export type ClipboardImage = { data: string; size: { width: number; height: number } }
 
 /**
- * Reading the device clipboard, which is three calls on a phone and two verbs on the web.
+ * Reading the device clipboard, which is three calls on a phone and, on the web, one verb for text and three for an image.
  *
  * This seam owns the pasteboard on both platforms; the media seam beside it owns the pickers only.
  * On the page `readText` is `native.clipboard.read`, and `readImage` is

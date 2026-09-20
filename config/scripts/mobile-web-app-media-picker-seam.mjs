@@ -137,7 +137,9 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
       return null
     }
     const [specifier] = value.arguments
-    return ts.isStringLiteral(specifier) ? specifier.text : null
+    return ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier)
+      ? specifier.text
+      : null
   }
 
   const seedDynamic = (node) => {

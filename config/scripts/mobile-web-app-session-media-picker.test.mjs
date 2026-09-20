@@ -125,6 +125,9 @@ describe('the rule that reads a module for a picker', () => {
       "export async function r() {\n  const { getImageAsync } = await import('expo-clipboard')\n  return getImageAsync({ format: 'png' })\n}",
     'dynamic-picker.ts':
       "export async function r() {\n  return await import('expo-image-picker')\n}",
+    // A backticked specifier without substitutions is as static as the quoted one to the bundler.
+    'dynamic-template-picker.ts':
+      'export async function r() {\n  return await import(`expo-image-picker`)\n}',
     'dynamic-clipboard-text.ts':
       "export async function r() {\n  const Clipboard = await import('expo-clipboard')\n  return Clipboard.getStringAsync()\n}",
     'clipboard-text.ts':
@@ -151,6 +154,7 @@ describe('the rule that reads a module for a picker', () => {
         'src/dynamic-clipboard.ts:3',
         'src/dynamic-destructured.ts:2',
         'src/dynamic-picker.ts:2',
+        'src/dynamic-template-picker.ts:2',
         'src/element-access.ts:2',
         'src/namespace-picker.ts:1',
         'src/re-destructured.ts:4',
