@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { parseClaudeConfigDirBinding } from '../../../../shared/claude-home-binding'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   getClaudeConfigDirCredentialsPath,
   type ClaudeConfigDirProbe
@@ -13,17 +14,22 @@ const PROBE_DEBOUNCE_MS = 250
  * "looks fine".
  *
  * Deliberately `shell.pathExists`, not `fs.pathExists`: the latter is sandboxed to the workspace
- * roots and rejects any Claude home outside them. It is also local-only, so a group owned by an
- * SSH host is left unprobed rather than answered from the client's filesystem, where the same path
- * means something else entirely.
+ * roots and rejects any Claude home outside them. It is also local-only, so a group owned by any
+ * other execution host is left unprobed rather than answered from the client's filesystem, where
+ * the same path means something else entirely. The gate reads the *resolved* host, never a raw
+ * ownership field — `src/shared/execution-host.ts` documents why the raw read answers "local" for
+ * a row stamped only with `executionHostId`.
  */
 export function useClaudeConfigDirProbe(args: {
   enabled: boolean
   draft: string
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 }): ClaudeConfigDirProbe | null {
-  const { enabled, draft, connectionId } = args
-  const configDir = enabled && !connectionId ? parseClaudeConfigDirBinding(draft) : null
+  const { enabled, draft, executionHostId } = args
+  const configDir =
+    enabled && executionHostId === LOCAL_EXECUTION_HOST_ID
+      ? parseClaudeConfigDirBinding(draft)
+      : null
   const [probe, setProbe] = useState<{ configDir: string; result: ClaudeConfigDirProbe } | null>(
     null
   )

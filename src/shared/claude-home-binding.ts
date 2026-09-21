@@ -54,7 +54,7 @@ type HostStampedRow = { connectionId?: string | null; executionHostId?: string |
  * answering with it hands one host's filesystem path to a session on another, which is the silent
  * wrong-identity failure this binding exists to prevent.
  */
-function findRowForHost<T extends HostStampedRow>(
+export function findRowForHost<T extends HostStampedRow>(
   rows: readonly T[],
   matchesId: (row: T) => boolean,
   hostOf: (row: T) => ExecutionHostId,

@@ -36,9 +36,17 @@ describe('selectInheritedClaudeConfigDir', () => {
     })
   })
 
-  it('returns null when the group carries its own binding', () => {
+  it('still names the ancestor for a group that carries its own binding', () => {
     const bound = { ...CHILD, claudeConfigDir: '/home/alice/.claude-child' }
-    expect(selectInheritedClaudeConfigDir([PARENT, bound], 'child')).toBeNull()
+    expect(selectInheritedClaudeConfigDir([PARENT, bound], 'child')).toEqual({
+      configDir: '/home/alice/.claude-client',
+      groupId: 'parent',
+      groupName: 'Client Work'
+    })
+  })
+
+  it('returns null for a bound root group with no ancestor', () => {
+    expect(selectInheritedClaudeConfigDir([PARENT], 'parent')).toBeNull()
   })
 
   it('returns null for an unbound tree', () => {

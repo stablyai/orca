@@ -3,6 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { InheritedClaudeConfigDir } from './project-group-claude-config-dir-selection'
 import { ProjectGroupSettingsDialog } from './ProjectGroupSettingsDialog'
 
@@ -71,15 +72,15 @@ afterEach(() => {
 type RenderArgs = {
   configDir?: string | null
   inherited?: InheritedClaudeConfigDir | null
-  connectionId?: string | null
-  onSubmit?: (configDir: string | null) => Promise<void> | void
+  executionHostId?: ExecutionHostId | null
+  onSubmit?: (configDir: string | null) => Promise<boolean> | boolean
 }
 
 async function render(args: RenderArgs = {}): Promise<{
   onSubmit: ReturnType<typeof vi.fn>
   onOpenChange: ReturnType<typeof vi.fn>
 }> {
-  const onSubmit = vi.fn(args.onSubmit ?? (() => Promise.resolve()))
+  const onSubmit = vi.fn(args.onSubmit ?? (() => Promise.resolve(true)))
   const onOpenChange = vi.fn()
   await act(async () => {
     root.render(
@@ -88,7 +89,7 @@ async function render(args: RenderArgs = {}): Promise<{
         groupName="Child"
         configDir={args.configDir ?? null}
         inherited={args.inherited ?? null}
-        connectionId={args.connectionId ?? null}
+        executionHostId={args.executionHostId ?? 'local'}
         onOpenChange={onOpenChange}
         onSubmit={onSubmit}
       />
@@ -210,11 +211,65 @@ describe('ProjectGroupSettingsDialog', () => {
   it('never probes the client filesystem for a group owned by an SSH host', async () => {
     await render({
       configDir: '/home/alice/.claude-child',
-      connectionId: 'ssh-target-1'
+      executionHostId: 'ssh:prod-1'
     })
 
     expect(mocks.pathExists).not.toHaveBeenCalled()
     expect(advisoryText()).toBe('')
+  })
+
+  it('never probes the client filesystem for a runtime-environment-owned group', async () => {
+    await render({
+      configDir: '/home/alice/.claude-child',
+      executionHostId: 'runtime:env-1'
+    })
+
+    expect(mocks.pathExists).not.toHaveBeenCalled()
+    expect(advisoryText()).toBe('')
+  })
+
+  it('offers no client folder picker for a group owned by another host', async () => {
+    await render({
+      configDir: '/home/alice/.claude-child',
+      executionHostId: 'ssh:prod-1'
+    })
+
+    expect(() => findButton('Browse')).toThrow()
+    expect(container.textContent).toContain('prod-1')
+  })
+
+  it('brings the inherited hint back when a bound group clears its field', async () => {
+    await render({ configDir: '/home/alice/.claude-child', inherited: INHERITED })
+    expect(container.textContent).not.toContain('Client Work')
+
+    await type('')
+
+    expect(container.textContent).toContain('Client Work')
+    expect(container.textContent).toContain('/home/alice/.claude-client')
+  })
+
+  it('keeps the dialog open with the draft intact when the save is refused', async () => {
+    const { onOpenChange } = await render({
+      configDir: null,
+      onSubmit: () => Promise.resolve(false)
+    })
+
+    await type('/home/alice/.claude-child')
+    await act(async () => {
+      findButton('Save').click()
+    })
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(getInput().value).toBe('/home/alice/.claude-child')
+    expect(findButton('Save').disabled).toBe(false)
+  })
+
+  it('announces the advisory once, as a live region only', async () => {
+    mocks.pathExists.mockResolvedValue(false)
+    await render({ configDir: '/home/alice/.claude-child' })
+
+    expect(advisoryText()).toContain('does not exist')
+    expect(getInput().getAttribute('aria-describedby')).toBeNull()
   })
 
   it('seeds the platform directory picker with the current draft', async () => {

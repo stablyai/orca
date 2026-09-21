@@ -125,11 +125,21 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+/** `compact` is the type ramp of dialogs raised from the sidebar, which sits a step below the app's. */
+function DialogTitle({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & { size?: 'default' | 'compact' }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      data-size={size}
+      className={cn(
+        'text-lg leading-snug font-semibold break-words',
+        size === 'compact' && 'text-sm',
+        className
+      )}
       {...props}
     />
   )
@@ -137,12 +147,14 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
 
 function DialogDescription({
   className,
+  size = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<typeof DialogPrimitive.Description> & { size?: 'default' | 'compact' }) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      data-size={size}
+      className={cn('text-sm text-muted-foreground', size === 'compact' && 'text-xs', className)}
       {...props}
     />
   )

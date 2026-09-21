@@ -5,7 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getProjectGroupExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import {
   selectInheritedClaudeConfigDir,
   selectProjectGroupForHost,
@@ -23,8 +27,8 @@ export type ProjectGroupSettingsDialogState = {
   /** The group's own binding, captured at open time; ancestors arrive through `inherited`. */
   configDir: string | null
   inherited: InheritedClaudeConfigDir | null
-  /** SSH target of the owner host, so the dialog's advisory probe reads the right filesystem. */
-  connectionId: string | null
+  /** The row's resolved owner host, so the dialog never probes or browses the wrong filesystem. */
+  executionHostId: ExecutionHostId
   hostId?: ExecutionHostId
 }
 
@@ -166,7 +170,9 @@ export function useProjectGroupDialogs(args: {
         groupName: group?.name ?? groupId,
         configDir: group?.claudeConfigDir ?? null,
         inherited: selectInheritedClaudeConfigDir(projectGroups, groupId, hostId),
-        connectionId: group?.connectionId ?? null,
+        executionHostId: group
+          ? getProjectGroupExecutionHostId(group)
+          : (hostId ?? LOCAL_EXECUTION_HOST_ID),
         hostId
       })
     },
@@ -174,9 +180,9 @@ export function useProjectGroupDialogs(args: {
   )
 
   const handleSubmitProjectGroupSettings = useCallback(
-    async (claudeConfigDir: string | null) => {
+    async (claudeConfigDir: string | null): Promise<boolean> => {
       if (!settingsDialog) {
-        return
+        return false
       }
       const saved = await updateProjectGroup(
         settingsDialog.groupId,
@@ -198,6 +204,7 @@ export function useProjectGroupDialogs(args: {
           }
         )
       }
+      return saved
     },
     [settingsDialog, updateProjectGroup]
   )

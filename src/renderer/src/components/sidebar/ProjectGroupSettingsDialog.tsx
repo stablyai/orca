@@ -13,6 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 import {
+  getExecutionHostLabel,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import {
   evaluateClaudeConfigDirAdvice,
   type ClaudeConfigDirProbe
 } from './claude-config-dir-advice'
@@ -25,10 +30,11 @@ export type ProjectGroupSettingsDialogProps = {
   /** The group's own persisted binding; ancestors show up through `inherited` instead. */
   configDir: string | null
   inherited: InheritedClaudeConfigDir | null
-  /** SSH target of the group's owner host, so the advisory probe reads the right filesystem. */
-  connectionId?: string | null
+  /** The group's resolved owner host — the one filesystem this path means anything on. */
+  executionHostId: ExecutionHostId
   onOpenChange: (open: boolean) => void
-  onSubmit: (claudeConfigDir: string | null) => Promise<void> | void
+  /** Resolves false when the host refused or could not confirm the write. */
+  onSubmit: (claudeConfigDir: string | null) => Promise<boolean> | boolean
 }
 
 export function ProjectGroupSettingsDialog({
@@ -36,7 +42,7 @@ export function ProjectGroupSettingsDialog({
   groupName,
   configDir,
   inherited,
-  connectionId,
+  executionHostId,
   onOpenChange,
   onSubmit
 }: ProjectGroupSettingsDialogProps): React.JSX.Element {
@@ -67,9 +73,10 @@ export function ProjectGroupSettingsDialog({
   const probe: ClaudeConfigDirProbe | null = useClaudeConfigDirProbe({
     enabled: open,
     draft,
-    connectionId
+    executionHostId
   })
   const advice = evaluateClaudeConfigDirAdvice({ draft, probe })
+  const isLocalHost = executionHostId === LOCAL_EXECUTION_HOST_ID
   const trimmedDraft = draft.trim()
   // Why draft-driven: clearing the field puts the group back under its ancestor, so the hint has to
   // come back the moment the field is empty, not only after the save round-trips.
@@ -82,9 +89,15 @@ export function ProjectGroupSettingsDialog({
       }
       setSubmitting(true)
       try {
-        await onSubmit(nextValue)
-        if (mountedRef.current) {
+        const saved = await onSubmit(nextValue)
+        if (!mountedRef.current) {
+          return
+        }
+        // Why keep the dialog open on a refusal: the draft is the only copy of what the user typed.
+        if (saved) {
           onOpenChange(false)
+        } else {
+          setSubmitting(false)
         }
       } catch (error) {
         console.error('Failed to save project group settings:', error)
@@ -117,13 +130,13 @@ export function ProjectGroupSettingsDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle size="compact">
             {translate(
               'auto.components.sidebar.ProjectGroupSettingsDialog.title',
               'Group Settings'
             )}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription size="compact">
             {translate(
               'auto.components.sidebar.ProjectGroupSettingsDialog.description',
               'Settings for {{value0}} and the groups nested inside it.',
@@ -139,7 +152,7 @@ export function ProjectGroupSettingsDialog({
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor={inputId}>
+            <Label htmlFor={inputId} size="compact">
               {translate(
                 'auto.components.sidebar.ProjectGroupSettingsDialog.fieldLabel',
                 'Claude config directory'
@@ -152,36 +165,39 @@ export function ProjectGroupSettingsDialog({
                 type="text"
                 value={draft}
                 spellCheck={false}
-                aria-describedby={advice ? adviceId : undefined}
                 placeholder={translate(
                   'auto.components.sidebar.ProjectGroupSettingsDialog.fieldPlaceholder',
                   'Claude’s default home'
                 )}
                 onChange={(event) => setDraft(event.target.value)}
-                className="h-8"
+                size="compact"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 shrink-0"
-                onClick={() => void handleBrowse()}
-              >
-                <FolderOpen className="size-3.5" />
-                {translate('auto.components.sidebar.ProjectGroupSettingsDialog.browse', 'Browse')}
-              </Button>
+              {/* The picker can only browse this client, so it is offered for no other host. */}
+              {isLocalHost ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm-compact"
+                  className="shrink-0"
+                  onClick={() => void handleBrowse()}
+                >
+                  <FolderOpen className="size-3.5" />
+                  {translate('auto.components.sidebar.ProjectGroupSettingsDialog.browse', 'Browse')}
+                </Button>
+              ) : null}
             </div>
           </div>
           <ClaudeConfigDirFieldNote
             adviceId={adviceId}
             adviceMessage={advice?.message ?? null}
             inherited={showInherited ? inherited : null}
+            remoteHostLabel={isLocalHost ? null : getExecutionHostLabel(executionHostId)}
           />
           <DialogFooter className="sm:justify-between">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="sm-compact"
               disabled={submitting || (!configDir && !trimmedDraft)}
               onClick={() => void submit(null)}
             >
@@ -191,14 +207,14 @@ export function ProjectGroupSettingsDialog({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="sm-compact"
                 disabled={submitting}
                 onClick={() => onOpenChange(false)}
               >
                 {translate('auto.components.sidebar.ProjectGroupSettingsDialog.cancel', 'Cancel')}
               </Button>
               {/* Never disabled on advice: the directory's state can change before launch, where the authoritative refusal lives. */}
-              <Button type="submit" size="sm" disabled={submitting}>
+              <Button type="submit" size="sm-compact" disabled={submitting}>
                 {submitting
                   ? translate(
                       'auto.components.sidebar.ProjectGroupSettingsDialog.saving',
@@ -217,14 +233,25 @@ export function ProjectGroupSettingsDialog({
 function ClaudeConfigDirFieldNote({
   adviceId,
   adviceMessage,
-  inherited
+  inherited,
+  remoteHostLabel
 }: {
   adviceId: string
   adviceMessage: string | null
   inherited: InheritedClaudeConfigDir | null
+  remoteHostLabel: string | null
 }): React.JSX.Element {
   return (
     <div className="space-y-1 text-[11px]">
+      {remoteHostLabel ? (
+        <p className="text-muted-foreground">
+          {translate(
+            'auto.components.sidebar.ProjectGroupSettingsDialog.remoteHostPath',
+            'This path is read on {{value0}}, so type it as that host spells it.',
+            { value0: remoteHostLabel }
+          )}
+        </p>
+      ) : null}
       {adviceMessage ? (
         <p
           id={adviceId}

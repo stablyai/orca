@@ -74,6 +74,12 @@ const CHILD: ProjectGroup = {
 }
 
 const UNBOUND_CHILD: ProjectGroup = { ...CHILD, claudeConfigDir: null }
+// Ownership carried only by executionHostId — project-group-owner-stamping leaves connectionId null.
+const REMOTE_CHILD: ProjectGroup = {
+  ...UNBOUND_CHILD,
+  id: 'remote-child',
+  executionHostId: 'runtime:env-1'
+}
 
 let latest: ProjectGroupDialogs | null = null
 const roots: Root[] = []
@@ -82,7 +88,7 @@ function HookProbe(): null {
   latest = useProjectGroupDialogs({
     repos: [],
     repoMap: new Map(),
-    projectGroups: [PARENT, UNBOUND_CHILD]
+    projectGroups: [PARENT, UNBOUND_CHILD, REMOTE_CHILD]
   })
   return null
 }
@@ -158,7 +164,8 @@ describe('useProjectGroupDialogs settings flow', () => {
 
     expect(latest?.settingsDialog).toMatchObject({
       groupId: 'child',
-      configDir: null
+      configDir: null,
+      executionHostId: 'local'
     })
     expect(latest?.settingsDialog?.inherited).toEqual({
       configDir: '/home/alice/.claude-client',
@@ -187,14 +194,26 @@ describe('useProjectGroupDialogs settings flow', () => {
   it('reports a refused write instead of leaving the dialog looking saved', async () => {
     mocks.updateProjectGroup.mockResolvedValue(false)
     await renderHookProbe()
+    let saved: boolean | undefined
 
     act(() => {
       latest?.handleOpenProjectGroupSettings('child')
     })
     await act(async () => {
-      await latest?.handleSubmitProjectGroupSettings('.claude')
+      saved = await latest?.handleSubmitProjectGroupSettings('.claude')
     })
 
     expect(mocks.toastError).toHaveBeenCalled()
+    expect(saved).toBe(false)
+  })
+
+  it("stamps the dialog with the group row's resolved execution host, not its legacy field", async () => {
+    await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('remote-child', 'runtime:env-1')
+    })
+
+    expect(latest?.settingsDialog?.executionHostId).toBe('runtime:env-1')
   })
 })

@@ -6379,6 +6379,7 @@
           "fieldLabel": "Claude config directory",
           "fieldPlaceholder": "Claude’s default home",
           "browse": "Browse",
+          "remoteHostPath": "This path is read on {{value0}}, so type it as that host spells it.",
           "inherited": "Inherited from {{value0}}:",
           "adviceNotAbsolute": "This is not an absolute path. Claude sessions in this group would resolve it differently each run.",
           "adviceMissingDirectory": "That directory does not exist yet on this group’s host.",

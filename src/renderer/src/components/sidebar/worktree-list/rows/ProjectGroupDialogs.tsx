@@ -119,7 +119,7 @@ export function SidebarWorktreeListDialogs({
         groupName={settingsDialog?.groupName ?? ''}
         configDir={settingsDialog?.configDir ?? null}
         inherited={settingsDialog?.inherited ?? null}
-        connectionId={settingsDialog?.connectionId ?? null}
+        executionHostId={settingsDialog?.executionHostId ?? 'local'}
         onOpenChange={(open) => {
           if (!open) {
             dialogs.setSettingsDialog(null)
