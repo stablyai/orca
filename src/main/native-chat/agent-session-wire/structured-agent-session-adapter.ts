@@ -152,6 +152,8 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = {
+  /** Host-local readiness, when the adapter routes sessions through a live owner map. */
+  isSessionReady?(sessionId: string): boolean
   /** Provider-aware capability check for hosts that route more than one adapter. */
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Provider/runtime support, kept here so remote enablement changes adapter data, not UI logic. */

@@ -73,7 +73,9 @@ export async function evictHeldStructuredAgentSession(
   // proves the exit, so a step that aborts after that point would otherwise leave the retry
   // reading "no child here" and skipping the settlement and the lease release it still owes.
   const owesWindDown = owesProviderChildWindDown(session)
+  const acquisitionGeneration = session.acquisitionGeneration
   session.owesProviderChildWindDown = owesWindDown
+  let pendingStop: Promise<void> | undefined
   let settlementError: unknown
   const eviction: StructuredAgentSessionEvictionContext = {
     sessionId,
@@ -84,7 +86,12 @@ export async function evictHeldStructuredAgentSession(
     adapter: context.deps.adapter,
     // Host state must not disagree with the adapter for the seven steps in between.
     onProviderChildStopped: () => {
-      session.hasProviderChild = false
+      if (
+        context.sessions.get(sessionId) === session &&
+        session.acquisitionGeneration === acquisitionGeneration
+      ) {
+        session.hasProviderChild = false
+      }
     },
     forget: async () => {
       await forgetStructuredAgentSession(context, sessionId)
@@ -121,12 +128,35 @@ export async function evictHeldStructuredAgentSession(
       })
       session.owesProviderChildWindDown = false
       context.forgetStatus(sessionId)
+    },
+    onStepPending: (stepName, completion) => {
+      if (stepName !== 'stop-provider-child') {
+        return
+      }
+      pendingStop = completion
+      session.pendingCloseCompletion = completion
+      const clearPendingClose = (): void => {
+        if (
+          context.sessions.get(sessionId) === session &&
+          session.pendingCloseCompletion === completion
+        ) {
+          delete session.pendingCloseCompletion
+        }
+      }
+      void completion.then(clearPendingClose, clearPendingClose)
     }
   }
-  await evictStructuredAgentSession(
-    eviction,
-    withStructuredAgentSessionEvictionDeadline(STRUCTURED_AGENT_SESSION_EVICTION_STEPS)
+  const boundedSteps = withStructuredAgentSessionEvictionDeadline(
+    STRUCTURED_AGENT_SESSION_EVICTION_STEPS
   )
+  try {
+    await evictStructuredAgentSession(eviction, boundedSteps)
+  } finally {
+    // A timed-out stop is still allowed to finish, but no later transition may race it.
+    if (!pendingStop) {
+      delete session.pendingCloseCompletion
+    }
+  }
 }
 
 /** Stops every provider child owned by this host while keeping failed evictions reachable. A
@@ -192,6 +222,7 @@ export function createStructuredAgentSessionHolds(
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
     attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
     close: (sessionId: string) => Promise<void>
+    serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   }
 ): StructuredAgentSessionHolds {
   return new StructuredAgentSessionHolds({
@@ -210,6 +241,8 @@ export function createStructuredAgentSessionHolds(
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),
-    ...(context.deps.releaseGraceMs === undefined ? {} : { graceMs: context.deps.releaseGraceMs })
+    waitForPendingClose: (sessionId) => context.sessions.get(sessionId)?.pendingCloseCompletion,
+    ...(context.deps.releaseGraceMs === undefined ? {} : { graceMs: context.deps.releaseGraceMs }),
+    serialize: input.serialize
   })
 }

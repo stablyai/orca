@@ -9,7 +9,7 @@
 // The release CHAINS off the hold rather than racing it: an unmount during the hold's round trip
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -19,8 +19,9 @@ export function useStructuredAgentSessionHold(args: {
   target: RuntimeClientTarget
   surface: string
   enabled?: boolean
-}): void {
+}): string | null {
   const { enabled = true, sessionId, surface, target } = args
+  const [holdError, setHoldError] = useState<string | null>(null)
   // Keyed by VALUE, not identity: callers build the target inline, so an identity dependency would
   // release and re-take the hold on every render of the pane.
   const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
@@ -32,16 +33,30 @@ export function useStructuredAgentSessionHold(args: {
   }, [target])
   useEffect(() => {
     if (!enabled) {
+      setHoldError(null)
       return
     }
     const runtimeTarget = targetRef.current
     const holderId = structuredAgentSessionHolderId(surface)
+    let active = true
     const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
       sessionId,
       holderId
       // An older host has no such method; the session still reads, it just is not held.
-    }).catch(() => undefined)
+    }).then(
+      () => {
+        if (active) {
+          setHoldError(null)
+        }
+      },
+      (error: unknown) => {
+        if (active) {
+          setHoldError(error instanceof Error ? error.message : String(error))
+        }
+      }
+    )
     return () => {
+      active = false
       void held.then(() =>
         callStructuredAgentSession(runtimeTarget, 'agentSession.release', {
           sessionId,
@@ -50,4 +65,5 @@ export function useStructuredAgentSessionHold(args: {
       )
     }
   }, [enabled, sessionId, surface, targetKey])
+  return holdError
 }

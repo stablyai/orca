@@ -309,6 +309,35 @@ describe('a chat that closes', () => {
     ).toThrow(AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
   })
 
+  it('waits for an older close before resuming a newly opened pane', async () => {
+    await attach()
+    await host.hold(SESSION, SURFACE)
+    let finishStop!: () => void
+    const stopped = new Promise<void>((resolve) => (finishStop = resolve))
+    closeSession.mockImplementationOnce(() => stopped.then(() => true))
+
+    const closing = host.close(SESSION)
+    await vi.waitFor(() => expect(closeSession).toHaveBeenCalledOnce())
+    const reopening = host.hold(SESSION, 'new-pane')
+    expect(await Promise.race([reopening.then(() => true), Promise.resolve(false)])).toBe(false)
+
+    finishStop()
+    await Promise.all([closing, reopening])
+
+    expect(host.isHeld(SESSION)).toBe(true)
+    expect(host.hasSession(SESSION)).toBe(true)
+    expect(acquire).toHaveBeenCalledTimes(2)
+    dispatch.mockResolvedValueOnce({
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-next', ordinal: 1 }
+    })
+    const body = hostTestMessage('dispatch after close and resume')
+    await expect(
+      host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+    ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
+    expect(dispatch).toHaveBeenCalledOnce()
+  })
+
   it('does not lose the session to a release the client sent twice', async () => {
     await attach()
     await host.hold(SESSION, SURFACE)

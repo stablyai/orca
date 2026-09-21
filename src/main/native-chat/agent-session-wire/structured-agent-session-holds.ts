@@ -25,6 +25,10 @@ export type StructuredAgentSessionHoldsDeps = {
   evict: (sessionId: string) => Promise<void>
   onError?: (input: { sessionId: string; error: unknown }) => void
   graceMs?: number
+  /** Serializes holder changes with close, attach, and send transitions. */
+  serialize?: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  /** A timed-out close still owns the prior generation until its stop settles. */
+  waitForPendingClose?: (sessionId: string) => Promise<void> | undefined
 }
 
 export type StructuredAgentSessionHoldOptions = {
@@ -54,12 +58,36 @@ export class StructuredAgentSessionHolds {
     holderId: string,
     options: StructuredAgentSessionHoldOptions = {}
   ): Promise<void> {
+    const transition = () => this.holdInTransition(sessionId, holderId, options)
+    if (this.deps.serialize) {
+      await this.deps.serialize(sessionId, transition)
+      return
+    }
+    await transition()
+  }
+
+  private async holdInTransition(
+    sessionId: string,
+    holderId: string,
+    options: StructuredAgentSessionHoldOptions
+  ): Promise<void> {
     const alreadyHeld = this.holders.has(sessionId, holderId)
     this.holders.add(sessionId, holderId, options.resume !== false)
     const incarnation = this.holders.incarnation(sessionId, holderId)
     // Unconditional, not only on the first-holder edge: a second surface arriving during the grace
     // window must cancel the pending release too.
     this.clock.cancel(sessionId)
+    const pendingClose = this.deps.waitForPendingClose?.(sessionId)
+    if (pendingClose) {
+      try {
+        await pendingClose
+      } catch (error) {
+        if (!alreadyHeld) {
+          this.holders.remove(sessionId, holderId)
+        }
+        throw error
+      }
+    }
     if (options.resume === false || this.deps.hasProviderChild(sessionId)) {
       return
     }
@@ -81,6 +109,23 @@ export class StructuredAgentSessionHolds {
   }
 
   release(sessionId: string, holderId: string, expectedIncarnation?: symbol): void {
+    const transition = async (): Promise<void> => {
+      this.releaseInTransition(sessionId, holderId, expectedIncarnation)
+    }
+    if (this.deps.serialize) {
+      void this.deps.serialize(sessionId, transition).catch((error: unknown) => {
+        this.deps.onError?.({ sessionId, error })
+      })
+      return
+    }
+    this.releaseInTransition(sessionId, holderId, expectedIncarnation)
+  }
+
+  private releaseInTransition(
+    sessionId: string,
+    holderId: string,
+    expectedIncarnation?: symbol
+  ): void {
     if (!this.holders.remove(sessionId, holderId, expectedIncarnation)) {
       return
     }
