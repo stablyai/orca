@@ -179,6 +179,35 @@ describe('bound Claude home usage previews', () => {
     expect(service.getState().boundClaudeHomes).toEqual([])
   })
 
+  it('refetches a rebound group immediately instead of waiting out the 60-second debounce', async () => {
+    // Why: with the row deleted but the debounce untouched, the next expand returns early and
+    // `buildBoundClaudeHomeArray` skips a binding with no row and no fetching flag — so the group
+    // reads as *absent* for up to 55s, the same "the binding did not save" misread as a stale row.
+    vi.useFakeTimers()
+    try {
+      const service = new RateLimitService()
+      let bindings = [{ groupId: 'group-a', configDir: '/tmp/home-a' }]
+      service.setBoundClaudeHomesResolver(() => bindings)
+      vi.mocked(fetchBoundClaudeHomeUsage).mockResolvedValue(okUsage(9))
+
+      await service.fetchBoundClaudeHomesOnOpen()
+      expect(service.getState().boundClaudeHomes?.[0]?.configDir).toBe('/tmp/home-a')
+
+      vi.advanceTimersByTime(5_000)
+      bindings = [{ groupId: 'group-a', configDir: '/tmp/home-b' }]
+      service.evictBoundClaudeHomeUsage('group-a')
+      await service.fetchBoundClaudeHomesOnOpen()
+
+      expect(fetchBoundClaudeHomeUsage).toHaveBeenCalledTimes(2)
+      expect(service.getState().boundClaudeHomes?.[0]).toMatchObject({
+        configDir: '/tmp/home-b',
+        status: 'ok'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('evicts a cached row when its group is deleted', async () => {
     const service = new RateLimitService()
     let bindings = [{ groupId: 'group-a', configDir: '/tmp/home-a' }]

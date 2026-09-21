@@ -23,6 +23,12 @@ import { okProvider } from './rate-limit-service-test-harness'
  * (`asar-transparent-fs`), and a second JS realm (`new Worker(...)`, whose module graph this file's
  * mocks never touch). They are guarded below for that reason, not because today's code reaches them.
  *
+ * A token refresh has no filesystem sink at all — it is a network call that makes the bound
+ * directory's own single-use refresh token dead server-side — so its sinks are guarded by specifier
+ * too: `fetch` (a global, invisible to `vi.mock`), `node:https`, `node:http`, Electron's `net` —
+ * the spelling `oauth-refresh.ts` uses — and the raw `node:net` / `node:tls` sockets underneath
+ * them. `electron`'s `utilityProcess.fork` rides the same specifier and is guarded with them.
+ *
  * The self-test at the bottom fires every probe, so dropping a mock or renaming a specifier fails
  * the suite instead of quietly widening what a bound directory is exposed to.
  */
@@ -174,6 +180,67 @@ vi.mock('node:module', async (importOriginal) => {
   const guarded = {
     ...(await importOriginal<object>()),
     ...ratchet.forbiddenModule('node:module', ['createRequire'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+// Why: a token refresh is the fifth write this file's header names, and it is the one write with no
+// filesystem sink at all — the server rotates a single-use refresh token and the copy still sitting
+// in the bound directory dies. `vi.mock('../claude-accounts/oauth-refresh')` below guards the
+// *wrapper*; the specifiers below are the sinks that wrapper and every other in-repo network call
+// reach. A guard written against the verb name `refresh` would cover none of them.
+//
+// `fetch` is a global, not a module, so `vi.mock` cannot see it at all and only a stub reaches it.
+vi.stubGlobal('fetch', () => {
+  throw new Error('D9 violation: bound-home usage called global fetch')
+})
+
+vi.mock('node:https', async (importOriginal) => {
+  const guarded = {
+    ...(await importOriginal<object>()),
+    ...ratchet.forbiddenModule('node:https', ['request', 'get'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+vi.mock('node:http', async (importOriginal) => {
+  const guarded = {
+    ...(await importOriginal<object>()),
+    ...ratchet.forbiddenModule('node:http', ['request', 'get'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+// Why: `net.fetch` is the only sanctioned spelling in this repo — `proxy-guarded-fetch-call-site-audit`
+// enforces it and `oauth-refresh.ts:142` uses it — so a copied refresh lands here, not on `fetch`.
+// `utilityProcess.fork` rides the same specifier and is the `node:worker_threads` escape with a
+// different name: a second process whose module graph none of these mocks reach, so it is guarded
+// for the same reason the `Worker` constructor is. Built without `importOriginal` because outside an
+// Electron process the real `electron` entry point is a path string, whose named imports are all
+// `undefined` — which is how `net.request` was denied by a TypeError rather than by rule.
+vi.mock('electron', () => {
+  const guarded = {
+    net: ratchet.forbiddenModule('electron.net', ['fetch', 'request', 'resolveHost']),
+    utilityProcess: ratchet.forbiddenModule('electron.utilityProcess', ['fork'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+// Why: `node:net` and `node:tls` are the same refresh one layer down — a hand-rolled POST on a raw
+// socket touches no `http` specifier. No in-repo code spells an outbound request this way, so this
+// guard is by rule, not by sighting, exactly like `node-pty` and `node:worker_threads`.
+vi.mock('node:net', async (importOriginal) => {
+  const guarded = {
+    ...(await importOriginal<object>()),
+    ...ratchet.forbiddenModule('node:net', ['connect', 'createConnection'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+vi.mock('node:tls', async (importOriginal) => {
+  const guarded = {
+    ...(await importOriginal<object>()),
+    ...ratchet.forbiddenModule('node:tls', ['connect', 'createConnection'])
   }
   return { ...guarded, default: guarded }
 })
@@ -418,6 +485,7 @@ describe('fetchBoundClaudeHomeUsage', () => {
  */
 describe('the D9 ratchet itself', () => {
   const boundFile = path.join(fixtureDir('valid'), 'probe.json')
+  const probeTokenUrl = 'https://platform.claude.com/v1/oauth/token'
 
   it('fails a file write into the bound directory', async () => {
     const fsPromises = await import('node:fs/promises')
@@ -488,5 +556,47 @@ describe('the D9 ratchet itself', () => {
     const { Worker } = await import('node:worker_threads')
 
     expect(() => new Worker('./writer.js')).toThrow('D9 violation')
+  })
+
+  it('fails a token refresh reached as global `fetch`', () => {
+    expect(() => fetch(probeTokenUrl, { method: 'POST' })).toThrow('D9 violation')
+  })
+
+  it('fails a token refresh reached through `node:https` or `node:http`', async () => {
+    const https = await import('node:https')
+    const http = await import('node:http')
+
+    expect(() => https.request({ host: '127.0.0.1', port: 9, method: 'POST' })).toThrow(
+      'D9 violation'
+    )
+    expect(() => https.get({ host: '127.0.0.1', port: 9 })).toThrow('D9 violation')
+    expect(() => http.request({ host: '127.0.0.1', port: 9, method: 'POST' })).toThrow(
+      'D9 violation'
+    )
+    expect(() => http.get({ host: '127.0.0.1', port: 9 })).toThrow('D9 violation')
+  })
+
+  it("fails a token refresh reached through Electron's `net`, the in-repo spelling", async () => {
+    // `oauth-refresh.ts:142` is `net.fetch(OAUTH_TOKEN_URL, { method: 'POST', ... })`, and
+    // `proxy-guarded-fetch-call-site-audit.test.ts` makes that the only sanctioned spelling, so a
+    // copied refresh lands here rather than on `fetch` or `node:https`.
+    const { net } = await import('electron')
+
+    expect(() => net.fetch(probeTokenUrl, { method: 'POST' })).toThrow('D9 violation')
+    expect(() => net.request({ url: probeTokenUrl, method: 'POST' })).toThrow('D9 violation')
+  })
+
+  it('fails a hand-rolled request on a raw `node:net` or `node:tls` socket', async () => {
+    const net = await import('node:net')
+    const tls = await import('node:tls')
+
+    expect(() => net.connect({ host: '127.0.0.1', port: 9 })).toThrow('D9 violation')
+    expect(() => tls.connect({ host: '127.0.0.1', port: 9 })).toThrow('D9 violation')
+  })
+
+  it('fails a utilityProcess fork, the worker-thread escape under a second specifier', async () => {
+    const { utilityProcess } = await import('electron')
+
+    expect(() => utilityProcess.fork('./writer.js')).toThrow('D9 violation')
   })
 })

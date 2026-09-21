@@ -82,6 +82,9 @@ export abstract class RateLimitServiceBoundClaudeHomes extends RateLimitServiceI
     this.boundClaudeHomesGeneration += 1
     this.boundClaudeHomeCache.delete(groupId)
     this.boundClaudeHomeFetching.delete(groupId)
+    // Why clear the debounce: the evicted group now has no row and no fetching flag, so it renders
+    // as absent, not stale. A deliberate rebind outranks a rate-limiting window the user cannot see.
+    this.lastBoundClaudeHomeFetchAt = 0
     this.pushToRenderer()
   }
 
