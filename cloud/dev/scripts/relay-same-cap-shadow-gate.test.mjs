@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readRelayWorkflow } from './relay-repository.mjs'
 import {
+  READ_ATTEMPTS,
   evaluateShadowGate,
   parseShadowGateArguments
 } from './relay-same-cap-shadow-gate.mjs'
@@ -438,6 +439,39 @@ test('every read is given a bounded timeout, and a timed-out read is just a fail
   assert.equal(timedOut.verdict, 'WARN')
 })
 
+// The reads are serialised, so the cost of a failure that makes every one of them spend its full
+// retry budget scales with the window. The deadline is what turns that into a verdict rather than
+// a cancelled job, which would take every later cell in the wave with it.
+test('the gate stops reading at its own deadline and still reports a verdict', async () => {
+  const seam = gcloudSeam()
+  // A clock where every read costs its whole retry budget, which is the case the deadline exists
+  // for: an expired credential or a Logging 429 storm answers nothing, slowly, every time.
+  let elapsedMs = 0
+  const report = await evaluateShadowGate(parseShadowGateArguments(ARGV), {
+    ...seam,
+    now: () => {
+      elapsedMs += SHADOW_GATE_THRESHOLDS.readTimeoutMs * READ_ATTEMPTS
+      return elapsedMs
+    }
+  })
+  // Everything past the deadline is skipped rather than attempted, so the gate cannot outlive it.
+  assert.ok(seam.calls.length > 0, 'the gate must still attempt reads inside its budget')
+  assert.ok(
+    seam.calls.length * SHADOW_GATE_THRESHOLDS.readTimeoutMs * READ_ATTEMPTS <=
+      SHADOW_GATE_THRESHOLDS.overallDeadlineMs,
+    'the gate read past its own deadline'
+  )
+  // A verdict, not a crash: a skipped read is an unverified check, which can never read as PASS.
+  assert.equal(report.reportOnly, true)
+  assert.equal(report.verdict, 'WARN')
+  assert.equal(report.checks.cellServing.status, 'unverified')
+  // No read is ever given more time than the budget still has left.
+  for (const { options } of seam.calls) {
+    assert.ok(options.timeoutMs > 0)
+    assert.ok(options.timeoutMs <= SHADOW_GATE_THRESHOLDS.readTimeoutMs)
+  }
+})
+
 test('the job runs the gate report-only, after verification, and uploads its artifact', () => {
   const workflow = readRelayWorkflow('deploy-relay-production-same-cap-job.yml')
   const gate = workflow.slice(workflow.indexOf('- name: Shadow health gate (report only)'))
@@ -445,6 +479,20 @@ test('the job runs the gate report-only, after verification, and uploads its art
   // Two independent guarantees that no verdict can fail a cell: the step's own exit code and this.
   assert.match(gate.slice(0, gate.indexOf('run:')), /continue-on-error: true/)
   assert.match(gate, /relay-same-cap-shadow-gate\.mjs/)
+  // The gate and its upload must be bounded in time as well as in outcome: a step that runs past
+  // the job's timeout-minutes gets the job cancelled, and cancellation stops the whole wave.
+  const gateHeader = gate.slice(0, gate.indexOf('run:'))
+  assert.match(gateHeader, /timeout-minutes: (\d+)/)
+  const stepTimeoutMinutes = Number(/timeout-minutes: (\d+)/.exec(gateHeader)[1])
+  assert.equal(stepTimeoutMinutes, 8)
+  // The script has to settle on its own before the runner kills it, or the artifact is never
+  // written and the step reports nothing at all.
+  assert.ok(
+    SHADOW_GATE_THRESHOLDS.overallDeadlineMs < stepTimeoutMinutes * 60_000,
+    'the gate deadline must leave the step time to write its verdict'
+  )
+  const upload = workflow.slice(workflow.indexOf('- name: Publish the shadow health gate verdict'))
+  assert.match(upload.slice(0, upload.indexOf('uses:')), /timeout-minutes: 2/)
   assert.match(
     workflow,
     /name: relay-same-cap-shadow-gate-\$\{\{ inputs\.target-cell-id \}\}-\$\{\{ github\.run_id \}\}\.json/

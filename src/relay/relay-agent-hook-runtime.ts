@@ -91,13 +91,18 @@ export class RelayAgentHookRuntime {
         : 'opencode'
     if (this.pluginOverlay.hasOpenCodeSource(opencodeAgent)) {
       const sourceDir = resolveOpenCodeSourceConfigDir(context.env, context.shell)
-      const dir = this.pluginOverlay.materializeOpenCode(overlayId, sourceDir, opencodeAgent)
-      if (dir) {
-        env.OPENCODE_CONFIG_DIR = dir
-        env.ORCA_OPENCODE_CONFIG_DIR = dir
-        if (sourceDir) {
+      const inheritedRelayOverlay = sourceDir
+        ? this.pluginOverlay.isRelayOverlayPath(sourceDir)
+        : false
+      if (sourceDir && !inheritedRelayOverlay) {
+        const dir = this.pluginOverlay.materializeOpenCode(overlayId, sourceDir, opencodeAgent)
+        if (dir) {
+          env.OPENCODE_CONFIG_DIR = dir
+          env.ORCA_OPENCODE_CONFIG_DIR = dir
           env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
         }
+      } else {
+        this.pluginOverlay.installOpenCodePlugin(opencodeAgent, context.env)
       }
     }
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)

@@ -50,6 +50,15 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
   if (readyIndex === null) {
     return false
   }
+  const antigravityReadyIndex = findAntigravityReadyPromptIndex(normalized)
+  const modelPickerIndex = findActiveAntigravityModelPickerIndex(normalized)
+  if (
+    antigravityReadyIndex !== null &&
+    modelPickerIndex !== null &&
+    modelPickerIndex > antigravityReadyIndex
+  ) {
+    return false
+  }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
   if (blockedSignal !== null && blockedSignal.index > readyIndex) {
     return false
@@ -133,10 +142,10 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
     return null
   }
   let lineStart = headerIndex
-  let modelIndex: number | null = null
   let promptIndex: number | null = null
+  let previousNonEmpty: { start: number; end: number } | null = null
 
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
+  // Why: a column-0 caret is ready; an indented `>` under `> draft` is a wrap, not an empty box.
   for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
     if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
       continue
@@ -150,21 +159,34 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       trimmedEnd -= 1
     }
     if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
       if (
-        promptIndex === null &&
         trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
+        normalized.charCodeAt(trimmedStart) === 62 &&
+        trimmedStart === lineStart &&
+        !(
+          previousNonEmpty !== null &&
+          normalized.charCodeAt(previousNonEmpty.start) === 62 &&
+          previousNonEmpty.end - previousNonEmpty.start > 1
+        )
       ) {
         promptIndex = trimmedStart
       }
+      previousNonEmpty = { start: trimmedStart, end: trimmedEnd }
     }
     lineStart = cursor + 1
   }
 
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
+  return promptIndex
+}
+
+// Why: the model picker keeps the ready composer's bare caret in scrollback while its selected row
+// is labeled, so that stale caret must not satisfy tui-idle until the picker emits its exit marker.
+function findActiveAntigravityModelPickerIndex(normalized: string): number | null {
+  const pickerIndex = normalized.lastIndexOf('switch model')
+  if (pickerIndex === -1 || normalized.lastIndexOf('antigravity cli') > pickerIndex) {
+    return null
+  }
+  return normalized.lastIndexOf('exited /model command') > pickerIndex ? null : pickerIndex
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =

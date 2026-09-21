@@ -167,4 +167,13 @@ describe('AccountsPane', () => {
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
   })
+
+  it('tells users to paste the OpenCode console session cookie, not auth alone', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('__Host-console_session')
+    expect(markup).toContain('auth=…; __Host-console_session=…')
+    expect(markup).toContain('auth cookie still covers workspace discovery')
+    expect(markup).not.toContain('Fe26.2**… token or auth=Fe26.2**… header')
+  })
 })

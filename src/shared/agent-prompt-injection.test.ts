@@ -9,6 +9,7 @@ import {
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
   iterateAgentPromptPasteChunks,
+  resolveAgentPromptSubmitDelayForAgent,
   sanitizeAgentPromptText
 } from './agent-prompt-injection'
 
@@ -88,6 +89,17 @@ describe('agent prompt injection bytes', () => {
     expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(
       getTerminalPasteIngestMs('darwin', 320_000)
     )
+  })
+
+  it('adds per-line settle time for antigravity multiline prompts', () => {
+    const short = resolveAgentPromptSubmitDelayForAgent('darwin', 'one line', 'antigravity')
+    const long = resolveAgentPromptSubmitDelayForAgent(
+      'darwin',
+      `${'Filler line\n'.repeat(100)}AGY_LONG_OK`,
+      'antigravity'
+    )
+    expect(long - short).toBeGreaterThanOrEqual(100 * 45)
+    expect(resolveAgentPromptSubmitDelayForAgent('darwin', 'one line', 'aider')).toBe(short - 45)
   })
 
   it('inverts the host ingest budget without crossing it', () => {

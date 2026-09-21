@@ -54,6 +54,26 @@ describe('PluginOverlayManager', () => {
     expect(existsSync(join(dir!, 'plugins', 'orca-opencode-status.js'))).toBe(false)
   })
 
+  it('installs OpenCode plugins in the canonical XDG config roots', () => {
+    manager.setSources({
+      opencodePluginSource: 'v1 plugin',
+      opencode2PluginSource: 'v2 plugin'
+    })
+
+    expect(
+      manager.installOpenCodePlugin('opencode', { XDG_CONFIG_HOME: join(homeDir, 'xdg') })
+    ).toBe(true)
+    expect(
+      manager.installOpenCodePlugin('opencode2', { XDG_CONFIG_HOME: join(homeDir, 'xdg') })
+    ).toBe(true)
+    expect(
+      readFileSync(join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode-status.js'), 'utf8')
+    ).toBe('v1 plugin')
+    expect(
+      readFileSync(join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode2-status.js'), 'utf8')
+    ).toBe('v2 plugin')
+  })
+
   it('mirrors a preexisting remote OpenCode config dir before adding Orca plugin', () => {
     const userConfigDir = join(homeDir, 'company-opencode')
     mkdirSync(join(userConfigDir, 'plugins'), { recursive: true })

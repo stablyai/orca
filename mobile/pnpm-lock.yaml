@@ -12,6 +12,9 @@ patchedDependencies:
   expo-notifications@55.0.27:
     hash: ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0
     path: patches/expo-notifications@55.0.27.patch
+  query-string@9.5.1:
+    hash: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
+    path: patches/query-string@9.5.1.patch
   react-native-webview@13.16.2:
     hash: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
     path: patches/react-native-webview@13.16.2.patch
@@ -9966,7 +9969,7 @@ snapshots:
       escape-string-regexp: 4.0.0
       fast-deep-equal: 3.1.3
       nanoid: 3.3.18
-      query-string: 9.5.1
+      query-string: 9.5.1(patch_hash=8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b)
       react: 19.2.8
       react-is: 19.2.6
       use-latest-callback: 0.2.6(react@19.2.8)
@@ -12230,7 +12233,7 @@ snapshots:
       fast-deep-equal: 3.1.3
       invariant: 2.2.4
       nanoid: 3.3.18
-      query-string: 9.5.1
+      query-string: 9.5.1(patch_hash=8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b)
       react: 19.2.8
       react-fast-compare: 3.2.2
       react-native: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8)
@@ -14283,7 +14286,7 @@ snapshots:
 
   pure-rand@6.1.0: {}
 
-  query-string@9.5.1:
+  query-string@9.5.1(patch_hash=8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b):
     dependencies:
       decode-uri-component: 0.5.0
       filter-obj: 5.1.0

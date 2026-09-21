@@ -626,7 +626,7 @@ jobs:
                     | select(.change.actions | any(. != "no-op" and . != "read"))
                     | .address] | join(","))'
             echo 'requiring reviewed rollback-image drift'
-            terraform -chdir=infra/terraform show -json \
+            RESUME_REVIEW="$(terraform -chdir=infra/terraform show -json \
               "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
               | node dev/scripts/validate-relay-capacity-plan.mjs \
                 --mode same-cap-cell --cell-id "${TARGET_CELL_ID}" \
@@ -638,9 +638,23 @@ jobs:
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
-                "${POOL_ARGUMENTS[@]}" \
-              | jq -e '.changes == 2
-                  or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' >/dev/null
+                "${POOL_ARGUMENTS[@]}")"
+            echo "${RESUME_REVIEW}"
+            jq -e '.changes == 2
+                or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' \
+              <<< "${RESUME_REVIEW}" >/dev/null
+            # changes == 0 here means the template and MIG are converged and this cell's
+            # reviewed backend update is the only thing left, so the resume is not complete:
+            # apply it, or the cell silently keeps the 300-second drain and no request
+            # logging and the operator reads that as a finished roll. The plan holds nothing
+            # else (the validator bounded it to this cell's backend, and the template and MIG
+            # are no-ops in it), and neither attribute restarts an instance, so the
+            # incarnation check downstream stays honest. Template-and-MIG drift still applies
+            # nothing, which is what a resume means.
+            if test "$(jq -er '.changes' <<< "${RESUME_REVIEW}")" = 0; then
+              terraform -chdir=infra/terraform apply -auto-approve \
+                "${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
+            fi
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
@@ -829,6 +843,15 @@ jobs:
         id: shadow-gate
         if: ${{ inputs.mode != 'verify' }}
         continue-on-error: true
+        # continue-on-error bounds this step's contribution to the job outcome, not its clock,
+        # and its reads are serialised. A timed-out step is a failed step, which continue-on-error
+        # absorbs; without this bound a Logging 429 storm or an expired credential makes every
+        # read cost its full retry budget and can push the job past timeout-minutes, and a
+        # cancelled job takes the whole wave with it. A healthy gate is already minutes of
+        # serial reads, so both bounds sit above that: the script settles at seven minutes and
+        # reaching this eight is the pathological case. Eight on top of a ~14-minute cell still
+        # leaves the job's 75 minutes intact.
+        timeout-minutes: 8
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
           APPLY_STARTED_AT: ${{ steps.apply.outputs.apply-started-at }}
@@ -853,6 +876,8 @@ jobs:
       - name: Publish the shadow health gate verdict
         if: ${{ inputs.mode != 'verify' }}
         continue-on-error: true
+        # One small JSON file; a retrying upload must not spend the wave's remaining minutes either.
+        timeout-minutes: 2
         uses: actions/upload-artifact@v4
         with:
           name: relay-same-cap-shadow-gate-${{ inputs.target-cell-id }}-${{ github.run_id }}.json

@@ -44,6 +44,8 @@ export type TuiAgentConfig = {
   draftPasteReadyTimeoutMs?: number
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
+  /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
+  submitLineSettleMsPerLine?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
   /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
@@ -175,7 +177,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   antigravity: {
     detectCmd: 'agy',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
+    // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
+    // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
+    submitLineSettleMsPerLine: 45
   },
   aider: {
     detectCmd: 'aider',

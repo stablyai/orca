@@ -65,7 +65,7 @@ describe('TerminalWebView scroll routing', () => {
     expect(touchMoveBlock).toContain('routeScrollLines(lines, x, y);')
 
     const momentumBlock = sliceBetween(
-      'let momentumStep = function()',
+      'let momentumStep = function(frameTime)',
       'if (Math.abs(vel) > MIN_VEL)'
     )
     expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
@@ -95,7 +95,7 @@ describe('TerminalWebView scroll routing', () => {
     expect(touchMoveBlock).toContain('scope.touchGesture.velY = 0;')
 
     const momentumBlock = sliceBetween(
-      'let momentumStep = function()',
+      'let momentumStep = function(frameTime)',
       'if (Math.abs(vel) > MIN_VEL)'
     )
     expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
@@ -186,6 +186,12 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('scope.touchGesture.velY * 0.55 + instantVelocity * 0.45')
     expect(source).toContain('const FRICTION = 0.972;')
     expect(source).toContain('const MIN_VEL = 0.012;')
+    expect(source).toContain('let lastMomentumTime = performance.now();')
+    expect(source).toContain(
+      'const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime));'
+    )
+    expect(source).toContain('vel *= FRICTION ** (elapsed / 16);')
+    expect(source).toContain('const delta = vel * elapsed;')
   })
 
   it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {

@@ -3261,13 +3261,15 @@ window.onerror = function(msg) {
           return;
         }
         if (e.touches.length === 0) {
-          let momentumStep = function() {
-            vel *= FRICTION;
+          let momentumStep = function(frameTime) {
+            const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime));
+            lastMomentumTime = frameTime;
+            vel *= FRICTION ** (elapsed / 16);
             if (Math.abs(vel) < MIN_VEL) {
               scope.touchGesture.momentumId = null;
               return;
             }
-            const delta = vel * 16;
+            const delta = vel * elapsed;
             if (shouldRouteScrollToTerminalInput()) {
               resetSmoothScrollOffset();
               const effectiveCellH = getCellHeight() * getTotalScale();
@@ -3288,6 +3290,7 @@ window.onerror = function(msg) {
           let vel = scope.touchGesture.velY;
           const FRICTION = 0.972;
           const MIN_VEL = 0.012;
+          let lastMomentumTime = performance.now();
           if (Math.abs(vel) > MIN_VEL) {
             scope.touchGesture.momentumId = scheduleDocumentFrame(momentumStep);
           }

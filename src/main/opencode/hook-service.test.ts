@@ -26,6 +26,7 @@ import {
   getOpenCodePluginSource,
   getOpenCode2PluginSource
 } from './hook-service'
+import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 beforeEach(() => {
   setAppEnvironment({
@@ -247,9 +248,11 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
   const plainUuidId = 'c0ffee00-0000-4000-8000-000000000000'
   let userDataDir: string
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 
   beforeAll(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-opencode-hooks-'))
+    process.env.XDG_CONFIG_HOME = userDataDir
     getPathMock.mockImplementation((name: string) => {
       if (name === 'userData') {
         return userDataDir
@@ -259,6 +262,11 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
   })
 
   afterAll(() => {
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome
+    }
     rmSync(userDataDir, { recursive: true, force: true })
   })
 
@@ -267,14 +275,12 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     rmSync(join(userDataDir, 'opencode-config-overlays'), { recursive: true, force: true })
   })
 
-  it('writes a shared OPENCODE_CONFIG_DIR and installs the plugin file', () => {
+  it('installs the plugin without overriding OpenCode config discovery', () => {
     const service = new OpenCodeHookService()
     const env = service.buildPtyEnv(daemonSessionId)
 
-    expect(env.OPENCODE_CONFIG_DIR).toBeTruthy()
-    expect(env.OPENCODE_CONFIG_DIR).toBe(join(userDataDir, 'opencode-hooks', 'shared'))
-
-    const pluginPath = join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js')
+    expect(env).toEqual({})
+    const pluginPath = join(resolveOpenCodeConfigDirectory(), 'plugins', 'orca-opencode-status.js')
     expect(existsSync(pluginPath)).toBe(true)
     // Sanity-check the file has plugin source, not a stray write.
     const pluginSource = readFileSync(pluginPath, 'utf8')
@@ -284,8 +290,8 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
 
   it('clearPty leaves the shared OpenCode config dir off the teardown hot path', () => {
     const service = new OpenCodeHookService()
-    const env = service.buildPtyEnv(daemonSessionId)
-    const configDir = env.OPENCODE_CONFIG_DIR!
+    service.buildPtyEnv(daemonSessionId)
+    const configDir = resolveOpenCodeConfigDirectory()
     expect(existsSync(configDir)).toBe(true)
     mkdirSync(join(configDir, 'node_modules', 'opencode-runtime'), { recursive: true })
     writeFileSync(join(configDir, 'node_modules', 'opencode-runtime', 'index.js'), '')
@@ -318,15 +324,13 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
 
   it('works end-to-end for a plain UUID id (non-daemon path)', () => {
     const service = new OpenCodeHookService()
-    const env = service.buildPtyEnv(plainUuidId)
+    service.buildPtyEnv(plainUuidId)
 
-    expect(env.OPENCODE_CONFIG_DIR).toBe(join(userDataDir, 'opencode-hooks', 'shared'))
-    expect(existsSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'))).toBe(
-      true
-    )
+    const configDir = resolveOpenCodeConfigDirectory()
+    expect(existsSync(join(configDir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
 
     service.clearPty(plainUuidId)
-    expect(existsSync(env.OPENCODE_CONFIG_DIR!)).toBe(true)
+    expect(existsSync(configDir)).toBe(true)
   })
 })
 
