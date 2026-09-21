@@ -484,7 +484,7 @@ test('the job runs the gate report-only, after verification, and uploads its art
   const gateHeader = gate.slice(0, gate.indexOf('run:'))
   assert.match(gateHeader, /timeout-minutes: (\d+)/)
   const stepTimeoutMinutes = Number(/timeout-minutes: (\d+)/.exec(gateHeader)[1])
-  assert.equal(stepTimeoutMinutes, 5)
+  assert.equal(stepTimeoutMinutes, 8)
   // The script has to settle on its own before the runner kills it, or the artifact is never
   // written and the step reports nothing at all.
   assert.ok(

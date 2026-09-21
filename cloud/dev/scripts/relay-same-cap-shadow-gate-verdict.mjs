@@ -41,8 +41,10 @@ export const SHADOW_GATE_THRESHOLDS = {
   // Reads are serialised, so a failure mode that makes every read cost its full retry budget
   // (an expired credential, a Logging 429 storm) scales with the window, not with one read.
   // Past this the gate stops reading and reports the rest unverified, which is a verdict; the
-  // step's own timeout-minutes is a minute above it and exists only for a hung process.
-  overallDeadlineMs: 240_000
+  // step's own timeout-minutes sits above it and exists only for a hung process. Set well clear
+  // of a healthy gate's own serial read time, or ordinary days report unverified tails and the
+  // shadow roll stops measuring the thing it exists to measure. Raise both bounds together.
+  overallDeadlineMs: 420_000
 }
 
 const MINUTE_MS = 60_000

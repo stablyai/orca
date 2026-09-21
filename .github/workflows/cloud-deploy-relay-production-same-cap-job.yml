@@ -847,9 +847,11 @@ jobs:
         # and its reads are serialised. A timed-out step is a failed step, which continue-on-error
         # absorbs; without this bound a Logging 429 storm or an expired credential makes every
         # read cost its full retry budget and can push the job past timeout-minutes, and a
-        # cancelled job takes the whole wave with it. The script settles at four minutes, so
-        # reaching this five is already the pathological case.
-        timeout-minutes: 5
+        # cancelled job takes the whole wave with it. A healthy gate is already minutes of
+        # serial reads, so both bounds sit above that: the script settles at seven minutes and
+        # reaching this eight is the pathological case. Eight on top of a ~14-minute cell still
+        # leaves the job's 75 minutes intact.
+        timeout-minutes: 8
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
           APPLY_STARTED_AT: ${{ steps.apply.outputs.apply-started-at }}
