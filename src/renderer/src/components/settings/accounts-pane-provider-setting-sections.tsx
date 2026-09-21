@@ -145,7 +145,12 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
             'auto.components.settings.AccountsPane.62ab430f94',
             "Paste the full Cookie header from your browser's DevTools → Network → any opencode.ai request, including __Host-console_session (e.g."
           )}{' '}
-          <code className="text-xs">auth=…; __Host-console_session=…</code>
+          <code className="text-xs">
+            {translate(
+              'auto.components.settings.AccountsPane.37b4b4a3f7',
+              'auth=…; __Host-console_session=…'
+            )}
+          </code>
           {translate(
             'auto.components.settings.AccountsPane.d5267cce63',
             '). The auth cookie still covers workspace discovery; auth alone is not enough for usage. OpenCode Go auth is web-based and shared across Windows and WSL terminals.'
