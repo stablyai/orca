@@ -28,6 +28,7 @@ const STATUS = {
   accountLabel: 'Boards',
   notice: null,
   supports: {
+    create: true,
     comment: false,
     transition: false,
     assign: false,
@@ -201,6 +202,25 @@ describe('TaskPage contributed source content', () => {
       })
       expect(invoke).toHaveBeenCalledWith({ ...BOARDS, method: 'listScopes' })
     })
+  })
+
+  it('offers the create control only to a source that declares supports.create', async () => {
+    stubSource({ items: [ITEM] })
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByRole('button', { name: 'New task' })).toBeInTheDocument()
+  })
+
+  it('renders no create control for a source that cannot create', async () => {
+    stubSource({ items: [ITEM] }, { ...STATUS, supports: { ...STATUS.supports, create: false } })
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByText('Ship the source bar')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New task' })).not.toBeInTheDocument()
   })
 
   it('surfaces a load failure instead of an empty board', async () => {

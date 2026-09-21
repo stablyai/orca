@@ -13,6 +13,7 @@ import type {
   PluginTaskSourceLoadError,
   PluginTaskSourceQuery
 } from '@/store/slices/plugin-task-sources-slice-contract'
+import type { PluginTaskSourceCreateControl } from './CreateItemDialog'
 import { TaskPagePluginSourceList } from './List'
 import type { PluginTaskSourceScopeFilter } from './ScopePicker'
 
@@ -53,6 +54,7 @@ function renderList(
     onUseItem?: (item: PluginTaskItem) => void
     refreshing?: boolean
     onRefresh?: () => void
+    create?: PluginTaskSourceCreateControl | null
   } = {}
 ): ReturnType<typeof render> {
   return render(
@@ -69,6 +71,7 @@ function renderList(
         onUseItem={props.onUseItem ?? vi.fn()}
         refreshing={props.refreshing ?? false}
         onRefresh={props.onRefresh ?? vi.fn()}
+        create={props.create ?? null}
       />
     </TooltipProvider>
   )

@@ -12,6 +12,10 @@ import type {
   PluginTaskSourceLoadError,
   PluginTaskSourceQuery
 } from '@/store/slices/plugin-task-sources-slice-contract'
+import {
+  TaskPagePluginSourceCreateButton,
+  type PluginTaskSourceCreateControl
+} from './CreateItemDialog'
 import { PLUGIN_TASK_ROW_GRID_CLASS, TaskPagePluginSourceItemRow } from './ItemRow'
 import { TaskPagePluginSourceQueryBar } from './QueryBar'
 import type { PluginTaskSourceScopeFilter } from './ScopePicker'
@@ -151,7 +155,8 @@ export function TaskPagePluginSourceList({
   scopeFilter,
   onUseItem,
   refreshing,
-  onRefresh
+  onRefresh,
+  create
 }: {
   title: string
   items: PluginTaskItem[]
@@ -164,6 +169,9 @@ export function TaskPagePluginSourceList({
   onUseItem: (item: PluginTaskItem) => void
   refreshing: boolean
   onRefresh: () => void
+  /** Null when the source did not declare `supports.create`, so an unsupported
+   *  verb cannot become a dead button. */
+  create: PluginTaskSourceCreateControl | null
 }): React.JSX.Element {
   const refreshLabel = translate('auto.components.TaskPage.pluginTaskSourceRefresh', 'Refresh')
   return (
@@ -176,6 +184,13 @@ export function TaskPagePluginSourceList({
           <span className="text-[11px] text-muted-foreground">
             {items.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
           </span>
+          {create ? (
+            <TaskPagePluginSourceCreateButton
+              scopes={scopeFilter.scopes}
+              selectedScopeIds={scopeFilter.selectedScopeIds}
+              {...create}
+            />
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

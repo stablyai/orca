@@ -1,9 +1,12 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  PluginTaskCreate,
   PluginTaskItem,
+  PluginTaskItemType,
   PluginTaskScope,
-  PluginTaskSourceErrorCode
+  PluginTaskSourceErrorCode,
+  PluginTaskSourceResult
 } from '../../../../shared/plugins/plugin-task-source-contract'
 
 /** A plugin's contribution to the Tasks source bar. */
@@ -49,6 +52,9 @@ export type PluginTaskSourcesSlice = {
   pluginTaskSourceLoading: boolean
   pluginTaskSourceError: PluginTaskSourceLoadError | null
   pluginTaskSourceFilters: PluginTaskSourceFilter[]
+  /** Straight from `status().supports.create`. False until the probe answers,
+   *  so a source is never offered a create control it did not declare. */
+  pluginTaskSourceSupportsCreate: boolean
   pluginTaskSourceQuery: PluginTaskSourceQuery
   /** Projects/boards the source can be narrowed to, as `listScopes` named
    *  them. Core never re-derives or reformats `name`. */
@@ -68,12 +74,22 @@ export type PluginTaskSourcesSlice = {
   selectPluginTaskSource: (selection: SelectedPluginTaskSource | null) => void
   setPluginTaskSourceQuery: (query: PluginTaskSourceQuery) => void
   setPluginTaskSourceScopeIds: (scopeIds: string[]) => void
-  loadPluginTaskSourceFilters: () => Promise<void>
+  /** One status probe feeds both the chip row and the create control. */
+  loadPluginTaskSourceStatus: () => Promise<void>
   loadPluginTaskSourceScopes: () => Promise<void>
   loadPluginTaskSourceItems: () => Promise<void>
   /** Re-runs `listItems` and `listScopes` with the selection already in the
    *  store, so a chip, a search, or a picked project survives the refresh. */
   refreshPluginTaskSource: () => Promise<void>
+  /** Scope-bound, never cached: the creatable types differ per project. */
+  listPluginTaskSourceItemTypes: (
+    scopeId: string
+  ) => Promise<PluginTaskSourceResult<PluginTaskItemType[]>>
+  /** Returns the envelope rather than setting state: the caller decides
+   *  whether a failure belongs in its own form or in the page banner. */
+  createPluginTaskSourceItem: (
+    input: PluginTaskCreate
+  ) => Promise<PluginTaskSourceResult<PluginTaskItem>>
 }
 
 type PluginTaskSourcesStateCreator = StateCreator<AppState, [], [], PluginTaskSourcesSlice>

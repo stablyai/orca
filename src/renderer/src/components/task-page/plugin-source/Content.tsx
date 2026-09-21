@@ -18,15 +18,18 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   const scopesError = useAppStore((state) => state.pluginTaskSourceScopesError)
   const selectedScopeIds = useAppStore((state) => state.selectedPluginTaskSourceScopeIds)
   const setScopeIds = useAppStore((state) => state.setPluginTaskSourceScopeIds)
-  const loadFilters = useAppStore((state) => state.loadPluginTaskSourceFilters)
+  const loadStatus = useAppStore((state) => state.loadPluginTaskSourceStatus)
   const loadScopes = useAppStore((state) => state.loadPluginTaskSourceScopes)
   const loadItems = useAppStore((state) => state.loadPluginTaskSourceItems)
   const refreshing = useAppStore((state) => state.pluginTaskSourceRefreshing)
   const refresh = useAppStore((state) => state.refreshPluginTaskSource)
+  const supportsCreate = useAppStore((state) => state.pluginTaskSourceSupportsCreate)
+  const listItemTypes = useAppStore((state) => state.listPluginTaskSourceItemTypes)
+  const createItem = useAppStore((state) => state.createPluginTaskSourceItem)
 
   useEffect(() => {
-    void loadFilters()
-  }, [loadFilters, selected])
+    void loadStatus()
+  }, [loadStatus, selected])
 
   useEffect(() => {
     void loadScopes()
@@ -50,6 +53,11 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
     [scopes, scopesLoading, scopesError, selectedScopeIds, setScopeIds]
   )
 
+  const create = useMemo(
+    () => (supportsCreate ? { listItemTypes, createItem, onCreated: () => void refresh() } : null),
+    [supportsCreate, listItemTypes, createItem, refresh]
+  )
+
   const contributed = sources.find(
     (source) => source.pluginKey === selected?.pluginKey && source.sourceId === selected?.sourceId
   )
@@ -67,6 +75,7 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
       onUseItem={onUseItem}
       refreshing={refreshing}
       onRefresh={() => void refresh()}
+      create={create}
     />
   )
 }

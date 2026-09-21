@@ -248,6 +248,7 @@ describe('createPluginTaskSourcesSlice', () => {
         accountLabel: 'Boards',
         notice: null,
         supports: {
+          create: true,
           comment: false,
           transition: false,
           assign: false,
@@ -260,9 +261,10 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    await store.getState().loadPluginTaskSourceFilters()
+    await store.getState().loadPluginTaskSourceStatus()
 
     expect(store.getState().pluginTaskSourceFilters).toEqual([{ id: 'open', label: 'All open' }])
+    expect(store.getState().pluginTaskSourceSupportsCreate).toBe(true)
   })
 
   it('leaves the chip row empty when the status probe fails', async () => {
@@ -273,9 +275,67 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    await store.getState().loadPluginTaskSourceFilters()
+    await store.getState().loadPluginTaskSourceStatus()
 
     expect(store.getState().pluginTaskSourceFilters).toEqual([])
+    expect(store.getState().pluginTaskSourceSupportsCreate).toBe(false)
+    expect(store.getState().pluginTaskSourceError).toBeNull()
+  })
+
+  it('asks for item types in the named scope rather than the source default', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: [{ id: 'Bug', name: 'Bug' }] })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    const result = await store.getState().listPluginTaskSourceItemTypes('NssfDevOps/dashboards')
+
+    expect(result).toEqual({ ok: true, data: [{ id: 'Bug', name: 'Bug' }] })
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'listItemTypes',
+      params: { scopeId: 'NssfDevOps/dashboards' }
+    })
+  })
+
+  it('returns the created item envelope without touching the loaded list', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockResolvedValue({ ok: true, data: taskItem('new') })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.setState({ pluginTaskSourceItems: [taskItem('existing')] })
+    const input = {
+      scopeId: 'NssfDevOps/dashboards',
+      typeId: 'Bug',
+      title: 'Ship the create dialog'
+    }
+    const result = await store.getState().createPluginTaskSourceItem(input)
+
+    expect(result.ok).toBe(true)
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'createItem',
+      params: input
+    })
+    expect(store.getState().pluginTaskSourceItems.map((item) => item.id)).toEqual(['existing'])
+  })
+
+  it('reports a create failure as an envelope rather than the page error banner', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: false, code: 'forbidden', message: 'No permission.' })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    const result = await store
+      .getState()
+      .createPluginTaskSourceItem({ scopeId: 's', typeId: 'Bug', title: 'x' })
+
+    expect(result).toEqual({ ok: false, code: 'forbidden', message: 'No permission.' })
     expect(store.getState().pluginTaskSourceError).toBeNull()
   })
 
