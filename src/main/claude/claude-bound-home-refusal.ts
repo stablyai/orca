@@ -1,10 +1,9 @@
 import { statSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { ResolvedClaudeHomeBinding } from '../../shared/claude-home-binding'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { claudeConfigDirKeychainAliases } from '../claude-accounts/keychain'
 import { readClaudeConfigDirScopedOAuthCredentials } from '../rate-limits/claude-oauth-credentials'
+import { sameClaudeConfigDir } from './claude-config-dir-identity'
 
 /** Why a bound group home cannot be launched against. Never a silent fallback to the shared home:
  *  the user asked for one identity, and quietly substituting another is the failure this prevents. */
@@ -58,30 +57,6 @@ export class ClaudeBoundHomeRefusalError extends Error {
 export type ClaudeBoundHomeProbe = {
   platform?: NodeJS.Platform
   readScopedKeychainCredentials?: (configDir: string) => Promise<string | null>
-}
-
-/** Case-folded wherever the filesystem is: a spelling difference on macOS or Windows names one
- *  directory, and refusing it blocks work the binding was meant to allow. */
-function comparablePath(value: string, platform: NodeJS.Platform): string {
-  const resolved = resolve(value.trim())
-  return platform === 'win32' || platform === 'darwin' ? resolved.toLowerCase() : resolved
-}
-
-/**
- * Alias-aware config-dir identity, through the same realpath expansion the Keychain lookup uses:
- * macOS `/tmp` is `/private/tmp`, so two spellings of one directory must not read as two homes.
- */
-export function sameClaudeConfigDir(
-  left: string,
-  right: string,
-  platform: NodeJS.Platform = process.platform
-): boolean {
-  const leftAliases = new Set(
-    claudeConfigDirKeychainAliases(left.trim()).map((alias) => comparablePath(alias, platform))
-  )
-  return claudeConfigDirKeychainAliases(right.trim()).some((alias) =>
-    leftAliases.has(comparablePath(alias, platform))
-  )
 }
 
 function isAbsoluteBinding(configDir: string): boolean {

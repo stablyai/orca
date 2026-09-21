@@ -1,15 +1,10 @@
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { sameClaudeConfigDir } from './claude-config-dir-identity'
 
 /** The config dir the Claude CLI resolves for itself when nothing pins one. */
 export function defaultClaudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
-}
-
-function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
-  const left = resolve(a)
-  const right = resolve(b)
-  return platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 /**
@@ -22,8 +17,9 @@ function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
  *
  * The pinned value is the account home verbatim: the CLI keys its credential lookup on
  * the literal string, so re-spelling an equivalent path (absolute vs `~`, trailing
- * separator) selects a different identity. Normalization here is for the equality test
- * only and must never reach the env.
+ * separator) selects a different identity. `sameClaudeConfigDir` — the unit's single
+ * path-identity answer, case-folding and alias-expanding per filesystem — decides the
+ * equality test only; its normalization must never reach the env.
  */
 export function claudeConfigDirEnvPatch(
   accountHome: string,
@@ -32,7 +28,7 @@ export function claudeConfigDirEnvPatch(
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
   const resolved = accountHome.trim()
-  if (!resolved || samePath(resolved, defaultClaudeConfigDir(env), platform)) {
+  if (!resolved || sameClaudeConfigDir(resolved, defaultClaudeConfigDir(env), platform)) {
     return {}
   }
   return { CLAUDE_CONFIG_DIR: resolved }

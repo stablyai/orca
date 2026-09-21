@@ -29,9 +29,9 @@ import type { AgentSessionRecordStore } from '../runtime/agent-session-record-st
 import {
   ClaudeBoundHomeRefusalError,
   assertClaudeBoundHomeUsable,
-  sameClaudeConfigDir,
   type AssertClaudeBoundHomeUsable
 } from './claude-bound-home-refusal'
+import { sameClaudeConfigDir } from './claude-config-dir-identity'
 import { isCustomClaudeConfigDir } from './claude-config-dir-pin'
 import { claudeChildLaunchEnv, isEffectiveBoundClaudeHome } from './claude-structured-account-home'
 import type { ResolvedClaudeHomeBinding } from '../../shared/claude-home-binding'
