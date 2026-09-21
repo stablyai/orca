@@ -15,6 +15,7 @@ import {
   PAYLOAD_STORE_DIR_NAME,
   setDefaultJournalPayloadRetention
 } from './journal-payload-store'
+import { collectJournalRowPayloadDigests } from '../../../shared/journal-payload-reference'
 import {
   journalReferencesDigest,
   PayloadReadError,
@@ -222,5 +223,50 @@ describe('owner-checked payload read through a real journal', () => {
     expect(() => readSessionPayload({ journalRoot: root, owner: recordFor(OWNER),
       digest: bounded.digest, maxLimit: 256 * 1024 }))
       .toThrow(PayloadReadError)
+  })
+})
+
+describe('reference collection across row shapes', () => {
+  const DIGEST = 'c'.repeat(64)
+  const reference = { head: 'head', byteLength: 40_000, truncated: true, digest: DIGEST }
+
+  it('admits a completed tool-call body carried in a lifecycle batch', () => {
+    // A settlement path may carry a finished tool call under `mutations[].body`
+    // instead of the row's own `body`; its output is the session's own payload.
+    expect(
+      collectJournalRowPayloadDigests({
+        kind: 'lifecycle-batch',
+        settlementId: 's1',
+        mutations: [
+          { kind: 'tombstone', itemId: 'i0', revision: 1 },
+          {
+            kind: 'item',
+            itemId: 'i1',
+            revision: 1,
+            body: { kind: 'tool-call', name: 'Bash', input: {}, state: 'completed', output: reference }
+          }
+        ]
+      })
+    ).toEqual(new Set([DIGEST]))
+  })
+
+  it('still refuses a digest a batch only echoes back through tool input', () => {
+    expect(
+      collectJournalRowPayloadDigests({
+        kind: 'lifecycle-batch',
+        settlementId: 's1',
+        mutations: [
+          {
+            kind: 'item',
+            itemId: 'i1',
+            revision: 1,
+            body: { kind: 'tool-call', name: 'Bash', input: reference, state: 'completed' }
+          }
+        ]
+      }).size
+    ).toBe(0)
+    // A `mutations` field that is not an array of bodies references nothing.
+    expect(collectJournalRowPayloadDigests({ mutations: 'not-an-array' }).size).toBe(0)
+    expect(collectJournalRowPayloadDigests({ mutations: [null, 7, { body: reference }] }).size).toBe(0)
   })
 })

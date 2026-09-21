@@ -21,6 +21,12 @@ export const DEFAULT_JOURNAL_PAYLOAD_LIMITS: JournalPayloadLimits = {
   inlineHeadBytes: 16 * 1024
 }
 
+/** Pass as `retention` when only the clipped string is kept and the bounded
+ *  object is thrown away. Nothing then mints a reference to the original, so
+ *  retaining it would leave bytes on disk that no reader is ever allowed to
+ *  serve — see journal-payload-reference for which positions grant ownership. */
+export const NO_PAYLOAD_RETENTION = null
+
 /** Marker appended to a clipped inline string so the UI never presents a
  *  truncated body as complete. Kept in the text itself because block-level
  *  payloads (tool-result output) have nowhere else to carry the flag. */
@@ -28,6 +34,7 @@ export function journalTruncationMarker(byteLength: number, digest: string): str
   return `\n[Orca: output truncated — ${byteLength} bytes total, digest ${digest.slice(0, 12)}]`
 }
 
+/** The sha256 that addresses a payload in the store and identifies it on a row. */
 export function digestPayload(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }
@@ -82,7 +89,14 @@ export function boundInlineText(
   }
 }
 
-/** Keep arbitrary tool input JSON bounded before it reaches a row. */
+/**
+ * Keep arbitrary tool input JSON bounded before it reaches a row.
+ *
+ * Deliberately never retained: `input` is model-authored, so
+ * journal-payload-reference refuses to read ownership out of it, and a row that
+ * claimed `retrievable: true` here would advertise a read every host will
+ * refuse while leaving unreachable bytes in the store. Clipping stays lossy.
+ */
 export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
   let encoded: string
   try {
@@ -95,14 +109,14 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
       head: '[unserializable input]'
     }
   }
-  const bounded = boundPayload(encoded, limits)
+  const bounded = boundPayload(encoded, limits, NO_PAYLOAD_RETENTION)
   return bounded.truncated
     ? {
         truncated: true,
         byteLength: bounded.byteLength,
         digest: bounded.digest,
         head: bounded.head,
-        retrievable: bounded.retrievable === true
+        retrievable: false
       }
     : input
 }

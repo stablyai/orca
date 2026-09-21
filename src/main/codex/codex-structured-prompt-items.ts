@@ -6,6 +6,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import {
   boundInlineText,
+  NO_PAYLOAD_RETENTION,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import {
@@ -51,12 +52,15 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+/** Prompt text clipped for the row; the original is not retained, because no
+ *  row will reference it and no reader could serve it back. */
 function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS, NO_PAYLOAD_RETENTION).text
 }
 
+/** An option label, clipped to the tighter per-option bound. Not retained. */
 function boundPromptOptionLabel(value: string): string {
-  return boundInlineText(value, PROMPT_OPTION_LIMITS).text
+  return boundInlineText(value, PROMPT_OPTION_LIMITS, NO_PAYLOAD_RETENTION).text
 }
 
 /**

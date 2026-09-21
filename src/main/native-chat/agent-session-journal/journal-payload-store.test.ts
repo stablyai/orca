@@ -10,6 +10,7 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   journalTruncationMarker
 } from './journal-payload-bounds'
+import { boundJournalStatusText } from './journal-prompt-body-bounds'
 import {
   JournalPayloadIntegrityError,
   JournalPayloadStore,
@@ -73,14 +74,37 @@ describe('journal payload retention', () => {
     expect(inline.text.endsWith(journalTruncationMarker(inline.bounded.byteLength, inline.bounded.digest))).toBe(true)
     expect(inline.bounded.retrievable).toBe(true)
     expect(retrieveJournalPayload(inline.bounded.digest)).toBe(payload)
+  })
+
+  it('clips tool input without retaining it, and never claims it is retrievable', async () => {
+    setDefaultJournalPayloadRetention(new JournalPayloadStore({ directory }))
+    const payload = counterexample()
     const tool = boundToolInput({ big: payload }, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
     if (typeof tool !== 'object' || tool === null) {
       throw new Error('expected a bounded record')
     }
     const bounded: Record<string, unknown> = Object.fromEntries(Object.entries(tool))
+    // Still clipped and still lossy — the head is all the row carries.
     expect(bounded.truncated).toBe(true)
-    expect(bounded.retrievable).toBe(true)
-    expect(retrieveJournalPayload(String(bounded.digest))).toBe(JSON.stringify({ big: payload }))
+    expect(Buffer.byteLength(String(bounded.head), 'utf8')).toBeLessThanOrEqual(16 * 1024)
+    // `input` is model-authored, so journal-payload-reference never admits a
+    // digest found there. Advertising a read the host will always refuse — and
+    // paying for the bytes on disk — is the contract this asserts away.
+    expect(bounded.retrievable).toBe(false)
+    expect(retrieveJournalPayload(String(bounded.digest))).toBeNull()
+    expect(await readdir(directory)).toEqual([])
+  })
+
+  it('leaves no store entry for a status row taken over the inline bound', async () => {
+    setDefaultJournalPayloadRetention(new JournalPayloadStore({ directory }))
+    const payload = counterexample()
+    // The row keeps only the clipped string, so nothing will ever reference the
+    // original; retaining it would be unreadable bytes until the prune sweep.
+    const text = boundJournalStatusText(payload)
+    expect(text).toContain('output truncated')
+    expect(text).not.toContain('CONSTRAINT-C')
+    expect(retrieveJournalPayload(sha256(payload))).toBeNull()
+    expect(await readdir(directory)).toEqual([])
   })
 
   it('keeps small payloads inline and untouched', () => {
@@ -184,6 +208,29 @@ describe('journal payload retention: scopes, ranges and pruning', () => {
     const next = store.retrieveRange(digest, first!.chunkOffset + first!.chunkByteLength, 4_096)
     expect(next!.complete).toBe(true)
     expect(`${first!.chunk}${next!.chunk}`).toBe(payload)
+  })
+
+  it('aligns a mid-code-point offset forward and reports where the bytes begin', () => {
+    const store = new JournalPayloadStore({ directory })
+    const payload = '\u{1F9E9}\u{1F9E9}\u{1F9E9}'
+    const digest = sha256(payload)
+    store.retain(digest, payload)
+    // Offset 1 lands inside the first 4-byte emoji. Decoding from there would
+    // hand the caller replacement characters dressed as the payload's content.
+    const range = store.retrieveRange(digest, 1, 64)!
+    expect(range.chunkOffset).toBe(4)
+    expect(range.chunk).toBe('\u{1F9E9}\u{1F9E9}')
+    expect(range.chunk).not.toContain('\uFFFD')
+    expect(range.chunkByteLength).toBe(8)
+    expect(Buffer.byteLength(range.chunk, 'utf8')).toBe(range.chunkByteLength)
+    expect(range.complete).toBe(true)
+    // At most one character's worth of continuation bytes is ever skipped.
+    for (const offset of [1, 2, 3, 5, 6, 7]) {
+      const aligned = store.retrieveRange(digest, offset, 64)!
+      expect(aligned.chunkOffset - offset).toBeLessThanOrEqual(3)
+      expect(aligned.chunkOffset).toBeGreaterThanOrEqual(offset)
+      expect(aligned.chunk).not.toContain('\uFFFD')
+    }
   })
 
   it('refuses any range from a tampered file', async () => {

@@ -2,6 +2,7 @@ import type { AgentJournalStatusItem } from '../../../shared/agent-session-journ
 import {
   boundInlineText,
   boundPayload,
+  NO_PAYLOAD_RETENTION,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
@@ -137,8 +138,10 @@ export function unhandledProviderFrameJournalItem(
         .join('\n\n') || message
   }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
-  const display = message ? boundInlineText(message, limits) : null
-  const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
+  // Only the clipped string reaches the row, so these two are not retained;
+  // `bounded` above is the one that a providerFrame reference can read back.
+  const display = message ? boundInlineText(message, limits, NO_PAYLOAD_RETENTION) : null
+  const goalDisplay = goalText ? boundInlineText(goalText, limits, NO_PAYLOAD_RETENTION) : null
   return {
     body: {
       kind: 'status',

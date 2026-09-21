@@ -23,6 +23,7 @@ export { PAYLOAD_READ_ERROR_CODES, type PayloadReadErrorCode }
 /** A refusal a client can act on: it names which of the read's preconditions failed. */
 export class PayloadReadError extends Error {
   readonly code: PayloadReadErrorCode
+  /** Carries the precondition code alongside the message so a caller can branch. */
   constructor(code: PayloadReadErrorCode, message: string) {
     super(message)
     this.name = 'PayloadReadError'
@@ -42,6 +43,14 @@ export const DEFAULT_PAYLOAD_READ_LIMIT = 64 * 1024
  * `journal-payload-reference` recognises; otherwise a session could name a
  * foreign digest and read another session's retained bytes out of the
  * process-wide store.
+ *
+ * Every row of the session is scanned, with no epoch, revision or tombstone
+ * filter: a row later revised to drop the reference, or tombstoned outright,
+ * still admits the digest. That is deliberate. `journal_rows` is append-only
+ * and the question here is ownership, not visibility — the payload is this
+ * session's own in every such case, so admitting it discloses nothing the
+ * session did not already retain. Hiding a row from the timeline is a
+ * presentation decision; it is not a promise that the bytes were destroyed.
  */
 export function journalReferencesDigest(journalDir: string, sessionId: string, digest: string): boolean {
   const dbPath = journalDatabaseFile(journalDir)
@@ -143,6 +152,7 @@ export function readSessionPayload(input: {
   })
   return readOwnedPayloadRange({
     retention: input.retention,
+    // The session's own journal is the proof; see journalReferencesDigest.
     isReferenced: () => journalReferencesDigest(journalDir, input.owner.sessionId, input.digest),
     digest: input.digest,
     offset: input.offset,

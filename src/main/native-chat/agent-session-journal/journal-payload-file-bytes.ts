@@ -35,6 +35,32 @@ export function fileIdentity(path: string): VerifiedFileIdentity {
   return { size: info.size, mtimeMs: info.mtimeMs, ino: info.ino, dev: info.dev }
 }
 
+/** Most bytes a start alignment can skip: a UTF-8 sequence is at most 4 bytes,
+ *  so at most 3 continuation bytes stand between an offset and the next lead
+ *  byte. The federated reply binding holds peers to the same ceiling. */
+export const MAX_UTF8_START_ALIGNMENT = 3
+
+/** Walk forward from a byte position to the next UTF-8 lead byte, so a chunk
+ *  never begins inside a multi-byte sequence. A caller-supplied offset that
+ *  lands mid-character would otherwise decode to replacement characters and be
+ *  served as if it were the payload's own content. Moves forward by at most
+ *  `MAX_UTF8_START_ALIGNMENT`, and never past the end of the file. */
+export function alignUtf8Start(descriptor: number, start: number, size: number): number {
+  if (start <= 0 || start >= size) {
+    return start
+  }
+  const probe = Buffer.alloc(1)
+  let aligned = start
+  while (aligned < size) {
+    readSync(descriptor, probe, 0, 1, aligned)
+    if ((probe[0] & 0b1100_0000) !== 0b1000_0000) {
+      break
+    }
+    aligned += 1
+  }
+  return aligned
+}
+
 /** Walk back from a byte position so the chunk never ends inside a multi-byte
  *  UTF-8 sequence; the final byte of the file is always a valid end. */
 export function alignUtf8End(descriptor: number, start: number, end: number, size: number): number {

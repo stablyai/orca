@@ -16,6 +16,9 @@ import { readWorkerTranscript } from '../../../../orchestration/worker-transcrip
 import { getSshFilesystemProvider } from '../../../../../providers/ssh-filesystem-dispatch'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
+/** One page of a Dispatch's output, from the terminal buffer or the agent's own
+ *  transcript depending on `source`. The cursor is bound to the Dispatch it was
+ *  issued for, so a cursor from another Dispatch cannot resume this one. */
 export async function readExactWorkerOutput(args: {
   runtime: OrcaRuntimeService
   dispatchId: string

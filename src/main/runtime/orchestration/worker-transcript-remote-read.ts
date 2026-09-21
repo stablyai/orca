@@ -151,6 +151,9 @@ async function readLegacyWindow(
   }
 }
 
+/** Decodes the bytes a remote read returned into messages and the cursor the
+ *  next page resumes from, honouring the limit and the record boundary the
+ *  window starts on. */
 function parseTranscriptWindow(
   args: RemoteReadArgs,
   filePath: string,
@@ -212,6 +215,8 @@ function parseTranscriptWindow(
   }
   return finish(nextOffset)
 
+  /** Bounds the decoded messages and reports what the window itself truncated,
+   *  separately from what bounding clipped. */
   function finish(cursor: number): RemoteReadResult {
     const bounded = boundWorkerTranscriptMessages(messages, filePath, {
       payloadScope: args.payloadScope

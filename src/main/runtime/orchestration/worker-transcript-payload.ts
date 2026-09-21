@@ -63,6 +63,11 @@ export function redactWorkerTerminalLines(lines: readonly string[]): {
   }
 }
 
+/** Bounds a whole transcript window for the wire: every block is clipped to the
+ *  shared byte budget, dispatch capability tokens are redacted, and each clip
+ *  that crossed a bound is marked and reported in `warnings` rather than dropped
+ *  silently. With a `payloadScope`, the complete original is retained under that
+ *  scope so the Dispatch that read it can page the full text back. */
 export function boundWorkerTranscriptMessages(
   messages: readonly NativeChatMessage[],
   transcriptPath?: string,
@@ -135,6 +140,8 @@ function boundMessage(
   }
 }
 
+/** One block, bounded by its own type: text is clipped, activity blocks recurse,
+ *  and a local image is replaced by a reference because its path is not ours to send. */
 function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): NativeChatBlock {
   if (block.type === 'text') {
     const clipped = clipText(block.text, state)
@@ -166,6 +173,7 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
   if (block.type === 'subagent-group' || block.type === 'background-task') {
     return boundWorkerTranscriptActivityBlock(block, {
       clipMetadata: (value) => clipMetadata(value, state),
+      // Activity blocks carry display strings only, so the clip is lossy here.
       clipText: (value) => clipText(value, state).text,
       boundEntryId: (value) => boundEntryId(value, state),
       markClipped: (warning) => markClipped(state, warning)

@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat-types'
 import { boundWorkerTranscriptMessages } from '../../../../orchestration/worker-transcript-payload'
@@ -115,7 +116,9 @@ describe('a federated payload reply is bound to the request that asked for it', 
   it.each([
     ['a different digest', { ...good, digest: OTHER }, 0],
     ['a chunk length that contradicts the bytes', { ...good, chunkByteLength: 4 }, 0],
-    ['an offset past the one requested', { ...good, chunkOffset: 6 }, 0],
+    ['an offset further forward than one code point', { ...good, chunkOffset: 6 }, 0],
+    ['an offset behind the one requested', { ...good, chunkOffset: 0 }, 3],
+    ['an empty chunk that claims more is coming', { ...good, chunk: '', chunkByteLength: 0 }, 0],
     ['a fractional byte length', { ...good, byteLength: 11.5 }, 0],
     ['a negative offset', { ...good, chunkOffset: -1 }, 0],
     ['a chunk that runs past the payload', { ...good, byteLength: 3 }, 0],
@@ -125,6 +128,29 @@ describe('a federated payload reply is bound to the request that asked for it', 
     expect(() => parseRemotePayloadReply(reply(payload), { digest: DIGEST, offset })).toThrow(
       expect.objectContaining({ code: 'payload_integrity_failed' })
     )
+  })
+
+  it('accepts the forward shift a host makes when the offset splits a code point', () => {
+    // The host aligns a mid-code-point offset forward to the next lead byte, so
+    // an honest reply may begin up to 3 bytes past what was asked for.
+    const parsed = parseRemotePayloadReply(
+      reply({ ...good, chunkOffset: 4, chunkByteLength: 5, byteLength: 11 }),
+      { digest: DIGEST, offset: 1 }
+    )
+    expect(parsed.payload.chunkOffset).toBe(4)
+  })
+
+  it('accepts a real store range taken at a mid-code-point offset', () => {
+    const store = new JournalPayloadStore({ directory })
+    const payload = '\u{1F9E9}\u{1F9E9}\u{1F9E9}'
+    const digest = createHash('sha256').update(payload, 'utf8').digest('hex')
+    expect(store.retain(digest, payload)).toBe(true)
+    const range = store.retrieveRange(digest, 1, 64)!
+    expect(range.chunkOffset).toBe(4)
+    expect(
+      parseRemotePayloadReply({ runtimeEpoch: 'epoch-1', payload: range }, { digest, offset: 1 })
+        .payload.chunk
+    ).toBe('\u{1F9E9}\u{1F9E9}')
   })
 
   it('refuses a reply that is not a payload envelope at all', () => {

@@ -42,6 +42,9 @@ export function createSessionPayloadReader(
   sessionId: string
 ): NativeChatPayloadReader {
   return {
+    /** Reassembles the payload page by page, stopping at the host's `complete`.
+     *  A page that neither completes nor advances ends the read as
+     *  `payload_incomplete` rather than looping. */
     async readFullPayload(digest, expectedByteLength) {
       const parts: string[] = []
       let offset = 0

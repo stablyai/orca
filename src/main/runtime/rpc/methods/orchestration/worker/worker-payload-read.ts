@@ -17,12 +17,14 @@ import {
   PayloadReadError,
   readOwnedPayloadRange
 } from '../../../../../native-chat/agent-session-journal/journal-payload-read'
+import { MAX_UTF8_START_ALIGNMENT } from '../../../../../native-chat/agent-session-journal/journal-payload-file-bytes'
 import { resolvePinnedFederatedServer } from './worker-observation'
 import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
 
 /** Largest chunk one reply carries; callers page with `offset`. */
 export const WORKER_PAYLOAD_READ_MAX_LIMIT = 256 * 1024
 
+/** The retention scope a Dispatch's own transcript reads are recorded under. */
 export function dispatchPayloadScope(dispatchId: string): string {
   return `dispatch:${dispatchId}`
 }
@@ -43,6 +45,8 @@ export function readLocalDispatchPayload(input: {
   const retention = getDefaultJournalPayloadRetention()
   const range = readOwnedPayloadRange({
     retention,
+    // A transcript has no journal, so the scope index recorded at clip time is
+    // the only ownership proof this read has.
     isReferenced: () =>
       retention !== null && retention.isReferencedBy(input.digest, dispatchPayloadScope(input.dispatchId)),
     digest: input.digest,
@@ -94,9 +98,15 @@ export function parseRemotePayloadReply(
     // The reply must answer the digest that was asked for, and nothing else.
     digest !== request.digest
     || Buffer.byteLength(chunk, 'utf8') !== chunkByteLength
-    // The host clamps an offset past the end, so it may only ever move backwards.
-    || chunkOffset > requestedOffset
+    // The host aligns a mid-code-point offset forward to the next UTF-8 lead
+    // byte, so the answer may begin a little past the request but never before
+    // it, and never further than one character's worth of continuation bytes.
+    || chunkOffset < requestedOffset
+    || chunkOffset - requestedOffset > MAX_UTF8_START_ALIGNMENT
     || chunkOffset + chunkByteLength > byteLength
+    // A peer that returns nothing and calls it unfinished hands the pager an
+    // offset that never advances; that is a broken answer, not a short one.
+    || (chunkByteLength === 0 && !complete)
     // `complete` is what stops the pager; it must mean the payload's real end.
     || complete !== (chunkOffset + chunkByteLength === byteLength)
   ) {

@@ -1,5 +1,6 @@
 import {
   boundPayload,
+  NO_PAYLOAD_RETENTION,
   digestPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
@@ -62,14 +63,19 @@ export function codexPromptMatchesTurn(
   return prompt.turnId === turnId || prompt.turnIdDigest === digestPayload(turnId)
 }
 
+/** One component of a Codex prompt id, kept whole when it fits and otherwise
+ *  clipped with a digest suffix that keeps distinct values distinct. The
+ *  original is not retained: the digest is an identity, not a reference. */
 export function codexJournalPromptIdPart(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES) {
     return value
   }
   const suffix = `#${digestPayload(value).slice(0, 32)}`
-  const bounded = boundPayload(value, {
-    inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length
-  })
+  const bounded = boundPayload(
+    value,
+    { inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length },
+    NO_PAYLOAD_RETENTION
+  )
   return `${bounded.head}${suffix}`
 }
 

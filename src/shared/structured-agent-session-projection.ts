@@ -28,6 +28,8 @@ export {
 // Re-exported so this file stays the one import site its readers already use.
 export { stripBoundedTextMarker } from './structured-agent-session-bounded-payload'
 
+/** The role and content blocks one journal item renders as, or null for an item
+ *  kind the chat surface does not render. */
 function itemBlocks(item: AgentJournalRenderItem): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]

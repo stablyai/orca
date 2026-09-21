@@ -36,6 +36,7 @@ import {
   boundInlineText,
   boundPayload,
   boundToolInput,
+  NO_PAYLOAD_RETENTION,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
@@ -289,7 +290,7 @@ function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): Nativ
         // The id is the roster key, so it is bounded with a digest rather than
         // clipped to a prefix that two distinct children could share.
         id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
+        label: boundInlineText(agent.label, limits, NO_PAYLOAD_RETENTION).text
       }))
     }
   }

@@ -1,6 +1,7 @@
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   boundInlineText,
+  NO_PAYLOAD_RETENTION,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
@@ -101,6 +102,8 @@ export function isModeledClaudeContent(value: unknown): boolean {
   return part.type === 'thinking' || part.type === 'redacted_thinking'
 }
 
+/** The last-resort journaller for a Claude frame no translator handled: it
+ *  writes a status row naming the frame rather than dropping it silently. */
 export function createClaudeProviderFrameFallback(
   sink: StructuredAgentSessionEventSink,
   acquisitionId: string
@@ -132,7 +135,7 @@ export function createClaudeProviderFrameFallback(
       }
       beforeAppend?.()
       const bounded = displayText
-        ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS, NO_PAYLOAD_RETENTION).text
         : null
       sink.appendItem(
         {

@@ -9,6 +9,7 @@
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   boundInlineText,
+  NO_PAYLOAD_RETENTION,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -52,6 +53,9 @@ export type ClaudeMessageJournalContext = {
   turn: ClaudeOpenTurn
 }
 
+/** Translates one Claude message frame into journal rows, opening the turn when
+ *  it is the first of one. Text and thinking are clipped to the row's inline
+ *  bound; nothing references those originals, so they are not retained. */
 export function journalClaudeMessage(
   ctx: ClaudeMessageJournalContext,
   message: Record<string, unknown>,
@@ -129,7 +133,10 @@ export function journalClaudeMessage(
       kind: 'message',
       role: 'reasoning',
       blocks: [
-        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        {
+          type: 'text',
+          text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS, NO_PAYLOAD_RETENTION).text
+        }
       ]
     })
     changed = true

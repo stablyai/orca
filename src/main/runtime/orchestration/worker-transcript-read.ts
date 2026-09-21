@@ -34,6 +34,10 @@ type WorkerTranscriptReadSuccess = {
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
 
+/** Reads one page of an agent's own transcript file, on whichever host owns it
+ *  (native, WSL guest or SSH). The cursor evidence is checked before the page is
+ *  trusted, so a transcript rewritten or rotated under a paging reader is
+ *  reported rather than stitched into the previous page. */
 export async function readWorkerTranscript(args: {
   agent: AgentType
   sessionId: string

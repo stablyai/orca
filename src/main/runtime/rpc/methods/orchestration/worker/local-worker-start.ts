@@ -33,6 +33,9 @@ type WorkerStartMutation = {
   payloadHash: string
 }
 
+/** Starts a worker on this host: claims the task, opens the pane, and delivers
+ *  the preamble. `mode` is what settings asked for; the executing host may still
+ *  refuse it below. */
 export async function startLocalWorker(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService

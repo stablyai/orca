@@ -20,7 +20,11 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import {
+  boundInlineText,
+  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  NO_PAYLOAD_RETENTION
+} from './journal-payload-bounds'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -93,7 +97,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
   }
-  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS, NO_PAYLOAD_RETENTION).text
 }
 
 export type JournalLifecycleMutationInput =

@@ -1,5 +1,6 @@
 import {
   boundPayload,
+  NO_PAYLOAD_RETENTION,
   digestPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
@@ -28,6 +29,9 @@ export class CodexTurnOrdinals {
     return this.retainedBytes
   }
 
+  /** One component of a turn key, url-encoded and — when over-long — clipped
+   *  with a digest suffix so two distinct values cannot collide on a prefix.
+   *  The digest identifies; it is not a reference, so nothing is retained. */
   private keyPart(value: string): string {
     const encoded = encodeURIComponent(value)
     if (Buffer.byteLength(encoded, 'utf8') <= 256) {
@@ -35,9 +39,11 @@ export class CodexTurnOrdinals {
     }
     const suffix = `#${digestPayload(value).slice(0, 24)}`
     return `${
-      boundPayload(encoded, {
-        inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8')
-      }).head
+      boundPayload(
+        encoded,
+        { inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8') },
+        NO_PAYLOAD_RETENTION
+      ).head
     }${suffix}`
   }
 

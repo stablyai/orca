@@ -54,6 +54,14 @@ export function collectJournalRowPayloadDigests(row: unknown): Set<string> {
   if (record) {
     // Item and submission rows both carry the render body under `body`.
     collectBodyDigests(record['body'], digests)
+    // A lifecycle-batch row nests its bodies one level down, so a settled
+    // tool-call carried in a batch references its output from there.
+    const mutations = record['mutations']
+    if (Array.isArray(mutations)) {
+      for (const mutation of mutations) {
+        collectBodyDigests(asRecord(mutation)?.['body'], digests)
+      }
+    }
   }
   return digests
 }
@@ -63,6 +71,8 @@ export function journalRowReferencesDigest(row: unknown, digest: string): boolea
   return collectJournalRowPayloadDigests(row).has(digest)
 }
 
+/** The reference fields of one render body: a message's blocks, a tool call's
+ *  `output`, a diff's `patch`. A tool call's `input` is never walked. */
 function collectBodyDigests(body: unknown, into: Set<string>): void {
   const record = asRecord(body)
   if (!record) {
@@ -86,6 +96,8 @@ function collectBodyDigests(body: unknown, into: Set<string>): void {
   }
 }
 
+/** The reference fields of one content block. Only `text` and `tool-result`
+ *  blocks carry a reference Orca wrote; every other block type is the model's. */
 function collectBlockDigests(block: unknown, into: Set<string>): void {
   const record = asRecord(block)
   const type = record?.['type']
@@ -102,16 +114,19 @@ function collectBlockDigests(block: unknown, into: Set<string>): void {
   }
 }
 
+/** Adds a recognised digest, dropping the null a failed shape check returns. */
 function add(into: Set<string>, digest: string | null): void {
   if (digest !== null) {
     into.add(digest)
   }
 }
 
+/** The value only when it is a lowercase sha256; anything else references nothing. */
 function asDigest(value: unknown): string | null {
   return typeof value === 'string' && PAYLOAD_DIGEST_PATTERN.test(value) ? value : null
 }
 
+/** A plain object to read fields off, or null for anything not indexable. */
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null

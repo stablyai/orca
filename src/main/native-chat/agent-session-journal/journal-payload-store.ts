@@ -39,6 +39,7 @@ import {
 import { join } from 'node:path'
 import {
   alignUtf8End,
+  alignUtf8Start,
   fileIdentity,
   hashDescriptor,
   type VerifiedFileIdentity
@@ -71,6 +72,7 @@ export type JournalPayloadRange = {
 export class JournalPayloadIntegrityError extends Error {
   readonly digest: string
   readonly actualDigest: string
+  /** Names both digests so a caller can tell a tampered file from a missing one. */
   constructor(digest: string, actualDigest: string) {
     super(`Retained payload for digest ${digest.slice(0, 12)} hashes to ${actualDigest.slice(0, 12)}; refusing to return mismatched content.`)
     this.name = 'JournalPayloadIntegrityError'
@@ -131,17 +133,25 @@ export class JournalPayloadStore implements JournalPayloadRetention {
   private readonly maxRetainedBytes: number
   private readonly verified = new Map<string, VerifiedFileIdentity>()
 
+  /** Creates the store directory 0700 on construction, so no later write has to
+   *  decide the permissions of a directory holding complete payload originals. */
   constructor(options: JournalPayloadStoreOptions) {
     this.directory = options.directory
     this.maxRetainedBytes = options.maxRetainedBytes ?? DEFAULT_MAX_RETAINED_PAYLOAD_BYTES
     mkdirSync(this.directory, { recursive: true, mode: 0o700 })
   }
 
+  /** The on-disk path for a digest. Validating first is what keeps a caller
+   *  from steering a read or a write outside this store's own directory. */
   private pathFor(digest: string, suffix = PAYLOAD_SUFFIX): string {
     assertPayloadDigest(digest)
     return join(this.directory, `${digest}${suffix}`)
   }
 
+  /** Writes the complete original under `digest`, via a temporary and a rename
+   *  so no reader can observe a half-written file. Returns false — never throws
+   *  — when the payload is oversized, mis-addressed, or could not be stored, so
+   *  the row records `retrievable: false` rather than a retention that failed. */
   retain(digest: string, payload: string, scope?: string): boolean {
     const bytes = Buffer.from(payload, 'utf8')
     if (bytes.byteLength > this.maxRetainedBytes) {
@@ -209,6 +219,8 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     )
   }
 
+  /** Pins a successful verification to the file it was computed from, evicting
+   *  oldest-first. The cache is what makes paging cost one hash, not one per page. */
   private rememberVerified(digest: string, identity: VerifiedFileIdentity): void {
     this.verified.delete(digest)
     this.verified.set(digest, identity)
@@ -222,6 +234,9 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     }
   }
 
+  /** Appends `scope` to the digest's reference index, for readers that have no
+   *  journal of their own to prove ownership from. Failure is swallowed on
+   *  purpose: a missing scope record only ever narrows a later read. */
   private recordScope(digest: string, scope: string): void {
     if (!SCOPE_PATTERN.test(scope)) {
       return
@@ -237,6 +252,8 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     }
   }
 
+  /** True only when this exact scope was recorded against `digest`. A malformed
+   *  scope, a missing index and an unreadable one all answer false. */
   isReferencedBy(digest: string, scope: string): boolean {
     if (!SCOPE_PATTERN.test(scope)) {
       return false
@@ -252,6 +269,8 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     }
   }
 
+  /** The whole retained original, re-hashed before it is returned. Null when
+   *  nothing is stored; throws rather than serve bytes that no longer match. */
   retrieve(digest: string): string | null {
     const path = this.pathFor(digest)
     if (!existsSync(path)) {
@@ -269,6 +288,10 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     return bytes.toString('utf8')
   }
 
+  /** One page of the retained original. The WHOLE file is verified before any
+   *  of it is served, so an intact-looking range out of a tampered file is never
+   *  returned. Both ends of the page are aligned to UTF-8 boundaries, and the
+   *  returned `chunkOffset` is where the served bytes actually start. */
   retrieveRange(digest: string, offset: number, limit: number): JournalPayloadRange | null {
     const path = this.pathFor(digest)
     if (!existsSync(path)) {
@@ -294,7 +317,10 @@ export class JournalPayloadStore implements JournalPayloadRetention {
         }
         this.rememberVerified(digest, identity)
       }
-      const start = Math.min(offset, size)
+      // A caller may page from anywhere, so the start is aligned forward to the
+      // next lead byte before any of it is decoded; `chunkOffset` reports where
+      // the served bytes actually begin, never the unaligned request.
+      const start = alignUtf8Start(descriptor, Math.min(offset, size), size)
       const end = Math.min(size, start + limit)
       const alignedEnd = alignUtf8End(descriptor, start, end, size)
       chunk = Buffer.alloc(alignedEnd - start)
@@ -314,6 +340,8 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     }
   }
 
+  /** Sweeps expired and over-cap files oldest-first, together with their scope
+   *  records and any temporary a crashed writer left. Never called on a read path. */
   prune(options: JournalPayloadPruneOptions): JournalPayloadPruneReport {
     const now = options.now ?? Date.now()
     const entries: { digest: string; mtimeMs: number; size: number }[] = []
