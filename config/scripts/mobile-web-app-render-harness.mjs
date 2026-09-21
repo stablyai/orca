@@ -348,10 +348,17 @@ export function installShellDouble({
  * The page server the render checks run against: the built bundle, under the shell's own policy.
  *
  * `transformChunk` is how a check poisons one route chunk without building a second bundle.
+ * `cspHeader` may be a function of the request, and `handleRequest` lets a check answer a path of
+ * its own on this origin.
  */
-export async function createBundleServer({ outDir, cspHeader, transformChunk }) {
+export async function createBundleServer({ outDir, cspHeader, transformChunk, handleRequest }) {
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
+    // An endpoint of the check's own, answered before anything is looked for on disk: a policy's
+    // `report-uri` has to name a real server, and naming this one keeps it on the page's origin.
+    if (handleRequest?.(request, response, path)) {
+      return
+    }
     // A browser asks for this on its own and the shell's WebView never does. The bundle carries
     // no icon, so a 404 would put a console error in every check that runs against a full Chrome
     // -- which is what CI resolves -- and none against the bundled headless shell.
@@ -374,7 +381,10 @@ export async function createBundleServer({ outDir, cspHeader, transformChunk }) 
         // The document carries the shell's real policy, so a directive the page violates fails
         // here rather than on a phone. Assets carry none, exactly as the native handler does.
         if (file === 'index.html' && cspHeader) {
-          headers['content-security-policy'] = cspHeader
+          // A function when the policy is per-document: the preview rig appends this document's own
+          // report endpoint, which carries the arm's nonce.
+          headers['content-security-policy'] =
+            typeof cspHeader === 'function' ? cspHeader(request) : cspHeader
         }
         response.writeHead(200, headers)
         response.end(bytes)
