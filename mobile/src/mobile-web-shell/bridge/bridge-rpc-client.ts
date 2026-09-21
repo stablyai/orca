@@ -134,20 +134,25 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   /**
-   * Posts one frame, or says why it did not leave.
+   * Posts one frame, or says why it did not leave. Never throws, which is the contract every caller
+   * below depends on: a throw escaping here skips the id bookkeeping that follows the call, and the
+   * slot it leaves open is one of sixty-four for the life of the page.
    *
    * `oversized` is refused here rather than by the shell, under the shell reader's own predicate:
    * the reader drops a frame over the cap and answers nothing, which would leave a request pending
-   * for the life of the page. Every value in a page frame is one the caller handed in, so the throw
-   * the port arm catches is the port's, never `JSON.stringify`'s.
+   * for the life of the page.
+   *
+   * Serialization is inside the `try` and not before it. Every value in a page frame is one the
+   * caller handed in, so `JSON.stringify` can throw on one — a `BigInt`, a cycle, a `toJSON` of its
+   * own — and that throw is a send that failed, not an exception for a tap handler to discover.
    */
   function sendFrame(frame: BridgeClientMessage): 'sent' | 'oversized' | 'port-failed' {
-    const json = JSON.stringify(frame)
-    if (!isBridgeFrameWithinCap(json)) {
-      report({ kind: 'send-oversized', bytes: json.length })
-      return 'oversized'
-    }
     try {
+      const json = JSON.stringify(frame)
+      if (!isBridgeFrameWithinCap(json)) {
+        report({ kind: 'send-oversized', bytes: json.length })
+        return 'oversized'
+      }
       options.send(json)
       return 'sent'
     } catch (error) {
