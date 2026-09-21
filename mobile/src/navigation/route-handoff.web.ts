@@ -136,7 +136,6 @@ export function useRouteHandoff(): RouteHandoff {
 
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()
-    /** Whether this document is the one that renders the target, which is the shell's answer. */
     /**
      * Whether this document both renders the target and may: pattern listed, grants covered.
      *
