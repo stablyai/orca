@@ -33,6 +33,22 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes a Kiro model and effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'kiro',
+        model: 'claude-opus-5',
+        effort: 'high'
+      })
+    ).toEqual({
+      preferences: { model: 'claude-opus-5', effort: 'high' },
+      receipt: {
+        requested: { agent: 'kiro', model: 'claude-opus-5', effort: 'high' },
+        effective: { agent: 'kiro', model: 'claude-opus-5', effort: 'high' }
+      }
+    })
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',
