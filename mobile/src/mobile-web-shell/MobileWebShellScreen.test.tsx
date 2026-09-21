@@ -79,6 +79,16 @@ vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: () => Promise.resolve('')
 }))
+// Same reason, and the screen only hands `playPageHaptic` over: which expo member each kind
+// reaches is `page-haptics.test.ts`. `Platform.OS` above is pinned to `ios`, so the Android
+// members are never evaluated and are not listed.
+vi.mock('expo-haptics', () => ({
+  impactAsync: () => Promise.resolve(),
+  notificationAsync: () => Promise.resolve(),
+  selectionAsync: () => Promise.resolve(),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success' }
+}))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: () => Promise.resolve(null) }))
 vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),

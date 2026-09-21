@@ -1,4 +1,5 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 
@@ -20,6 +21,10 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   // The screencast's binary frames, encoded into `event.binary` for a page that subscribed with
   // `wantsBinary`. Named where the rule that reads it lives, so the two cannot drift.
   BRIDGE_SCREENCAST_BINARY_GRANT,
+  // The device's own feedback, played by the app's functions on the page's behalf. A token rather
+  // than the notify's dotted name, because a notify is not a verb: the dotted names below are the
+  // verb table's, spread from it.
+  BRIDGE_HAPTICS_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES
@@ -53,7 +58,13 @@ export function matchesRoutePattern(pathname: string, pattern: string): boolean 
   })
 }
 
-/** The routes this shell will render from the page: listed, and needing nothing it lacks. */
+/**
+ * The routes this shell will render from the page: listed, and needing nothing it lacks.
+ *
+ * `every` and not `some`: one grant this build lacks takes the whole route native, so a token every
+ * page route declares couples the whole set to a shell that carries it — `haptics` is the first,
+ * and against a shell without it no page route is served at all.
+ */
 function implementedPageRouteEntries(
   routes: readonly MobileWebPageRoute[] | undefined
 ): MobileWebPageRoute[] {

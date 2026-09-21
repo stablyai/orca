@@ -8,6 +8,7 @@ import {
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
+import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 import {
   BRIDGE_NATIVE_VERBS,
@@ -35,6 +36,8 @@ export type Harness = {
   navigations: string[]
   /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
+  /** Every haptic the page asked the shell to play, in order. */
+  haptics: BridgeHapticsKind[]
   /** Every text the page wrote to the pasteboard through a native verb, in order. */
   clipboardWrites: string[]
   /** One entry per `navigate-back` the host answered, in order, with what the shell did. */
@@ -89,6 +92,7 @@ export function harness(
   const diagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
   const externalLinks: string[] = []
+  const haptics: BridgeHapticsKind[] = []
   const clipboardWrites: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
@@ -118,6 +122,7 @@ export function harness(
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onNavigate: options.onNavigate ?? ((href) => navigations.push(href)),
     onExternalLink: (url) => externalLinks.push(url),
+    onHaptic: (kind) => haptics.push(kind),
     serveNativeVerb: (verb, params) => {
       if (options.serveNativeVerb !== undefined) {
         return options.serveNativeVerb(verb, params)
@@ -164,6 +169,7 @@ export function harness(
     droppedBinaryFrames,
     navigations,
     externalLinks,
+    haptics,
     clipboardWrites,
     backPops,
     storageWrites,

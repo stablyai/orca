@@ -89,6 +89,7 @@ export class RelayAgentHookRuntime {
       context.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
         ? 'opencode2'
         : 'opencode'
+    env.ORCA_OPENCODE_AGENT = opencodeAgent
     if (this.pluginOverlay.hasOpenCodeSource(opencodeAgent)) {
       const sourceDir = resolveOpenCodeSourceConfigDir(context.env, context.shell)
       const inheritedRelayOverlay = sourceDir

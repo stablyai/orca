@@ -6,6 +6,7 @@ import type {
 import { useHostClient } from '../transport/client-context'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -68,6 +69,8 @@ export function useMobileWebShellBridge(args: {
   onNavigate: (href: string) => void
   /** Opens a URL outside the app, on the page's behalf. */
   onExternalLink: (url: string) => void
+  /** Plays one haptic on this device, on the page's behalf. */
+  onHaptic: (kind: BridgeHapticsKind) => void
   /** Serves one `native.` verb on this device, for a page that was granted it. */
   serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   /** Pops the stack this page was pushed onto, and says so when it did not. */
@@ -110,6 +113,7 @@ export function useMobileWebShellBridge(args: {
   // fresh closure every render must not tear one down and settle its pendings.
   const navigateRef = useRef(args.onNavigate)
   const externalLinkRef = useRef(args.onExternalLink)
+  const hapticRef = useRef(args.onHaptic)
   const nativeVerbRef = useRef(args.serveNativeVerb)
   const navigateBackRef = useRef(args.onNavigateBack)
   const storageWriteRef = useRef(args.onStorageWrite)
@@ -127,6 +131,7 @@ export function useMobileWebShellBridge(args: {
     routeGrantsRef.current = args.routeGrants
     navigateRef.current = args.onNavigate
     externalLinkRef.current = args.onExternalLink
+    hapticRef.current = args.onHaptic
     nativeVerbRef.current = args.serveNativeVerb
     navigateBackRef.current = args.onNavigateBack
     storageWriteRef.current = args.onStorageWrite
@@ -138,6 +143,7 @@ export function useMobileWebShellBridge(args: {
   }, [
     args.onBinaryFramesDropped,
     args.onExternalLink,
+    args.onHaptic,
     args.serveNativeVerb,
     args.onNavigate,
     args.onNavigateBack,
@@ -187,6 +193,9 @@ export function useMobileWebShellBridge(args: {
       onNavigateBack: () => navigateBackRef.current(),
       onExternalLink: (url) => {
         externalLinkRef.current(url)
+      },
+      onHaptic: (kind) => {
+        hapticRef.current(kind)
       },
       serveNativeVerb: (verb, params) => nativeVerbRef.current(verb, params),
       host: snapshot.host,

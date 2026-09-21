@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge-envelope'
-import { bridgeNotifyRefusal } from './bridge-notify-grants'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY
+} from './bridge-envelope'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { bridgeNotifyRefusal, type BridgeNotifyName } from './bridge-notify-grants'
 
 const GRANTED = [BRIDGE_FAULT_GRANT]
 
@@ -95,5 +100,83 @@ describe('the grant table', () => {
     expect(
       bridgeNotifyRefusal({ name: 'storage', initSent: true, granted: ['storage'] })
     ).toBeNull()
+  })
+})
+
+/**
+ * Haptics, the first notify added since the protocol's own, and the second whose name is not its
+ * grant: `native.haptics.trigger` rides the single token `haptics`.
+ *
+ * A token because a notify is not a verb: every grant in that table is one, and the dotted names
+ * `MOBILE_WEB_SHELL_GRANTS` carries are spread from the verb table. A route declaring the notify's
+ * own name would be declaring something no shell advertises, which the case below pins.
+ */
+describe('the haptics notify', () => {
+  it('is refused on a route that was granted no haptics', () => {
+    expect(bridgeNotifyRefusal({ name: BRIDGE_HAPTICS_NOTIFY, initSent: true, granted: [] })).toBe(
+      'ungranted'
+    )
+    // Granted everything else this shell has, so the refusal is the haptics row and not an
+    // empty list.
+    expect(
+      bridgeNotifyRefusal({
+        name: BRIDGE_HAPTICS_NOTIFY,
+        initSent: true,
+        granted: ['navigate', 'storage', BRIDGE_EXTERNAL_LINK_GRANT, BRIDGE_FAULT_GRANT]
+      })
+    ).toBe('ungranted')
+  })
+
+  it('is served on a route that was granted the token', () => {
+    expect(
+      bridgeNotifyRefusal({
+        name: BRIDGE_HAPTICS_NOTIFY,
+        initSent: true,
+        granted: [BRIDGE_HAPTICS_GRANT]
+      })
+    ).toBeNull()
+  })
+
+  it('is not served against a grant list that names the notify instead of the token', () => {
+    expect(
+      bridgeNotifyRefusal({
+        name: BRIDGE_HAPTICS_NOTIFY,
+        initSent: true,
+        granted: [BRIDGE_HAPTICS_NOTIFY]
+      })
+    ).toBe('ungranted')
+  })
+
+  it('is refused before a grant is read at all from a page with no session', () => {
+    expect(
+      bridgeNotifyRefusal({
+        name: BRIDGE_HAPTICS_NOTIFY,
+        initSent: false,
+        granted: [BRIDGE_HAPTICS_GRANT]
+      })
+    ).toBe('before-ready')
+  })
+})
+
+/**
+ * The totality shown rather than described.
+ *
+ * The docstring above says a name with no row is a compile error; this is the error. Every row the
+ * table has, less the haptics one, against the same `Record` over the union — checked by
+ * `tsconfig.test.json`, so the day the omission stops being an error the unused directive is.
+ */
+describe('a grant table missing a row', () => {
+  it('does not typecheck', () => {
+    // @ts-expect-error TS2741: no row for the haptics notify, the hole the Record closes.
+    const incomplete: Readonly<Record<BridgeNotifyName, string | null>> = {
+      foreground: null,
+      terminalViewport: null,
+      navigate: 'navigate',
+      [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
+      storage: 'storage',
+      [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
+      [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
+    }
+    expect(Object.keys(incomplete)).toHaveLength(7)
   })
 })

@@ -1,6 +1,7 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import type { BridgeNativeVerb } from './bridge-native-verbs'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
@@ -44,6 +45,8 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   navigations: string[]
   /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
+  /** Every haptic the page asked the shell to play, in order. */
+  haptics: BridgeHapticsKind[]
   /** One entry per stack pop the page asked for, with what the shell did about it. */
   backPops: BridgeNavigateBackOutcome[]
   /** Every allowlisted key the page wrote through the shell, in order. */
@@ -177,6 +180,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const hostDiagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
   const externalLinks: string[] = []
+  const haptics: BridgeHapticsKind[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
@@ -202,6 +206,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     sessionEstablished: options.sessionEstablished ?? false,
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
+    onHaptic: (kind) => haptics.push(kind),
     // The pair has no device: what a test reads here is that the host answered without forwarding.
     // Each verb gets a shape its own row declares, so a case that calls one it did not configure
     // reads an answer rather than `native_verb_result`, which is a shell bug's code.
@@ -248,6 +253,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     hostDiagnostics,
     navigations,
     externalLinks,
+    haptics,
     backPops,
     storageWrites,
     pageFaults,

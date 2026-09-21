@@ -31,7 +31,7 @@
     },
     {
       "file": "src/platform/haptics.web.ts",
-      "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. The page has no haptics instead; the bundle test reads the shipped bytes for the shim."
+      "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. So the page asks the shell for the device's own haptic instead, over the native.haptics.trigger notify behind the haptics grant: 70 to 77 bytes per frame, no reply, and haptics.ts's own Platform.OS split on the other side. A notify rather than a verb because nothing is owed back and a reply would spend a slot in the same in-flight window a forwarded request does, at 90 call sites (rulings-ota-c7.md ruling 30). The five exports are the five kinds the frame admits; mobile-web-app-haptics-seam.test.mjs is the fence."
     },
     {
       "file": "app/h/[hostId]/files/[worktreeId].web.tsx",
@@ -63,7 +63,7 @@
     },
     {
       "file": "src/components/pr-sidebar/MermaidDiagram.web.tsx",
-      "reason": "The native component renders the diagram inside a sandboxed WebView, and react-native-webview is a native component with no browser counterpart: importing it runs a codegen lookup that throws, and the route manifest imports every route, so one such import takes the whole page down rather than one diagram. This one renders the labelled source box the native component already falls back to on a parse or render error. A real browser renderer is reachable — mermaid is a browser library and the engine bundle is vendored — but it is a different shape rather than a smaller one: with no WebView to sandbox untrusted diagram source in, the escaping buildHtml does for </script> and the line separators has to be replaced by whatever the DOM path needs, which is its own change with its own proof."
+      "reason": "The native component seals the diagram inside a WebView whose document embeds the whole mermaid bundle as a string, because react-native-webview is a native component with no browser counterpart: importing it runs a codegen lookup that throws, and the route manifest imports every route, so one such import takes the whole page down rather than one diagram. This one renders the same diagram in this document instead — mermaid is a browser library, so it is an import() inside the render effect rather than a 3.7 MB literal, and the two hosts share one MERMAID_DIAGRAM_CONFIG. What replaces the sandbox is mermaid's own securityLevel: 'strict', which runs the serialized SVG through DOMPurify; the native path's </script> escaping has no analogue because the source is a JS string argument rather than text spliced into an inline script. Both are measured in both engines under the shipped CSP by config/scripts/mobile-web-app-mermaid-render.test.mjs, which also pins the rendered SVG byte for byte against the native document's own render."
     },
     {
       "file": "app/h/[hostId]/tasks.web.tsx",

@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 import {
   GenerationScopedRequestOwner,
   type LoadedRequest,
@@ -370,16 +371,6 @@ function importsOwner(path: string, source: string): boolean {
   })
 }
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
-
 function declaredInside(callback: ts.Node): Set<string> {
   const names = new Set<string>()
   const bind = (name: ts.BindingName): void => {
@@ -492,7 +483,7 @@ function loaderWrites(path: string, source: string): string[] {
 describe('loader write fence', () => {
   const holders = ['app', 'src']
     .map((directory) => join(mobileRoot, directory))
-    .flatMap(sourceFiles)
+    .flatMap(censusSourceFiles)
     .filter((path) => ['.ts', '.tsx'].includes(extname(path)))
     .filter((path) => !/\.test\.tsx?$/.test(path))
     .map((path) => ({ path, source: readFileSync(path, 'utf8') }))

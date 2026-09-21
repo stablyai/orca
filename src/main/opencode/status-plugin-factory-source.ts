@@ -7,6 +7,7 @@ export function getStatusPluginFactorySource(options: {
   emitSessionStart: boolean
   emitNextEvents?: boolean
 }): string[] {
+  const expectedAgent = options.emitNextEvents ? 'opencode2' : 'opencode'
   return [
     ...(options.emitNextEvents ? getOpenCode2EventNormalizationSource() : []),
     '// Why: accept the factory argument as an optional opaque parameter instead',
@@ -15,6 +16,7 @@ export function getStatusPluginFactorySource(options: {
     '// destructuring form throw synchronously and crash OpenCode with an opaque',
     '// UnknownError before any event is ever dispatched.',
     'export const OrcaOpenCodeStatusPlugin = async (_ctx) => {',
+    `  if (process.env.ORCA_OPENCODE_AGENT && process.env.ORCA_OPENCODE_AGENT !== '${expectedAgent}') return {};`,
     '  const client = _ctx?.client;',
     '  const factoryID = ++nextFactoryID;',
     '  activeFactoryIDs.add(factoryID);',

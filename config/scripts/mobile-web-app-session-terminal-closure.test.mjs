@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppRouteChunkClosure } from './mobile-web-app-route-chunk-closure.mjs'
 import {
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
@@ -32,6 +33,32 @@ import {
  * -47,255 at 51ae7b1b03 and -55,561 at 0ce0fc99a2. They differ because C7.1's own round-1 fold
  * deleted `URL_TAP_WEBVIEW_JS` from a module only the page's component brings into this closure,
  * so the saving lands on the after side and no base can show it.
+ *
+ * Then C7.10 item B put mermaid on the page, and the module list moved again:
+ *
+ *   modules        4320 -> 4323   (+3)
+ *   local modules   970 ->  973   (+3)
+ *
+ * Three modules: the configuration both hosts read, the loader, and the pre-bundled engine the
+ * loader imports on demand. The engine's own 66 files and the d3, dagre, katex and cytoscape trees
+ * under them are inside that one artifact rather than in this graph, which is why the count barely
+ * moves. Importing the package here instead read +2,056 and emitted 103 scripts, a package
+ * splitting along its own lazy diagram-type boundaries — every one of them inside the OTA generation
+ * the phone had already downloaded, so the split moved no bytes and spent 103 of the 256 manifest
+ * assets the shell will load. One artifact costs one script and one module.
+ *
+ * What the generation weighs, because every chunk ships in it whether or not a phone ever fetches
+ * one: the built bundle is 8,016,714 bytes across 112 assets, against the 9 MiB ceiling in
+ * `verify-mobile-web-app-bundle.mjs`. That is 84.9% of it, with 1,420,470 bytes left for the rest
+ * of C7.10 and for C7.7. Before item B the same bundle was 4,539,090 bytes, and the engine is the
+ * difference — deferring it defers evaluation and a fetch, never the download.
+ *
+ * `mobileWebAppRouteClosure` reads `metafile.inputs`, which holds dynamically imported modules
+ * under `splitting: true` just as it does under `splitting: false`, so it cannot express "on
+ * demand" about anything. Ruling 28: the fence for this route is `entryStaticClosure`, which
+ * follows `import-statement` edges only, and the module list's total is a recorded number rather
+ * than a budget. It moves whenever main adds a module this route reaches, and is re-recorded rather
+ * than argued with.
  */
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
@@ -75,6 +102,16 @@ const XTERM_PACKAGES = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-
  */
 const EXPECTED_OFFENDERS = 0
 
+/** The deferred engine, as the page reaches it: one artifact, not the package's own file tree. */
+const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.generated.ts'
+const MERMAID_PACKAGE = 'node_modules/mermaid/'
+
+/** The module list with mermaid on the page, recorded at the base in the docstring above. */
+const MODULES_WITH_MERMAID = 4323
+
+const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
+const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
+
 const bundles = mobileWebAppDependenciesPresent()
 const describeClosure = bundles ? describe : describe.skip
 
@@ -102,6 +139,27 @@ describeClosure(
       expect(documentModules).not.toContain('src/terminal/document/message-bridge.ts')
       expect(documentModules).toContain('src/terminal/document/page-document-modules.ts')
     }, 300_000)
+
+    it('reaches the engine as one deferred module and never as part of the download', async () => {
+      const { modules } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      // The engine is here, as the one artifact the loader imports.
+      expect(artifactModules(modules)).toHaveLength(1)
+      // And the package's own file tree is not, anywhere: it is inside that artifact. Meaningful
+      // only beside the line above, which is why the two sit together.
+      expect(packageModules(modules)).toEqual([])
+      expect(modules).toHaveLength(MODULES_WITH_MERMAID)
+
+      const download = await mobileWebAppRouteChunkClosure(SESSION_ROUTE)
+      // The fence: nothing of the engine is reachable from the route's own chunk by an import
+      // statement, so opening the session pays none of it.
+      expect(artifactModules(download.staticInputs)).toEqual([])
+      // The precondition that absence needs. The artifact is in the bundle, in a chunk the route
+      // reaches by a `dynamic-import` edge instead -- a deferred engine, not a dropped one.
+      expect(artifactModules(download.deferredInputs)).toHaveLength(1)
+      // And the walk read a real download rather than one chunk: the route's own chunk is in it.
+      expect(download.staticChunks).toContain(download.routeChunk)
+      expect(download.staticInputs.length).toBeGreaterThan(1000)
+    }, 600_000)
 
     it('leaves the 16px seam census exactly where C7.2 left it', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION_ROUTE)

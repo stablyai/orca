@@ -12,22 +12,30 @@
  *
  * Declared here rather than in src/shared because the builder is the only thing that reads it: the
  * shape it must satisfy is MobileWebBundleRouteSchema, which the manifest write is checked against.
+ *
+ * `haptics` is on every entry below, and by measurement rather than by habit: the shared worktree
+ * row is in all five closures and calls the seam, so a route without the grant is a page whose taps
+ * stop buzzing. mobile-web-app-haptics-seam.test.mjs derives that list from the closures and fails
+ * on a route that imports the seam and declares nothing.
  */
 export const MOBILE_WEB_PAGE_ROUTES = [
   // The worktree list. `navigate` because every row opens a session screen that is still native.
   // `storage` because its pins and its last-visited repo are the app's, not the document's.
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
   // Agent session history. `navigate` because a resumed session opens the session screen, which is
   // native, and because the list above now reaches this one without leaving the page. `storage`
   // because the host layout above every page route reads the app's own sidebar width.
-  { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] },
+  {
+    pathname: '/h/[hostId]/agent-history/[worktreeId]',
+    grants: ['navigate', 'storage', 'haptics']
+  },
   // Tasks. `navigate` for the session screens its rows open and for the Back that pops the native
   // stack; `storage` for the shared components it renders; `externalLink` for the provider links
   // in its items, checks and drawers; `native.clipboard.write` for the two copy actions in its
   // comment review. Grants are scoped per route, so naming fewer here serves fewer.
   {
     pathname: '/h/[hostId]/tasks',
-    grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
@@ -52,7 +60,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // does not grow a grant it has no screen for.
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
   // The file preview. Same three. `externalLink` is this route's own rather than inherited: a
   // Markdown preview renders links and `MobileMarkdown` opens them through the platform seam, which
@@ -61,6 +69,6 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // the reasons are not.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
   }
 ]

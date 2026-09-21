@@ -14,6 +14,7 @@ import {
   BridgeSendFailedError,
   BridgeShellReplacedError
 } from './bridge-client-errors'
+import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
 import { BridgeClientRequests } from './bridge-client-requests'
@@ -82,6 +83,11 @@ export type BridgeRpcClient = RpcClient & {
   callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
+  /**
+   * Asks the shell to play one haptic. False when the shell granted no `haptics`, which no caller
+   * has to do anything about: a tap that did not buzz is what the page did before this existed.
+   */
+  notifyHaptics: (kind: BridgeHapticsKind) => boolean
   /**
    * Tells the shell this page cannot render what it was opened for. Never throws and never rejects:
    * the one caller is an error boundary, and a report that threw would be the second failure.
@@ -345,6 +351,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       })
     },
     notifyStorageWrite: notifications.notifyStorageWrite,
+    notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     close,
     onReady: (listener) => {

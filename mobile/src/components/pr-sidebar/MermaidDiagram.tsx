@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
 import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
 
 export type MermaidDiagramProps = {
@@ -79,19 +80,31 @@ function MermaidFallback({ source, base }: MermaidDiagramProps) {
 }
 
 // JSON.stringify escapes quotes and control chars but leaves `<`, `>`, `&`, and
-// the U+2028/U+2029 line separators raw — so a source containing `</script>`
-// would close this inline <script> and let the rest execute as markup. Diagram
-// source is untrusted (agent output, PR/chat content), so escape those to \uXXXX;
-// the literal still parses back to the exact original string inside the WebView.
-function encodeSourceForScript(source: string): string {
-  return JSON.stringify(source).replace(
+// the U+2028/U+2029 line separators raw — so a value containing `</script>` would
+// close the inline <script> this is spliced into and let the rest execute as
+// markup. These characters only ever appear inside JSON string literals, so
+// escaping them to \uXXXX is always valid and always parses back to the exact
+// original text inside the WebView.
+function encodeJsonForScript(json: string): string {
+  return json.replace(
     /[<>&\u2028\u2029]/g,
     (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
   )
 }
 
+// Diagram source is untrusted: agent output, PR and chat content.
+function encodeSourceForScript(source: string): string {
+  return encodeJsonForScript(JSON.stringify(source))
+}
+
+// The config is not untrusted, but it is not a closed set of hex colours either: a
+// themeCSS or a font stack is free text, and it goes into the same script element.
+function encodeConfigForScript(): string {
+  return encodeJsonForScript(JSON.stringify(MERMAID_DIAGRAM_CONFIG))
+}
+
 // Self-contained HTML: embedded mermaid bundle, render the graph, post the body
-// height (or "error") back to RN. Theme variables match the dark sidebar palette.
+// height (or "error") back to RN. The configuration is the one the page runs too.
 export function buildHtml(source: string): string {
   const encoded = encodeSourceForScript(source)
   return `<!DOCTYPE html>
@@ -117,19 +130,7 @@ export function buildHtml(source: string): string {
   }
   try {
     document.querySelector('.mermaid').textContent = ${encoded};
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'dark',
-      securityLevel: 'strict',
-      darkMode: true,
-      themeVariables: {
-        background: '${colors.bgRaised}',
-        primaryColor: '${colors.bgPanel}',
-        primaryTextColor: '${colors.textPrimary}',
-        lineColor: '${colors.textSecondary}',
-        textColor: '${colors.textPrimary}'
-      }
-    });
+    mermaid.initialize(${encodeConfigForScript()});
     mermaid.run({ querySelector: '.mermaid' })
       .then(function () { reportHeight(); })
       .catch(function () { post('error'); });

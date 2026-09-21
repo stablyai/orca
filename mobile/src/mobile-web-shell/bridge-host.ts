@@ -19,6 +19,7 @@ import {
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { captureBridgeError } from './bridge/bridge-error-capture'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
+import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 import { isPageStorageKeyForHost } from './page-storage-keys'
@@ -267,6 +268,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           return
         }
         options.onStorageWrite(message.key, message.value)
+        return
+      }
+      if (message.name === BRIDGE_HAPTICS_NOTIFY) {
+        // Local, and the only notify the shell answers with hardware. Nothing crosses back, which
+        // is the whole reason this is a notify: a reply would spend an in-flight slot per row tap.
+        options.onHaptic(message.kind)
         return
       }
       client.updateTerminalSubscriptionViewport(message.terminal, {

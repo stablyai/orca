@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
+import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import {
   isPageStorageKey,
@@ -317,7 +318,9 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       /** The capture an `error` frame already carries, so both directions share one bound and one
        *  reader. Nothing is owed back: the page is telling the shell, not asking it. */
       error: BridgeErrorCaptureSchema
-    })
+    }),
+    // Behind the `haptics` grant, and the fields are its own module's for the reason stated there.
+    z.object({ v: versionSchema, ...BRIDGE_HAPTICS_NOTIFY_FIELDS })
   ]),
   z.object({ v: versionSchema, type: z.literal('close') })
 ])

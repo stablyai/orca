@@ -2,6 +2,7 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
@@ -142,6 +143,16 @@ export type BridgeHostOptions = {
    * failed is invisible on both sides unless the caller says so.
    */
   onExternalLink: (url: string) => void
+  /**
+   * Plays one haptic on this device. Required for the reason `onExternalLink` is: the `haptics`
+   * grant is issued on the strength of this existing.
+   *
+   * Injected rather than called here, as every other device-local notify is: a static import of the
+   * app's haptics would put `react-native` and `expo-haptics` in this module's graph, and the host
+   * is the protocol's half of the bridge on either. It must not throw — this runs on the native
+   * frame handler — and it owes the page nothing, which is why a notify rather than a verb.
+   */
+  onHaptic: (kind: BridgeHapticsKind) => void
   /**
    * Pops the native stack this page was pushed onto. Required for the reason `onNavigate` is: the
    * `navigate` grant carries this verb too, and a page told it may hand its Back button over and

@@ -21,6 +21,7 @@ import {
   BRIDGE_ROUTE_HREF_PATTERN,
   BRIDGE_ROUTE_PATHNAME_PATTERN
 } from './bridge-caps'
+import { BRIDGE_HAPTICS_KINDS, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
 import {
   BRIDGE_BINARY_FORMATS,
   BRIDGE_CONNECTION_STATES,
@@ -130,6 +131,12 @@ describe('client messages', () => {
       }
     ],
     ['a navigate-back notify', { type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }],
+    // One per kind, spread from the list itself: a kind added to the tuple and left out of the
+    // schema's enum would otherwise be accepted here by a case nobody wrote.
+    ...BRIDGE_HAPTICS_KINDS.map(
+      (kind) =>
+        [`a ${kind} haptics notify`, { type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind }] as const
+    ),
     ['close', { type: 'close' }]
   ] as const
 
@@ -199,6 +206,11 @@ describe('client messages', () => {
       'a page fault whose error is not a capture',
       client({ type: 'notify', name: BRIDGE_FAULT_GRANT, error: 'the route threw' })
     ],
+    [
+      'a haptic this app has no function for',
+      client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind: 'heavyImpact' })
+    ],
+    ['a haptics notify naming no kind', client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY })],
     ['a bare array', []],
     ['a bare string', 'ready']
   ] as const

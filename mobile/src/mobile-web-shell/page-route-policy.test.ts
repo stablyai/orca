@@ -7,6 +7,7 @@ import {
   grantsForRoute,
   routeViewOf
 } from './page-route-policy'
+import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import {
   BRIDGE_NATIVE_METHOD_PREFIX,
   BRIDGE_NATIVE_VERB_NAMES,
@@ -89,6 +90,7 @@ describe('the grants this app implements', () => {
       'storage',
       'externalLink',
       'screencastBinary',
+      'haptics',
       'native.clipboard.write',
       'native.clipboard.read',
       'native.media.pick',
@@ -228,5 +230,43 @@ describe('a grant name this build has never heard of', () => {
         '/h/host-1/tasks'
       )
     ).toEqual(['navigate', 'native.clipboard.write'])
+  })
+})
+
+/**
+ * What a token on every page route costs against a shell that does not carry it.
+ *
+ * `implementedPageRoutes` filters on `grants.every(implementsGrant)`, so one grant this build lacks
+ * takes the whole route native rather than degrading the feature that needed it. `haptics` is
+ * declared by all five page routes, which makes the whole set conditional on a shell carrying the
+ * token; the route list itself is pinned in `config/scripts/mobile-web-app-haptics-seam.test.mjs`,
+ * and this is the mechanism behind it.
+ */
+describe('a page route that needs the haptics token', () => {
+  const route = {
+    pathname: '/h/[hostId]',
+    grants: ['navigate', 'storage', BRIDGE_HAPTICS_GRANT]
+  }
+
+  it('is served by this shell, which implements the token', () => {
+    expect(implementedPageRoutes([route])).toEqual(['/h/[hostId]'])
+  })
+
+  it('renders natively against a shell whose grant list does not carry it', () => {
+    // An older shell's view of the same declaration: a grant it does not implement, whatever it is
+    // spelled. Nothing degrades — the route goes native whole, pins and sidebar and all.
+    const older = {
+      ...route,
+      grants: route.grants.map((grant) =>
+        grant === BRIDGE_HAPTICS_GRANT ? 'hapticsUnderAnotherName' : grant
+      )
+    }
+    expect(implementedPageRoutes([older])).toEqual([])
+    // The control, so the empty list above is the token and not the other two grants.
+    expect(
+      implementedPageRoutes([
+        { ...route, grants: route.grants.filter((grant) => grant !== BRIDGE_HAPTICS_GRANT) }
+      ])
+    ).toEqual(['/h/[hostId]'])
   })
 })

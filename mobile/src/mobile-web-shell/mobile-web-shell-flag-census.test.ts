@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 
 /**
  * The hybrid shell flag is the whole of what keeps this feature dark, so who touches it is a
@@ -34,16 +35,9 @@ const TREES = { src: 200, app: 10, modules: 1 }
 const SHELL_VIEW = 'modules/orca-mobile-web-shell/src/index.ts'
 
 function sourceFiles(directory: string): string[] {
-  const found: string[] = []
-  for (const entry of readdirSync(join(MOBILE_ROOT, directory), { withFileTypes: true })) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      found.push(...sourceFiles(path))
-    } else if (/\.tsx?$/.test(entry.name) && !entry.name.includes('.test.')) {
-      found.push(path)
-    }
-  }
-  return found
+  return censusSourceFiles(join(MOBILE_ROOT, directory))
+    .map((path) => relative(MOBILE_ROOT, path))
+    .filter((path) => /\.tsx?$/.test(path) && !path.includes('.test.'))
 }
 
 const SOURCES = Object.keys(TREES)

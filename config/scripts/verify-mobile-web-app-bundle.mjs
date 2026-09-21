@@ -40,10 +40,22 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
 /**
  * How many scripts the page may be cut into, for a given number of routes. A chunk is emitted per
- * distinct set of importers rather than per route, so the count is combinatorial in what the
- * routes share: 8 routes measure 23 chunks, 10 measure 40, 12 measure 47, 14 measure 53, about
- * three more per route at the top. Four per route with a flat 16 leaves the next few routes room,
- * so a route added in C2 fails on its own weight and not on a number measured before it existed.
+ * distinct set of importers rather than per route, so this is not a function of the route count
+ * alone — it depends on what the routes in the tree happen to share. Measured on the head that
+ * wrote this, dropping routes from the end of the sorted key list: 8 routes emit 32 scripts, 10
+ * emit 43, 12 emit 61, 14 emit 69. That is between four and nine more per route depending on which
+ * route, so four per route with a flat 16 is a bound rather than a fit.
+ *
+ * Read the headroom before adding a route: 14 routes measure 69 against this ceiling's 72, and the
+ * last two of them cost 8 — exactly the 8 the ceiling grants for two. The fence is at break-even,
+ * so the next route that shares less than its neighbours breaches it. That is the failure it is
+ * for; it names the split, where the asset count alone would name nothing.
+ *
+ * The route count is the only term, deliberately. A deferred engine belongs inside one artifact and
+ * costs one script: C7.10 item B first reached mermaid with `import('mermaid')`, which emitted 103
+ * more because mermaid lazily imports each of its own diagram types, and a second term admitting
+ * those would have raised this fence far enough to admit any split at all. The build test's control
+ * is what holds that line.
  *
  * This is the ceiling that catches a split running away; MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES
  * below is the one that catches it collapsing, and it is the real budget of the two.
