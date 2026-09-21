@@ -243,6 +243,27 @@ describe('bound Claude home usage previews', () => {
     expect(service.getState().boundClaudeHomes).toEqual([])
   })
 
+  it('surfaces a status row when the very first fetch for a binding fails', async () => {
+    // Why: with no prior row to keep, the group disappeared from the section entirely — visually
+    // identical to having no binding, so the user reads a 502 as "the binding did not save".
+    const service = new RateLimitService()
+    service.setBoundClaudeHomesResolver(() => [{ groupId: 'group-a', configDir: '/tmp/home-a' }])
+    vi.mocked(fetchBoundClaudeHomeUsage).mockRejectedValueOnce(new Error('HTTP 502'))
+
+    await service.fetchBoundClaudeHomesOnOpen()
+
+    expect(service.getState().boundClaudeHomes).toEqual([
+      {
+        groupId: 'group-a',
+        configDir: '/tmp/home-a',
+        rateLimits: null,
+        status: 'unavailable',
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
   it('keeps one failing directory from aborting the rest of the batch', async () => {
     const service = new RateLimitService()
     service.setBoundClaudeHomesResolver(() => [
@@ -256,6 +277,14 @@ describe('bound Claude home usage previews', () => {
     await service.fetchBoundClaudeHomesOnOpen()
 
     expect(service.getState().boundClaudeHomes).toEqual([
+      {
+        groupId: 'group-a',
+        configDir: '/tmp/home-a',
+        rateLimits: null,
+        status: 'unavailable',
+        updatedAt: expect.any(Number),
+        isFetching: false
+      },
       {
         groupId: 'group-b',
         configDir: '/tmp/home-b',

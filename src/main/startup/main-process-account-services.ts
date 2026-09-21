@@ -25,6 +25,7 @@ import { isRealHomeCodexHookLaneUsable } from '../codex/codex-real-home-hook-ins
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { resolveLocalBoundClaudeHomes } from '../rate-limits/bound-claude-home-bindings'
+import { setClaudeHomeBindingChangeNotifier } from '../rate-limits/claude-home-binding-change-notification'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
@@ -159,6 +160,9 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits.setBoundClaudeHomesResolver(() =>
     resolveLocalBoundClaudeHomes(store.getProjectGroups())
+  )
+  setClaudeHomeBindingChangeNotifier((groupId) =>
+    state.rateLimits?.evictBoundClaudeHomeUsage(groupId)
   )
   state.rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()

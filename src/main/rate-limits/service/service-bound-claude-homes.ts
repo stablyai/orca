@@ -53,6 +53,16 @@ export abstract class RateLimitServiceBoundClaudeHomes extends RateLimitServiceI
           // stale — a transient 500 must not make a still-bound group vanish from the menu.
           if (this.isStaleBoundClaudeHomeFetch(signal, fetchGeneration, binding)) {
             this.boundClaudeHomeCache.delete(binding.groupId)
+          } else if (!this.boundClaudeHomeCache.has(binding.groupId)) {
+            // Why only with no prior row: a binding that has never fetched successfully renders
+            // nothing at all, which reads as "the binding did not save". A prior row keeps its
+            // last-known bars instead of being downgraded to a status line.
+            this.boundClaudeHomeCache.set(binding.groupId, {
+              configDir: binding.configDir,
+              rateLimits: null,
+              status: 'unavailable',
+              updatedAt: Date.now()
+            })
           }
         }
         this.boundClaudeHomeFetching.delete(binding.groupId)

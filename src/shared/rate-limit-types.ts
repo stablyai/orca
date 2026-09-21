@@ -108,7 +108,11 @@ export type InactiveAccountUsage = {
 }
 
 /** How a project group's bound CLAUDE_CONFIG_DIR looks to Orca, which only ever reads it (D9). */
-export type BoundClaudeHomeStatus = 'ok' | 'signed-out' | 'expired' | 'unreadable'
+/**
+ * `unavailable` is Orca's own failure to fetch, not a verdict on the directory. Additive: a client
+ * older than this member falls through to the generic unreadable label rather than breaking.
+ */
+export type BoundClaudeHomeStatus = 'ok' | 'signed-out' | 'expired' | 'unreadable' | 'unavailable'
 
 export type BoundClaudeHomeUsage = {
   groupId: string

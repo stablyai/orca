@@ -53,18 +53,24 @@ async function readBoundClaudeHomeCredentials(
   now: number
 ): Promise<BoundClaudeHomeCredentials> {
   const scoped = await readClaudeCredentialsFromStrictKeychain(configDir, 'scoped-keychain')
-  const credentials: ClaudeOAuthCredentialReadResult = scoped.token
-    ? scoped
+  const fromFile: ClaudeOAuthCredentialReadResult | null = scoped.token
+    ? null
     : await readClaudeOAuthCredentialsFile(configDir)
+  const credentials = fromFile ?? scoped
   const token = credentials.token?.trim() ?? ''
   if (!token) {
     // Why: a Keychain Orca could not reach is not evidence that the directory is signed out.
-    return {
-      kind: 'status',
-      status: scoped.keychainUnavailable
-        ? 'unreadable'
-        : await classifyTokenlessBoundHome(configDir)
+    if (scoped.keychainUnavailable) {
+      return { kind: 'status', status: 'unreadable' }
     }
+    // Why not signed-out: a directory left holding only a refresh token is one `claude` run away
+    // from working. "Signed out" sends the user to a full re-login, which is the operation most
+    // likely to rotate the token Orca is deliberately not touching. Either source counts, because
+    // an access token in neither does not mean a refresh token in neither.
+    if (scoped.hasRefreshableCredentials || fromFile?.hasRefreshableCredentials) {
+      return { kind: 'status', status: 'expired' }
+    }
+    return { kind: 'status', status: await classifyTokenlessBoundHome(configDir) }
   }
   // Why act on expiresAt here alone: callers that may refresh let the server decide, but Orca never
   // refreshes a bound directory (D9), so a lapsed token is a status the user can act on.

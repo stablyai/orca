@@ -19,6 +19,14 @@ function unavailableStatusLabel(status: Exclude<BoundClaudeHomeStatus, 'ok'>): s
       'Session expired'
     )
   }
+  if (status === 'unavailable') {
+    // Why a separate line: the directory is fine, Orca's usage call is not — "Directory unreadable"
+    // would send the user to check permissions on a directory that has nothing wrong with it.
+    return translate(
+      'auto.components.status.bar.BoundClaudeHomesSection.7b3c1d94ae',
+      'Usage unavailable'
+    )
+  }
   return translate(
     'auto.components.status.bar.BoundClaudeHomesSection.cfcef0699a',
     'Directory unreadable'

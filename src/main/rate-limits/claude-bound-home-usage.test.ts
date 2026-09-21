@@ -15,6 +15,16 @@ import { okProvider } from './rate-limit-service-test-harness'
  *
  * Reads stay real (and are recorded, so the "nothing outside the bound directory" claim is
  * asserted, not just titled). Never move a verb from a read list to an allowed-write list.
+ *
+ * `vi.mock` is specifier-exact and only reaches vitest's own module registry, so a guard list built
+ * from the write verbs alone passes vacuously for any sink reached *around* that registry. Three
+ * shapes do exactly that and the repo already spells each of them: a native module
+ * (`await import('node-pty')`), Electron's unpatched fs behind `createRequire('original-fs')`
+ * (`asar-transparent-fs`), and a second JS realm (`new Worker(...)`, whose module graph this file's
+ * mocks never touch). They are guarded below for that reason, not because today's code reaches them.
+ *
+ * The self-test at the bottom fires every probe, so dropping a mock or renaming a specifier fails
+ * the suite instead of quietly widening what a bound directory is exposed to.
  */
 const ratchet = vi.hoisted(() => {
   const readOnlyFsVerbs = new Set([
@@ -78,11 +88,13 @@ const ratchet = vi.hoisted(() => {
   }
 
   const describeSpawn = (args: unknown[]): { command: string; verb: string } => {
-    // Covers both `execFile(command, args)` and `runProcess({ command, args })`.
-    const spec = isPlainObject(args[0]) ? args[0] : { command: args[0], args: args[1] }
+    // Covers both `execFile(command, args)` and `runProcess({ program, args })`. Reading the wrong
+    // key would deny the allowed read too, which reads as "the ratchet forbids the supported
+    // spawner" and pushes the next author toward `node:child_process` or toward loosening this.
+    const spec = isPlainObject(args[0]) ? args[0] : { program: args[0], args: args[1] }
     const argv: unknown = Reflect.get(spec, 'args')
     return {
-      command: String(Reflect.get(spec, 'command')),
+      command: String(Reflect.get(spec, 'program') ?? Reflect.get(spec, 'command')),
       verb: Array.isArray(argv) && argv.length > 0 ? String(argv[0]) : ''
     }
   }
@@ -107,7 +119,21 @@ const ratchet = vi.hoisted(() => {
     return guarded
   }
 
-  return { readOnlyFsVerbs, guardModule, guardSpawnModule, readPaths }
+  /**
+   * A module with no legitimate read on this path: every named export throws. Built without
+   * `importOriginal` so guarding a native or Electron-only module never loads it.
+   */
+  const forbiddenModule = (label: string, names: readonly string[]): Record<string, unknown> => {
+    const guarded: Record<string, unknown> = {}
+    for (const name of names) {
+      guarded[name] = () => {
+        throw new Error(`D9 violation: bound-home usage called ${label}.${name}`)
+      }
+    }
+    return guarded
+  }
+
+  return { readOnlyFsVerbs, guardModule, guardSpawnModule, forbiddenModule, readPaths }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -130,6 +156,43 @@ vi.mock('node:child_process', async (importOriginal) => {
 vi.mock('../../shared/child-process/run-process', async (importOriginal) =>
   ratchet.guardSpawnModule(await importOriginal<object>(), 'shared/child-process')
 )
+
+// Why: a PTY spawn is one of the five writes this file names, and `claude-pty.ts` and
+// `codex-pty-rate-limit-probe.ts` both reach it as `await import('node-pty')` — a specifier no
+// `node:child_process` guard sees. Guarding `./claude-pty` guards the wrapper, not the sink.
+vi.mock('node-pty', () => ratchet.forbiddenModule('node-pty', ['spawn', 'open']))
+
+// Why: `asar-transparent-fs` resolves its `rm` through `createRequire(__filename)('original-fs')`,
+// Electron's unpatched, fully write-capable fs. A recursive delete through it touches no `node:fs*`
+// specifier.
+vi.mock('../asar-transparent-fs', () => ratchet.forbiddenModule('asar-transparent-fs', ['rm']))
+
+// Why: `createRequire` is the general form of that escape — it resolves outside vitest's registry,
+// so `createRequire(__filename)('fs').writeFileSync` and `('original-fs')` alike land on the real
+// module whatever is mocked above. Nothing on this path needs a CommonJS require.
+vi.mock('node:module', async (importOriginal) => {
+  const guarded = {
+    ...(await importOriginal<object>()),
+    ...ratchet.forbiddenModule('node:module', ['createRequire'])
+  }
+  return { ...guarded, default: guarded }
+})
+
+// Why: a worker runs its entry file in a second module registry, where none of this file's mocks
+// apply — so any write inside it escapes every guard above. `usage-scan-worker-spawn.ts` is the
+// in-repo spelling. Only the constructor is replaced; the module's data exports stay real.
+vi.mock('node:worker_threads', async (importOriginal) => {
+  const actual = await importOriginal<object>()
+  const guarded = {
+    ...actual,
+    Worker: class {
+      constructor() {
+        throw new Error('D9 violation: bound-home usage started a worker thread')
+      }
+    }
+  }
+  return { ...guarded, default: guarded }
+})
 
 // Why the read exports survive: deciding whether a bound directory is signed in *requires* reading
 // its scoped Keychain item on macOS. They are stubbed so the suite never depends on — or reads —
@@ -239,8 +302,29 @@ describe('fetchBoundClaudeHomeUsage', () => {
     expect(fetchClaudeOAuthUsage).not.toHaveBeenCalled()
   })
 
-  it('reports signed-out without any HTTP call when the file holds no access token', async () => {
+  it('reports expired, not signed-out, when only a refresh token is left', async () => {
+    // Why: this is the shape Claude leaves once an access token is consumed and cleared. "Signed
+    // out" sends the user to a full `claude login`, which rotates the very token Orca is trying not
+    // to disturb — re-running `claude` in that directory is all it needs.
     const result = await fetchBoundClaudeHomeUsage(fixtureDir('no-token'))
+
+    expect(result).toEqual({ status: 'expired', rateLimits: null })
+    expect(fetchClaudeOAuthUsage).not.toHaveBeenCalled()
+  })
+
+  it('reports expired when the scoped Keychain item holds only a refresh token', async () => {
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { refreshToken: 'keychain-refresh' } })
+    )
+
+    const result = await fetchBoundClaudeHomeUsage(fixtureDir('absent'))
+
+    expect(result).toEqual({ status: 'expired', rateLimits: null })
+    expect(fetchClaudeOAuthUsage).not.toHaveBeenCalled()
+  })
+
+  it('reports signed-out without any HTTP call when the file holds no credentials at all', async () => {
+    const result = await fetchBoundClaudeHomeUsage(fixtureDir('signed-out'))
 
     expect(result).toEqual({ status: 'signed-out', rateLimits: null })
     expect(fetchClaudeOAuthUsage).not.toHaveBeenCalled()
@@ -285,10 +369,15 @@ describe('fetchBoundClaudeHomeUsage', () => {
     await expect(fetchBoundClaudeHomeUsage(fixtureDir('valid'))).rejects.toThrow('HTTP 500')
   })
 
-  it('reads nothing outside the bound directory and writes nothing anywhere', async () => {
+  it('keeps every read this module makes itself inside the bound directory', async () => {
+    // Scope of the claim: the reads this module performs *through a mocked module*. The macOS
+    // Keychain entry point is stubbed, so its own `realpathSync`/`lstatSync` alias walk — which
+    // deliberately climbs above the bound directory (`keychain.ts:133-177`) — does not run here and
+    // is not covered by the path assertion below. Those are reads, which D9 permits; what matters
+    // is which entry point is used and how it is called, asserted directly underneath.
     vi.mocked(fetchClaudeOAuthUsage).mockResolvedValue(okProvider('claude', 3))
 
-    for (const fixture of ['valid', 'expired', 'absent', 'no-token', 'unreadable']) {
+    for (const fixture of ['valid', 'expired', 'absent', 'no-token', 'signed-out', 'unreadable']) {
       const configDir = fixtureDir(fixture)
       await fetchBoundClaudeHomeUsage(configDir)
       const strayPaths = ratchet.readPaths.filter((read) => !read.startsWith(configDir))
@@ -300,5 +389,104 @@ describe('fetchBoundClaudeHomeUsage', () => {
     for (const call of vi.mocked(readActiveClaudeKeychainCredentialsStrict).mock.calls) {
       expect(call[0]?.startsWith(fixtureRoot)).toBe(true)
     }
+  })
+
+  it('never reaches the Keychain through any entry point but the config-dir-scoped one', async () => {
+    // Why this is the real guarantee: the strict reader is the only one that cannot fall back to
+    // the unscoped `Claude Code-credentials` item. The path recorder above cannot see inside it,
+    // so the narrow claim — one entry point, always scoped — is asserted here instead.
+    vi.mocked(fetchClaudeOAuthUsage).mockResolvedValue(okProvider('claude', 3))
+
+    for (const fixture of ['valid', 'expired', 'absent', 'no-token', 'signed-out', 'unreadable']) {
+      await fetchBoundClaudeHomeUsage(fixtureDir(fixture))
+    }
+
+    expect(readActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(vi.mocked(readActiveClaudeKeychainCredentialsStrict).mock.calls.length).toBeGreaterThan(
+      0
+    )
+    for (const call of vi.mocked(readActiveClaudeKeychainCredentialsStrict).mock.calls) {
+      expect(call[0]?.startsWith(fixtureRoot)).toBe(true)
+    }
+  })
+})
+
+/**
+ * The probes, run rather than recorded. Each one is the shape a real mutation of
+ * `fetchBoundClaudeHomeUsage` would take; a green suite with any of these passing means the ratchet
+ * has stopped biting. Every guarded specifier gets exactly one probe.
+ */
+describe('the D9 ratchet itself', () => {
+  const boundFile = path.join(fixtureDir('valid'), 'probe.json')
+
+  it('fails a file write into the bound directory', async () => {
+    const fsPromises = await import('node:fs/promises')
+
+    expect(() => fsPromises.writeFile(boundFile, '{}')).toThrow('D9 violation')
+  })
+
+  it('fails a file write reached through the nested `fs.promises` object', async () => {
+    const fs = await import('node:fs')
+
+    expect(() => fs.default.promises.writeFile(boundFile, '{}')).toThrow('D9 violation')
+    expect(() => fs.writeFileSync(boundFile, '{}')).toThrow('D9 violation')
+  })
+
+  it('fails a Keychain item write however it is spawned, and allows only the read verb', async () => {
+    const { execFile } = await import('node:child_process')
+    const { runProcess } = await import('../../shared/child-process/run-process')
+
+    expect(() =>
+      execFile('security', ['add-generic-password', '-s', 'Claude Code-credentials'])
+    ).toThrow('D9 violation')
+    expect(() => runProcess({ program: 'security', args: ['delete-generic-password'] })).toThrow(
+      'D9 violation'
+    )
+    // The allowed read has to stay allowed through the spawner the repo actually mandates.
+    expect(() => execFile('security', ['find-generic-password', '-s', 'x'])).not.toThrow()
+    expect(() =>
+      runProcess({ program: 'security', args: ['find-generic-password', '-s', 'x'] })
+    ).not.toThrow()
+  })
+
+  it('fails a Keychain write export and a credential stage', async () => {
+    const keychain = await import('../claude-accounts/keychain')
+    const refresh = await import('../claude-accounts/oauth-refresh')
+
+    expect(() => keychain.writeActiveClaudeKeychainCredentials('{}')).toThrow('D9 violation')
+    expect(() => keychain.deleteActiveClaudeKeychainCredentials()).toThrow('D9 violation')
+    expect(Object.keys(refresh).length).toBeGreaterThan(0)
+    for (const name of Object.keys(refresh)) {
+      const exported: unknown = Reflect.get(refresh, name)
+      if (typeof exported === 'function') {
+        expect(() => exported()).toThrow('D9 violation')
+      }
+    }
+  })
+
+  it('fails a PTY spawn reached as a dynamic `node-pty` import', async () => {
+    // The R1 probe: `claude-pty.ts` and `codex-pty-rate-limit-probe.ts` both spell it exactly this
+    // way, so this is the shape a "reuse the PTY fetcher for parity" change would take.
+    const pty = await import('node-pty')
+
+    expect(() => pty.spawn('claude', ['/usage'], {})).toThrow('D9 violation')
+  })
+
+  it("fails a delete reached through Electron's unpatched `original-fs`", async () => {
+    const asarFs = await import('../asar-transparent-fs')
+
+    expect(() => asarFs.rm(fixtureDir('valid'), { recursive: true })).toThrow('D9 violation')
+  })
+
+  it('fails a CommonJS require, the general form of the `original-fs` escape', async () => {
+    const { createRequire } = await import('node:module')
+
+    expect(() => createRequire(__filename)).toThrow('D9 violation')
+  })
+
+  it('fails a worker thread, whose module graph none of these mocks reach', async () => {
+    const { Worker } = await import('node:worker_threads')
+
+    expect(() => new Worker('./writer.js')).toThrow('D9 violation')
   })
 })

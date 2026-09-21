@@ -79,7 +79,8 @@ describe('BoundClaudeHomesSection', () => {
   it.each([
     ['signed-out', 'Signed out'],
     ['expired', 'Session expired'],
-    ['unreadable', 'Directory unreadable']
+    ['unreadable', 'Directory unreadable'],
+    ['unavailable', 'Usage unavailable']
   ] as const)('renders a muted status line instead of bars for %s', (status, label) => {
     render(<BoundClaudeHomesSection rows={[usageRow({ status })]} groups={groups} />)
 
