@@ -11,6 +11,9 @@ export type LinearWorkspace = LinearViewer & {
   organizationId: string
   isLegacy?: true
   credentialRevision?: number
+  viewerId?: string
+  credentialOwnerProfileId?: string
+  credentialEpoch?: string
 }
 
 export type LinearWorkspaceSelection = (string & {}) | 'all'
@@ -67,9 +70,14 @@ export function linearWorkspaceScopeSignature(
     viewerOrganizationUrlKey: status.viewer?.organizationUrlKey ?? null,
     workspaces: (status.workspaces ?? [])
       .map((workspace) =>
-        [workspace.id, workspace.organizationUrlKey ?? '', workspace.credentialRevision ?? 0].join(
-          '\u001f'
-        )
+        [
+          workspace.id,
+          workspace.organizationUrlKey ?? '',
+          workspace.credentialRevision ?? 0,
+          workspace.viewerId ?? '',
+          workspace.credentialOwnerProfileId ?? '',
+          workspace.credentialEpoch ?? ''
+        ].join('\u001f')
       )
       .sort()
   })

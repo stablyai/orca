@@ -115,7 +115,10 @@ function linearWorkspaceSignature(workspace: LinearWorkspace): string {
     workspace.organizationUrlKey ?? '',
     workspace.displayName,
     workspace.email ?? '',
-    workspace.credentialRevision ?? 0
+    workspace.credentialRevision ?? 0,
+    workspace.viewerId ?? '',
+    workspace.credentialOwnerProfileId ?? '',
+    workspace.credentialEpoch ?? ''
   ].join('\u001f')
 }
 
