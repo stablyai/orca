@@ -147,6 +147,45 @@ describe('the rich Markdown editor document at parse time', () => {
     )
   })
 
+  it('finds a lifecycle export however it is written, and only when it is one', () => {
+    // The precondition for the comparison above, and the reason it is read from the tree: a
+    // pattern over the source needed one exact spelling, so `async`, a return type or a parameter
+    // list the formatter wrapped made a real start disappear — and a start missing from both
+    // lists makes them agree, which is the silent version of the failure they exist to catch.
+    const spellings: [string, string][] = [
+      ['plain', 'export function startKeyboardInset(scope: RichMarkdownEditorScope) {\n}\n'],
+      ['async', 'export async function startKeyboardInset(scope: RichMarkdownEditorScope) {\n}\n'],
+      [
+        'with a return type',
+        'export function startKeyboardInset(scope: RichMarkdownEditorScope): void {\n}\n'
+      ],
+      [
+        'wrapped parameters',
+        'export function startKeyboardInset(\n  scope: RichMarkdownEditorScope\n) {\n}\n'
+      ]
+    ]
+    expect(
+      spellings.map(([spelling, source]) => [
+        spelling,
+        exportedLifecycleFunctions(source, 'start', 'RichMarkdownEditorScope')
+      ])
+    ).toEqual(spellings.map(([spelling]) => [spelling, ['startKeyboardInset']]))
+
+    // And only when it is one. A start that takes more than the scope is an act the document
+    // performs, not a module's lifecycle (ruling 20), and a start over another document's scope
+    // belongs to that document.
+    const refused = [
+      'export function startEdgeScroll(scope: RichMarkdownEditorScope, dir: number) {\n}\n',
+      'export function startTapDispatch(scope: TerminalDocumentScope) {\n}\n',
+      'function startKeyboardInset(scope: RichMarkdownEditorScope) {\n}\n'
+    ]
+    expect(
+      refused.map((source) =>
+        exportedLifecycleFunctions(source, 'start', 'RichMarkdownEditorScope')
+      )
+    ).toEqual([[], [], []])
+  })
+
   it('would name a start the sequence forgot, which is what the comparison above is for', () => {
     const planted = sequenceCallsTo('startRichMarkdownEditorDocument')
     expect(planted).not.toContain('startEditorCommands')

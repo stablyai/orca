@@ -288,17 +288,53 @@ export function moduleLevelMutableBindings(name: string, source: string): string
   return found
 }
 
-/** Every `export function start…(scope: <Scope>)` a module declares, by name. */
+/**
+ * Every lifecycle function a module exports, by name, read from the tree.
+ *
+ * A regular expression over the source needed one exact spelling — `export function`, one line,
+ * the scope parameter, no return type — so `export async function startX(` or a parameter list the
+ * formatter wrapped would vanish from this list. That failure is silent in the worst way: the
+ * comparison this feeds is a set against the names the sequence calls, so a function missing from
+ * *both* lists makes them agree, and a start nobody runs reads as a start nobody needs.
+ *
+ * A function qualifies by what it is rather than how it is written: exported, named for the
+ * lifecycle it belongs to, and taking the document's scope as its first parameter.
+ */
 export function exportedLifecycleFunctions(
   source: string,
   keyword: 'start' | 'stop',
   scopeType: string
 ): string[] {
-  const pattern = new RegExp(
-    `^export function (${keyword}[A-Za-z]+)\\(scope: ${scopeType}\\) \\{$`,
-    'gm'
-  )
-  return [...source.matchAll(pattern)].map((match) => match[1]!)
+  const names: string[] = []
+  for (const statement of parseModule('lifecycle', source).body) {
+    if (statement.type !== 'ExportNamedDeclaration') {
+      continue
+    }
+    const declared = field(statement, 'declaration')
+    if (stringField(declared, 'type') !== 'FunctionDeclaration') {
+      continue
+    }
+    const name = stringField(field(declared, 'id'), 'name')
+    if (!name.startsWith(keyword)) {
+      continue
+    }
+    // Exactly one parameter, which is ruling 20's own wording: a start takes nothing the scope
+    // does not already carry. `startEdgeScroll(scope, dir)` takes a direction, so it is the
+    // overlay's own act for a drag rather than a module's lifecycle.
+    const params = arrayField(declared, 'params')
+    const [first] = params
+    if (params.length !== 1 || stringField(first, 'name') !== 'scope') {
+      continue
+    }
+    const annotation = field(first, 'typeAnnotation')
+    const written = source
+      .slice(numberField(annotation, 'start'), numberField(annotation, 'end'))
+      .replace(/^:\s*/, '')
+    if (written === scopeType) {
+      names.push(name)
+    }
+  }
+  return names
 }
 
 /**
