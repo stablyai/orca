@@ -2603,6 +2603,18 @@
           }
         }
       },
+      "dropUploadFailure": {
+        "connectionChanged": "Remote connection changed; retry the import.",
+        "fileTooLarge": "File is too large",
+        "missing": "File not found.",
+        "more_one": "+{{count}} more failure",
+        "more_other": "+{{count}} more failures",
+        "pairingChanged": "Remote pairing changed; retry the import.",
+        "permissionDenied": "Permission denied.",
+        "storageFull": "Not enough storage.",
+        "totalTooLarge": "Total upload is too large.",
+        "unsupported": "Unsupported file type."
+      },
       "terminal": {
         "shortcut": {
           "capture": {
