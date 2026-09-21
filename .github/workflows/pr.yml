@@ -223,6 +223,9 @@ jobs:
       - name: Verify localization extraction
         run: pnpm run verify:localization-extraction
 
+      - name: Verify no orphaned localization keys
+        run: pnpm run verify:localization-orphans
+
       - name: Verify localization coverage
         run: pnpm run verify:localization-coverage
 
