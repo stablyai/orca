@@ -421,6 +421,31 @@ describe('a capture the page loses', () => {
     expect(Array.from(chunks.at(-1)?.data ?? [])).toEqual(Array.from(pcm(512, 21)))
   })
 
+  it('ends a capture opened after the last end, though `begin` never ran between them', async () => {
+    // `open` starts the shell recording, and the hook sets `activeIdRef` before the desktop
+    // session exists: a start that goes stale after that point cleans up through `capture.end()`
+    // while `commitRecordingStart` -- the only caller of `begin` -- never runs. An `end` still
+    // holding the previous dictation's settled promise answers from it and stops nothing, leaving
+    // the shell recording a capture no page is draining.
+    const shell = createAudioShell()
+    const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
+    const capture = await mount(pair)
+    await capture.open()
+    capture.begin()
+    await act(async () => {
+      await capture.end()
+      await pair.flush()
+    })
+    await capture.open()
+    const stopsBefore = shell.calls.filter((verb) => verb === 'native.audio.stop').length
+    await act(async () => {
+      await capture.end()
+      await pair.flush()
+    })
+    const stopsAfter = shell.calls.filter((verb) => verb === 'native.audio.stop').length
+    expect(stopsAfter).toBe(stopsBefore + 1)
+  })
+
   it('swallows a refused stop, because a capture that will not end is not the page to fix', async () => {
     const shell = createAudioShell({
       refuse: (verb) =>

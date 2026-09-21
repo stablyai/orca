@@ -73,8 +73,11 @@ export function createPageDictationCapture(
   const chunkHandlers: Handlers<(chunk: DictationCaptureChunk) => void> = new Set()
   const interruptionHandlers: Handlers<() => void> = new Set()
   let timer: ReturnType<typeof setInterval> | null = null
-  /** The end in flight, or the one that already finished; null while a capture is drainable. */
+  /** The end in flight; null when none is running. Cleared on settle rather than held, because
+   *  `begin` is not guaranteed to run between two ends and a finished one must shadow neither. */
   let ending: Promise<void> | null = null
+  /** The screen went away: no later end reads or stops again. Cleared by `begin`. */
+  let released = false
   /** The read in flight, if there is one. At most one: two would double the slots dictation spends
    *  and can settle out of order, which is a splice of two moments reaching the transcriber as
    *  speech. Held rather than flagged so a stop can wait for it before taking its own turn. */
@@ -161,23 +164,38 @@ export function createPageDictationCapture(
   }
 
   /**
-   * Idempotent for the life of one capture, which is what stops a refused read looping.
+   * Idempotent while one end is in flight, which is what stops a refused read looping.
    *
    * The hook's interruption handler is `() => void cancel()`, and `cancel` reaches `end()`
    * synchronously through `closeDictationAudio`. So the last read here can raise an interruption
    * that calls straight back into this function, whose own last read is refused for the same
    * reason — the shell has no capture — and the recursion issues bridge reads until the page runs
-   * out of memory. Returning the first call's promise makes the second a no-op rather than a
-   * second read. `begin` clears it, because the seam is memoised per client and the next dictation
-   * on the same screen has to be able to drain.
+   * out of memory. Returning the in-flight promise makes the re-entrant call a no-op rather than a
+   * second read; the recursion happens while that promise is still pending, so guarding the flight
+   * is enough and outliving it is not required.
+   *
+   * Cleared on settle, because a finished end must not answer for the next capture. `open` starts
+   * the shell recording and the hook can reach `end` before `begin` — a start that goes stale
+   * after `activeIdRef` is set cleans up that way, and `begin` is the only thing that would have
+   * cleared a latch — so an end held past its own flight would report a stop it never issued and
+   * leave the shell holding a live microphone.
    */
   function endCapture(): Promise<void> {
+    // A released capture has already stopped the shell and has nobody to hand a tail to.
+    if (released) {
+      return Promise.resolve()
+    }
     if (ending !== null) {
       return ending
     }
     // Assigned before anything can await, so a handler re-entering from inside the read below
     // finds it set rather than starting a second end.
-    const run = runEndCapture()
+    const run = runEndCapture().finally(() => {
+      // Only its own flight: `begin` may have started a newer capture while this one settled.
+      if (ending === run) {
+        ending = null
+      }
+    })
     ending = run
     return run
   }
@@ -196,6 +214,7 @@ export function createPageDictationCapture(
     begin: () => {
       // The shell began capturing inside `start`; this is the page's half, which is the drain.
       ending = null
+      released = false
       stopDraining()
       timer = setInterval(() => {
         void drain()
@@ -206,8 +225,9 @@ export function createPageDictationCapture(
     // No last read: a release is the screen going away, and there is nobody left to hand the tail
     // to. The shell sweeps the ring with the capture.
     release: () => {
-      // Marked ended so a later `end` neither reads nor stops again: the screen is going away.
-      ending ??= Promise.resolve()
+      // Marked released so a later `end` neither reads nor stops again: the screen is going away.
+      // A flag rather than a settled `ending`, which now clears itself and would unlatch this.
+      released = true
       stopDraining()
       void stopShell()
     },
