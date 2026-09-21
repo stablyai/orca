@@ -9,6 +9,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { OrcaMobileWebShellViewProps } from '../../modules/orca-mobile-web-shell/src'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 type Dependencies = {
@@ -92,7 +93,8 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
   const React = await import('react')
   const loadState = await import('../../modules/orca-mobile-web-shell/src/load-state')
   return {
-    OrcaMobileWebShellView: (props: object) => React.createElement('ShellViewProbe', props),
+    OrcaMobileWebShellView: (props: OrcaMobileWebShellViewProps) =>
+      React.createElement('ShellViewProbe', props),
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
   }
 })
