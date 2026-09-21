@@ -26,14 +26,16 @@ export function ProjectGroupHeaderMenu({
   hostId,
   label,
   onRename,
-  onDelete
+  onDelete,
+  onOpenSettings
 }: {
   groupId: string
-  /** Owner host of the group row, so rename/delete route to the host that holds it. */
+  /** Owner host of the group row, so rename/delete/settings route to the host that holds it. */
   hostId?: ExecutionHostId
   label: string
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onOpenSettings: (groupId: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   return (
     <DropdownMenu modal={false}>
@@ -70,6 +72,15 @@ export function ProjectGroupHeaderMenu({
       >
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          data-project-group-menu-item="settings"
+          onSelect={() => onOpenSettings(groupId, hostId)}
+        >
+          {translate(
+            'auto.components.sidebar.WorktreeList.projectGroupSettings',
+            'Group settings\u2026'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}

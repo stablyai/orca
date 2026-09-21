@@ -6,11 +6,27 @@ import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-r
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  selectInheritedClaudeConfigDir,
+  selectProjectGroupForHost,
+  type InheritedClaudeConfigDir
+} from '../../project-group-claude-config-dir-selection'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+
+export type ProjectGroupSettingsDialogState = {
+  groupId: string
+  groupName: string
+  /** The group's own binding, captured at open time; ancestors arrive through `inherited`. */
+  configDir: string | null
+  inherited: InheritedClaudeConfigDir | null
+  /** SSH target of the owner host, so the dialog's advisory probe reads the right filesystem. */
+  connectionId: string | null
+  hostId?: ExecutionHostId
+}
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -61,7 +77,7 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
-// Create/rename/delete flows for project groups, including the contained-project fan-out.
+// Create/rename/delete/settings flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
@@ -76,6 +92,7 @@ export function useProjectGroupDialogs(args: {
   )
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
+  const [settingsDialog, setSettingsDialog] = useState<ProjectGroupSettingsDialogState | null>(null)
 
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setNameDialog({ type: 'create-from-repo', repo })
@@ -141,6 +158,50 @@ export function useProjectGroupDialogs(args: {
     [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
   )
 
+  const handleOpenProjectGroupSettings = useCallback(
+    (groupId: string, hostId?: ExecutionHostId) => {
+      const group = selectProjectGroupForHost(projectGroups, groupId, hostId)
+      setSettingsDialog({
+        groupId,
+        groupName: group?.name ?? groupId,
+        configDir: group?.claudeConfigDir ?? null,
+        inherited: selectInheritedClaudeConfigDir(projectGroups, groupId, hostId),
+        connectionId: group?.connectionId ?? null,
+        hostId
+      })
+    },
+    [projectGroups]
+  )
+
+  const handleSubmitProjectGroupSettings = useCallback(
+    async (claudeConfigDir: string | null) => {
+      if (!settingsDialog) {
+        return
+      }
+      const saved = await updateProjectGroup(
+        settingsDialog.groupId,
+        { claudeConfigDir },
+        { hostId: settingsDialog.hostId }
+      )
+      if (!saved) {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.groupSettingsSaveFailed',
+            'Failed to save group settings'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.WorktreeList.groupSettingsSaveFailedDesc',
+              // Why: a falsy result also covers a refused path and an RPC timeout, so the copy must not assert which.
+              "Orca could not confirm the Claude config directory with the group's host. Check that the path is absolute and recheck the group after reconnecting."
+            )
+          }
+        )
+      }
+    },
+    [settingsDialog, updateProjectGroup]
+  )
+
   const deleteTargets = useMemo(() => {
     if (!deleteDialog) {
       return null
@@ -192,6 +253,8 @@ export function useProjectGroupDialogs(args: {
     setNameDialog,
     deleteDialog,
     setDeleteDialog,
+    settingsDialog,
+    setSettingsDialog,
     deleteProjectCount,
     deleteProjectNames,
     removeContainedProjects,
@@ -201,6 +264,8 @@ export function useProjectGroupDialogs(args: {
     handleRenameProjectGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
-    handleConfirmDeleteProjectGroup
+    handleConfirmDeleteProjectGroup,
+    handleOpenProjectGroupSettings,
+    handleSubmitProjectGroupSettings
   }
 }

@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { ProjectGroupNameDialog } from '../../ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from '../../ProjectGroupDeleteDialog'
+import { ProjectGroupSettingsDialog } from '../../ProjectGroupSettingsDialog'
 import SuppressExternalWorktreeInboxDialog from '../../SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
@@ -28,7 +29,7 @@ export function SidebarWorktreeListDialogs({
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
-  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog, settingsDialog } = dialogs
   return (
     <>
       <ProjectGroupNameDialog
@@ -112,6 +113,19 @@ export function SidebarWorktreeListDialogs({
           }
         }}
         onConfirm={dialogs.handleConfirmDeleteProjectGroup}
+      />
+      <ProjectGroupSettingsDialog
+        open={settingsDialog !== null}
+        groupName={settingsDialog?.groupName ?? ''}
+        configDir={settingsDialog?.configDir ?? null}
+        inherited={settingsDialog?.inherited ?? null}
+        connectionId={settingsDialog?.connectionId ?? null}
+        onOpenChange={(open) => {
+          if (!open) {
+            dialogs.setSettingsDialog(null)
+          }
+        }}
+        onSubmit={dialogs.handleSubmitProjectGroupSettings}
       />
     </>
   )
