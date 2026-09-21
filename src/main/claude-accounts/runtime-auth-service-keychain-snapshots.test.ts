@@ -709,4 +709,29 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
     warn.mockRestore()
   })
+
+  it('does not abort the switch when the live Keychain read for the shared-field merge fails', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      managedCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
+    })
+    const store = createStore(settings)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    testState.throwActiveKeychainRead = true
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    settings.activeClaudeManagedAccountId = 'account-1'
+    await expect(service.syncForCurrentSelection()).resolves.toBeUndefined()
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(managedCredentials)
+    warn.mockRestore()
+  })
 })
