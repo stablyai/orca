@@ -125,7 +125,8 @@ export function finalizeLocalPtySpawnEnvironment(args: {
           // handshake can bind output to the right shell PID.
           emitsStartupIdentity: waitsForShellReady
         }),
-        wrapperStartupCommand
+        wrapperStartupCommand,
+        plan.shellArgs
       )
     }
     const shellLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)

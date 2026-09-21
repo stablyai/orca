@@ -215,5 +215,40 @@
     "text": ". Switch to System shell or choose an executable on this host.",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "args",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "arguments",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "-l",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Custom shell arguments",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-text",
+    "text": "Arguments passed to the shell executable. Defaults to -l (login shell).",
+    "dynamic": false,
+    "count": 1
   }
 ]

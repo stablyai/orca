@@ -1,3 +1,4 @@
+import { resolveDefaultShellArgs } from '../../../../shared/terminal-shell-args'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -38,6 +39,10 @@ export function configureLocalPtyProvider(args: {
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
     getDefaultShell: () => getSettings?.()?.terminalDefaultShell,
+    getDefaultShellArgs: () => {
+      const configured = getSettings?.()?.terminalDefaultShellArgs
+      return configured === undefined ? undefined : resolveDefaultShellArgs(configured)
+    },
     getWindowsPowerShellImplementation: () =>
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),

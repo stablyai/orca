@@ -47,33 +47,7 @@ export function resolveAgentBrowserBinary(): string {
   return 'agent-browser'
 }
 
-// Why: exec commands arrive as one string; split on whitespace but respect quotes so quoted args stay intact.
-export function parseShellArgs(input: string): string[] {
-  const args: string[] = []
-  let current = ''
-  let inDouble = false
-  let inSingle = false
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i]
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble
-    } else if (ch === "'" && !inDouble) {
-      inSingle = !inSingle
-    } else if (ch === ' ' && !inDouble && !inSingle) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-    } else {
-      current += ch
-    }
-  }
-  if (current) {
-    args.push(current)
-  }
-  return args
-}
+export { parseShellArgs } from '../../shared/terminal-shell-args'
 
 export function stripAgentBrowserTargetArgs(args: string[]): string[] {
   const stripped: string[] = []

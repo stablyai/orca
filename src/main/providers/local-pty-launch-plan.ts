@@ -243,9 +243,10 @@ export function createLocalPtyLaunchPlan(
     args.env?.SHELL ||
     process.env.SHELL ||
     '/bin/zsh'
+  const shellArgs = getOptions().getDefaultShellArgs?.() ?? ['-l']
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
-    shellArgs: ['-l'],
+    shellArgs,
     effectiveCwd: cwd,
     validationCwd: cwd
   })

@@ -85,7 +85,17 @@ export function TerminalPane({
     matchesSettingsSearch(searchQuery, {
       title: 'Default shell',
       description: 'Shell used for new terminal panes',
-      keywords: ['shell', 'terminal', 'fish', 'zsh', 'bash', 'nushell', 'default']
+      keywords: [
+        'shell',
+        'terminal',
+        'fish',
+        'zsh',
+        'bash',
+        'nushell',
+        'default',
+        'args',
+        'arguments'
+      ]
     }) ? (
       <section key="default-shell" className="space-y-3">
         <SettingsSubsectionHeader
@@ -131,6 +141,21 @@ export function TerminalPane({
               ) : null}
             </div>
           ) : null}
+          <div className="space-y-1.5">
+            <Input
+              value={settings.terminalDefaultShellArgs ?? ''}
+              placeholder="-l"
+              onChange={(event) => {
+                updateSettings({ terminalDefaultShellArgs: event.target.value })
+              }}
+              className="w-full"
+              aria-label="Custom shell arguments"
+              aria-describedby="default-shell-args-help"
+            />
+            <p id="default-shell-args-help" className="text-xs text-muted-foreground">
+              Arguments passed to the shell executable. Defaults to -l (login shell).
+            </p>
+          </div>
         </div>
       </section>
     ) : null
