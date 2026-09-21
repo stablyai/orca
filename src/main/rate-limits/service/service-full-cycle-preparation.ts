@@ -15,6 +15,7 @@ import type {
 } from './service-types'
 
 export type FetchAllCyclePrepared = {
+  claudeFetchStartedAt: number
   claudeTarget: NormalizedClaudeAccountSelectionTarget
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
@@ -51,6 +52,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+    const claudeFetchStartedAt = Date.now()
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
@@ -194,6 +196,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
+      claudeFetchStartedAt,
       results: [
         claudeResult,
         codexResult,
