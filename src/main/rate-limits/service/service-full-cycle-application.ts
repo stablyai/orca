@@ -26,6 +26,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
+      claudeFetchStartedAt,
       results: [
         claudeResult,
         codexResult,
@@ -169,7 +170,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude, claudeFetchStartedAt)
         : this.state.claude,
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)

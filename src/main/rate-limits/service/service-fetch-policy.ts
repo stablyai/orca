@@ -1,5 +1,6 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
 import {
+  DEFAULT_POLL_MS,
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
   isSameUsageWindow,
@@ -12,6 +13,9 @@ import {
 import { mapClaudeUsageWindow } from '../claude-usage-window'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
+  // Why: statusline freshness does not refresh Fable; track actual attempts separately, per account generation.
+  private claudeSupplementAttempt: { generation: number; at: number; retryAt: number } | null = null
+
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -43,13 +47,31 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
-    return this.isRetryAfterActive(limits) || this.isLiveClaudeUsageFresh(limits)
+    const attempt = this.claudeSupplementAttempt
+    const currentAttempt = attempt?.generation === this.claudeFetchGeneration ? attempt : null
+    if (
+      this.isRetryAfterActive(limits) ||
+      (currentAttempt && currentAttempt.retryAt > Date.now())
+    ) {
+      return true
+    }
+    return Boolean(
+      this.isLiveClaudeUsageFresh(limits) &&
+      currentAttempt &&
+      Date.now() - currentAttempt.at < DEFAULT_POLL_MS
+    )
   }
 
   protected resolveClaudeFetchApply(
     fresh: ProviderRateLimits,
-    previous: ProviderRateLimits | null
+    previous: ProviderRateLimits | null,
+    startedAt: number
   ): ProviderRateLimits {
+    this.claudeSupplementAttempt = {
+      generation: this.claudeFetchGeneration,
+      at: startedAt,
+      retryAt: fresh.usageMetadata?.retryAtMs ?? 0
+    }
     // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
     // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
     const current = this.state.claude
@@ -122,7 +144,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         session,
         weekly,
         // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
-        // Tradeoff: while live posts keep the OAuth poll gated, fableWeekly stays frozen until the session idles past the freshness window.
+        // Why: the separate attempt clock permits bounded Fable refreshes even during continuous live posts.
         fableWeekly: previous?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,

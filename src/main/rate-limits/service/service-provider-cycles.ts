@@ -89,6 +89,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
       return
     }
+    const claudeFetchStartedAt = Date.now()
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
@@ -140,7 +141,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude, claudeFetchStartedAt)
         : this.state.claude
     })
   }
