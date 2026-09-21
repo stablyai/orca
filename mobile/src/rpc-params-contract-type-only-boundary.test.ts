@@ -114,9 +114,9 @@ export function contractValueImports(path: string, source: string): string[] {
  * there — so a file re-exporting the contract under a name was dropped before the analyser saw it,
  * which is the one shape the soundness case exists to catch. Anything holding that shape is handed
  * on as well. Counted over the 2,236 files this census reads: 1,005 carry an asterisk and so reach
- * the token scan, which costs 118 ms for all of them together, and exactly one matches — this
- * file, through the fixture strings below. No product file uses the shape, so the widening hands
- * the analyser nothing new.
+ * the token scan, which costs 173 ms for all of them together, and none matches — including this
+ * one, whose spellings below live inside template literals and are therefore template text rather
+ * than tokens. No file in the tree holds the shape, so the widening hands the analyser nothing new.
  *
  * A text match for the contract path would be the other way to widen, and is the wrong one: the
  * escaped-specifier case is a real import whose text does not contain the directory name, so a
@@ -145,9 +145,35 @@ function hasNamespaceReExport(source: string): boolean {
     ts.LanguageVariant.Standard,
     source
   )
+  // The scanner is not a standalone tokenizer: after a `${...}` substitution the closing brace has
+  // to be re-scanned as a template token or everything after it is read as ordinary source, and the
+  // rest of the file is tokenised wrongly. `preProcessFile` keeps this same stack for that reason.
+  const openTemplates: ts.SyntaxKind[] = []
   // `export` -> optional `type` -> `*` -> `as`, restarting from any `export` that breaks it.
   let matched = 0
   for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (token === ts.SyntaxKind.TemplateHead) {
+      openTemplates.push(ts.SyntaxKind.TemplateHead)
+      matched = 0
+      continue
+    }
+    if (openTemplates.length > 0) {
+      // Inside a substitution, which cannot hold this declaration; the work here is staying in step.
+      if (token === ts.SyntaxKind.OpenBraceToken) {
+        openTemplates.push(ts.SyntaxKind.OpenBraceToken)
+      } else if (token === ts.SyntaxKind.CloseBraceToken) {
+        if (openTemplates.at(-1) === ts.SyntaxKind.TemplateHead) {
+          // A tail ends the template; a middle means another substitution follows.
+          if (scanner.reScanTemplateToken(false) === ts.SyntaxKind.TemplateTail) {
+            openTemplates.pop()
+          }
+        } else {
+          openTemplates.pop()
+        }
+      }
+      matched = 0
+      continue
+    }
     if (matched === 2 && token === ts.SyntaxKind.AsKeyword) {
       return true
     }
@@ -238,6 +264,12 @@ describe('RPC params contract boundary', () => {
       // reads the characters between `*` and `as` and a token rule does not see them at all.
       `export * /* note */ as ns from '${contract}'`,
       `export *\n// note\nas ns from '${contract}'`,
+      // And after an interpolated template, which is where a bare scanner loop loses its place.
+      'const t = `a${1}b`\n' + `export * as ns from '${contract}'`,
+      // A brace inside the substitution, and a template inside it: the two shapes that exercise
+      // the stack rather than a single flag, which a lone substitution would leave unpinned.
+      'const t = `a${ { k: 1 } }b`\n' + `export * as ns from '${contract}'`,
+      'const t = `a${ `x${2}y` }b`\n' + `export * as ns from '${contract}'`,
       ESCAPED_SPECIFIER
     ]
     expect(contractImportSpellings.filter((source) => !referencesContract(path, source))).toEqual(
