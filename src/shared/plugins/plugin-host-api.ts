@@ -24,6 +24,8 @@ export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
 export const PLUGIN_BOARDS_PATH_MAX_LENGTH = 2048
+export const PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH = 256
+export const PLUGIN_BOARDS_ORGANIZATION_LIMIT = 64
 
 const workspaceReadContextParams = z.object({}).strict().optional()
 const workspaceReadContextResult = z
@@ -102,6 +104,9 @@ const azureDevOpsBoardsRequestParams = z
   .object({
     method: z.enum(BOARDS_PROXY_METHODS),
     path: z.string().min(1).max(PLUGIN_BOARDS_PATH_MAX_LENGTH),
+    /** Selects one of the host's configured organizations. Absent means the
+     *  first one; a name outside the set is refused, never substituted. */
+    organization: z.string().min(1).max(PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH).optional(),
     query: z.record(z.string().max(256), z.string().max(2048)).optional(),
     body: z.unknown().optional()
   })
@@ -111,6 +116,15 @@ const azureDevOpsBoardsRequestResult = z.object({
   body: z.unknown(),
   /** Host classification of `status`, so a plugin never has to guess; null on success. */
   code: z.enum(PLUGIN_TASK_SOURCE_ERROR_CODES).nullable()
+})
+
+const azureDevOpsBoardsOrganizationsParams = z.object({}).strict().optional()
+const azureDevOpsBoardsOrganizationsResult = z.object({
+  /** Configured organization names, in configured order. Names only: no base
+   *  URLs, no credentials, and no way to add one. */
+  organizations: z
+    .array(z.string().min(1).max(PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH))
+    .max(PLUGIN_BOARDS_ORGANIZATION_LIMIT)
 })
 
 export type PluginHostMethodSpec = {
@@ -278,6 +292,16 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: azureDevOpsBoardsRequestParams,
     result: azureDevOpsBoardsRequestResult
+  }),
+  spec({
+    name: 'azureDevOps.boardsOrganizations',
+    since: '1.1',
+    scope: 'desktop',
+    capability: 'azure-devops:boards',
+    mutation: false,
+    panel: false,
+    params: azureDevOpsBoardsOrganizationsParams,
+    result: azureDevOpsBoardsOrganizationsResult
   })
 ]
 

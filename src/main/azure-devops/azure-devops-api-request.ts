@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getConfiguredAzureDevOpsApiBaseUrls,
+  normalizeAzureDevOpsApiBaseUrl
+} from './azure-devops-organization-base-urls'
 
 const REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_API_VERSION = '7.1'
@@ -61,16 +65,12 @@ function envValue(name: string): string | null {
   return value.length > 0 ? value : null
 }
 
-export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
 export function getAzureDevOpsAuthConfig(): AzureDevOpsAuthConfig {
   return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
+    // One base URL, never the raw list: every caller of this config addresses a
+    // single origin. Selecting among the rest goes through
+    // resolveAzureDevOpsApiBaseUrl.
+    apiBaseUrl: getConfiguredAzureDevOpsApiBaseUrls()[0] ?? null,
     pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')

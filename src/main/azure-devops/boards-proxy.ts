@@ -4,9 +4,9 @@ import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task
 import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
-  normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsResponseAtBase
 } from './azure-devops-api-request'
+import { resolveAzureDevOpsApiBaseUrl } from './azure-devops-organization-base-urls'
 
 /**
  * Host-side Azure Boards proxy. A plugin names a method, a path and a body;
@@ -18,6 +18,8 @@ import {
 export type BoardsProxyRequest = {
   method: string
   path: string
+  /** Selects one of the configured organizations; absent means the first. */
+  organization?: string
   query?: Record<string, string>
   body?: unknown
 }
@@ -47,14 +49,21 @@ async function resolveBoardsProxyResponse(
     }
   }
 
-  const config = getAzureDevOpsAuthConfig()
-  if (!config.apiBaseUrl) {
-    return {
-      status: 412,
-      body: { message: 'Azure DevOps is not configured for this execution host' }
-    }
+  const resolution = resolveAzureDevOpsApiBaseUrl(request.organization)
+  if (!resolution.ok) {
+    return resolution.reason === 'unknown-organization'
+      ? {
+          status: 400,
+          body: {
+            message: 'Azure DevOps organization is not configured for this execution host'
+          }
+        }
+      : {
+          status: 412,
+          body: { message: 'Azure DevOps is not configured for this execution host' }
+        }
   }
-  if (!azureDevOpsTokenConfigured(config)) {
+  if (!azureDevOpsTokenConfigured(getAzureDevOpsAuthConfig())) {
     return {
       status: 412,
       body: {
@@ -63,10 +72,9 @@ async function resolveBoardsProxyResponse(
     }
   }
 
-  const normalized = normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
   let scheme: string
   try {
-    scheme = new URL(normalized).protocol
+    scheme = new URL(resolution.baseUrl).protocol
   } catch {
     scheme = ''
   }
@@ -80,7 +88,7 @@ async function resolveBoardsProxyResponse(
   }
 
   try {
-    return await requestAzureDevOpsResponseAtBase(normalized, request.path, {
+    return await requestAzureDevOpsResponseAtBase(resolution.baseUrl, request.path, {
       ...(request.query ? { searchParams: request.query } : {}),
       ...(request.method === 'POST' || request.method === 'PATCH'
         ? { method: request.method }

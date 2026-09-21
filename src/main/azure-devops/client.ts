@@ -15,11 +15,11 @@ import {
 import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
-  normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
-export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
+import { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-organization-base-urls'
+export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-organization-base-urls'
 
 export type AzureDevOpsAuthStatus = {
   configured: boolean

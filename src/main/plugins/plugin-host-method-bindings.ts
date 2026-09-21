@@ -51,9 +51,11 @@ export type PluginHostServices = {
   azureDevOpsBoardsRequest(request: {
     method: string
     path: string
+    organization?: string
     query?: Record<string, string>
     body?: unknown
   }): Promise<{ status: number; body: unknown; code: PluginTaskSourceErrorCode | null }>
+  azureDevOpsBoardsOrganizations(): string[]
 }
 
 export type BoundPluginHostMethod = {
@@ -180,10 +182,14 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     const request = params as {
       method: string
       path: string
+      organization?: string
       query?: Record<string, string>
       body?: unknown
     }
     return services.azureDevOpsBoardsRequest(request)
+  }),
+  definePluginMethod('azureDevOps.boardsOrganizations', async (_params, { services }) => {
+    return { organizations: services.azureDevOpsBoardsOrganizations() }
   })
 ])
 

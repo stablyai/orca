@@ -56,7 +56,8 @@ function createServices(): PluginHostServices {
     subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events),
     azureDevOpsBoardsRequest: vi
       .fn()
-      .mockResolvedValue({ status: 200, body: { count: 0 }, code: null })
+      .mockResolvedValue({ status: 200, body: { count: 0 }, code: null }),
+    azureDevOpsBoardsOrganizations: vi.fn().mockReturnValue(['nssf-dolphin'])
   }
 }
 
@@ -121,12 +122,13 @@ const successParams: Record<string, unknown> = {
   'settings.get': {},
   'settings.set': { key: 'theme', value: 'dark' },
   'events.subscribe': { events: ['worktree.created'] },
-  'azureDevOps.boardsRequest': { method: 'GET', path: '/_apis/projects' }
+  'azureDevOps.boardsRequest': { method: 'GET', path: '/_apis/projects' },
+  'azureDevOps.boardsOrganizations': {}
 }
 
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 14 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(14)
+  it('runs a granted success through both transports for all 15 host methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(15)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )

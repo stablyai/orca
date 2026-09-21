@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
@@ -30,7 +30,8 @@ function createServices(
       set: vi.fn().mockReturnValue({ ok: true })
     },
     subscribeEvents: vi.fn().mockReturnValue([]),
-    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: null, code: null })
+    azureDevOpsBoardsRequest: vi.fn().mockResolvedValue({ status: 200, body: null, code: null }),
+    azureDevOpsBoardsOrganizations: vi.fn().mockReturnValue([])
   }
 }
 
@@ -319,6 +320,27 @@ describe('azureDevOps.boardsRequest', () => {
     })
   })
 
+  it('passes the selected organization through to the proxy', async () => {
+    const services = createServices()
+    const boardsRequest = vi.fn().mockResolvedValue({ status: 200, body: { count: 1 }, code: null })
+    services.azureDevOpsBoardsRequest = boardsRequest
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: { method: 'GET', path: '/_apis/projects', organization: 'NssfDevOps' },
+      viaPanel: false,
+      grantedCapabilities: ['azure-devops:boards'],
+      services,
+      audit: { record: vi.fn().mockResolvedValue(undefined) }
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(boardsRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ organization: 'NssfDevOps' })
+    )
+  })
+
   it('records the HTTP method and path in the audit summary, not a content-free entry', async () => {
     const services = createServices()
     services.azureDevOpsBoardsRequest = vi
@@ -339,5 +361,90 @@ describe('azureDevOps.boardsRequest', () => {
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({ summary: 'PATCH /_apis/wit/workitems/42' })
     )
+  })
+
+  it('names the organization a write reached in the audit summary', async () => {
+    const services = createServices()
+    services.azureDevOpsBoardsRequest = vi
+      .fn()
+      .mockResolvedValue({ status: 200, body: { count: 1 }, code: null })
+    const record = vi.fn().mockResolvedValue(undefined)
+
+    await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsRequest',
+      params: {
+        method: 'PATCH',
+        path: '/_apis/wit/workitems/42',
+        organization: 'NssfDevOps'
+      },
+      viaPanel: false,
+      grantedCapabilities: ['azure-devops:boards'],
+      services,
+      audit: { record }
+    })
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: 'PATCH /_apis/wit/workitems/42 org=NssfDevOps' })
+    )
+  })
+})
+
+describe('azureDevOps.boardsOrganizations discovery', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('returns exactly the configured organization names, with no credential material', async () => {
+    vi.stubEnv(
+      'ORCA_AZURE_DEVOPS_API_BASE_URL',
+      'https://dev.azure.com/nssf-dolphin, https://dev.azure.com/NssfDevOps'
+    )
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_USERNAME', 'someone@example.com')
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsOrganizations',
+      params: {},
+      viaPanel: false,
+      grantedCapabilities: ['azure-devops:boards'],
+      services: createTerminalHarness([]).services
+    })
+
+    expect(outcome).toEqual({
+      ok: true,
+      value: { organizations: ['nssf-dolphin', 'NssfDevOps'] }
+    })
+    const serialized = JSON.stringify(outcome)
+    expect(serialized).not.toContain('super-secret-pat')
+    expect(serialized).not.toContain('someone@example.com')
+    expect(serialized).not.toContain('dev.azure.com')
+  })
+
+  it('needs the boards capability like the proxy itself', async () => {
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsOrganizations',
+      params: {},
+      viaPanel: false,
+      grantedCapabilities: ['storage'],
+      services: createServices()
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'capability_denied' })
+  })
+
+  it('is not reachable from a sandboxed panel', async () => {
+    const outcome = await executePluginHostCall({
+      pluginId: 'acme.boards',
+      method: 'azureDevOps.boardsOrganizations',
+      params: {},
+      viaPanel: true,
+      grantedCapabilities: ['azure-devops:boards'],
+      services: createServices()
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'panel_forbidden' })
   })
 })
