@@ -1,4 +1,7 @@
-import { checkBoardsProxyRequest } from '../../shared/azure-devops/boards-proxy-path-policy'
+import {
+  BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE,
+  checkBoardsProxyRequest
+} from '../../shared/azure-devops/boards-proxy-path-policy'
 import { classifyBoardsProxyStatus } from '../../shared/azure-devops/boards-proxy-status-classification'
 import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task-source-contract'
 import {
@@ -22,6 +25,10 @@ export type BoardsProxyRequest = {
   organization?: string
   query?: Record<string, string>
   body?: unknown
+  /** Creating a work item is a POST whose body is a JSON Patch document, so
+   *  the method alone does not determine the media type. The JSON Patch type
+   *  is the only one a caller may ask for. */
+  contentType?: typeof BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE
 }
 
 export type BoardsProxyResponse = {
@@ -94,7 +101,12 @@ async function resolveBoardsProxyResponse(
         ? { method: request.method }
         : {}),
       ...(request.body === undefined ? {} : { body: request.body }),
-      ...(request.method === 'PATCH' ? { contentType: 'application/json-patch+json' } : {})
+      // PATCH on this API is always a JSON Patch; POST is one only when the
+      // caller says so (creating a work item), and plain JSON otherwise.
+      ...(request.method === 'PATCH' ||
+      request.contentType === BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE
+        ? { contentType: BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE }
+        : {})
     })
   } catch {
     // requestAzureDevOpsResponseAtBase has no try/catch of its own, so a

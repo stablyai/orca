@@ -6,6 +6,7 @@ import {
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
+import type { BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE } from '../../shared/azure-devops/boards-proxy-path-policy'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task-source-contract'
 
@@ -185,6 +186,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
       organization?: string
       query?: Record<string, string>
       body?: unknown
+      contentType?: typeof BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE
     }
     return services.azureDevOpsBoardsRequest(request)
   }),

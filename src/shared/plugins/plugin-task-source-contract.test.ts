@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pluginTaskCreateSchema,
   pluginTaskItemSchema,
+  pluginTaskItemTypeQuerySchema,
   pluginTaskQuerySchema,
   pluginTaskSourceResultSchema,
   pluginTaskSourceStatusSchema,
@@ -74,6 +76,7 @@ describe('plugin task source contract', () => {
       accountLabel: 'Ada Lovelace',
       notice: null,
       supports: {
+        create: false,
         comment: true,
         transition: true,
         assign: false,
@@ -97,6 +100,7 @@ describe('plugin task source contract', () => {
       accountLabel: 'Ada Lovelace',
       notice: null,
       supports: {
+        create: false,
         comment: true,
         transition: true,
         assign: false,
@@ -132,6 +136,7 @@ describe('plugin task source contract', () => {
       accountLabel: 'Ada Lovelace',
       notice: { code: 'unavailable', message: 'scope cache is stale' },
       supports: {
+        create: false,
         comment: true,
         transition: true,
         assign: false,
@@ -147,8 +152,10 @@ describe('plugin task source contract', () => {
     expect([...PLUGIN_TASK_SOURCE_METHODS]).toEqual([
       'status',
       'listScopes',
+      'listItemTypes',
       'listItems',
       'getItem',
+      'createItem',
       'listComments',
       'addComment',
       'listTransitions',
@@ -170,7 +177,8 @@ describe('plugin task source contract', () => {
     ['listItems', { items: [], nextCursor: null }, { items: 'not-an-array' }],
     ['listScopes', [{ id: 'proj', name: 'Project' }], { id: 'proj' }],
     ['listTransitions', [{ id: '2', name: 'Active' }], [{ id: '2' }]],
-    ['listAssignees', [{ id: 'ada', displayName: 'Ada' }], [{ id: 'ada' }]]
+    ['listAssignees', [{ id: 'ada', displayName: 'Ada' }], [{ id: 'ada' }]],
+    ['listItemTypes', [{ id: 'Bug', name: 'Bug' }], [{ id: 'Bug' }]]
   ] as const)('binds %s to a schema that rejects the wrong shape', (method, valid, invalid) => {
     const schema = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]
 
@@ -178,18 +186,81 @@ describe('plugin task source contract', () => {
     expect(schema.safeParse(invalid).success).toBe(false)
   })
 
-  it('binds getItem and applyPatch to the item schema, not a page', () => {
+  it('binds getItem, applyPatch and createItem to the item schema, not a page', () => {
     const page = { items: [], nextCursor: null }
 
     expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.getItem.safeParse(page).success).toBe(false)
     expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.applyPatch.safeParse(page).success).toBe(false)
+    expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.createItem.safeParse(page).success).toBe(false)
   })
 
+  it('requires a source to declare whether it can create, with no default', () => {
+    const status = {
+      connected: true,
+      accountLabel: 'Ada Lovelace',
+      notice: null,
+      supports: {
+        comment: true,
+        transition: true,
+        assign: false,
+        editTitle: false,
+        editDescription: false
+      }
+    }
+
+    expect(pluginTaskSourceStatusSchema.safeParse(status).success).toBe(false)
+    expect(
+      pluginTaskSourceStatusSchema.safeParse({
+        ...status,
+        supports: { ...status.supports, create: true }
+      }).success
+    ).toBe(true)
+  })
+
+  it('names the scope whose item types to offer', () => {
+    expect(pluginTaskItemTypeQuerySchema.safeParse({ scopeId: 'org/proj' }).success).toBe(true)
+    expect(pluginTaskItemTypeQuerySchema.safeParse({}).success).toBe(false)
+    expect(pluginTaskItemTypeQuerySchema.safeParse({ scopeId: '' }).success).toBe(false)
+  })
+
+  it('accepts a create with and without a description', () => {
+    const create = { scopeId: 'org/proj', typeId: 'Bug', title: 'Crash on resume' }
+
+    expect(pluginTaskCreateSchema.safeParse(create).success).toBe(true)
+    expect(pluginTaskCreateSchema.safeParse({ ...create, description: 'Steps' }).success).toBe(true)
+  })
+
+  it.each([['scopeId'], ['typeId'], ['title']] as const)(
+    'rejects a create missing %s',
+    (field) => {
+      const create: Record<string, string> = {
+        scopeId: 'org/proj',
+        typeId: 'Bug',
+        title: 'Crash on resume'
+      }
+      delete create[field]
+
+      expect(pluginTaskCreateSchema.safeParse(create).success).toBe(false)
+      expect(
+        pluginTaskCreateSchema.safeParse({ ...create, [field]: '' }).success,
+        `an empty ${field} is as unusable as a missing one`
+      ).toBe(false)
+    }
+  )
+
   describe('every method is pinned to its own schema, not a neighbor', () => {
-    // getItem and applyPatch both legitimately use pluginTaskItemSchema, so no
-    // fixture can tell which of the two a binding points at; that pair is
-    // excluded from the cross-schema rejection matrix below.
-    const SHARED_SCHEMA_METHODS = new Set<PluginTaskSourceMethod>(['getItem', 'applyPatch'])
+    // Methods within a group accept structurally identical data, so no fixture
+    // can tell which of them a binding points at. Only within-group pairs are
+    // excluded from the cross-schema rejection matrix below; every other pair
+    // still has to reject.
+    const INDISTINGUISHABLE_GROUPS: readonly ReadonlySet<PluginTaskSourceMethod>[] = [
+      new Set(['getItem', 'applyPatch', 'createItem']),
+      new Set(['listItemTypes', 'listTransitions'])
+    ]
+
+    function shareASchema(a: PluginTaskSourceMethod, b: PluginTaskSourceMethod): boolean {
+      return INDISTINGUISHABLE_GROUPS.some((group) => group.has(a) && group.has(b))
+    }
 
     const fixtures: Record<PluginTaskSourceMethod, unknown> = {
       status: {
@@ -197,6 +268,7 @@ describe('plugin task source contract', () => {
         accountLabel: 'Ada Lovelace',
         notice: null,
         supports: {
+          create: false,
           comment: true,
           transition: true,
           assign: true,
@@ -207,12 +279,26 @@ describe('plugin task source contract', () => {
       // isDefault plus a name past transition's 256-char cap: valid as a
       // scope, invalid as a transition on both counts.
       listScopes: [{ id: 'proj', name: 'P'.repeat(300), isDefault: true }],
+      // isDefault with a string value is stripped by the item type schema and
+      // fails type-checking under the scope schema, which is otherwise the one
+      // other schema a bare id/name pair satisfies.
+      listItemTypes: [{ id: 'User Story', name: 'User Story', isDefault: 'not-a-boolean' }],
       listItems: { items: [], nextCursor: null },
       getItem: {
         id: '4821',
         key: '4821',
         title: 'Crash on resume',
         state: { name: 'Active', category: 'in-progress' },
+        assignee: null,
+        url: null,
+        updatedAt: null,
+        scopeId: null
+      },
+      createItem: {
+        id: '5560',
+        key: '5560',
+        title: 'Add retry budget',
+        state: { name: 'New', category: 'todo' },
         assignee: null,
         url: null,
         updatedAt: null,
@@ -266,7 +352,7 @@ describe('plugin task source contract', () => {
           if (otherMethod === ownMethod) {
             continue
           }
-          if (SHARED_SCHEMA_METHODS.has(ownMethod) && SHARED_SCHEMA_METHODS.has(otherMethod)) {
+          if (shareASchema(ownMethod, otherMethod)) {
             continue
           }
 

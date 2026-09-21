@@ -22,6 +22,7 @@ export default function activate(orca) {
         accountLabel: 'Demo',
         notice: null,
         supports: {
+          create: false,
           comment: false,
           transition: false,
           assign: false,

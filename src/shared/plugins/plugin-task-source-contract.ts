@@ -102,6 +102,13 @@ export const pluginTaskTransitionSchema = z.object({
   name: z.string().min(1).max(256)
 })
 
+/** What kind of work a new item is. Scope-dependent: Azure DevOps offers a
+ *  different set per project, and Jira per project too. */
+export const pluginTaskItemTypeSchema = z.object({
+  id: z.string().min(1).max(512),
+  name: z.string().min(1).max(256)
+})
+
 export const pluginTaskSourceStatusSchema = z.object({
   connected: z.boolean(),
   accountLabel: z.string().max(TITLE_MAX).nullable(),
@@ -116,6 +123,7 @@ export const pluginTaskSourceStatusSchema = z.object({
   /** Core renders only the controls a provider actually offers, so an
    *  unsupported verb cannot become a dead button. */
   supports: z.object({
+    create: z.boolean(),
     comment: z.boolean(),
     transition: z.boolean(),
     assign: z.boolean(),
@@ -141,6 +149,22 @@ export const pluginTaskQuerySchema = z.object({
   filterId: z.string().min(1).max(512).nullable().optional()
 })
 
+/** Which scope's types to offer. Required, not optional: a source's default
+ *  scope would answer with types that do not apply to the scope the caller is
+ *  about to create in. */
+export const pluginTaskItemTypeQuerySchema = z.object({
+  scopeId: z.string().min(1).max(512)
+})
+
+/** The minimum a provider needs to open a work item. `typeId` names one of
+ *  listItemTypes' entries for the same `scopeId`. */
+export const pluginTaskCreateSchema = z.object({
+  scopeId: z.string().min(1).max(512),
+  typeId: z.string().min(1).max(512),
+  title: z.string().min(1).max(TITLE_MAX),
+  description: z.string().max(BODY_MAX).optional()
+})
+
 export const pluginTaskPatchSchema = z
   .object({
     stateId: z.string().min(1).max(512),
@@ -153,8 +177,10 @@ export const pluginTaskPatchSchema = z
 export const PLUGIN_TASK_SOURCE_METHODS = [
   'status',
   'listScopes',
+  'listItemTypes',
   'listItems',
   'getItem',
+  'createItem',
   'listComments',
   'addComment',
   'listTransitions',
@@ -176,8 +202,11 @@ export function isPluginTaskSourceMethod(value: string): value is PluginTaskSour
 export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z.ZodTypeAny> = {
   status: pluginTaskSourceStatusSchema,
   listScopes: z.array(pluginTaskScopeSchema),
+  listItemTypes: z.array(pluginTaskItemTypeSchema),
   listItems: pluginTaskPageSchema,
   getItem: pluginTaskItemSchema,
+  /** The created item, so a caller can show it without a second round trip. */
+  createItem: pluginTaskItemSchema,
   listComments: z.array(pluginTaskCommentSchema),
   addComment: pluginTaskCommentSchema,
   listTransitions: z.array(pluginTaskTransitionSchema),
@@ -191,6 +220,9 @@ export type PluginTaskItem = z.infer<typeof pluginTaskItemSchema>
 export type PluginTaskPage = z.infer<typeof pluginTaskPageSchema>
 export type PluginTaskComment = z.infer<typeof pluginTaskCommentSchema>
 export type PluginTaskTransition = z.infer<typeof pluginTaskTransitionSchema>
+export type PluginTaskItemType = z.infer<typeof pluginTaskItemTypeSchema>
+export type PluginTaskItemTypeQuery = z.infer<typeof pluginTaskItemTypeQuerySchema>
+export type PluginTaskCreate = z.infer<typeof pluginTaskCreateSchema>
 export type PluginTaskSourceStatus = z.infer<typeof pluginTaskSourceStatusSchema>
 export type PluginTaskQuery = z.infer<typeof pluginTaskQuerySchema>
 export type PluginTaskPatch = z.infer<typeof pluginTaskPatchSchema>

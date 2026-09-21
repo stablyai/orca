@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
-import { BOARDS_PROXY_METHODS } from '../azure-devops/boards-proxy-path-policy'
+import {
+  BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE,
+  BOARDS_PROXY_METHODS
+} from '../azure-devops/boards-proxy-path-policy'
 import { PLUGIN_TASK_SOURCE_ERROR_CODES } from './plugin-task-source-contract'
 
 /**
@@ -108,7 +111,11 @@ const azureDevOpsBoardsRequestParams = z
      *  first one; a name outside the set is refused, never substituted. */
     organization: z.string().min(1).max(PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH).optional(),
     query: z.record(z.string().max(256), z.string().max(2048)).optional(),
-    body: z.unknown().optional()
+    body: z.unknown().optional(),
+    /** Creating a work item is a POST carrying a JSON Patch document, which
+     *  the method alone cannot signal. Restricted to that one media type so a
+     *  plugin cannot reshape an arbitrary request. */
+    contentType: z.literal(BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE).optional()
   })
   .strict()
 const azureDevOpsBoardsRequestResult = z.object({

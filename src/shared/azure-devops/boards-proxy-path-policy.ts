@@ -5,6 +5,10 @@
  */
 
 export const BOARDS_PROXY_METHODS = ['GET', 'POST', 'PATCH'] as const
+
+/** The only media type a caller may ask for. Everything else is plain JSON. */
+export const BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE = 'application/json-patch+json'
+
 export type BoardsProxyMethod = (typeof BOARDS_PROXY_METHODS)[number]
 
 export type BoardsProxyRejection = {

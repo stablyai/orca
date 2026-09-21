@@ -6,6 +6,10 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+function contentTypeOf(init: RequestInit | undefined): string | null {
+  return new Headers(init?.headers).get('content-type')
+}
+
 describe('executeBoardsProxyRequest', () => {
   it('reports not_configured when no base url is set', async () => {
     vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', '')
@@ -250,6 +254,31 @@ describe('executeBoardsProxyRequest', () => {
 
     expect(result).toMatchObject({ status: 412, code: 'not_configured' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('sends a POST as JSON Patch only when the caller asks for that media type', async () => {
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/org')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ id: 1 }), { status: 200 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await executeBoardsProxyRequest({
+      method: 'POST',
+      path: '/proj/_apis/wit/workitems/$Bug',
+      body: [{ op: 'add', path: '/fields/System.Title', value: 'Crash' }],
+      contentType: 'application/json-patch+json'
+    })
+    await executeBoardsProxyRequest({
+      method: 'POST',
+      path: '/_apis/wit/wiql',
+      body: { query: 'SELECT [System.Id] FROM WorkItems' }
+    })
+
+    expect(contentTypeOf(fetchMock.mock.calls[0]?.[1])).toBe('application/json-patch+json')
+    expect(contentTypeOf(fetchMock.mock.calls[1]?.[1])).toBe('application/json')
   })
 
   it('reports a failed upstream call as unavailable rather than empty data', async () => {
