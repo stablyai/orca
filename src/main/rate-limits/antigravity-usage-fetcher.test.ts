@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
+  AGY_MIN_USAGE_VERSION,
   AGY_USAGE_ARGS,
+  AGY_VERSION_ARGS,
+  extractAgyVersion,
   fetchAntigravityRateLimits,
   parseAgyUsageResponse
 } from './antigravity-usage-fetcher'
@@ -119,14 +122,49 @@ describe('parseAgyUsageResponse', () => {
   })
 })
 
+describe('extractAgyVersion', () => {
+  it.each([
+    { output: '1.2.4', expected: '1.2.4' },
+    { output: 'agy version 1.1.11\n', expected: '1.1.11' },
+    { output: 'v1.1.10 (darwin arm64)', expected: '1.1.10' }
+  ])('reads $output as $expected', ({ output, expected }) => {
+    expect(extractAgyVersion(output)).toBe(expected)
+  })
+
+  it.each([{ output: '' }, { output: 'agy' }, { output: 'version unknown' }])(
+    'returns null for $output',
+    ({ output }) => {
+      expect(extractAgyVersion(output)).toBeNull()
+    }
+  )
+})
+
 describe('fetchAntigravityRateLimits', () => {
-  it('resolves agy outside PATH and uses the exact argv without a shell', async () => {
+  function mockVersionThenUsage(versionStdout: string, usageStdout: string) {
     vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockResolvedValue({
-      stdout: JSON.stringify(sample),
-      stderr: ''
-    })
+    vi.mocked(execFileCaptureToTermination)
+      .mockResolvedValueOnce({ stdout: versionStdout, stderr: '' })
+      .mockResolvedValueOnce({ stdout: usageStdout, stderr: '' })
+  }
+
+  function usageInvocations() {
+    return vi
+      .mocked(execFileCaptureToTermination)
+      .mock.calls.filter(([, args]) => args === AGY_USAGE_ARGS)
+  }
+
+  it('resolves agy outside PATH and uses the exact argv without a shell', async () => {
+    mockVersionThenUsage('1.2.4', JSON.stringify(sample))
     await fetchAntigravityRateLimits()
+    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
+      '/mock/bin/agy',
+      AGY_VERSION_ARGS,
+      expect.objectContaining({
+        timeout: 5_000,
+        signal: undefined,
+        createTimeoutError: expect.any(Function)
+      })
+    )
     expect(execFileCaptureToTermination).toHaveBeenCalledWith(
       '/mock/bin/agy',
       AGY_USAGE_ARGS,
@@ -139,6 +177,55 @@ describe('fetchAntigravityRateLimits', () => {
     )
   })
 
+  it('proceeds on the 1.1.11 boundary version', async () => {
+    mockVersionThenUsage('1.1.11', JSON.stringify(sample))
+    const result = await fetchAntigravityRateLimits()
+    expect(result.status).toBe('ok')
+    expect(usageInvocations()).toHaveLength(1)
+  })
+
+  // Why: agy 1.1.10 answers `-p /usage` with a billable agent turn instead of a
+  // quota report, so the usage argv must never be spawned for older CLIs.
+  it('never invokes /usage on agy older than 1.1.11', async () => {
+    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
+    vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
+      stdout: '1.1.10',
+      stderr: ''
+    })
+    const result = await fetchAntigravityRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
+    expect(result.error).toContain('1.1.10')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(vi.mocked(execFileCaptureToTermination).mock.calls).toHaveLength(1)
+    expect(usageInvocations()).toHaveLength(0)
+  })
+
+  it.each([{ versionStdout: '' }, { versionStdout: 'version unknown' }])(
+    'never invokes /usage when the version is unreadable ($versionStdout)',
+    async ({ versionStdout }) => {
+      vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
+      vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
+        stdout: versionStdout,
+        stderr: ''
+      })
+      const result = await fetchAntigravityRateLimits()
+      expect(result.status).toBe('unavailable')
+      expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
+      expect(usageInvocations()).toHaveLength(0)
+    }
+  )
+
+  it('never invokes /usage when the version probe fails', async () => {
+    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
+    vi.mocked(execFileCaptureToTermination).mockRejectedValueOnce(
+      Object.assign(new Error('The agy CLI timed out.'), { code: 'ETIMEDOUT' })
+    )
+    const result = await fetchAntigravityRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(usageInvocations()).toHaveLength(0)
+  })
+
   it('distinguishes an unresolved executable', async () => {
     vi.mocked(resolveCliCommand).mockReturnValue('agy')
     const result = await fetchAntigravityRateLimits()
@@ -148,8 +235,7 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('reports malformed stdout as a parse failure', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockResolvedValue({ stdout: '{', stderr: '' })
+    mockVersionThenUsage('1.2.4', '{')
     const result = await fetchAntigravityRateLimits()
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('parse')
@@ -157,12 +243,16 @@ describe('fetchAntigravityRateLimits', () => {
 
   it('passes the refresh AbortSignal to the agy process', async () => {
     vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockResolvedValue({
-      stdout: JSON.stringify(sample),
-      stderr: ''
-    })
     const controller = new AbortController()
+    vi.mocked(execFileCaptureToTermination)
+      .mockResolvedValueOnce({ stdout: '1.2.4', stderr: '' })
+      .mockResolvedValueOnce({ stdout: JSON.stringify(sample), stderr: '' })
     await fetchAntigravityRateLimits(controller.signal)
+    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
+      '/mock/bin/agy',
+      AGY_VERSION_ARGS,
+      expect.objectContaining({ signal: controller.signal })
+    )
     expect(execFileCaptureToTermination).toHaveBeenCalledWith(
       '/mock/bin/agy',
       AGY_USAGE_ARGS,
@@ -172,13 +262,15 @@ describe('fetchAntigravityRateLimits', () => {
 
   it('classifies the shared runner timeout separately from a generic read failure', async () => {
     vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockRejectedValue(
-      Object.assign(new Error('The agy CLI timed out.'), {
-        code: null,
-        killed: true,
-        signal: 'SIGTERM'
-      })
-    )
+    vi.mocked(execFileCaptureToTermination)
+      .mockResolvedValueOnce({ stdout: '1.2.4', stderr: '' })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('The agy CLI timed out.'), {
+          code: null,
+          killed: true,
+          signal: 'SIGTERM'
+        })
+      )
     const result = await fetchAntigravityRateLimits()
     expect(result.error).toContain('timed out')
     expect(result.usageMetadata?.failureKind).toBe('unknown')

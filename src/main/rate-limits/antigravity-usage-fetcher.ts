@@ -1,11 +1,18 @@
 import path from 'node:path'
 import type { ProviderRateLimits, RateLimitBucket } from '../../shared/rate-limit-types'
+import { hasReachedAppVersion } from '../../shared/app-version'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
 
 const AGY_USAGE_ARGS = ['--print', '/usage', '--output-format', 'json']
 const AGY_USAGE_TIMEOUT_MS = 10_000
 const AGY_USAGE_MAX_BUFFER = 1024 * 1024
+const AGY_VERSION_ARGS = ['--version']
+const AGY_VERSION_TIMEOUT_MS = 5_000
+const AGY_VERSION_MAX_BUFFER = 64 * 1024
+// Why 1.1.11: older agy answers `-p /usage` with a billable agent turn instead of
+// a quota report; 1.1.11 handles read-only slash commands in print mode directly.
+const AGY_MIN_USAGE_VERSION = '1.1.11'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
@@ -164,6 +171,39 @@ export function getAntigravityUsageCommand(): string {
   return resolveCliCommand('agy')
 }
 
+// Why a pre-check: invoking /usage on agy <1.1.11 starts an agent turn that spends
+// quota on every refresh, so the version gate must run before any usage invocation.
+// Unreadable versions fail closed for the same reason.
+export function extractAgyVersion(output: string): string | null {
+  const match = output.match(/(\d+)\.(\d+)\.(\d+)/)
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : null
+}
+
+async function checkAgyUsageSupport(
+  command: string,
+  signal?: AbortSignal
+): Promise<{ supported: boolean; version: string | null }> {
+  try {
+    const { stdout } = await execFileCaptureToTermination(command, AGY_VERSION_ARGS, {
+      encoding: 'utf8',
+      timeout: AGY_VERSION_TIMEOUT_MS,
+      maxBuffer: AGY_VERSION_MAX_BUFFER,
+      signal,
+      createTimeoutError: createAgyTimeoutError
+    })
+    const version = extractAgyVersion(String(stdout))
+    return {
+      supported: version !== null && hasReachedAppVersion(version, AGY_MIN_USAGE_VERSION),
+      version
+    }
+  } catch (error) {
+    if (signal?.aborted || (isRecord(error) && error.name === 'AbortError')) {
+      throw error
+    }
+    return { supported: false, version: null }
+  }
+}
+
 export async function fetchAntigravityRateLimits(
   signal?: AbortSignal
 ): Promise<ProviderRateLimits> {
@@ -175,6 +215,17 @@ export async function fetchAntigravityRateLimits(
       'Antigravity usage is unavailable because the agy CLI was not found.',
       now,
       'cli-unavailable'
+    )
+  }
+  const versionCheck = await checkAgyUsageSupport(command, signal)
+  if (!versionCheck.supported) {
+    return emptyAntigravityResult(
+      'unavailable',
+      versionCheck.version
+        ? `Antigravity usage needs agy ${AGY_MIN_USAGE_VERSION} or newer (found ${versionCheck.version}). Update the agy CLI to show quota in the status bar.`
+        : 'Antigravity usage is unavailable because the agy CLI version could not be read. Update agy to 1.1.11 or newer.',
+      now,
+      'usage-unavailable'
     )
   }
   try {
@@ -204,4 +255,4 @@ export async function fetchAntigravityRateLimits(
   }
 }
 
-export { AGY_USAGE_ARGS, parseAgyUsageResponse }
+export { AGY_MIN_USAGE_VERSION, AGY_USAGE_ARGS, AGY_VERSION_ARGS, parseAgyUsageResponse }
