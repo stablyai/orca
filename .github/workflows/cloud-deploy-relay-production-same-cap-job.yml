@@ -594,11 +594,15 @@ jobs:
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
+          # The backend service is targeted too, so its reviewed drain timeout
+          # can be the only thing left here; it restarts nothing, so the
+          # validator below clears it without the template-and-MIG pair.
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
           if ! terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
@@ -634,7 +638,8 @@ jobs:
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
                 "${POOL_ARGUMENTS[@]}" \
-              | jq -e '.changes == 2' >/dev/null
+              | jq -e '.changes == 2
+                  or (.changes == 0 and .connectionDrainUpdate == true)' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
@@ -657,6 +662,7 @@ jobs:
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
           PLAN_REVIEW="$(terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap.tfplan" \

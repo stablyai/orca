@@ -336,6 +336,29 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.equal(workflow.split('POOL_ARGUMENTS=()').length, 3)
   })
 
+  // One cell's whole serving path and nothing else: the template, the MIG bound to it, and the
+  // backend service, whose reviewed drain timeout would otherwise need a fleet-wide root apply.
+  it('targets exactly this cell template, MIG, and backend on every plan the job runs', () => {
+    const plans = workflow.split('terraform -chdir=infra/terraform plan').slice(1)
+    assert.equal(plans.length, 2)
+    for (const plan of plans) {
+      const lines = plan.split('\n')
+      const end = lines.findIndex((line) => !line.trimEnd().endsWith('\\'))
+      const call = lines.slice(0, end + 1).join('\n')
+      assert.deepEqual(
+        [...call.matchAll(/-target=([\w.]+)\[\\"\$\{TARGET_CELL_ID\}\\"\]/g)]
+          .map(([, resource]) => resource),
+        [
+          'google_compute_instance_template.relay_gce_cell',
+          'google_compute_instance_group_manager.relay_gce_cell',
+          'google_compute_backend_service.relay_gce_cell'
+        ]
+      )
+      // Any target that is not one of those three, or not scoped to this cell, fails here.
+      assert.equal(call.split('-target=').length, 4)
+    }
+  })
+
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses

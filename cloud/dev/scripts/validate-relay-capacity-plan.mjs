@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { RELAY_CELL_CONNECTION_DRAIN_SECONDS } from './validate-relay-asia-topology-plan.mjs'
+
+const CELL_BACKEND_RESOURCE = 'google_compute_backend_service.relay_gce_cell'
+const CONNECTION_DRAIN_PATH = 'connection_draining_timeout_sec'
 
 const SERVICE_ACCOUNT_EMAIL =
   /^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9-]+\.iam\.gserviceaccount\.com$/
@@ -292,6 +296,39 @@ function requireDesiredStartupScript(script, config) {
   }
 }
 
+// The same-cap job targets this cell's backend service so the reviewed connection drain
+// timeout lands one cell at a time; a root apply would pull in every cell template instead.
+// Splitting it out here keeps `changes` the template-and-MIG count both callers read.
+function takeCellBackendDrain(changes, config) {
+  const backends = changes.filter(
+    ({ address }) => typeof address === 'string' && address.startsWith(`${CELL_BACKEND_RESOURCE}[`)
+  )
+  if (config.mode !== 'same-cap-cell' || backends.length === 0) {
+    return { rest: changes, drained: false }
+  }
+  const [backend] = backends
+  if (
+    backends.length !== 1 ||
+    backend.address !== `${CELL_BACKEND_RESOURCE}[${JSON.stringify(config.cellId)}]` ||
+    backend.deposed !== undefined ||
+    !sameActions(backend, ['update']) ||
+    backend.change?.after?.[CONNECTION_DRAIN_PATH] !== RELAY_CELL_CONNECTION_DRAIN_SECONDS
+  ) {
+    throw new Error('cell plan may change only this cell backend connection draining timeout')
+  }
+  const backendComputed = new Set(['fingerprint', 'generated_id'])
+  requireOnlyPaths(
+    backend,
+    new Set([
+      CONNECTION_DRAIN_PATH,
+      ...unknownPaths(backend.change.after_unknown).filter((path) => backendComputed.has(path))
+    ]),
+    [CONNECTION_DRAIN_PATH],
+    backendComputed
+  )
+  return { rest: changes.filter((change) => change !== backend), drained: true }
+}
+
 function plannedResources(module) {
   if (!module) return []
   return [
@@ -530,11 +567,13 @@ export function validateCapacityPlan(plan, config) {
     config.mode === 'same-cap-image' &&
     !/^.+@sha256:[a-f0-9]{64}$/.test(config.rollbackImage ?? '')
   ) throw new Error('same-cap image Terraform plan has an invalid rollback image')
-  const changes = mutations(plan)
+  const { rest: changes, drained } = takeCellBackendDrain(mutations(plan), config)
+  const drainUpdate = drained ? { connectionDrainUpdate: true } : {}
   if (changes.length === 0) {
     return {
       mode: config.mode,
       changes: 0,
+      ...drainUpdate,
       ...(config.mode === 'same-cap-image' ? { changeKind: 'none' } : {})
     }
   }
@@ -555,6 +594,7 @@ export function validateCapacityPlan(plan, config) {
   return {
     mode: config.mode,
     changes: changes.length,
+    ...drainUpdate,
     ...(config.mode === 'same-cap-image'
       ? {
           changeKind: replacement
