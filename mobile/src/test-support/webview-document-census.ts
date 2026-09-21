@@ -180,6 +180,66 @@ export function sequenceCalls(source: string, functionName: string, ignore: stri
   return called
 }
 
+/**
+ * What a binding *belongs to* rather than where it is written: a function's own bindings are one
+ * per call, so the walk stops at every body and never at a block.
+ */
+const OWNS_ITS_BINDINGS = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+  'ClassDeclaration',
+  'ClassExpression',
+  'TSDeclareFunction'
+])
+
+function numberField(node: unknown, key: string): number {
+  const found = field(node, key)
+  return typeof found === 'number' ? found : -1
+}
+
+/**
+ * Every `let` and `var` a module owns, whatever shape it is written in.
+ *
+ * Ruling 21, and the reason it is a tree walk rather than a line match: `export let`, a declaration
+ * indented inside a top-level block, and a `for (let …)` at the top level are all one binding
+ * shared by every document the module serves, and none of them starts a line with the keyword. A
+ * `let` inside a function body is the opposite — one binding per call — so the walk stops there.
+ */
+export function moduleLevelMutableBindings(name: string, source: string): string[] {
+  const found: string[] = []
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk)
+      return
+    }
+    const type = stringField(node, 'type')
+    if (OWNS_ITS_BINDINGS.has(type)) {
+      return
+    }
+    if (type === 'VariableDeclaration') {
+      const kind = stringField(node, 'kind')
+      if (kind === 'let' || kind === 'var') {
+        const declarations = field(node, 'declarations')
+        for (const declarator of Array.isArray(declarations) ? declarations : []) {
+          const id = field(declarator, 'id')
+          found.push(
+            `${name}: ${kind} ${source.slice(numberField(id, 'start'), numberField(id, 'end'))}`
+          )
+        }
+      }
+      return
+    }
+    fieldsOf(node).forEach(([key, value]) => {
+      if (key !== 'type') {
+        walk(value)
+      }
+    })
+  }
+  walk(parseModule(name, source).body)
+  return found
+}
+
 /** Every `export function start…(scope: <Scope>)` a module declares, by name. */
 export function exportedLifecycleFunctions(
   source: string,
