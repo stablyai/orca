@@ -72,7 +72,7 @@ export function NativeChatToolLine({
         type="button"
         onClick={() => hasDetail && setExpanded(!expanded)}
         className={cn(
-          'group flex w-full items-center gap-1.5 py-0.5 text-left',
+          'group/tool-line flex w-full items-center gap-1.5 py-0.5 text-left',
           hasDetail ? 'cursor-pointer' : 'cursor-default'
         )}
         aria-expanded={hasDetail ? expanded : undefined}
@@ -89,12 +89,12 @@ export function NativeChatToolLine({
              category to read from it. The empty slot keeps rows aligned. */
           <span aria-hidden className="size-4 shrink-0" />
         )}
-        <code className="min-w-0 truncate font-mono text-xs font-semibold text-foreground/90 transition-colors group-hover:text-foreground">
+        <code className="min-w-0 truncate font-mono text-xs font-semibold text-foreground/90 transition-colors group-hover/tool-line:text-foreground">
           {isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name}
         </code>
         {preview ? (
           <span
-            className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/70"
+            className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-line:text-foreground/70"
             title={preview}
           >
             {preview}
@@ -102,11 +102,12 @@ export function NativeChatToolLine({
         ) : null}
         {isCall ? <NativeChatCommandMetadata block={block} /> : null}
         {hasDetail ? (
-          // Chevron stays hidden until this row is expanded.
+          // Hover reveal is keyed to this row's own named group: a bare `group`
+          // also answers to the message row's, lighting every chevron at once.
           <ChevronRight
             className={cn(
               'size-3.5 shrink-0 text-muted-foreground transition-all',
-              expanded ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+              expanded ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/tool-line:opacity-100'
             )}
           />
         ) : null}

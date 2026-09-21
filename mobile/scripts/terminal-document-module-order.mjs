@@ -74,11 +74,3 @@ export function terminalDocumentStartFunctionName(moduleName) {
 export function terminalDocumentStopFunctionName(moduleName) {
   return terminalDocumentStartFunctionName(moduleName).replace(/^start/, 'stop')
 }
-
-/**
- * The scope's reset, called ahead of every start (ruling 21).
- *
- * Module top level holds no mutable state, so a second mount's state comes from here and nowhere
- * else. The WebView runs it once at parse, where it restores what the factory just built.
- */
-export const TERMINAL_DOCUMENT_RESET_CALL = 'resetTerminalDocumentScope'

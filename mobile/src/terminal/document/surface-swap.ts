@@ -1,6 +1,7 @@
+import { elementInRoot } from './document-host-seams'
 import { disposeTermObservers } from './write-queue'
 import { attachSurfaceEventHandlers } from './surface-touch-gestures'
-import { scope, type TerminalDocumentTerminal } from './document-scope'
+import { type TerminalDocumentTerminal, scope } from './document-scope'
 
 /** The surfaces and terminal a swap is replacing, handed back to whoever commits it. */
 export type TerminalSurfaceSwap = {
@@ -35,7 +36,7 @@ export function beginTerminalSurfaceSwap() {
   swap.nextSurface.style.position = 'absolute'
   swap.nextSurface.style.left = '0'
   swap.nextSurface.style.top = '0'
-  document.getElementById('terminal-container')!.appendChild(swap.nextSurface)
+  elementInRoot(scope.root, 'terminal-container')!.appendChild(swap.nextSurface)
   scope.surface = swap.nextSurface
   scope.pendingSurface = swap.nextSurface
   attachSurfaceEventHandlers(scope.surface)

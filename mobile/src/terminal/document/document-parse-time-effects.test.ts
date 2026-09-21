@@ -21,11 +21,12 @@ import {
  * function, which both hosts call — the generated script once at the foot of the document, the
  * page once per mount.
  *
- * Ruling 21 is the same argument about state rather than about effects. A module-level `let`
- * survives a mount just as a module body does, so the second terminal inherited a spent error
- * budget, the first terminal's committed surface and its momentum loop. Every mutable binding
- * therefore lives on the scope, which the start sequence resets first, and module top level holds
- * constants, functions and types only.
+ * Ruling 21's half of this — no module-level `let`, because a second mount inherited a spent error
+ * budget and the first terminal's momentum loop — is not checked any more, and ruling 22 is why. A
+ * module's top level is emitted inside the factory, so a `let` there is one binding per call and
+ * per document, which is what the scope was being used to achieve. An effect is still refused: it
+ * would run at the position its module is emitted rather than in the start sequence, so no stop
+ * would undo it and every call would leak another one.
  */
 const EMITTED = [
   TERMINAL_DOCUMENT_HOST_SEAMS_MODULE,
@@ -122,25 +123,6 @@ function readsTheDocument(node: unknown): boolean {
   return fieldsOf(node).some(([key, value]) => key !== 'type' && readsTheDocument(value))
 }
 
-/** Every top-level `let` or `var`: state the module owns, which a second mount would inherit. */
-function mutableBindingsIn(name: string, source: string): string[] {
-  const { program } = parseSync(`${name}.ts`, source, { lang: 'ts' })
-  const found: string[] = []
-  for (const statement of program.body) {
-    const declaration =
-      statement.type === 'ExportNamedDeclaration' ? (statement.declaration ?? statement) : statement
-    if (declaration.type !== 'VariableDeclaration' || declaration.kind === 'const') {
-      continue
-    }
-    found.push(`${name}: ${source.slice(declaration.start, declaration.end).split('\n')[0]}`)
-  }
-  return found
-}
-
-function mutableBindings(name: string): string[] {
-  return mutableBindingsIn(name, moduleSource(name))
-}
-
 /**
  * The top-level statements that are not declarations, and the initialisers that run something.
  *
@@ -200,17 +182,6 @@ describe('the document modules at parse time', () => {
     expect(topLevel.some(readsTheDocument)).toBe(false)
   })
 
-  it('own no mutable state: no top-level let or var outside the scope', () => {
-    expect(EMITTED.filter((name) => name !== BUILDS_THE_SCOPE).flatMap(mutableBindings)).toEqual([])
-  })
-
-  it('would report a planted one, so the empty list above is a measurement', () => {
-    // The precondition for the case above, run against the same reader: a module body with a
-    // `let` in it is the exact shape the rule refuses, and the reader has to say so.
-    const planted = `import { scope } from './document-scope'\nlet spent = 0\nexport function n() {\n  spent++\n  return scope.term\n}\n`
-    expect(mutableBindingsIn('planted', planted)).toEqual(['planted: let spent = 0'])
-  })
-
   it('would report a planted element read, which the statement filter cannot see', () => {
     // The second reader has its own precondition. A `const` initialised from the document is a
     // declaration by shape and a parse-time element read by effect — the exact form that survived
@@ -246,14 +217,14 @@ describe('the document modules at parse time', () => {
 
   it('still start and stop: the functions holding what was moved out are exported', () => {
     // The other half. Moving an effect out is only correct if something calls it, and the caller
-    // is pinned by `page-document-module-order.test.ts` against the generator's own sequence;
-    // this holds the shape of the names so that sequence can be derived rather than listed.
+    // is the generator's own sequence, derived from these names by convention rather than listed;
+    // this holds the shape of the names so that derivation keeps working.
     const declaring = (keyword: string) =>
       EMITTED.filter((name) =>
         new RegExp(`^export function ${keyword}[A-Za-z]+\\(\\) \\{$`, 'm').test(moduleSource(name))
       )
-    expect(declaring('start').length).toBe(10)
+    expect(declaring('start').length).toBe(11)
     // Ruling 21: a module that schedules a frame, a timer or a retry owes an undo for it.
-    expect(declaring('stop').length).toBe(9)
+    expect(declaring('stop').length).toBe(10)
   })
 })

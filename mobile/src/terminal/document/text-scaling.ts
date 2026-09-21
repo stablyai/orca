@@ -1,5 +1,6 @@
+import { elementInRoot } from './document-host-seams'
 import { terminalTextScalePresets } from './document-constants'
-import { scope, scheduleDocumentFrame } from './document-scope'
+import { scheduleDocumentFrame, scope } from './document-scope'
 import { applyFitScale, getCellHeight } from './fit-scale'
 import { getCellWidth } from './viewport-transform'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
@@ -84,8 +85,8 @@ export function applyTextScale(scale: number) {
 }
 
 export function startTextScaling() {
-  scope.scrollIndicator = document.getElementById('scroll-indicator')
-  scope.scrollThumb = document.getElementById('scroll-thumb')
+  scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
+  scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
   scope.terminalFontFamily =
     (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
 }

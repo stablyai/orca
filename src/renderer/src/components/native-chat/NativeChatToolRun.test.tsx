@@ -774,6 +774,64 @@ describe('NativeChatToolRun', () => {
     expect(container.querySelector('.lucide-folder')).toBeInTheDocument()
     expect(screen.getByTitle('ls')).toHaveTextContent('ls')
   })
+
+  // A bare `group-hover:` matches a hover on ANY ancestor carrying `.group`, and
+  // the assistant message row around this run is one. Hovering a single tool line
+  // therefore revealed every chevron in the message at once.
+  describe('hover reveal', () => {
+    const run: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' }, state: 'completed' },
+      { type: 'tool-result', output: 'a\nb' },
+      { type: 'tool-call', name: 'Bash', input: { command: 'pwd' }, state: 'completed' },
+      { type: 'tool-result', output: '/tmp' }
+    ]
+
+    /** Every node's class list, read through the attribute because an SVG's
+     *  `className` is an `SVGAnimatedString` rather than a string. */
+    function hoverRevealed(container: HTMLElement): { element: Element; classes: string }[] {
+      return [...container.querySelectorAll('[class*="group-hover"]')].map((element) => ({
+        element,
+        classes: element.getAttribute('class') ?? ''
+      }))
+    }
+
+    it('scopes a row’s reveal to that row rather than the whole message', () => {
+      // Open run, collapsed children — the state the turn caret leaves behind.
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      const revealed = hoverRevealed(container)
+      expect(revealed.length).toBeGreaterThan(0)
+      revealed.forEach(({ classes }) => {
+        expect(classes).not.toMatch(/(^|\s)group-hover:/)
+      })
+    })
+
+    it('puts every reveal inside the row button that governs it', () => {
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      hoverRevealed(container).forEach(({ element, classes }) => {
+        const scope = /group-hover\/([a-z-]+):/.exec(classes)?.[1]
+        expect(scope).toBeDefined()
+        expect(element.closest(`.group\\/${scope}`)).not.toBeNull()
+      })
+    })
+
+    it('hides a collapsed chevron on every row until its own row is hovered', () => {
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      const chevrons = [...container.querySelectorAll('.pl-4 button svg.lucide-chevron-right')]
+      expect(chevrons.length).toBeGreaterThan(1)
+      chevrons.forEach((chevron) => {
+        expect(chevron.getAttribute('class')).toContain('group-hover/tool-line:opacity-100')
+      })
+    })
+  })
 })
 
 describe('NativeChatToolRun task lists', () => {

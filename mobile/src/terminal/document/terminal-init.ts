@@ -193,7 +193,20 @@ export function resize(cols: number, rows: number) {
 /**
  * Ruling 21: init's own frames carry the generation they were scheduled under, so bumping it is
  * what abandons them — the same guard a re-init already uses against its predecessor.
+ *
+ * The engine goes too, because a stopped document's terminal is a WebGL context and a row buffer
+ * that nothing will read again. Both terminals, since a swap that never committed leaves two:
+ * `beginTerminalSurfaceSwap` opens a hidden replacement and `commitTerminalSurfaceSwap` disposes
+ * the one it replaced, so a stop in between leaves the committed one live with nothing pointing at
+ * it. They are the same object whenever no swap is open, which is what the set deduplicates.
  */
 export function stopTerminalInit() {
   scope.terminalGeneration++
+  for (const terminal of new Set([scope.term, scope.committedTerm])) {
+    try {
+      terminal?.dispose()
+    } catch {}
+  }
+  scope.term = null
+  scope.committedTerm = null
 }

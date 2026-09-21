@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { TerminalDocumentScope } from './document-scope'
 
 /**
- * The six host seams the page sets, and the window reads and writes they default to.
+ * The eight host seams the page sets, and the window reads and writes they default to.
  *
  * The document reached its host through `window.ReactNativeWebView` and built its engine from
  * `window.Terminal` and the two addon globals the engine bundle installs. On the page neither is
@@ -11,7 +11,7 @@ import type { TerminalDocumentScope } from './document-scope'
  * a terminal notify posted through it would put raw terminal JSON into the bridge's own channel,
  * and there is no engine bundle at all because the page imports xterm as a module.
  *
- * So each of the six is a scope field. The default is the window read the document already did,
+ * So each of the eight is a scope field. The default is the window read the document already did,
  * unchanged and still performed at call time rather than captured when the scope is built; the
  * page assigns the field instead. Both halves are asserted here, because a seam whose default
  * quietly stopped reading the window would leave the native document mute with every other
@@ -36,12 +36,12 @@ let attachWebglAddon: typeof import('./webgl-recovery').attachWebglAddon
 
 beforeAll(async () => {
   document.body.innerHTML = SURFACE_MARKUP
-  // The page's own entry and the page's own sequence, rather than a hand-picked subset: the
-  // elements `runtime-constants`, `surface-swap` and `selection-state-and-eviction` take are read
-  // in the one order both hosts run them in, and a module added to that order is covered here
-  // without this file being edited.
-  const pageModules = await import('./page-document-modules')
-  pageModules.startPageDocumentModules()
+  // The generator's own sequence, rather than a hand-picked subset: the elements
+  // `runtime-constants`, `surface-swap` and `selection-state-and-eviction` take are read in the one
+  // order both hosts run them in, and a module added to that order is covered here without this
+  // file being edited.
+  const support = await import('./generated-document-region.test-support')
+  await support.startDocumentModulesOverTheSharedScope()
   const documentScope = await import('./document-scope')
   createTerminalDocumentScope = documentScope.createTerminalDocumentScope
   scope = documentScope.scope

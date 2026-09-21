@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelDocumentFrames,
-  resetTerminalDocumentScope,
+  createTerminalDocumentScope,
   scheduleDocumentFrame,
   scope
 } from './document-scope'
@@ -15,10 +15,17 @@ import {
  * frame asked for on the way out would be owed by nobody because the cancel has already run. A
  * generation guard cannot help there — it makes a stale frame do nothing, but the frame still
  * runs, and on the page the mount it belonged to may be gone and the next one already up.
+ *
+ * These modules read one scope, so a case that needs a fresh document refills it from the same
+ * factory the document's own build calls. On the page that is a new object per mount (ruling 22);
+ * here it is this object holding what a new one would.
  */
+const startAFreshDocument = () => {
+  Object.assign(scope, createTerminalDocumentScope())
+}
 describe('the document frame registry', () => {
   afterEach(() => {
-    resetTerminalDocumentScope()
+    startAFreshDocument()
     vi.restoreAllMocks()
   })
 
@@ -28,7 +35,7 @@ describe('the document frame registry', () => {
       frames.push(callback)
       return frames.length
     })
-    resetTerminalDocumentScope()
+    startAFreshDocument()
 
     const id = scheduleDocumentFrame(() => {})
     expect(scope.scheduledFrames).toEqual([id])
@@ -44,7 +51,7 @@ describe('the document frame registry', () => {
       return next
     })
     vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => cancelled.push(id))
-    resetTerminalDocumentScope()
+    startAFreshDocument()
 
     const first = scheduleDocumentFrame(() => {})
     const second = scheduleDocumentFrame(() => {})
@@ -58,15 +65,17 @@ describe('the document frame registry', () => {
     expect(scope.scheduledFrames).toEqual([])
   })
 
-  it('schedules again once the scope is reset, which is what the next mount does', () => {
+  it('refuses for good, and the next document starts from a scope that does not know', () => {
     vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(() => 7)
     vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {})
-    resetTerminalDocumentScope()
+    startAFreshDocument()
 
     cancelDocumentFrames()
     expect(scope.framesStopped).toBe(true)
-    resetTerminalDocumentScope()
-    expect(scope.framesStopped).toBe(false)
+    // Nothing clears this flag: a stopped document stays stopped, and what schedules again is the
+    // next document's own scope.
+    expect(createTerminalDocumentScope().framesStopped).toBe(false)
+    startAFreshDocument()
     expect(scheduleDocumentFrame(() => {})).toBe(7)
     expect(scope.scheduledFrames).toEqual([7])
   })

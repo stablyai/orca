@@ -1,3 +1,4 @@
+import { elementInRoot } from './document-host-seams'
 import { scope } from './document-scope'
 
 /**
@@ -8,5 +9,5 @@ import { scope } from './document-scope'
  */
 
 export function startRuntimeConstants() {
-  scope.surface = document.getElementById('terminal-surface')
+  scope.surface = elementInRoot(scope.root, 'terminal-surface')
 }

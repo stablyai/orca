@@ -63,7 +63,7 @@ describe('the source files a census reads', () => {
 
   it('covers every artifact the tree generates, read from the ignore file that lists them', () => {
     // The list is `mobile/.gitignore`, because that is what the generators and the build agree on.
-    // A sixth artifact landing under a name this predicate does not match would put a multi-megabyte
+    // A seventh artifact landing under a name this predicate does not match would put a multi-megabyte
     // vendor bundle back into every census, which is the failure this module exists for.
     const ignored = readFileSync(join(mobileRoot, '.gitignore'), 'utf8')
       .split('\n')

@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { generatedDocumentProgram } from './document/generated-document-region.test-support'
 import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
@@ -129,7 +124,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
   function boot(): void {
     document.body.innerHTML = bodyMarkup()
-    new Function(iifeSource())()
+    new Function(generatedDocumentProgram())()
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })

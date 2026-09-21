@@ -155,7 +155,9 @@ describe('terminal WebView bundled engine', () => {
 
   it('reports WebView message handler failures instead of swallowing them', () => {
     const start = terminalHtmlSource.indexOf('function handleIncomingMessage')
-    const end = terminalHtmlSource.indexOf('window.addEventListener("resize"', start)
+    // Bounded by the next declaration in the same module: ruling 24 took the resize listener out
+    // of the bridge, so the handler is followed by the start that installs the transport.
+    const end = terminalHtmlSource.indexOf('function startMessageBridge', start)
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
     const handlerSource = terminalHtmlSource.slice(start, end)

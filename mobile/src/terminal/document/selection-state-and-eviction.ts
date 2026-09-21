@@ -1,3 +1,4 @@
+import { elementInRoot } from './document-host-seams'
 import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-range'
 import { notify } from './host-notify'
@@ -63,10 +64,10 @@ export function logFeedAndEvict() {
 }
 
 export function startSelectionStateAndEviction() {
-  scope.selectionOverlay = document.getElementById('selection-overlay')
-  scope.handleStart = document.getElementById('sel-handle-start')
-  scope.handleEnd = document.getElementById('sel-handle-end')
-  scope.selMenu = document.getElementById('sel-menu')
-  scope.btnCopy = document.getElementById('sel-menu-copy')
-  scope.btnSelAll = document.getElementById('sel-menu-all')
+  scope.selectionOverlay = elementInRoot(scope.root, 'selection-overlay')
+  scope.handleStart = elementInRoot(scope.root, 'sel-handle-start')
+  scope.handleEnd = elementInRoot(scope.root, 'sel-handle-end')
+  scope.selMenu = elementInRoot(scope.root, 'sel-menu')
+  scope.btnCopy = elementInRoot(scope.root, 'sel-menu-copy')
+  scope.btnSelAll = elementInRoot(scope.root, 'sel-menu-all')
 }

@@ -16,8 +16,8 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
  *
  * `react-native-webview` has no web build that renders anything: on the page it paints the line
  * "React Native WebView does not support this platform" where the terminal was. So the page mounts
- * the document itself — xterm as an import, the document's own modules as modules — and keeps the
- * contract above it exactly as it was. `TerminalPaneView` and the subscription foundation hold
+ * the document itself — xterm as an import, the document as the factory the WebView's own script is
+ * generated from — and keeps the contract above it exactly as it was. `TerminalPaneView` and the subscription foundation hold
  * `TerminalWebViewProps` and `TerminalWebViewHandle` and cannot tell which of the two they have.
  *
  * Both halves of the transport are the same objects the native component uses: the commands are
@@ -28,9 +28,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
     const hostRef = useRef<View>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
-    // The document is mounted in an effect and commands can be handled before it answers, so the
-    // controller's queue is not enough on its own: a `set-theme` posted on the first render would
-    // otherwise be dropped rather than queued. Held here and replayed when the mount resolves.
+    // The document reports itself ready from inside the mount call, through the seam below, so the
+    // controller flushes its queue while this effect is still on the line that built the document
+    // and `documentRef` is null. That flush is the one caller that reaches `post` before the mount
+    // has a handle, and this is what catches it: held here, replayed the moment there is one.
     const beforeMountRef = useRef<(TerminalWebViewCommand & { id: number })[]>([])
     const receiveRef = useRef<((message: Record<string, unknown>) => void) | null>(null)
 
@@ -49,8 +50,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       // were gone so was the component holding this handle.
       pingsOnForegroundRecovery: () => false
     })
-    const { clearEngineError, confirmWebReady, engineError, handle, receive, resetReadiness } =
-      controller
+    const { clearEngineError, engineError, handle, receive, resetReadiness } = controller
     // The page's answer to the WebView's reload: drop the document and build another one. The host
     // element is keyed on it so React replaces the div rather than handing back one xterm left in.
     const [generation, setGeneration] = useState(0)
@@ -64,69 +64,43 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [receive])
 
     useEffect(() => {
-      let cancelled = false
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
       const host = hostRef.current as unknown as HTMLElement | null
       if (!host) {
         return
       }
-      // The handle comes back before the document does, which is what makes the cleanup below
-      // able to answer for a mount whose import is still in flight. Without it a slow chunk left
-      // the page claimed by a mount that had already been torn down, and Reload — the way out the
-      // overlay offers — was refused as a second document.
-      const reportMountFailure = (error: unknown) => {
-        // The document is reached by a dynamic import, so its chunk can fail to load — offline, a
-        // stale hashed filename after a deploy, an evaluation error in a module body. No engine
-        // ever ran, so no `error` notify is coming. It goes down the document's own reporting
-        // path, which names the cause in the overlay instead of leaving the readiness watchdog to
-        // say "no ready after 15s".
+      let live
+      try {
+        live = mountTerminalWebDocument(host, (message) => receiveRef.current?.(message))
+      } catch (error) {
+        // A start that throws is the document's own failure and the factory has already unwound
+        // it, so there is no handle and no engine ran: no `error` notify is coming. It goes down
+        // the document's own reporting path, which names the cause in the overlay instead of
+        // leaving the readiness watchdog to say "no ready after 15s".
         receiveRef.current?.({
           type: 'error',
           fatal: true,
-          message: `terminal document failed to load - ${
+          message: `terminal document failed to start - ${
             error instanceof Error ? error.message : String(error)
           }`
         })
-      }
-      let mounted
-      try {
-        mounted = mountTerminalWebDocument(host, (message) => receiveRef.current?.(message))
-      } catch (error) {
-        // The mount refuses synchronously when the page is already taken, and the refusal is the
-        // overlay's to show rather than the tree's to crash on.
-        reportMountFailure(error)
         return
       }
-      void mounted.ready.then(
-        () => {
-          if (cancelled) {
-            return
-          }
-          documentRef.current = mounted
-          for (const command of beforeMountRef.current) {
-            mounted.send(command)
-          }
-          beforeMountRef.current = []
-          // The WebView's document posts this as its last parsed statement, once it has seen the
-          // engine. Here the engine is an import that already resolved, so the mount is the moment.
-          confirmWebReady(true)
-        },
-        (error: unknown) => {
-          if (cancelled) {
-            return
-          }
-          reportMountFailure(error)
-        }
-      )
-      const live = mounted
+      documentRef.current = live
+      // Posted by the flush that readiness triggered, one line above this, before there was a
+      // handle to send them through. Everything the queue can hold here is also carried by the
+      // `init` that follows — the theme and the text scale — so dropping the replay is invisible
+      // rather than harmless: the next command that is not re-sent would go missing silently.
+      for (const command of beforeMountRef.current) {
+        live.send(command)
+      }
+      beforeMountRef.current = []
       return () => {
-        cancelled = true
         documentRef.current = null
         live.dispose()
       }
       // Mounted once per generation: re-running this would throw away a live terminal and its
       // scrollback, and the controller's identity changes with every callback prop.
-      // `confirmWebReady` is read on the mount path only, which is why it is not a dependency.
     }, [generation])
 
     const handleReload = useCallback(() => {

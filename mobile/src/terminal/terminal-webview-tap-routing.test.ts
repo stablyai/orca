@@ -4,13 +4,8 @@
 // in-app/phone browser). Regression guard for taps that jitter a few pixels —
 // those were being swallowed because the tap shared the long-press slop gate.
 import { beforeEach, describe, expect, it } from 'vitest'
+import { generatedDocumentProgram } from './document/generated-document-region.test-support'
 import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
@@ -92,7 +87,7 @@ function boot(
   }
   document.body.innerHTML = bodyMarkup()
   // eslint-disable-next-line no-new-func
-  new Function(iifeSource())()
+  new Function(generatedDocumentProgram())()
   window.dispatchEvent(
     new MessageEvent('message', {
       data: JSON.stringify({ type: 'init', cols: 80, rows: 24, initialData: '', oscLinks })

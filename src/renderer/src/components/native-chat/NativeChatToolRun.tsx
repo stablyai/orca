@@ -214,7 +214,7 @@ export function NativeChatToolRun({
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
           aria-expanded={open}
           aria-live="polite"
         >
@@ -232,13 +232,13 @@ export function NativeChatToolRun({
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left"
+          className="group/tool-run flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left"
           aria-expanded={open}
         >
           {structuredActivityUi && settledHeaderIcon ? (
             <NativeChatToolRunIcon iconName={settledHeaderIcon} className="text-muted-foreground" />
           ) : null}
-          <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
+          <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
             {callCount}×
           </span>
           {summaryMembers.length > 0 ? (
@@ -248,7 +248,7 @@ export function NativeChatToolRun({
                   `browser.open` and `tools/read`. The list stays one line and
                   truncates as a whole rather than wrapping into a block — a
                   header that grows to three rows stops reading as a header. */}
-              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
                 {keyedSummaryMembers.map((member, index) => (
                   <Fragment key={member.key}>
                     {/* A real space, not just the margin: a CSS gap is invisible to
@@ -273,7 +273,7 @@ export function NativeChatToolRun({
               {hiddenCallCount > 0 ? (
                 /* Outside the truncating span, so the count of what is not shown
                    survives a list the pane is too narrow to print. */
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
                   {translate(
                     'components.native-chat.tool.moreCalls',
                     NATIVE_CHAT_TOOL_ACTIVITY_COPY.moreCalls,
@@ -283,7 +283,7 @@ export function NativeChatToolRun({
               ) : null}
             </>
           ) : (
-            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
               {fallbackLabel}
             </span>
           )}
@@ -299,7 +299,7 @@ export function NativeChatToolRun({
                 NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCallsLabel,
                 { value0: failedCallCount }
               )}
-              className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80"
+              className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80"
             >
               {translate(
                 'components.native-chat.tool.failedCount',
@@ -312,11 +312,12 @@ export function NativeChatToolRun({
           {structuredActivityUi && runSucceeded ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
-          {/* Chevron is revealed on hover when collapsed and points down when open. */}
+          {/* Revealed on hover of this header alone — see NativeChatToolLine on
+              why the group is named — and points down when open. */}
           <ChevronRight
             className={cn(
               'size-3.5 shrink-0 text-muted-foreground transition-all',
-              open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+              open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/tool-run:opacity-100'
             )}
           />
         </button>

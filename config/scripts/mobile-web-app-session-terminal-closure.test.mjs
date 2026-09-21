@@ -17,24 +17,66 @@ import {
  * the terminal is by far the largest thing in it. Measured here so the trade is a number rather
  * than a claim, and so that a later change cannot quietly put the engine string back.
  *
- * Measured against `origin/main` at 9fbdfc592c, which is the merge base this branch now sits on:
+ * Re-anchored on the merge of main at 5d13a70ea3 and re-measured there. The reading has been
+ * re-taken at each merge rather than adjusted, because the arithmetic keeps not working: main has
+ * re-pinned this count three times for modules that arrived from three other PRs, and a number
+ * carried forward would have been wrong about every one of them.
  *
- *   modules        4277 -> 4320   (+43)
- *   local modules   926 ->  970   (+44)
- *   minified bytes  3,868,833 -> 3,812,418   (-56,415)
+ *   modules        4326 -> 4286   (-40)
+ *   local modules   976 ->  936   (-40)
  *
- * The route gets smaller. It sheds six modules — the native component, the 612 KiB engine string,
- * the 105 KiB generated document script, the HTML module and the shell and close around it, all
- * string literals of a program the page cannot run — and gains fifty: the document's own 39, the
- * component, its mount, the stylesheet and markup, the two the controller split made, and xterm
- * with its two addons behind them at 607,945 bytes minified ESM on their own.
+ * The -40 is the only part of this that is the lane's, and it has not moved across those three
+ * re-pins. What moved is the base.
+ *
+ * The three modules the base gained, none of them this branch's and all of them in its 4286 by
+ * main's own route:
+ *
+ * - `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches. C7.10
+ *   item E (#21864) and mermaid (#21871) were each green against a main that lacked the other, so
+ *   main held 4323 while measuring 4324, and #21908 re-pinned it there.
+ * - `src/mobile-web-shell/bridge/bridge-page-route-grants.ts` and the
+ *   `mobile-web-bundle/manifest-contract.ts` whose grant grammar it imports rather than restates,
+ *   both C2.9's. They reach every page closure through `bridge-envelope.ts`, which the page reads
+ *   to parse `init`, so this count moves for any route the page serves and not for the session
+ *   alone.
+ *
+ * Which is the point of re-measuring rather than summing. The merged total was one above the sum
+ * the first time, when main had drifted the haptics module after recording its own number, and a
+ * sum would have read 4283 and been wrong about a module neither side of that merge touched.
+ *
+ * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and the four postinstall
+ * generators run first, the before side in a scratch worktree detached at the same sha, and the
+ * three modules above read out of the after side's list by name rather than inferred from the
+ * total. Measured rather than taken from main's pin because the pin covers only the module count,
+ * so the local count beside it would otherwise be a number nobody had read.
+ *
+ * The byte reading is not re-measured and stays anchored where it was taken, against main at
+ * ec82173130: 3,768,122 -> 3,766,312 minified (-1,810). `mobileWebAppRouteClosure` reads
+ * `metafile.inputs` and returns no byte total, so a figure produced here would be a different
+ * computation rather than a newer reading of that one.
+ *
+ * What moved is which files carry the document, not whether the page carries it. C7.5 put the
+ * document's own source modules in this closure and started them per mount; ruling 23 gives the
+ * page the factory the WebView's script is generated from, so the same program arrives as one
+ * emitted file and its 41 inputs leave. The bytes barely move because it is the same program: what
+ * goes is the import and export plumbing between the modules, and what the generator substitutes.
+ *
+ * The two commits inside the -40, because only one of them is the factory arriving: making the
+ * document a factory put the `host` argument on `createTerminalDocumentScope`, the lane's only edit
+ * to a module this closure already carried, and cost 80 bytes on its own -- 3,768,202 measured at
+ * that commit. The -1,890 from there is the page importing the emitted factory instead.
+ *
+ * xterm was already a static import of the mount before this, so nothing here is xterm arriving: it
+ * and its two addons are 607,945 bytes minified ESM on their own, and they are on both sides of the
+ * reading above.
  *
  * Two earlier readings of the same measurement, against the bases this branch sat on before:
  * -47,255 at 51ae7b1b03 and -55,561 at 0ce0fc99a2. They differ because C7.1's own round-1 fold
  * deleted `URL_TAP_WEBVIEW_JS` from a module only the page's component brings into this closure,
  * so the saving lands on the after side and no base can show it.
  *
- * Then C7.10 item B put mermaid on the page, and the module list moved again:
+ * Then C7.10 item B put mermaid on the page, and the module list moved again. Its own reading, at
+ * the base it was taken against:
  *
  *   modules        4320 -> 4323   (+3)
  *   local modules   970 ->  973   (+3)
@@ -43,7 +85,7 @@ import {
  * loader imports on demand. The engine's own 66 files and the d3, dagre, katex and cytoscape trees
  * under them are inside that one artifact rather than in this graph, which is why the count barely
  * moves. Importing the package here instead read +2,056 and emitted 103 scripts, a package
- * splitting along its own lazy diagram-type boundaries — every one of them inside the OTA generation
+ * splitting along its own lazy diagram-type boundaries -- every one of them inside the OTA generation
  * the phone had already downloaded, so the split moved no bytes and spent 103 of the 256 manifest
  * assets the shell will load. One artifact costs one script and one module.
  *
@@ -51,7 +93,7 @@ import {
  * one: the built bundle is 8,016,714 bytes across 112 assets, against the 9 MiB ceiling in
  * `verify-mobile-web-app-bundle.mjs`. That is 84.9% of it, with 1,420,470 bytes left for the rest
  * of C7.10 and for C7.7. Before item B the same bundle was 4,539,090 bytes, and the engine is the
- * difference — deferring it defers evaluation and a fetch, never the download.
+ * difference -- deferring it defers evaluation and a fetch, never the download.
  *
  * `mobileWebAppRouteClosure` reads `metafile.inputs`, which holds dynamically imported modules
  * under `splitting: true` just as it does under `splitting: false`, so it cannot express "on
@@ -79,6 +121,7 @@ const SHED = [
 /** The component, its mount, the stylesheet and the markup, and the modules the splits made. */
 const GAINED_OUTSIDE_THE_DOCUMENT = [
   'src/terminal/TerminalWebView.web.tsx',
+  'src/terminal/terminal-webview-document-factory.generated.ts',
   'src/terminal/terminal-web-document-mount.ts',
   'src/terminal/terminal-webview-engine-css.generated.ts',
   'src/terminal/terminal-webview-html.web.ts',
@@ -107,17 +150,11 @@ const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.gener
 const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
 /**
- * The module list with mermaid on the page, recorded at the base in the docstring above, plus
- * three.
- *
- * One is `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches
- * since C7.10 E landed beside this pin (#21864 and #21871 were each green against a main without
- * the other). The other two are C2.9's: `src/mobile-web-shell/bridge/bridge-page-route-grants.ts`
- * and the `mobile-web-bundle/manifest-contract.ts` whose grant grammar it imports rather than
- * restates. Both reach every page closure through `bridge-envelope.ts`, which the page reads to
- * parse `init`, so this count moves for any route the page serves and not for the session alone.
+ * The module list on the merge, recorded at the base in the docstring above, which is where every
+ * part of it is accounted for: the factory replacing the document's source modules, mermaid's
+ * three, and the three bridge modules #21908 and C2.9 pin on main.
  */
-const MODULES_WITH_MERMAID = 4326
+const SESSION_ROUTE_MODULES = 4286
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
@@ -142,12 +179,12 @@ describeClosure(
           `${name} is not in the closure`
         ).toBe(true)
       }
-      // The document, whole: every module the generator emits except the bridge, which ruling 19
-      // keeps off the page because those `message` frames belong to the shell.
-      const documentModules = local.filter((module) => module.startsWith('src/terminal/document/'))
-      expect(documentModules.length).toBeGreaterThanOrEqual(36)
-      expect(documentModules).not.toContain('src/terminal/document/message-bridge.ts')
-      expect(documentModules).toContain('src/terminal/document/page-document-modules.ts')
+      // The document, whole, and as one file: ruling 23 gives the page the factory the WebView's
+      // own script is generated from, so what the closure carries is that emitted text. The source
+      // modules are not in it at all — they are the factory's inputs, not the page's — and the one
+      // import the generated file makes is a type, which erases.
+      expect(local).toContain('src/terminal/terminal-webview-document-factory.generated.ts')
+      expect(local.filter((module) => module.startsWith('src/terminal/document/'))).toEqual([])
     }, 300_000)
 
     it('reaches the engine as one deferred module and never as part of the download', async () => {
@@ -157,7 +194,7 @@ describeClosure(
       // And the package's own file tree is not, anywhere: it is inside that artifact. Meaningful
       // only beside the line above, which is why the two sit together.
       expect(packageModules(modules)).toEqual([])
-      expect(modules).toHaveLength(MODULES_WITH_MERMAID)
+      expect(modules).toHaveLength(SESSION_ROUTE_MODULES)
 
       const download = await mobileWebAppRouteChunkClosure(SESSION_ROUTE)
       // The fence: nothing of the engine is reachable from the route's own chunk by an import

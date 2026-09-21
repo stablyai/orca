@@ -4,6 +4,11 @@ import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import { scope } from './document-scope'
 import { notifyTerminalSurfaceTap } from './surface-tap'
+import {
+  eventTargetInRoot,
+  touchesInRoot,
+  type TerminalDocumentTargetContainer
+} from './document-host-seams'
 
 // ============================================================
 // LATCHING TOUCH DISPATCHER (document-level)
@@ -17,10 +22,7 @@ export type TerminalTouchDispatch = {
   longPressFingerInsideOverlay: boolean
 }
 
-/** An element a target can be tested against; a method so a real element satisfies it. */
-type TerminalDocumentTargetContainer = { contains(other: EventTarget | null): boolean }
-
-export function touchById(touches: TouchList, id: number | null) {
+export function touchById(touches: ArrayLike<Touch>, id: number | null) {
   for (let i = 0; i < touches.length; i++) {
     if (touches[i].identifier === id) {
       return touches[i]
@@ -84,8 +86,22 @@ export function dispatcherShouldBlockSurface() {
 const CAPTURE_ACTIVE = { capture: true, passive: false }
 const CAPTURE_PASSIVE = { capture: true, passive: true }
 
+/**
+ * Whether a touch belongs to this document (ruling 22's last page-wide read).
+ *
+ * `e.target` is the element the finger went down on and stays that element for the life of the
+ * touch, so a select-drag that travels outside the host still answers yes on move and end.
+ */
+function touchIsThisDocuments(e: { target: EventTarget | null }) {
+  return eventTargetInRoot(scope.root, e.target)
+}
+
 function onDocumentTouchStart(e: TouchEvent) {
-  const t = e.touches[0]
+  if (!touchIsThisDocuments(e)) {
+    return
+  }
+  const touches = touchesInRoot(scope.root, e.touches)
+  const t = touches[0]
   const target = e.target
   const onHandle = target === scope.handleStart || target === scope.handleEnd
   const inOverlay = targetInside(target, scope.selectionOverlay)
@@ -95,14 +111,14 @@ function onDocumentTouchStart(e: TouchEvent) {
   // taps never resolve as a link tap on touchend.
   scope.tapCandidate = null
 
-  if (e.touches.length === 2) {
+  if (touches.length === 2) {
     // pinch latch
     if (scope.selMode === 'select') {
       notify({ type: 'mobile-clip-cancel-by-pinch' })
       cancelSelect()
     }
     scope.touchDispatch.mode = 'pinch'
-    scope.touchDispatch.touchIds = [e.touches[0].identifier, e.touches[1].identifier]
+    scope.touchDispatch.touchIds = [touches[0].identifier, touches[1].identifier]
     clearLongPress()
     return
   }
@@ -141,8 +157,12 @@ function onDocumentTouchStart(e: TouchEvent) {
 }
 
 function onDocumentTouchMove(e: TouchEvent) {
+  if (!touchIsThisDocuments(e)) {
+    return
+  }
+  const touches = touchesInRoot(scope.root, e.touches)
   if (scope.touchDispatch.mode === 'select-drag') {
-    const t = touchById(e.touches, scope.touchDispatch.touchId)
+    const t = touchById(touches, scope.touchDispatch.touchId)
     if (!t || !scope.sel || !scope.sel.activeHandle) {
       return
     }
@@ -152,16 +172,16 @@ function onDocumentTouchMove(e: TouchEvent) {
   }
   if (scope.touchDispatch.mode === 'surface' || scope.touchDispatch.mode === 'pinch') {
     // long-press slop check
-    if (scope.longPressTimer && e.touches.length === 1) {
-      if (touchSlopExceeded(e.touches[0])) {
+    if (scope.longPressTimer && touches.length === 1) {
+      if (touchSlopExceeded(touches[0])) {
         clearLongPress()
       }
     }
     // Why: disqualify the tap only once the finger travels past TAP_SLOP
     // (a scroll/pan), independent of the long-press timer — so a tap that
     // jitters under TAP_SLOP still opens the link/path under the finger.
-    if (scope.tapCandidate && e.touches.length === 1) {
-      const mt = e.touches[0]
+    if (scope.tapCandidate && touches.length === 1) {
+      const mt = touches[0]
       if (mt.identifier === scope.tapCandidate.identifier) {
         const dx = Math.abs(mt.clientX - scope.tapCandidate.x)
         const dy = Math.abs(mt.clientY - scope.tapCandidate.y)
@@ -169,7 +189,7 @@ function onDocumentTouchMove(e: TouchEvent) {
           scope.tapCandidate = null
         }
       }
-    } else if (e.touches.length !== 1) {
+    } else if (touches.length !== 1) {
       scope.tapCandidate = null
     }
     // existing surface handler will run from its own listener
@@ -177,6 +197,10 @@ function onDocumentTouchMove(e: TouchEvent) {
 }
 
 function onDocumentTouchEnd(e: TouchEvent) {
+  if (!touchIsThisDocuments(e)) {
+    return
+  }
+  const touches = touchesInRoot(scope.root, e.touches)
   if (scope.touchDispatch.mode === 'select-drag') {
     if (scope.sel) {
       scope.sel.activeHandle = null
@@ -187,11 +211,11 @@ function onDocumentTouchEnd(e: TouchEvent) {
     return
   }
   if (scope.touchDispatch.mode === 'pinch') {
-    if (e.touches.length < 2) {
-      scope.touchDispatch.mode = e.touches.length === 1 ? 'surface' : 'idle'
+    if (touches.length < 2) {
+      scope.touchDispatch.mode = touches.length === 1 ? 'surface' : 'idle'
       scope.touchDispatch.touchIds = null
-      if (e.touches.length === 1) {
-        scope.touchDispatch.touchId = e.touches[0].identifier
+      if (touches.length === 1) {
+        scope.touchDispatch.touchId = touches[0].identifier
       }
     }
     return
@@ -201,7 +225,7 @@ function onDocumentTouchEnd(e: TouchEvent) {
     // TAP_SLOP) rather than longPressOrigin, which the press-to-select slop
     // can null mid-tap — that was dropping URL/file taps that moved a few px.
     if (
-      e.touches.length === 0 &&
+      touches.length === 0 &&
       scope.tapCandidate &&
       scope.selMode !== 'select' &&
       Date.now() - scope.tapCandidate.t <= scope.TAP_MAX_MS
@@ -210,14 +234,17 @@ function onDocumentTouchEnd(e: TouchEvent) {
     }
     clearLongPress()
     scope.tapCandidate = null
-    if (e.touches.length === 0) {
+    if (touches.length === 0) {
       scope.touchDispatch.mode = 'idle'
       scope.touchDispatch.touchId = null
     }
   }
 }
 
-function onDocumentTouchCancel() {
+function onDocumentTouchCancel(e: TouchEvent) {
+  if (!touchIsThisDocuments(e)) {
+    return
+  }
   clearLongPress()
   scope.tapCandidate = null
   stopEdgeScroll()

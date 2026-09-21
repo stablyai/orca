@@ -76,19 +76,19 @@ describe('terminal WebView reflow', () => {
       expect(XTERM_HTML).toContain('reflow(msg.cols, msg.rows);')
     })
 
-    it('still wires the message listener after the reflow routine and tap dispatcher', () => {
-      // Why: the reflow message only reaches reflow() if the document-level
-      // message listener actually attaches. The tap dispatcher is injected
-      // between them; if its IIFE-time code threw, the listener below would
-      // never bind and reflow messages would silently no-op.
+    it('still starts the message bridge after the reflow routine and tap dispatcher', () => {
+      // Why: the reflow message only reaches reflow() if the document's transport actually
+      // attaches. The tap dispatcher starts between them; if its start threw, the bridge's would
+      // never run and reflow messages would silently no-op — which is now the document's own
+      // unwind rather than a silent half-start, and the order is still what this holds.
       const reflowAt = XTERM_HTML.indexOf('function reflow(cols, rows) {')
-      // Ruling 21 moved the dispatcher's latch onto the scope, so the dispatcher is located by
-      // its own first handler rather than by the object it used to declare.
-      const dispatchAt = XTERM_HTML.indexOf('function onDocumentTouchStart(e) {')
-      const listenerAt = XTERM_HTML.indexOf('window.addEventListener("message"')
+      // Ruling 24 put the listener behind the host's transport seam, so what is located here is
+      // the call that installs it rather than the install itself.
+      const dispatchAt = XTERM_HTML.indexOf('startTapDispatch();')
+      const bridgeAt = XTERM_HTML.indexOf('startMessageBridge();')
       expect(reflowAt).toBeGreaterThanOrEqual(0)
       expect(dispatchAt).toBeGreaterThan(reflowAt)
-      expect(listenerAt).toBeGreaterThan(dispatchAt)
+      expect(bridgeAt).toBeGreaterThan(dispatchAt)
     })
   })
 })

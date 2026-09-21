@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   buildTerminalDocumentScript,
+  emitDocumentedTerminalModule,
   emitTerminalDocumentModule
 } from '../../../scripts/build-terminal-document-script.mjs'
 import {
@@ -27,11 +28,7 @@ const NOT_EMITTED = [
   'document-constants',
   // Types only. esbuild emits nothing for it, and an empty emission would add a blank line to the
   // document rather than a program.
-  'document-terminal-shape',
-  // The page's entry, not the WebView's: it imports the modules below in the order the generator
-  // emits them, because on the page nothing splices them into one scope.
-  // `page-document-module-order.test.ts` holds its list against this one.
-  'page-document-modules'
+  'document-terminal-shape'
 ]
 
 function documentModuleNames(): string[] {
@@ -84,9 +81,9 @@ describe('the document module order', () => {
 
     const script = await buildTerminalDocumentScript()
     const emittedAt = async (name: string) => {
-      const text = await emitTerminalDocumentModule(
-        fileURLToPath(new URL(`./${name}.ts`, import.meta.url))
-      )
+      // As the document carries it: the scope module is the one the generator rewrites, so a raw
+      // emit would be absent from the script for a reason that has nothing to do with order.
+      const text = await emitDocumentedTerminalModule(name)
       const at = script.indexOf(text)
       expect(at, `${name} is not in the emitted document`).toBeGreaterThanOrEqual(0)
       return at

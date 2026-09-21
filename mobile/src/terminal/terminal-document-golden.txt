@@ -158,7 +158,7 @@ window.onerror = function(msg) {
 </div>
 <script>__ORCA_TERMINAL_ENGINE_JS__</script>
 <script>
-(function() {
+function createTerminalDocument(host) {
   function postToReactNativeWebView(message) {
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify(message));
@@ -182,6 +182,42 @@ window.onerror = function(msg) {
     return function() {
       window.onerror = null;
     };
+  }
+  function installWindowHostTransport(receive) {
+    const listener = (event) => {
+      receive(event.data);
+    };
+    window.addEventListener("message", listener);
+    document.addEventListener("message", listener);
+    return function() {
+      window.removeEventListener("message", listener);
+      document.removeEventListener("message", listener);
+    };
+  }
+  function windowHasEngine() {
+    return window.Terminal !== void 0;
+  }
+  function elementInRoot(root, id) {
+    const within = root === null ? document : root;
+    return within.querySelector(`#${id}`);
+  }
+  function eventTargetInRoot(root, target) {
+    if (root === null) {
+      return true;
+    }
+    return target !== null && root.contains(target);
+  }
+  function touchesInRoot(root, touches) {
+    if (root === null) {
+      return touches;
+    }
+    const mine = [];
+    for (let i = 0; i < touches.length; i++) {
+      if (eventTargetInRoot(root, touches[i].target)) {
+        mine.push(touches[i]);
+      }
+    }
+    return mine;
   }
   const textScalePresets = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const statusDot = String.fromCharCode(9210);
@@ -280,6 +316,8 @@ window.onerror = function(msg) {
       linesEverWritten: 0,
       nonFatalErrorNotifies: 0,
       uninstallErrorReporter: null,
+      uninstallHostTransport: null,
+      removeViewportRefit: null,
       fitRetryToken: 0,
       mouseGesture: null,
       touchDispatch: {
@@ -312,20 +350,17 @@ window.onerror = function(msg) {
       createUnicode11Addon: createEngineUnicode11Addon,
       createWebglAddon: createEngineWebglAddon,
       installErrorReporter: installWindowErrorReporter,
-      paintDocumentBackground: paintWindowDocumentBackground
+      paintDocumentBackground: paintWindowDocumentBackground,
+      installHostTransport: installWindowHostTransport,
+      hasEngine: windowHasEngine,
+      root: null
     };
   }
-  function createTerminalDocumentScope() {
-    return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams() };
+  function createTerminalDocumentScope(host = {}) {
+    const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== void 0));
+    return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams(), ...named };
   }
-  function resetTerminalDocumentScope() {
-    const generations = {
-      terminalGeneration: scope.terminalGeneration + 1,
-      fitRetryToken: scope.fitRetryToken + 1
-    };
-    Object.assign(scope, createTerminalDocumentState(), generations);
-  }
-  const scope = createTerminalDocumentScope();
+  const scope = createTerminalDocumentScope(host);
   function scheduleDocumentFrame(callback) {
     if (scope.framesStopped) {
       return -1;
@@ -348,7 +383,7 @@ window.onerror = function(msg) {
     scope.scheduledFrames = [];
   }
   function startRuntimeConstants() {
-    scope.surface = document.getElementById("terminal-surface");
+    scope.surface = elementInRoot(scope.root, "terminal-surface");
   }
   function resetTerminalDataReplyAuthority() {
     scope.terminalDataRepliesEnabled = false;
@@ -416,7 +451,7 @@ window.onerror = function(msg) {
     swap.nextSurface.style.position = "absolute";
     swap.nextSurface.style.left = "0";
     swap.nextSurface.style.top = "0";
-    document.getElementById("terminal-container").appendChild(swap.nextSurface);
+    elementInRoot(scope.root, "terminal-container").appendChild(swap.nextSurface);
     scope.surface = swap.nextSurface;
     scope.pendingSurface = swap.nextSurface;
     attachSurfaceEventHandlers(scope.surface);
@@ -494,8 +529,8 @@ window.onerror = function(msg) {
     });
   }
   function startTextScaling() {
-    scope.scrollIndicator = document.getElementById("scroll-indicator");
-    scope.scrollThumb = document.getElementById("scroll-thumb");
+    scope.scrollIndicator = elementInRoot(scope.root, "scroll-indicator");
+    scope.scrollThumb = elementInRoot(scope.root, "scroll-thumb");
     scope.terminalFontFamily = (isIOSWebView() ? "ui-monospace, " : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
   }
   function flog(tag, payload) {
@@ -811,8 +846,25 @@ window.onerror = function(msg) {
     }
     repositionOverlay();
   }
+  function startFitScale() {
+    const refit = () => {
+      applyFitScale("window-resize");
+      adjustRowsForViewport();
+      repositionOverlay();
+      clampPan();
+      updateTransform();
+    };
+    window.addEventListener("resize", refit);
+    scope.removeViewportRefit = () => {
+      window.removeEventListener("resize", refit);
+    };
+  }
   function stopFitScale() {
     scope.fitRetryToken++;
+    if (scope.removeViewportRefit) {
+      scope.removeViewportRefit();
+      scope.removeViewportRefit = null;
+    }
   }
   function isAltScreenActive(data) {
     if (typeof data !== "string") {
@@ -1231,6 +1283,14 @@ window.onerror = function(msg) {
   }
   function stopTerminalInit() {
     scope.terminalGeneration++;
+    for (const terminal of /* @__PURE__ */ new Set([scope.term, scope.committedTerm])) {
+      try {
+        terminal == null ? void 0 : terminal.dispose();
+      } catch {
+      }
+    }
+    scope.term = null;
+    scope.committedTerm = null;
   }
   function reflow(cols, rows) {
     if (!scope.term || isAlternateBufferActive()) {
@@ -1488,12 +1548,12 @@ window.onerror = function(msg) {
     }
   }
   function startSelectionStateAndEviction() {
-    scope.selectionOverlay = document.getElementById("selection-overlay");
-    scope.handleStart = document.getElementById("sel-handle-start");
-    scope.handleEnd = document.getElementById("sel-handle-end");
-    scope.selMenu = document.getElementById("sel-menu");
-    scope.btnCopy = document.getElementById("sel-menu-copy");
-    scope.btnSelAll = document.getElementById("sel-menu-all");
+    scope.selectionOverlay = elementInRoot(scope.root, "selection-overlay");
+    scope.handleStart = elementInRoot(scope.root, "sel-handle-start");
+    scope.handleEnd = elementInRoot(scope.root, "sel-handle-end");
+    scope.selMenu = elementInRoot(scope.root, "sel-menu");
+    scope.btnCopy = elementInRoot(scope.root, "sel-menu-copy");
+    scope.btnSelAll = elementInRoot(scope.root, "sel-menu-all");
   }
   function emitModesIfChanged() {
     if (!scope.term) {
@@ -2670,20 +2730,27 @@ window.onerror = function(msg) {
   }
   const CAPTURE_ACTIVE = { capture: true, passive: false };
   const CAPTURE_PASSIVE = { capture: true, passive: true };
+  function touchIsThisDocuments(e) {
+    return eventTargetInRoot(scope.root, e.target);
+  }
   function onDocumentTouchStart(e) {
-    const t = e.touches[0];
+    if (!touchIsThisDocuments(e)) {
+      return;
+    }
+    const touches = touchesInRoot(scope.root, e.touches);
+    const t = touches[0];
     const target = e.target;
     const onHandle = target === scope.handleStart || target === scope.handleEnd;
     const inOverlay = targetInside(target, scope.selectionOverlay);
     const inSurface = targetInside(target, scope.surface);
     scope.tapCandidate = null;
-    if (e.touches.length === 2) {
+    if (touches.length === 2) {
       if (scope.selMode === "select") {
         notify({ type: "mobile-clip-cancel-by-pinch" });
         cancelSelect();
       }
       scope.touchDispatch.mode = "pinch";
-      scope.touchDispatch.touchIds = [e.touches[0].identifier, e.touches[1].identifier];
+      scope.touchDispatch.touchIds = [touches[0].identifier, touches[1].identifier];
       clearLongPress();
       return;
     }
@@ -2712,8 +2779,12 @@ window.onerror = function(msg) {
     }
   }
   function onDocumentTouchMove(e) {
+    if (!touchIsThisDocuments(e)) {
+      return;
+    }
+    const touches = touchesInRoot(scope.root, e.touches);
     if (scope.touchDispatch.mode === "select-drag") {
-      const t = touchById(e.touches, scope.touchDispatch.touchId);
+      const t = touchById(touches, scope.touchDispatch.touchId);
       if (!t || !scope.sel || !scope.sel.activeHandle) {
         return;
       }
@@ -2722,13 +2793,13 @@ window.onerror = function(msg) {
       return;
     }
     if (scope.touchDispatch.mode === "surface" || scope.touchDispatch.mode === "pinch") {
-      if (scope.longPressTimer && e.touches.length === 1) {
-        if (touchSlopExceeded(e.touches[0])) {
+      if (scope.longPressTimer && touches.length === 1) {
+        if (touchSlopExceeded(touches[0])) {
           clearLongPress();
         }
       }
-      if (scope.tapCandidate && e.touches.length === 1) {
-        const mt = e.touches[0];
+      if (scope.tapCandidate && touches.length === 1) {
+        const mt = touches[0];
         if (mt.identifier === scope.tapCandidate.identifier) {
           const dx = Math.abs(mt.clientX - scope.tapCandidate.x);
           const dy = Math.abs(mt.clientY - scope.tapCandidate.y);
@@ -2736,12 +2807,16 @@ window.onerror = function(msg) {
             scope.tapCandidate = null;
           }
         }
-      } else if (e.touches.length !== 1) {
+      } else if (touches.length !== 1) {
         scope.tapCandidate = null;
       }
     }
   }
   function onDocumentTouchEnd(e) {
+    if (!touchIsThisDocuments(e)) {
+      return;
+    }
+    const touches = touchesInRoot(scope.root, e.touches);
     if (scope.touchDispatch.mode === "select-drag") {
       if (scope.sel) {
         scope.sel.activeHandle = null;
@@ -2752,28 +2827,31 @@ window.onerror = function(msg) {
       return;
     }
     if (scope.touchDispatch.mode === "pinch") {
-      if (e.touches.length < 2) {
-        scope.touchDispatch.mode = e.touches.length === 1 ? "surface" : "idle";
+      if (touches.length < 2) {
+        scope.touchDispatch.mode = touches.length === 1 ? "surface" : "idle";
         scope.touchDispatch.touchIds = null;
-        if (e.touches.length === 1) {
-          scope.touchDispatch.touchId = e.touches[0].identifier;
+        if (touches.length === 1) {
+          scope.touchDispatch.touchId = touches[0].identifier;
         }
       }
       return;
     }
     if (scope.touchDispatch.mode === "surface") {
-      if (e.touches.length === 0 && scope.tapCandidate && scope.selMode !== "select" && Date.now() - scope.tapCandidate.t <= scope.TAP_MAX_MS) {
+      if (touches.length === 0 && scope.tapCandidate && scope.selMode !== "select" && Date.now() - scope.tapCandidate.t <= scope.TAP_MAX_MS) {
         notifyTerminalSurfaceTap(scope.tapCandidate.x, scope.tapCandidate.y, true);
       }
       clearLongPress();
       scope.tapCandidate = null;
-      if (e.touches.length === 0) {
+      if (touches.length === 0) {
         scope.touchDispatch.mode = "idle";
         scope.touchDispatch.touchId = null;
       }
     }
   }
-  function onDocumentTouchCancel() {
+  function onDocumentTouchCancel(e) {
+    if (!touchIsThisDocuments(e)) {
+      return;
+    }
     clearLongPress();
     scope.tapCandidate = null;
     stopEdgeScroll();
@@ -3147,20 +3225,21 @@ window.onerror = function(msg) {
           cancelAnimationFrame(scope.touchGesture.momentumId);
           scope.touchGesture.momentumId = null;
         }
-        if (e.touches.length === 2) {
+        const touches = touchesInRoot(scope.root, e.touches);
+        if (touches.length === 2) {
           scope.touchGesture.isPinching = true;
           scope.smoothScrollOffsetY = 0;
-          scope.touchGesture.pinchDist = getDistance(e.touches[0], e.touches[1]);
+          scope.touchGesture.pinchDist = getDistance(touches[0], touches[1]);
           scope.touchGesture.pinchScale = scope.userScale;
-          const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          const mx = (touches[0].clientX + touches[1].clientX) / 2;
+          const my = (touches[0].clientY + touches[1].clientY) / 2;
           const total = getTotalScale();
           scope.touchGesture.pinchSurfX = (mx - scope.panX) / total;
           scope.touchGesture.pinchSurfY = (my - scope.panY) / total;
-        } else if (e.touches.length === 1) {
+        } else if (touches.length === 1) {
           scope.touchGesture.isPinching = false;
-          scope.touchGesture.lastX = e.touches[0].clientX;
-          scope.touchGesture.lastY = e.touches[0].clientY;
+          scope.touchGesture.lastX = touches[0].clientX;
+          scope.touchGesture.lastY = touches[0].clientY;
           scope.touchGesture.lastTime = Date.now();
           scope.touchGesture.velY = 0;
           scope.touchGesture.accumDelta = 0;
@@ -3179,11 +3258,12 @@ window.onerror = function(msg) {
         }
         e.preventDefault();
         e.stopPropagation();
-        if (e.touches.length === 2) {
+        const touches = touchesInRoot(scope.root, e.touches);
+        if (touches.length === 2) {
           scope.touchGesture.isPinching = true;
-          const dist = getDistance(e.touches[0], e.touches[1]);
-          const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          const dist = getDistance(touches[0], touches[1]);
+          const mx = (touches[0].clientX + touches[1].clientX) / 2;
+          const my = (touches[0].clientY + touches[1].clientY) / 2;
           const ratio = dist / scope.touchGesture.pinchDist;
           const loScale = scope.MIN_TEXT_SCALE / scope.currentTextScale;
           const hiScale = scope.MAX_TEXT_SCALE / scope.currentTextScale;
@@ -3196,8 +3276,8 @@ window.onerror = function(msg) {
           scope.panY = my - scope.touchGesture.pinchSurfY * total;
           clampPan();
           updateTransform();
-        } else if (e.touches.length === 1 && !scope.touchGesture.isPinching) {
-          const x = e.touches[0].clientX, y = e.touches[0].clientY;
+        } else if (touches.length === 1 && !scope.touchGesture.isPinching) {
+          const x = touches[0].clientX, y = touches[0].clientY;
           const now = Date.now(), dt = now - scope.touchGesture.lastTime;
           if (scope.term.element && scope.term.element.scrollWidth * getTotalScale() > window.innerWidth + 1) {
             scope.panX += x - scope.touchGesture.lastX;
@@ -3238,7 +3318,8 @@ window.onerror = function(msg) {
         if (!scope.term) {
           return;
         }
-        if (scope.touchGesture.isPinching && e.touches.length < 2) {
+        const touches = touchesInRoot(scope.root, e.touches);
+        if (scope.touchGesture.isPinching && touches.length < 2) {
           scope.touchGesture.isPinching = false;
           const target = snapToTextScalePreset(scope.currentTextScale * scope.userScale);
           const changed = target !== scope.currentTextScale;
@@ -3251,16 +3332,16 @@ window.onerror = function(msg) {
           if (changed) {
             notify({ type: "haptic", kind: "selection" });
           }
-          if (e.touches.length === 1) {
-            scope.touchGesture.lastX = e.touches[0].clientX;
-            scope.touchGesture.lastY = e.touches[0].clientY;
+          if (touches.length === 1) {
+            scope.touchGesture.lastX = touches[0].clientX;
+            scope.touchGesture.lastY = touches[0].clientY;
             scope.touchGesture.lastTime = Date.now();
             scope.touchGesture.velY = 0;
             scope.touchGesture.accumDelta = 0;
           }
           return;
         }
-        if (e.touches.length === 0) {
+        if (touches.length === 0) {
           let momentumStep = function(frameTime) {
             const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime));
             lastMomentumTime = frameTime;
@@ -3308,10 +3389,10 @@ window.onerror = function(msg) {
       scope.touchGesture.momentumId = null;
     }
   }
-  function handleIncomingMessage(e) {
+  function handleIncomingMessage(frame) {
     let msg;
     try {
-      msg = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+      msg = typeof frame === "string" ? JSON.parse(frame) : frame;
     } catch {
       return;
     }
@@ -3326,33 +3407,51 @@ window.onerror = function(msg) {
     }
   }
   function startMessageBridge() {
-    window.addEventListener("message", handleIncomingMessage);
-    document.addEventListener("message", handleIncomingMessage);
-    window.addEventListener("resize", function() {
-      applyFitScale("window-resize");
-      adjustRowsForViewport();
-      repositionOverlay();
-      clampPan();
-      updateTransform();
-    });
-    if (window.Terminal) {
+    scope.uninstallHostTransport = scope.installHostTransport(handleIncomingMessage);
+    if (scope.hasEngine()) {
       notify({ type: "web-ready" });
     } else {
       reportEngineError("terminal engine missing", "xterm failed to load", true);
     }
   }
-  resetTerminalDocumentScope();
-  startRuntimeConstants();
-  startSurfaceSwap();
-  startTextScaling();
-  startWebglRecovery();
-  startHostNotify();
-  startSelectionStateAndEviction();
-  startTapDispatch();
-  startSelectionMenuButtons();
-  startSurfaceTouchGestures();
-  startMessageBridge();
-})();
+  function stopMessageBridge() {
+    if (scope.uninstallHostTransport) {
+      scope.uninstallHostTransport();
+      scope.uninstallHostTransport = null;
+    }
+  }
+  function stop() {
+    stopMessageBridge();
+    stopSurfaceTouchGestures();
+    stopTapDispatch();
+    stopSelectionOverlay();
+    stopNormalBufferSmoothScroll();
+    stopHostNotify();
+    stopTerminalInit();
+    stopWebglRecovery();
+    stopFitScale();
+    stopViewportTransform();
+    cancelDocumentFrames();
+  }
+  try {
+    startRuntimeConstants();
+    startSurfaceSwap();
+    startTextScaling();
+    startFitScale();
+    startWebglRecovery();
+    startHostNotify();
+    startSelectionStateAndEviction();
+    startTapDispatch();
+    startSelectionMenuButtons();
+    startSurfaceTouchGestures();
+    startMessageBridge();
+  } catch (error) {
+    stop();
+    throw error;
+  }
+  return { send: handleMsg, stop: stop };
+}
+createTerminalDocument();
 </script>
 </body>
 </html>

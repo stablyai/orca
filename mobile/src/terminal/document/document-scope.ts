@@ -4,9 +4,12 @@ import {
   createEngineUnicode11Addon,
   createEngineWebglAddon,
   installWindowErrorReporter,
+  installWindowHostTransport,
   paintWindowDocumentBackground,
   postToReactNativeWebView,
-  type TerminalDocumentErrorReporter
+  windowHasEngine,
+  type TerminalDocumentHost,
+  type TerminalDocumentHostSeams
 } from './document-host-seams'
 import type {
   TerminalDocumentDisposable,
@@ -23,6 +26,7 @@ import type { TerminalDocumentThemeMessage } from './terminal-theme'
 // Re-exported so every module that reads the scope keeps naming one import for both: the split is
 // about this file's length, not about a second place to look for the engine's shape.
 export type * from './document-terminal-shape'
+export type { TerminalDocumentHost, TerminalDocumentHostSeams } from './document-host-seams'
 /**
  * The state the in-WebView terminal document shares across its parts.
  *
@@ -209,6 +213,10 @@ export type TerminalDocumentState = {
   nonFatalErrorNotifies: number
   /** `host-notify`: undoes the host's reporter install, or null before one. */
   uninstallErrorReporter: (() => void) | null
+  /** `message-bridge`: undoes the host transport's install, or null before one. */
+  uninstallHostTransport: (() => void) | null
+  /** `fit-scale`: takes the viewport refit's listener off again, or null before one. */
+  removeViewportRefit: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
   /** `mouse-click-drag`: the mouse gesture in progress, or null. */
@@ -221,25 +229,6 @@ export type TerminalDocumentState = {
   scheduledFrames: number[]
   /** Whether the document has been stopped, and so asks for no more frames. */
   framesStopped: boolean
-}
-
-/**
- * The six host seams, kept out of the state above because they are the one thing a reset must
- * not touch: the page sets them once per mount, before the start sequence runs.
- */
-export type TerminalDocumentHostSeams = {
-  /** `host-notify`, `viewport-transform`: where a message for the host goes. */
-  postToHost: (message: Record<string, unknown>) => void
-  /** `terminal-init`: builds the xterm terminal. */
-  createTerminal: (options: Record<string, unknown>) => TerminalDocumentTerminal
-  /** `terminal-init`: builds the unicode11 addon, or answers null when the host has none. */
-  createUnicode11Addon: () => TerminalDocumentWebglAddon | null
-  /** `webgl-recovery`: builds the WebGL addon, or answers null when the host has none. */
-  createWebglAddon: () => TerminalDocumentWebglAddon | null
-  /** `host-notify`: installs the document's runtime error reporter with the host. */
-  installErrorReporter: (report: TerminalDocumentErrorReporter) => () => void
-  /** `terminal-theme`: paints the terminal's background behind the grid. */
-  paintDocumentBackground: (background: string) => void
 }
 
 /** The document's whole scope: its state, and the seams to whatever is hosting it. */
@@ -374,6 +363,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     linesEverWritten: 0,
     nonFatalErrorNotifies: 0,
     uninstallErrorReporter: null,
+    uninstallHostTransport: null,
+    removeViewportRefit: null,
     fitRetryToken: 0,
     mouseGesture: null,
     touchDispatch: {
@@ -408,35 +399,29 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     createUnicode11Addon: createEngineUnicode11Addon,
     createWebglAddon: createEngineWebglAddon,
     installErrorReporter: installWindowErrorReporter,
-    paintDocumentBackground: paintWindowDocumentBackground
+    paintDocumentBackground: paintWindowDocumentBackground,
+    installHostTransport: installWindowHostTransport,
+    hasEngine: windowHasEngine,
+    root: null
   }
 }
 
-export function createTerminalDocumentScope(): TerminalDocumentScope {
-  return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams() }
+export function createTerminalDocumentScope(
+  host: TerminalDocumentHost = {}
+): TerminalDocumentScope {
+  const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== undefined))
+  return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams(), ...named }
 }
 
 /**
- * The scope back at the state a freshly parsed document has (ruling 21).
+ * The document's own scope. The generator emits this declaration at the top of the factory, with
+ * the factory's `host` argument passed in, so each call gets state of its own (ruling 22).
  *
- * The page mounts these modules more than once and an ES module body runs once per page, so this
- * is what makes a second mount a second document: the start sequence calls it first, and on the
- * WebView it runs once at parse, where it changes nothing. The seams are left alone — the page
- * sets them before the sequence runs, and they belong to the host rather than to the terminal.
- *
- * Two counters carry forward instead of resetting, because they are what a stale callback is
- * tested against: a frame scheduled by the mount that just went away compares its captured number
- * with the one here, and a reset to zero would make the old number match again.
+ * That is what makes a second mount a second document, and it is why nothing resets this: a
+ * generation counter used to carry across a reset so a frame scheduled by the mount that went away
+ * could not match the new one, and now the old mount's callbacks close over the old scope object,
+ * which the new one is not.
  */
-export function resetTerminalDocumentScope() {
-  const generations = {
-    terminalGeneration: scope.terminalGeneration + 1,
-    fitRetryToken: scope.fitRetryToken + 1
-  }
-  Object.assign(scope, createTerminalDocumentState(), generations)
-}
-
-/** The document's own scope. The generator emits this declaration at the top of the script. */
 export const scope: TerminalDocumentScope = createTerminalDocumentScope()
 
 /**

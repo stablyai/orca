@@ -4,12 +4,15 @@ import { join } from 'node:path'
 /**
  * Build output, which a source census reads as source and must not.
  *
- * `mobile/.gitignore` is the list: five `*.generated.ts` files under `mobile/src`, written by the
- * postinstall generators. Two are vendored engines — 3.7 MB of mermaid for the native WebView and
- * 3.5 MB of it for the page — and 7.9 MB of what a walk over this tree returns is generated. A
+ * `mobile/.gitignore` is the list: six `*.generated.ts` files under `mobile/src`, written by the
+ * four postinstall generators. Two are vendored engines — 3.7 MB of mermaid for the native WebView
+ * and 3.5 MB of it for the page — and 7.9 MB of what a walk over this tree returns is generated. A
  * census that parses them parses minified third-party code looking for call sites nobody in this
  * repo wrote and nobody can move, and pays the whole parse to find them: five of those files is
  * what took `rpc-params-contract-type-only-boundary` from 1.5 s to over its 5 s timeout in CI.
+ *
+ * The sixth is the page's copy of the terminal document (C7.5b), which is this repo's own emitted
+ * text rather than a vendored bundle — and is walked as source at every one of its 38 modules.
  *
  * The generator that writes each one is ordinary source and is still walked, which is where a real
  * reach into whatever a census is fencing would be.
