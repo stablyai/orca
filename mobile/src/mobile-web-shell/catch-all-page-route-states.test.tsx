@@ -56,6 +56,21 @@ vi.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Error: 'error', Success: 'success' }
 }))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: () => Promise.resolve(null) }))
+// Dictation's device half, which the shell screen reaches through the audio verbs. The real module
+// touches the Expo global at import and this test has none; what each verb does is
+// `bridge-audio-verbs.test.ts`.
+vi.mock('@orca/expo-two-way-audio', () => ({
+  addExpoTwoWayAudioEventListener: () => ({ remove: () => {} }),
+  initialize: () => Promise.resolve(true),
+  requestMicrophonePermissionsAsync: () =>
+    Promise.resolve({ granted: true, canAskAgain: true, status: 'granted', expires: 'never' }),
+  tearDown: () => {},
+  toggleRecording: () => true
+}))
+vi.mock('expo-keep-awake', () => ({
+  activateKeepAwakeAsync: () => Promise.resolve(),
+  deactivateKeepAwake: () => Promise.resolve()
+}))
 vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
   requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
