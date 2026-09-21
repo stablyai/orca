@@ -91,7 +91,7 @@ it('prepares the execution host OMP config and status extension for a guarded la
     source.mockReturnValue(false)
     expect(
       await augment.mock.calls[1][0]({ id: 'other', shell: '/bin/bash', env: {}, command: 'codex' })
-    ).toEqual({})
+    ).toEqual({ ORCA_OPENCODE_AGENT: 'opencode' })
   } finally {
     runtime.stop()
     dispatcher.dispose()
