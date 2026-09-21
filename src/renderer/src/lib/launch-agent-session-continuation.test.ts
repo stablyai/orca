@@ -77,6 +77,44 @@ describe('launchAgentSessionContinuation', () => {
     )
   })
 
+  // Why: #21912 made Claude load the context as an unsubmitted --prefill draft; a
+  // "sent" toast would tell the user the handoff already happened.
+  it('tells the user the Claude draft still needs Enter instead of claiming it was sent', async () => {
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue the unfinished task',
+      worktreeId: 'wt-1',
+      workspacePath: '/repo/worktree',
+      launchSource: 'sidebar'
+    })
+
+    const { onPromptDelivered } = launchAgentInNewTab.mock.calls[0][0]
+    onPromptDelivered()
+
+    expect(toast.success).toHaveBeenCalledWith(
+      'Session context loaded as a draft in the new Claude session. Review it and press Enter to continue.'
+    )
+  })
+
+  it('keeps the sent toast for Agents whose context is submitted after readiness', async () => {
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue the unfinished task',
+      worktreeId: 'wt-1',
+      workspacePath: '/repo/worktree',
+      launchSource: 'sidebar'
+    })
+
+    const { onPromptDelivered } = launchAgentInNewTab.mock.calls[0][0]
+    onPromptDelivered()
+
+    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+  })
+
   it('detects the target Agent on the SSH host that owns the workspace', async () => {
     connectionId.value = 'ssh-1'
     const { detectAgentSessionContinuationAgents } =
