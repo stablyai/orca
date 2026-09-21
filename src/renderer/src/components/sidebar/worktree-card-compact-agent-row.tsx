@@ -88,6 +88,7 @@ type CompactAgentRowProps = {
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
+  showModel?: boolean
   cacheTimerActive?: boolean
 }
 
@@ -104,6 +105,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   reserveDisclosureGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
+  showModel = true,
   cacheTimerActive = true
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
@@ -243,7 +245,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         )}
       </span>
-      {model && (
+      {showModel && model && (
         <span
           className={cn(
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
