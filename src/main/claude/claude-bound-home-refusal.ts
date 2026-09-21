@@ -1,12 +1,10 @@
-import { existsSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { statSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { ResolvedClaudeHomeBinding } from '../../shared/claude-home-binding'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import {
-  claudeConfigDirKeychainAliases,
-  readActiveClaudeKeychainCredentialsStrict
-} from '../claude-accounts/keychain'
+import { claudeConfigDirKeychainAliases } from '../claude-accounts/keychain'
+import { readClaudeConfigDirScopedOAuthCredentials } from '../rate-limits/claude-oauth-credentials'
 
 /** Why a bound group home cannot be launched against. Never a silent fallback to the shared home:
  *  the user asked for one identity, and quietly substituting another is the failure this prevents. */
@@ -51,9 +49,11 @@ export type ClaudeBoundHomeProbe = {
   readScopedKeychainCredentials?: (configDir: string) => Promise<string | null>
 }
 
+/** Case-folded wherever the filesystem is: a spelling difference on macOS or Windows names one
+ *  directory, and refusing it blocks work the binding was meant to allow. */
 function comparablePath(value: string, platform: NodeJS.Platform): string {
   const resolved = resolve(value.trim())
-  return platform === 'win32' ? resolved.toLowerCase() : resolved
+  return platform === 'win32' || platform === 'darwin' ? resolved.toLowerCase() : resolved
 }
 
 /**
@@ -73,15 +73,16 @@ function isAbsoluteBinding(configDir: string): boolean {
   return isWindowsAbsolutePathLike(configDir) || configDir.startsWith('/')
 }
 
+/** The repo's own config-dir-scoped credential read, on every platform: the scoped Keychain item
+ *  a macOS OAuth login writes, then this directory's `.credentials.json`. */
 async function hasCredentials(configDir: string, probe: ClaudeBoundHomeProbe): Promise<boolean> {
-  const platform = probe.platform ?? process.platform
-  if (platform === 'darwin') {
-    // Claude Code 2.1+ scopes the macOS Keychain item by config dir; the strict read is the only
-    // one that answers for THIS directory rather than falling back to the shared login.
-    const read = probe.readScopedKeychainCredentials ?? readActiveClaudeKeychainCredentialsStrict
-    return Boolean((await read(configDir))?.trim())
-  }
-  return existsSync(join(configDir, '.credentials.json'))
+  const credentials = await readClaudeConfigDirScopedOAuthCredentials(configDir, {
+    platform: probe.platform ?? process.platform,
+    ...(probe.readScopedKeychainCredentials
+      ? { readScopedKeychain: probe.readScopedKeychainCredentials }
+      : {})
+  })
+  return Boolean(credentials.token || credentials.hasRefreshableCredentials)
 }
 
 /**

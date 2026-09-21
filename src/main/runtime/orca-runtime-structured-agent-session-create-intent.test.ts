@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AssertClaudeBoundHomeUsable } from '../claude/claude-bound-home-refusal'
 
+/** The real Store always answers these; a stub that omits one refuses by name instead of
+ *  silently reading as "nothing is bound". */
+const EMPTY_BINDING_CATALOG = {
+  getProjectGroups: () => [],
+  getRepos: () => [],
+  getFolderWorkspaces: () => []
+}
+
 describe('structured agent-session create intent', () => {
   it('pins the selected Codex launch home after normal launch preparation', async () => {
     const prepareCodexStructuredLaunch = vi.fn(() => '/accounts/selected/home')
@@ -66,7 +74,9 @@ describe('structured agent-session create intent', () => {
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
     const prepareCodexStructuredLaunch = vi.fn()
     const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create-intent path reads only the store accessors stubbed here.
       {
+        ...EMPTY_BINDING_CATALOG,
         getSettings: () => ({
           agentDefaultEnv: {
             claude: { CLAUDE_CONFIG_DIR: '/configured/claude-home' }
@@ -124,7 +134,9 @@ describe('structured agent-session create intent', () => {
     const prepareCodexStructuredLaunch = vi.fn()
     const getRuntimeConfigDir = vi.fn(() => '/accounts/managed/claude-home')
     const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create-intent path reads only the store accessors stubbed here.
       {
+        ...EMPTY_BINDING_CATALOG,
         getSettings: () => ({
           agentDefaultEnv: { claude: {} }
         })
@@ -190,13 +202,17 @@ describe('project-group Claude home binding', () => {
       repos?: unknown[]
       agentDefaultEnv?: Record<string, Record<string, string>>
       assertBoundHomeUsable?: AssertClaudeBoundHomeUsable
+      omitCatalogAccessor?: 'getProjectGroups' | 'getRepos' | 'getFolderWorkspaces'
     } = {}
   ) {
-    const store = {
+    const store: Record<string, unknown> = {
       getSettings: () => ({ agentDefaultEnv: overrides.agentDefaultEnv ?? { claude: {} } }),
       getRepos: () => overrides.repos ?? [REPO],
       getFolderWorkspaces: () => [],
       getProjectGroups: () => overrides.groups ?? [GROUP]
+    }
+    if (overrides.omitCatalogAccessor) {
+      delete store[overrides.omitCatalogAccessor]
     }
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create-intent path reads only these four store accessors.
@@ -289,6 +305,30 @@ describe('project-group Claude home binding', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
+  })
+
+  // A catalog this host cannot read is not evidence of "no binding": answering "unbound" would
+  // launch the shared home for a group that bound another one.
+  it.each(['getProjectGroups', 'getRepos', 'getFolderWorkspaces'] as const)(
+    'refuses by name when the store cannot answer %s',
+    async (accessor) => {
+      await expect(
+        boundRuntime({ omitCatalogAccessor: accessor }).resolveStructuredAgentSessionCreateIntent(
+          createInput
+        )
+      ).rejects.toThrow('claude_home_binding_catalog_unavailable')
+    }
+  )
+
+  it('refuses to resume a conversation that does not live under the bound home', async () => {
+    await expect(
+      boundRuntime({
+        assertBoundHomeUsable: async () => {}
+      }).resolveStructuredAgentSessionCreateIntent({
+        ...createInput,
+        resumeFrom: { providerSessionId: 'conversation-in-the-shared-home' }
+      })
+    ).rejects.toThrow('agent_session_identity_required')
   })
 
   it('never binds a Codex session', async () => {

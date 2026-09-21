@@ -11,12 +11,15 @@ const ROOT = mkdtempSync(join(tmpdir(), 'orca-bound-home-'))
 afterAll(() => rmSync(ROOT, { recursive: true, force: true }))
 
 const LOCAL = { executionHostId: 'local', wslDistro: null }
+const SIGNED_IN_CREDENTIALS = JSON.stringify({
+  claudeAiOauth: { accessToken: 'token', refreshToken: 'refresh', expiresAt: 0 }
+})
 
 function boundDir(name: string, options: { credentials?: boolean } = {}): string {
   const dir = join(ROOT, name)
   mkdirSync(dir, { recursive: true })
   if (options.credentials) {
-    writeFileSync(join(dir, '.credentials.json'), '{}')
+    writeFileSync(join(dir, '.credentials.json'), SIGNED_IN_CREDENTIALS)
   }
   return dir
 }
@@ -29,8 +32,8 @@ function usable(
     binding: { configDir, groupId: 'group-1' },
     location: LOCAL,
     launchEnv: {},
-    // Linux/Windows read `.credentials.json`; pinning the platform keeps the suite off the
-    // host's real Keychain and identical on every developer machine.
+    // Pinning the platform keeps the suite off the host's real Keychain and identical on every
+    // developer machine; the `.credentials.json` half of the read is platform-independent.
     probe: { platform: 'linux' },
     ...overrides
   })
@@ -97,7 +100,7 @@ describe('bound Claude home usability', () => {
 
   it('reads the config-dir-scoped Keychain item on macOS', async () => {
     const dir = boundDir('macos-signed-in')
-    const read = async () => '{"claudeAiOauth":{}}'
+    const read = async () => SIGNED_IN_CREDENTIALS
     await expect(
       usable(dir, { probe: { platform: 'darwin', readScopedKeychainCredentials: read } })
     ).resolves.toBeUndefined()
@@ -132,6 +135,35 @@ describe('bound Claude home usability', () => {
     await expect(
       usable(dir, { launchEnv: { CLAUDE_CONFIG_DIR: `${dir}  ` } })
     ).resolves.toBeUndefined()
+  })
+
+  it('refuses a `.credentials.json` that parses to no credentials', async () => {
+    for (const contents of ['{}', 'not json', '', '{"claudeAiOauth":{}}']) {
+      const dir = boundDir(`corrupt-${contents.length}`)
+      writeFileSync(join(dir, '.credentials.json'), contents)
+      expect(await refusalOf(usable(dir))).toMatchObject({ code: 'claude_bound_home_signed_out' })
+    }
+  })
+
+  it('accepts a `.credentials.json` on macOS when the scoped Keychain holds nothing', async () => {
+    const dir = boundDir('macos-file-only', { credentials: true })
+    await expect(
+      usable(dir, {
+        probe: { platform: 'darwin', readScopedKeychainCredentials: async () => null }
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('accepts a case-different launch env spelling on a case-insensitive filesystem', async () => {
+    const dir = boundDir('Env-Case', { credentials: true })
+    for (const platform of ['darwin', 'win32'] as const) {
+      await expect(
+        usable(dir, {
+          launchEnv: { CLAUDE_CONFIG_DIR: dir.toLowerCase() },
+          probe: { platform, readScopedKeychainCredentials: async () => SIGNED_IN_CREDENTIALS }
+        })
+      ).resolves.toBeUndefined()
+    }
   })
 
   it('names the group and the directory in the user-facing message', async () => {

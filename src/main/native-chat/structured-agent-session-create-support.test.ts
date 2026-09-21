@@ -66,6 +66,22 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
     ).toEqual({ supported: false, reason: 'wsl' })
   })
 
+  it('skips the managed-account gate for a workspace bound to a project-group Claude home', () => {
+    expect(support({ getSettings: () => WSL_ONLY, boundClaudeHome: true })).toEqual({
+      supported: true
+    })
+  })
+
+  it('still keeps the adapter refusal for a bound workspace the adapter cannot create on', () => {
+    expect(
+      support({
+        boundClaudeHome: true,
+        adapterSupportsCreate: false,
+        location: { ...LOCAL, executionHostId: 'ssh:host-a' }
+      })
+    ).toEqual({ supported: false, reason: 'remote' })
+  })
+
   it('leaves Codex to the adapter answer under the same WSL-only account', () => {
     expect(support({ agent: 'codex', getSettings: () => WSL_ONLY })).toEqual({ supported: true })
   })

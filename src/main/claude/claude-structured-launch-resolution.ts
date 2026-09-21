@@ -26,6 +26,10 @@ import {
 } from '../native-chat/claude-structured-managed-account-support'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import {
+  assertClaudeBoundHomeUsable,
+  type AssertClaudeBoundHomeUsable
+} from './claude-bound-home-refusal'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 
@@ -118,6 +122,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
+  /** Re-proves a bound home per acquisition. Overridden only by tests. */
+  assertBoundHomeUsable?: AssertClaudeBoundHomeUsable
 }
 
 /**
@@ -149,6 +155,15 @@ export function createClaudeStructuredLaunchResolver(
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
   return async ({ identity }) => {
     const record = deps.store.getRecord(identity.sessionId)
+    // A project-group binding is a custom home, not a managed one: it does not read the shared
+    // runtime auth a switch mutates, and the active managed selection does not describe it. Both
+    // the switch gate and the managed-account gate therefore have nothing to say about it.
+    const boundHome = record?.accountHome.binding?.kind === 'project-group'
+    // Ahead of the record validations, exactly where it sat before the bound branch existed: an
+    // unbound caller's error precedence is unchanged.
+    if (!boundHome) {
+      await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+    }
     if (!record) {
       throw new Error(`no durable agent-session record for ${identity.sessionId}`)
     }
@@ -165,13 +180,6 @@ export function createClaudeStructuredLaunchResolver(
     }
     if (record.accountHome.variable !== 'CLAUDE_CONFIG_DIR') {
       throw new Error(`claude sessions pin CLAUDE_CONFIG_DIR, not ${record.accountHome.variable}`)
-    }
-    // A project-group binding is a custom home, not a managed one: it does not read the shared
-    // runtime auth a switch mutates, and the active managed selection does not describe it. Both
-    // the switch gate and the managed-account gate therefore have nothing to say about it.
-    const boundHome = record.accountHome.binding?.kind === 'project-group'
-    if (!boundHome) {
-      await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
     }
     // Every acquisition, not just the first: the account state can change under a live session, and
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
@@ -210,6 +218,20 @@ export function createClaudeStructuredLaunchResolver(
     // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
     if (!boundHome) {
       await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+    }
+    // The same "every acquisition" rule the two skipped gates carried: a bound directory that has
+    // been deleted or signed out since the create refuses by name here rather than spawning an
+    // unauthenticated child against whatever the path has become.
+    const binding = record.accountHome.binding
+    if (binding) {
+      await (deps.assertBoundHomeUsable ?? assertClaudeBoundHomeUsable)({
+        binding: { configDir: record.accountHome.path, groupId: binding.groupId },
+        location: {
+          executionHostId: record.location.executionHostId,
+          wslDistro: record.location.wslDistro
+        },
+        launchEnv: overlay ?? {}
+      })
     }
     // Under a managed account the pinned credential is the only auth this launch may
     // use, so an explicit override is refused rather than silently beating the pin.

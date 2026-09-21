@@ -1,7 +1,7 @@
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -69,6 +69,8 @@ function resolverFor(
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
     resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
+    // A no-op by default so a test that is not about the bound home does not need a real directory.
+    assertBoundHomeUsable: async () => {},
     ...(resolveEnv ? { resolveEnv } : {}),
     ...extraDeps
   })
@@ -458,6 +460,63 @@ describe('claude structured launch resolution', () => {
       } finally {
         endClaudeAuthSwitch()
       }
+    })
+
+    // Was the resolver's first statement before the bound-home branch existed; an unbound caller
+    // must still see the switch message rather than a record-shape error.
+    it('reports an in-flight switch ahead of a missing record', async () => {
+      beginClaudeAuthSwitch()
+      try {
+        await expect(
+          resolverFor(null, undefined, false, undefined, { authSwitchSettleTimeoutMs: 10 })({
+            identity: identityAt('leaf-current')
+          })
+        ).rejects.toThrow(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+      } finally {
+        endClaudeAuthSwitch()
+      }
+    })
+  })
+
+  describe('bound home re-verification at acquisition', () => {
+    it('re-proves the bound directory on every acquisition, not only at create', async () => {
+      const assertBoundHomeUsable = vi.fn(async () => {})
+      const resolve = resolverFor(
+        boundRecord(true),
+        () => ({ SOME_OVERLAY: '1' }),
+        false,
+        undefined,
+        { assertBoundHomeUsable }
+      )
+
+      await expect(resolve({ identity: identityAt('leaf-current') })).resolves.toBeDefined()
+      expect(assertBoundHomeUsable).toHaveBeenCalledWith({
+        binding: { configDir: '/bound/claude-home', groupId: 'group-1' },
+        location: { executionHostId: LOCAL_EXECUTION_HOST_ID, wslDistro: null },
+        launchEnv: { SOME_OVERLAY: '1' }
+      })
+    })
+
+    it('refuses the acquisition when the bound directory no longer serves it', async () => {
+      const resolve = resolverFor(boundRecord(true), undefined, false, undefined, {
+        assertBoundHomeUsable: async () => {
+          throw new Error('claude_bound_home_signed_out')
+        }
+      })
+
+      await expect(resolve({ identity: identityAt('leaf-current') })).rejects.toThrow(
+        'claude_bound_home_signed_out'
+      )
+    })
+
+    it('leaves an unbound record untouched by the bound-home check', async () => {
+      const assertBoundHomeUsable = vi.fn(async () => {})
+      await expect(
+        resolverFor(boundRecord(false), undefined, false, undefined, { assertBoundHomeUsable })({
+          identity: identityAt('leaf-current')
+        })
+      ).resolves.toBeDefined()
+      expect(assertBoundHomeUsable).not.toHaveBeenCalled()
     })
   })
 })

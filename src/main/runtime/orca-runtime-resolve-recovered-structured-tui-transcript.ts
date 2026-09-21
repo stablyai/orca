@@ -20,14 +20,12 @@ import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults
 import { resolveStructuredLaunchSeedOptions } from '../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
-  resolveClaudeHomeBindingForGroup,
-  resolveProjectGroupIdForWorkspace
-} from '../../shared/claude-home-binding'
+  hasClaudeHomeBindingForSupport,
+  resolveClaudeStructuredAccountHome
+} from '../claude/claude-structured-account-home'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -67,6 +65,16 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
+      // The managed-account gate describes the ambient Claude config, which a bound group's chat
+      // does not launch against. Disagreeing with the acquisition gate would make a bound group
+      // unusable for exactly the users it exists for.
+      boundClaudeHome:
+        agent === 'claude' &&
+        hasClaudeHomeBindingForSupport({
+          store: this.store ?? null,
+          workspaceId: location.workspaceId,
+          executionHostId: location.executionHostId
+        }),
       adapterSupportsCreate:
         agent === 'claude'
           ? supportsClaudeStructuredLocation(location)
@@ -134,37 +142,19 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
     if (input.agent === 'claude') {
-      return this.resolveStructuredAgentSessionIntent(
-        input,
-        async ({ launchEnv, location, projectGroupId }) => {
-          // A group binding outranks every other source, and an unusable one refuses rather than
-          // falling back: the user asked for that identity, and quietly substituting the shared
-          // home is the silent-wrong-account failure the binding exists to prevent.
-          const binding = resolveClaudeHomeBindingForGroup(
-            this.store?.getProjectGroups?.() ?? [],
-            projectGroupId,
-            location.executionHostId
-          )
-          if (binding) {
-            await this.assertClaudeBoundHomeUsableFn({ binding, location, launchEnv })
-            return {
-              path: binding.configDir,
-              binding: { kind: 'project-group' as const, groupId: binding.groupId }
-            }
-          }
-          return {
-            path:
-              launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
-              this.accounts
-                .getClaudeConfigDirectory(
-                  location.wslDistro
-                    ? { runtime: 'wsl', wslDistro: location.wslDistro }
-                    : { runtime: 'host' }
-                )
-                ?.trim() ||
-              join(homedir(), '.claude')
-          }
-        }
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
+        resolveClaudeStructuredAccountHome({
+          store: this.store ?? null,
+          location,
+          launchEnv,
+          readSelectedConfigDir: () =>
+            this.accounts.getClaudeConfigDirectory(
+              location.wslDistro
+                ? { runtime: 'wsl', wslDistro: location.wslDistro }
+                : { runtime: 'host' }
+            ),
+          assertBoundHomeUsable: this.assertClaudeBoundHomeUsableFn
+        })
       )
     }
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
@@ -199,8 +189,6 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-      /** The workspace's own group; the binding may still come from an ancestor of it. */
-      projectGroupId: string | null
     }) => Promise<{
       path: string
       binding?: { kind: 'project-group'; groupId: string }
@@ -228,17 +216,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     if (committedReplay) {
       return committedReplay
     }
-    const selectedAccountHome = await resolveAccountHome({
-      workspacePath,
-      launchEnv,
-      location,
-      projectGroupId: resolveProjectGroupIdForWorkspace({
-        repos: this.store?.getRepos?.() ?? [],
-        folderWorkspaces: this.store?.getFolderWorkspaces?.() ?? [],
-        workspaceId: location.workspaceId,
-        executionHostId: location.executionHostId
-      })
-    })
+    const selectedAccountHome = await resolveAccountHome({ workspacePath, launchEnv, location })
     const selectedAccountHomePath = selectedAccountHome.path
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
@@ -251,7 +229,8 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
           agent: input.agent,
           providerSessionId: input.resumeFrom.providerSessionId,
           selfSessionId: input.envelope.sessionId,
-          selectedAccountHomePath
+          selectedAccountHomePath,
+          selectedAccountHomeBound: Boolean(selectedAccountHome.binding)
         })
       : null
     const accountHomePath = adoption ? adoption.accountHomePath : selectedAccountHomePath
