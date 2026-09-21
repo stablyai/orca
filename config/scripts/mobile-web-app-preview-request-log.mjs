@@ -27,8 +27,14 @@ export async function recordRequestsTo(page, originPrefix) {
 
   page.on('request', (request) => {
     if (request.url().startsWith(originPrefix)) {
-      asked.push(request.url())
+      asked.push({ url: request.url(), at: Math.round(performance.now()) })
     }
+  })
+  // When this page first had any frame at all, so an attachment time has something to be early or
+  // late against.
+  const frameAttached = []
+  page.on('frameattached', (frame) => {
+    frameAttached.push({ url: frame.url(), at: Math.round(performance.now()) })
   })
   page.on('requestfailed', (request) => {
     if (request.url().startsWith(originPrefix)) {
@@ -47,7 +53,13 @@ export async function recordRequestsTo(page, originPrefix) {
     // Playwright did record. Flattened auto-attach puts each child target on this same connection,
     // and `Network.enable` on the child is what makes its requests visible here.
     cdp.on('Target.attachedToTarget', (event) => {
-      attached.push({ type: event.targetInfo?.type ?? null, url: event.targetInfo?.url ?? null })
+      // The moment, not just the fact: a request whose resource-timing entry starts before this was
+      // issued by a frame nothing was listening to yet, which is a different bug from a refusal.
+      attached.push({
+        type: event.targetInfo?.type ?? null,
+        url: event.targetInfo?.url ?? null,
+        at: Math.round(performance.now())
+      })
       cdp.send('Network.enable', {}, event.sessionId).catch(() => {})
     })
     await cdp
@@ -83,8 +95,8 @@ export async function recordRequestsTo(page, originPrefix) {
   }
 
   return {
-    asked: () => [...asked],
+    asked: () => asked.map((one) => one.url),
     describe: () =>
-      `asked ${JSON.stringify(asked)}; failed ${JSON.stringify(failed)}; cdp ${cdp ? 'on' : 'off'} attached ${JSON.stringify(attached)} sent ${JSON.stringify(sent)}; cdp loadingFailed ${JSON.stringify(loadingFailed)}`
+      `asked ${JSON.stringify(asked)}; failed ${JSON.stringify(failed)}; frameAttached ${JSON.stringify(frameAttached)}; cdp ${cdp ? 'on' : 'off'} attached ${JSON.stringify(attached)} sent ${JSON.stringify(sent)}; cdp loadingFailed ${JSON.stringify(loadingFailed)}`
   }
 }

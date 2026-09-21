@@ -61,6 +61,21 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
         // Every subresource this document actually fetched, from the document's own side. An entry
         // here for a URL the rig never saw would mean the request left the frame and died before it.
         resources: performance.getEntriesByType('resource').map((one) => one.name),
+        // The same entry in full for the element under test. A zero `responseStatus` with a zero
+        // `transferSize` is a fetch that reached the network stack and came back with no response,
+        // which is what a request the rig never intercepted looks like once the host cannot resolve;
+        // `startTime` is what an attachment time is early or late against.
+        remoteTiming: performance
+          .getEntriesByType('resource')
+          .filter((one) => one.name === remote?.src)
+          .map((one) => ({
+            responseStatus: one.responseStatus ?? null,
+            transferSize: one.transferSize,
+            encodedBodySize: one.encodedBodySize,
+            nextHopProtocol: one.nextHopProtocol,
+            startTime: Math.round(one.startTime),
+            duration: Math.round(one.duration)
+          })),
         navigations: performance.getEntriesByType('navigation').map((one) => one.type),
         remote: remote
           ? {
