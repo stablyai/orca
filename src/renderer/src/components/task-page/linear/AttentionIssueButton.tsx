@@ -38,6 +38,9 @@ export function AttentionIssueButton({
     try {
       const intent = parseLinearIssueUrlIntent(issue.url)
       const status = await window.api.linear.status()
+      if (linearWorkspaceScopeSignature(status) !== signature) {
+        throw new Error('Linear connection changed. Refresh before opening this issue.')
+      }
       const matches =
         status.workspaces?.filter(
           (workspace) =>
