@@ -21,13 +21,17 @@
 export const MOBILE_WEB_PAGE_ROUTES = [
   // The worktree list. `navigate` because every row opens a session screen that is still native.
   // `storage` because its pins and its last-visited repo are the app's, not the document's.
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
+  // `externalLink` for the one opener the census finds in this closure: `app/h/_layout.tsx` wraps
+  // every `/h` route in `HostProtocolGate`, so without the grant the wall's Update Orca tap posts a
+  // notify the shell refuses, with nothing on screen to say why.
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   // Agent session history. `navigate` because a resumed session opens the session screen, which is
   // native, and because the list above now reaches this one without leaving the page. `storage`
   // because the host layout above every page route reads the app's own sidebar width.
+  // `externalLink` for that same layout's wall, which is this route's only opener too.
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
   // Tasks. `navigate` for the session screens its rows open and for the Back that pops the native
   // stack; `storage` for the shared components it renders; `externalLink` for the provider links
@@ -40,19 +44,15 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
   //
-  // `externalLink` is transitive, not its own: a row opens the preview, and because that is a page
-  // route and this list covers what it declares, the handoff keeps that push inside this document.
+  // `externalLink` is the layout wall's here, the single opener the census finds in this closure:
+  // nothing the explorer itself renders opens a URL. It is also inherited, and that is what makes
+  // the hop below cheap: a row opens the preview, and because that is a page route and this list
+  // covers what it declares, the handoff keeps that push inside this document.
   // Grants are resolved once, from the route the shell opened (`grantsForRoute` on
   // `session.routePathname`), so a preview reached that way runs under *this* route's grants for
   // the life of the session. Covering the preview is therefore what buys the cheap in-document hop,
   // not what makes it correct: a target this list did not cover would be handed to the shell and
   // reopened under its own grants instead. The census beside it reads that relation off this list.
-  //
-  // Nothing the explorer itself renders opens a URL. The two openers in its own closure are the
-  // shared layout's — the protocol wall, and the New Workspace source field the sidebar renders on
-  // a wide layout — and every `/h` route reaches both, `/h/[hostId]` included, which declares no
-  // `externalLink`. That tablet tap stays dead on all of them: a pre-existing gap this route
-  // neither widens nor fixes.
   //
   // The sidebar `HostScreen` the layout renders on a wide layout pushes to `/h/<id>/tasks` from
   // every page route, and no other route declares the `native.clipboard.write` that one asks for.
@@ -62,11 +62,10 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
-  // The file preview. Same three. `externalLink` is this route's own rather than inherited: a
-  // Markdown preview renders links and `MobileMarkdown` opens them through the platform seam, which
-  // is a consumer inside the domain rather than the shared wall. The explorer declares the same
-  // list only because it can become this route in-page, so the two happen to be equal today and
-  // the reasons are not.
+  // The file preview. Same three. `externalLink` has a consumer inside the domain as well as the
+  // shared wall every `/h` route carries: a Markdown preview renders links and `MobileMarkdown`
+  // opens them through the platform seam. That second site is what the census finds here and not in
+  // the explorer, which declares the same list for the wall and for the hop into this route.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']

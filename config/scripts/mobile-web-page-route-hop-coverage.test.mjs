@@ -44,8 +44,14 @@ function sameRoute(pushed, declared) {
  * What is NOT here is the point of the census. `files/[worktreeId] -> files/preview/[worktreeId]`
  * is absent because the preview declares no more than the explorer, so that hop stays in the
  * document — which is C3.1's pairwise pin, now a consequence of the rule rather than a rule of its
- * own. The two `-> tasks` entries and the four `-> files/*` entries are the hops the sidebar and
- * the rows make into a route that asks for more than their opener holds.
+ * own. Absent for the same reason, and measured rather than reasoned: the four hops the worktree
+ * list and the history screen make into the explorer and its preview, which left this list when
+ * those two declared the `externalLink` their own protocol wall reaches and took it from 23 rows
+ * to 19. The four now declare the same four grants, so a tapped file costs no native frame and no
+ * second bridge session.
+ *
+ * What remains beside the session rows is twelve: four openers holding no `native.clipboard.write`
+ * into the three routes that ask for it — tasks, the hub and review.
  *
  * Absent for the same reason, and the reason C4 registered its two routes in one PR:
  * `source-control ⇄ review` in both directions. The hub's rows push review and review replaces
@@ -53,21 +59,17 @@ function sameRoute(pushed, declared) {
  * landing alone would have put a handoff — a new native screen and a new bridge session — between
  * a changed-file row and its diff.
  *
- * The seven C7 rows are the same rule with the arrows all one way: 16 -> 23, every new entry
- * `X -> session`, one from each other page route. The session screen's fourteen grants are a strict
+ * The seven C7 rows are the same rule with the arrows all one way: every one `X -> session`, one
+ * from each other page route. The session screen's fourteen grants are a strict
  * superset of every other route's, so nothing can reach it under the grants it was opened with —
  * and nothing it pushes to leaves, because its own seven targets each declare a subset. A row in
  * the other direction would mean a route had grown a grant the session lacks.
  */
 const HANDED_OFF = [
-  '/h/[hostId] -> /h/[hostId]/files/[worktreeId]',
-  '/h/[hostId] -> /h/[hostId]/files/preview/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/review/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/tasks',
-  '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/[worktreeId]',
-  '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/preview/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
@@ -131,6 +133,33 @@ describe('in-page hops between page routes', () => {
     }
     expect(preview.grants.length, 'the preview declares something to inherit').toBeGreaterThan(0)
     expect(preview.grants.filter((grant) => !explorer.grants.includes(grant))).toEqual([])
+  })
+
+  it('keeps the file hops local from the two routes whose rows open them', () => {
+    // The other half of the four rows that left the list above. Asserted as coverage rather than as
+    // their absence: an unregistered route is absent too, and a worktree row opening a file is the
+    // hop a phone actually makes.
+    const grantsOf = (pathname) => {
+      const route = MOBILE_WEB_PAGE_ROUTES.find((entry) => entry.pathname === pathname)
+      if (!route) {
+        throw new Error(`${pathname} is not registered`)
+      }
+      return route.grants
+    }
+    const explorer = grantsOf('/h/[hostId]/files/[worktreeId]')
+    const preview = grantsOf('/h/[hostId]/files/preview/[worktreeId]')
+    expect(explorer.length, 'the explorer declares something to cover').toBeGreaterThan(0)
+    for (const opener of ['/h/[hostId]', '/h/[hostId]/agent-history/[worktreeId]']) {
+      const held = grantsOf(opener)
+      expect(
+        explorer.filter((grant) => !held.includes(grant)),
+        opener
+      ).toEqual([])
+      expect(
+        preview.filter((grant) => !held.includes(grant)),
+        opener
+      ).toEqual([])
+    }
   })
 
   it('keeps every hop out of the session local, which is the other half of its seven rows', () => {

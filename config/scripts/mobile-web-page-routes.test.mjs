@@ -46,10 +46,10 @@ async function withScratch(run) {
  * the route tree resolves to, and what the built manifest actually carries.
  */
 const EXPECTED_PAGE_ROUTES = [
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
   {
     pathname: '/h/[hostId]/tasks',
