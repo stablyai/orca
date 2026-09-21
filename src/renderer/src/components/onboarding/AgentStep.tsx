@@ -2,6 +2,15 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, Info } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import {
+  resolveAntigravityInstallTarget,
+  type AntigravityInstallTarget
+} from './antigravity-install-target'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 const AGENT_GRID_MAX_ROWS = 4
 
 type AgentStepProps = {
+  onInstallAntigravity?: (target: AntigravityInstallTarget) => void
   selectedAgent: TuiAgent | null
   // `fromCollapsedSection` tells the controller whether the click happened
   // under the `<details>` disclosure so `onboarding_agent_picked` can carry
@@ -61,12 +71,20 @@ function useAgentGridScrollMaxHeight(
 
 export function AgentStep({
   selectedAgent,
+  onInstallAntigravity,
   onSelect,
   detectedSet,
   isDetecting,
   yoloPermissions = true,
   onYoloPermissionsChange
 }: AgentStepProps) {
+  const terminalTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const detectionContext = useAppStore(getLocalAgentPreflightContext)
+  const installTarget = resolveAntigravityInstallTarget(
+    getRendererAppPlatform(),
+    detectionContext,
+    terminalTarget?.kind === 'local'
+  )
   const agentCatalog = getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
   const rest = agentCatalog.filter((agent) => !detectedSet.has(agent.id))
@@ -120,7 +138,7 @@ export function AgentStep({
         </div>
       )}
       {selectedEntry && (
-        <div className="flex shrink-0 items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-200/90">
+        <div className="flex shrink-0 items-center justify-between gap-3 rounded-lg border border-border bg-muted px-4 py-2.5 text-xs text-muted-foreground">
           <span>
             <span className="font-medium">{selectedEntry.label}</span>{' '}
             {translate(
@@ -128,14 +146,21 @@ export function AgentStep({
               "isn't on your PATH yet. Orca will set it as your default and you can install it any time."
             )}
           </span>
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
-            onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
-          >
-            {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
-            <ExternalLink className="size-3" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {selectedEntry.id === 'antigravity' && installTarget && onInstallAntigravity && (
+              <Button size="sm" onClick={() => onInstallAntigravity(installTarget)}>
+                {translate('components.onboarding.agyInstall.open', 'Install')}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
+            >
+              {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
+              <ExternalLink className="size-3" />
+            </Button>
+          </div>
         </div>
       )}
       <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">

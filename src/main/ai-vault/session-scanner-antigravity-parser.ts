@@ -120,7 +120,7 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
   }
 }
 
-function extractAntigravityUserRequest(content: string): string | null {
+export function extractAntigravityUserRequest(content: string): string | null {
   const opener = '<USER_REQUEST>'
   const startIndex = content.indexOf(opener)
   if (startIndex === -1) {

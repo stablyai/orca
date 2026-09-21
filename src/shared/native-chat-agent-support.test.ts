@@ -34,11 +34,12 @@ describe('isNativeChatSupportedAgent', () => {
 })
 
 describe('nativeChatRequiresLocalTranscript', () => {
-  it('covers the agents whose hook discloses no transcript path', () => {
+  it('covers agents requiring a runtime-owned transcript filesystem', () => {
     // Claude/Codex report `transcript_path`; Grok and omp report only an id, so
     // native chat has to find their file on a disk this process can read.
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('antigravity')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('openclaude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('codex')).toBe(false)

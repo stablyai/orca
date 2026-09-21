@@ -4,6 +4,9 @@ import type {
 } from '../../../../preload/api-types'
 import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
 
+export const RUNTIME_NATIVE_CHAT_TOO_OLD =
+  'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
+
 export const RUNTIME_NATIVE_CHAT_READ_ERROR = "Couldn't read agent chat from the remote runtime."
 
 export function parseRuntimeNativeChatTurnLifecycle(

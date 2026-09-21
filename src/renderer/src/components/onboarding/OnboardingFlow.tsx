@@ -4,6 +4,8 @@ import { isEditableTarget } from '@/lib/editable-target'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import { AntigravityInstallDialog } from './AntigravityInstallDialog'
+import type { AntigravityInstallTarget } from './antigravity-install-target'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
@@ -137,6 +139,7 @@ export default function OnboardingFlow({
     (currentStep.id === 'notifications'
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
+  const [installTarget, setInstallTarget] = useState<AntigravityInstallTarget | null>(null)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
@@ -145,13 +148,13 @@ export default function OnboardingFlow({
     (advancedVia: 'button' | 'keyboard') => {
       // Why: click-off / Escape dismissal stays available on every step,
       // including the final notifications step, so the modal never feels stuck.
-      if (busyLabel || skipConfirmOpen) {
+      if (busyLabel || skipConfirmOpen || installTarget) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen, installTarget]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -166,7 +169,7 @@ export default function OnboardingFlow({
     const onKeyDown = (event: KeyboardEvent): void => {
       // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
       // clone-URL input or any other editable field on a step.
-      if (isEditableTarget(event.target)) {
+      if (installTarget || isEditableTarget(event.target)) {
         return
       }
       // Why: onboarding continue is screen-local submit behavior, not a
@@ -179,11 +182,11 @@ export default function OnboardingFlow({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [flowNext])
+  }, [flowNext, installTarget])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || skipConfirmOpen) {
+      if (event.key !== 'Escape' || skipConfirmOpen || installTarget) {
         return
       }
       event.preventDefault()
@@ -191,7 +194,7 @@ export default function OnboardingFlow({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [requestSkipConfirmation, skipConfirmOpen])
+  }, [requestSkipConfirmation, skipConfirmOpen, installTarget])
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
@@ -310,6 +313,7 @@ export default function OnboardingFlow({
             >
               {currentStep.id === 'agent' && (
                 <AgentStep
+                  onInstallAntigravity={setInstallTarget}
                   selectedAgent={flow.selectedAgent}
                   onSelect={flow.setSelectedAgent}
                   detectedSet={flow.detectedSet}
@@ -352,6 +356,9 @@ export default function OnboardingFlow({
             />
           </div>
         </section>
+        {installTarget && (
+          <AntigravityInstallDialog target={installTarget} onClose={() => setInstallTarget(null)} />
+        )}
         <OnboardingSkipConfirmationDialog
           open={skipConfirmOpen}
           onOpenChange={setSkipConfirmOpen}

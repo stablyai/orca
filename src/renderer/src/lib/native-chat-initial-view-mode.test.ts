@@ -7,15 +7,19 @@ import {
 import { isNativeChatTranscriptLocalReadable } from './native-chat-transcript-readability'
 
 describe('decideInitialAgentTabViewMode', () => {
-  it("returns 'chat' when native chat and the opt-in default setting are on", () => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'codex'
-      })
-    ).toBe('chat')
-  })
+  it.each(['codex', 'antigravity'] as const)(
+    'opens %s in chat when native chat and the opt-in default setting are on',
+    (agent) => {
+      expect(
+        decideInitialAgentTabViewMode({
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true,
+          agent,
+          nativeChatTranscriptIsLocalReadable: true
+        })
+      ).toBe('chat')
+    }
+  )
 
   it('returns undefined when native chat is disabled', () => {
     expect(
@@ -74,17 +78,20 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBe('chat')
   })
 
-  it('keeps Model-A SSH omp in the terminal view but opens it locally', () => {
-    const forConnection = (connectionId: string | null): Tab['viewMode'] =>
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'omp',
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
-      })
-    expect(forConnection('ssh-target-1')).toBeUndefined()
-    expect(forConnection(null)).toBe('chat')
-  })
+  it.each(['omp', 'antigravity'] as const)(
+    'keeps Model-A SSH %s in the terminal view but opens it locally',
+    (agent) => {
+      const forConnection = (connectionId: string | null): Tab['viewMode'] =>
+        decideInitialAgentTabViewMode({
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true,
+          agent,
+          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+        })
+      expect(forConnection('ssh-target-1')).toBeUndefined()
+      expect(forConnection(null)).toBe('chat')
+    }
+  )
 
   it('keeps Model-A SSH Grok in the terminal view', () => {
     expect(
