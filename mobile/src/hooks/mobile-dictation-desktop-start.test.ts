@@ -124,7 +124,7 @@ describe('startMobileDictationDesktopSession', () => {
     })
   })
 
-  it('closes it even when the failure is not the current start to report', async () => {
+  it('leaves the capture alone when the failure is no longer the current start', async () => {
     let setNewerStart = () => undefined
     const harness = createStartHarness({
       sendRequest: async (method) => {
@@ -139,9 +139,15 @@ describe('startMobileDictationDesktopSession', () => {
 
     await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
 
-    // A start nobody will hear about still opened a microphone, and the screen does not care
-    // which generation held it.
-    expect(harness.rollbackRecordingStart).toHaveBeenCalledOnce()
+    // There is one capture seam and it carries no start identity, so a stale rejection rolling it
+    // back would stop whatever dictation replaced this one and hand back the screen it holds. By
+    // the time the generation moved, the capture was either already ended — `cancel`, `stop`, the
+    // unmount, a failed dictation — or belongs to a newer start.
+    expect(harness.rollbackRecordingStart).not.toHaveBeenCalled()
+    // Its own desktop session is still cancelled, which is the part that is this start's to undo.
+    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
+      dictationId: 'dictation-a'
+    })
   })
 
   it('does not surface a desktop-start failure after the start became stale', async () => {

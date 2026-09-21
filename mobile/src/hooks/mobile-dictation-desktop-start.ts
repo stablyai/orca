@@ -56,16 +56,21 @@ export async function startMobileDictationDesktopSession(
     dictationSessionStart.interpret(reply)
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
-    // The hook opened the capture before this ran, and an open microphone holds the screen. No
-    // session started, so both go back — through the same rollback the commit failure below uses,
-    // because "undo the capture this start opened" is one thing and the hook owns it. Before the
-    // screen moved onto the mic this path leaked only an idle audio session; now it would pin the
-    // display until the user cancelled, retried, or the screen unmounted.
-    try {
-      options.rollbackRecordingStart()
-    } catch {
-      // Guarded for the reason the commit arm below is: a seam that throws on the way down must
-      // not take the desktop cancel with it, nor replace the failure the caller is about to see.
+    // The hook opened the capture before this ran, and an open microphone holds the screen, so a
+    // failure that is still this start's gives both back — through the same rollback the commit
+    // failure below uses, because "undo the capture this start opened" is one thing the hook owns.
+    //
+    // Only while it is still current, though: there is one capture seam and it carries no start
+    // identity. A stale rejection — A opened the capture, the user cancelled, B is recording —
+    // would end B's microphone and hand back B's screen. Past the generation, the capture was
+    // already ended by whatever superseded this start, or belongs to the one that did.
+    if (wasCurrent) {
+      try {
+        options.rollbackRecordingStart()
+      } catch {
+        // Guarded for the reason the commit arm below is: a seam that throws on the way down must
+        // not take the desktop cancel with it, nor replace the failure the caller is about to see.
+      }
     }
     options.clearActiveId(dictationId)
     await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)

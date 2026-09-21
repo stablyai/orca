@@ -80,6 +80,10 @@ function createAudioShell(): (verb: BridgeNativeVerb, params: unknown) => Promis
   return (verb, params) => capture.serve(verb, params)
 }
 
+/** The hook the composer holds, for a case that has to act on a state the button does not offer:
+ *  the cancel affordance only exists once a dictation is recording or processing. */
+const composer: { dictation: ReturnType<typeof useMobileDictation> | null } = { dictation: null }
+
 function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
   const dictation = useMobileDictation({
     client: pair.client,
@@ -87,6 +91,7 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
     onTranscript: () => {},
     onError: (error) => reported.push(error.message)
   })
+  composer.dictation = dictation
   return (
     <MobileTerminalInputActions
       canSend
@@ -114,19 +119,26 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
   )
 }
 
-/** What the desktop answers a forwarded request with; the default is a plain success. */
-type DesktopAnswer = (method: string) => {
+/** What the desktop answers a forwarded request with. `null` leaves it in flight for the case to
+ *  settle later; the default is a plain success. */
+type DesktopReply = {
   id: string
   ok: boolean
   result?: unknown
   error?: unknown
 }
+type DesktopAnswer = (method: string) => DesktopReply | null
 
 const DESKTOP_OK: DesktopAnswer = () => ({ id: 'desktop', ok: true, result: {} })
+
+/** Requests a case left unanswered, in the order the page sent them. */
+const pending: { method: string; resolve: (reply: DesktopReply) => void }[] = []
 
 type MicControl = {
   readonly label: () => string
   readonly tap: (answer?: DesktopAnswer) => Promise<void>
+  /** Drives the bridge and the desktop without pressing anything, for a case acting on the hook. */
+  readonly settle: (answer?: DesktopAnswer) => Promise<void>
 }
 
 /** The mic button, found by the label it carries in every state rather than by position. */
@@ -158,23 +170,34 @@ async function mount(pair: BridgePortPair): Promise<MicControl> {
   if (rendered === null) {
     throw new Error('nothing mounted')
   }
+  // The tap crosses the bridge, the shell answers, and the desktop answers what was forwarded.
+  async function settle(answer: DesktopAnswer = DESKTOP_OK): Promise<void> {
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {
+        await pair.flush()
+        for (const request of pair.rpc.requests.splice(0)) {
+          const reply = answer(request.method)
+          if (reply === null) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake client's resolver takes the reply shape the host would have sent.
+            pending.push({ method: request.method, resolve: request.resolve as never })
+            continue
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake client takes the reply shape the host would have sent, which is what a case builds here.
+          request.resolve(reply as never)
+        }
+        await pair.flush()
+      })
+    }
+  }
+
   return {
     label: () => String(micOf(rendered.root).props.accessibilityLabel),
+    settle,
     tap: async (answer: DesktopAnswer = DESKTOP_OK) => {
       await act(async () => {
         micOf(rendered.root).props.onPress()
       })
-      // The tap crosses the bridge, the shell answers, and the desktop answers what was forwarded.
-      for (let round = 0; round < 4; round += 1) {
-        await act(async () => {
-          await pair.flush()
-          for (const request of pair.rpc.requests.splice(0)) {
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake client takes the reply shape the host would have sent, which is what a case builds here.
-            request.resolve(answer(request.method) as never)
-          }
-          await pair.flush()
-        })
-      }
+      await settle(answer)
     }
   }
 }
@@ -182,6 +205,8 @@ async function mount(pair: BridgePortPair): Promise<MicControl> {
 beforeEach(() => {
   reported.length = 0
   screen.length = 0
+  pending.length = 0
+  composer.dictation = null
 })
 
 afterEach(() => {
@@ -279,5 +304,42 @@ describe('the mic control on a page the shell did grant audio', () => {
         .readToShell()
         .some((frame) => frame.type === 'request' && frame.method.startsWith('speech.dictation.'))
     ).toBe(true)
+  })
+})
+
+describe('a stale page start whose refusal arrives after a newer one is recording', () => {
+  it('leaves the newer dictation recording, with the shell capture and the screen still its own', async () => {
+    const shell = createAudioShell()
+    const verbs: string[] = []
+    const pair = createFakeBridgePortPair({
+      serveNativeVerb: (verb, params) => {
+        verbs.push(verb)
+        return shell(verb, params)
+      }
+    })
+    const mic = await mount(pair)
+    // A opens the shell's microphone and waits on the desktop.
+    await mic.tap((method) => (method === 'speech.dictation.start' ? null : DESKTOP_OK(method)))
+    expect(screen).toEqual(['+'])
+    const first = pending.find((request) => request.method === 'speech.dictation.start')
+    expect(first).toBeDefined()
+    // The user gives up on A while it is still starting, which is a state the button has no
+    // affordance for, and then starts B.
+    await act(async () => {
+      void composer.dictation?.cancel()
+    })
+    await mic.settle()
+    await mic.tap()
+    expect(mic.label()).toBe('Stop voice dictation')
+    const verbsWhileRecording = [...verbs]
+    const screenWhileRecording = [...screen]
+    // A's request finally fails. It owns nothing: the capture and the screen are B's.
+    await act(async () => {
+      first?.resolve({ id: 'desktop', ok: false, error: { code: 'refused', message: 'no model' } })
+    })
+    await mic.settle()
+    expect(mic.label()).toBe('Stop voice dictation')
+    expect(verbs).toEqual(verbsWhileRecording)
+    expect(screen).toEqual(screenWhileRecording)
   })
 })
