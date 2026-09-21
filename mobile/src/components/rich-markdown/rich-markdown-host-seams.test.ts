@@ -173,6 +173,60 @@ describe('the editor document host seams, once the page sets them', () => {
     expect(posted).toEqual([{ type: 'keyboardInset', bottom: 291 }, { type: 'ready' }])
   })
 
+  it('takes the caret from the selection the host names, not the window one', async () => {
+    // The seam the page needs most. A document mounted inside a screen shares `window` with every
+    // other field on it, so the caret the editor saves and restores has to come from the object
+    // its host hands over — and the window's must be left alone, because it belongs to whatever
+    // else has focus.
+    document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
+    const editor = document.getElementById('editor')!
+    editor.innerHTML = '<p id="only">text</p>'
+    const ranges: Range[] = []
+    const windowSelection = window.getSelection()!
+    windowSelection.removeAllRanges()
+    // WebKit's own behaviour, and the reason the document saves a caret at all.
+    editor.addEventListener('blur', () => {
+      ranges.length = 0
+    })
+
+    const hostSelection: Selection = Object.create(windowSelection)
+    Object.defineProperty(hostSelection, 'rangeCount', { get: () => ranges.length })
+    hostSelection.getRangeAt = (index: number) => ranges[index]!
+    hostSelection.removeAllRanges = () => {
+      ranges.length = 0
+    }
+    hostSelection.addRange = (range: Range) => {
+      ranges.push(range)
+    }
+
+    const caret = document.createRange()
+    caret.selectNodeContents(document.getElementById('only')!)
+    caret.collapse(true)
+    ranges.push(caret)
+
+    const started = createRichMarkdownEditorDocument({
+      getSelection: () => hostSelection,
+      getDocument: () => hostDocument([]),
+      keyboardInsetSource: () => null,
+      postToHost: () => {}
+    })
+    startedDocuments.push(started)
+
+    // Saved out of the host's selection, which the blur then empties.
+    editor.focus()
+    started.send.dismissKeyboard()
+    expect(ranges).toEqual([])
+    // And restored into the host's selection rather than the window's.
+    await started.send.runCommand('bold')
+    expect(
+      ranges.map((range) => {
+        const container = range.commonAncestorContainer
+        return (container instanceof Element ? container : container.parentElement)?.id
+      })
+    ).toEqual(['only'])
+    expect(windowSelection.rangeCount).toBe(0)
+  })
+
   it('runs its selection and its commands against the page the host names', () => {
     const commands: [string, boolean, string | undefined][] = []
     const started = startedDocument({ getDocument: () => hostDocument(commands) })
