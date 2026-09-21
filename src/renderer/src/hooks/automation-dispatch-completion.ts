@@ -8,11 +8,19 @@ import type {
   AutomationPrecheckResult,
   AutomationRun
 } from '../../../shared/automations-types'
-import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
+import type {
+  AgentStateHistoryEntry,
+  AgentStatusEntry,
+  ParsedAgentStatusPayload
+} from '../../../shared/agent-status-types'
 import {
   selectAutomationAgentStatusEntryChange,
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
 } from './automation-agent-status-entry-change'
+import {
+  createAutomationAgentStatusMatcher,
+  getAutomationAgentStateHistoryOverlap
+} from './automation-dispatch-agent-status-match'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 
@@ -20,6 +28,7 @@ type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
 export function createAutomationDispatchCompletion(args: {
   run: AutomationRun
+  prompt: string
   worktree: Worktree
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
@@ -35,9 +44,12 @@ export function createAutomationDispatchCompletion(args: {
   let pendingDone = false
   let completionMarked = false
   let contactLost = false
+  let directSawWorkingAfterStart = false
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
+  const { candidateBelongsToRun, maybeCaptureTargetProviderSession, promptMatchesRun } =
+    createAutomationAgentStatusMatcher(args.prompt)
   const cleanupRunObservers = (): void => {
     unsubscribeAgentStatus()
     unsubscribeSessionObserver()
@@ -158,6 +170,25 @@ export function createAutomationDispatchCompletion(args: {
     }
     settleLateResult(markCompletionResult())
   }
+  const handleAgentStatusPayload = (
+    payload: ParsedAgentStatusPayload,
+    options?: { requireWorkingAfterStart?: boolean }
+  ): void => {
+    if (payload.state === 'working' && promptMatchesRun(payload.prompt)) {
+      directSawWorkingAfterStart = true
+      return
+    }
+    if (
+      payload.state !== 'done' ||
+      payload.sessionBoundary === true ||
+      (options?.requireWorkingAfterStart && !directSawWorkingAfterStart) ||
+      !promptMatchesRun(payload.prompt)
+    ) {
+      return
+    }
+    latestAssistantMessage = payload.lastAssistantMessage?.trim() || latestAssistantMessage
+    handleAgentDone()
+  }
   const handleExit = (code: number): void => {
     if (completionMarked) {
       return
@@ -190,7 +221,12 @@ export function createAutomationDispatchCompletion(args: {
       if (!entry || entry.updatedAt < startedAfter) {
         return
       }
-      const historyOverlap = getAgentStateHistoryOverlap(observedStateHistory, entry.stateHistory)
+      maybeCaptureTargetProviderSession(entry)
+      const historyOverlap = getAutomationAgentStateHistoryOverlap(
+        entry.agentType,
+        observedStateHistory,
+        entry.stateHistory
+      )
       // Why: sawWorkingAfterStart stays monotonic — a recreated entry
       // (transport loss, PTY exit, cap eviction) arrives with an empty
       // stateHistory, so clearing it here would strand reuseSession runs
@@ -199,11 +235,14 @@ export function createAutomationDispatchCompletion(args: {
         if (historicalState.startedAt < startedAfter) {
           continue
         }
-        if (historicalState.state === 'working') {
+        maybeCaptureTargetProviderSession(historicalState)
+        const historicalStateBelongsToRun = candidateBelongsToRun(entry.agentType, historicalState)
+        if (historicalState.state === 'working' && historicalStateBelongsToRun) {
           sawWorkingAfterStart = true
         }
         if (
           historicalState.state === 'done' &&
+          historicalStateBelongsToRun &&
           (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
         ) {
           // Why: this `done` already rolled out of the live entry, so its output
@@ -215,11 +254,13 @@ export function createAutomationDispatchCompletion(args: {
         }
       }
       observedStateHistory = [...entry.stateHistory]
-      if (entry.state === 'working') {
+      const entryBelongsToRun = candidateBelongsToRun(entry.agentType, entry)
+      if (entry.state === 'working' && entryBelongsToRun) {
         sawWorkingAfterStart = true
       }
       if (
         entry.state === 'done' &&
+        entryBelongsToRun &&
         // Why: a session-boundary done is the agent CONNECTING (Claude SessionStart
         // fires at launch, before the argv prompt submits) — completing here would
         // close the tab and record an empty run result.
@@ -238,11 +279,9 @@ export function createAutomationDispatchCompletion(args: {
 
   return {
     appendOutput: (chunk: string) => outputSnapshotBuffer.append(chunk),
-    captureAssistantMessage: (message: string | null | undefined) => {
-      latestAssistantMessage = message?.trim() || latestAssistantMessage
-    },
     cleanupRunObservers,
     handleAgentDone,
+    handleAgentStatusPayload,
     handleExit,
     observeAgentStatus,
     setReuseDispatchTabRelease: (release: () => void) => {
@@ -260,35 +299,4 @@ export function createAutomationDispatchCompletion(args: {
       }
     }
   }
-}
-
-function agentStateHistoryEntriesEqual(
-  left: AgentStateHistoryEntry,
-  right: AgentStateHistoryEntry
-): boolean {
-  return (
-    left.state === right.state &&
-    left.prompt === right.prompt &&
-    left.startedAt === right.startedAt &&
-    left.interrupted === right.interrupted
-  )
-}
-
-function getAgentStateHistoryOverlap(
-  previous: AgentStateHistoryEntry[],
-  current: AgentStateHistoryEntry[]
-): number {
-  for (let overlap = Math.min(previous.length, current.length); overlap > 0; overlap -= 1) {
-    const previousOffset = previous.length - overlap
-    if (
-      current
-        .slice(0, overlap)
-        .every((entry, index) =>
-          agentStateHistoryEntriesEqual(entry, previous[previousOffset + index])
-        )
-    ) {
-      return overlap
-    }
-  }
-  return 0
 }
