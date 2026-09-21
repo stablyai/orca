@@ -135,9 +135,13 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const argsRef = useRef(args)
   // Commit-phase and declared above the host's effect, so the host is built against what this
   // render passed: a native frame can land between a commit and a passive effect.
+  //
+  // No dependency list, rather than one holding `args`: a caller builds that object inline, so
+  // every render is a new one and there is nothing to compare. This runs after each commit, which
+  // is what the ref is for.
   useLayoutEffect(() => {
     argsRef.current = args
-  }, [args])
+  })
   const snapshot = args.snapshot
 
   // Commit-phase, not passive: a native frame that arrives between the two carries the session id
