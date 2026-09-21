@@ -125,11 +125,21 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+/** `sm` is the type ramp of dialogs raised from the sidebar, a step below the app's. */
+function DialogTitle({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & { size?: 'default' | 'sm' }) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      data-size={size}
+      className={cn(
+        'text-lg leading-snug font-semibold break-words',
+        'data-[size=sm]:text-sm',
+        className
+      )}
       {...props}
     />
   )
@@ -137,12 +147,14 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
 
 function DialogDescription({
   className,
+  size = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<typeof DialogPrimitive.Description> & { size?: 'default' | 'sm' }) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      data-size={size}
+      className={cn('text-sm text-muted-foreground', 'data-[size=sm]:text-xs', className)}
       {...props}
     />
   )
