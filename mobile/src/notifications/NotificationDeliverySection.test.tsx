@@ -14,7 +14,7 @@ vi.mock('react-native', () => ({
 
 it('shows only phone-specific controls while desktop owns category eligibility', () => {
   const onChange = vi.fn()
-  let renderer: ReturnType<typeof create>
+  let renderer!: ReturnType<typeof create>
   act(() => {
     renderer = create(
       createElement(NotificationDeliverySection, { value: DEFAULT_NOTIFICATION_DELIVERY, onChange })

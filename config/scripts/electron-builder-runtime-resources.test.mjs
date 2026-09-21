@@ -1,9 +1,10 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { removeTree } from '../../src/shared/windows-transient-lock-removal.ts'
 
 const require = createRequire(import.meta.url)
 const projectRoot = resolve(import.meta.dirname, '..', '..')
@@ -20,6 +21,13 @@ const {
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
+
+// Why this and not process.platform: @vscode/windows-process-tree is the only os: win32 npm
+// addon left, so its presence is what decides whether the win32 plan resolves.
+// @orca/windows-registry is a workspace link present on every host, so it proves nothing.
+const windowsAddonsInstalled = existsSync(
+  join(projectRoot, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
+)
 
 describe('packaged runtime resources', () => {
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
@@ -40,7 +48,7 @@ describe('packaged runtime resources', () => {
 
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -75,7 +83,7 @@ describe('packaged runtime resources', () => {
       })
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -93,7 +101,7 @@ describe('packaged runtime resources', () => {
         /managed-agent-hook-controls\.js was not found/
       )
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -127,7 +135,7 @@ describe('packaged runtime resources', () => {
       await mkdir(join(resourcesDir, 'node_modules', 'jsonc-parser'), { recursive: true })
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -147,7 +155,7 @@ describe('packaged runtime resources', () => {
 
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -169,7 +177,7 @@ describe('packaged runtime resources', () => {
 
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -207,7 +215,7 @@ describe('packaged runtime resources', () => {
         'Unsupported packaged runtime architecture: 4'
       )
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -243,7 +251,7 @@ describe('packaged runtime resources', () => {
           `console payload ${arch}`
         )
       } finally {
-        await rm(resourcesDir, { recursive: true, force: true })
+        await removeTree(resourcesDir)
       }
     }
   })
@@ -264,7 +272,9 @@ describe('packaged runtime resources', () => {
   })
 
   it('includes the Claude agent SDK in every desktop package plan', () => {
-    for (const platform of ['darwin', 'linux', 'win32']) {
+    for (const platform of windowsAddonsInstalled
+      ? ['darwin', 'linux', 'win32']
+      : ['darwin', 'linux']) {
       const packagedTargets = createPackagedRuntimeNodeModuleResources(platform).map(
         (resource) => resource.to
       )
@@ -293,7 +303,7 @@ describe('packaged runtime resources', () => {
         'Unsupported packaged runtime architecture: universal'
       )
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -315,7 +325,7 @@ describe('packaged runtime resources', () => {
         'watcher-linux-x64-glibc'
       ])
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -333,7 +343,7 @@ describe('packaged runtime resources', () => {
 
       await expect(readdir(join(packageDir, 'dist'))).resolves.toEqual(['index.cjs'])
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -353,7 +363,7 @@ describe('packaged runtime resources', () => {
         'sherpa-onnx.node'
       ])
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -369,7 +379,7 @@ describe('packaged runtime resources', () => {
 
       await expect(readdir(packageDir)).resolves.toEqual(['index.cjs'])
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 
@@ -383,7 +393,7 @@ describe('packaged runtime resources', () => {
         })
       ).rejects.toThrow(/Missing packaged resources directory/)
     } finally {
-      await rm(root, { recursive: true, force: true })
+      await removeTree(root)
     }
   })
 
@@ -448,7 +458,7 @@ describe('packaged runtime resources', () => {
         await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
       } finally {
         process.env.PATH = previousPath
-        await rm(root, { recursive: true, force: true })
+        await removeTree(root)
       }
     }
   )
@@ -509,7 +519,7 @@ describe('packaged runtime resources', () => {
         ).resolves.toContain('"version": "9.9.9"')
         await expect(readFile(join(resourcesDir, 'package-type'), 'utf8')).resolves.toBe('AppImage')
       } finally {
-        await rm(root, { recursive: true, force: true })
+        await removeTree(root)
       }
     }
   )
@@ -564,11 +574,13 @@ describe('lazily required packages reach Resources/node_modules', () => {
       const covered = (platform) =>
         destinations[platform].has(`node_modules/${packageName}`) ||
         destinations[platform].has(`node_modules/${specifier}`)
-      // Windows carries the full closure, so an uncovered specifier is uncovered everywhere.
-      expect(
-        covered('win'),
-        `${source} lazily requires '${specifier}', but nothing copies it to Resources/node_modules`
-      ).toBe(true)
+      // The Windows CI lane checks the full closure with its native addons installed.
+      if (windowsAddonsInstalled) {
+        expect(
+          covered('win'),
+          `${source} lazily requires '${specifier}', but nothing copies it to Resources/node_modules`
+        ).toBe(true)
+      }
       if (covered('mac') && covered('linux')) {
         continue
       }
@@ -598,7 +610,7 @@ describe('lazily required packages reach Resources/node_modules', () => {
       const dataset = require(probe)('emojibase-data/en/shortcodes/emojibase.json')
       expect(Object.keys(dataset).length).toBeGreaterThan(1000)
     } finally {
-      await rm(resourcesDir, { recursive: true, force: true })
+      await removeTree(resourcesDir)
     }
   })
 })

@@ -1,0 +1,152 @@
+{
+  "operation": "components.setup-script",
+  "family": "components.setup-script",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "d4052f119c7ed68dc922c8beeb0074701f1532b10e48e284fb71aa165a17e437",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2bf6d40fe6a5": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "5d1cf72f4e12": {
+      "advanced": true,
+      "command": "pnpm install",
+      "run": true,
+      "runPolicy": "ask",
+      "source": "repo",
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "79deedc9f2ed": {
+      "name": "repo.hooks#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "80cf8444e458": {
+      "advanced": false,
+      "command": {
+        "$rpc": "null"
+      },
+      "run": true,
+      "runPolicy": "run-by-default",
+      "source": {
+        "$rpc": "null"
+      },
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "a4e4636264db": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "pnpm install"
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "$rpc": "null"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "components-setup-ask",
+    "checkpoints": [
+      {
+        "id": "hooks-pending",
+        "observation": {
+          "sender": ["2bf6d40fe6a5"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a4e4636264db"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "5d1cf72f4e12",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

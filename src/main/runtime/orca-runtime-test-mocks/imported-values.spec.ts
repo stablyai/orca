@@ -48,7 +48,11 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../effective-hook-config'
-import { getBaseRefDefault, getBranchConflictKind } from '../../git/repo'
+import {
+  getBaseRefDefault,
+  getBranchConflictKind,
+  resolveDefaultBaseRefWithLocalGit
+} from '../../git/repo'
 import { OrchestrationDb as RuntimeOrchestrationDb } from '../orchestration/db'
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -248,3 +252,5 @@ export const exportedVi = vi
 export const exportedWin32 = win32
 export const exportedWorktreePathComparison = worktreePathComparison
 export const exportedWriteFile = writeFile
+
+export const exportedResolveDefaultBaseRefWithLocalGit = resolveDefaultBaseRefWithLocalGit

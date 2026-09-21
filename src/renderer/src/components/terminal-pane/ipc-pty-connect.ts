@@ -27,6 +27,7 @@ type IpcPtyConnectContext = {
   /** True only for the one buffered exit consumed by this connect attempt. */
   isExpectedExitCurrent: () => boolean
   ownsPtyId: (id: string) => boolean
+  handleExplicitlyClosedConnect?: (id: string) => boolean
   bind: (id: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
@@ -89,6 +90,9 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
+      if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
+        return
+      }
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
       if (
         !spawnResult.isReattach &&

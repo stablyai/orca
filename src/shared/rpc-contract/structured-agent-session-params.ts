@@ -2,11 +2,12 @@ import { z } from 'zod'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
+  AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
 
-export const MAX_ID_LENGTH = 512
+export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = 1024
@@ -16,6 +17,9 @@ export const MAX_PROMPT_BYTES = 256 * 1024
 export const MAX_BLOCKS = 64
 
 export const MAX_OPTION_LABEL = 512
+
+/** One relaunch cannot offer more chats than a profile plausibly holds. */
+export const MAX_RESTART_RESUME_SESSIONS = 512
 
 export const SessionId = z
   .string()
@@ -164,11 +168,23 @@ export const CancelParams = z
     envelope: MutationEnvelope,
     turnId: Identifier('Invalid turn id'),
     scope: z.literal('background-tasks').optional(),
-    taskId: Identifier('Invalid task id').optional()
+    taskId: Identifier('Invalid task id').optional(),
+    prompt: z
+      .object({
+        itemId: Identifier('Invalid item id'),
+        expectedRevision: z.number().int().positive()
+      })
+      .strict()
+      .optional()
   })
   .strict()
-  .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
-    message: 'A task id requires background-task scope'
+  .superRefine((value, ctx) => {
+    if (value.taskId !== undefined && value.scope !== 'background-tasks') {
+      ctx.addIssue({ code: 'custom', message: 'A task id requires background-task scope' })
+    }
+    if (value.prompt !== undefined && value.scope === 'background-tasks') {
+      ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
+    }
   })
 
 export const RespondParams = z
@@ -212,6 +228,16 @@ export const ConversationCommandParams = z
  *  the other's. */
 export const HoldParams = z
   .object({ sessionId: SessionId, holderId: Identifier('Invalid holder id') })
+  .strict()
+
+/** A launch's offer to resume what the last teardown recorded as working. No arguments: the set is
+ *  the host's to derive, never a client's to assert. */
+export const RestartResumableParams = z.object({}).strict()
+
+/** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
+ *  host re-derives eligibility, so an id a client invents is simply not in the set. */
+export const RestartResumeParams = z
+  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
 export const HistoryParams = z

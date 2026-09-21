@@ -6,7 +6,10 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isAgentHookSource } from '../../../shared/agent-hook-relay'
-import { normalizeClaudePromptId } from '../../../shared/agent-hook-listener/listener-limits'
+import {
+  normalizeClaudePromptId,
+  normalizeGrokPromptId
+} from '../../../shared/agent-hook-listener/listener-limits'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
@@ -100,7 +103,11 @@ export function sanitizeHydratedEntry(
   }
   const source = isAgentHookSource(record.source) ? record.source : undefined
   const providerPromptId =
-    source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
+    source === 'claude'
+      ? normalizeClaudePromptId(record.providerPromptId)
+      : source === 'grok'
+        ? normalizeGrokPromptId(record.providerPromptId)
+        : undefined
   const compactTrigger =
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
@@ -114,6 +121,7 @@ export function sanitizeHydratedEntry(
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
     hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
     providerPromptId,
+    grokPromptBoundary: source === 'grok' && record.grokPromptBoundary === true ? true : undefined,
     compactTrigger,
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,

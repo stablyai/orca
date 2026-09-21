@@ -54,7 +54,7 @@ describe('incumbent alive and refusing', () => {
     await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
     // The whole point of #8585: the incumbent's socket must survive so it is not orphaned.
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
   })
 
   it('names the incumbent pid and the Reset Relay escape hatch in the error', async () => {
@@ -70,7 +70,7 @@ describe('incumbent alive and refusing', () => {
       probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable'])
     )
     await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
   })
 
   it('treats a version mismatch as live even where holders cannot be enumerated', async () => {
@@ -123,7 +123,7 @@ describe('incumbent alive but silent', () => {
     await expect(outcome).rejects.toSatisfy(isRelayEndpointUnresponsiveError)
     await expect(outcome).rejects.not.toSatisfy(isRelayEndpointHeldError)
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
   })
 
   it('stays retryable when a silent holder is enumerated with live work', async () => {
@@ -158,6 +158,19 @@ describe('incumbent unverifiable', () => {
   it('stays unverifiable when the probe command itself fails', async () => {
     execCommand.mockRejectedValueOnce(new Error('exec timeout'))
     await expect(resolve()).resolves.toMatchObject({ verdict: 'unverifiable' })
+  })
+
+  it('rethrows an unconfirmed probe termination without relaunching, unlinking, or killing', async () => {
+    const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    execCommand.mockRejectedValueOnce(unconfirmed)
+
+    await expect(resolve()).rejects.toBe(unconfirmed)
+    expect(issuedCommands()).toHaveLength(1)
+    expect(issuedCommands().some((command) => /--detached|\brm -f\b|\bkill\s/.test(command))).toBe(
+      false
+    )
   })
 })
 

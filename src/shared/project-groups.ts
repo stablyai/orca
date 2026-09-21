@@ -91,9 +91,8 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
-  const groupIds = new Set(groups.map((group) => group.id))
   for (const group of groups) {
-    if (group.parentGroupId === group.id || !groupIds.has(group.parentGroupId ?? '')) {
+    if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
     }
   }

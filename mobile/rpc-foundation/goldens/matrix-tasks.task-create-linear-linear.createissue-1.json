@@ -1,0 +1,827 @@
+{
+  "operation": "tasks.task-create-linear",
+  "family": "tasks.task-create-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "cb4c10cc6401e5b68340bd1fa09381c973348b6e0c7ffef563cde92080c57a15",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0fef9dc7845d": {
+      "name": "createTitle",
+      "ordinal": 7,
+      "value": ""
+    },
+    "13b1e9c092d4": {
+      "name": "createBody",
+      "ordinal": 8,
+      "value": ""
+    },
+    "15984a10afe8": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "233381f915af": {
+      "composer": true,
+      "creating": false,
+      "error": "refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "30d39651f586": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.createIssue",
+        "operation": "linear.create-issue",
+        "variant": "linear-created-issue"
+      }
+    },
+    "34beeae20de2": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "3c76066eb236": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "ok": true,
+            "title": "A sub-issue",
+            "url": ""
+          }
+        }
+      }
+    },
+    "449fcef41ecc": {
+      "composer": true,
+      "creating": false,
+      "error": "outer refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "5294116e0f90": {
+      "name": "creatingTask",
+      "ordinal": 1,
+      "value": true
+    },
+    "54f14c01a5e1": {
+      "composer": true,
+      "creating": false,
+      "error": "Failed to create Linear issue",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "569f09937c17": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "58d5e47807d7": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "5c6dab9499b0": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (linear.createIssue)"
+    },
+    "5ca21ce0a8bd": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "refused"
+    },
+    "61b2cb7e4313": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "67649a39eef0": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "69a1459381a5": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6a6ddba57b66": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "6bb96c7332db": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "transport failure"
+    },
+    "776607d47471": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "inner refused"
+    },
+    "7db197060e39": {
+      "composer": true,
+      "creating": false,
+      "error": "",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "82b36eab5101": {
+      "name": "creatingTask",
+      "ordinal": 6,
+      "value": false
+    },
+    "91259ae589b2": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "outer refused"
+    },
+    "978112708adf": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ac46e56e89fe": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "Unknown method"
+    },
+    "ad2d22e4895f": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to create Linear issue"
+    },
+    "b1504689c2b3": {
+      "name": "creatingTask",
+      "ordinal": 9,
+      "value": false
+    },
+    "b44dfc09514f": {
+      "name": "actionItem",
+      "ordinal": 5,
+      "value": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "c11e0b43f745": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "c140f66eca23": {
+      "composer": true,
+      "creating": false,
+      "error": "transport failure",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "ce67fb8d9d58": {
+      "name": "linear.createIssue#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "d24a112e43bf": {
+      "composer": true,
+      "creating": false,
+      "error": "Unknown method",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "e92e2340bb29": {
+      "composer": true,
+      "creating": false,
+      "error": "The host sent a reply this app could not read (linear.createIssue)",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "e9a162defc32": {
+      "name": "creatingTask",
+      "ordinal": 7,
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "f8df20507017": {
+      "name": "error",
+      "ordinal": 5,
+      "value": ""
+    },
+    "fa467ac4ab12": {
+      "name": "showCreateTask",
+      "ordinal": 6,
+      "value": false
+    },
+    "fdd487d7c0f5": {
+      "composer": true,
+      "creating": false,
+      "error": "inner refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "fe195bb4412e": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.task-create-linear-linear.createissue-1",
+    "checkpoints": [
+      {
+        "id": "tk-create-linear.normal:create-settled",
+        "observation": {
+          "sender": ["3c76066eb236"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "61b2cb7e4313",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "b44dfc09514f",
+            "fa467ac4ab12",
+            "0fef9dc7845d",
+            "13b1e9c092d4",
+            "b1504689c2b3"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-linear.result-absent:create-settled",
+        "observation": {
+          "sender": ["fe195bb4412e"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "e92e2340bb29",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "5c6dab9499b0", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.result-null:create-settled",
+        "observation": {
+          "sender": ["34beeae20de2"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "e92e2340bb29",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "5c6dab9499b0", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-ok-missing:create-settled",
+        "observation": {
+          "sender": ["15984a10afe8"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "233381f915af",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "5ca21ce0a8bd", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-false-string-error:create-settled",
+        "observation": {
+          "sender": ["569f09937c17"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "fdd487d7c0f5",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "776607d47471", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.inner-false-object-error:create-settled",
+        "observation": {
+          "sender": ["c11e0b43f745"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "54f14c01a5e1",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "30d39651f586",
+            "ad2d22e4895f",
+            "e9a162defc32"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-linear.outer-refused:create-settled",
+        "observation": {
+          "sender": ["58d5e47807d7"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "449fcef41ecc",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "91259ae589b2", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.outer-refused-no-message:create-settled",
+        "observation": {
+          "sender": ["978112708adf"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "f8df20507017", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.method-not-found:create-settled",
+        "observation": {
+          "sender": ["69a1459381a5"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "d24a112e43bf",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "ac46e56e89fe", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.transport-rejection:create-settled",
+        "observation": {
+          "sender": ["67649a39eef0"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "c140f66eca23",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "6bb96c7332db", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-linear.transport-rejection-no-message:create-settled",
+        "observation": {
+          "sender": ["6a6ddba57b66"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "f8df20507017", "82b36eab5101"]
+        }
+      }
+    ]
+  }
+}

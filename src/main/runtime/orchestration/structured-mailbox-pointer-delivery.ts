@@ -238,6 +238,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       return
     }
     if (!structuredDispatchDelivered(outcome.state)) {
+      if (outcome.state === 'rejected') {
+        db.deleteStructuredPointerOperation(mailboxHandle)
+      }
       this.retain(
         mailboxHandle,
         sessionId,

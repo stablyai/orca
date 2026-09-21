@@ -38,6 +38,7 @@ export async function rewindStructuredAgentSession(
       envelope: params.envelope,
       journal: context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
+      flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
         method: 'agentSession.rewind',

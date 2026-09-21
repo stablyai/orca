@@ -9,10 +9,22 @@ import type {
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
-  retirePaneAuthority(paneKey: string): void {
+  retirePaneAuthority(paneKey: string, retirementId?: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
-    const retiredAliases: RetiredPaneAlias[] = []
+    for (const key of previousFence?.paneKeys ?? []) {
+      if (
+        this.retiredPaneFencesByKey.get(key) === previousFence &&
+        this.closedAgentStatusPaneKeys.has(key)
+      ) {
+        paneKeys.add(key)
+      }
+    }
+    const retiredAliases: RetiredPaneAlias[] = (previousFence?.aliases ?? []).filter(
+      ({ physicalPaneKey, entry }) =>
+        paneKeys.has(physicalPaneKey) && paneKeys.has(entry.stablePaneKey)
+    )
     let aliasChanged = false
     for (const [physicalPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (physicalPaneKey === paneKey || entry.stablePaneKey === ownerPaneKey) {
@@ -23,7 +35,11 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         aliasChanged = true
       }
     }
-    this.recordRetiredPaneFence(paneKeys, retiredAliases)
+    this.recordRetiredPaneFence(
+      paneKeys,
+      retiredAliases,
+      this.isClosedAgentStatusTabForPaneKey(ownerPaneKey) ? undefined : retirementId
+    )
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
     const retiredRows = [...paneKeys].flatMap((key) => {
       const row = this.state.lastStatusByPaneKey.get(key) as
@@ -66,6 +82,8 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     let aliasChanged = false
     for (const { physicalPaneKey, entry } of fence.aliases) {
       if (
+        this.retiredPaneFencesByKey.get(physicalPaneKey) !== fence ||
+        this.retiredPaneFencesByKey.get(entry.stablePaneKey) !== fence ||
         this.isClosedAgentStatusTabForPaneKey(physicalPaneKey) ||
         this.isClosedAgentStatusTabForPaneKey(entry.stablePaneKey) ||
         // Why: the pane was rebound in the meantime; the newer alias is the truth.
@@ -101,7 +119,10 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.retiredPaneFencesByKey.get(paneKey) ?? this.retiredPaneFencesByKey.get(ownerPaneKey)
     let restored = false
     for (const key of new Set([paneKey, ownerPaneKey, ...(fence?.paneKeys ?? [])])) {
-      if (this.isClosedAgentStatusTabForPaneKey(key)) {
+      if (
+        (fence && this.retiredPaneFencesByKey.get(key) !== fence) ||
+        this.isClosedAgentStatusTabForPaneKey(key)
+      ) {
         continue
       }
       if (this.closedAgentStatusPaneKeys.delete(key)) {
@@ -112,6 +133,26 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.restoreRetiredPaneFence(fence)
     }
     return restored
+  }
+
+  protected restoreRetiredStatusRestart(paneKey: string): {
+    paneKey: string
+    authorityRestartId?: string
+  } {
+    const authorityRestartId = this.takeRetiredPaneRestartId(paneKey)
+    if (!authorityRestartId) {
+      return { paneKey }
+    }
+    this.restorePaneAuthority(paneKey)
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (ownerPaneKey !== paneKey) {
+      const tokenHash = this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)
+      this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
+      if (tokenHash) {
+        this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, tokenHash)
+      }
+    }
+    return { paneKey: ownerPaneKey, authorityRestartId }
   }
 
   clearPaneKeyAliasesForPty(

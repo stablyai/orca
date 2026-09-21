@@ -1,0 +1,147 @@
+{
+  "operation": "session.terminal-clipboard",
+  "family": "session.worktree-connection",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e7e3718f685e3713cf1b8209d59d618741f892bd286853b79bb456c59cec8d86",
+  "scenarioSha256": "f921c4a764cdf7a4c1df0a7ec618d7c3b1d8a05ee4baa42d66f3bc0d95b3f550",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "3fb0e93ab6cb": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "terminalCopyTrimsGutter": true
+            }
+          }
+        }
+      }
+    },
+    "5a51b87432e2": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "connectionId": "ssh-zeta",
+                "displayName": "zeta",
+                "id": "repo-z"
+              },
+              {
+                "connectionId": "ssh-alpha",
+                "displayName": "alpha",
+                "id": "repo-a"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "c8c77ac17e0a": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "e61132f30b52": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "ssh-alpha"
+    },
+    "e84b72d7c6fc": {
+      "connectionId": "ssh-alpha",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "unpasted"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-worktree-connection-resolved",
+    "checkpoints": [
+      {
+        "id": "resolved",
+        "observation": {
+          "sender": ["3fb0e93ab6cb", "5a51b87432e2"],
+          "payloads": ["c8c77ac17e0a", "d64700b9de3b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connection": "e61132f30b52"
+          },
+          "state": "e84b72d7c6fc",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ import {
 } from './stable-logical-rpc-client'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
@@ -145,22 +146,22 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   isPairingRejected = () => this.pairingRejected
-  private hostSignedOut = false
-  setHostSignedOut = vi.fn((signedOut: boolean) => {
-    if (this.hostSignedOut === signedOut) {
+  private relayHostReachability: RelayHostReachability = 'connecting'
+  setRelayHostReachability = vi.fn((reachability: RelayHostReachability) => {
+    if (this.relayHostReachability === reachability) {
       return
     }
-    this.hostSignedOut = signedOut
+    this.relayHostReachability = reachability
     for (const listener of this.pathListeners) {
       listener()
     }
   })
-  isHostSignedOut = () => this.hostSignedOut
+  getRelayHostReachability = () => this.relayHostReachability
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
-      this.hostSignedOut = false
+      this.relayHostReachability = 'connecting'
     }
     super.publishState(state)
   }
@@ -236,8 +237,8 @@ function dependencies(
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: (handler, ms) => setTimeout(handler, ms),
+    clearTimer: (handle) => clearTimeout(handle),
     ...overrides
   }
 }

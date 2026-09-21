@@ -18,12 +18,15 @@ import {
   type NativeChatTranscriptSubscription
 } from '../transcript-watch'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { StructuredTuiCatchupStoppedError } from './structured-agent-session-handoff-types'
 import {
   readStructuredTuiTranscriptBoundary,
   writeStructuredTuiTranscriptBoundary
 } from './structured-tui-transcript-boundary'
 
 type CatchupState = {
+  controller: AbortController
+  initialReady: (() => void) | null
   active: boolean
   fence: number
   agent: AgentSessionHandleProvider
@@ -35,6 +38,7 @@ type CatchupState = {
 
 export class StructuredTuiTranscriptCatchup {
   private readonly states = new Map<string, CatchupState>()
+  private readonly teardown = new AbortController()
 
   constructor(
     private readonly input: {
@@ -47,15 +51,16 @@ export class StructuredTuiTranscriptCatchup {
     }
   ) {}
 
-  async prepare(sessionId: string, fence: number): Promise<void> {
-    await this.start(sessionId, fence, false)
+  async prepare(sessionId: string, fence: number): Promise<AbortSignal> {
+    return this.start(sessionId, fence, false)
   }
 
-  async recover(sessionId: string, fence: number): Promise<void> {
-    await this.start(sessionId, fence, true)
+  async recover(sessionId: string, fence: number): Promise<AbortSignal> {
+    return this.start(sessionId, fence, true)
   }
 
-  private async start(sessionId: string, fence: number, recovering: boolean): Promise<void> {
+  private async start(sessionId: string, fence: number, recovering: boolean): Promise<AbortSignal> {
+    this.teardown.signal.throwIfAborted()
     this.stop(sessionId)
     const record = this.input.store.getRecord(sessionId)
     const head = record?.providerHandleChain.at(-1)
@@ -64,7 +69,7 @@ export class StructuredTuiTranscriptCatchup {
       !head ||
       (head.handle.provider !== 'codex' && head.handle.provider !== 'claude')
     ) {
-      return
+      return this.teardown.signal
     }
     const agent = head.handle.provider
     const providerSessionId = agent === 'claude' ? head.handle.sessionId : head.handle.threadId
@@ -73,17 +78,9 @@ export class StructuredTuiTranscriptCatchup {
       agent === 'claude'
         ? { claudeProjectsDir: join(record.accountHome.path, 'projects') }
         : { codexSessionsDirs: [join(record.accountHome.path, 'sessions')] }
-    const boundary = recovering
-      ? await readStructuredTuiTranscriptBoundary(journal.directory)
-      : null
-    const filePath = await resolveSessionFilePath(agent, providerSessionId, {
-      ...transcriptOptions,
-      ...(boundary?.filePath ? { transcriptPath: boundary.filePath } : {})
-    })
-    let initialReady: (() => void) | null = null
-    let baselineOffset = 0
-    const ready = filePath ? new Promise<void>((resolve) => (initialReady = resolve)) : null
     const state: CatchupState = {
+      controller: new AbortController(),
+      initialReady: null,
       active: false,
       fence,
       agent,
@@ -95,20 +92,42 @@ export class StructuredTuiTranscriptCatchup {
     const receive = (messages: NativeChatMessage[]) => this.receive(sessionId, state, messages)
     this.states.set(sessionId, state)
     try {
-      state.subscription = await subscribeNativeChatTranscript({
+      const signal = state.controller.signal
+      const boundary = recovering
+        ? await readStructuredTuiTranscriptBoundary(journal.directory)
+        : null
+      signal.throwIfAborted()
+      const filePath = await resolveSessionFilePath(
         agent,
-        sessionId: providerSessionId,
-        ...transcriptOptions,
-        ...(filePath ? { filePath, initialLimit: 0 } : {}),
-        onInitialSnapshot: (messages, _hasMore, beforeOffset) => {
-          baselineOffset = beforeOffset
-          receive(messages)
-          initialReady?.()
-          initialReady = null
+        providerSessionId,
+        {
+          ...transcriptOptions,
+          ...(boundary?.filePath ? { transcriptPath: boundary.filePath } : {})
         },
-        onAppend: receive
-      })
+        signal
+      )
+      signal.throwIfAborted()
+      let baselineOffset = 0
+      const ready = filePath ? new Promise<void>((resolve) => (state.initialReady = resolve)) : null
+      state.subscription = await subscribeNativeChatTranscript(
+        {
+          agent,
+          sessionId: providerSessionId,
+          ...transcriptOptions,
+          ...(filePath ? { filePath, initialLimit: 0 } : {}),
+          onInitialSnapshot: (messages, _hasMore, beforeOffset) => {
+            baselineOffset = beforeOffset
+            receive(messages)
+            state.initialReady?.()
+            state.initialReady = null
+          },
+          onAppend: receive
+        },
+        signal
+      )
+      signal.throwIfAborted()
       await ready
+      signal.throwIfAborted()
       if (!recovering) {
         await writeStructuredTuiTranscriptBoundary(journal.directory, {
           providerSessionId,
@@ -134,13 +153,21 @@ export class StructuredTuiTranscriptCatchup {
         if (!imported.ok) {
           throw new Error(imported.error)
         }
+        signal.throwIfAborted()
         this.input.reset(sessionId, fence)
       }
+      signal.throwIfAborted()
+      return signal
     } catch (error) {
+      const stopped = state.controller.signal.aborted
       if (this.states.get(sessionId) === state) {
-        this.states.delete(sessionId)
+        this.stop(sessionId)
+      } else {
+        state.subscription?.unsubscribe()
       }
-      state.subscription?.unsubscribe()
+      if (stopped) {
+        state.controller.signal.throwIfAborted()
+      }
       throw error
     }
   }
@@ -197,10 +224,16 @@ export class StructuredTuiTranscriptCatchup {
   stop(sessionId: string): void {
     const state = this.states.get(sessionId)
     this.states.delete(sessionId)
+    state?.controller.abort(new StructuredTuiCatchupStoppedError())
+    state?.initialReady?.()
+    if (state) {
+      state.initialReady = null
+    }
     state?.subscription?.unsubscribe()
   }
 
   stopAll(): void {
+    this.teardown.abort(new StructuredTuiCatchupStoppedError())
     for (const sessionId of this.states.keys()) {
       this.stop(sessionId)
     }

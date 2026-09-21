@@ -1,0 +1,1763 @@
+{
+  "sources": {
+    "src/main/runtime/orca-runtime-sync-window-graph.ts": "e9527f5964af3ed93ec4815096ebdcc181118f9edc76f34e1cc25d1fa67a5fb4",
+    "src/main/runtime/orca-runtime-mark-pty-liveness-unverifiable.ts": "ff5433a848e43f22560234c98e25122237f16bcda7668603dd2640eb86cec315",
+    "src/main/runtime/orca-runtime-on-pty-exit.ts": "def5d33f70a656b13c619db8b453ab2b72cade31c7078583c6f6f6ea8d3544e6"
+  },
+  "phases": [
+    {
+      "phase": "before",
+      "rows": [
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [],
+            "unchangedMobileSessionWorktrees": ["repo::/tmp/late-exit-audit"]
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:852007b5-0f95-44b0-9182-1dbd97a4ce2b",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:852007b5-0f95-44b0-9182-1dbd97a4ce2b",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "afterRepeatedGraph": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": "repo::/tmp/late-exit-audit@@terminal"
+            }
+          ],
+          "resolution": "terminal_pane_owner_conflict",
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@terminal",
+              "connected": false,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            },
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:852007b5-0f95-44b0-9182-1dbd97a4ce2b",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": true,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": "repo::/tmp/late-exit-audit@@terminal"
+            }
+          ],
+          "resolution": "terminal_pane_owner_conflict",
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        }
+      ],
+      "history": {
+        "initial": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "afterExit": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "incoming": {
+          "worktree": "repo-1::/tmp/worktree-a",
+          "snapshotVersion": 2,
+          "activeGroupId": null,
+          "activeTabId": null,
+          "activeTabType": null,
+          "tabs": [
+            {
+              "type": "terminal",
+              "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+              "title": "Sleeping terminal",
+              "parentTabId": "10000000-0000-4000-8000-000000000001",
+              "leafId": "10000000-0000-4000-8000-000000000002",
+              "ptyId": "repo-1::/tmp/worktree-a@@sleep-review",
+              "parentLayout": {
+                "root": {
+                  "type": "leaf",
+                  "leafId": "10000000-0000-4000-8000-000000000002"
+                },
+                "activeLeafId": "10000000-0000-4000-8000-000000000002",
+                "expandedLeafId": null,
+                "ptyIdsByLeafId": {
+                  "10000000-0000-4000-8000-000000000002": "repo-1::/tmp/worktree-a@@sleep-review"
+                }
+              },
+              "isActive": false
+            }
+          ]
+        },
+        "afterQueued": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "leafState": {
+          "connected": true,
+          "writable": true,
+          "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+        },
+        "model": false,
+        "afterBindingClear": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": null
+          }
+        ],
+        "result": {
+          "stopped": 1,
+          "stoppedPtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "livePtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "postStopVerified": true
+        }
+      }
+    },
+    {
+      "phase": "guard-only",
+      "rows": [
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [],
+            "unchangedMobileSessionWorktrees": ["repo::/tmp/late-exit-audit"]
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:3f6ce3d1-c184-4637-a5c1-14b30cd0b1b4",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:3f6ce3d1-c184-4637-a5c1-14b30cd0b1b4",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": null
+            }
+          ],
+          "resolution": {
+            "ptyId": "repo::/tmp/late-exit-audit@@successor"
+          },
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@terminal",
+              "connected": false,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            },
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:3f6ce3d1-c184-4637-a5c1-14b30cd0b1b4",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": true,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": null,
+            "model": false,
+            "urlBound": true,
+            "leaves": [
+              {
+                "connected": true,
+                "writable": true
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": "repo::/tmp/late-exit-audit@@terminal"
+            }
+          ],
+          "resolution": {
+            "ptyId": "repo::/tmp/late-exit-audit@@successor"
+          },
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        }
+      ],
+      "history": {
+        "initial": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "afterExit": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "incoming": {
+          "worktree": "repo-1::/tmp/worktree-a",
+          "snapshotVersion": 2,
+          "activeGroupId": null,
+          "activeTabId": null,
+          "activeTabType": null,
+          "tabs": [
+            {
+              "type": "terminal",
+              "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+              "title": "Sleeping terminal",
+              "parentTabId": "10000000-0000-4000-8000-000000000001",
+              "leafId": "10000000-0000-4000-8000-000000000002",
+              "ptyId": "repo-1::/tmp/worktree-a@@sleep-review",
+              "parentLayout": {
+                "root": {
+                  "type": "leaf",
+                  "leafId": "10000000-0000-4000-8000-000000000002"
+                },
+                "activeLeafId": "10000000-0000-4000-8000-000000000002",
+                "expandedLeafId": null,
+                "ptyIdsByLeafId": {
+                  "10000000-0000-4000-8000-000000000002": "repo-1::/tmp/worktree-a@@sleep-review"
+                }
+              },
+              "isActive": false
+            }
+          ]
+        },
+        "afterQueued": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "leafState": {
+          "connected": false,
+          "writable": false,
+          "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+        },
+        "model": false,
+        "afterBindingClear": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": null
+          }
+        ],
+        "result": {
+          "stopped": 1,
+          "stoppedPtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "livePtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "postStopVerified": true
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "rows": [
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [],
+            "unchangedMobileSessionWorktrees": ["repo::/tmp/late-exit-audit"]
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "ordinary-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:34668074-f3d3-4e0f-bbd5-e31900482d81",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "mobile": [],
+          "resolution": null,
+          "inventory": [],
+          "listed": []
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": false,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:34668074-f3d3-4e0f-bbd5-e31900482d81",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": null
+            }
+          ],
+          "resolution": {
+            "ptyId": "repo::/tmp/late-exit-audit@@successor"
+          },
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@terminal",
+              "connected": false,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            },
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        },
+        {
+          "scenario": "successor-binding-before-exit",
+          "graphGapBeforeInventory": true,
+          "capture": {
+            "tabs": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "title": "Terminal",
+                "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                "layout": null
+              }
+            ],
+            "leaves": [
+              {
+                "tabId": "00000000-0000-4000-8000-000000000001",
+                "worktreeId": "repo::/tmp/late-exit-audit",
+                "leafId": "00000000-0000-4000-8000-000000000002",
+                "paneRuntimeId": 1,
+                "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                "paneTitle": null,
+                "title": "Terminal"
+              }
+            ],
+            "mobileSessionTabs": [
+              {
+                "worktree": "repo::/tmp/late-exit-audit",
+                "publicationEpoch": "renderer:34668074-f3d3-4e0f-bbd5-e31900482d81",
+                "snapshotVersion": 4,
+                "activeGroupId": null,
+                "activeTabId": null,
+                "activeTabType": null,
+                "tabs": [
+                  {
+                    "type": "terminal",
+                    "id": "00000000-0000-4000-8000-000000000001::00000000-0000-4000-8000-000000000002",
+                    "title": "Terminal",
+                    "parentTabId": "00000000-0000-4000-8000-000000000001",
+                    "leafId": "00000000-0000-4000-8000-000000000002",
+                    "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+                    "parentLayout": {
+                      "root": {
+                        "type": "leaf",
+                        "leafId": "00000000-0000-4000-8000-000000000002"
+                      },
+                      "activeLeafId": "00000000-0000-4000-8000-000000000002",
+                      "expandedLeafId": null,
+                      "ptyIdsByLeafId": {
+                        "00000000-0000-4000-8000-000000000002": "repo::/tmp/late-exit-audit@@terminal"
+                      }
+                    },
+                    "isActive": false
+                  }
+                ]
+              }
+            ],
+            "unchangedMobileSessionWorktrees": []
+          },
+          "afterExit": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterQueuedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "afterFreshList": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": []
+          },
+          "afterRepeatedGraph": {
+            "connected": false,
+            "exitCause": {
+              "kind": "exited",
+              "exitCode": 0
+            },
+            "liveness": {
+              "status": "exited"
+            },
+            "model": false,
+            "urlBound": false,
+            "leaves": [
+              {
+                "connected": false,
+                "writable": false
+              }
+            ]
+          },
+          "mobile": [
+            {
+              "ptyId": "repo::/tmp/late-exit-audit@@terminal",
+              "handlePtyId": null
+            }
+          ],
+          "resolution": {
+            "ptyId": "repo::/tmp/late-exit-audit@@successor"
+          },
+          "inventory": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor"
+            }
+          ],
+          "persistedPtyId": "repo::/tmp/late-exit-audit@@successor",
+          "listed": [
+            {
+              "id": "repo::/tmp/late-exit-audit@@successor",
+              "connected": true,
+              "tabId": "00000000-0000-4000-8000-000000000001",
+              "leafId": "00000000-0000-4000-8000-000000000002"
+            }
+          ]
+        }
+      ],
+      "history": {
+        "initial": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "afterExit": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "incoming": {
+          "worktree": "repo-1::/tmp/worktree-a",
+          "snapshotVersion": 2,
+          "activeGroupId": null,
+          "activeTabId": null,
+          "activeTabType": null,
+          "tabs": [
+            {
+              "type": "terminal",
+              "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+              "title": "Sleeping terminal",
+              "parentTabId": "10000000-0000-4000-8000-000000000001",
+              "leafId": "10000000-0000-4000-8000-000000000002",
+              "ptyId": "repo-1::/tmp/worktree-a@@sleep-review",
+              "parentLayout": {
+                "root": {
+                  "type": "leaf",
+                  "leafId": "10000000-0000-4000-8000-000000000002"
+                },
+                "activeLeafId": "10000000-0000-4000-8000-000000000002",
+                "expandedLeafId": null,
+                "ptyIdsByLeafId": {
+                  "10000000-0000-4000-8000-000000000002": "repo-1::/tmp/worktree-a@@sleep-review"
+                }
+              },
+              "isActive": false
+            }
+          ]
+        },
+        "afterQueued": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+          }
+        ],
+        "leafState": {
+          "connected": false,
+          "writable": false,
+          "ptyId": "repo-1::/tmp/worktree-a@@sleep-review"
+        },
+        "model": false,
+        "afterBindingClear": [
+          {
+            "type": "terminal",
+            "id": "10000000-0000-4000-8000-000000000001::10000000-0000-4000-8000-000000000002",
+            "ptyId": null
+          }
+        ],
+        "result": {
+          "stopped": 1,
+          "stoppedPtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "livePtyIds": ["repo-1::/tmp/worktree-a@@sleep-review"],
+          "postStopVerified": true
+        }
+      }
+    }
+  ]
+}

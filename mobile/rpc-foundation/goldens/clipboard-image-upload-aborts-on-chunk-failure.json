@@ -1,0 +1,171 @@
+{
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "195c2f15d81c70012ea88750ab3f84bfe512f7e422f7d2d09fb7919bd9cfd85a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "8e6c4f65042a": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-2\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "b49be31d506e": {
+      "failure": "Upload slot expired",
+      "path": "unsaved"
+    },
+    "bdd08542c5fc": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":null}}"
+    },
+    "c81557ea67fa": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "upload_expired",
+            "message": "Upload slot expired"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "ca96681f306d": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": {
+              "$rpc": "null"
+            },
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-2"
+          }
+        }
+      }
+    },
+    "cd036aabcfa0": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.abortImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "aborted": true
+          }
+        }
+      }
+    },
+    "e6cb8187ff0a": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.abortImageUpload\",\"params\":{\"uploadId\":\"upload-2\"}}"
+    },
+    "ead0111942f4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Upload slot expired",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-upload-aborts-on-chunk-failure",
+    "checkpoints": [
+      {
+        "id": "aborted",
+        "observation": {
+          "sender": ["ca96681f306d", "c81557ea67fa", "cd036aabcfa0"],
+          "payloads": ["bdd08542c5fc", "8e6c4f65042a", "e6cb8187ff0a"],
+          "settlements": {
+            "local": "ead0111942f4"
+          },
+          "state": "b49be31d506e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

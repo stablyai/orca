@@ -47,7 +47,7 @@ const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const INTERVAL_MS = 20_000
 const SESSIONS = ['aaaaaaaa', 'bbbbbbbb', 'cccccccc']
 
-type RootShape = {
+type RootLayout = {
   name: string
   /** Where the unreachable root's transcripts live, and where its files go. */
   detachedRoot: (harness: SessionSearchIndexerHarness) => string
@@ -59,7 +59,7 @@ type RootShape = {
 
 const OPENCLAW_SESSION_DIR = join('agents', 'main', 'sessions')
 
-const ROOT_SHAPES: RootShape[] = [
+const ROOT_LAYOUTS: RootLayout[] = [
   {
     name: 'roots discovery reports one per directory',
     detachedRoot: (harness) => harness.roots.claudeProjectsDir ?? '',
@@ -81,7 +81,7 @@ const ROOT_SHAPES: RootShape[] = [
   }
 ]
 
-type UnreachableShape = {
+type UnreachableMode = {
   name: string
   needsDeniedRead: boolean
   /**
@@ -97,7 +97,7 @@ type UnreachableShape = {
   attach: (root: string, transcriptDir: string, parked: string) => Promise<void>
 }
 
-const UNREACHABLE_SHAPES: UnreachableShape[] = [
+const UNREACHABLE_MODES: UnreachableMode[] = [
   {
     name: 'the root itself is not there',
     needsDeniedRead: false,
@@ -276,8 +276,8 @@ function indexedSessions(): string[] {
     .sort()
 }
 
-for (const roots of ROOT_SHAPES) {
-  for (const unreachable of UNREACHABLE_SHAPES) {
+for (const roots of ROOT_LAYOUTS) {
+  for (const unreachable of UNREACHABLE_MODES) {
     describe.skipIf(unreachable.needsDeniedRead && !CAN_DENY_READ)(
       `${roots.name}, ${unreachable.name}`,
       () => {
@@ -298,7 +298,7 @@ for (const roots of ROOT_SHAPES) {
             // pass, so the setup drives passes until the index has caught up.
             await driveUntilIndexed(SESSIONS.length * 2)
             const detachedIds = detachedPaths.map((_path, index) =>
-              roots === ROOT_SHAPES[0]
+              roots === ROOT_LAYOUTS[0]
                 ? fullSessionId(SESSIONS[index] ?? '')
                 : (SESSIONS[index] ?? '')
             )

@@ -3,6 +3,10 @@
  *
  * Why: heavy fan-out (listWorkItems × repos, org-walks) can drain the core/search buckets; surfacing remaining budget lets users self-regulate rather than throttle.
  * The probe itself is exempt from rate-limit accounting per GitHub docs.
+ *
+ * Part A: breaker stays host/runtime-scoped (not account-scoped). Bound-account
+ * calls can trip a host breaker that ambient reset probes later clear — known
+ * cross-account bleed, accepted for Part A.
  */
 import type {
   GetRateLimitResult,

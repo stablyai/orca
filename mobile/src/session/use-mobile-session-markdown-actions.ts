@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { useClipboardWriter } from '../platform/clipboard'
+import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
@@ -23,6 +23,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     showToast,
     readMarkdownTab
   } = scope
+  const clipboard = useClipboardWriter()
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
@@ -46,11 +47,20 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await Clipboard.setStringAsync(current.localContent)
+      // Caught here because the only caller is `void copyMarkdownLocalContent(...)`: the seam
+      // rejects when the pasteboard refused the text, and an uncaught rejection would leave
+      // "Copied" as the last word on a copy that did not happen.
+      try {
+        await clipboard.writeText(current.localContent)
+      } catch {
+        triggerError()
+        showToast("Couldn't copy", 1500)
+        return
+      }
       triggerSuccess()
       showToast('Copied')
     },
-    [markdownDocs, showToast]
+    [clipboard, markdownDocs, showToast]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {
@@ -138,20 +148,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
-        const response = await client.sendRequest('markdown.saveTab', {
+        const response = await markdownTabSave.request(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        const result = (response as RpcSuccess).result as {
-          content: string
-          version: string
-          isDirty: false
-        }
+        const result = markdownTabSave.interpret(response)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }

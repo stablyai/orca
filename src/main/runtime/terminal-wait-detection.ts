@@ -1,3 +1,4 @@
+import { memoizeTitleClassification } from '../../shared/terminal-title-classification-memo'
 import {
   detectAgentStatusFromTitle,
   isOpenCodeNativeTitle,
@@ -15,7 +16,7 @@ const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'
 const PI_IDLE_PREFIX = '\u03c0 - '
 
-export function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
+function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   const status = detectAgentStatusFromTitle(title)
   if (status !== 'idle') {
     return null
@@ -34,6 +35,14 @@ export function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | 
   }
   return null
 }
+
+/**
+ * Pure in `title`, so it is memoized on the title string like the status classifier it
+ * wraps: the wait path re-asks for the same unchanged title on every poll tick and every
+ * repaint frame, and the marker scan below is a regex sweep each time (~72ns vs ~7ns).
+ */
+export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus | null =
+  memoizeTitleClassification(computeExplicitIdleStatusFromTitle)
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()

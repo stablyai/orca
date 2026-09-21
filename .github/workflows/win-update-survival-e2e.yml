@@ -75,6 +75,12 @@ jobs:
           path: dist/orca-windows-setup.exe
           key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
 
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules. Gated with the
+      # build it feeds, so a cache hit does not pay for an install nothing consumes.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'
         run: |

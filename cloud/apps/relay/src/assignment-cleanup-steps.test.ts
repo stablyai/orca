@@ -16,6 +16,7 @@ function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
     completeReadyEvacuations: method('completeReadyEvacuations'),
     completeReadyRegionalRehomes: method('completeReadyRegionalRehomes'),
     abortExpiredEvacuations: method('abortExpiredEvacuations'),
+    abortUnarrivedRegionalRehomes: method('abortUnarrivedRegionalRehomes'),
     abortExpiredRegionalRehomes: method('abortExpiredRegionalRehomes'),
     reapRegionalRehomeAttempts: method('reapRegionalRehomeAttempts'),
     releaseExpiredActivityLeases: method('releaseExpiredActivityLeases'),
@@ -42,6 +43,7 @@ describe('assignment cleanup steps', () => {
       'refreshRegionalRehomeLeases',
       'completeReadyEvacuations',
       'abortExpiredEvacuations',
+      'abortUnarrivedRegionalRehomes',
       'abortExpiredRegionalRehomes',
       'reapRegionalRehomeAttempts',
       'releaseExpiredActivityLeases',
@@ -55,13 +57,13 @@ describe('assignment cleanup steps', () => {
     )
   })
 
-  it('covers all ten sweeps exactly once per run', async () => {
+  it('covers all eleven sweeps exactly once per run', async () => {
     const { store, calls } = stubStore()
 
     await runAssignmentCleanup(store)
 
-    expect(calls).toHaveLength(10)
-    expect(new Set(calls).size).toBe(10)
-    expect(assignmentCleanupSteps(store)).toHaveLength(10)
+    expect(calls).toHaveLength(11)
+    expect(new Set(calls).size).toBe(11)
+    expect(assignmentCleanupSteps(store)).toHaveLength(11)
   })
 })

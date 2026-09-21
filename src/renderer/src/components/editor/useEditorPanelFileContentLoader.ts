@@ -4,7 +4,7 @@ import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/conn
 import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -205,9 +205,17 @@ export function useEditorPanelFileContentLoader({
           return
         }
         const message = err instanceof Error ? err.message : String(err)
+        // Why: a host may put prose on the message and the machine token on `.code`;
+        // classifiers downstream must see the token, not only its rendering (#21041).
+        const loadErrorCode = err instanceof RuntimeRpcCallError ? err.code : undefined
         setFileContents((prev) => ({
           ...prev,
-          [id]: { content: '', isBinary: false, loadError: message }
+          [id]: {
+            content: '',
+            isBinary: false,
+            loadError: message,
+            ...(loadErrorCode ? { loadErrorCode } : {})
+          }
         }))
       } finally {
         if (outstandingFileReadsRef.current[id] === generation) {

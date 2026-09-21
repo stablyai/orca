@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["OrcaMobileWebShellModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.orcamobilewebshell.OrcaMobileWebShellModule"]
+  }
+}

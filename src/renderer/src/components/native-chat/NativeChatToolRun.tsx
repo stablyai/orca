@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   isToolCallBlock,
+  type NativeChatBackgroundTaskBlock,
   type NativeChatBlock,
   type NativeChatSubagentGroupBlock,
   type NativeChatToolCallBlock
@@ -25,14 +26,22 @@ import {
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
+import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
+import {
+  nativeChatAskRunBlocks,
+  nativeChatAskRunSubject
+} from '../../../../shared/native-chat-ask-row'
+import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
+import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
 import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
 
 /** Stable empty default: a fresh array literal per render breaks memoization. */
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
+const NO_BACKGROUND_TASKS: NativeChatBackgroundTaskBlock[] = []
 
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
  *  expands to the individual inline tool lines. */
@@ -43,6 +52,7 @@ export function NativeChatToolRun({
   revealedDiff,
   onRevealDiff,
   subagentGroups = NO_SUBAGENT_GROUPS,
+  backgroundTasks = NO_BACKGROUND_TASKS,
   expandSignal,
   activeTurnIsWorking,
   expandOverride,
@@ -57,6 +67,8 @@ export function NativeChatToolRun({
   onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
+  /** Background tasks that belong with this run's activity, one row each. */
+  backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** Legacy view-level default; production native-chat entry points pass false. */
   expandSignal: boolean
   /** Per-turn disclosure state controlled by the completed turn status row. */
@@ -88,11 +100,26 @@ export function NativeChatToolRun({
   const subagentRows = subagentGroups
     .filter(isRenderableSubagentGroup)
     .map((group) => <NativeChatSubagentRun key={group.groupId} block={group} />)
-  const callCount = countToolCalls(blocks) || blocks.length
+  // Neither a roster nor a background task is tool activity, so both take every
+  // escape below that the tool header does not: a task row outlives the turn
+  // that started it and is the only durable report of how it ended.
+  const standaloneRows = [
+    ...subagentRows,
+    ...backgroundTasks.map((task) => <NativeChatBackgroundTaskRun key={task.taskId} block={task} />)
+  ]
+  const {
+    asks,
+    unansweredAsks,
+    work: headerBlocks
+  } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
+  const hasAskCall = asks.length > 0
+  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
+  const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
+  const callCount = countToolCalls(headerBlocks) || headerBlocks.length
   // Members stay separate all the way to the markup: joining them into one
   // string is what made a run read as a single call, because the separator also
   // occurs inside tool names like `browser.open` and `tools/read`.
-  const summaryMembers = toolRunSummaryMembers(blocks)
+  const summaryMembers = toolRunSummaryMembers(headerBlocks)
   const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
   // Same content-signature keying the member rows below use: two identical calls
   // in one run are distinguished by occurrence, never by list position.
@@ -105,11 +132,14 @@ export function NativeChatToolRun({
       return { ...member, key: `${signature}:${occurrence}` }
     })
   })()
-  const latestActiveCall = structuredActivityUi
-    ? selectActiveToolCall(blocks, { activeTurnIsWorking })
+  const headerActiveCall = structuredActivityUi
+    ? selectActiveToolCall(headerBlocks, { activeTurnIsWorking })
     : null
-  const isSettled = latestActiveCall == null
-  const hasRunningCall = blocks.some((block) => isToolCallBlock(block) && block.state === 'running')
+  const isSettled = headerActiveCall == null
+  const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
+  const { succeeded: runSucceeded, failedCallCount } = nativeChatToolRunOutcome(headerBlocks, {
+    activeTurnIsWorking
+  })
   // The turn caret opens the activity group while each child tool stays collapsed.
   const expandToolLines = expandOverride === undefined ? open : false
   // Diffing every edit is the run's most expensive work, so a collapsed run —
@@ -135,7 +165,7 @@ export function NativeChatToolRun({
   // spans categories therefore heads with the generic tool glyph. The glyph is
   // fixed once settled, so state rides on the trailing mark — a leading glyph
   // that flipped to a check would read as a change of identity.
-  const settledHeaderIcon = nativeChatToolRunIconName(blocks.filter(isToolCallBlock))
+  const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
     callCount === 1
       ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
@@ -153,7 +183,7 @@ export function NativeChatToolRun({
   // whole transcript — and left the caller, which counts a spawn group as
   // renderable, drawing the empty bubble it explicitly guards against.
   if (blocks.length === 0) {
-    return subagentRows.length > 0 ? <div className="mt-3">{subagentRows}</div> : null
+    return standaloneRows.length > 0 ? <div className="mt-3">{standaloneRows}</div> : null
   }
 
   // Completed turn activity belongs behind the turn-status disclosure. Keeping
@@ -169,15 +199,18 @@ export function NativeChatToolRun({
     // The roster is not tool activity, so it survives this guard exactly as it
     // survives the tool-less escape above — otherwise a group sharing a message
     // with tool calls is dropped from every settled turn.
-    return subagentRows.length > 0 ? <div className="mt-3">{subagentRows}</div> : null
+    return standaloneRows.length > 0 ? <div className="mt-3">{standaloneRows}</div> : null
   }
 
   return (
     // Extra top margin sets the tool run apart from the assistant prose above it
     // so the turn's activity doesn't crowd the message text.
     <div className="mt-3">
-      {subagentRows}
-      {latestActiveCall ? (
+      {standaloneRows}
+      {hasAskCall ? (
+        <NativeChatAwaitingInputRow subject={askSubject} pending={askIsActive} />
+      ) : null}
+      {!showsHeader ? null : headerActiveCall ? (
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -186,12 +219,12 @@ export function NativeChatToolRun({
           aria-live="polite"
         >
           <NativeChatToolIcon
-            mcpIdentity={latestActiveCall.mcpIdentity}
-            rowWord={latestActiveCall.name}
+            mcpIdentity={headerActiveCall.mcpIdentity}
+            rowWord={headerActiveCall.name}
             className="text-muted-foreground"
           />
           <span className="min-w-0 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
-            {nativeChatToolActivityLabel(latestActiveCall)}
+            {nativeChatToolActivityLabel(headerActiveCall)}
           </span>
           {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}
         </button>
@@ -254,8 +287,29 @@ export function NativeChatToolRun({
               {fallbackLabel}
             </span>
           )}
-          {/* A running item cannot inherit completion from its turn. */}
-          {structuredActivityUi && !hasRunningCall ? (
+          {failedCallCount > 0 ? (
+            /* Outside the truncating member list, so the one thing the reader
+               cannot afford to miss survives a pane too narrow to print it.
+               Quiet text in the header's own type, not a destructive tint or a
+               swapped glyph: a tool error is routine work, and the failing
+               line's own detail is one click away. */
+            <span
+              aria-label={translate(
+                'components.native-chat.tool.failedCallsLabel',
+                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCallsLabel,
+                { value0: failedCallCount }
+              )}
+              className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80"
+            >
+              {translate(
+                'components.native-chat.tool.failedCount',
+                NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount,
+                { value0: failedCallCount }
+              )}
+            </span>
+          ) : null}
+          {/* Only a stated success is marked done — see nativeChatToolRunOutcome. */}
+          {structuredActivityUi && runSucceeded ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {/* Chevron is revealed on hover when collapsed and points down when open. */}
@@ -267,14 +321,14 @@ export function NativeChatToolRun({
           />
         </button>
       )}
-      {open ? (
+      {open && showsHeader ? (
         // Members are indented under the header because nothing else marks the
         // run's extent — flush rows are indistinguishable from the blocks after
         // them, so the batch has no visible end.
         <div className="mt-1 pl-4">
           {(() => {
             const seen = new Map<string, number>()
-            return blocks.map((block, blockIndex) => {
+            return headerBlocks.map((block, blockIndex) => {
               const taskList = taskLists?.rows.get(block)
               if (taskList) {
                 return <NativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} />

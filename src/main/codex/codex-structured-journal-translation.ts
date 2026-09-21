@@ -59,8 +59,10 @@ export function createCodexJournalTranslator(
     (threadId, turnId) => genericFrames.suppress(threadId, turnId)
   )
   const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
-  const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
-    items.detailFor(threadId, itemId)
+  const prompts = new CodexJournalPrompts(
+    deps,
+    (threadId, itemId) => items.detailFor(threadId, itemId),
+    (threadId) => activeTurns.current(threadId)
   )
   const subagents = new CodexSubagentRoster({
     sink: deps.sink,
@@ -82,6 +84,8 @@ export function createCodexJournalTranslator(
     primaryThreadId: () => deps.primaryThreadId?.() ?? null,
     activeTurns,
     items,
+    pendingPrompts: prompts.pending,
+    ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
     ...(deps.now ? { now: deps.now } : {})
@@ -158,13 +162,13 @@ export function createCodexJournalTranslator(
           currentTurnIds: activeTurns.byThread,
           primaryThreadId: deps.primaryThreadId?.() ?? null,
           ordinals: items.ordinals,
+          // The host saw the child go, not what Codex made of the turn, so the row
+          // carries no outcome: the end is observed, the verdict is unknown.
           settledTurnLifecycle: (threadId, turnId) =>
-            turnBoundaries.settled(
-              threadId,
-              turnId,
-              'interrupted',
-              event.observedAt ?? deps.now?.() ?? Date.now()
-            )
+            turnBoundaries.settled(threadId, turnId, {
+              state: 'interrupted',
+              completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
+            })
         })
         if (!admission.accepted) {
           return admission
@@ -178,7 +182,7 @@ export function createCodexJournalTranslator(
         deps.sink.setActivity?.(null)
         items.activeItems.clear()
         prompts.pending.clear()
-        activeTurns.clear()
+        turnBoundaries.clear()
         compactions.clear()
         goals.clear()
         return CODEX_JOURNAL_ADMITTED
@@ -253,6 +257,23 @@ export function createCodexJournalTranslator(
           return publishActivity(event, subagentAdmission)
         }
         const translated = items.handle(event)
+        if (translated.handled && translated.dispatchEcho) {
+          const { clientMessageId, providerIdentity } = translated.dispatchEcho
+          const requestOrigin = deps.dispatchRequestOrigin?.(clientMessageId) ?? null
+          if (requestOrigin !== null && providerIdentity.provider === 'codex') {
+            const attribution = turnBoundaries.attributeRequest({
+              sessionId: event.sessionId,
+              clientMessageId,
+              threadId: providerIdentity.threadId,
+              turnId: providerIdentity.turnId,
+              requestOrigin
+            })
+            if (!attribution.accepted) {
+              return attribution
+            }
+          }
+          deps.onUserMessageEcho?.(clientMessageId, providerIdentity)
+        }
         return publishActivity(
           event,
           translated.handled
@@ -269,6 +290,7 @@ export function createCodexJournalTranslator(
         genericFrames.appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
       )
     },
+    cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
     flush: () => {
       items.streams.flush()
@@ -279,7 +301,7 @@ export function createCodexJournalTranslator(
       prompts.dispose()
       genericFrames.dispose()
       subagents.dispose()
-      activeTurns.clear()
+      turnBoundaries.clear()
       compactions.clear()
       goals.dispose()
     }

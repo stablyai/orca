@@ -268,7 +268,6 @@ describe('codex journal translation', () => {
     expect(tap.rows.map((row) => row.body)).toEqual([
       expect.objectContaining({ kind: 'turn', turnId: 'turn-stale', state: 'running' }),
       expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'running' }),
-      expect.objectContaining({ text: 'Provider exited: app-server exited' }),
       expect.objectContaining({ kind: 'turn', turnId: 'turn-stale', state: 'interrupted' }),
       expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'interrupted' })
     ])
@@ -440,14 +439,13 @@ describe('codex journal translation', () => {
 
     expect(tap.rows.map((row) => row.body)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ blocks: [{ type: 'text', text: 'half' }] }),
-        { kind: 'status', text: 'Provider exited: app-server exited' }
+        expect.objectContaining({ blocks: [{ type: 'text', text: 'half' }] })
       ])
     )
     expect(window.idle()).toBe(true)
   })
 
-  it('settles tools, prompts, exit status, and turn lifecycle in one ordered batch', () => {
+  it('settles tools, prompts, and turn lifecycle in one ordered batch', () => {
     const tap = recorder()
     const batches: { settlementId: string; mutations: unknown[] }[] = []
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
@@ -499,10 +497,6 @@ describe('codex journal translation', () => {
           kind: 'approval',
           resolution: expect.objectContaining({ state: 'cancelled' })
         })
-      }),
-      expect.objectContaining({
-        kind: 'item',
-        body: { kind: 'status', text: 'Provider exited: lost child' }
       }),
       expect.objectContaining({
         kind: 'item',

@@ -107,7 +107,7 @@ vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).pty
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/workspace/repo'
-const LOCAL_HOST_ID = 'local'
+const LOCAL_HOST_ID = 'local' as const
 
 function worktree(path: string, overrides: Partial<GitWorktreeInfo> = {}): GitWorktreeInfo {
   return {

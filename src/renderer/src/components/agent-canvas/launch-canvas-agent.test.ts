@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.host = 'local'
   mocks.route.mockReturnValue({ kind: 'resolved', route: { runtimeEnvironmentId: null } })
-  mocks.local.mockReturnValue({ tabId: 'new-terminal' })
+  mocks.local.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-terminal' } })
 })
 describe('canvas agent launch', () => {
   it('uses the existing launcher and keeps the canvas selected', async () => {

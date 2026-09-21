@@ -63,14 +63,12 @@ function serializedLifecycleBatchFits(
     fence: Number.MAX_SAFE_INTEGER,
     ts: Number.MAX_SAFE_INTEGER,
     settlementId,
-    mutations: mutations.map(lifecycleMutationRowShape)
+    mutations: mutations.map(toLifecycleMutationRow)
   }
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
 }
 
-function lifecycleMutationRowShape(
-  mutation: JournalLifecycleMutationInput
-): JournalLifecycleMutation {
+function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): JournalLifecycleMutation {
   const itemId = agentJournalItemKey(mutation.identity)
   return mutation.kind === 'item'
     ? {

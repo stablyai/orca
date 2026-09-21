@@ -1,3 +1,4 @@
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { CANVAS_CONTEXT_RESPONSE_HEADER } from '../../../shared/canvas-agent-context'
@@ -119,9 +120,22 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
             })
           : 'suppress'
         if (normalized.event && statusDisposition !== 'suppress') {
+          const restartedAuthority =
+            statusDisposition === 'restart' && source === 'omp'
+              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
+              : undefined
           const event =
             statusDisposition === 'restart'
-              ? { ...normalized.event, launchToken: undefined }
+              ? {
+                  ...normalized.event,
+                  launchToken: undefined,
+                  ...(restartedAuthority
+                    ? {
+                        ...restartedAuthority,
+                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
+                      }
+                    : {})
+                }
               : normalized.event
           if (statusDisposition === 'restart') {
             // Why: a retired pane accepting a new turn is a different agent session behind the
@@ -130,19 +144,21 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           }
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
-          if (req.headers[CANVAS_CONTEXT_RESPONSE_HEADER] === '1') {
-            const payload = (aliasedBody as { payload?: unknown }).payload
-            const raw = typeof payload === 'string' ? parseAgentHookJson(payload) : payload
-            const response =
-              raw && typeof raw === 'object'
-                ? await this.canvasContexts.response(source, event, raw as Record<string, unknown>)
-                : null
-            if (response) {
-              res.writeHead(200, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify(response))
-              return
+          if (enriched) {
+            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+            this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+            if (req.headers[CANVAS_CONTEXT_RESPONSE_HEADER] === '1') {
+              const payload = (aliasedBody as { payload?: unknown }).payload
+              const raw = typeof payload === 'string' ? parseAgentHookJson(payload) : payload
+              const response =
+                raw && typeof raw === 'object'
+                  ? await this.canvasContexts.response(source, event, raw as Record<string, unknown>)
+                  : null
+              if (response) {
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify(response))
+                return
+              }
             }
           }
         }
@@ -239,6 +255,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.ownerStateInitialized = false
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     clearAllListenerCaches(this.state)
+    this.resetCanonicalStatus()
     this.notifyStatusChangeListeners()
     this.paneStatusClearListeners.clear()
     this.statusDropListeners.clear()

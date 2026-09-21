@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
-import { Image, Linking, Pressable, Text, View } from 'react-native'
+import { Image, Pressable, Text, View } from 'react-native'
+import { openExternalLink } from '../../platform/external-link'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type {
   GitHubReaction,
@@ -140,7 +141,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         {comment.url ? (
           <Pressable
             style={styles.openButton}
-            onPress={() => void Linking.openURL(comment.url).catch(() => {})}
+            onPress={() => openExternalLink(comment.url)}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Open comment on GitHub"

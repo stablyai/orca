@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  hasSemanticallyNonEmptyAgentArgs,
+  hasExplicitTuiLaunchCommand,
   resolveAgentLaunchRoute,
   structuredAgentLaunchSupported
 } from './agent-launch-routing'
@@ -96,7 +94,7 @@ describe('resolveAgentLaunchRoute', () => {
     // openclaude and grok render native chat but have no structured adapter.
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
-    expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
+    expect(route({ requiresTuiLaunchCommand: true })).toBe('legacy-native-chat')
   })
 
   it.each([
@@ -147,21 +145,13 @@ describe('resolveAgentLaunchRoute', () => {
     ).toBe('legacy-native-chat')
   })
 
-  it('normalizes semantically empty argument and settings customization', () => {
-    expect(hasSemanticallyNonEmptyAgentArgs('  \n\t')).toBe(false)
-    expect(
-      hasExplicitTuiLaunchCustomization(
-        { agentCmdOverrides: {}, agentDefaultArgs: { codex: '   ' }, agentDefaultEnv: {} },
-        'codex'
-      )
-    ).toBe(false)
-  })
-
-  it('does not classify the resolved default TUI args as customization', () => {
-    expect(hasExplicitTuiAgentArgs('codex', '--dangerously-bypass-approvals-and-sandbox')).toBe(
+  it('treats a whitespace-only command override as no override', () => {
+    expect(hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: '   ' } }, 'codex')).toBe(
       false
     )
-    expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
+    expect(
+      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'codex-nightly' } }, 'codex')
+    ).toBe(true)
   })
 })
 

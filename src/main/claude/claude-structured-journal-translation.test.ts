@@ -220,10 +220,15 @@ describe('Claude structured journal translation', () => {
     for (const event of turn.start) {
       translator.handle(event)
     }
+    expect(lifecycleAppends(state.items)).toEqual([
+      ['turn-lifecycle:msg_01-message-start', 'running']
+    ])
+    expect(assistantMessages(state.items)).toEqual([])
+
     for (const delta of turn.deltas) {
       translator.handle(delta)
     }
-    expect(state.items).toEqual([])
+    expect(assistantMessages(state.items)).toEqual([])
 
     const run = scheduled as (() => void) | null
     run?.()
@@ -302,6 +307,53 @@ describe('Claude structured journal translation', () => {
       blocks: [{ type: 'text', text: numbers.join('\n') }]
     })
     expect(providerFrameKinds(items)).toEqual([])
+  })
+
+  it('restores a cancelled prompt as terminal history after reopening the journal', async () => {
+    const journal = await openAgentSessionJournal({
+      identity: JOURNAL_IDENTITY,
+      journalDir: journalRoot,
+      now: () => 1_700_000_000_000,
+      mintEpoch: () => 'epoch-1'
+    })
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+    deferred.bind({ journal, fence: 1, publish: vi.fn() })
+    const translator = createClaudeJournalTranslator({ sink: deferred.sink })
+    const approval = prompt({
+      requestId: 'permission-1',
+      promptKey: 'permission-1',
+      toolUseId: 'tool-1',
+      toolName: 'Bash',
+      kind: 'approval',
+      input: { command: 'git status' },
+      questionIds: []
+    })
+
+    translator.handle({ type: 'prompt', sessionId: 'orca-session', prompt: approval })
+    translator.handle({
+      type: 'prompt-cancelled',
+      sessionId: 'orca-session',
+      promptKey: approval.promptKey
+    })
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    deferred.close()
+    await journal.close()
+
+    const reopened = await openAgentSessionJournal({
+      identity: JOURNAL_IDENTITY,
+      journalDir: journalRoot,
+      now: () => 1_700_000_000_000,
+      mintEpoch: () => 'epoch-2'
+    })
+    expect(reopened.snapshot().items).toEqual([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          kind: 'approval',
+          resolution: expect.objectContaining({ state: 'cancelled' })
+        })
+      })
+    ])
+    await reopened.close()
   })
 
   it('settles result frames, empty thinking and string user replays without painting a row', () => {
@@ -430,6 +482,12 @@ describe('Claude structured journal translation', () => {
     })
     // The turn still settles: the error is an extra row, not a stuck lifecycle.
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
+    // The arm stays `completed` on purpose — the host watched this turn finish —
+    // and `outcome` is the only thing that says it failed. Widening the arm
+    // instead would move every reader that switches on it.
+    expect(state.items.findLast((item) => item.identity.provider === 'legacy')?.body).toMatchObject(
+      { kind: 'turn', state: 'completed', outcome: 'failure' }
+    )
   })
 
   it('drops the stream state of turns that ended without their final frame', () => {
@@ -568,7 +626,11 @@ describe('Claude structured journal translation', () => {
 
     translator.handle(message('assistant', 'assistant-thinking', [{ type: 'thinking', thinking }]))
 
-    expect(state.items.at(-1)?.body).toEqual({
+    // The frame also opens the turn it produced in, so pick the reasoning row itself.
+    const reasoning = state.items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'reasoning'
+    )
+    expect(reasoning?.body).toEqual({
       kind: 'message',
       role: 'reasoning',
       blocks: [
@@ -790,7 +852,11 @@ describe('Claude structured journal translation', () => {
       sessionId: 'orca-session',
       promptKey: 'questions-1'
     })
-    expect(state.tombstones).toHaveLength(1)
+    expect(state.items.at(-1)?.body).toMatchObject({
+      kind: 'question',
+      resolution: { state: 'cancelled' }
+    })
+    expect(state.tombstones).toHaveLength(0)
   })
 })
 

@@ -107,6 +107,40 @@ describe('runtime terminal handle incarnation fencing', () => {
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({ handle, status: 'running' })
   })
 
+  it('keeps a listed handle when graph sync learns the incarnation after issue', async () => {
+    // Daemon-hosted PTYs are recorded from first output before the spawn commit reports an
+    // incarnation, so the handle is issued un-fenced and must survive learning it.
+    const { runtime } = makeRuntime()
+    runtime.registerPty(PTY_ID, WORKTREE_ID, 'target', { tabId: TAB_ID, leafId: LEAF_ID })
+    syncGraph(runtime)
+    const [listed] = (await runtime.listTerminals()).terminals
+
+    register(runtime, 'incarnation-learned')
+    syncGraph(runtime)
+
+    await expect(runtime.readTerminal(listed.handle)).resolves.toMatchObject({
+      handle: listed.handle,
+      status: 'running'
+    })
+  })
+
+  it('stales a listed handle when graph sync sees a replaced incarnation', async () => {
+    const { runtime } = makeRuntime()
+    register(runtime, 'incarnation-old')
+    syncGraph(runtime)
+    const [listed] = (await runtime.listTerminals()).terminals
+
+    // Rotate the record directly so reconcile is the only fence exercised.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test reaches the runtime's protected pty record map to bypass the registerPty fence.
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { incarnationId: string | null }>
+    }
+    internals.ptysById.get(PTY_ID)!.incarnationId = 'incarnation-new'
+    syncGraph(runtime)
+
+    await expect(runtime.readTerminal(listed.handle)).rejects.toThrow('terminal_handle_stale')
+  })
+
   it('invalidates a direct handle when a reused PTY id gets a new incarnation', async () => {
     const { runtime, writes } = makeRuntime()
     const staleHandle = runtime.preAllocateHandleForPty(PTY_ID)

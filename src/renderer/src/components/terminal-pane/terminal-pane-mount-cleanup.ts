@@ -61,6 +61,7 @@ export function cleanupTerminalPaneMount(args: {
   disposeAll(refs.fileLinkClickFallbackDisposablesRef.current)
   disposeAll(refs.httpLinkClickFallbackDisposablesRef.current)
   disposeAll(refs.selectionDisposablesRef.current)
+  disposeAll(refs.nativeCopyDisposablesRef.current)
   for (const timer of refs.selectionCaptureTimersRef.current.values()) {
     window.clearTimeout(timer)
   }

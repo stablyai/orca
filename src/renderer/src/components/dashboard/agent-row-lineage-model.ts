@@ -90,19 +90,14 @@ export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
   }
 
   const reachablePaneKeys = new Set<string>()
-  const markReachable = (row: T, ancestorPaneKeys: ReadonlySet<string> = new Set()): void => {
-    if (reachablePaneKeys.has(row.paneKey) || ancestorPaneKeys.has(row.paneKey)) {
-      return
-    }
-    reachablePaneKeys.add(row.paneKey)
-    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
-    descendantAncestorPaneKeys.add(row.paneKey)
-    for (const childRow of childrenByParentPaneKey.get(row.paneKey) ?? []) {
-      markReachable(childRow, descendantAncestorPaneKeys)
-    }
-  }
   for (const rootRow of rootRows) {
-    markReachable(rootRow)
+    reachablePaneKeys.add(rootRow.paneKey)
+  }
+  // Set iteration visits newly added descendants once, including cyclic/duplicate edges.
+  for (const paneKey of reachablePaneKeys) {
+    for (const childRow of childrenByParentPaneKey.get(paneKey) ?? []) {
+      reachablePaneKeys.add(childRow.paneKey)
+    }
   }
 
   const unreachableRows = rows.filter((row) => !reachablePaneKeys.has(row.paneKey))
@@ -112,20 +107,16 @@ export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
 
   const normalizedChildrenByParentPaneKey = new Map(childrenByParentPaneKey)
   const normalizedChildPaneKeys = new Set(childPaneKeys)
+  const promotedPaneKeys = new Set<string>()
   for (const row of unreachableRows) {
-    if (!rootRows.some((rootRow) => rootRow.paneKey === row.paneKey)) {
-      rootRows.push(row)
+    if (promotedPaneKeys.has(row.paneKey)) {
+      continue
     }
+    promotedPaneKeys.add(row.paneKey)
+    rootRows.push(row)
     normalizedChildPaneKeys.delete(row.paneKey)
+    // Every child of a reachable parent is reachable, so only these parent lists need removal.
     normalizedChildrenByParentPaneKey.delete(row.paneKey)
-    for (const [parentPaneKey, siblings] of normalizedChildrenByParentPaneKey) {
-      const visibleSiblings = siblings.filter((sibling) => sibling.paneKey !== row.paneKey)
-      if (visibleSiblings.length === 0) {
-        normalizedChildrenByParentPaneKey.delete(parentPaneKey)
-      } else if (visibleSiblings.length !== siblings.length) {
-        normalizedChildrenByParentPaneKey.set(parentPaneKey, visibleSiblings)
-      }
-    }
   }
 
   return {

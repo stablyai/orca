@@ -7,7 +7,8 @@ import {
   classifyPrJobs,
   isDocsOnlyPath,
   PR_CHECK_JOBS,
-  shouldRunPrChecks
+  shouldRunPrChecks,
+  STATIC_ANALYSIS_SCAN_ROOTS
 } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -254,6 +255,39 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the mobile web app job for the builder, the page source and the shell policy', () => {
+    for (const file of [
+      'config/scripts/build-mobile-web-app-bundle.mjs',
+      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'mobile/web-entry/index.tsx',
+      'mobile/app/h/[hostId]/index.tsx',
+      'mobile/src/transport/client-context.web.tsx',
+      'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      // The vendored Expo module the page resolves a .web.ts out of.
+      'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
+    ]) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(true)
+    }
+  })
+
+  it('runs it on a mobile-only diff, which should_run alone would skip', () => {
+    const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
+    expect(classified.should_run).toBe(false)
+    expect(classified.mobile_web_app).toBe(true)
+  })
+
+  it('needs no package.json prefix, because package.json already forces every job', () => {
+    // build:mobile-web:app is defined there, so the job has to run on an edit to it. A prefix
+    // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
+    expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
+  })
+
+  it('leaves it off for changes that cannot reach the page', () => {
+    for (const file of ['docs/reference/x.md', 'src/main/orcad/orcad-native-preflight.ts']) {
+      expect(classifyPrJobs([file]).mobile_web_app, file).toBe(false)
+    }
+  })
+
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
@@ -327,11 +361,41 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
     ).toBe(true)
-    // Why false: a mobile-only diff skips every desktop job, so the install step's own
-    // job never runs and claiming the install is needed contradicts should_run.
-    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
+    // Why true: a mobile-only diff still skips the desktop suite, but the repo-wide audits lint
+    // mobile/, so static analysis runs and its changed-code pass needs the mobile types.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(true)
     expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
-    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(true)
+  })
+
+  // Why: `mobile/` is desktop-irrelevant for every other job, so a mobile-only diff used to skip
+  // the audits that do lint it. That is how #20702 landed two duplicate imports which then failed
+  // this gate on every later PR's merge ref until #20895 swept them.
+  it('runs static analysis for a mobile-only diff without dragging in the desktop suite', () => {
+    const result = classifyPrJobs([
+      'mobile/src/test-support/rpc-recording/adapters/push-registration-mount-adapters.ts'
+    ])
+    expect(result.static_analysis).toBe(true)
+    expect(result.mobile_dependencies).toBe(true)
+    expect(result.should_run).toBe(false)
+    for (const job of ['typecheck', 'test', 'package', 'package_windows', 'git_compatibility']) {
+      expect(result[job], job).toBe(false)
+    }
+  })
+
+  // The ratchet: adding a tree to an audit command has to widen this trigger on its own.
+  it('runs static analysis for every tree the audit commands scan', () => {
+    expect(STATIC_ANALYSIS_SCAN_ROOTS).toEqual(
+      expect.arrayContaining(['src', 'config', 'tests', 'mobile'])
+    )
+    for (const root of STATIC_ANALYSIS_SCAN_ROOTS) {
+      expect(classifyPrJobs([`${root}/changed-file.ts`]).static_analysis, root).toBe(true)
+    }
+  })
+
+  it('leaves diffs the audits never read out of static analysis', () => {
+    expect(classifyPrJobs(['README.md']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {
@@ -425,13 +489,24 @@ describe('PR Checks skip wiring', () => {
       '${{ steps.filter.outputs.mobile_dependencies }}'
     )
     const steps = prWorkflow.jobs.static_analysis.steps
-    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-mobile-dependencies'
+    )
     const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
     expect(install).toBeGreaterThan(-1)
     expect(install).toBeLessThan(gate)
     expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
-    expect(steps[install]['working-directory']).toBe('mobile')
-    expect(steps[install].run).toContain('--frozen-lockfile')
+    // The install itself moved into the action the packaging jobs share; assert it there so
+    // this job cannot keep the step while the action stops installing anything.
+    const action = parse(
+      readFileSync(
+        join(projectDir, '.github/actions/install-mobile-dependencies/action.yml'),
+        'utf8'
+      )
+    )
+    const [installStep] = action.runs.steps
+    expect(installStep['working-directory']).toBe('mobile')
+    expect(installStep.run).toContain('--frozen-lockfile')
   })
 
   it('keeps the cheap root-directory guard on docs-only PRs', () => {

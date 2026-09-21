@@ -1,0 +1,676 @@
+{
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "fa69748b6d0e29abc37757b48bcb22dac07af1686554200ceaf18b4e3d62e4ac",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "046968b3bb5e": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "06e55827ea7c": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "345c82f8165d": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "350e6f28e830": {
+      "failure": "outer refused",
+      "path": "unsaved"
+    },
+    "386081a78bad": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4c903e2be871": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "50f96603667c": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "53a2a256b500": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "5f0bdbce1ddf": {
+      "failure": "",
+      "path": "unsaved"
+    },
+    "67b442005898": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (clipboard.saveImageAsTempFile)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "7a9387a4c64a": {
+      "failure": "transport failure",
+      "path": "unsaved"
+    },
+    "7bc2e4227914": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "7f1260e77032": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "/tmp/legacy.png"
+    },
+    "83066435034c": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": "/tmp/legacy.png"
+        }
+      }
+    },
+    "90ff7c821047": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "923de2c0221d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "path": "/tmp/legacy.png"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bf02ba1bc517": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}"
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "e939e5e1437a": {
+      "failure": "Unknown method",
+      "path": "unsaved"
+    },
+    "e9e0139b9fa1": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "f100a8a8f589": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "fa3470507c98": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ff4c5fd9c1aa": {
+      "failure": "The host sent a reply this app could not read (clipboard.saveImageAsTempFile)",
+      "path": "unsaved"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-clipboard.image-upload-clipboard.saveimageastempfile-1",
+    "checkpoints": [
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.normal:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "83066435034c"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "7f1260e77032"
+          },
+          "state": "923de2c0221d",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.result-absent:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "90ff7c821047"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "67b442005898"
+          },
+          "state": "ff4c5fd9c1aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.result-null:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "06e55827ea7c"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "67b442005898"
+          },
+          "state": "ff4c5fd9c1aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.inner-ok-missing:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "386081a78bad"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "67b442005898"
+          },
+          "state": "ff4c5fd9c1aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.inner-false-string-error:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "f100a8a8f589"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "67b442005898"
+          },
+          "state": "ff4c5fd9c1aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.inner-false-object-error:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "e9e0139b9fa1"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "67b442005898"
+          },
+          "state": "ff4c5fd9c1aa",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.outer-refused:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "345c82f8165d"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "32a7c0ae7918"
+          },
+          "state": "350e6f28e830",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.outer-refused-no-message:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "046968b3bb5e"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "f3b516f62081"
+          },
+          "state": "5f0bdbce1ddf",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.method-not-found:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "53a2a256b500"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "b948e8307e81"
+          },
+          "state": "e939e5e1437a",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.transport-rejection:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "4c903e2be871"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "a947768bc0ed"
+          },
+          "state": "7a9387a4c64a",
+          "effects": []
+        }
+      },
+      {
+        "id": "clipboard-image-upload-single-frame-fallback.transport-rejection-no-message:fell-back",
+        "observation": {
+          "sender": ["fa3470507c98", "50f96603667c"],
+          "payloads": ["7bc2e4227914", "bf02ba1bc517"],
+          "settlements": {
+            "remote": "c7584e82c72f"
+          },
+          "state": "5f0bdbce1ddf",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

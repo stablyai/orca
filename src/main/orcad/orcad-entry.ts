@@ -25,6 +25,13 @@ import {
 } from './orcad-bind-address'
 import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instance-lock'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
+import { parseArgs } from './orcad-command-arguments'
+import {
+  changedAiVaultSearchSettings,
+  type AiVaultSearchSettings
+} from '../../shared/ai-vault-search-settings'
+
+export { parseArgs }
 
 let runOrcadQuitHandlers = (): void => {}
 
@@ -202,6 +209,10 @@ async function startOrcadRuntime(
   // registerPtyHandlers so the IPC layer routes through the daemon from the first call.
   await startOrcadDaemon()
 
+  // Why a holder and not a direct reference: the index is installed after the runtime is
+  // constructed, and the deps hook is only ever called later, from an RPC.
+  let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
+
   const runtime = new OrcaRuntimeService(store, undefined, {
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
     // reference would freeze the pre-daemon one.
@@ -233,14 +244,29 @@ async function startOrcadRuntime(
     // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     structuredAgentStatusSink: {
-      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
-      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+      publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject)
     },
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
     buildAgentHookPtyEnv: () =>
-      isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {}
+      isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+    // Why the dedupe here and not in the instance: `apply` closes and reconstructs
+    // unconditionally, so an unchanged value would restart a healthy index.
+    applySessionSearchSettings: (before, after) => {
+      const next = changedAiVaultSearchSettings(before, after)
+      if (next) {
+        sessionSearch?.apply(next)
+      }
+    }
   })
+
+  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
+  sessionSearch = await installOrcadSessionSearchService({
+    userDataPath: runtimeUserDataPath,
+    getSettings: () => store.getSettings()
+  })
+  getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
   // pane's status row changes, and orcad's whole job is serving paired clients.
@@ -336,43 +362,6 @@ async function startOrcadRuntime(
   })
 
   return { readiness }
-}
-
-export function parseArgs(argv: string[]): OrcadOptions {
-  const options: OrcadOptions = {}
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]
-    if (arg === '--port') {
-      const raw = argv[i + 1]
-      const port = Number(raw)
-      if (!Number.isInteger(port) || port < 0 || port > 65535) {
-        throw new Error(`--port expects an integer 0-65535, got ${raw ?? "''"}`)
-      }
-      options.port = port
-      i += 1
-    } else if (arg === '--json') {
-      options.json = true
-    } else if (arg === '--no-pairing') {
-      options.noPairing = true
-    } else if (arg === '--bind') {
-      const value = argv[i + 1]
-      if (value === undefined) {
-        throw new Error('--bind expects a value')
-      }
-      options.bind = value
-      i += 1
-    } else if (arg === '--pairing-address') {
-      const value = argv[i + 1]
-      if (!value) {
-        throw new Error('--pairing-address expects a value')
-      }
-      options.pairingAddress = value
-      i += 1
-    } else {
-      throw new Error(`Unknown argument: ${arg}`)
-    }
-  }
-  return options
 }
 
 /**

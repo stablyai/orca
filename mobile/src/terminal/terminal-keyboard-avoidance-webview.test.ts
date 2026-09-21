@@ -1,16 +1,16 @@
-import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
-import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
+import {
+  documentScopePreamble,
+  generatedDocumentModule
+} from './document/generated-document-region.test-support'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
-import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
+import { XTERM_HTML } from './terminal-webview-html'
 
-const terminalHtmlSource = readTerminalWebViewHtmlSource()
-const reflowSource = readFileSync(
-  new URL('./terminal-webview-reflow-injected.ts', import.meta.url),
-  'utf8'
-)
+const terminalHtmlSource = XTERM_HTML
+// The scope object plus the metrics block, exactly as the document carries them.
+const keyboardAvoidanceMetricsScript = `${documentScopePreamble()}\nscope.term = term;\n${await generatedDocumentModule('keyboard-avoidance-metrics')}`
 
 type Cell = { isBgDefault: () => boolean; isInverse: () => number }
 type MetricsNotification = {
@@ -48,17 +48,15 @@ function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScree
     notify: (message: Record<string, unknown>) => notifications.push(message),
     term: { buffer: { active: buffer }, cols: 10, rows: lines.length }
   }
-  new Script(
-    `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
-  ).runInNewContext(context)
+  new Script(`${keyboardAvoidanceMetricsScript}\nemitKeyboardAvoidanceMetrics();`).runInNewContext(
+    context
+  )
   return notifications[0] as MetricsNotification
 }
 
 function runTerminalMetrics(term: Terminal) {
   const notifications: Record<string, unknown>[] = []
-  new Script(
-    `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
-  ).runInNewContext({
+  new Script(`${keyboardAvoidanceMetricsScript}\nemitKeyboardAvoidanceMetrics();`).runInNewContext({
     notify: (message: Record<string, unknown>) => notifications.push(message),
     term
   })
@@ -193,17 +191,19 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
 
   it('refreshes metrics after every buffer geometry reset', () => {
     const resizeStart = terminalHtmlSource.indexOf('  function resize(cols, rows)')
-    const resizeEnd = terminalHtmlSource.indexOf('\n  // reflow()', resizeStart)
-    const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
+    const resizeEnd = terminalHtmlSource.indexOf('\n  function reflow(', resizeStart)
+    const clearStart = terminalHtmlSource.indexOf('} else if (msg.type === "clear") {')
+    const clearEnd = terminalHtmlSource.indexOf('} else if (msg.type === "measure")', clearStart)
     const textScaleStart = terminalHtmlSource.indexOf('  function applyTextScale(scale)')
-    const textScaleEnd = terminalHtmlSource.indexOf('\n  var panX', textScaleStart)
+    const textScaleEnd = terminalHtmlSource.indexOf('\n  scope.panX', textScaleStart)
+    const reflowStart = terminalHtmlSource.indexOf('  function reflow(cols, rows)')
+    const reflowEnd = terminalHtmlSource.indexOf('\n  function notify(', reflowStart)
 
     for (const block of [
       terminalHtmlSource.slice(resizeStart, resizeEnd),
       terminalHtmlSource.slice(clearStart, clearEnd),
       terminalHtmlSource.slice(textScaleStart, textScaleEnd),
-      reflowSource
+      terminalHtmlSource.slice(reflowStart, reflowEnd)
     ]) {
       expect(block.indexOf('emitKeyboardAvoidanceMetrics()')).toBeGreaterThan(
         block.includes('term.resize') ? block.indexOf('term.resize') : block.indexOf('term.reset')

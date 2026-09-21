@@ -1,3 +1,4 @@
+import { createTerminalStartupTiming } from '../terminal-startup-timing'
 import type { PtyReplayDataMeta } from '../pty-transport'
 import type { PtyTransportRecoveryState } from '../pty-transport-types'
 import type { PtyDataMeta } from '../pty-dispatcher'
@@ -27,6 +28,15 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
       // stream's queued callback runs; only the registered transport may
       // mutate pane-scoped error/recovery state.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+    session.startupTiming?.finish('replaced')
+    session.startupTiming = createTerminalStartupTiming({
+      paneKey: session.cacheKey,
+      generation,
+      getPtyId: () => session.transport.getPtyId(),
+      isCurrent,
+      isForeground: () => session.deps.isVisibleRef.current,
+      onRender: (callback) => session.pane.terminal.onRender(callback)
+    })
     return {
       generation,
       callbacks: {
@@ -37,6 +47,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         },
         onConnect: (): void => {
           if (isCurrent()) {
+            session.startupTiming?.mark('connected')
             session.reportRemoteRendererSerializerReady()
             // Re-derive the pause bit after a rebind; visibility can change while no PTY is bound.
             session.syncHiddenRendererPtyDelivery()
@@ -49,6 +60,9 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         },
         onData: (data: string, meta?: PtyDataMeta): void => {
           if (isCurrent()) {
+            if (data.length > 0) {
+              session.startupTiming?.mark('liveData')
+            }
             processExitState.detector.observe(data)
             session.dataCallback(data, meta, generation)
           }
@@ -60,6 +74,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         },
         onError: (message: string): void => {
           if (isCurrent()) {
+            session.startupTiming?.finish('error')
             onError(message)
           }
         },

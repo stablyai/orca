@@ -1,32 +1,9 @@
 import { Buffer } from 'node:buffer'
-import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBrowserScreencastFrame } from '../../shared/browser-screencast-protocol'
 import { startBrowserScreencast } from './browser-screencast-stream'
-
-function createMockWebContents() {
-  let attached = false
-  const dbg = new EventEmitter() as EventEmitter & {
-    isAttached: ReturnType<typeof vi.fn>
-    attach: ReturnType<typeof vi.fn>
-    detach: ReturnType<typeof vi.fn>
-    sendCommand: ReturnType<typeof vi.fn>
-  }
-  dbg.isAttached = vi.fn(() => attached)
-  dbg.attach = vi.fn(() => {
-    attached = true
-  })
-  dbg.detach = vi.fn(() => {
-    attached = false
-  })
-  dbg.sendCommand = vi.fn(async () => ({}))
-
-  return {
-    isDestroyed: vi.fn(() => false),
-    debugger: dbg
-  }
-}
+import { createMockScreencastWebContents as createMockWebContents } from './browser-screencast-web-contents-test-double'
 
 function jpegWithSize(width: number, height: number): Buffer {
   return Buffer.from([

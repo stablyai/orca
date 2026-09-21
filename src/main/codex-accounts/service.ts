@@ -80,6 +80,9 @@ function killLoginProcessTree(
 export class CodexAccountService {
   // Why: serialize the read-modify-write of settings; overlapping calls (e.g. double-click Add) would lose updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private cancelPendingCodexLogin: (() => boolean) | null = null
+  private pendingLoginUrl: string | null = null
+  private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
   private readonly identity: CodexAccountIdentity
   private readonly configMirror: CodexConfigMirror
   private readonly managedHomePaths: CodexManagedHomePath
@@ -161,7 +164,44 @@ export class CodexAccountService {
   }
 
   async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.add(target))
+  }
+
+  /** Abandons the login waiting on a browser, if any. True when one was stopped. */
+  cancelPendingLogin(): boolean {
+    return this.cancelPendingCodexLogin?.() ?? false
+  }
+
+  /** The sign-in link of the login waiting on a browser, for a late-joining renderer. */
+  getPendingLoginUrl(): string | null {
+    return this.pendingLoginUrl
+  }
+
+  /** Registration lasts the process's lifetime; there is no teardown to hand back. */
+  onPendingLoginUrlChanged(listener: (url: string | null) => void): void {
+    this.pendingLoginUrlListeners.add(listener)
+  }
+
+  private setPendingLoginUrl(url: string | null): void {
+    // Why the guard: every login that ends before printing a link clears an
+    // already-empty value, and each change reaches every window.
+    if (this.pendingLoginUrl === url) {
+      return
+    }
+    this.pendingLoginUrl = url
+    for (const listener of this.pendingLoginUrlListeners) {
+      listener(url)
+    }
+  }
+
+  // Why before the queue, not inside it: the abandoned login owns the queue slot
+  // every later account action waits for. Called from the four the user drives,
+  // never from serializeMutation, which background reset-credit work also uses.
+  private supersedePendingLogin(): void {
+    if (this.cancelPendingLogin()) {
+      console.info('[codex-accounts] Cancelled a pending Codex login superseded by a new request.')
+    }
   }
 
   /**
@@ -181,14 +221,17 @@ export class CodexAccountService {
     accountId: string,
     options?: CodexAccountReauthenticateOptions
   ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.reauthenticate(accountId, options))
   }
 
   async removeAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
   async selectAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId))
   }
 
@@ -196,6 +239,7 @@ export class CodexAccountService {
     accountId: string | null,
     target?: CodexAccountSelectionTarget
   ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 
@@ -234,16 +278,27 @@ export class CodexAccountService {
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
-    await runCodexLoginSession(managedHomePath, {
-      wslCommand: 'wsl.exe',
-      spawn: ({ command, args, env, stdio }) =>
-        spawn(command, args, {
-          stdio,
-          // Why: hide the outer wrapper only. A dedicated login console stays visible.
-          windowsHide: true,
-          env
-        }),
-      killProcessTree: killLoginProcessTree
-    })
+    try {
+      await runCodexLoginSession(managedHomePath, {
+        wslCommand: 'wsl.exe',
+        spawn: ({ command, args, env, stdio }) =>
+          spawn(command, args, {
+            stdio,
+            // Why: hide the outer wrapper only. A dedicated login console stays visible.
+            windowsHide: true,
+            env
+          }),
+        killProcessTree: killLoginProcessTree,
+        setCancel: (cancel) => {
+          this.cancelPendingCodexLogin = cancel
+        },
+        onAuthUrl: (url) => this.setPendingLoginUrl(url)
+      })
+    } finally {
+      // Why: both die with the login server — no surface may keep offering a
+      // link nothing is listening on, or a cancel with nothing to cancel.
+      this.cancelPendingCodexLogin = null
+      this.setPendingLoginUrl(null)
+    }
   }
 }

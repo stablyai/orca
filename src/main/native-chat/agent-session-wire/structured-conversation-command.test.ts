@@ -146,6 +146,23 @@ describe('host conversation commands', () => {
     expect(compact).toHaveBeenCalledTimes(1)
   })
 
+  /** The replacement seeds from what the provider reports now, not from what the
+   *  retired record happened to store — the same rule acquire and handoff apply. */
+  it('adopts the reported Fast preference into the replacement record', async () => {
+    adapter.readOptions = async () => ({
+      models: [],
+      current: { model: 'test-model', effort: 'high', fastMode: false }
+    })
+    const result = await host.conversationCommand(caller, commandParams('clear'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(store.getRecord(result.value.replacementSessionId!)).toMatchObject({
+      options: { model: 'test-model', effort: 'high', fastMode: 'false' }
+    })
+  })
+
   it('clears with a fresh record and effective options, retaining old history and idempotent mapping', async () => {
     const before = store.getRecord(HOST_TEST_SESSION)!
     const params = commandParams('clear')

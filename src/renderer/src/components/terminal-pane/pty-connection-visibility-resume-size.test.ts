@@ -633,7 +633,7 @@ describe('connectPanePty', () => {
       }
     })
 
-    it('skips remote-runtime PTYs (their size lives outside the local ptySizes map)', async () => {
+    it.each([true, false])('reasserts a remote grid only when visible (%s)', async (visible) => {
       const getSize = vi.mocked(window.api.pty.getSize)
       getSize.mockClear()
       const { connectPanePty } = await import('./pty-connection')
@@ -651,12 +651,16 @@ describe('connectPanePty', () => {
       }
       transport.resize.mockClear()
 
+      deps.isVisibleRef.current = visible
       binding.noteVisibilityResume()
       await flushAsyncTicks()
 
-      // Never even queries size for a remote pane, and never re-asserts.
       expect(getSize).not.toHaveBeenCalled()
-      expect(transport.resize).not.toHaveBeenCalled()
+      if (visible) {
+        expect(transport.resize).toHaveBeenCalledExactlyOnceWith(120, 40, { claim: true })
+      } else {
+        expect(transport.resize).not.toHaveBeenCalled()
+      }
     })
 
     it('claims a focused visible remote mirror once when its passive fit hold arrives', async () => {

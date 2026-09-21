@@ -1,12 +1,15 @@
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync, gitExecFileSync } from './runner'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export type LocalDefaultBaseRefGitOptions = {
   cwd: string
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
@@ -14,8 +17,12 @@ export const DEFAULT_BASE_REF_PROBE_TIMEOUT_MS = 15_000
 export function gitExecOptions(
   cwd: string,
   options: LocalGitExecOptions = {}
-): { cwd: string; wslDistro?: string } {
-  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+): LocalDefaultBaseRefGitOptions {
+  return {
+    cwd,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+  }
 }
 
 export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }[] = [

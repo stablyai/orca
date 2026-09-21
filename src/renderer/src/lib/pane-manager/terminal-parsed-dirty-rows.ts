@@ -15,6 +15,13 @@ export type ParsedDirtyRowSpan = { start: number; end: number }
 
 type RequestRefreshRowsEvent = { start: number; end: number } | undefined
 
+/**
+ * A terminal instance, used as the span cache's identity. Not `ParsedDirtyRowSource`: callers hold
+ * their own partial structural views of the same xterm terminal, so the internals below stay a
+ * defensive probe rather than a requirement on the caller's type.
+ */
+export type ParsedDirtyRowTerminal = WeakKey
+
 type ParsedDirtyRowSource = {
   _core?: {
     _inputHandler?: {
@@ -35,9 +42,9 @@ type ParsedDirtyRowTracker = {
 
 // `null` marks a terminal whose parse spans cannot be observed, so callers keep
 // the full-grid behavior instead of narrowing on an absent signal.
-const trackersByTerminal = new WeakMap<object, ParsedDirtyRowTracker | null>()
+const trackersByTerminal = new WeakMap<ParsedDirtyRowTerminal, ParsedDirtyRowTracker | null>()
 
-function attachTracker(terminal: object): ParsedDirtyRowTracker | null {
+function attachTracker(terminal: ParsedDirtyRowTerminal): ParsedDirtyRowTracker | null {
   const existing = trackersByTerminal.get(terminal)
   if (existing !== undefined) {
     return existing
@@ -82,7 +89,7 @@ function attachTracker(terminal: object): ParsedDirtyRowTracker | null {
 }
 
 /** Start (or reset) parse-span observation for the write that is about to run. */
-export function resetParsedDirtyRows(terminal: object): void {
+export function resetParsedDirtyRows(terminal: ParsedDirtyRowTerminal): void {
   const tracker = attachTracker(terminal)
   if (!tracker) {
     return
@@ -98,7 +105,9 @@ export function resetParsedDirtyRows(terminal: object): void {
  * unknown (unobservable terminal, no parse seen, or an xterm full-refresh
  * request) and the caller must repaint the whole viewport.
  */
-export function readParsedDirtyRowSpan(terminal: object): ParsedDirtyRowSpan | null {
+export function readParsedDirtyRowSpan(
+  terminal: ParsedDirtyRowTerminal
+): ParsedDirtyRowSpan | null {
   const tracker = trackersByTerminal.get(terminal)
   if (!tracker || !tracker.observed || tracker.wholeViewport) {
     return null
@@ -106,7 +115,7 @@ export function readParsedDirtyRowSpan(terminal: object): ParsedDirtyRowSpan | n
   return { start: tracker.start, end: tracker.end }
 }
 
-export function disposeParsedDirtyRows(terminal: object): void {
+export function disposeParsedDirtyRows(terminal: ParsedDirtyRowTerminal): void {
   const tracker = trackersByTerminal.get(terminal)
   if (tracker) {
     try {

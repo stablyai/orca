@@ -1,3 +1,4 @@
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
 import {
   FileJson,
@@ -36,6 +37,7 @@ export function SessionInlineDetails({
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
+  subagentResume,
   onContinueInNewSession,
   onResumeInNewChat,
   onOpenLog
@@ -50,6 +52,7 @@ export function SessionInlineDetails({
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
+  subagentResume?: AiVaultSubagentResumeActions
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
   onOpenLog?: () => void
@@ -217,7 +220,7 @@ export function SessionInlineDetails({
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
 
-        <SessionSubagentsSection session={session} />
+        <SessionSubagentsSection session={session} resume={subagentResume} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   openSessionSearchIndexFile,
@@ -25,6 +25,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   store.close()
   await index.close()
 })
@@ -111,15 +112,13 @@ it('refuses to commit a write whose file was removed mid-read', () => {
 
 it('declines a behind cursor in beginRead before it ever reaches the store', () => {
   const attempted: number[] = []
-  const stub = {
-    indexedFile: () => ({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 }),
-    beginWrite: (_candidate: unknown, _mode: unknown, previousByteOffset: number) => {
-      attempted.push(previousByteOffset)
-      return { add: () => undefined, commit: () => true }
-    },
-    setFileState: () => undefined
-  } as unknown as SessionSearchStore
-  const consumer = new SessionSearchIndexConsumer(stub)
+  vi.spyOn(store, 'indexedFile').mockReturnValue({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 })
+  vi.spyOn(store, 'beginWrite').mockImplementation((_candidate, _mode, previousByteOffset) => {
+    attempted.push(previousByteOffset)
+    return { add: () => undefined, commit: () => true, discard: () => undefined }
+  })
+  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
+  const consumer = new SessionSearchIndexConsumer(store)
 
   expect(
     consumer.beginRead({
@@ -142,22 +141,17 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
 
 it("hands the read's identity accessor to the store", () => {
   const captured: unknown[] = []
-  const stub = {
-    indexedFile: () => null,
-    beginWrite: (
-      _candidate: unknown,
-      _mode: unknown,
-      _previousByteOffset: unknown,
-      identity: unknown
-    ) => {
+  vi.spyOn(store, 'indexedFile').mockReturnValue(null)
+  vi.spyOn(store, 'beginWrite').mockImplementation(
+    (_candidate, _mode, _previousByteOffset, identity) => {
       captured.push(identity)
-      return { add: () => undefined, commit: () => true }
-    },
-    setFileState: () => undefined
-  } as unknown as SessionSearchStore
+      return { add: () => undefined, commit: () => true, discard: () => undefined }
+    }
+  )
+  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
   const identity = (): null => null
 
-  new SessionSearchIndexConsumer(stub).beginRead({
+  new SessionSearchIndexConsumer(store).beginRead({
     candidate: syntheticCandidate(),
     mode: 'replace',
     previousByteOffset: 0,

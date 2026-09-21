@@ -120,7 +120,9 @@ describe('runQuickCommandInNewTab', () => {
   })
 
   it('launches agent quick commands through the programmatic agent prompt path', () => {
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-agent' }
+    })
     mockState.unifiedTabsByWorktree['repo::worktree'] = [
       { entityId: 'tab-agent', contentType: 'terminal', groupId: 'group-1' }
     ]
@@ -152,7 +154,9 @@ describe('runQuickCommandInNewTab', () => {
 
   it('falls back to the active group when context-menu group resolution is missing', () => {
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-agent' }
+    })
 
     const result = runQuickCommandInNewTab({
       command: {
@@ -183,10 +187,11 @@ describe('runQuickCommandInNewTab', () => {
 
   it('records history while a structured agent quick command publishes asynchronously', () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: null,
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: false,
-      focusAfterMenuClose: 'structured-session'
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'agent-session:codex-session-1',
+        sessionId: 'codex-session-1'
+      }
     })
 
     const result = runQuickCommandInNewTab({
@@ -202,7 +207,7 @@ describe('runQuickCommandInNewTab', () => {
       historyId: 'runtime:local\u0000agent-review'
     })
 
-    expect(result).toBeNull()
+    expect(result).toEqual({ tabId: 'agent-session:codex-session-1' })
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
       'group-1',
       'runtime:local\u0000agent-review'
@@ -211,10 +216,11 @@ describe('runQuickCommandInNewTab', () => {
 
   it('uses the active group for structured history when the caller has no group', () => {
     mocks.launchAgentInNewTab.mockReturnValue({
-      tabId: null,
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: false,
-      focusAfterMenuClose: 'structured-session'
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'agent-session:codex-session-1',
+        sessionId: 'codex-session-1'
+      }
     })
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
 

@@ -73,12 +73,15 @@ export function getTerminalQuickCommandPickerValue({
 }
 
 function scoreQuickCommand(command: TerminalQuickCommand, query: string): number {
-  const body = getTerminalQuickCommandBody(command)
-  const scores = [scoreCandidate(query, command.label, 0), scoreCandidate(query, body, 400)]
-  if (isTerminalAgentQuickCommand(command)) {
-    scores.push(scoreCandidate(query, command.agent, 200))
+  let score = scoreCandidate(query, command.label, 0)
+  // A field cannot improve a score already at or below its base score.
+  if (score > 200 && isTerminalAgentQuickCommand(command)) {
+    score = Math.min(score, scoreCandidate(query, command.agent, 200))
   }
-  return Math.min(...scores)
+  if (score > 400) {
+    score = Math.min(score, scoreCandidate(query, getTerminalQuickCommandBody(command), 400))
+  }
+  return score
 }
 
 function scoreCandidate(query: string, rawCandidate: string, baseScore: number): number {

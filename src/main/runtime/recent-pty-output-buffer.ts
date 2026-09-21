@@ -1,3 +1,5 @@
+import { ownRetainedString } from '../../shared/own-retained-string'
+
 export const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 
 // Compact the backing array once this many fully-dropped head slots accumulate,
@@ -42,7 +44,7 @@ export class RecentPtyOutputBuffer {
       return
     }
     if (data.length >= this.limit) {
-      this.chunks = [data.slice(-this.limit)]
+      this.chunks = [data.length > this.limit ? ownRetainedString(data.slice(-this.limit)) : data]
       this.headIndex = 0
       this.headOffset = 0
       this.totalLen = this.limit

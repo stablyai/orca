@@ -1,0 +1,122 @@
+diff --git a/src/main/daemon/session-output-pipeline.ts b/src/main/daemon/session-output-pipeline.ts
+index c249e4d1d3..f67d2e15b9 100644
+--- a/src/main/daemon/session-output-pipeline.ts
++++ b/src/main/daemon/session-output-pipeline.ts
+@@ -14,6 +14,7 @@ export function createSessionOutputPipeline(opts: {
+   subprocess: SubprocessHandle
+   isAlive: () => boolean
+ }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
++  const { subprocess, isAlive } = opts
+   let barrier: TerminalShellRecoveryBarrier | null = null
+   const output = new SessionOutputPlane({
+     cols: opts.cols,
+@@ -24,9 +25,9 @@ export function createSessionOutputPipeline(opts: {
+     getTerminalOwner: () => barrier?.getOwner()
+   })
+   const recoveryBarrier = new TerminalShellRecoveryBarrier({
+-    confirmShellForeground: async () => (await opts.subprocess.confirmShellForeground?.()) ?? false,
++    confirmShellForeground: async () => (await subprocess.confirmShellForeground?.()) ?? false,
+     release: (emission) => output.emit(emission),
+-    isAlive: opts.isAlive
++    isAlive
+   })
+   barrier = recoveryBarrier
+   return { output, recoveryBarrier }
+diff --git a/src/main/daemon/terminal-host-session-create.ts b/src/main/daemon/terminal-host-session-create.ts
+index 8f6833c3d9..fc4cc01088 100644
+--- a/src/main/daemon/terminal-host-session-create.ts
++++ b/src/main/daemon/terminal-host-session-create.ts
+@@ -150,7 +150,11 @@ async function spawnAndPublishSession(
+     historySeedChunks: opts.historySeedChunks,
+     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+     wslDistro,
+-    onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
++    onExit: createSessionExitHandler(
++      deps.onSessionExit,
++      opts.sessionId,
++      opts.agentSessionGeneration
++    ),
+     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
+     ...(opts.shellReadyTimeoutMs !== undefined
+       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+@@ -212,6 +216,14 @@ async function spawnAndPublishSession(
+   }
+ }
+ 
++function createSessionExitHandler(
++  onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
++  sessionId: string,
++  generation: string | undefined
++): () => void {
++  return () => onSessionExit(sessionId, generation)
++}
++
+ // Why R_OK|X_OK: listing a directory needs read, and entering it needs search — both are what
+ // TCC withholds. A non-permission failure (ENOENT, ENOTDIR) reads as readable so it can never
+ // masquerade as a permission denial.
+diff --git a/src/main/daemon/terminal-host.ts b/src/main/daemon/terminal-host.ts
+index 81dae092b1..1fdbb6d161 100644
+--- a/src/main/daemon/terminal-host.ts
++++ b/src/main/daemon/terminal-host.ts
+@@ -54,7 +54,6 @@ export class TerminalHost {
+   private onSessionReaped: TerminalHostOptions['onSessionReaped']
+   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
+   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+-  private maxTombstones: number
+   private creationFenced = false
+   private disposePromise: Promise<void> | null = null
+   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
+@@ -71,8 +70,7 @@ export class TerminalHost {
+     this.onSessionReaped = opts.onSessionReaped
+     this.reportReadinessEvent = opts.reportReadinessEvent
+     this.onFinalCheckpoint = opts.onFinalCheckpoint
+-    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
+-    this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
++    this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
+   }
+ 
+   async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
+@@ -123,20 +121,7 @@ export class TerminalHost {
+             ...(this.reportReadinessEvent
+               ? { reportReadinessEvent: this.reportReadinessEvent }
+               : {}),
+-            onSessionExit: (sessionId, generation) => {
+-              const session = this.sessions.get(sessionId)
+-              if (session) {
+-                pruneRetiredPtyIncarnations(this.retiredIncarnations)
+-                this.retiredIncarnations.set(sessionId, {
+-                  incarnationId: session.incarnationId,
+-                  code: session.exitCode ?? 0,
+-                  expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
+-                })
+-              }
+-              this.agentSessionOwners.release(sessionId, generation)
+-              this.agentSessionGenerations.forget(sessionId, generation)
+-              this.reapSession(sessionId)
+-            }
++            onSessionExit: this.handleSessionExit.bind(this)
+           })
+         }
+       })
+@@ -146,6 +131,21 @@ export class TerminalHost {
+     }
+   }
+ 
++  private handleSessionExit(sessionId: string, generation: string | undefined): void {
++    const session = this.sessions.get(sessionId)
++    if (session) {
++      pruneRetiredPtyIncarnations(this.retiredIncarnations)
++      this.retiredIncarnations.set(sessionId, {
++        incarnationId: session.incarnationId,
++        code: session.exitCode ?? 0,
++        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
++      })
++    }
++    this.agentSessionOwners.release(sessionId, generation)
++    this.agentSessionGenerations.forget(sessionId, generation)
++    this.reapSession(sessionId)
++  }
++
+   private assertCreateOrAttachAllowed(opts: InternalCreateOrAttachOptions): void {
+     if (this.creationFenced) {
+       throw new Error('Terminal host is shutting down')

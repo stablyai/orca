@@ -1,8 +1,14 @@
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
+import type { TuiAgent } from './tui-agent'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+
+/** OMP recognizes a submitted bracketed paste only when Enter shares its PTY write. */
+export function agentPromptSubmitJoinsPasteFrame(agent: TuiAgent | null | undefined): boolean {
+  return agent === 'omp'
+}
 
 // Why: Windows ConPTY ingests pasted input linearly (first byte written -> child observes
 // ESC[201~), and the cost is input ingest, not rendering -- the child repaints in ~0 ms on

@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { EventEmitter } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

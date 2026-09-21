@@ -138,6 +138,43 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none')
   })
 
+  it('hides foreground turn activity without settling live tool state', () => {
+    const { container } = render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'assistant-running-tool',
+              role: 'assistant',
+              blocks: [
+                {
+                  type: 'tool-call',
+                  name: 'shell',
+                  input: { command: 'pnpm test' },
+                  state: 'running'
+                }
+              ],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ]
+        }}
+        journalItems={[journalItem(1, turnItem), journalItem(2, reasoningRow)]}
+        isWorking
+        showLiveTurnActivity={false}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
+    expect(screen.queryByText(/Working for/)).toBeNull()
+    expect(screen.queryByText('Thinking')).toBeNull()
+    expect(screen.getByText('Running pnpm test')).toHaveClass('animate-pulse')
+  })
+
   it('keeps the live row up after a tool settles', () => {
     render(
       <NativeChatMessageList
@@ -270,6 +307,75 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
     expect(screen.queryByText('Running sleep 5')).toBeNull()
     expect(document.querySelectorAll('.animate-bounce')).toHaveLength(3)
+  })
+
+  it('replaces a bridge ask row and settles it from the FIFO tool result', () => {
+    const user = {
+      id: 'bridge-user',
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'Help me choose' }],
+      timestamp: 1,
+      source: 'transcript' as const
+    }
+    const call = {
+      id: 'bridge-ask',
+      role: 'assistant' as const,
+      blocks: [
+        {
+          type: 'tool-call' as const,
+          name: 'AskUserQuestion',
+          input: { questions: [{ question: 'Which branch?' }] }
+        }
+      ],
+      timestamp: 2,
+      source: 'transcript' as const
+    }
+    const bridgeSession: NativeChatLiveSession = {
+      ...session,
+      agent: 'claude',
+      messages: [user, call],
+      transcriptLifecycle: { state: 'working', turnId: user.id, timestamp: 1 }
+    }
+    const rendered = render(
+      <NativeChatMessageList
+        session={bridgeSession}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        showTurnStatus={false}
+      />
+    )
+
+    expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
+    expect(screen.getByText('Which branch?')).toBeInTheDocument()
+    expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
+
+    rendered.rerender(
+      <NativeChatMessageList
+        session={{
+          ...bridgeSession,
+          messages: [
+            user,
+            call,
+            {
+              id: 'bridge-answer',
+              role: 'tool',
+              blocks: [{ type: 'tool-result', output: 'main' }],
+              timestamp: 3,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        showTurnStatus={false}
+      />
+    )
+
+    expect(screen.queryByText('Awaiting user input:')).toBeNull()
+    expect(screen.getByText('Asked:')).toBeInTheDocument()
+    expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
   })
 
   it('reads "Thinking" on the one live row while the turn is reasoning', () => {

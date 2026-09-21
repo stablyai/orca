@@ -138,7 +138,7 @@ function writeLegacyFile(dataFile: string): void {
 
 /** Inverse of everything this change does, applied to a compact file: what the old serializer
  *  would have written for the same state. */
-function reexpandToLegacyShape(state: PersistedState): PersistedState {
+function reexpandToLegacySerialization(state: PersistedState): PersistedState {
   const expanded = structuredClone(state)
   for (const map of [expanded.worktreeMeta, expanded.worktreeMetaByIdentity]) {
     for (const [key, meta] of Object.entries(map ?? {})) {
@@ -207,7 +207,7 @@ describe('persisted-state redundancy', () => {
     // Apples to apples: re-expand the file we just wrote back into the old shape and compare, so
     // the number is the redundancy alone and not the settings defaults a synthetic fixture lacks.
     expect(Buffer.byteLength(rewritten)).toBeLessThan(
-      Buffer.byteLength(JSON.stringify(reexpandToLegacyShape(onDisk))) * 0.6
+      Buffer.byteLength(JSON.stringify(reexpandToLegacySerialization(onDisk))) * 0.6
     )
 
     // load(save(state)) deep-equals the pre-save state for every field touched.

@@ -31,12 +31,21 @@ describe('getAgentModelProbeSpec', () => {
     )
   })
 
-  it('aliases commit-message agents by identity rather than copying them', () => {
+  it('aliases agents without a generation-only default by identity', () => {
     // A lossy adapter here would silently drop fields like
     // `modelDiscovery.stdinPayload` and break Claude discovery.
-    for (const id of listCommitMessageAgentIds()) {
+    for (const id of listCommitMessageAgentIds().filter((agentId) => agentId !== 'omp')) {
       expect(getAgentModelProbeSpec(id)).toBe(getCommitMessageAgentSpec(id))
     }
+  })
+
+  it('removes only the OMP generation sentinel while preserving discovery', () => {
+    const generation = getCommitMessageAgentSpec('omp')!
+    const probe = getAgentModelProbeSpec('omp')!
+    expect(generation.defaultModelId).toBe('default')
+    expect(probe.defaultModelId).toBe('')
+    expect(probe.models).toEqual([])
+    expect(probe.modelDiscovery).toBe(generation.modelDiscovery)
   })
 
   it('keeps grok out of the commit-message registry', () => {

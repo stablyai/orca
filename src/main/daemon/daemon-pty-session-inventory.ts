@@ -1,3 +1,4 @@
+import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
 import {
@@ -154,16 +155,11 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
-        listener({
-          id,
-          code,
-          ...(this.sessionIncarnations.get(id)
-            ? { incarnationId: this.sessionIncarnations.get(id) }
-            : {})
-        })
-      }
+      emitPtyListeners(this.exitListeners, (listener) =>
+        listener(
+          createPtyExitPayload(id, { code, incarnationId: this.sessionIncarnations.get(id) })
+        )
+      )
       this.sessionIncarnations.delete(id)
     }
   }

@@ -1,0 +1,1009 @@
+{
+  "operation": "settings.task-workspace-create",
+  "family": "settings.task-workspace-create",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
+  "scenarioSha256": "1d7713cf4c23d053105c2abb02340d81d5eb689f4311a0984932d8ebd031b4ce",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "009f82649181": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "028ed68ea991": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0ab47d066cba": {
+      "name": "error",
+      "ordinal": 8,
+      "value": "outer refused"
+    },
+    "0e0c27425410": {
+      "name": "navigation",
+      "ordinal": 11,
+      "value": "/h/host-1/session/wt-1?name=ORC-1+Recorded+issue&created=1"
+    },
+    "104bf14d3af8": {
+      "name": "error",
+      "ordinal": 8,
+      "value": ""
+    },
+    "10841e6e2151": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "15a350feeedb": {
+      "name": "creatingKey",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "1bb065c2a768": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Unknown method",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "2142af96648c": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "ORC-1 Recorded issue",
+              "id": "wt-1"
+            }
+          }
+        }
+      }
+    },
+    "2fac0da15fae": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "transport failure",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "33e3b949d4c5": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "3ec9a6ef7bbf": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "41a2214deb19": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "582028823c76": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "67e4de286c96": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "71f882fa01cd": {
+      "name": "error",
+      "ordinal": 8,
+      "value": "The host sent a reply this app could not read (worktree.create)"
+    },
+    "7abdfe20af50": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "7b27297e7f2d": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "outer refused",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "85b99a2ca439": {
+      "name": "workspaceCreateDraft",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "86a3bbb38597": {
+      "name": "error",
+      "ordinal": 8,
+      "value": "transport failure"
+    },
+    "8ac371cf7234": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": []
+            }
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "975f2ff9a730": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "9b03383cf8c2": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "9e4d66bb4dbf": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "ba6b37393b35": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cbe638ec5266": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "cc50b9749135": {
+      "name": "worktree.create#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "createdWithAgent": "claude",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "name": "orc-1",
+            "repo": "id:repo-1",
+            "setupDecision": "inherit",
+            "startupDraft": "https://linear.app/orca/issue/ORC-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ce455f0c9a54": {
+      "name": "actionItem",
+      "ordinal": 8,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "dac4022522a4": {
+      "name": "error",
+      "ordinal": 8,
+      "value": "Unknown method"
+    },
+    "df8accf1ced4": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "The host sent a reply this app could not read (worktree.create)",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "e0423a9e6995": {
+      "name": "worktree.create#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"orc-1\",\"displayName\":\"ORC-1 Recorded issue\",\"displayNameKind\":\"generated\",\"linkedLinearIssue\":\"ORC-1\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://linear.app/orca/issue/ORC-1\",\"createdWithAgent\":\"claude\"}}"
+    },
+    "e0a8ee1f3c00": {
+      "name": "creatingKey",
+      "ordinal": 1,
+      "value": "linear:1"
+    },
+    "e445683fd6a5": {
+      "name": "runtimeTaskSettings",
+      "ordinal": 5,
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "e969ced16929": {
+      "name": "setupPrompt",
+      "ordinal": 10,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "eecc0c1b6490": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": []
+      }
+    },
+    "f2ebfa81caaf": {
+      "name": "creatingKey",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f9a104d641fd": {
+      "name": "error",
+      "ordinal": 8,
+      "value": "Connection closed"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-settings.task-workspace-create-worktree.create-1",
+    "checkpoints": [
+      {
+        "id": "settings-task-workspace-create-linear.prelude:settings-pending",
+        "observation": {
+          "sender": ["41a2214deb19"],
+          "payloads": ["975f2ff9a730"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "9270aeb7d9c6"
+          },
+          "state": "7abdfe20af50",
+          "effects": ["e0a8ee1f3c00", "ed3a7d6bc894"]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.prelude:cleanup",
+        "observation": {
+          "sender": ["8ac371cf7234", "ba6b37393b35"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "eecc0c1b6490",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "f9a104d641fd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.normal:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "2142af96648c"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "33e3b949d4c5",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "ce455f0c9a54",
+            "85b99a2ca439",
+            "e969ced16929",
+            "0e0c27425410",
+            "15a350feeedb"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.result-absent:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "009f82649181"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "df8accf1ced4",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "71f882fa01cd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.result-null:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "67e4de286c96"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "df8accf1ced4",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "71f882fa01cd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.inner-ok-missing:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "10841e6e2151"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "df8accf1ced4",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "71f882fa01cd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.inner-false-string-error:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "9e4d66bb4dbf"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "df8accf1ced4",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "71f882fa01cd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.inner-false-object-error:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "3ec9a6ef7bbf"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "df8accf1ced4",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "71f882fa01cd",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.outer-refused:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "cbe638ec5266"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "7b27297e7f2d",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "0ab47d066cba",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.outer-refused-no-message:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "582028823c76"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "33e3b949d4c5",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "104bf14d3af8",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.method-not-found:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "9b03383cf8c2"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "1bb065c2a768",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "dac4022522a4",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.transport-rejection:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "cc50b9749135"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "2fac0da15fae",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "86a3bbb38597",
+            "f2ebfa81caaf"
+          ]
+        }
+      },
+      {
+        "id": "settings-task-workspace-create-linear.transport-rejection-no-message:created",
+        "observation": {
+          "sender": ["8ac371cf7234", "028ed68ea991"],
+          "payloads": ["975f2ff9a730", "e0423a9e6995"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "33e3b949d4c5",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "e445683fd6a5",
+            "104bf14d3af8",
+            "f2ebfa81caaf"
+          ]
+        }
+      }
+    ]
+  }
+}

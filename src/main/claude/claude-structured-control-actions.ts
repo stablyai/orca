@@ -1,8 +1,16 @@
-import { applyClaudePromptAnswer } from './claude-structured-prompt-replies'
+import { applyClaudePromptAnswer, type ClaudePromptClaim } from './claude-structured-prompt-replies'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import {
+  settleCancelledClaudeDispatchWaiters,
+  type ClaudeLateDispatchSettlement
+} from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
+
+export function supportsClaudeQueuedInterruptCancellation(session: ClaudeSession): boolean {
+  return session.capabilities.includes(INTERRUPT_CANCEL_QUEUED_CAPABILITY)
+}
 
 export type ClaudeTurnCancellationGuard = () => boolean
 
@@ -16,20 +24,23 @@ export type ClaudeTurnCancellationGuard = () => boolean
 export async function cancelClaudeTurn(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  isCurrent: ClaudeTurnCancellationGuard = () => true
+  isCurrent: ClaudeTurnCancellationGuard = () => true,
+  onDispatchSettledLate?: ClaudeLateDispatchSettlement
 ): Promise<{ cancelled: boolean }> {
   // The SDK interrupt is session-scoped. Re-check the caller's turn/fence
   // immediately before issuing it so a delayed request cannot stop a later turn.
   if (!isCurrent()) {
     return { cancelled: false }
   }
-  const cancelQueued = session.capabilities.includes(INTERRUPT_CANCEL_QUEUED_CAPABILITY)
+  const cancelQueued = supportsClaudeQueuedInterruptCancellation(session)
   try {
     const receipt = await session.connection.interrupt({
       ...(cancelQueued ? { cancelQueued: true } : {}),
       timeoutMs
     })
-    if (!cancelQueued) {
+    if (cancelQueued) {
+      settleCancelledClaudeDispatchWaiters(session, receipt?.cancelled ?? [], onDispatchSettledLate)
+    } else {
       for (const uuid of receipt?.still_queued ?? []) {
         await session.connection.cancelAsyncMessage(uuid, { timeoutMs }).catch(() => {})
       }
@@ -71,16 +82,18 @@ export async function stopClaudeBackgroundTasks(
 
 export async function answerClaudePrompt(
   session: ClaudeSession,
-  input: { itemId: string; kind: 'approval' | 'question'; optionId: string }
+  claim: ClaudePromptClaim,
+  optionId: string
 ): Promise<void> {
-  const found = session.prompts.find(input.itemId)
-  if (!found || found.prompt.kind !== input.kind) {
-    throw new Error(`claude is no longer waiting on ${input.itemId}`)
+  if (!session.prompts.ownsClaim(claim)) {
+    throw new Error(`claude is no longer waiting on ${claim.itemId}`)
   }
-  const response = applyClaudePromptAnswer(found, input.optionId)
+  const response = applyClaudePromptAnswer(claim.found, optionId)
   if (response === null) {
+    session.prompts.releaseClaim(claim)
     return
   }
-  session.prompts.forget(found.prompt)
-  found.prompt.settle(response)
+  session.prompts.forget(claim.found.prompt)
+  claim.found.prompt.settle(response)
+  session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)
 }

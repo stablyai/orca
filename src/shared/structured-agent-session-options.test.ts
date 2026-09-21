@@ -110,4 +110,79 @@ describe('structured agent session options', () => {
     expect(snapshot.every((descriptor) => descriptor.settable)).toBe(true)
     expect(snapshot.every((descriptor) => descriptor.action === undefined)).toBe(true)
   })
+
+  it('projects Fast mode only from positive session and model capability', () => {
+    const supported = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'account-model',
+            label: 'Account Model',
+            isDefault: true,
+            efforts: [],
+            supportsFastMode: true
+          }
+        ],
+        fastModeSupport: { supported: true },
+        current: { model: 'account-model', fastMode: false, confirmed: ['fastMode'] }
+      }
+    )
+    expect(structuredAgentSessionOptionSnapshot(supported)).toContainEqual(
+      expect.objectContaining({
+        id: 'fastMode',
+        kind: { type: 'boolean', currentValue: false },
+        valueSource: 'reported',
+        settable: true
+      })
+    )
+
+    const absent = applyStructuredAgentSessionOptions(supported, CODEX_SESSION_OPTION_CATALOG, {
+      models: [
+        {
+          id: 'account-model',
+          label: 'Account Model',
+          isDefault: true,
+          efforts: [],
+          supportsFastMode: true
+        }
+      ],
+      current: { model: 'account-model' }
+    })
+    expect(structuredAgentSessionOptionSnapshot(absent).map(({ id }) => id)).toEqual(['model'])
+    expect(absent.record.valuesByModel['account-model']?.fastMode).toBeUndefined()
+  })
+
+  it('renders Fast off but marked unreported when support is known and no value is', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'account-model',
+            label: 'Account Model',
+            isDefault: true,
+            efforts: [],
+            supportsFastMode: true
+          }
+        ],
+        fastModeSupport: { supported: true },
+        current: { model: 'account-model' }
+      }
+    )
+
+    // The switch has no third position, so the value resolves to the catalog's
+    // own `false`. `unknown` is what stops any surface calling that a default:
+    // `default` is unreachable in this lane (it is hardcoded `mode: 'live'`), and
+    // nothing here has reported the tier the thread is actually routing.
+    expect(structuredAgentSessionOptionSnapshot(state)).toContainEqual(
+      expect.objectContaining({
+        id: 'fastMode',
+        kind: { type: 'boolean', currentValue: false },
+        valueSource: 'unknown'
+      })
+    )
+  })
 })

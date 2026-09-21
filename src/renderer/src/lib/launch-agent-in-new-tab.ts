@@ -1,13 +1,5 @@
 import { useAppStore } from '@/store'
-import type {
-  LaunchAgentInNewTabArgs,
-  LaunchAgentInNewTabResult
-} from './launch-agent-tab-contract'
-export { shouldQueueTerminalFocusAfterMenuClose } from './launch-agent-tab-contract'
-export type {
-  LaunchAgentInNewTabArgs,
-  LaunchAgentInNewTabResult
-} from './launch-agent-tab-contract'
+import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
@@ -31,12 +23,71 @@ import {
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
+import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import {
+  planAgentSessionLaunch,
+  type AgentSessionLaunchPlan
+} from '@/lib/agent-session-launch-plan'
+
+export type LaunchAgentInNewTabArgs = {
+  agent: TuiAgent
+  worktreeId: string
+  /** Canvas sessions require the interactive terminal even when chat is the user's default. */
+  viewMode?: 'terminal'
+  /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
+  groupId?: string
+  /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
+  prompt?: string
+  /** Optional CLI arguments appended to the selected agent command. */
+  agentArgs?: string | null
+  initialCwd?: string | null
+  /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
+  promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
+  /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */
+  launchSource?: LaunchSource
+  /** User-authored Quick Command label for local tabs created from the tab bar. */
+  quickCommandLabel?: string | null
+  /** Shell platform for the startup command; defaults to renderer OS. SSH/WSL worktrees run Linux even from Windows. */
+  launchPlatform?: NodeJS.Platform
+  /** Called after the prompt is actually delivered to the agent input path. */
+  onPromptDelivered?: () => void
+  /** Keeps a preflighted route authoritative across workspace creation. */
+  agentSessionLaunchPlan?: AgentSessionLaunchPlan
+  /** Lets a workspace reveal itself before the selected surface opens. */
+  beforeSurfaceOpen?: (
+    surface:
+      | { kind: 'local-terminal' }
+      | { kind: 'local-agent-session'; sessionId: string }
+      | { kind: 'host-published' }
+  ) => boolean | void
+}
+
+export type AgentLaunchSurface =
+  | { kind: 'local-terminal'; tabId: string }
+  | { kind: 'local-agent-session'; tabId: string; sessionId: string }
+  | { kind: 'host-published' }
+
+export type LaunchAgentInNewTabResult = {
+  surface: AgentLaunchSurface
+  startupPlan: AgentStartupPlan
+  pasteDraftAfterLaunch: boolean
+  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  /** Structured route only: what the launch did once it settled. The call stays synchronous. */
+  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
+} | null
+
+export function shouldQueueTerminalFocusAfterMenuClose(
+  result: NonNullable<LaunchAgentInNewTabResult>
+): boolean {
+  return result.surface.kind === 'host-published'
+}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -48,13 +99,11 @@ import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
  *
  * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
  */
-function launchAgentInNewTabInternal(
-  args: LaunchAgentInNewTabArgs,
-  forceLegacy = false
-): LaunchAgentInNewTabResult {
+function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
     agent,
     worktreeId,
+    viewMode,
     groupId,
     prompt,
     agentArgs,
@@ -63,7 +112,9 @@ function launchAgentInNewTabInternal(
     launchSource,
     quickCommandLabel,
     launchPlatform,
-    onPromptDelivered
+    onPromptDelivered,
+    agentSessionLaunchPlan,
+    beforeSurfaceOpen
   } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
@@ -109,10 +160,7 @@ function launchAgentInNewTabInternal(
     nativeChatTranscriptIsLocalReadable:
       isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
   }
-  const initialViewModeProps =
-    args.viewMode === 'terminal'
-      ? { viewMode: 'terminal' as const }
-      : initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
+  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
   const startupPlanBase = {
     agent,
     cmdOverrides,
@@ -137,6 +185,9 @@ function launchAgentInNewTabInternal(
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+      return null
+    }
     const webHostDelivery = launchAgentInWebHostTab({
       agent,
       worktreeId,
@@ -155,7 +206,7 @@ function launchAgentInNewTabInternal(
       onPromptDelivered
     })
     return {
-      tabId: null,
+      surface: { kind: 'host-published' },
       startupPlan,
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
@@ -164,11 +215,12 @@ function launchAgentInNewTabInternal(
     }
   }
 
-  // Why: the legacy re-entry is the plan's own fallback; deciding a route again would loop.
+  // Why: canvas sessions require the interactive terminal even when chat is the default.
   const plan =
-    forceLegacy || args.viewMode === 'terminal'
+    viewMode === 'terminal'
       ? null
-      : planAgentSessionLaunch(store, {
+      : (agentSessionLaunchPlan ??
+        planAgentSessionLaunch(store, {
           agent,
           workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
           prompt: trimmedPrompt,
@@ -176,17 +228,29 @@ function launchAgentInNewTabInternal(
           tuiCustomization: { cwd: initialCwd, agentArgs },
           initialSessionOptions: startupPlan.sessionOptions,
           onPromptDelivered
-        })
+        }))
   if (plan?.route === 'structured-native-chat') {
     const structured = launchAgentInStructuredNewTab({
       plan,
-      legacyLaunch: () => launchAgentInNewTabInternal(args, true)
+      ...(beforeSurfaceOpen
+        ? {
+            beforeOpen: (sessionId: string) =>
+              beforeSurfaceOpen({ kind: 'local-agent-session', sessionId })
+          }
+        : {}),
+      ...(groupId ? { targetGroupId: groupId } : {})
     })
+    if (!structured) {
+      return null
+    }
     return {
-      tabId: null,
+      surface: {
+        kind: 'local-agent-session',
+        tabId: structured.tabId,
+        sessionId: structured.sessionId
+      },
       startupPlan,
       pasteDraftAfterLaunch: false,
-      focusAfterMenuClose: 'structured-session',
       structuredSettlement: structured.structuredSettlement,
       ...(structured.promptDeliveryResult
         ? { promptDeliveryResult: structured.promptDeliveryResult }
@@ -194,6 +258,9 @@ function launchAgentInNewTabInternal(
     }
   }
 
+  if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
+    return null
+  }
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
   const tab = store.createTab(worktreeId, groupId, undefined, {
@@ -275,7 +342,7 @@ function launchAgentInNewTabInternal(
   persistAgentLaunchTabOrder(worktreeId, tab.id)
 
   return {
-    tabId: tab.id,
+    surface: { kind: 'local-terminal', tabId: tab.id },
     startupPlan,
     pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
     ...(promptDeliveryResult ? { promptDeliveryResult } : {})

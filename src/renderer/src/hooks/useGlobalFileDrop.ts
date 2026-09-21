@@ -207,6 +207,19 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
   description: string
   title: string
 } {
+  if (data.reason === 'unresolved-paths') {
+    return {
+      description: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPathsDescription',
+        'Save them to disk first, then drop the saved files.'
+      ),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPaths',
+        "Orca couldn't read a path for the dropped files."
+      )
+    }
+  }
+
   if (data.reason === 'too-many-paths') {
     return {
       description: translate(

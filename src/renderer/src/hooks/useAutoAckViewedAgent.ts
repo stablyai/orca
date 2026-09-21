@@ -8,193 +8,16 @@ import {
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-
-function resolveActiveLeafId(
-  state: { terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> },
-  activeTabId: string
-): string | null {
-  const leafId = state.terminalLayoutsByTabId[activeTabId]?.activeLeafId ?? null
-  return leafId && isTerminalLeafId(leafId) ? leafId : null
-}
-
-/**
- * Returns paneKeys to ack for the active tab/leaf; exported for the
- * codex-row-bold regression test (docs/codex-agent-row-bold-stuck.md).
- *
- * Why: split tabs host multiple agent panes, so match exact `${tabId}:${leafId}` — a tab-prefix match would ack undisplayed siblings.
- */
-export function computeAutoAckTargets(
-  state: {
-    agentStatusByPaneKey: Record<string, AgentStatusEntry>
-    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-    acknowledgedAgentsByPaneKey: Record<string, number>
-  },
-  activeTabId: string,
-  activeLeafId: string | null
-): string[] {
-  if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
-    return []
-  }
-  const targetKey = makePaneKey(activeTabId, activeLeafId)
-  const targets: string[] = []
-  const liveEntry = state.agentStatusByPaneKey[targetKey]
-  if (liveEntry) {
-    const ackAt = state.acknowledgedAgentsByPaneKey[targetKey] ?? 0
-    // Why: compare stateStartedAt (not updatedAt) so same-state pings don't re-trigger ack, matching WorktreeCardAgents' is-unvisited rule.
-    if (ackAt < liveEntry.stateStartedAt) {
-      targets.push(targetKey)
-    }
-  }
-  const retained = state.retainedAgentsByPaneKey[targetKey]
-  if (retained) {
-    const ackAt = state.acknowledgedAgentsByPaneKey[targetKey] ?? 0
-    if (ackAt < retained.entry.stateStartedAt) {
-      targets.push(targetKey)
-    }
-  }
-  return targets
-}
-
-export function computeViewedAgentCompletionPaneKey(
-  state: {
-    unreadAgentCompletionPanes: Record<string, true>
-  },
-  activeTabId: string,
-  activeLeafId: string | null
-): string | null {
-  if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
-    return null
-  }
-
-  const targetKey = makePaneKey(activeTabId, activeLeafId)
-  return state.unreadAgentCompletionPanes[targetKey] ? targetKey : null
-}
-
-function getAgentTurnTimestamp(
-  state: {
-    agentStatusByPaneKey: Record<string, AgentStatusEntry>
-    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-  },
-  paneKey: string
-): number | null {
-  return (
-    state.agentStatusByPaneKey[paneKey]?.stateStartedAt ??
-    state.retainedAgentsByPaneKey[paneKey]?.entry.stateStartedAt ??
-    null
-  )
-}
-
-export function shouldClearViewedAgentWorktreeUnread(
-  state: {
-    tabsByWorktree: Record<string, { id: string }[]>
-    unreadAgentCompletionPanes: Record<string, true>
-    unreadTerminalTabs: Record<string, true>
-  },
-  args: {
-    activeWorktreeId: string | null
-    activeTabId: string
-    paneKeysToClear: Set<string>
-  }
-): boolean {
-  if (!args.activeWorktreeId) {
-    return false
-  }
-
-  const tabIds = new Set((state.tabsByWorktree[args.activeWorktreeId] ?? []).map((tab) => tab.id))
-  if (tabIds.size === 0) {
-    return true
-  }
-
-  // Why: worktree unread is coarse — don't clear for the visible pane if a hidden tab/pane in the same worktree still owns unread attention.
-  for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
-    if (args.paneKeysToClear.has(paneKey)) {
-      continue
-    }
-    const parsed = parsePaneKey(paneKey)
-    if (parsed && tabIds.has(parsed.tabId)) {
-      return false
-    }
-  }
-
-  for (const tabId of Object.keys(state.unreadTerminalTabs)) {
-    if (tabId !== args.activeTabId && tabIds.has(tabId)) {
-      return false
-    }
-  }
-
-  return true
-}
-
-/**
- * Manual mark-unread protections that no longer apply: the user moved to another pane, or the
- * agent took a new turn. Exported for the startup-race test.
- */
-export function computeLapsedManualUnreadProtections(
-  state: {
-    agentStatusByPaneKey: Record<string, AgentStatusEntry>
-    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-    manuallyUnreadTurnsByPaneKey: Record<string, number>
-  },
-  activePaneKeys: ReadonlySet<string>
-): string[] {
-  const lapsed: string[] = []
-  for (const [paneKey, turnTimestamp] of Object.entries(state.manuallyUnreadTurnsByPaneKey)) {
-    if (!activePaneKeys.has(paneKey)) {
-      lapsed.push(paneKey)
-      continue
-    }
-    const currentTurn = getAgentTurnTimestamp(state, paneKey)
-    // Why keep on null: persisted UI hydrates before the status snapshot lands, so an active
-    // pane with no row yet is "not known", not "moved on"; wiping it would lose the mark-unread
-    // the user made before relaunch.
-    if (currentTurn !== null && currentTurn !== turnTimestamp) {
-      lapsed.push(paneKey)
-    }
-  }
-  return lapsed
-}
-
-type ViewedAgentAttentionActions = {
-  acknowledgeAgents: (paneKeys: string[]) => void
-  clearWorktreeUnread: (worktreeId: string) => void
-  clearTerminalTabUnread: (tabId: string) => void
-  clearTerminalPaneUnread: (paneKey: string) => void
-}
-
-export function acknowledgeViewedAgentAttention(
-  state: ViewedAgentAttentionActions,
-  args: {
-    activeWorktreeId: string | null
-    activeTabId: string
-    paneKeys: string[]
-    activePaneKey?: string | null
-  }
-): void {
-  const paneKeysToClear = new Set(args.paneKeys)
-  if (args.activePaneKey) {
-    paneKeysToClear.add(args.activePaneKey)
-  }
-
-  if (args.paneKeys.length === 0 && paneKeysToClear.size === 0) {
-    return
-  }
-
-  if (args.paneKeys.length > 0) {
-    state.acknowledgeAgents(args.paneKeys)
-  }
-  if (args.activeWorktreeId) {
-    // Why: the selected agent is now visible, so clear the Dock-driving worktree unread without a click.
-    state.clearWorktreeUnread(args.activeWorktreeId)
-  }
-  state.clearTerminalTabUnread(args.activeTabId)
-  for (const paneKey of paneKeysToClear) {
-    state.clearTerminalPaneUnread(paneKey)
-  }
-}
+import {
+  acknowledgeViewedAutoAckTarget,
+  readAgentAttentionTurnRecords,
+  surfaceForAutoAckTarget
+} from './agent-auto-ack-surfaces'
+import {
+  computeAgentAcknowledgementTargets,
+  computeLapsedManualUnreadProtections,
+  resolveViewedUnreadSubjectKey
+} from '@/attention/agent-attention-acknowledgement'
 
 // Auto-ack an agent row as "seen" when the user is already on its tab, so the dashboard/Dock don't stay bold for an event they watched happen.
 // Scans live + retained maps: Codex's title-revert (pty-connection.ts:onAgentExited) migrates `done` rows to retained mid-race — see docs/codex-agent-row-bold-stuck.md.
@@ -209,7 +32,12 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     // Init to undefined so the first maybeAck() (on mount) always passes the ref guard and scans.
     let lastActiveView: unknown = undefined
     let lastActiveTabId: unknown = undefined
+    let lastActiveWorktreeId: unknown = undefined
+    let lastActiveWorkspaceGroupId: unknown = undefined
+    let lastActiveWorkspaceGroups: unknown = undefined
     let lastFloatingWorkspaceActiveTabId: unknown = undefined
+    let lastFloatingWorkspaceGroupId: unknown = undefined
+    let lastFloatingWorkspaceGroups: unknown = undefined
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
@@ -223,13 +51,28 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     )
     const maybeAck = (options?: { force?: boolean; presenceConfirmed?: boolean }): void => {
       const s = useAppStore.getState()
+      const activeWorktreeId = s.activeWorktreeId
+      const activeWorkspaceGroupId = activeWorktreeId
+        ? (s.activeGroupIdByWorktree[activeWorktreeId] ?? null)
+        : null
+      const activeWorkspaceGroups = activeWorktreeId
+        ? s.groupsByWorktree[activeWorktreeId]
+        : undefined
       const floatingWorkspaceActiveTabId =
         s.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+      const floatingWorkspaceGroupId =
+        s.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+      const floatingWorkspaceGroups = s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
       if (
         !options?.force &&
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
+        activeWorktreeId === lastActiveWorktreeId &&
+        activeWorkspaceGroupId === lastActiveWorkspaceGroupId &&
+        activeWorkspaceGroups === lastActiveWorkspaceGroups &&
         floatingWorkspaceActiveTabId === lastFloatingWorkspaceActiveTabId &&
+        floatingWorkspaceGroupId === lastFloatingWorkspaceGroupId &&
+        floatingWorkspaceGroups === lastFloatingWorkspaceGroups &&
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
@@ -242,7 +85,12 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       // Presence signals force a rescan; unrelated writes must not retry an away result.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
+      lastActiveWorktreeId = activeWorktreeId
+      lastActiveWorkspaceGroupId = activeWorkspaceGroupId
+      lastActiveWorkspaceGroups = activeWorkspaceGroups
       lastFloatingWorkspaceActiveTabId = floatingWorkspaceActiveTabId
+      lastFloatingWorkspaceGroupId = floatingWorkspaceGroupId
+      lastFloatingWorkspaceGroups = floatingWorkspaceGroups
       lastAgentStatus = s.agentStatusByPaneKey
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
@@ -269,11 +117,14 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       }
       // Browsers have no native idle capability; their visible/focused gates still apply.
       if (!options?.presenceConfirmed && !isWebClientLocation()) {
-        const hasAttention = targets.some(({ tabId }) => {
-          const leafId = resolveActiveLeafId(s, tabId)
+        const records = readAgentAttentionTurnRecords(s)
+        const hasAttention = targets.some((target) => {
+          const subjectKey = surfaceForAutoAckTarget(s, target).resolveViewedSubjectKey(
+            target.tabId
+          )
           return (
-            computeAutoAckTargets(s, tabId, leafId).length > 0 ||
-            computeViewedAgentCompletionPaneKey(s, tabId, leafId) !== null
+            computeAgentAcknowledgementTargets(records, subjectKey).length > 0 ||
+            resolveViewedUnreadSubjectKey(s.unreadAgentCompletionPanes, subjectKey) !== null
           )
         })
         if (hasAttention) {
@@ -282,16 +133,23 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
         }
       }
 
-      const activePaneKeys = new Set<string>()
+      const activeSubjectKeys = new Set<string>()
       for (const target of targets) {
-        const activeLeafId = resolveActiveLeafId(s, target.tabId)
-        if (activeLeafId) {
-          activePaneKeys.add(makePaneKey(target.tabId, activeLeafId))
+        const subjectKey = surfaceForAutoAckTarget(s, target).resolveViewedSubjectKey(target.tabId)
+        if (subjectKey) {
+          activeSubjectKeys.add(subjectKey)
         }
       }
-      // Protection lapses when the user moves on to another pane or the agent takes a new
-      // turn; a still-active pane with an unchanged turn keeps its explicit mark-unread.
-      const lapsedProtections = computeLapsedManualUnreadProtections(s, activePaneKeys)
+      // Protection lapses when the user moves on to another subject or the agent takes a new
+      // turn; a still-active subject with an unchanged turn keeps its explicit mark-unread.
+      const lapsedProtections = computeLapsedManualUnreadProtections(
+        {
+          liveTurns: s.agentStatusByPaneKey,
+          retainedTurns: s.retainedAgentsByPaneKey,
+          manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
+        },
+        activeSubjectKeys
+      )
       if (lapsedProtections.length > 0) {
         s.clearManuallyUnreadTurns(lapsedProtections)
       }
@@ -299,34 +157,7 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       for (const target of targets) {
         // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
         // and may already have handled target[1]; `s` is a pre-write snapshot that would re-ack it.
-        const current = useAppStore.getState()
-        const tabId = target.tabId
-        const activeLeafId = resolveActiveLeafId(current, tabId)
-        const toAck = computeAutoAckTargets(current, tabId, activeLeafId).filter(
-          (paneKey) =>
-            current.manuallyUnreadTurnsByPaneKey[paneKey] !==
-            getAgentTurnTimestamp(current, paneKey)
-        )
-        const activePaneKey = computeViewedAgentCompletionPaneKey(current, tabId, activeLeafId)
-        if (toAck.length > 0 || activePaneKey) {
-          const paneKeysToClear = new Set(toAck)
-          if (activePaneKey) {
-            paneKeysToClear.add(activePaneKey)
-          }
-          const worktreeId = target.worktreeId
-          acknowledgeViewedAgentAttention(current, {
-            activeWorktreeId: shouldClearViewedAgentWorktreeUnread(current, {
-              activeWorktreeId: worktreeId,
-              activeTabId: tabId,
-              paneKeysToClear
-            })
-              ? worktreeId
-              : null,
-            activeTabId: tabId,
-            paneKeys: toAck,
-            activePaneKey
-          })
-        }
+        acknowledgeViewedAutoAckTarget(useAppStore.getState(), target)
       }
     }
     rescanRef.current = (): void => maybeAck({ force: true })

@@ -213,9 +213,11 @@ describe('unvalidated RPC request port boundary', () => {
   })
 
   it('scans a plausible number of files', () => {
-    // A broken root or extension filter would make every check below vacuously pass.
+    // A broken root or extension filter would make every check below vacuously pass. The scan
+    // width is the load-bearing half: the offender count is what the migration is driving to zero,
+    // so its floor has to come down as the list does rather than fail on a successful step.
     expect(scanned.length).toBeGreaterThan(400)
-    expect(observed.size).toBeGreaterThan(50)
+    expect(observed.size).toBeGreaterThan(20)
   })
 
   it('lists each file once', () => {

@@ -20,7 +20,10 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   parseWorkerTerminalHostScope,
@@ -67,13 +70,30 @@ export function mintStructuredWorkerPaneKey(sessionId: string): string {
   return makePaneKey(structuredAgentSessionTabId(sessionId), randomUUID())
 }
 
-/** Integrity check for a persisted pane key: same session's tab, and a real terminal leaf. */
+/** Credential check: only the pane key registered for this session can prove its identity. */
 export function structuredWorkerPaneKeyBelongsToSession(
   paneKey: string | null | undefined,
   sessionId: string
 ): boolean {
+  const registered = structuredWorkerIdentities.getBySessionId(sessionId)
   const parsed = paneKey ? parsePaneKey(paneKey) : null
   return Boolean(
+    registered &&
+    registered.paneKey === paneKey &&
+    parsed &&
+    parsed.tabId === structuredAgentSessionTabId(sessionId)
+  )
+}
+
+/** Bootstrap validation for a durable row before its key can enter the registry. */
+function persistedStructuredWorkerPaneKeyIsValid(
+  paneKey: string | null | undefined,
+  sessionId: string
+): paneKey is string {
+  const parsed = paneKey ? parsePaneKey(paneKey) : null
+  return Boolean(
+    paneKey &&
+    paneKey !== structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId) &&
     parsed &&
     parsed.tabId === structuredAgentSessionTabId(sessionId) &&
     isTerminalLeafId(parsed.leafId)
@@ -176,9 +196,8 @@ export class StructuredWorkerIdentityRegistry {
       !hostScope ||
       !row.worktree_id ||
       !isStructuredWorkerHandle(row.terminal_handle) ||
-      // The leaf is random, so the row IS the only source for it; verify only that it is a real
-      // leaf under this session's tab rather than trying to re-derive it.
-      !structuredWorkerPaneKeyBelongsToSession(row.pane_key, sessionId)
+      // The durable row bootstraps the registry after restart, so validate it before registration.
+      !persistedStructuredWorkerPaneKeyIsValid(row.pane_key, sessionId)
     ) {
       return null
     }
@@ -187,7 +206,7 @@ export class StructuredWorkerIdentityRegistry {
       sessionId,
       // The row does not carry the provider; callers that need it read the durable record.
       agent: null,
-      paneKey: row.pane_key as string,
+      paneKey: row.pane_key,
       processIncarnation: structuredWorkerProcessIncarnation(sessionId),
       worktreeId: row.worktree_id,
       hostScope

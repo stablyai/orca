@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 // Why: Phase 3 slice 1 of terminal-side-effect-authority.md runs a per-PTY
 // title tracker in main alongside the renderer transport's byte parser. Both
 // must derive IDENTICAL ordered title/status facts from the same bytes, or
@@ -101,6 +102,19 @@ describe('main title tracker parity with the renderer transport processor', () =
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('agrees on captured OMP native frames before and after owner rebranding', () => {
+    const captured = readFileSync(
+      new URL('../../../../main/runtime/__fixtures__/omp-native-title-win32.txt', import.meta.url),
+      'utf8'
+    )
+    feedBoth(paths, captured)
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events.some((event) => event.kind === 'became-working')).toBe(true)
+    expect(paths.main.events.some((event) => event.kind === 'became-idle')).toBe(true)
+    feedBoth(paths, captured.replaceAll(']0;π', ']0;OMP'))
+    expect(paths.main.events).toEqual(paths.renderer.events)
   })
 
   it('derives identical facts from a coalesced spinner+idle chunk (issue #1083)', () => {

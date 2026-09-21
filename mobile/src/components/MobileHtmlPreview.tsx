@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
+import { openExternalLink } from '../platform/external-link'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-type Props = {
+export type MobileHtmlPreviewProps = {
   html: string
   // Rendered when the user flips to "Source" (the existing syntax view).
   renderSource: () => React.ReactNode
@@ -14,7 +15,7 @@ type Props = {
 // Preview/Source toggle. Navigation is locked: only the initial inline document
 // loads in-place; any link tap opens externally so a page can't hijack the
 // review surface.
-export function MobileHtmlPreview({ html, renderSource }: Props) {
+export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
 
   return (
@@ -50,7 +51,7 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
             if (request.url === 'about:blank' || request.url.startsWith('data:')) {
               return true
             }
-            void Linking.openURL(request.url).catch(() => {})
+            openExternalLink(request.url)
             return false
           }}
         />

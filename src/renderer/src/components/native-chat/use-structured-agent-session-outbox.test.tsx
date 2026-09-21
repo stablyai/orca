@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
+import { enqueueStructuredAgentSessionLaunchPrompt } from './structured-agent-session-outbox-storage'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn()
@@ -16,6 +17,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -122,12 +124,79 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
 }
 
 describe('useStructuredAgentSessionOutbox', () => {
+  let randomUuidSequence = 0
+
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
-      '11111111-1111-4111-8111-111111111111'
+    randomUuidSequence = 0
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      randomUuidSequence += 1
+      return `11111111-1111-4111-8111-${randomUuidSequence.toString(16).padStart(12, '0')}`
+    })
+  })
+
+  it('does not redispatch a launch prompt settled before the mounted outbox gets its fence', async () => {
+    const stagedEntry = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'review this')
+    if (!stagedEntry) {
+      throw new Error('fixture outbox entry was not persisted')
+    }
+    mocks.call.mockResolvedValue(acceptedResultFor(stagedEntry.clientMessageId, 1))
+    const initialProps: { fence: number | null } = { fence: null }
+    const { result, rerender } = renderHook(
+      ({ fence }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence,
+          submissions: []
+        }),
+      { initialProps }
     )
+    expect(result.current.outbox).toHaveLength(1)
+
+    await expect(
+      settleStructuredAgentLaunchPrompt({
+        launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+        options: { prompt: 'review this' },
+        stagedEntry
+      })
+    ).resolves.toEqual({ delivered: true, failureNotified: false })
+    expect(mocks.call).toHaveBeenCalledOnce()
+
+    rerender({ fence: 1 })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+    expect(mocks.call).toHaveBeenCalledOnce()
+  })
+
+  it('joins a launch prompt dispatch already in flight when the outbox mounts', async () => {
+    const stagedEntry = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'review this')
+    if (!stagedEntry) {
+      throw new Error('fixture outbox entry was not persisted')
+    }
+    const admission = deferred<ReturnType<typeof acceptedResultFor>>()
+    mocks.call.mockReturnValueOnce(admission.promise)
+    const delivery = settleStructuredAgentLaunchPrompt({
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      options: { prompt: 'review this' },
+      stagedEntry
+    })
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+    expect(result.current.outbox[0]?.state).toBe('dispatching')
+
+    await act(async () => admission.resolve(acceptedResultFor(stagedEntry.clientMessageId, 1)))
+    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+    expect(mocks.call).toHaveBeenCalledOnce()
   })
 
   it('requeues across a fence change and ignores the stale settlement', async () => {
@@ -546,7 +615,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     const retryParams = mocks.call.mock.calls[1]?.[2] as { retryUnknown?: true } | undefined
-    expect(retryParams?.retryUnknown).toBe(true)
+    expect(retryParams?.retryUnknown).toBeUndefined()
   })
 
   it('rotates a history-rejected unknown head so the queued tail can advance', async () => {
@@ -607,6 +676,81 @@ describe('useStructuredAgentSessionOutbox', () => {
       | { envelope: { clientOperationId: string } }
       | undefined
     expect(retryParams?.envelope.clientOperationId).not.toBe(firstId)
+  })
+
+  it('rotates the id after a refused write and delivers the message exactly once', async () => {
+    vi.mocked(globalThis.crypto.randomUUID)
+      .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+    const writeFailed = (clientMessageId: string) => ({
+      clientMessageId,
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState: 'rejected' as const,
+      providerItemId: null,
+      reason: 'provider_write_failed: broken pipe',
+      submittedAt: 10,
+      resolvedAt: 10
+    })
+    mocks.call
+      .mockImplementationOnce(async (_target, _method, params) => ({
+        ok: true,
+        replayed: false,
+        fence: 1,
+        cursor: { epoch: 'epoch-1', sequence: 10 },
+        value: {
+          clientMessageId: (params as { envelope: { clientOperationId: string } }).envelope
+            .clientOperationId,
+          submission: writeFailed(
+            (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
+          )
+        }
+      }))
+      .mockImplementationOnce(async (_target, _method, params) =>
+        acceptedResultFor(
+          (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId,
+          11
+        )
+      )
+    const { result } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const firstId = mocks.call.mock.calls[0]![2].envelope.clientOperationId as string
+
+    // A refused write is answered, not doubted: the entry parks with human copy
+    // rather than under the "delivery is unconfirmed" banner. The durable reason
+    // stays `provider_write_failed: …`; it must not reach the screen.
+    await waitFor(() =>
+      expect(result.current.error).toBe(
+        "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+      )
+    )
+    expect(result.current.outbox[0]?.state).toBe('queued')
+    expect(result.current.blockedClientMessageId).toBe(firstId)
+
+    // Retry immediately, before the journal subscription can publish the rejected row.
+    act(() => result.current.retry(firstId))
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+
+    // Exactly one further delivery, under a new id, and with no `retryUnknown`:
+    // this is a first delivery of a new message, so it cannot duplicate.
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    const retryParams = mocks.call.mock.calls[1]?.[2] as {
+      envelope: { clientOperationId: string }
+      retryUnknown?: true
+    }
+    expect(retryParams.envelope.clientOperationId).not.toBe(firstId)
+    expect(retryParams.retryUnknown).toBeUndefined()
   })
 
   it('loads the new session outbox when a pane switches sessions', async () => {

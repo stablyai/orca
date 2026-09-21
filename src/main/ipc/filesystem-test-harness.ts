@@ -207,12 +207,16 @@ export async function withPlatform<T>(
   }
 }
 
-function collectMocks(moduleMock: object): IpcMock[] {
+function isMockContainer(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function collectMocks(moduleMock: Record<string, unknown>): IpcMock[] {
   return Object.values(moduleMock).flatMap((value) => {
     if (vi.isMockFunction(value)) {
       return [value as IpcMock]
     }
-    return value && typeof value === 'object' ? collectMocks(value) : []
+    return isMockContainer(value) ? collectMocks(value) : []
   })
 }
 

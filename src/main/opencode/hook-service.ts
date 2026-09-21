@@ -33,6 +33,13 @@ type OpenCodeOverlayManifest = {
   pluginEntries: string[]
 }
 
+type OpenCodeHookVariant = {
+  pluginFileName: string
+  legacyHooksDir: string
+  overlayDir: string
+  pluginSource: () => string
+}
+
 // Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
@@ -47,9 +54,16 @@ export function getOpenCodePluginSource(): string {
   return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
+export function getOpenCode2PluginSource(): string {
+  return getOpenCodeFamilyPluginSource('/hook/opencode2', {
+    emitSessionStart: true,
+    emitNextEvents: true
+  })
+}
+
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
-  options: { emitSessionStart: boolean }
+  options: { emitSessionStart: boolean; emitNextEvents?: boolean }
 ): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
@@ -67,6 +81,32 @@ export function getOpenCodeFamilyPluginSource(
 
 // Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
+  private readonly pluginSource: () => string
+  private readonly pluginFileName: string
+  private readonly legacyHooksDir: string
+  private readonly overlayDir: string
+
+  constructor(variant?: OpenCodeHookVariant | (() => string)) {
+    const config: OpenCodeHookVariant =
+      typeof variant === 'function'
+        ? {
+            pluginFileName: ORCA_OPENCODE_PLUGIN_FILE,
+            legacyHooksDir: OPENCODE_LEGACY_HOOKS_DIR,
+            overlayDir: OPENCODE_OVERLAY_DIR,
+            pluginSource: variant
+          }
+        : (variant ?? {
+            pluginFileName: ORCA_OPENCODE_PLUGIN_FILE,
+            legacyHooksDir: OPENCODE_LEGACY_HOOKS_DIR,
+            overlayDir: OPENCODE_OVERLAY_DIR,
+            pluginSource: getOpenCodePluginSource
+          })
+    this.pluginSource = config.pluginSource
+    this.pluginFileName = config.pluginFileName
+    this.legacyHooksDir = config.legacyHooksDir
+    this.overlayDir = config.overlayDir
+  }
+
   clearPty(_ptyId: string): void {
     // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
@@ -106,7 +146,7 @@ export class OpenCodeHookService {
   }
 
   private getOverlayRoot(): string {
-    return join(getAppEnvironment().getPath('userData'), OPENCODE_OVERLAY_DIR)
+    return join(getAppEnvironment().getPath('userData'), this.overlayDir)
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
@@ -116,7 +156,7 @@ export class OpenCodeHookService {
   private getSharedConfigDir(): string {
     return join(
       getAppEnvironment().getPath('userData'),
-      OPENCODE_LEGACY_HOOKS_DIR,
+      this.legacyHooksDir,
       OPENCODE_SHARED_CONFIG_DIR
     )
   }
@@ -149,7 +189,7 @@ export class OpenCodeHookService {
 
     const overlayPluginsDir = join(overlayDir, 'plugins')
     for (const entryName of manifest.pluginEntries) {
-      if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
+      if (entryName === this.pluginFileName) {
         continue
       }
       safeRemoveTree(join(overlayPluginsDir, entryName))
@@ -187,7 +227,7 @@ export class OpenCodeHookService {
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
             // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
-            if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
+            if (pluginEntry.name === this.pluginFileName) {
               continue
             }
             mirrorEntry(
@@ -211,13 +251,13 @@ export class OpenCodeHookService {
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
-    const pluginPath = join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE)
+    const pluginPath = join(pluginsDir, this.pluginFileName)
     try {
       unlinkSync(pluginPath)
     } catch {
       // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
     }
-    writeFileSync(pluginPath, getOpenCodePluginSource())
+    writeFileSync(pluginPath, this.pluginSource())
   }
 
   private writeSharedPluginConfig(): string | null {
@@ -225,7 +265,7 @@ export class OpenCodeHookService {
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })
-      writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
+      writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
     } catch {
       // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
       return null
@@ -235,8 +275,15 @@ export class OpenCodeHookService {
 }
 
 export const openCodeHookService = new OpenCodeHookService()
+export const openCode2HookService = new OpenCodeHookService({
+  pluginFileName: 'orca-opencode2-status.js',
+  legacyHooksDir: 'opencode2-hooks',
+  overlayDir: 'opencode2-config-overlays',
+  pluginSource: getOpenCode2PluginSource
+})
 export const _internals = {
   getOpenCodePluginSource,
+  getOpenCode2PluginSource,
   isUsableId,
   toSafeDirName
 }

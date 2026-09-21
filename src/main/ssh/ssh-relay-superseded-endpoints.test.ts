@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const execCommand = vi.fn()
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -7,7 +7,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     (error as { sshChannelCloseConfirmed?: boolean } | null)?.sshChannelCloseConfirmed === false
 }))
 
-import { parseRelayEndpointIncumbentProbe } from './ssh-relay-endpoint-incumbent'
+import {
+  RelayProbeCleanupUnconfirmedError,
+  parseRelayEndpointIncumbentProbe
+} from './ssh-relay-endpoint-incumbent'
 import {
   classifySupersededRelay,
   supersededRelayEndpointListCommand,
@@ -41,6 +44,13 @@ function incumbent(lines: string[]): ReturnType<typeof parseRelayEndpointIncumbe
 
 function issuedCommands(): string[] {
   return execCommand.mock.calls.map((call) => String(call[1]))
+}
+
+/** The `beforeEach` spy is reinstalled, not reset, so its calls survive the previous test. */
+function warnSpy(): MockInstance<typeof console.warn> {
+  const spy = vi.spyOn(console, 'warn')
+  spy.mockClear()
+  return spy
 }
 
 beforeEach(() => {
@@ -97,6 +107,23 @@ describe('classifySupersededRelay', () => {
 })
 
 describe('sweepSupersededRelayEndpoints', () => {
+  it('stops the sweep before cleanup when probe group termination is unconfirmed', async () => {
+    execCommand
+      .mockResolvedValueOnce(OLD_SOCK)
+      .mockResolvedValueOnce(
+        probe([
+          'PRESENT=yes',
+          'LISTEN=accepted',
+          'HOLDERS_SOURCE=unavailable',
+          'PROBE_CLEANUP=unconfirmed'
+        ])
+      )
+    await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).rejects.toBeInstanceOf(
+      RelayProbeCleanupUnconfirmedError
+    )
+    expect(issuedCommands()).toHaveLength(2)
+  })
+
   it('leaves an upgrade-orphaned relay that still owns terminals running, untouched', async () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
@@ -106,7 +133,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ sockPath: OLD_SOCK, outcome: 'retained-live-work' })
-    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
   })
 
@@ -157,8 +184,62 @@ describe('sweepSupersededRelayEndpoints', () => {
     await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).resolves.toEqual([])
   })
 
+  it('records the abandoned pass when the listing fails, so it reads apart from an empty host', async () => {
+    const warn = warnSpy()
+    execCommand.mockRejectedValueOnce(new Error('exec failed'))
+    await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
+    expect(warn.mock.calls.flat().join('\n')).toContain('no pass ran: exec failed')
+  })
+
+  // Same defect as the two arms above, one level down. An ordinary probe failure degrades to
+  // `unverifiable` and the loop carries on, so the only way out of it mid-pass is the one case that
+  // matters most: an exec whose SSH channel never confirmed close, which may still be running
+  // remotely. That rethrows by design — and it used to throw past the log, losing socket 1's
+  // verdict and making a half-run pass read exactly like a host with nothing to sweep.
+  it('keeps the endpoints it already classified when a later probe cannot confirm termination', async () => {
+    const SECOND_SOCK = `${HOME}/.orca-remote/relay-0.1.0+cafebabe1234/${SOCK_NAME}`
+    const unconfirmed = Object.assign(new Error('channel close unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    const warn = warnSpy()
+    execCommand
+      .mockResolvedValueOnce(`${OLD_SOCK}\n${SECOND_SOCK}\n`)
+      .mockResolvedValueOnce(probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable']))
+      .mockRejectedValueOnce(unconfirmed)
+
+    await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).rejects.toBe(unconfirmed)
+
+    const logged = warn.mock.calls.flat().join('\n')
+    // Socket 1's verdict survives the abandon...
+    expect(logged).toContain('Superseded relay unverifiable')
+    expect(logged).toContain(OLD_SOCK)
+    // ...and the pass says how far it got, claiming nothing about the one it never reached.
+    expect(logged).toContain('stopped after 1 of 2 endpoints')
+    expect(logged).not.toContain(SECOND_SOCK)
+  })
+
+  // The loop must not stop on a probe that merely failed: that is an absence of evidence, and the
+  // remaining endpoints still deserve a pass.
+  it('carries on past an ordinary probe failure and classifies the rest', async () => {
+    const SECOND_SOCK = `${HOME}/.orca-remote/relay-0.1.0+cafebabe1234/${SOCK_NAME}`
+    execCommand
+      .mockResolvedValueOnce(`${OLD_SOCK}\n${SECOND_SOCK}\n`)
+      .mockRejectedValueOnce(new Error('probe blew up'))
+      .mockResolvedValueOnce(probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable']))
+
+    const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
+
+    expect(findings.map((f) => f.outcome)).toEqual(['unverifiable', 'unverifiable'])
+  })
+
   it('does not run against Windows hosts, whose endpoints are named pipes', async () => {
+    const warn = warnSpy()
     await expect(sweepSupersededRelayEndpoints(CONN, WINDOWS_HOST, SWEEP)).resolves.toEqual([])
     expect(execCommand).not.toHaveBeenCalled()
+    // The skip has to leave a trace: a Windows orphan is never listed and never reclaimed, and
+    // an empty return is otherwise indistinguishable from a host that had nothing to sweep.
+    const logged = warn.mock.calls.flat().join('\n')
+    expect(logged).toContain('Superseded relay sweep did not run')
+    expect(logged).toContain(CURRENT_DIR)
   })
 })

@@ -1,0 +1,89 @@
+{
+  "operation": "source-control.review-git-preparation",
+  "family": "git.review-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "a29d518b2d075e8e4811404e0fcbf8948fbfe53a3aefbf0948cb2f2e622e8cbb",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "17bb401abe83": {
+      "committed": {
+        "ok": true
+      },
+      "status": "unread"
+    },
+    "2a7ee2985949": {
+      "name": "git.commit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "message": "recorded message",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "commit": "abc1234",
+            "success": true
+          }
+        }
+      }
+    },
+    "342343f97688": {
+      "name": "git.commit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-review-commit",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["2a7ee2985949"],
+          "payloads": ["342343f97688"],
+          "settlements": {
+            "commit": "fbc958e4d46e"
+          },
+          "state": "17bb401abe83",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

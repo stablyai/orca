@@ -2,16 +2,17 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
+import { gitCommitCompareRead } from './mobile-git-read-operations'
+import type { MobileGitChangedFile } from './git-compare-reply-schema'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { GitBranchChangeEntry } from '../../../src/shared/git-diff-compare-types'
 
 type Props = {
   client: RpcClient | null
@@ -41,7 +42,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
+  const [filesById, setFilesById] = useState<Record<string, MobileGitChangedFile[] | 'loading'>>({})
 
   // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
@@ -105,12 +106,11 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     const commitId = expanded
     let stale = false
     setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
-    void client
-      .sendRequest('git.commitCompare', { worktree: `id:${worktreeId}`, commitId })
-      .then((response) => {
-        const entries = response.ok
-          ? ((response as RpcSuccess).result as { entries: GitBranchChangeEntry[] }).entries
-          : []
+    void gitCommitCompareRead
+      .request(client, { worktree: `id:${worktreeId}`, commitId })
+      .then((reply) => {
+        const compared = gitCommitCompareRead.interpret(reply)
+        const entries = compared.accepted ? compared.value.entries : []
         if (!stale) {
           setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }

@@ -44,6 +44,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       restoredUnconfirmed,
       observation,
       isReplay,
+      authorityRestartId,
       structuredHost
     }) => {
       if (state.mainWindow?.isDestroyed()) {
@@ -88,6 +89,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
             })
           : false
       const statusEvent = {
+        ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),

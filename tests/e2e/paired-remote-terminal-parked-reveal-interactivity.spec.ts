@@ -150,7 +150,7 @@ async function createHostTerminal(
     hostTabId,
     sinkPath,
     terminal: result.tab.terminal,
-    webTabId: toWebTerminalSurfaceTabId(hostTabId)
+    webTabId: toWebTerminalSurfaceTabId(hostTabId, { environmentId, worktreeId })
   }
 }
 
@@ -224,7 +224,6 @@ async function readPaneDiagnostics(
         bufferLength: pane?.serializeAddon?.serialize?.()?.length ?? null,
         paneLeafIds: manager?.getPanes?.().map((entry) => entry.leafId ?? null) ?? null,
         storeTabPtyId: tab?.ptyId ?? null,
-        storeTabLayout: tab?.paneLayout ? JSON.stringify(tab.paneLayout) : null,
         storePtyIdsByTab: state?.ptyIdsByTabId?.[webTabId] ?? null
       }
     },
@@ -392,6 +391,29 @@ test('paired client keeps revealed remote terminals interactive', async ({
       const { target, decoys } = await seedScenario(client, worktreeId)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
+      const originalGrid = await readActivePaneGrid(client.page, target.webTabId)
+      await client.page.setViewportSize({ width: 960, height: 800 })
+      await expect
+        .poll(() => readActivePaneGrid(client.page, decoys[0].webTabId))
+        .not.toEqual(originalGrid)
+      const revealGrid = await readActivePaneGrid(client.page, decoys[0].webTabId)
+      if (!revealGrid) {
+        throw new Error('visible decoy has no grid')
+      }
+      // Hidden xterm changes locally, but its authority gate drops the PTY resize.
+      await client.page.evaluate(
+        ({ id, grid }) => {
+          const pane = window.__paneManagers?.get(id)?.getPanes()[0]
+          if (!pane) {
+            throw new Error('hidden target parked before resize injection')
+          }
+          pane.terminal.resize(grid.cols, grid.rows)
+        },
+        { id: target.webTabId, grid: revealGrid }
+      )
+      expect(readPtyGridFromContent(readSink(target.sinkPath))).toEqual(originalGrid)
+      expect(await readActivePaneGrid(client.page, target.webTabId)).toEqual(revealGrid)
+      expect(revealGrid).not.toEqual(originalGrid)
       // Pins the scenario label: this reveal must not have gone through a park.
       await expectStillMounted(client.page, target.webTabId, 'hidden-mounted target')
       await openClientTab(client.page, worktreeId, target.webTabId)

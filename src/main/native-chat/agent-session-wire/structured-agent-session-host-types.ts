@@ -3,6 +3,7 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -31,6 +32,11 @@ export type StructuredAgentSessionHostSession = {
    *  restored for reading has none, and neither has a session a TUI owns — so neither may be
    *  evicted to free a child, and neither may have its lease released as an observed exit. */
   hasProviderChild: boolean
+  /** The wind-down this host still owes for a child it started: settling that generation's work
+   *  and handing the lease back. A separate fact from `hasProviderChild`, which goes false the
+   *  moment the adapter proves the exit — an eviction that aborts after that point must still be
+   *  able to finish the wind-down on the next close. */
+  owesProviderChildWindDown?: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
 }
@@ -38,6 +44,8 @@ export type StructuredAgentSessionHostSession = {
 export type StructuredAgentSessionHostDeps = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  /** Optional advisory recovery storage, independent of conversation backups. */
+  recoveryCapsule?: AgentSessionRecoveryCapsule
   journalRoot: string
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>

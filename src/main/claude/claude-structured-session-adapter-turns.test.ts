@@ -55,7 +55,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 
-  it('puts delivery in doubt only when the write itself fails', async () => {
+  it('rejects a send whose frame the transport never took', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await acquired(claude)
     claude.connections[0]!.send = async () => {
@@ -68,7 +68,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
   })
 
   it('requires an acknowledged interrupt and supports controlled options', async () => {

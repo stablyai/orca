@@ -1,103 +1,72 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  settleStructuredAgentLaunch: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  activateStructuredAgentSessionById: vi.fn()
-}))
-
-vi.mock('@/lib/structured-agent-launch-settlement', () => ({
-  settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
-}))
-
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
-}))
-
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
-  activateStructuredAgentSessionById: mocks.activateStructuredAgentSessionById
-}))
-
-import {
-  adoptAgentSessionLaunchVerdict,
-  type AgentSessionLaunchVerdict
-} from '@/lib/agent-session-launch-plan'
-import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
-
-/** Planned before the worktree existed, so the verdict names no workspace. */
-const plan = (overrides: Partial<AgentSessionLaunchVerdict> = {}) =>
-  adoptAgentSessionLaunchVerdict({
-    route: 'structured-native-chat',
-    agent: 'codex',
-    prompt: 'Fix the route',
-    promptDelivery: 'auto-submit',
-    ...overrides
-  })
-
-const baseArgs = {
-  plan: plan(),
-  agent: 'codex' as const,
-  worktreeId: 'worktree-1',
-  startup: { command: 'codex' } as never,
-  pendingFirstAgentMessageRename: true,
-  applyWorktreeMeta: vi.fn().mockResolvedValue(undefined)
+type BeginArgs = {
+  plan: unknown
+  target: { worktreeId: string }
+  beforeOpen?: (sessionId: string) => boolean | void
 }
 
-describe('settleFullCreationStructuredLaunch', () => {
-  beforeEach(() => vi.clearAllMocks())
+const mocks = vi.hoisted(() => ({
+  beginStructuredAgentSessionProvisionalLaunch:
+    vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>()
+}))
 
-  it('skips the loop when the route is not structured', async () => {
-    await expect(
-      settleFullCreationStructuredLaunch({ ...baseArgs, plan: plan({ route: 'terminal-tui' }) })
-    ).resolves.toBeNull()
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
+}))
+
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { beginFullCreationStructuredLaunch } from './full-creation-structured-launch'
+
+const plan = adoptAgentSessionLaunchVerdict({
+  route: 'structured-native-chat',
+  agent: 'codex',
+  prompt: 'Fix the route',
+  promptDelivery: 'auto-submit'
+})
+
+describe('beginFullCreationStructuredLaunch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.beforeOpen?.('session-1')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+    })
   })
 
-  it('hands the loop the prompt and activates the structured tab when ready', async () => {
-    mocks.settleStructuredAgentLaunch.mockImplementation(
-      async (_worktreeId, _agent, _options, hooks) => {
-        hooks.onStructuredReady('session-1')
-        return { kind: 'structured', sessionId: 'session-1' }
-      }
-    )
+  it('allocates the final identity before revealing and opening the chat surface', () => {
+    const order: string[] = []
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      order.push('begin')
+      args.beforeOpen?.('session-1')
+      order.push('open')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+    })
 
-    await expect(
-      settleFullCreationStructuredLaunch({ ...baseArgs, plan: plan({ promptDelivery: 'draft' }) })
-    ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1' })
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
-      'worktree-1',
-      'codex',
-      { prompt: 'Fix the route', promptDelivery: 'draft' },
-      expect.anything()
-    )
-    expect(mocks.activateStructuredAgentSessionById).toHaveBeenCalledWith({
+    const launch = beginFullCreationStructuredLaunch({
+      plan,
       worktreeId: 'worktree-1',
-      sessionId: 'session-1'
+      beforeOpen: (sessionId) => {
+        order.push(`reveal:${sessionId}`)
+        return true
+      }
+    })
+
+    expect(launch).toMatchObject({ sessionId: 'session-1', tab: { id: 'agent-session:session-1' } })
+    expect(order).toEqual(['begin', 'reveal:session-1', 'open'])
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith({
+      plan,
+      hooks: {},
+      target: { worktreeId: 'worktree-1' },
+      beforeOpen: expect.any(Function)
     })
   })
 
-  it('marks the rename flag and opens the startup terminal as the legacy fallback', async () => {
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'fallback-tab' })
-    mocks.settleStructuredAgentLaunch.mockImplementation(
-      async (_worktreeId, _agent, _options, hooks) => ({
-        kind: 'refused-then-legacy',
-        ...(await hooks.legacyFallback())
-      })
-    )
+  it('returns no surface when reveal or ownership is refused', () => {
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(null)
 
-    await expect(settleFullCreationStructuredLaunch(baseArgs)).resolves.toEqual({
-      kind: 'refused-then-legacy',
-      activation: { primaryTabId: 'fallback-tab' },
-      primaryTabId: 'fallback-tab'
-    })
-    expect(baseArgs.applyWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
-      pendingFirstAgentMessageRename: true
-    })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
-      sidebarRevealBehavior: 'auto',
-      agent: 'codex',
-      createNewTerminalForStartup: true,
-      startup: baseArgs.startup
-    })
+    expect(
+      beginFullCreationStructuredLaunch({ plan, worktreeId: 'worktree-1', beforeOpen: vi.fn() })
+    ).toBeNull()
   })
 })

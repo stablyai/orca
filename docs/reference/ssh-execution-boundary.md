@@ -72,6 +72,33 @@ A verdict needs evidence from the host that owns the process. Apply these tests 
 
 Anything short of positive host evidence is `unverifiable`. Reporting it as `exited` is the error this document exists to prevent: it orphans live work and can cold-start a duplicate over the same worktree.
 
+## Host contact is a different question from process liveness
+
+The `live` / `unverifiable` / `exited` triple above answers one question: is this PTY running. It has
+no synonyms, and nothing below adds any.
+
+A second, narrower question — can we currently reach the host at all, and what is its last answer
+worth — is answered by `RuntimeHostContact` (`src/shared/runtime-host-contact.ts`), whose arms are
+`live` / `unverifiable` / `refused` / `retired`. These are **not** extra process verdicts and must
+never be mapped onto one:
+
+- `refused` is the host answering and turning us away — unauthorized, a protocol mismatch, a status
+  method it does not implement. That is positive evidence about the *connection*, and it says
+  nothing whatever about whether the host's PTYs are running. They almost certainly still are.
+- `retired` is the pairing being ended by explicit user action. Same point: the client stops having
+  a route, the remote work is unaffected.
+
+Both are reasons to stop *trusting a cached answer*, never reasons to report a process `exited`. A
+reader that needs a process verdict must still get it from the host that owns the process, by the
+tests above.
+
+Why the extra arms exist at all: the renderer previously expressed every non-answer as one nullable
+`status`, so a probe in flight, a probe that failed, a host that refused us and a retired pairing
+all reached readers as the same `null` — and readers spent that `null` on decisions of very
+different weight, including destructive ones. Folding `refused` and `retired` back into
+`unverifiable` to match this document's triple would recreate exactly that collapse. The vocabularies
+are deliberately separate because the questions are.
+
 ## Deciding a remote pane is idle
 
 The orphan-PTY sweep is the one flow that turns an observation into a SIGKILL, so its idleness evidence has to be measured against the same thing the signal reaches. It is not the terminal.

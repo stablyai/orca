@@ -2,6 +2,7 @@ import {
   boundPayload,
   digestPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
 
 export const CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES = 256
 export const CODEX_JOURNAL_PROMPT_OPTION_ID_MAX_BYTES = 1024
@@ -13,6 +14,53 @@ export const CODEX_PROMPT_MAX_ANSWER_BYTES = 64 * 1024
 export const MAX_CODEX_PROMPT_REGISTRY_ENTRIES = 128
 export const MAX_CODEX_PROMPT_JOURNAL_BINDINGS = 256
 export const MAX_CODEX_PROMPT_REGISTRY_BYTES = 4 * 1024 * 1024
+const CODEX_PROMPT_TURN_ID_RESERVED_BYTES = AGENT_SESSION_ID_MAX_LENGTH * 3
+
+type CodexPromptRegistryEntryBounds = {
+  threadId: string
+  turnId: string | null
+  turnIdDigest?: string
+  codexItemId: string
+  promptKey: string
+  questionIds: readonly string[]
+  optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
+  answers: ReadonlyMap<string, string>
+}
+
+export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBounds): number {
+  let bytes = 0
+  for (const value of [prompt.threadId, prompt.codexItemId, prompt.promptKey]) {
+    bytes += Buffer.byteLength(value, 'utf8')
+  }
+  const turnId = prompt.turnId ?? prompt.turnIdDigest
+  bytes += turnId ? Buffer.byteLength(turnId, 'utf8') : CODEX_PROMPT_TURN_ID_RESERVED_BYTES
+  for (const id of prompt.questionIds) {
+    bytes += Buffer.byteLength(id, 'utf8')
+  }
+  for (const entry of prompt.optionAnswers.values()) {
+    bytes += Buffer.byteLength(entry.questionId, 'utf8') + Buffer.byteLength(entry.answer, 'utf8')
+  }
+  for (const value of prompt.answers.values()) {
+    bytes += Buffer.byteLength(value, 'utf8')
+  }
+  return bytes
+}
+
+export function codexPromptTurnIdentity(turnId: string): {
+  turnId: string | null
+  turnIdDigest?: string
+} {
+  return turnId.length <= AGENT_SESSION_ID_MAX_LENGTH
+    ? { turnId }
+    : { turnId: null, turnIdDigest: digestPayload(turnId) }
+}
+
+export function codexPromptMatchesTurn(
+  prompt: Pick<CodexPromptRegistryEntryBounds, 'turnId' | 'turnIdDigest'>,
+  turnId: string
+): boolean {
+  return prompt.turnId === turnId || prompt.turnIdDigest === digestPayload(turnId)
+}
 
 export function codexJournalPromptIdPart(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES) {

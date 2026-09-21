@@ -12,6 +12,17 @@ const CREDENTIAL_GRACE_MS = 24 * 60 * 60 * 1000
 // tolerance at exactly inviteTtlMs; issuing under the ceiling keeps pairing
 // working for clients whose clocks trail the cell by up to this margin.
 const INVITE_ISSUE_SKEW_MARGIN_MS = 30 * 1000
+// Terminal invites are read by nothing: every reader re-checks expiry and state at read time, so
+// the row only serves the audit trail, which relay_audit_events already keeps. A week is long
+// enough to answer a support question about a pairing that failed.
+const TERMINAL_INVITE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+// Why: both readers of a connection basis and of a direct authorization require it still
+// active/unconsumed AND inside its deadline, and every deadline is set at most 30s past insert, so
+// a settled row can never authorize anything again. A day is margin for forensics, not for reads.
+const INACTIVE_AUTHORIZATION_RETENTION_MS = 24 * 60 * 60 * 1000
+// Bounded so one cycle cannot hold row locks or grow WAL without limit; the backlog drains over
+// however many cycles it takes.
+const REAP_BATCH_ROWS = 5000
 
 export type RelayIdentity = { userId: string; relayHostId: string }
 export type CredentialReservation = RelayIdentity & {
@@ -643,6 +654,44 @@ export class RelayCredentialStore {
         [now - 24 * 60 * 60 * 1000]
       )
     })
+    await this.reapSettledCredentials(now)
+  }
+
+  // Outside the sweep transaction on purpose: each delete is idempotent and independent of the
+  // state transitions above, so batching them in would only hold their row locks for longer.
+  private async reapSettledCredentials(now: number): Promise<void> {
+    await this.reapBatch(
+      'relay_invites',
+      'state IN (?, ?, ?) AND updated_at <= ?',
+      ['expired', 'consumed', 'invalidated', now - TERMINAL_INVITE_RETENTION_MS]
+    )
+    // deadline, not created_at: it is the second column of relay_connection_bases_active_deadline,
+    // so once the backlog is drained this batch learns there is nothing left to do from the index
+    // instead of the 1.5 GB heap. Both readers reject a passed deadline, so a day past one is
+    // unusable whatever the active flag says.
+    await this.reapBatch('relay_connection_bases', 'active = ? AND deadline <= ?', [
+      0,
+      now - INACTIVE_AUTHORIZATION_RETENTION_MS
+    ])
+    // consumed_at, not deadline: consumption is what settles this row, and it can happen well
+    // before the deadline, so measuring from it retains the row for the full window either way.
+    await this.reapBatch(
+      'relay_direct_authorizations',
+      'consumed_at IS NOT NULL AND consumed_at <= ?',
+      [now - INACTIVE_AUTHORIZATION_RETENTION_MS]
+    )
+  }
+
+  // ctid/rowid, not the primary key: the physical address lets the delete re-find exactly the batch
+  // the subquery located instead of re-matching the predicate per row.
+  private async reapBatch(table: string, predicate: string, params: unknown[]): Promise<void> {
+    const address = this.database.dialect === 'sqlite' ? 'rowid' : 'ctid'
+    await this.database.query(
+      `DELETE FROM ${table} WHERE ${address} IN (
+         SELECT ${address} FROM ${table} WHERE ${predicate} LIMIT ${REAP_BATCH_ROWS}
+       )`,
+      params
+    )
   }
 
   private async installStatusWith(

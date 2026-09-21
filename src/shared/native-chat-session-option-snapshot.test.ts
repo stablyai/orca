@@ -8,6 +8,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-gemini-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
@@ -382,6 +383,80 @@ describe('defaults on load', () => {
     expect(resolveAgentSessionOptionLaunch('grok', undefined)).toEqual({
       args: [],
       appliedValues: {}
+    })
+  })
+})
+
+describe('a boolean option always carries a value to render', () => {
+  // `thinking` is the sharp case: its catalog default is `true`, so a descriptor
+  // that omits the value renders a switch that says the opposite of the catalog.
+  function cursorSnapshot(mode: 'draft' | 'live'): SessionOptionDescriptor[] {
+    const record = createNativeChatSessionOptionRecord('cursor')
+    record.model = { value: 'claude-opus-4-8', source: 'reported' }
+    return buildNativeChatSessionOptionSnapshot({
+      catalog: CURSOR_SESSION_OPTION_CATALOG,
+      models: CURSOR_SESSION_OPTION_CATALOG.models,
+      record,
+      mode,
+      modelLabel: 'Model',
+      liveTransport: mode === 'live' ? 'agent-session' : 'catalog'
+    })
+  }
+  const thinkingOf = (mode: 'draft' | 'live'): SessionOptionDescriptor | undefined =>
+    cursorSnapshot(mode).find((descriptor) => descriptor.id === 'thinking')
+
+  it('resolves an unreported live boolean to the catalog default, not to off', () => {
+    // A switch has no third position: leaving this unset rendered `thinking` off
+    // while the catalog — and every composed dispatch — treats it as on.
+    const thinking = thinkingOf('live')
+    expect(thinking?.kind.type).toBe('boolean')
+    expect(thinking?.kind.type === 'boolean' ? thinking.kind.currentValue : null).toBe(true)
+  })
+
+  it('keeps provenance on its own track when it resolves that value', () => {
+    // The value renders; nothing reported it. Collapsing these would let a pill
+    // name a value the agent never confirmed.
+    expect(thinkingOf('live')).toMatchObject({ valueSource: 'unknown' })
+    expect(thinkingOf('draft')).toMatchObject({ valueSource: 'default' })
+  })
+
+  it('resolves a tracked boolean to the tracked value, not the catalog default', () => {
+    const record = createNativeChatSessionOptionRecord('cursor')
+    record.model = { value: 'claude-opus-4-8', source: 'reported' }
+    record.valuesByModel['claude-opus-4-8'] = { thinking: { value: false, source: 'reported' } }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: CURSOR_SESSION_OPTION_CATALOG,
+      models: CURSOR_SESSION_OPTION_CATALOG.models,
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'agent-session'
+    })
+    const thinking = snapshot.find((descriptor) => descriptor.id === 'thinking')
+    expect(thinking?.kind.type === 'boolean' ? thinking.kind.currentValue : null).toBe(false)
+    expect(thinking).toMatchObject({ valueSource: 'reported' })
+  })
+
+  it('leaves a select able to render nothing selected', () => {
+    // Only the boolean kind resolves: a radio group can show no selection
+    // truthfully, so nothing forces a value onto it.
+    const effort = cursorSnapshot('live')!.find((descriptor) => descriptor.id === 'effort')
+    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeUndefined()
+    expect(effort).toMatchObject({ valueSource: 'unknown' })
+  })
+
+  it('does not let the resolved display value reach the composed --model argument', () => {
+    // Invariant pin, not a regression arm: the composed model is built from the
+    // caller's picks, never from a descriptor, so resolving display cannot move it.
+    expect(resolveAgentSessionOptionLaunch('cursor', { model: 'claude-opus-4-8' })).toEqual({
+      args: ['--model', 'claude-opus-4-8-thinking-high'],
+      appliedValues: { model: 'claude-opus-4-8', thinking: true, effort: 'high' }
+    })
+    expect(
+      resolveAgentSessionOptionLaunch('cursor', { model: 'claude-opus-4-8' }, [], false)
+    ).toEqual({
+      args: ['--model', 'claude-opus-4-8'],
+      appliedValues: { model: 'claude-opus-4-8' }
     })
   })
 })

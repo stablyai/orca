@@ -1,9 +1,10 @@
 import type { createServer } from 'node:http'
 import { CanvasAgentContextStore } from '../../../shared/canvas-agent-context-store'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 
 import {
   createHookListenerState,
+  canAdmitLegacyAgentStatusEntry,
   type HookListenerState
 } from '../../../shared/agent-hook-listener/listener-state'
 import {
@@ -22,6 +23,9 @@ import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
+import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
@@ -47,6 +51,38 @@ import type {
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
   readonly canvasContexts = new CanvasAgentContextStore()
+  protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
+    return canAdmitLegacyAgentStatusEntry(
+      this.state,
+      'main-status-update',
+      entry,
+      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    )
+  }
+
+  // Why: the epoch is minted on first canonical use, so constructing the server — which happens at
+  // import time for the module singleton — owes nothing to a live crypto implementation.
+  private canonicalStatusStoreInstance: AgentStatusStore | null = null
+  protected get canonicalStatusStore(): AgentStatusStore {
+    this.canonicalStatusStoreInstance ??= createAgentStatusStore({
+      epoch: randomUUID(),
+      mode: 'authority'
+    })
+    return this.canonicalStatusStoreInstance
+  }
+  protected readonly canonicalListingOrder = new Map<string, number>()
+  protected readonly canonicalSubjectsByPane = new Map<
+    string,
+    Map<string, AgentStatusStructuredSessionSubject>
+  >()
+  private statusListingOrder = 0
+  protected nextStatusListingOrder = (): number => ++this.statusListingOrder
+
+  protected resetCanonicalStatus(): void {
+    this.canonicalStatusStoreInstance = null
+    this.canonicalListingOrder.clear()
+    this.canonicalSubjectsByPane.clear()
+  }
   protected server: ReturnType<typeof createServer> | null = null
   protected port = 0
   protected token = ''
@@ -75,7 +111,10 @@ export abstract class AgentHookServerState {
   protected endpointFilePathCache: string | null = null
   protected endpointFileWritten = false
   // Why: per-instance (not module-level) so tests can spin up multiple servers without state cross-contamination.
-  protected state: HookListenerState = createHookListenerState()
+  protected state: HookListenerState = createHookListenerState({
+    nextListingOrder: this.nextStatusListingOrder,
+    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
+  })
   protected onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null =
     null
   protected transportInterference = createHookTransportInterferenceTracker(
@@ -145,9 +184,11 @@ export abstract class AgentHookServerState {
     }
   ): 'accept' | 'restart' | 'suppress'
   protected abstract isClosedAgentStatusTabForPaneKey(paneKey: string): boolean
+  protected abstract takeRetiredPaneRestartId(paneKey: string): string | undefined
   protected abstract recordRetiredPaneFence(
     paneKeys: ReadonlySet<string>,
-    aliases: readonly RetiredPaneAlias[]
+    aliases: readonly RetiredPaneAlias[],
+    retirementId?: string
   ): void
   protected abstract markPaneClosedForAgentStatus(paneKey: string): void
   protected abstract attachStatusTiming(
@@ -171,7 +212,7 @@ export abstract class AgentHookServerState {
     origin?: AgentStatusObservationOrigin,
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
   protected abstract clearCodexSubagentPoll(paneKey: string): void

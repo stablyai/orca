@@ -70,7 +70,7 @@ function createHarness(
       preparingPartition = partition
       return session
     }),
-    setupPolicies: vi.fn(() => {
+    setupPolicies: vi.fn(async () => {
       order.push('setup-policies')
       if (options.setupError) {
         throw options.setupError
@@ -510,7 +510,7 @@ describe('BrowserRouteSessionRegistry', () => {
     expect(dependencies.clearPolicies).toHaveBeenCalledTimes(1)
   })
 
-  it('clears partially installed policies when policy setup fails', async () => {
+  it('clears partially installed policies when async policy setup fails', async () => {
     const { dependencies, registry, session } = createHarness({
       setupError: new Error('policy setup failed')
     })

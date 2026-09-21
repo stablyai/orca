@@ -18,6 +18,7 @@ import { restoreStructuredTabsIfSupported } from './structured-session-tab-resto
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 export const SESSION_TAB_METHODS = [
   defineMethod({
@@ -46,7 +47,10 @@ export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) => {
+    handler: async (
+      params,
+      { runtime, signal, clientKind, pairedDeviceId, clientCapabilities }
+    ) => {
       if (params.command) {
         await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
           runtime.ensureStructuredAgentSessionHost()
@@ -74,6 +78,14 @@ export const SESSION_TAB_METHODS = [
           clientKind
         }),
         clientMutationId: params.clientMutationId,
+        ...(pairedDeviceId
+          ? {
+              supportsSplitGroupPlacement:
+                clientCapabilities?.includes(
+                  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+                ) === true
+            }
+          : {}),
         // Why: a dead client connection must cancel the surface wait instead
         // of running down the timeout and rolling back a live tab (#7718).
         signal

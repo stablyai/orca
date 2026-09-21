@@ -191,6 +191,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={onBack}
+            accessibilityRole="button"
             accessibilityLabel="Back"
           >
             <ChevronLeft size={18} color={colors.textSecondary} />

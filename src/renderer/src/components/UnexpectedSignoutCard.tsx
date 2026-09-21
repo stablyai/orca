@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, ChevronDown, CircleUserRound, Files, Smartphone, X } from 'lucide-react'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
@@ -48,18 +48,18 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const persistedDismissedVersion = useAppStore((s) => s.dismissedUnexpectedSignoutVersion)
   const dismissedVersions = useAppStore((s) => s.unexpectedSignoutDismissedVersions)
   const dismissForVersion = useAppStore((s) => s.dismissUnexpectedSignoutCard)
-  const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [authRefreshReady, setAuthRefreshReady] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [preview] = useState(readPreviewFlag)
   const [previewDismissed, setPreviewDismissed] = useState(false)
-  const reconnectingProfile = useRef<string | null>(null)
+  const [appearance, setAppearance] = useState<'unseen' | 'visible' | 'closed'>('unseen')
 
   useEffect(() => {
     let cancelled = false
     let attempts = 0
+    let retryTimer: number | null = null
     const refresh = (): void => {
       attempts += 1
       void useAppStore
@@ -72,13 +72,19 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           if (status != null) {
             setAuthRefreshReady(true)
           } else if (attempts < 3) {
-            window.setTimeout(refresh, 500)
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null
+              refresh()
+            }, 500)
           }
         })
     }
     refresh()
     return () => {
       cancelled = true
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer)
+      }
     }
   }, [])
 
@@ -101,47 +107,29 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
     }
   }, [])
 
-  const dismissedVersion =
-    appVersion && dismissedVersions.includes(appVersion) ? appVersion : persistedDismissedVersion
+  const dismissedVersion = dismissedVersions[0] ?? persistedDismissedVersion
   const eligible = shouldShowUnexpectedSignoutCard({
     authStatus,
     persistedUIReady,
     appVersion,
-    dismissedVersion
+    dismissedVersion: appearance === 'visible' ? null : dismissedVersion
   })
+  const visible = preview
+    ? persistedUIReady && !previewDismissed
+    : authRefreshReady && appearance !== 'closed' && eligible
 
-  const visible = preview ? persistedUIReady && !previewDismissed : authRefreshReady && eligible
-
-  // Observe recovery independently of visibility and asynchronous version/hydration reads.
+  // Record the first appearance without closing the card currently being read.
   useEffect(() => {
-    if (preview || !authRefreshReady) {
+    if (preview) {
       return
     }
-    if (authStatus?.state === 'reconnect-required' && authStatus.configured && authStatus.cloud) {
-      reconnectingProfile.current = authStatus.activeProfileId
-    } else if (authStatus?.state === 'connected') {
-      if (
-        reconnectingProfile.current === authStatus.activeProfileId &&
-        persistedUIReady &&
-        appVersion
-      ) {
-        reconnectingProfile.current = null
-        if (dismissedVersion !== appVersion) {
-          dismissForVersion(appVersion)
-        }
-      }
-    } else {
-      reconnectingProfile.current = null
+    if (visible && appearance === 'unseen' && appVersion) {
+      setAppearance('visible')
+      dismissForVersion(appVersion)
+    } else if (!visible && appearance === 'visible') {
+      setAppearance('closed')
     }
-  }, [
-    preview,
-    authRefreshReady,
-    authStatus,
-    persistedUIReady,
-    appVersion,
-    dismissedVersion,
-    dismissForVersion
-  ])
+  }, [preview, visible, appearance, appVersion, dismissForVersion])
 
   if (!visible) {
     return null
@@ -153,8 +141,8 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const handleDismiss = (): void => {
     if (preview) {
       setPreviewDismissed(true)
-    } else if (appVersion) {
-      dismissForVersion(appVersion)
+    } else {
+      setAppearance('closed')
     }
   }
 
@@ -254,12 +242,10 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
               variant="default"
               size="sm"
               className="flex-1"
-              disabled={!canConnect || connecting}
+              disabled={!canConnect}
               onClick={() => void connect()}
             >
-              {connecting
-                ? translate('auto.components.UnexpectedSignoutCard.7e1a9c4d2f', 'Signing in…')
-                : translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
+              {translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
             </Button>
           </div>
         </div>

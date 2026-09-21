@@ -18,9 +18,9 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { dispatchMayMatchProviderEcho } from './journal-dispatch-doubt-reasons'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
+import { dispatchRejectionWasTransportWriteFailure } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -159,11 +159,17 @@ export function resolveJournalItemId(
     fields: { body }
   })
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
+  // A submission an echo may not claim is one that says the message never reached
+  // the provider, so an item resembling it is somebody else's. That is `rejected`
+  // now — and, in journals written before this state moved, an `unknown` carrying
+  // the transport marker. Replaying an older journal must not let such a row alias
+  // the echo of a later, genuinely delivered resend of the same text.
   const submission = [...state.submissions.values()]
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find(
       (candidate) =>
-        dispatchMayMatchProviderEcho(candidate.dispatchState, candidate.reason) &&
+        candidate.dispatchState !== 'rejected' &&
+        !dispatchRejectionWasTransportWriteFailure(candidate.reason) &&
         candidate.payloadFingerprint === fingerprint &&
         state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
     )

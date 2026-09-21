@@ -84,7 +84,6 @@ export function buildNativeChatTranscriptSlots(
       message,
       turnKey,
       activeTurnIsWorking:
-        showTurnStatus &&
         (currentTurnKey ? turnKey === currentTurnKey : turnKey === undefined) &&
         (isWorking || lifecycleWorking),
       receipt,

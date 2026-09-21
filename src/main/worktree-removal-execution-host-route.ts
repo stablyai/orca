@@ -27,7 +27,16 @@
  * worktree in place, while the incumbent fallback deleted a client-side path.
  */
 
-import type { ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId,
+  type LOCAL_EXECUTION_HOST_ID
+} from '../shared/execution-host'
+import {
+  CLIENT_REMOVAL_HOME,
+  executionHostRemovalHome,
+  type WorktreeRemovalHomeAuthority
+} from './worktree-removal-home-guard'
 import {
   ExecutionHostNotDispatchableError,
   resolveFilesystemRouteForHost,
@@ -72,6 +81,57 @@ export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRe
         fsProvider: fsRoute.kind === 'ssh' ? fsRoute.provider : null
       }
     }
+  }
+}
+
+/**
+ * Reads the `$HOME` an active SSH session resolved on its host.
+ *
+ * Injected the same way `setSshActiveMultiplexerResolver` is, because importing
+ * the session table here would run its registration inside every suite that
+ * partially mocks the SSH registry. Unresolved stays `null` — "unknown", never
+ * "this client's home".
+ */
+let sshHostHomeResolver: (connectionId: string) => string | null = () => null
+
+export function setWorktreeRemovalSshHostHomeResolver(
+  resolver: (connectionId: string) => string | null
+): void {
+  sshHostHomeResolver = resolver
+}
+
+/**
+ * Whose home directory the removal's safety guards may consult — one answer for
+ * the whole removal, taken from the same host id that owns the filesystem.
+ */
+export function resolveWorktreeRemovalHome(
+  route: WorktreeRemovalRoute
+): WorktreeRemovalHomeAuthority {
+  return resolveWorktreeRemovalHomeForHost(route.hostId)
+}
+
+/**
+ * The same answer for the entry points that hold a host id rather than a route.
+ *
+ * Keyed on the resolved `ExecutionHostId`, not on `repo.connectionId`: a row naming its owner only
+ * as `executionHostId: 'ssh:<target>'` has a null `connectionId`, and answering that with this
+ * client's home is how the guard would vouch for the wrong machine (#11163).
+ */
+export function resolveWorktreeRemovalHomeForHost(
+  hostId: ExecutionHostId
+): WorktreeRemovalHomeAuthority {
+  const parsed = parseExecutionHostId(hostId)
+  switch (parsed?.kind) {
+    case 'local':
+      return CLIENT_REMOVAL_HOME
+    case 'ssh':
+      return executionHostRemovalHome(sshHostHomeResolver(parsed.targetId))
+    // Why spelled out rather than a `default`: `runtime:<env>` deletes on that environment's own
+    // server and an id that parses to nothing names no machine at all, so neither can be answered
+    // with this client's home — and a host kind added later has to come here and say which it is.
+    case 'runtime':
+    case undefined:
+      return executionHostRemovalHome(null)
   }
 }
 

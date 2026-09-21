@@ -210,7 +210,7 @@ export function setHostWorkspaceSession(
 }
 
 export function installSessionHostPartitionOperationsContext(
-  target: object,
+  target: SessionHostPartitionOperations,
   source: SessionHostPartitionOperations
 ): void {
   Object.defineProperty(target, sessionHostPartitionOperationsContext, {

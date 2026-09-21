@@ -5,10 +5,8 @@ import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
+import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
   CLAUDE_APPROVAL_DECISIONS,
@@ -23,6 +21,12 @@ const APPROVAL_LABELS: Record<ClaudeApprovalDecision, string> = {
   deny: 'Deny',
   cancel: 'Stop'
 }
+
+const PLAN_APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
+  { id: 'allow', label: 'Approve plan' },
+  { id: 'deny', label: 'Keep planning' },
+  { id: 'cancel', label: 'Stop' }
+]
 
 const PENDING = {
   state: 'pending',
@@ -44,17 +48,26 @@ export function claudePromptIdentity(input: {
 }
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
-  const serialized = JSON.stringify(prompt.input)
-  return {
+  const planSubject = prompt.subject?.kind === 'plan' ? prompt.subject : null
+  const detail = truncateToolDetail(planSubject?.text ?? formatToolInput(prompt.input))
+  return boundJournalPromptBody({
     kind: 'approval',
-    title: `Allow ${prompt.toolName}?`,
-    detail: serialized ? boundInlineText(serialized, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text : null,
-    options: CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
-      id: decision,
-      label: APPROVAL_LABELS[decision]
-    })),
+    title: prompt.title ?? (planSubject ? 'Review proposed plan' : `Allow ${prompt.toolName}?`),
+    ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(prompt.description ? { description: prompt.description } : {}),
+    ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
+    ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
+    ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
+    ...(prompt.subject ? { subject: prompt.subject } : {}),
+    detail: detail || null,
+    options: planSubject
+      ? PLAN_APPROVAL_OPTIONS.map((option) => ({ ...option }))
+      : CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
+          id: decision,
+          label: APPROVAL_LABELS[decision]
+        })),
     resolution: { ...PENDING }
-  }
+  })
 }
 
 export type ClaudeQuestionItem = {
@@ -119,7 +132,7 @@ export function claudeQuestionItems(input: {
         sessionId: input.sessionId,
         promptKey: input.prompt.promptKey
       }),
-      body: {
+      body: boundJournalPromptBody({
         kind: 'question',
         question: legacyCompatible
           ? first.question
@@ -128,7 +141,7 @@ export function claudeQuestionItems(input: {
         ...(legacyCompatible ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
         questions,
         resolution: { ...PENDING }
-      }
+      })
     }
   ]
 }

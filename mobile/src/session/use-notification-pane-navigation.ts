@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { parsePaneKey } from '../../../src/shared/stable-pane-id'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
@@ -25,7 +26,7 @@ export function useNotificationPaneNavigation({
   switchSessionTab: (tab: MobileSessionTab) => void
 }) {
   const { paneKey } = useLocalSearchParams<{ paneKey?: string }>()
-  const router = useRouter()
+  const router = useRouteHandoff()
   useEffect(() => {
     if (!terminalsLoaded || typeof paneKey !== 'string' || !paneKey) {
       return

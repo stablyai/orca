@@ -9,8 +9,7 @@ import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
   // Open the pop-out dashboard window, or focus it if already open.
-  openPopout: (view?: 'board' | 'map'): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:open', view),
+  openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
 
   // ── Producer side (main window) ──────────────────────────────────────
   publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
@@ -57,12 +56,6 @@ export const dashboardApi = {
       callback(snapshot)
     ipcRenderer.on('dashboard:snapshot', listener)
     return () => ipcRenderer.removeListener('dashboard:snapshot', listener)
-  },
-  onViewRequested: (callback: (view: 'board' | 'map') => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, view: 'board' | 'map'): void =>
-      callback(view)
-    ipcRenderer.on('dashboard:viewRequested', listener)
-    return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
   },
   revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:revealAgent', args),

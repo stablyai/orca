@@ -4,6 +4,9 @@ const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
+// Why: a structured-session marker inherited from the runner diverts these cases to the
+// structured refusal, so which branch they exercise would depend on who ran them.
+const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
@@ -28,6 +31,11 @@ afterEach(() => {
   } else {
     process.env.ORCA_PANE_KEY = originalPaneKey
   }
+  if (originalStructuredSession === undefined) {
+    delete process.env.ORCA_STRUCTURED_SESSION
+  } else {
+    process.env.ORCA_STRUCTURED_SESSION = originalStructuredSession
+  }
 })
 
 describe('orchestration send structured payload flags', () => {
@@ -36,6 +44,7 @@ describe('orchestration send structured payload flags', () => {
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_STRUCTURED_SESSION
   })
 
   const invokeSend = (flags: Map<string, string | boolean>) =>
@@ -292,6 +301,29 @@ describe('orchestration send structured payload flags', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('refuses a structured session without naming a handle it could pass', async () => {
+    process.env.ORCA_STRUCTURED_SESSION = '1'
+    getTerminalHandleMock.mockResolvedValue('term_sibling_pane')
+
+    // The refusal must not recommend --from: the explicit-flag branch returns before this guard,
+    // so the advice would succeed against a handle that necessarily belongs to another pane.
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['to', 'term_coord'],
+          ['subject', 'done'],
+          ['type', 'worker_done'],
+          ['outcome', 'succeeded']
+        ])
+      )
+    ).rejects.toMatchObject({
+      code: 'no_active_sender_terminal',
+      message: expect.not.stringContaining('Pass --from')
+    })
+    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it.each(['worker_done', 'heartbeat'] as const)(
     'does not resolve an identity-less %s sender from the active terminal',
     async (type) => {
@@ -327,6 +359,7 @@ describe('orchestration timeout flag validation', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_STRUCTURED_SESSION
   })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>

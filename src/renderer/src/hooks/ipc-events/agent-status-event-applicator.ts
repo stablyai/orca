@@ -30,7 +30,10 @@ import type {
   AgentStatusApplyResult,
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
-import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
+import {
+  normalizeAgentStatusEvent,
+  normalizeAgentStatusMetadata
+} from './normalize-agent-status-event'
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
@@ -50,7 +53,9 @@ export function createAgentStatusEventApplicator(args: {
     if (!store.workspaceSessionReady) {
       return 'dropped'
     }
-    if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
+    const authorityRestartId =
+      options?.replay !== true && data.agentType === 'omp' ? data.authorityRestartId : undefined
+    if (isAgentStatusForRecentlyClosedTab(store, data.paneKey, authorityRestartId)) {
       return 'dropped'
     }
     const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
@@ -59,8 +64,7 @@ export function createAgentStatusEventApplicator(args: {
     if (!payload) {
       return 'dropped'
     }
-    // Why: the memoized index answers the leading edge with the same first-match ownership the
-    // standalone resolver produced, without its worktree x tab rescan per event.
+    // Reuse first-match pane ownership without rescanning every worktree per event.
     const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
     let {
       exists,
@@ -81,7 +85,12 @@ export function createAgentStatusEventApplicator(args: {
       identityTitle = projectedTitles.identityTitle
     }
     tabTitle = options?.batch?.tabTitlesByTabId.get(ownerTabId ?? '') ?? tabTitle
-    if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
+    if (
+      !exists &&
+      !authorityRestartId &&
+      data.worktreeId &&
+      hasRuntimeBackedWorktreeAttribution(data)
+    ) {
       const fallbackOwnership = resolveWorktreeConnectionFromRoutingIndex(
         routingIndex,
         data.worktreeId
@@ -239,13 +248,7 @@ export function createAgentStatusEventApplicator(args: {
         terminalHandle: data.terminalHandle,
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
-      metadata:
-        data.providerSession || data.launchToken
-          ? {
-              ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-              ...(data.launchToken ? { launchToken: data.launchToken } : {})
-            }
-          : undefined
+      metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
     }
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {

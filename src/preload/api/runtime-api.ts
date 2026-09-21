@@ -123,6 +123,7 @@ export type RuntimeApi = {
       params?: unknown
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
+      expectedEnvironmentRuntimeId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribe: (
       args: {
@@ -131,6 +132,7 @@ export type RuntimeApi = {
         params?: unknown
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
+        expectedEnvironmentRuntimeId?: string
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

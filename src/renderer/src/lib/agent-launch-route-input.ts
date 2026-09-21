@@ -1,14 +1,12 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
+  hasExplicitTuiLaunchCommand,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
 // Why: the `connection-context` facade imports the store root; the resolver's own module keeps
@@ -53,17 +51,12 @@ export type AgentLaunchRouteArgs = {
   workspace: ProspectiveWorkspace
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
-  /** A cwd or explicit CLI args only a terminal can apply. */
-  tuiCustomization?: { cwd?: string | null; agentArgs?: string | null }
+  /** A working directory only a terminal can apply; a structured session runs in its workspace. */
+  tuiCustomization?: { cwd?: string | null }
   initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
-export function workspaceKindForWorktreeId(worktreeId: string): ProspectiveWorkspaceKind {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return 'floating'
-  }
-  return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
-}
+export { workspaceKindForWorktreeId }
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
@@ -130,10 +123,8 @@ export function buildAgentLaunchRouteInput(
       workspace,
       executionHostId
     ),
-    requiresTuiLaunchCustomization:
-      Boolean(tuiCustomization?.cwd?.trim()) ||
-      hasExplicitTuiAgentArgs(agent, tuiCustomization?.agentArgs) ||
-      hasExplicitTuiLaunchCustomization(store.settings, agent),
+    requiresTuiLaunchCommand:
+      Boolean(tuiCustomization?.cwd?.trim()) || hasExplicitTuiLaunchCommand(store.settings, agent),
     initialSessionOptions: args.initialSessionOptions
   }
 }

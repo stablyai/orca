@@ -140,7 +140,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -221,7 +223,8 @@ describe('registerWorktreeHandlers', () => {
       'improve-dashboard',
       ['packages/web', 'apps/api'],
       'origin/main',
-      false
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',

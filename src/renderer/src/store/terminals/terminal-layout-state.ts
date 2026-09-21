@@ -23,14 +23,31 @@ export function createTerminalLayoutActions(
   | 'setTabPaneExpanded'
   | 'setTabCanExpandPane'
   | 'setTabLayout'
+  | 'setTabLocalOnlyScrollback'
   | 'syncPaneDetachPtyOwnership'
 > {
   return {
+    // Why separate from setTabLayout: ordinary-park scrollback must not ride the remote projection.
+    // See WorkspaceSessionState.localOnlyScrollbackByTabId; read via resolveLeafScrollbackBuffers.
+    setTabLocalOnlyScrollback: (tabId, buffersByLeafId) => {
+      set((s) => {
+        const current = s.localOnlyScrollbackByTabId ?? {}
+        if (!buffersByLeafId || Object.keys(buffersByLeafId).length === 0) {
+          if (!(tabId in current)) {
+            return s
+          }
+          const next = { ...current }
+          delete next[tabId]
+          return { localOnlyScrollbackByTabId: next }
+        }
+        return { localOnlyScrollbackByTabId: { ...current, [tabId]: buffersByLeafId } }
+      })
+    },
     replaceTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
       set((s) => {
         const layout = s.terminalLayoutsByTabId[tabId]
         if (!layout || layout.ptyIdsByLeafId?.[leafId] === ptyId) {
-          return {}
+          return s
         }
         return {
           terminalLayoutsByTabId: {

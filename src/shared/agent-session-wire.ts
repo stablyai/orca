@@ -75,6 +75,8 @@ export type AgentSessionTurnActivity = {
   text: string
 }
 
+export const AGENT_SESSION_ID_MAX_LENGTH = 512
+
 /** Backward paging is the client's normal read; 40 matches the page size the
  *  mobile list renders without a visible fill-in. */
 export const AGENT_SESSION_HISTORY_DEFAULT_LIMIT = 40
@@ -301,6 +303,16 @@ export type AgentSessionModelOption = {
   isDefault: boolean
   defaultEffort?: string
   efforts: AgentSessionOptionChoice[]
+  /** Provider catalog fact. Absent means the host could not determine support. */
+  supportsFastMode?: boolean
+}
+
+export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
+
+export type AgentSessionFastModeSupport = {
+  supported: boolean
+  /** Provider-authored or host-normalized reason code; presentation may ignore unknown values. */
+  reason?: string
 }
 
 /** One entry of the `/` menu the running provider reports for itself. `skill`
@@ -330,9 +342,15 @@ export type AgentSessionOptionsResult = {
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
   models: AgentSessionModelOption[]
+  /** Session/account/transport support. Absent means unknown, never unsupported. */
+  fastModeSupport?: AgentSessionFastModeSupport
   current: {
     model: string
     effort?: string
+    /** Canonical preference for the next turn. Explicit false is meaningful. */
+    fastMode?: boolean
+    /** Provider-reported effective routing, distinct from the next-turn preference. */
+    fastModeState?: AgentSessionFastModeState
     /**
      * Option ids whose value the provider reported back, not merely accepted.
      * Optional: a host that predates it sends nothing and the client keeps

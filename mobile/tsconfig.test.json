@@ -1,0 +1,18 @@
+{
+  // The main config excludes test files so Metro never compiles them into the release bundle, and
+  // vitest transpiles without typechecking — so until this config existed nothing typechecked a
+  // mobile test, and a type-level pin written in one proved nothing.
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    // These four are Node-side, not React Native: they import the desktop main process or
+    // src/shared/child-process, whose modules are written against @types/node. This program's libs
+    // are React Native's, where `setTimeout` answers a number rather than a NodeJS.Timeout, so
+    // pulling that graph in reports ~280 errors about the desktop rather than about mobile. Their
+    // own runtime coverage is vitest, which runs them under Node.
+    "scripts/rpc-recording-pin-guard.test.ts",
+    "src/tasks/agent-launch-mobile-replay.test.ts",
+    "src/tasks/mobile-agent-launch-architecture.test.ts",
+    "src/transport/mobile-relay-browser-cancel-budget.test.ts"
+  ]
+}

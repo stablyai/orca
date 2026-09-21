@@ -2,11 +2,12 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalTurnItem,
   AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState
+  AgentJournalTurnLifecycleState,
+  AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
-import { CODEX_USER_MESSAGE_ORDINAL } from './codex-structured-turn-start'
+import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
@@ -49,6 +50,32 @@ export function codexTurnLifecycleState(
   return status === null || status === 'completed' ? 'completed' : 'interrupted'
 }
 
+/**
+ * Codex's own verdict on a turn, or null when this host cannot place one.
+ *
+ * `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
+ * inProgress` and `status` is REQUIRED on every `Turn`, on the live notification
+ * and in resumed history alike. So a missing or unrecognised status is a payload
+ * this host did not get, not a clean finish — unlike `codexTurnLifecycleState`,
+ * which still has to name a terminal lifecycle arm for the row. `inProgress` on
+ * a turn-end contradicts itself and is no verdict either.
+ */
+export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome | null {
+  switch (status) {
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'failure'
+    case 'interrupted':
+      return 'cancellation'
+    // The fourth protocol arm, plus the two shapes that are no verdict at all.
+    case 'inProgress':
+    case null:
+    default:
+      return null
+  }
+}
+
 export function publishCodexTurnLifecycle(input: {
   sink: StructuredAgentSessionEventSink
   primaryThreadId: string | null
@@ -56,7 +83,11 @@ export function publishCodexTurnLifecycle(input: {
   threadId: string
   turnId: string
   state: AgentJournalTurnLifecycleState
+  /** Absent whenever Codex named no verdict, which reads as unknown. */
+  outcome?: AgentJournalTurnOutcome
+  userItemId?: string
   startedAt?: number
+  requestedAt?: number
   completedAt?: number
   durationMs?: number
 }): StructuredAgentSessionSinkAdmission {
@@ -67,8 +98,10 @@ export function publishCodexTurnLifecycle(input: {
   const body = codexTurnLifecycleBody({
     turnId: input.turnId,
     state: input.state,
-    userItemId: codexTurnUserItemId(input.threadId, input.turnId),
+    ...(input.outcome !== undefined ? { outcome: input.outcome } : {}),
+    userItemId: input.userItemId ?? codexTurnUserItemId(input.threadId, input.turnId),
     ...(input.startedAt !== undefined ? { startedAt: input.startedAt } : {}),
+    ...(input.requestedAt !== undefined ? { requestedAt: input.requestedAt } : {}),
     ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {})
   })

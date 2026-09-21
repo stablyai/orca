@@ -7,6 +7,7 @@ import {
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import {
   codexTurnLifecycleState,
+  codexTurnOutcome,
   codexTurnUserItemId
 } from './codex-structured-journal-translation-turns'
 import { readCodexTurnDurationMs, readCodexTurnStatus } from './codex-structured-thread-facts'
@@ -103,9 +104,12 @@ function historicalTurnLifecycle(
     return null
   }
   const durationMs = readCodexTurnDurationMs(turn)
+  const status = readCodexTurnStatus(turn)
+  const outcome = codexTurnOutcome(status)
   return {
     turnId,
-    state: codexTurnLifecycleState(readCodexTurnStatus(turn)),
+    state: codexTurnLifecycleState(status),
+    ...(outcome ? { outcome } : {}),
     userItemId: codexTurnUserItemId(threadId, turnId),
     startedAt: startedAt * 1000,
     completedAt: completedAt * 1000,

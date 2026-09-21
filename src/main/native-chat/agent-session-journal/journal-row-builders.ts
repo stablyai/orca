@@ -20,6 +20,7 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
+import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -76,13 +77,23 @@ export function journalDispatchRowBuilder(
       clientMessageId: input.clientMessageId,
       dispatchState: input.state,
       providerItemId,
-      reason:
-        input.state === 'accepted' || input.state === 'pending' ? null : (input.reason ?? null),
+      reason: boundedDispatchReason(input),
       seq,
       fence: input.fence,
       ts,
       recovered: input.recovered
     })
+}
+
+/** `reason` is the only unbounded field written by Orca's own code: a provider error is
+ *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
+ *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  written before this keep their full text, so readers still meet unbounded ones. */
+function boundedDispatchReason(input: ResolveDispatchInput): string | null {
+  if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
+    return null
+  }
+  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 export type JournalLifecycleMutationInput =

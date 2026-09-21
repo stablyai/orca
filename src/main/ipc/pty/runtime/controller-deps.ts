@@ -68,7 +68,7 @@ export type PtyRuntimeControllerDeps = {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ) => Promise<boolean>
-  rememberSyntheticKillExit: (id: string) => void
+  rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   rememberRetiredRejectedPty: (id: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
   sendPtySpawnedToRenderer: (id: string) => void

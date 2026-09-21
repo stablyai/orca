@@ -265,6 +265,40 @@ describe('Relay region API', () => {
     expect(burst.every(({ status }) => status === 200)).toBe(true)
     expect(regionCatalog).toHaveBeenCalledOnce()
   })
+
+  it('answers a pool that cannot hand out a client with a retryable 503', async () => {
+    const regionCatalog = vi.fn(async () => {
+      throw new Error('Connection terminated due to connection timeout')
+    })
+    const app = createRelayApp(config({ publicAssignmentRetryAfterSeconds: 7 }), {
+      store: {} as never,
+      assignments: { regionCatalog } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await app.request('/v1/regions')
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('7')
+    expect(await response.json()).toEqual({ error: 'region_catalog_temporarily_unavailable' })
+  })
+
+  it('still fails loudly when the region catalog breaks for a non-transient reason', async () => {
+    const regionCatalog = vi.fn(async () => {
+      throw new TypeError('broken invariant')
+    })
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { regionCatalog } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await app.request('/v1/regions')
+
+    expect(response.status).toBe(500)
+  })
 })
 
 function assignmentRequest(relayHostId: string, extra: Record<string, unknown>): RequestInit {

@@ -1,0 +1,125 @@
+{
+  "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
+  "overrides": [
+    {
+      "file": "src/transport/client-context.web.tsx",
+      "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
+    },
+    {
+      "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
+      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+    },
+    {
+      "file": "src/navigation/route-handoff.web.ts",
+      "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
+    },
+    {
+      "file": "src/transport/host-store.web.ts",
+      "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
+    },
+    {
+      "file": "src/transport/host-device-token-store.web.ts",
+      "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
+    },
+    {
+      "file": "app/h/[hostId]/index.web.tsx",
+      "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
+      "file": "src/platform/text-input-font-size.web.ts",
+      "reason": "iOS zooms the page on focus of any text input under 16px and does not zoom back out, which leaves the document at a scale other than 1 for a whole typing session. keyboard-occlusion.web.ts reads a scale other than 1 as 'not a keyboard' on purpose, because geometry cannot separate a zoom from a keyboard, so the commit bar and the note composer would never lift on the platform they were written for. The web file raises the app's 14px body size to that floor; the native file is the body size, so a phone renders exactly what it rendered before. maximum-scale=1 on the viewport meta was the other fix and was rejected: Android WebView honours it and it would take deliberate pinch zoom away from low-vision users."
+    },
+    {
+      "file": "src/platform/haptics.web.ts",
+      "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. The page has no haptics instead; the bundle test reads the shipped bytes for the shim."
+    },
+    {
+      "file": "app/h/[hostId]/files/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for the file explorer, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser — reproduced in the render check, which painted that console error instead of the route."
+    },
+    {
+      "file": "app/h/[hostId]/files/preview/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for the file preview, for the same reason as the explorer beside it: no nested shell, and a native file that reaches requireNativeViewManager at import. Normalizing the route params stays here, because the page reads them back out of its own URL exactly as the native screen reads them out of the router."
+    },
+    {
+      "file": "app/h/[hostId]/agent-history/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
+      "file": "app/h/[hostId]/web.web.tsx",
+      "reason": "The hybrid shell route opens a WebView on this very page, so on web it redirects to the host instead of nesting the shell inside itself. Its native file pulls in OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
+    },
+    {
+      "file": "src/platform/external-link.web.ts",
+      "reason": "The page runs inside the shell's WebView, where react-native-web's Linking.openURL calls window.open(url, '_blank', 'noopener') and resolves whether or not anything opened; only a tel: URL assigns window.location, and none of the three allowed schemes is one. Both shells refuse window.open outright: iOS sets javaScriptCanOpenWindowsAutomatically = false and returns nil from WKUIDelegate's createWebViewWith, and Android sets javaScriptCanOpenWindowsAutomatically = false, setSupportMultipleWindows(false) and returns false from onCreateWindow. So the native path reports success into a tap that did nothing. This one posts the externalLink notify instead, after the same scheme check the frame enforces, and names its refusal rather than throwing inside a tap handler."
+    },
+    {
+      "file": "src/platform/keyboard-occlusion.web.ts",
+      "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+    },
+    {
+      "file": "src/platform/clipboard.web.ts",
+      "reason": "expo-clipboard resolves to navigator.clipboard on the web, which needs a secure context; the iOS shell serves the page from the custom scheme orca-mobile-web://<session>/ while Android serves https, so that path would work on one platform and silently not on the other. This one asks the shell through the native.clipboard.write and native.clipboard.read verbs, where the pasteboard is the device's, and rejects when the route was not granted one so the caller's own catch puts that on screen. An image is the same pasteboard reached a different way: native.clipboard.read admits only text, and a 24 MiB base64 image cannot cross an 8 MiB reply cap, so readImage runs native.media.pick with source 'clipboard', reads the staged bytes back a chunk at a time and gives the handle back. contents answers per grant without probing, because the shell serves no 'is there text' verb and reading to find out would raise iOS's paste-consent prompt on every mount."
+    },
+    {
+      "file": "src/components/pr-sidebar/MermaidDiagram.web.tsx",
+      "reason": "The native component renders the diagram inside a sandboxed WebView, and react-native-webview is a native component with no browser counterpart: importing it runs a codegen lookup that throws, and the route manifest imports every route, so one such import takes the whole page down rather than one diagram. This one renders the labelled source box the native component already falls back to on a parse or render error. A real browser renderer is reachable — mermaid is a browser library and the engine bundle is vendored — but it is a different shape rather than a smaller one: with no WebView to sandbox untrusted diagram source in, the escaping buildHtml does for </script> and the line separators has to be replaced by whatever the DOM path needs, which is its own change with its own proof."
+    },
+    {
+      "file": "app/h/[hostId]/tasks.web.tsx",
+      "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
+    },
+    {
+      "file": "src/browser/browser-frame-layer-paint.web.ts",
+      "reason": "setNativeProps does not exist on React Native Web: an Image or View ref is the DOM node itself, so both native writes throw rather than paint and the pane never shows a frame. This file writes the same two things through the element — the frame as a background-image on the child RN Web sizes, the double buffer as one opacity write per layer — so the pane still never re-renders while it streams. It also answers whenBrowserFrameDisplayable, which is a no-op natively: a background write fires no load event, so the flip to the pending layer is armed from an image decode instead of the Image's onLoad."
+    },
+    {
+      "file": "src/browser/browser-frame-data-uri.web.ts",
+      "reason": "The bridge hands the page its frame as base64 and the data URI wants base64, so the native file encodes the bytes back into the string they arrived as. The page resolves buffer to the JS shim rather than Node's native encoder, which makes that the largest per-frame cost the page pays. This file reads the base64 the bridge kept and falls back to the native encoding for a frame that carried none."
+    },
+    {
+      "file": "src/browser/use-browser-binary-screencast-grant.web.ts",
+      "reason": "Natively the socket carries the binary screencast frame and this app is both halves of that path, so there is nothing to negotiate. In the page the frames come through a shell that may predate the encoder, and subscribing with wantsBinary against one leaves the pane on a stream no frame can arrive on. This file asks the shell through the grants init carried, per C6 ruling 5."
+    },
+    {
+      "file": "src/browser/browser-screencast-request.web.ts",
+      "reason": "Not an RN Web API gap but a transport one that exists only in the page: a screencast frame crosses the bridge as one message under BRIDGE_MAX_MESSAGE_BYTES, and a phone's mobile view at the native device scale factor produces a worst-case JPEG larger than that. This file budgets the mobile view's area against the cap, the envelope it measures rather than names, and one worst-case bytes-per-pixel constant. Web view mode is untouched, because a letterboxed desktop viewport is not an area the page can predict."
+    },
+    {
+      "file": "src/session/terminal-snapshot-byte-budget.web.ts",
+      "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
+    },
+    {
+      "file": "src/session/mobile-native-chat-input-styles.web.ts",
+      "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps 15."
+    },
+    {
+      "file": "src/browser/browser-address-field-styles.web.ts",
+      "reason": "The address bar renders at the theme's 12px meta size, and in a browser an input under 16px makes iOS zoom the page on focus and never zoom back. keyboard-occlusion.web.ts reads that scale as 'no keyboard' and answers 0, so one focus would stop the pane lifting for the rest of the typing session. This file puts the input and its overlaid label on TEXT_INPUT_FONT_SIZE with a line box to match; the native sibling keeps 12px, which is what a phone has always rendered and where no page can zoom."
+    },
+    {
+      "file": "src/terminal/TerminalWebView.web.tsx",
+      "reason": "react-native-webview has no web build that renders anything: on the page it paints the line \"React Native WebView does not support this platform\" where the terminal was, which is a red line and no terminal rather than a crash. This file mounts the same document the WebView loads — xterm imported from @xterm/xterm with the unicode11 and webgl addons, and the document's own modules imported in the order the generator emits them — behind the identical TerminalWebViewProps and TerminalWebViewHandle, so nothing above the contract can tell the two apart."
+    },
+    {
+      "file": "src/terminal/terminal-webview-html.web.ts",
+      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
+    },
+    {
+      "file": "src/platform/media-picker.web.ts",
+      "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
+    },
+    {
+      "file": "src/session/mobile-clipboard-image-resize.web.ts",
+      "reason": "expo-image-manipulator is a native module with no browser counterpart, and the two expo-file-system writes its native path makes exist to work around an iOS loader that cannot decode a large base64 data URI, which a browser does not need. img-src 'self' data: already admits the source, so this file decodes one <img>, draws it into a canvas at the target size and reads the PNG back out of toDataURL, with no file anywhere in it. It reads the size back off the canvas rather than echoing the size asked for; the two are the same number, because a browser reflects the width it was assigned, and reading it back keeps the dimensions and the bytes coming from one element. Measured in a real browser under the shipped header: a 1400x1000 noise PNG of 5,476,032 base64 characters converges in one pass to 368x263 and 397,220 characters, 75.8% of the upload path's 512 KiB chunk."
+    },
+    {
+      "file": "src/components/MobileRichMarkdownEditor.web.tsx",
+      "reason": "The native editor is a rich document inside a WebView, and react-native-webview is a native component with no browser counterpart: importing it runs a codegen lookup that throws, and the route manifest imports every route, so one such import takes the whole page down rather than one editor. This one renders the Markdown source in a plain field on the text-input seam, which is the state the screen around it already handles — the text, every edit through onChange, and Save, Discard, Copy and Refresh unchanged. The degradation is the formatting toolbar and the rendered view: the toolbar's fifteen commands are the rich document's, and a contenteditable reimplementation is a different surface with its own escaping and its own proof rather than a smaller version of this one (rulings-ota-c7.md ruling 8). onKeyboardInsetChange is never called, which is correct rather than missing: it exists because native Keyboard events under-report a WebView's covered area, and on the page keyboard-occlusion.web.ts is the only measurement there is."
+    },
+    {
+      "file": "src/components/MobileHtmlPreview.web.tsx",
+      "reason": "The native preview renders an agent-produced HTML artifact inside a sandboxed WebView with navigation locked to the initial inline document, and react-native-webview throws at import in a browser for the reason above. This one renders the labelled source, which is the component's own Source tab. Rendering the HTML instead is a different change rather than a smaller one: the page has no nested frame to sandbox untrusted source in, because the shell's policy carries frame-src 'none' and child-src 'none', so a browser renderer would need its own sanitiser and its own proof (ruling 8). The Preview/Source toggle goes with the preview, because a control that can only be in one position is a control that lies."
+    }
+  ]
+}

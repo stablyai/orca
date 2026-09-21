@@ -57,6 +57,10 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  handleNativeChatCancelPrompt?: (prompt?: {
+    itemId: string
+    expectedRevision: number
+  }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
@@ -75,6 +79,7 @@ export type MobileNativeChatController = {
       id?: string
       path: string
       previewUri: string
+      contentFingerprint?: string
     }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.

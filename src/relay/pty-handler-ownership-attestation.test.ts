@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 // The host half of #9819: a client may only reap a relay PTY it can prove it created, so the relay
 // has to say who created each one. The attestation is read from the live consumer grant, never from
 // a spawn parameter — otherwise it would just echo the caller's claim back at it.

@@ -10,6 +10,7 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -502,5 +503,42 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
+ *  the test says which build kind it is running as without asserting a type on `globalThis`. */
+function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
+  if (isDevelopmentBuild === undefined) {
+    Reflect.deleteProperty(globalThis, '__DEV__')
+    return
+  }
+  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
+}
+
+describe('hybrid shell flag', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    setDevelopmentBuild(undefined)
+  })
+
+  it('reads the developer toggle in a development build', async () => {
+    setDevelopmentBuild(true)
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
+  })
+
+  it.each([
+    ['a release build', false],
+    ['a runtime with no __DEV__ at all', undefined]
+  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
+    setDevelopmentBuild(isDev)
+    // The value a development build left behind in a container the install-over kept.
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+
+    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
   })
 })

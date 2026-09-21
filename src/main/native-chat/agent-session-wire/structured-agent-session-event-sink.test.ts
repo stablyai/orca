@@ -224,6 +224,35 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toHaveLength(2)
   })
 
+  it('admits a resolved append and publication as one bounded operation', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink({
+      watermarks: {
+        pauseQueuedOperations: 1,
+        maxQueuedOperations: 2,
+        lowQueuedOperations: 0,
+        maxQueuedBytes: 1_000_000
+      }
+    })
+
+    expect(deferred.sink.tryAppendItem?.(identity(0), BODY)).toEqual({ accepted: true })
+    expect(
+      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendItem?.(identity(2), BODY)).toEqual({
+      accepted: false,
+      reason: 'backpressure'
+    })
+
+    deferred.bind(target(5, log))
+    await deferred.drained()
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 5, ordinal: 0 },
+      { call: 'appendItem', fence: 5, ordinal: 1 },
+      { call: 'publish', fence: 5 }
+    ])
+  })
+
   it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []

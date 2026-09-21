@@ -1,5 +1,6 @@
 import type { HostClientAcquisition } from './host-client-acquisition-registry'
 import type { RpcClient } from './rpc-client'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -24,7 +25,7 @@ export type RpcClientContextValue = {
   getActivePath: (hostId: string) => MobileConnectionPath
   getPendingPath: (hostId: string) => MobileConnectionPath | null
   isPairingRejected: (hostId: string) => boolean
-  isHostSignedOut: (hostId: string) => boolean
+  getRelayHostReachability: (hostId: string) => RelayHostReachability
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
   getAllClients: () => { hostId: string; client: RpcClient }[]
   subscribeAllHosts: (listener: () => void) => () => void

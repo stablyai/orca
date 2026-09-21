@@ -1,6 +1,11 @@
+import { PATH_EXISTENCE_BATCH_MAX } from '../path-existence-batch'
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open-path-search'
 import { FileOpen, WorktreeSelector } from './files-target-params'
+
+export const FilePathsExist = WorktreeSelector.extend({
+  relativePaths: z.array(z.string()).max(PATH_EXISTENCE_BATCH_MAX)
+})
 
 export const FilePathSearch = WorktreeSelector.extend({
   query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),

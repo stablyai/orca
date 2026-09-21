@@ -9,12 +9,12 @@ import {
 } from './notification-delivery-preferences'
 import type {
   MobilePushFilter,
-  MobilePushRegisterInput,
-  MobilePushRegisterResult
+  MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
+import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
@@ -25,7 +25,7 @@ import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from '
 
 export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
 
-type PushClient = Pick<RpcClient, 'sendRequest'>
+type PushClient = RpcClient
 
 const REQUEST_TIMEOUT_MS = 5_000
 const REMOVAL_TIMEOUT_MS = 2_000
@@ -107,26 +107,21 @@ async function sendRegister(
     ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
     filter
   }
-  const response = await client
-    .sendRequest('notifications.registerPush', params, {
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      failWhenDisconnected: true
-    })
+  const reply = await pushRouteRegister
+    .request(client, params, { timeoutMs: REQUEST_TIMEOUT_MS, failWhenDisconnected: true })
     .catch(() => null)
-  if (!response?.ok) {
+  const registration = reply && pushRouteRegister.interpret(reply)
+  if (!registration?.accepted) {
     return false
   }
-  return (response.result as MobilePushRegisterResult | null)?.registered === true
+  return registration.value?.registered === true
 }
 
 async function sendUnregister(client: PushClient, timeoutMs: number): Promise<boolean> {
-  const response = await client
-    .sendRequest('notifications.unregisterPush', null, {
-      timeoutMs,
-      failWhenDisconnected: true
-    })
+  const reply = await pushRouteUnregister
+    .request(client, null, { timeoutMs, failWhenDisconnected: true })
     .catch(() => null)
-  return response?.ok === true
+  return reply !== null && pushRouteUnregister.interpret(reply).accepted
 }
 
 async function reconcileHost(hostId: string): Promise<void> {

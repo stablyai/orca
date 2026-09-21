@@ -8,7 +8,7 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
-import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -63,15 +63,6 @@ function codexSessionsDirs(): string[] {
 
 function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
-}
-
-/** Mirrors the AI Vault scanner so an OMP_CODING_AGENT_DIR override resolves the
- *  same root for both, rather than leaving native chat pointed at the default. */
-function ompSessionsDir(): string {
-  return normalizeAgentSessionsDir(
-    process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
-    '.omp'
-  )
 }
 
 export type ResolveSessionFileOptions = {
@@ -214,7 +205,11 @@ async function resolveSessionFileById(
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)
   }
   if (transcriptAgent === 'omp') {
-    return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+    return resolveOmpSessionFile(
+      trimmedId,
+      resolveOmpSessionsDir({ sessionsDir: options.ompSessionsDir }),
+      signal
+    )
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -333,6 +328,9 @@ async function resolveOmpSessionFile(
   sessionsDir: string,
   signal?: AbortSignal
 ): Promise<string | null> {
+  if (!sessionsDir) {
+    return null
+  }
   const files = await walkSessionFiles(sessionsDir, 'omp', [], {
     extensions: new Set(['.jsonl']),
     // Why: a session's task-subagent transcripts live in its same-named

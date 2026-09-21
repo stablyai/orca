@@ -52,8 +52,9 @@ export async function launchCanvasAgent(tab: Tab, agent: TuiAgent): Promise<stri
   state.activateTab(tab.id)
   state.focusGroup(tab.worktreeId, tab.groupId)
   state.setActiveTabType('canvas')
-  if (!result?.tabId) {
+  const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
+  if (!tabId) {
     throw new Error('The agent could not be started. Check its configuration in Settings.')
   }
-  return result.tabId
+  return tabId
 }

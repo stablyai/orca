@@ -150,7 +150,11 @@ async function spawnAndPublishSession(
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
-    onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    onExit: createSessionExitHandler(
+      deps.onSessionExit,
+      opts.sessionId,
+      opts.agentSessionGeneration
+    ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
@@ -210,6 +214,14 @@ async function spawnAndPublishSession(
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
+}
+
+function createSessionExitHandler(
+  onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
+  sessionId: string,
+  generation: string | undefined
+): () => void {
+  return () => onSessionExit(sessionId, generation)
 }
 
 // Why R_OK|X_OK: listing a directory needs read, and entering it needs search — both are what

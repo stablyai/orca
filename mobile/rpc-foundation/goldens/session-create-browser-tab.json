@@ -1,0 +1,102 @@
+{
+  "operation": "session.content-create",
+  "family": "session.content-create",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "36dbd24dc3d24be8c14217ced1963d10ef8264438729dd146cbff79d9fbdf279",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4a842fa3c9c1": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "browserPageId": "page-1"
+          }
+        }
+      }
+    },
+    "6248a3dd0710": {
+      "name": "fetch-session-tabs",
+      "ordinal": 3,
+      "value": {}
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "d9a882adde26": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}"
+    },
+    "dfb723df461a": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 5,
+      "value": {}
+    },
+    "eda7d625e4b6": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 4,
+      "value": {}
+    },
+    "f1e12d7f04c7": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": "page-1"
+    }
+  },
+  "recording": {
+    "scenario": "session-create-browser-tab",
+    "checkpoints": [
+      {
+        "id": "created",
+        "observation": {
+          "sender": ["4a842fa3c9c1"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "f1e12d7f04c7",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      }
+    ]
+  }
+}

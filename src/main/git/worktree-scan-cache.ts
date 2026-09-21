@@ -7,6 +7,7 @@ import {
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
+import { resolveGitAdmissionTier } from './command-runner/git-operation-executor'
 
 // Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
@@ -76,7 +77,8 @@ function shareWorktreeScan(
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   // Why: callers with different deadlines cannot safely share which timeout wins the scan.
   // Why `kind`: a strict joiner must never receive a softened `[]` from a lenient scan.
-  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}`
+  // Why the tier: an interactive listing joining a queued status scan inherits its wait.
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}\0${resolveGitAdmissionTier(options.admissionTier)}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight

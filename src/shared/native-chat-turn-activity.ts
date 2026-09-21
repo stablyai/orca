@@ -7,12 +7,19 @@ import { describeActiveToolCall, formatActiveToolLabel } from './native-chat-too
 export type NativeChatTurnActivity = { kind: 'description'; text: string }
 
 function activityLine(text: string): string | null {
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const latest = lines.at(-1)
-  return latest ? normalizePromptField(latest) || null : null
+  let end = text.length
+  while (end > 0) {
+    const start = text.lastIndexOf('\n', end - 1) + 1
+    const latest = text.slice(start, end).trim()
+    if (latest) {
+      return normalizePromptField(latest) || null
+    }
+    if (start === 0) {
+      break
+    }
+    end = start - 1
+  }
+  return null
 }
 
 function recentToolActivityLabels(items: readonly AgentJournalRenderItem[]): Set<string> {

@@ -1,8 +1,5 @@
 import type { RpcResponse } from '../transport/types'
-import {
-  isMethodNotFoundRefusal,
-  rpcObjectResultOrNull
-} from '../transport/rpc-acceptance-policies'
+import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
 
 export type TerminalUpdateViewportCapability = 'unknown' | 'supported' | 'unsupported'
 
@@ -17,13 +14,8 @@ export type TerminalViewportRefitTargetState = {
   currentRunSeq: number
 }
 
-export function isTerminalUpdateViewportUpdated(response: RpcResponse): boolean {
-  return rpcObjectResultOrNull(response)?.updated === true
-}
-
-export function isTerminalUpdateViewportApplied(response: RpcResponse): boolean {
-  return rpcObjectResultOrNull(response)?.applied === true
-}
+/** What the runtime did with the viewport: recorded it, and whether it re-fitted the PTY too. */
+export type TerminalViewportUpdateOutcome = { updated: boolean; applied: boolean }
 
 export function resolveTerminalUpdateViewportCapability(
   response: RpcResponse

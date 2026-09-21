@@ -197,9 +197,15 @@ describe('site 11: host teardown is failure-complete', () => {
 
   it('closes every journal and clears the map on the happy path', async () => {
     const sessions = await twoSessions()
-    await tearDownStructuredAgentSessionHost({ phases: [], sessions })
+    const acknowledgeSessionRelease = vi.fn()
+    await tearDownStructuredAgentSessionHost({
+      phases: [],
+      sessions,
+      acknowledgeSessionRelease
+    })
 
     expect(sessions.size).toBe(0)
+    expect(acknowledgeSessionRelease.mock.calls).toEqual([[SESSION], [`${SESSION}-b`]])
     await expectNothingHoldsTheDirectory(journalDir)
     await expectNothingHoldsTheDirectory(join(root, 'journal-b'))
   })
@@ -231,6 +237,7 @@ describe('site 11: host teardown is failure-complete', () => {
 
   it('keeps the entry whose close rejected, and surfaces the rejection', async () => {
     const sessions = await twoSessions()
+    const acknowledgeSessionRelease = vi.fn()
     const failing = sessions.get(SESSION)
     const closeError = new Error('close rejected')
     if (failing) {
@@ -240,11 +247,12 @@ describe('site 11: host teardown is failure-complete', () => {
     }
 
     await expect(
-      tearDownStructuredAgentSessionHost({ phases: [], sessions })
+      tearDownStructuredAgentSessionHost({ phases: [], sessions, acknowledgeSessionRelease })
     ).rejects.toMatchObject({ errors: [closeError] })
 
     // Only the failure stays indexed — `status === 'fulfilled'`, not "settled".
     expect([...sessions.keys()]).toEqual([SESSION])
+    expect(acknowledgeSessionRelease).toHaveBeenCalledExactlyOnceWith(`${SESSION}-b`)
     await expectNothingHoldsTheDirectory(join(root, 'journal-b'))
   })
 })

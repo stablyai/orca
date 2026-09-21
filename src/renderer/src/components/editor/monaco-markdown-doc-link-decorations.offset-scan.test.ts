@@ -1,10 +1,12 @@
 import type { IRange } from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import { getMarkdownDocLinkTarget } from './markdown-doc-links'
+import { createMarkdownFenceTracker } from './markdown-fence-scanner'
 import { getMarkdownDocLinkDecorationRanges } from './monaco-markdown-doc-link-decorations'
 
-// Why: the pre-offset implementation, kept verbatim as the equivalence oracle
-// for the allocation-free scan that replaced it.
+// Why: the pre-offset implementation, kept as the equivalence oracle for the
+// allocation-free scan that replaced it. Fence detection is the shared
+// scanner's contract, not this file's, so the oracle calls into it.
 function referenceDecorationRanges(content: string): IRange[] {
   const getInlineCodeSpans = (line: string): { start: number; end: number }[] => {
     const spans: { start: number; end: number }[] = []
@@ -26,7 +28,7 @@ function referenceDecorationRanges(content: string): IRange[] {
     spans.some((span) => index >= span.start && index < span.end)
 
   const ranges: IRange[] = []
-  let insideFence = false
+  const fence = createMarkdownFenceTracker()
   let lineStart = 0
   let lineNumber = 1
   for (let index = 0; index <= content.length; index += 1) {
@@ -39,11 +41,7 @@ function referenceDecorationRanges(content: string): IRange[] {
     const currentLineNumber = lineNumber
     lineNumber += 1
 
-    if (/^\s*(```|~~~)/.test(line)) {
-      insideFence = !insideFence
-      continue
-    }
-    if (insideFence) {
+    if (fence.consume(line) || fence.insideFence) {
       continue
     }
     const inlineCodeSpans = getInlineCodeSpans(line)
@@ -76,6 +74,14 @@ function referenceDecorationRanges(content: string): IRange[] {
 
 const CORPUS: { name: string; content: string }[] = [
   { name: 'empty', content: '' },
+  {
+    name: 'Unicode whitespace before fences',
+    content: '\u00a0\u2028```\n[[hidden]]\n```\n[[shown]]'
+  },
+  {
+    name: 'indented blank run before fences',
+    content: `${`${' '.repeat(80)}\r\n`.repeat(1000)}\`\`\`\n[[hidden]]\n\`\`\`\n[[shown]]`
+  },
   { name: 'no links', content: '# Title\n\nJust prose.\n' },
   { name: 'single link', content: '# Title\n\nSee [[notes.md]] for details.\n' },
   { name: 'two links on one line', content: 'See [[a.md]] and [[b.md]].\n' },

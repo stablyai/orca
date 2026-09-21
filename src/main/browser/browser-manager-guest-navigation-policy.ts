@@ -129,7 +129,12 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     const handleDestroyed = (): void => {
-      // Why: guests can die before renderer registration, else attach-time closures leak until shutdown.
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      // A destroyed primary guest also owns per-page callbacks that capture its WebContents.
+      if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guest.id) {
+        this.unregisterGuest(browserTabId, 'guest-destroyed')
+        return
+      }
       this.cleanupGuestPolicyAttachment(guest.id)
     }
     guest.on('destroyed', handleDestroyed)

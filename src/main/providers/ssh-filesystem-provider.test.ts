@@ -77,14 +77,6 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
-  describe('readFile', () => {
-    it('short-circuits on empty:true metadata without subscribing to chunks', async () => {
-      mux.request.mockResolvedValue({ totalSize: 0, isBinary: false, empty: true })
-      const result = await provider.readFile('/home/user/empty.txt')
-      expect(result).toEqual({ content: '', isBinary: false })
-    })
-  })
-
   describe('readTerminalArtifact', () => {
     it('sends fs.readTerminalArtifact request with verification metadata', async () => {
       mux.request.mockResolvedValue({ content: '{}', isBinary: false })

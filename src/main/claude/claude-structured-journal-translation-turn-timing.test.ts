@@ -116,6 +116,9 @@ describe('Claude structured turn timing', () => {
     expect(state.lifecycle().at(-1)).toEqual({
       turnId: 'user-1',
       state: 'completed',
+      // A result with no error is the provider saying the turn worked, so the
+      // ordinary path carries a positive verdict rather than leaving it unknown.
+      outcome: 'success',
       startedAt: 1_000,
       completedAt: 4_500,
       userItemId: USER_1_KEY,

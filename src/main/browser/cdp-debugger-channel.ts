@@ -53,7 +53,7 @@ export class CdpDebuggerChannel {
       // agent-browser filters events by the sessionId from Target.attachToTarget.
       const msg: Record<string, unknown> = { method, params }
       msg.sessionId = sessionId || this.sessions.primarySessionId
-      client.send(JSON.stringify(msg))
+      this.responder.send(msg, client)
     }
     this.debuggerDetachHandler = () => {
       this.attached = false

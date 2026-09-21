@@ -7,6 +7,7 @@ import { i18n, translate } from '@/i18n/i18n'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
 import { ProjectTitleCell } from './ProjectCellIdentity'
+import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { formatRoadmapTick } from './roadmap-tick-format'
 import { loadRoadmapZoom, saveRoadmapZoom } from './roadmap-zoom-preference'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
@@ -145,14 +146,7 @@ export default function ProjectRoadmap({
   }
 
   if (table.rows.length === 0) {
-    return (
-      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
-          "No items match this view's filter."
-        )}
-      </div>
-    )
+    return <ProjectItemsEmptyState filter={view.filter} />
   }
 
   const undatedCount = table.rows.length - spans.size

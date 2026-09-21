@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import {
@@ -58,9 +59,8 @@ export const MessageRow = memo(function MessageRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
-  const { hasImages, markdown, prose, subagentGroups, tools } = deriveNativeChatRowContent(
-    message.blocks
-  )
+  const { backgroundTasks, hasImages, markdown, prose, subagentGroups, tools } =
+    deriveNativeChatRowContent(message.blocks)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -75,7 +75,13 @@ export const MessageRow = memo(function MessageRow({
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0 && subagentGroups.length === 0) {
+  if (
+    markdown.length === 0 &&
+    !hasImages &&
+    tools.length === 0 &&
+    subagentGroups.length === 0 &&
+    backgroundTasks.length === 0
+  ) {
     return null
   }
 
@@ -122,6 +128,7 @@ export const MessageRow = memo(function MessageRow({
                 content={markdown}
                 variant="document"
                 className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
@@ -175,12 +182,13 @@ export const MessageRow = memo(function MessageRow({
           content={markdown}
           variant="document"
           className="text-sm"
+          renderCodeBlock={NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {tools.length > 0 || subagentGroups.length > 0 ? (
+      {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}
           previousTodoWrite={previousTodoWrite}
@@ -189,6 +197,7 @@ export const MessageRow = memo(function MessageRow({
           onRevealDiff={onScrollMessageToTop}
           onLinkClick={onLinkClick}
           subagentGroups={subagentGroups}
+          backgroundTasks={backgroundTasks}
           expandSignal={expandSignal}
           expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}

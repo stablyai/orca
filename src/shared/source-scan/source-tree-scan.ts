@@ -29,6 +29,22 @@ export function isTestFile(relativePath: string): boolean {
 
 export type ScannedFile = { path: string; relativePath: string; source: string }
 
+/** The three readdir type predicates the walk consults. */
+type DirentTypeProbe = {
+  isSymbolicLink(): boolean
+  isFile(): boolean
+  isDirectory(): boolean
+}
+
+/**
+ * Links need a stat to follow them, and so does DT_UNKNOWN (every predicate
+ * false) -- filesystems that do not report d_type would otherwise have a real
+ * directory silently dropped from the scan.
+ */
+export function directoryEntryNeedsStat(entry: DirentTypeProbe): boolean {
+  return entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())
+}
+
 /**
  * Every `.ts`/`.tsx` file under `root`, with its text.
  *
@@ -46,16 +62,18 @@ export function scanSourceTree(
   const extensions = options.extensions ?? /\.tsx?$/
   const found: ScannedFile[] = []
   const visit = (directory: string): void => {
-    for (const entry of readdirSync(directory)) {
-      if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith('.') || entry === '__fixtures__') {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const name = entry.name
+      if (IGNORED_DIRECTORIES.has(name) || name.startsWith('.') || name === '__fixtures__') {
         continue
       }
-      const path = join(directory, entry)
-      if (statSync(path).isDirectory()) {
+      const path = join(directory, name)
+      // Ordinary entries carry their type from readdir.
+      if (directoryEntryNeedsStat(entry) ? statSync(path).isDirectory() : entry.isDirectory()) {
         visit(path)
         continue
       }
-      if (!extensions.test(entry)) {
+      if (!extensions.test(name)) {
         continue
       }
       const relativePath = relative(root, path).replace(/\\/g, '/')

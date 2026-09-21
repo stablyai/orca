@@ -5,6 +5,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
 import {
+  type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
   unhandledProviderFrameJournalItem
 } from '../native-chat/agent-session-wire/unhandled-provider-frame'
@@ -13,6 +14,7 @@ import {
   claudeText,
   type ClaudeMessageEnvelope
 } from './claude-structured-item-translation'
+import { claudeResultOutcome } from './claude-result-outcome'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -44,11 +46,9 @@ export function isSettledClaudeResultKind(kind: string): boolean {
 export function claudeResultFailure(
   message: Record<string, unknown>
 ): { text: string | null } | null {
-  if (message.is_error !== true) {
-    return null
-  }
-  const terminalReason = claudeText(message.terminal_reason)
-  if (terminalReason === 'aborted_streaming' || terminalReason === 'aborted_tools') {
+  // A cancellation is not a fault and earns no error row; the outcome classifier
+  // owns that distinction so this reader cannot drift from the turn's verdict.
+  if (claudeResultOutcome(message) !== 'failure') {
     return null
   }
   const result = claudeText(message.result)?.trim()
@@ -106,16 +106,31 @@ export function createClaudeProviderFrameFallback(
   acquisitionId: string
 ): {
   /** `displayText` leads the row when Claude knows the sentence the frame itself does not name. */
-  append: (kind: string, payload: unknown, displayText?: string | null) => void
+  append: (
+    kind: string,
+    payload: unknown,
+    displayText?: string | null,
+    /** Runs only when a row is actually going to be written, so a frame that
+     *  translates to nothing never opens a turn. */
+    beforeAppend?: () => void,
+    options?: UnhandledProviderFrameJournalItemOptions
+  ) => boolean
 } {
   let sequence = 0
   return {
-    append: (kind, payload, displayText) => {
+    append: (kind, payload, displayText, beforeAppend, options) => {
       sequence += 1
-      const translated = unhandledProviderFrameJournalItem('claude', kind, payload)
+      const translated = unhandledProviderFrameJournalItem(
+        'claude',
+        kind,
+        payload,
+        DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+        options
+      )
       if (!translated) {
-        return
+        return false
       }
+      beforeAppend?.()
       const bounded = displayText
         ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
         : null
@@ -127,6 +142,7 @@ export function createClaudeProviderFrameFallback(
         bounded ? { ...translated.body, text: bounded } : translated.body
       )
       sink.publish()
+      return true
     }
   }
 }
@@ -136,24 +152,27 @@ export type ClaudeProviderFrameFallback = ReturnType<typeof createClaudeProvider
 /** Journal each content part this build does not model, plus the empty assistant
  *  frame a replay leaves behind (an empty USER frame is a replay with nothing to
  *  show, not an unknown kind). Returns whether anything was appended. */
-export function appendUnmodeledClaudeContent(
+export function appendUnmodeledContent(
   fallback: ClaudeProviderFrameFallback,
   envelope: ClaudeMessageEnvelope,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  beforeAppend: () => void
 ): boolean {
   let changed = false
   for (const part of envelope.content.filter((part) => !isModeledClaudeContent(part))) {
     const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
-    fallback.append(
-      `message:${envelope.role}:content:${partType}`,
-      part,
-      readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT
-    )
-    changed = true
+    changed =
+      fallback.append(
+        `message:${envelope.role}:content:${partType}`,
+        part,
+        readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT,
+        beforeAppend
+      ) || changed
   }
   if (envelope.content.length === 0 && envelope.role === 'assistant') {
-    fallback.append(`message:${envelope.role}:empty`, message)
-    changed = true
+    // Empty provider placeholders do not prove work began, and may have no
+    // later result capable of closing a turn.
+    changed = fallback.append(`message:${envelope.role}:empty`, message) || changed
   }
   return changed
 }

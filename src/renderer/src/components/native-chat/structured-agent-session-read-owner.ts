@@ -29,7 +29,6 @@ export type StructuredAgentSessionReadOwner = {
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   loadOlder: () => Promise<void>
-  refresh: () => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -57,7 +56,6 @@ function createReadOwner(
     loadingOlder: false
   }
   let stopActiveRun: (() => void) | null = null
-  let refreshActiveRun = (): void => {}
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Set<symbol>()
@@ -91,7 +89,7 @@ function createReadOwner(
       setSnapshot({ ...snapshot, loadingOlder: false })
     }
   }
-  const refreshTail = async (shouldStop: () => boolean): Promise<void> => {
+  const hydrate = async (shouldStop: () => boolean): Promise<void> => {
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
       target,
       'agentSession.history',
@@ -120,7 +118,7 @@ function createReadOwner(
     if (shouldStop()) {
       return
     }
-    apply({ type: 'tail-page', page: result.page })
+    apply({ type: 'history-page', page: result.page })
     if (shouldStop()) {
       return
     }
@@ -177,15 +175,13 @@ function createReadOwner(
       applyError: (message) => apply({ type: 'error', message }),
       getCursor: () => snapshot.state.cursor,
       onHistoryReadInvalidated: clearLoadingOlder,
-      refreshTail,
+      hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,
       target
     })
     captureActiveHistoryReadGuard = transport.captureHistoryReadGuard
-    refreshActiveRun = transport.refresh
     stopActiveRun = () => {
       captureActiveHistoryReadGuard = () => retiredHistoryRead
-      refreshActiveRun = (): void => {}
       transport.dispose()
       stopActiveRun = null
     }
@@ -266,7 +262,6 @@ function createReadOwner(
         }
       }
     },
-    refresh: () => refreshActiveRun(),
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {

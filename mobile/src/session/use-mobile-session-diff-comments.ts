@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from 'react'
-import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { useClipboardWriter } from '../platform/clipboard'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
+import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
 import { triggerSelection, triggerSuccess, triggerError } from '../platform/haptics'
 import {
   addMobileDiffComment,
@@ -25,21 +27,19 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     setPendingDiffNotesDelivery,
     showToast
   } = scope
+  const clipboard = useClipboardWriter()
   const loadDiffComments = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !worktreeId || isFloatingWorkspaceRoute) {
       setDiffComments([])
       return
     }
-    const response = await client.sendRequest('worktree.show', {
-      worktree: `id:${worktreeId}`
-    })
-    if (!response.ok) {
+    const response = sessionWorktreeRecordRead.interpret(
+      await sessionWorktreeRecordRead.request(client, { worktree: `id:${worktreeId}` })
+    )
+    if (!response.accepted) {
       return
     }
-    const result = (response as RpcSuccess).result as {
-      worktree?: { diffComments?: unknown }
-    }
-    setDiffComments(normalizeMobileDiffComments(result.worktree?.diffComments, worktreeId))
+    setDiffComments(normalizeMobileDiffComments(response.value?.diffComments, worktreeId))
   }, [client, connState, worktreeId, isFloatingWorkspaceRoute])
 
   const persistDiffComments = useCallback(
@@ -47,13 +47,14 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      const response = await client.sendRequest('worktree.set', {
+      const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
-        diffComments: comments
+        diffComments: [...comments]
       })
-      if (!response.ok) {
-        throw new Error((response as RpcFailure).error.message || 'Failed to save review notes')
-      }
+      interpretOrThrowRefusalMessage(
+        () => sessionWorktreeNotesWrite.interpret(response),
+        'Failed to save review notes'
+      )
     },
     [client, connState, worktreeId]
   )
@@ -131,14 +132,14 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       return
     }
     try {
-      await Clipboard.setStringAsync(formatDiffComments(comments))
+      await clipboard.writeText(formatDiffComments(comments))
       triggerSuccess()
       showToast('Notes copied')
     } catch {
       triggerError()
       showToast("Couldn't copy notes", 1600)
     }
-  }, [showToast])
+  }, [clipboard, showToast])
 
   const sendDiffCommentsToAgent = useCallback((): void => {
     const comments = diffCommentsRef.current.filter((comment) => !comment.sentAt)

@@ -8,6 +8,14 @@ const fakes = vi.hoisted(() => ({
     return { rows: [], rowCount: 0 }
   }),
   release: vi.fn(),
+  // A real pooled client is an EventEmitter, and the acquire path attaches an
+  // `error` listener to it before handing it to the caller.
+  client: () => ({
+    query: fakes.query,
+    release: fakes.release,
+    on: vi.fn(),
+    removeListener: vi.fn()
+  }),
   end: vi.fn(async () => undefined)
 }))
 
@@ -19,7 +27,7 @@ vi.mock('pg', () => ({
       waitingCount = 0
       end = fakes.end
       on = vi.fn()
-      connect = vi.fn(async () => ({ query: fakes.query, release: fakes.release }))
+      connect = vi.fn(async () => fakes.client())
     }
   }
 }))
@@ -257,6 +265,64 @@ describe('bounded cell-inventory lock wait', () => {
     })
 
     expect(consumeRelayCellInventoryHold(database).cellInventoryHolds).toBe(1)
+    await database.close()
+  })
+
+  // Why: the 55P03 rolls the transaction back, so a drain on the commit path
+  // alone would report zero for exactly the windows that were contended.
+  it('reports a NOWAIT deferral that rolled its transaction back', async () => {
+    const database = await openFakePostgres()
+    fakes.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FOR UPDATE NOWAIT')) {
+        throw Object.assign(new Error('could not obtain lock'), { code: '55P03' })
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    await expect(
+      database.transaction(async (transaction) => {
+        await transaction.queryLocked(CELL_INVENTORY_SQL, [], {
+          failIfUnavailable: true,
+          measureHoldMs: true
+        })
+      })
+    ).rejects.toThrow('database_lock_unavailable')
+
+    const counts = consumeRelayCellInventoryHold(database)
+    expect(counts.cellInventoryLockUnavailable).toBe(1)
+    expect(counts.cellInventoryLockTimeouts).toBe(0)
+    await database.close()
+  })
+
+  // Why: a bounded request-path wait raises the same 55P03 without NOWAIT. Folding
+  // it into the deferral counter would hide user-visible stalls among by-design
+  // sweep skips, which outnumber them by roughly an order of magnitude.
+  it('counts an expired bounded wait apart from a NOWAIT deferral', async () => {
+    const database = await openFakePostgres()
+    fakes.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FOR UPDATE') && !sql.includes('NOWAIT')) {
+        throw Object.assign(new Error('canceling statement due to lock timeout'), {
+          code: '55P03'
+        })
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    await expect(
+      database.transaction(async (transaction) => {
+        await transaction.queryLocked(CELL_INVENTORY_SQL, [], {
+          lockTimeoutMs: 500,
+          measureHoldMs: true
+        })
+      })
+    ).rejects.toThrow()
+
+    const counts = consumeRelayCellInventoryHold(database)
+    // One per attempt, not per request: 55P03 is retryable, so an exhausted
+    // request contributes POSTGRES_TRANSACTION_ATTEMPTS timeouts. Reading the
+    // metric as affected-requests would overstate it threefold.
+    expect(counts.cellInventoryLockTimeouts).toBe(3)
+    expect(counts.cellInventoryLockUnavailable).toBe(0)
     await database.close()
   })
 

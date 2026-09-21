@@ -44,7 +44,7 @@ describe('a signed-out desktop reaches the phone verdict', () => {
     const { logical, supervisor } = supervisorOver(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
 
     await supervisor.start()
-    await vi.waitFor(() => expect(logical.isHostSignedOut()).toBe(true))
+    await vi.waitFor(() => expect(logical.getRelayHostReachability()).toBe('signed-out'))
 
     supervisor.stop()
   })
@@ -54,7 +54,7 @@ describe('a signed-out desktop reaches the phone verdict', () => {
 
     await supervisor.start()
 
-    expect(logical.isHostSignedOut()).toBe(false)
+    expect(logical.getRelayHostReachability()).not.toBe('signed-out')
     supervisor.stop()
   })
 })

@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -16,12 +16,18 @@ const OPENCODE_SQLITE_SESSION = {
   agent: 'opencode' as const,
   sessionId: 'sqlite-session'
 }
+const OPENCODE_SQLITE_MESSAGES = [
+  { role: 'user' as const, text: 'ask sqlite', timestamp: null },
+  { role: 'assistant' as const, text: 'reply sqlite', timestamp: null }
+]
 
-// Stands in for the worker thread: the point is that its messages never come
-// back over the channel, not what the SQLite read returns.
+// Stands in for the worker thread: the point is which leg the reader asks for
+// and that what comes back reaches the channel, not what the SQLite read returns.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof OpenCodeSqliteWorkerSpawn>()),
-  parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION)
+  parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION),
+  captureOpenCodeSqliteSessionViaWorker: () =>
+    Promise.resolve({ session: OPENCODE_SQLITE_SESSION, messages: OPENCODE_SQLITE_MESSAGES })
 }))
 import type * as OpenCodeSqliteWorkerSpawn from './session-scanner-opencode-sqlite-worker-spawn'
 import {
@@ -170,6 +176,8 @@ it('replays only the appended lines on a resumed read', async () => {
   expect(firstRead?.outcome?.incomplete).toBe(false)
 
   await appendFile(transcript, `${jsonLines(claudeTurns(5, 5))}\n`)
+  const changedAt = new Date(firstRead!.start.candidate.file.mtimeMs + 2000)
+  await utimes(transcript, changedAt, changedAt)
   consumer.reads.length = 0
   await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
@@ -182,6 +190,38 @@ it('replays only the appended lines on a resumed read', async () => {
     'tool:Bash: ls 5'
   ])
 })
+
+it.each(['rewrite', 'truncate then regrow'])(
+  're-reads a same-size %s from zero',
+  async (operation) => {
+    const { transcript } = await writeClaudeFixture()
+    const before = await claudeCandidate(transcript)
+    await parseAgentSessionFileCached(before, 'darwin')
+    const consumer = recordingConsumer()
+    const rewritten = `${jsonLines(claudeTurns(1, 4))}\n`.replace('reply 4', 'fresh 4')
+    expect(Buffer.byteLength(rewritten)).toBe(before.file.sizeBytes)
+
+    if (operation === 'truncate then regrow') {
+      await truncate(transcript, 0)
+      await appendFile(transcript, rewritten)
+    } else {
+      await writeFile(transcript, rewritten)
+    }
+    const changedAt = new Date(before.file.mtimeMs + 2000)
+    await utimes(transcript, changedAt, changedAt)
+    const session = await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
+
+    expect(consumer.reads).toHaveLength(1)
+    expect(consumer.reads[0].start.mode).toBe('replace')
+    expect(consumer.reads[0].start.previousByteOffset).toBe(0)
+    expect(textsFor(consumer.reads, 'claude')).toContain('assistant:fresh 4')
+    expect(textsFor(consumer.reads, 'claude')).not.toContain('assistant:reply 4')
+    resetSessionParseCacheForTests()
+    expect(session).toEqual(
+      await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
+    )
+  }
+)
 
 it('publishes a trailing unterminated line once, when it is complete', async () => {
   const { roots, transcript } = await writeClaudeFixture()
@@ -270,7 +310,7 @@ it('serializes overlapping parses of one path so no consumer read is orphaned', 
   expect(second?.messageCount).toBe(10)
 })
 
-it('reports a read whose parser cannot publish its messages as not complete', async () => {
+it('publishes an OpenCode SQLite session over the channel and reports it complete', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-transcript-opencode-'))
   tempRoots.push(root)
   const dbPath = join(root, 'opencode.db')
@@ -293,8 +333,9 @@ it('reports a read whose parser cannot publish its messages as not complete', as
 
   expect(session).toEqual(OPENCODE_SQLITE_SESSION)
   expect(consumer.reads).toHaveLength(1)
-  expect(consumer.reads[0].messages).toEqual([])
-  expect(consumer.reads[0].outcome?.incomplete).toBe(true)
+  expect(consumer.reads[0].messages).toEqual(OPENCODE_SQLITE_MESSAGES)
+  expect(consumer.reads[0].outcome?.incomplete).toBe(false)
+  consumer.unregister()
 })
 
 it('reports the transcript size, not the cache key, as a whole-file read offset', async () => {

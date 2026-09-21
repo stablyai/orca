@@ -14,8 +14,14 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 export type InstallPluginsResult = {
-  installed: { opencode: boolean; pi: boolean; omp: boolean; primeAgent: boolean }
-  overlayDirs: { opencode?: string }
+  installed: {
+    opencode: boolean
+    opencode2?: boolean
+    pi: boolean
+    omp: boolean
+    primeAgent: boolean
+  }
+  overlayDirs: { opencode?: string; opencode2?: string; pi?: string; omp?: string }
 }
 
 export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
@@ -36,24 +42,32 @@ export function createInstallPluginsHandler(
   // under running agents and race panes spawning against the path the host just
   // handed them. Rebuild only when the shipped source actually changed.
   let materialized: { source: string; sourceDir: string | undefined; dir: string } | null = null
+  let materialized2: { source: string; sourceDir: string | undefined; dir: string } | null = null
 
   return (params) => {
     const opencode = params.opencodePluginSource
+    const opencode2 = params.opencode2PluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
       primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     let opencodeDir: string | undefined
+    const launchKind =
+      params.launchKind === 'pi' || params.launchKind === 'omp' ? params.launchKind : undefined
+    let piDir: string | undefined
+    let ompDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
@@ -80,14 +94,57 @@ export function createInstallPluginsHandler(
             : null
       }
     }
+    let opencode2Dir: string | undefined
+    if (pluginOverlay.hasOpenCode2Source()) {
+      const incoming = typeof opencode2 === 'string' ? opencode2 : null
+      const sourceDir = resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL)
+      const cached = materialized2
+      if (
+        cached &&
+        (incoming === null || incoming === cached.source) &&
+        sourceDir === cached.sourceDir &&
+        existsSync(getRelayOpenCodePluginPath(cached.dir, 'opencode2'))
+      ) {
+        opencode2Dir = cached.dir
+      } else {
+        const overlayId =
+          sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode2'
+        opencode2Dir = pluginOverlay.materializeOpenCode2(overlayId, sourceDir) ?? undefined
+        materialized2 =
+          opencode2Dir && incoming !== null
+            ? { source: incoming, sourceDir, dir: opencode2Dir }
+            : null
+      }
+    }
+    // Materialize only the explicitly requested agent. Bare shells must not create
+    // ~/.pi/agent or ~/.omp/agent (#10196).
+    if (launchKind === 'pi' || launchKind === 'omp') {
+      const source = launchKind === 'pi' ? pi : omp
+      if (typeof source === 'string') {
+        const result = pluginOverlay.materializePi(`wsl-${launchKind}`, undefined, launchKind, {
+          materializeDefaultHome: true
+        })
+        if (launchKind === 'pi') {
+          piDir = result?.sourceAgentDir
+        } else {
+          ompDir = result?.statusExtensionPath
+        }
+      }
+    }
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
+        opencode2: pluginOverlay.hasOpenCode2Source(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp'),
         primeAgent: pluginOverlay.hasPiSource('prime-agent')
       },
-      overlayDirs: opencodeDir ? { opencode: opencodeDir } : {}
+      overlayDirs: {
+        ...(opencodeDir ? { opencode: opencodeDir } : {}),
+        ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
+        ...(piDir ? { pi: piDir } : {}),
+        ...(ompDir ? { omp: ompDir } : {})
+      }
     }
   }
 }

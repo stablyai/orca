@@ -162,7 +162,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(22)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(26)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -606,6 +606,19 @@ describe('method routing', () => {
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
 
+  it('routes strict prompt identity through cancellation', async () => {
+    const params = {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      prompt: { itemId: 'prompt-1', expectedRevision: 2 }
+    }
+
+    const response = await call('agentSession.cancel', params, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
   it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
@@ -647,6 +660,17 @@ describe('parameter validation', () => {
       envelope: envelope(),
       turnId: 'turn-1',
       taskId: 'task-2'
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      prompt: { itemId: 'prompt-1', expectedRevision: 1 }
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      prompt: { itemId: 'prompt-1', expectedRevision: 0 }
     })
     expect(hostCalls.cancel).not.toHaveBeenCalled()
   })

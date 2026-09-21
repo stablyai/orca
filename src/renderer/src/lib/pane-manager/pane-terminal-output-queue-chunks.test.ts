@@ -18,7 +18,8 @@ function createEntry(): QueueEntry {
     foregroundHoldSafetyTimer: null,
     foregroundCoalesceTimer: null,
     foregroundReleaseDeadlineAt: null,
-    foregroundReleaseDeadlineFixed: false
+    foregroundReleaseDeadlineFixed: false,
+    foregroundHoldSafetyExtended: false
   }
 }
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
+import { dispatchClaudeTurn, resolveClaudeReplayTurn } from './claude-structured-dispatch'
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeSession } from './claude-structured-session-state'
@@ -12,6 +12,10 @@ import {
   userMessage,
   userReplayFrame
 } from './claude-structured-dispatch-test-support'
+
+function resolveClaudeReplayWaiter(...args: Parameters<typeof resolveClaudeReplayTurn>): boolean {
+  return resolveClaudeReplayTurn(...args) !== null
+}
 
 describe('Claude structured dispatch image limits', () => {
   it.each(['isMeta', 'isSynthetic', 'isCompactSummary'])(
@@ -38,7 +42,7 @@ describe('Claude structured dispatch image limits', () => {
     }
   )
 
-  it('takes the active turn identity from a replay that lands after dispatch returned', async () => {
+  it('settles the waiter from a replay that lands after dispatch returned', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -47,14 +51,12 @@ describe('Claude structured dispatch image limits', () => {
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
-    expect(session.activeTurnId).toBeUndefined()
 
     expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
-  it('recovers the active identity when a replay lands after the child died', async () => {
+  it('settles a retired identity without reopening a turn after the child died', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -67,9 +69,8 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(1)
 
-    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(false)
+    expect(session.retiredDispatchWaiters).toHaveLength(0)
   })
 
   it('settles the send the replay proves was delivered, whenever it arrives', async () => {
@@ -372,14 +373,13 @@ describe('Claude structured dispatch image limits', () => {
       .fn()
       .mockRejectedValue(claudeUnwrittenUserMessageError(new Error('broken pipe')))
 
-    // A refused write is a transport fact, and the only thing besides child exit
-    // that puts one message's delivery in doubt.
+    // A refused write is not doubt: the frame never left, so it is a rejection.
     await expect(
       dispatchClaudeTurn(session, {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
     expect(session.dispatchWaiters).toEqual([firstWaiter])
 
     const firstUuid = (firstWaiter as { sentUuid?: string }).sentUuid
@@ -401,7 +401,7 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
@@ -411,7 +411,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(resolveClaudeReplayWaiter(session, userReplayFrame('fresh-replay', 'retry me'))).toBe(
       true
     )
-    expect(session.activeTurnId).toBe('fresh-replay')
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
   it('does not claim an SDK-pulled frame was unwritten when its write outcome is ambiguous', async () => {

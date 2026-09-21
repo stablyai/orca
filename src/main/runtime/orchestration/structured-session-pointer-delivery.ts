@@ -81,11 +81,14 @@ export function structuredSessionGateFacts(
  * Decide whether the nudge may be sent right now.
  *
  * Mid-turn delivery is refused for both providers rather than delegated to
- * them: Codex answers a mid-turn `turn/start` with `turn already running`, and
- * Claude accepts the frame but cannot acknowledge it inside the dispatch ack
- * window, settling `unknown` while the message is really queued. Waiting for
- * the turn to settle is the one contract that holds for both, and it preserves
- * orchestration's existing idle-edge-only delivery policy.
+ * them. Neither refuses the frame: Codex COALESCES a mid-turn `turn/start` into
+ * the running turn -- measured on codex-cli 0.147.0, 0.150.1 and 0.153.4, none
+ * of which refuse it and none of which fire a second `turn/started` -- and
+ * Claude queues it behind the turn. Both therefore
+ * fold the nudge into work already in flight, where it reads as part of the
+ * running turn rather than a new instruction. Waiting for the turn to settle is
+ * the one contract that holds for both, and it preserves orchestration's
+ * existing idle-edge-only delivery policy.
  */
 export function decideStructuredPointerDelivery(input: {
   refusal: AgentSessionPtyWriteRefusal

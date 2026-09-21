@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord, extractString } from './session-scanner-values'
@@ -18,7 +19,7 @@ export function resolveKimiSessionsDir(override?: string): string {
   if (override?.trim()) {
     return override.trim()
   }
-  const home = process.env.KIMI_CODE_HOME?.trim() || join(homedir(), '.kimi-code')
+  const home = resolveAbsoluteDirOverride(process.env.KIMI_CODE_HOME, join(homedir(), '.kimi-code'))
   return join(home, 'sessions')
 }
 

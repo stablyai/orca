@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import {
   claudeGroupedQuestionPromptItems,
@@ -133,6 +134,23 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
   })
 
+  // The list defaults to visible, so a dropped prop silently re-arms auto-scroll
+  // on reveal and drags a reader who left a hidden pane detached to the bottom.
+  it.each([true, false])('tells the transcript the pane is visible: %s', (isVisible) => {
+    render(
+      <NativeChatStructuredSession
+        isVisible={isVisible}
+        isFocusedGroup
+        tabId="structured-tab-visibility"
+        sessionId="session-visibility"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    expect(mocks.messageListProps?.isVisible).toBe(isVisible)
+  })
+
   // Turn status and transcript image previews shipped Codex-first. Every
   // structured session renders through the same list, so neither is agent-gated.
   it.each(['codex', 'claude'] as const)(
@@ -153,6 +171,110 @@ describe('NativeChatStructuredSession', () => {
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )
+
+  it('suppresses live turn activity for a pending question without ending the turn', () => {
+    mocks.isWorking = true
+    mocks.turnId = 'turn-question'
+    mocks.promptItems = legacySingleQuestionPromptItems
+    const view = () => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-question"
+        sessionId="session-question"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const { rerender } = render(view())
+
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: false
+    })
+    expect(
+      document
+        .querySelector('[data-native-chat-root="true"]')
+        ?.getAttribute('data-native-chat-working')
+    ).toBe('true')
+    expect(mocks.questionCardProps).not.toBeNull()
+    expect(screen.queryByTestId('structured-composer')).toBeNull()
+
+    act(() => mocks.questionCardProps?.onCancel())
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-question', {
+      itemId: 'legacy-question-item',
+      expectedRevision: 1
+    })
+    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+
+    mocks.promptItems = []
+    rerender(view())
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: true
+    })
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(mocks.composerProps?.isWorking).toBe(true)
+  })
+
+  it('suppresses live turn activity for a pending approval but keeps background work visible', () => {
+    const approvalItems: AgentJournalRenderItem[] = [
+      {
+        itemId: 'approval-item',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'approval',
+          title: 'Allow command?',
+          detail: 'pnpm test',
+          options: [
+            { id: 'allow', label: 'Allow' },
+            { id: 'deny', label: 'Deny' }
+          ],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+    mocks.isWorking = true
+    mocks.turnId = 'turn-approval'
+    mocks.promptItems = approvalItems
+    mocks.monitoringBackgroundTasks = true
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-approval"
+        sessionId="session-approval"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: false
+    })
+    expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
+    expect(screen.queryByTestId('structured-composer')).toBeNull()
+    expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
+
+    act(() => mocks.approvalCardProps?.onChoose('allow'))
+    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], 'allow')
+    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+
+    act(() => mocks.approvalCardProps?.onCancel?.())
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-approval', {
+      itemId: 'approval-item',
+      expectedRevision: 1
+    })
+  })
 
   // Every background-task test mounts the same local Claude session; only the ids
   // differ. A fresh element per call also matters for the rerenders below: React
@@ -249,7 +371,7 @@ describe('NativeChatStructuredSession', () => {
     let finishFirst!: (value: unknown) => void
     let finishSecond!: (value: unknown) => void
     mocks.stopBackgroundTask.mockImplementation(
-      (_sessionId: string, taskId: string) =>
+      (_sessionId: string, taskId?: string) =>
         new Promise((resolve) => {
           if (taskId === 'task-one') {
             finishFirst = resolve

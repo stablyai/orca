@@ -88,6 +88,7 @@ import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
 import {
+  RelayProbeCleanupUnconfirmedError,
   isRelayEndpointHeldError,
   isRelayEndpointUnresponsiveError
 } from './ssh-relay-endpoint-incumbent'
@@ -623,7 +624,11 @@ async function deployAndLaunchRelayAttempt(
         nodePath: launched.nodePath
       })
     )
-    .catch(() => {})
+    .catch((error) => {
+      if (error instanceof RelayProbeCleanupUnconfirmedError) {
+        throw error
+      }
+    })
     .then(() =>
       gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
         windowsNodePath: launched.nodePath,
@@ -1773,6 +1778,7 @@ async function launchRelay(
     // `test -S`. Swallowing a Held/Unresponsive verdict launches a fresh daemon over a live one —
     // the exact collision the probe exists to prevent (it lost the bind, but only by luck).
     if (
+      err instanceof RelayProbeCleanupUnconfirmedError ||
       isUnconfirmedSshCommandTermination(err) ||
       isRelayEndpointHeldError(err) ||
       isRelayEndpointUnresponsiveError(err)

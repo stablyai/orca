@@ -237,7 +237,12 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
+  const shellPath =
+    args.shellOverride ||
+    getOptions().getDefaultShell?.()?.trim() ||
+    args.env?.SHELL ||
+    process.env.SHELL ||
+    '/bin/zsh'
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
     shellArgs: ['-l'],

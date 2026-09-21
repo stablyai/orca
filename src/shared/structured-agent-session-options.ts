@@ -9,6 +9,7 @@ import {
 } from './native-chat-session-option-snapshot'
 import {
   applyNativeChatReportedSessionOptions,
+  clearTrackedSessionOption,
   createNativeChatSessionOptionRecord,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
@@ -16,6 +17,10 @@ import {
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat-session-option-defaults'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { AgentSessionOptionsResult } from './agent-session-wire'
+import {
+  decodeStructuredAgentSessionOptionValue,
+  encodeStructuredAgentSessionOptionValue
+} from './structured-agent-session-option-codec'
 
 function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
   if (model.efforts.length <= 1) {
@@ -34,14 +39,30 @@ function effortOption(model: AgentSessionOptionsResult['models'][number]): Catal
   }
 }
 
-function discoveredModel(model: AgentSessionOptionsResult['models'][number]): CatalogModel {
+function fastModeOption(): CatalogOption {
+  return {
+    id: 'fastMode',
+    label: 'Fast mode',
+    category: 'mode',
+    kind: { type: 'boolean', defaultValue: false },
+    apply: {}
+  }
+}
+
+function discoveredModel(
+  model: AgentSessionOptionsResult['models'][number],
+  sessionSupportsFastMode: boolean
+): CatalogModel {
   const effort = effortOption(model)
   return {
     id: model.id,
     label: model.label,
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
-    options: effort ? [effort] : []
+    options: [
+      ...(effort ? [effort] : []),
+      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : [])
+    ]
   }
 }
 
@@ -49,7 +70,9 @@ export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
-  const models: CatalogModel[] = result.models.map(discoveredModel)
+  const models: CatalogModel[] = result.models.map((model) =>
+    discoveredModel(model, result.fastModeSupport?.supported === true)
+  )
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
@@ -77,11 +100,15 @@ export function applyStructuredAgentSessionOptions(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): StructuredAgentSessionOptionState {
+  if (result.current.fastMode === undefined) {
+    clearTrackedSessionOption(state.record, result.current.model, 'fastMode')
+  }
   applyNativeChatReportedSessionOptions(
     state.record,
     {
       model: result.current.model,
-      ...(result.current.effort ? { effort: result.current.effort } : {})
+      ...(result.current.effort ? { effort: result.current.effort } : {}),
+      ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {})
     },
     result.current.confirmed ?? []
   )
@@ -112,10 +139,11 @@ export function canSetStructuredAgentSessionOption(
   const descriptor = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === id)
   return Boolean(
     state.catalog &&
-    typeof value === 'string' &&
     state.pendingId === null &&
-    descriptor?.kind.type === 'select' &&
-    descriptor.kind.choices.some((choice) => choice.value === value)
+    ((typeof value === 'string' &&
+      descriptor?.kind.type === 'select' &&
+      descriptor.kind.choices.some((choice) => choice.value === value)) ||
+      (typeof value === 'boolean' && descriptor?.kind.type === 'boolean'))
   )
 }
 
@@ -132,7 +160,11 @@ export function commitStructuredAgentSessionOption(
     state.catalog.models,
     state.record
   )
-  setTrackedSessionOption(state.record, id, value, 'dispatched', effectiveModel)
+  const decoded = decodeStructuredAgentSessionOptionValue(id, value)
+  if (decoded === null) {
+    return { ...state, pendingId: null }
+  }
+  setTrackedSessionOption(state.record, id, decoded, 'dispatched', effectiveModel)
   return { ...state, pendingId: null }
 }
 
@@ -141,9 +173,9 @@ export function commitStructuredAgentSessionOptionValues(
   values: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
   let next = state
-  for (const id of ['model', 'effort']) {
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values[id]
-    if (value) {
+    if (value !== undefined) {
       next = commitStructuredAgentSessionOption(next, id, value)
     }
   }
@@ -153,7 +185,7 @@ export function commitStructuredAgentSessionOptionValues(
 export type StructuredSessionOptionPick = {
   modelId: string
   optionId: string
-  value: string
+  value: SessionOptionValue
 }
 
 /**
@@ -187,6 +219,14 @@ export function structuredAgentSessionOptionPicks(
   }
   return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
     const value = committed[optionId]
-    return typeof value === 'string' && value.trim() ? [{ modelId, optionId, value }] : []
+    if (value === undefined) {
+      return []
+    }
+    const decoded = decodeStructuredAgentSessionOptionValue(optionId, value)
+    return decoded === null ||
+      (typeof decoded === 'string' && !decoded.trim()) ||
+      encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
+      ? []
+      : [{ modelId, optionId, value: decoded }]
   })
 }

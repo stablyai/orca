@@ -32,6 +32,7 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   clearSidebarFilters?: boolean
 }
 
+/** Create-time only: an agent selection suppresses the shell its own surface will replace. */
 export function activationProvidesInitialSurface(
   selection?: WorktreeActivationSurfaceSelection
 ): boolean {

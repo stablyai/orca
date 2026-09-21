@@ -65,6 +65,11 @@ export class SearchSubprocessLineAccumulator {
     this.bytes = 0
   }
 
+  /** Capacity of the retained growable buffer, or null once it has been released. */
+  retainedCapacityBytes(): number | null {
+    return this.buffer?.length ?? null
+  }
+
   private append(segment: Buffer): void {
     const requiredBytes = this.bytes + segment.length
     if (!this.buffer || this.buffer.length < requiredBytes) {
