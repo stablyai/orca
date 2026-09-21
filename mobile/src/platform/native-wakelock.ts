@@ -32,46 +32,83 @@ export type NativeWakelockServer = {
 
 export function createNativeWakelockServer(device: WakelockDevice): NativeWakelockServer {
   const held = new Set<string>()
+  /**
+   * One chain per tag, because `held` is read and written across an await.
+   *
+   * A release that arrives while its own activate is still in flight would otherwise read the set
+   * before the activate had recorded anything, find nothing, deactivate nothing and report the tag
+   * off — and then the activate lands and the device holds a tag the page has already said it does
+   * not want. Per tag rather than one chain for the server: a device call that hangs on one
+   * dictation's tag must not hold up another's.
+   */
+  const queues = new Map<string, Promise<unknown>>()
   let disposed = false
-  return {
-    serve: async (params) => {
-      const { active, tag } = wakelockSetParamsSchema.parse(params)
-      if (active) {
-        await device.activate(tag)
-        // The session can end between the call and its reply — the page is a document that can be
-        // swiped away mid-dictation — and a tag recorded after that dispose is held by nobody:
-        // `dispose` has already walked the set and nothing will walk it again. So it is given back
-        // here instead, and the page is told it is not held.
-        if (disposed) {
-          void device.deactivate(tag).catch(() => undefined)
-          return { active: false }
-        }
-        held.add(tag)
+
+  function enqueue<Value>(tag: string, action: () => Promise<Value>): Promise<Value> {
+    const previous = queues.get(tag) ?? Promise.resolve()
+    // On both settle paths: an activate the device refused must not wedge every later release.
+    const run = previous.then(action, action)
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    )
+    queues.set(tag, settled)
+    void settled.then(() => {
+      // Dropped once nothing is behind it, so a screen's worth of dictations does not accumulate.
+      if (queues.get(tag) === settled) {
+        queues.delete(tag)
+      }
+    })
+    return run
+  }
+
+  async function set(active: boolean, tag: string): Promise<{ active: boolean }> {
+    if (active) {
+      await device.activate(tag)
+      // Recorded the moment the device has it, before anything else here can fail. The set means
+      // "the device still has this tag", and the compensating release below is the one path that
+      // could leave a tag on with nothing recorded.
+      held.add(tag)
+      if (!disposed) {
         return { active: true }
       }
-      if (held.has(tag)) {
-        // Deleted only once the device has really dropped it. A refusal rejects out of here, which
-        // is how the page's owner learns to queue a retry — and that retry arrives as another
-        // `active: false`, so the tag has to still be recorded or it would answer "not held"
-        // without calling anything and leave the native tag on for the life of the app.
-        await device.deactivate(tag)
-        held.delete(tag)
-      }
+      // The session can end between the call and its reply — the page is a document that can be
+      // swiped away mid-dictation — and a tag recorded after that dispose is held by nobody:
+      // `dispose` has already walked the set and nothing will walk it again. So it is given back
+      // here instead, and the page is told it is not held. A refusal rejects rather than reporting
+      // a tag the device still holds as free, which is what lets the caller's retry path run.
+      await device.deactivate(tag)
+      held.delete(tag)
       return { active: false }
+    }
+    if (held.has(tag)) {
+      // Deleted only once the device has really dropped it. A refusal rejects out of here, which
+      // is how the page's owner learns to queue a retry — and that retry arrives as another
+      // `active: false`, so the tag has to still be recorded or it would answer "not held"
+      // without calling anything and leave the native tag on for the life of the app.
+      await device.deactivate(tag)
+      held.delete(tag)
+    }
+    return { active: false }
+  }
+
+  return {
+    // Parsed before the queue, so a malformed request is refused rather than waiting behind a tag.
+    serve: async (params) => {
+      const { active, tag } = wakelockSetParamsSchema.parse(params)
+      return await enqueue(tag, () => set(active, tag))
     },
     dispose: () => {
       disposed = true
-      for (const tag of held) {
+      for (const tag of Array.from(held)) {
         // Quiet, for the reason every other dispose here is: this runs while a screen is going
         // away, and a device that would not drop a tag is not something the page can be told about.
         // Forgotten only on success, so one this device refused stays recorded and a later release
-        // still reaches it.
-        void device.deactivate(tag).then(
-          () => {
-            held.delete(tag)
-          },
-          () => undefined
-        )
+        // still reaches it. Queued behind that tag's own operations rather than racing them.
+        void enqueue(tag, async () => {
+          await device.deactivate(tag)
+          held.delete(tag)
+        }).catch(() => undefined)
       }
     }
   }
