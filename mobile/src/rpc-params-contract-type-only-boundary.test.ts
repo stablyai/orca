@@ -90,6 +90,41 @@ export function contractValueImports(path: string, source: string): string[] {
   return offenders
 }
 
+/**
+ * Whether this file names the contract at all, through the compiler's own module scanner.
+ *
+ * The census walks every mobile source file, and on this tree that is 2,235 files and 11.3 MB;
+ * exactly one of them reaches the contract. Parsing and walking the AST of the other 2,234 to learn
+ * that is what put this case over its 5 s timeout under full-suite load, where it has the machine to
+ * itself for none of the time it did alone.
+ *
+ * `preProcessFile` is the scanner behind `tsc`'s own dependency discovery: it reports every module
+ * reference — `import`, `export ... from`, `require()` and dynamic `import()`, which is the same four
+ * shapes the analyser below inspects — without building a tree. It is a sound filter and not a
+ * substring search over the text: it decodes string escapes, so a specifier spelled
+ * `'...\u002Dcontract/...'` is reported as the path it resolves to rather than missed. The case
+ * below pins that, on the same shapes the analyser is pinned against.
+ *
+ * Over-approximating on purpose: a type-only import names the contract too, so it reaches the
+ * analyser, which is the thing that decides.
+ */
+function referencesContract(path: string, source: string): boolean {
+  return ts
+    .preProcessFile(source, true, true)
+    .importedFiles.some((reference) => targetsContract(path, reference.fileName))
+}
+
+/**
+ * The contract imported under a specifier whose text does not spell it: `-` written `\u002D`.
+ *
+ * Built from character codes rather than a raw string literal, because a source file carrying the
+ * escape is a source file whose own bytes the formatter, the linter and the next reader are all
+ * entitled to normalise — and normalising it would quietly turn this into an ordinary specifier.
+ */
+const ESCAPED_SPECIFIER = `import { RepoSelector } from '../../src/shared/rpc${String.fromCharCode(
+  92
+)}u002Dcontract/repo-params'`
+
 describe('RPC params contract boundary', () => {
   it('flags every shape that would emit a runtime require', () => {
     const path = join(mobileRoot, 'src', 'probe.ts')
@@ -120,16 +155,59 @@ describe('RPC params contract boundary', () => {
     ).toEqual([])
   })
 
+  it('lets every shape the analyser flags reach it', () => {
+    // The soundness half of the two-stage read below. The analyser only ever sees what this
+    // predicate admits, so a narrowing here is a fence that stops fencing while staying green —
+    // and it would stay green, because the tree has no offender to miss.
+    const path = join(mobileRoot, 'src', 'probe.ts')
+    const contract = '../../src/shared/rpc-contract/repo-params'
+    const shapes = [
+      `import { RepoSelector } from '${contract}'`,
+      `import '${contract}'`,
+      `export { RepoSelector } from '${contract}'`,
+      `const s = require('${contract}')`,
+      `const s = await import('${contract}')`,
+      // The type-only spellings too: this stage does not decide, it only hands work to the one
+      // that does, and a filter that pre-judged them would hide a later edit that dropped `type`.
+      `import type { RepoSelector } from '${contract}'`,
+      `import { type RepoSelector } from '${contract}'`,
+      `export type { RepoSelector } from '${contract}'`,
+      ESCAPED_SPECIFIER
+    ]
+    expect(shapes.filter((source) => !referencesContract(path, source))).toEqual([])
+    // The escaped shape's own premise, asserted rather than described: its text really does not
+    // contain the directory name, so admitting it is the scanner decoding the specifier and not a
+    // substring happening to match. A plain `includes` filter over the file would miss this one.
+    expect(ESCAPED_SPECIFIER).not.toContain('rpc-contract')
+    expect(referencesContract(path, ESCAPED_SPECIFIER)).toBe(true)
+    // And it is not simply true of everything: an unrelated import is not handed on.
+    expect(
+      referencesContract(
+        path,
+        `import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'`
+      )
+    ).toBe(false)
+  })
+
   it('keeps every mobile import of the params contract type-only', () => {
-    const offenders = scannedRoots
+    const sources = scannedRoots
       .flatMap(censusSourceFiles)
       .filter((path) => sourceExtensions.has(extname(path)))
-      .flatMap((path) =>
-        contractValueImports(path, readFileSync(path, 'utf8')).map(
-          (specifier) => `${relative(mobileRoot, path)} -> ${specifier}`
-        )
-      )
+      .map((path) => ({ path, source: readFileSync(path, 'utf8') }))
+    // The walk found the tree it is written against, rather than a directory that moved.
+    expect(sources.length).toBeGreaterThan(1000)
 
+    const reaching = sources.filter(({ path, source }) => referencesContract(path, source))
+    // The presence precondition. `[]` below is the verdict "every reach is type-only", and without
+    // this it is also what a census reaching nothing at all prints — a renamed contract directory,
+    // a scanner that stopped reporting, a walk over the wrong root.
+    expect(reaching.length).toBeGreaterThan(0)
+
+    const offenders = reaching.flatMap(({ path, source }) =>
+      contractValueImports(path, source).map(
+        (specifier) => `${relative(mobileRoot, path)} -> ${specifier}`
+      )
+    )
     expect(offenders).toEqual([])
   })
 })
