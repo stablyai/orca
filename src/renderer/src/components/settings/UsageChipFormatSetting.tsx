@@ -4,7 +4,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import {
   CHIP_PART_TOGGLES,
-  CHIP_SAMPLE,
+  getChipSample,
   getChipPresetOptions,
   getUsageChipFormatEntry,
   STATUS_BAR_USAGE_CHIP_PRESETS
@@ -30,8 +30,12 @@ export function UsageChipFormatSetting(): React.JSX.Element {
     statusBarUsageChipWindowLabel: useAppStore((state) => state.statusBarUsageChipWindowLabel)
   }
   const setStatusBarUsageChipParts = useAppStore((state) => state.setStatusBarUsageChipParts)
+  const usagePercentageDisplay = useAppStore((state) => state.usagePercentageDisplay)
   const activePreset = matchStatusBarUsageChipPreset(chipParts)
-  const chipSample = formatStatusBarUsageChipSample(chipParts, CHIP_SAMPLE)
+  const chipSample = formatStatusBarUsageChipSample(
+    chipParts,
+    getChipSample(usagePercentageDisplay)
+  )
   const chipFormatEntry = getUsageChipFormatEntry()
 
   return (

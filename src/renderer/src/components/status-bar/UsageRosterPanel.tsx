@@ -58,6 +58,12 @@ function shortLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
+/**
+ * The provider's most-consumed window, or null when it reports none.
+ *
+ * "Tightest" is measured on the used percentage even when the user displays the
+ * complement, so the roster's one-line summary picks the same window either way.
+ */
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
   if (sections.length === 0) {

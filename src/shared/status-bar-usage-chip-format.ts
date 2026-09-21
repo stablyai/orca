@@ -30,6 +30,13 @@ function normalizeFlag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
+/**
+ * Coerces a persisted blob to a complete set of chip parts.
+ *
+ * Each part falls back to its own default independently, so a profile that
+ * stored only some of them keeps the rest at today's rendering instead of
+ * inheriting a neighbour's value.
+ */
 export function normalizeStatusBarUsageChipParts(
   source:
     | {
@@ -116,11 +123,24 @@ export function matchStatusBarUsageChipPreset(
  */
 export function formatStatusBarUsageChipSample(
   parts: StatusBarUsageChipParts,
-  sample: { percentage: string; word: string; spacedDuration: string; tightDuration: string }
+  sample: {
+    /** Bare percentage, e.g. "42%". */
+    percentage: string
+    /**
+     * The same reading with its direction word, e.g. "42% used" or "58% left".
+     *
+     * Why the whole labelled string rather than the word on its own: the word
+     * and the number are chosen together — "left" goes with the complement of
+     * the used percentage — and some locales do not put the word last. Passing
+     * what `formatUsagePercentageLabel` already produced keeps the preview from
+     * inventing a pairing the status bar would never draw.
+     */
+    labelled: string
+    spacedDuration: string
+    tightDuration: string
+  }
 ): string {
-  const percentage = parts.statusBarUsageChipDisplayWord
-    ? `${sample.percentage} ${sample.word}`
-    : sample.percentage
+  const percentage = parts.statusBarUsageChipDisplayWord ? sample.labelled : sample.percentage
   if (!parts.statusBarUsageChipWindowLabel) {
     return percentage
   }

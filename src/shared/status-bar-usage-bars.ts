@@ -13,6 +13,13 @@
  */
 export const DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE = true
 
+/**
+ * Coerces a persisted value to the bar-visibility flag.
+ *
+ * Anything that is not a boolean falls back to the default rather than to
+ * `false`: a profile written before this preference existed has the field
+ * missing, and reading that as "hidden" would strip the bars off an upgrade.
+ */
 export function normalizeStatusBarUsageBarsVisible(value: unknown): boolean {
   return typeof value === 'boolean' ? value : DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE
 }

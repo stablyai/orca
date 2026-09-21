@@ -9,7 +9,18 @@ import {
 
 const SAMPLE = {
   percentage: '42%',
-  word: 'used',
+  labelled: '42% used',
+  spacedDuration: '3h 54m',
+  tightDuration: '3h54m'
+}
+
+// Why a second sample: the labelled form is not the bare one plus a fixed word.
+// In 'remaining' mode the number is the complement, so a formatter that spliced
+// a word onto `percentage` would render "42% left" for a chip the status bar
+// draws as "58% left".
+const REMAINING_SAMPLE = {
+  percentage: '58%',
+  labelled: '58% left',
   spacedDuration: '3h 54m',
   tightDuration: '3h54m'
 }
@@ -81,6 +92,15 @@ describe('formatStatusBarUsageChipSample', () => {
         SAMPLE
       )
     ).toBe('42% used')
+  })
+
+  it('takes the whole labelled reading, not the bare percentage plus a word', () => {
+    expect(
+      formatStatusBarUsageChipSample(STATUS_BAR_USAGE_CHIP_PRESETS.labelled, REMAINING_SAMPLE)
+    ).toBe('58% left 3h 54m')
+    expect(
+      formatStatusBarUsageChipSample(STATUS_BAR_USAGE_CHIP_PRESETS.compact, REMAINING_SAMPLE)
+    ).toBe('58%, 3h54m')
   })
 
   it('joins with a comma only when the word is absent', () => {

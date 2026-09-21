@@ -4,6 +4,12 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 
+/**
+ * The spelled-out reading for a window: "42% used" or "58% left".
+ *
+ * The number follows the mode — 'remaining' shows the complement — so the word
+ * and the value are chosen together and callers must not recombine them.
+ */
 export function formatUsagePercentageLabel(
   usedPercent: number,
   display: UsagePercentageDisplay

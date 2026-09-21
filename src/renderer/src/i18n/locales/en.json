@@ -4020,7 +4020,8 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: only the tightest window",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "usageBars": "Usage bars"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",

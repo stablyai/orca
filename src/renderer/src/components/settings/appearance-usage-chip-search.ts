@@ -1,5 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import {
+  formatUsagePercentageLabel,
+  formatUsagePercentageValue
+} from '../status-bar/usage-percentage-label'
+import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import {
   STATUS_BAR_USAGE_CHIP_PRESETS,
   type StatusBarUsageChipParts,
   type StatusBarUsageChipPreset
@@ -9,17 +14,34 @@ import { translateSearchKeyword } from './settings-search-keywords'
 export const USAGE_CHIP_FORMAT_SETTING_ID = 'appearance-usage-chip-format'
 
 /**
- * Sample values the settings preview renders.
+ * The reading the preview is built from, as a used-percentage.
  *
- * Fixed rather than taken from a live provider so the preview reads the same
- * on a fresh install with no usage data, and so every option is compared
- * against the same numbers.
+ * Fixed rather than taken from a live provider so the preview reads the same on
+ * a fresh install with no usage data, and so every option is compared against
+ * the same numbers.
  */
-export const CHIP_SAMPLE = {
-  percentage: '42%',
-  word: 'used',
-  spacedDuration: '3h 54m',
-  tightDuration: '3h54m'
+const CHIP_SAMPLE_USED_PERCENT = 42
+
+/**
+ * Sample values the settings preview renders, for the display mode in force.
+ *
+ * Why it takes the mode instead of hardcoding "used": in 'remaining' mode the
+ * status bar draws the complement and the word "left", so a fixed sample made
+ * the preview promise "42% used" next to a bar reading "58% left". Both strings
+ * come from the helpers the status bar itself uses.
+ */
+export function getChipSample(display: UsagePercentageDisplay): {
+  percentage: string
+  labelled: string
+  spacedDuration: string
+  tightDuration: string
+} {
+  return {
+    percentage: formatUsagePercentageValue(CHIP_SAMPLE_USED_PERCENT, display),
+    labelled: formatUsagePercentageLabel(CHIP_SAMPLE_USED_PERCENT, display),
+    spacedDuration: '3h 54m',
+    tightDuration: '3h54m'
+  }
 }
 
 export function getUsageChipFormatEntry(): {

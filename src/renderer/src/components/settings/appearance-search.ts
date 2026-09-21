@@ -7,6 +7,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
+import { getUsageChipFormatEntry } from './appearance-usage-chip-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 
 export {
@@ -166,6 +167,11 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
 
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
+  // `id` is the setting's scroll target, not part of a search entry.
+  ((): SettingsSearchEntry => {
+    const { title, description, keywords } = getUsageChipFormatEntry()
+    return { title, description, keywords }
+  })(),
   ...getStatusBarToggles().map(({ title, description, keywords }) => ({
     title,
     description,
