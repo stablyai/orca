@@ -115,4 +115,26 @@ describe('a release issued while its own activate is still in flight', () => {
     gated.settle('activate:orca-mobile-dictation:1:c')
     await expect(first).resolves.toEqual({ active: true })
   })
+
+  it('does not ask the device again for a tag a queued release already gave back', async () => {
+    // `dispose` queues behind the tag's own operations, so by the time it runs the release ahead
+    // of it may have returned the tag. Deactivating an unheld tag is a native call this module
+    // does not make: its failure would read to the page as a lock it could not drop.
+    const gated = createGatedDevice()
+    const server = createNativeWakelockServer(gated.device)
+    const activated = server.serve({ active: true, tag: 'orca-mobile-dictation:1:e' })
+    await settleMicrotasks()
+    gated.settle('activate:orca-mobile-dictation:1:e')
+    await expect(activated).resolves.toEqual({ active: true })
+    const released = server.serve({ active: false, tag: 'orca-mobile-dictation:1:e' })
+    await settleMicrotasks()
+    server.dispose()
+    gated.settle('deactivate:orca-mobile-dictation:1:e')
+    await expect(released).resolves.toEqual({ active: false })
+    await settleMicrotasks()
+    expect(gated.calls).toEqual([
+      'activate:orca-mobile-dictation:1:e',
+      'deactivate:orca-mobile-dictation:1:e'
+    ])
+  })
 })

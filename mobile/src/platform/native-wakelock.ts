@@ -104,8 +104,13 @@ export function createNativeWakelockServer(device: WakelockDevice): NativeWakelo
         // Quiet, for the reason every other dispose here is: this runs while a screen is going
         // away, and a device that would not drop a tag is not something the page can be told about.
         // Forgotten only on success, so one this device refused stays recorded and a later release
-        // still reaches it. Queued behind that tag's own operations rather than racing them.
+        // still reaches it. Queued behind that tag's own operations rather than racing them, and
+        // re-reading the set once it runs: a release already in flight may have given it back, and
+        // deactivating an unheld tag is a native call this module does not make.
         void enqueue(tag, async () => {
+          if (!held.has(tag)) {
+            return
+          }
           await device.deactivate(tag)
           held.delete(tag)
         }).catch(() => undefined)
