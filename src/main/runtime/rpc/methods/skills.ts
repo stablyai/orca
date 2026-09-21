@@ -1,5 +1,12 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { z } from 'zod'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
+import {
+  previewSkillDeleteRequest,
+  runSkillDeleteRequest,
+  type SkillDeleteRequestDependencies
+} from '../../../skills/skill-delete/request-service'
 import { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
 import {
   SkillInstallPreviewRequestSchema,
@@ -27,7 +34,9 @@ import {
   AgentSkillSharingError
 } from '../../../../shared/agent-skill-sharing-contract'
 
-function resolveDiscoveryTarget(
+/** Exported so the delete plan's root rebuild resolves its target exactly the
+ *  way `skills.discover` resolved the scan's — including WSL. */
+export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
   runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
 ) {
@@ -38,6 +47,16 @@ function resolveDiscoveryTarget(
         projectRuntime: runtime.resolveProjectRuntimeForWorktree(params.worktreeId)
       }
   return resolveSkillDiscoveryTarget(target)
+}
+
+function skillDeleteDependencies(
+  runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
+): SkillDeleteRequestDependencies {
+  return {
+    repos: () => runtime.listRepos(),
+    resolveProviderRootOverrides: (target) => runtime.resolveSkillDiscoveryProviderRoots(target),
+    userDataPath: getAppEnvironment().getPath('userData')
+  }
 }
 
 export const SKILL_METHODS: RpcMethod[] = [
@@ -54,6 +73,26 @@ export const SKILL_METHODS: RpcMethod[] = [
         refresh: params.refresh === true
       })
     }
+  }),
+  defineMethod({
+    name: 'skills.previewDelete',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      previewSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
+  }),
+  defineMethod({
+    name: 'skills.delete',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      runSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
   }),
   defineMethod({
     name: 'skills.share',

@@ -43,11 +43,106 @@ describe('remote agent completion authority', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps transport loss unknown through reconnect and completes only after authoritative idle samples', async () => {
+  it('keeps an idle remote pane at zero inspection cadence', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-remote',
       getPtyId: () => REMOTE_PTY_ID,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
+      inspectProcess: inspectRuntimeTerminalProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.dispose()
+  })
+
+  it('keeps a host with many idle remote panes at zero RPCs over a long interval', async () => {
+    const coordinators = Array.from({ length: 24 }, (_, index) =>
+      createAgentCompletionCoordinator({
+        paneKey: `tab-remote:leaf-idle-${index}`,
+        getPtyId: () => `${REMOTE_PTY_ID}-${index}`,
+        isRemotePtyId: () => true,
+        getExpectedIncarnationId: () => 'inc-remote',
+        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
+        inspectProcess: inspectRuntimeTerminalProcess,
+        dispatchCompletion: vi.fn(),
+        isLive: () => true
+      })
+    )
+
+    coordinators.forEach((coordinator) => coordinator.startProcessTracking())
+    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1_000)
+
+    expect(runtimeCall).not.toHaveBeenCalled()
+    coordinators.forEach((coordinator) => coordinator.dispose())
+  })
+
+  it('does not spin or infer exit from a remote transport failure', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-remote:leaf-partitioned-exit',
+      getPtyId: () => REMOTE_PTY_ID,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
+      inspectProcess: inspectRuntimeTerminalProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    runtimeCall.mockRejectedValue(
+      new Error('Runtime request timed out before terminal.inspectProcess completed')
+    )
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.dispose()
+  })
+
+  it('accepts only fenced host evidence for an explicit remote title confirmation', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-remote:leaf-confirm',
+      getPtyId: () => REMOTE_PTY_ID,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
+      inspectProcess: inspectRuntimeTerminalProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    runtimeCall.mockResolvedValue(remoteInspectionWithEvidence('codex'))
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/finished-task')
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(runtimeCall).toHaveBeenCalledOnce()
+    expect(dispatchCompletion).toHaveBeenCalledWith('/tmp/finished-task')
+
+    coordinator.dispose()
+  })
+
+  it('never recognizes a bare compatibility process name from an old host', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-remote:leaf-legacy',
+      getPtyId: () => REMOTE_PTY_ID,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
       getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
@@ -56,90 +151,54 @@ describe('remote agent completion authority', () => {
 
     runtimeCall.mockResolvedValue(remoteInspection('codex'))
     coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(runtimeCall).toHaveBeenCalledTimes(1)
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/legacy-host-title')
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+    await Promise.resolve()
 
-    runtimeCall.mockResolvedValue({
-      ok: false,
-      error: { code: 'terminal_handle_stale', message: 'remote transport is reconnecting' }
+    expect(runtimeCall).toHaveBeenCalledOnce()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    coordinator.dispose()
+  })
+
+  it('dispatches process-exit only for a positive host tombstone', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-remote:leaf-exit',
+      getPtyId: () => REMOTE_PTY_ID,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
+      inspectProcess: inspectRuntimeTerminalProcess,
+      dispatchCompletion,
+      isLive: () => true
     })
-    await vi.advanceTimersByTimeAsync(20_000)
-    expect(runtimeCall.mock.calls.length).toBeGreaterThan(2)
-    expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    runtimeCall.mockResolvedValue(remoteInspection('codex'))
-    await vi.advanceTimersByTimeAsync(20_000)
-    expect(dispatchCompletion).not.toHaveBeenCalled()
+    runtimeCall
+      .mockResolvedValueOnce(remoteInspectionWithEvidence('codex', 1))
+      .mockResolvedValueOnce(remoteInspectionWithEvidence(null, 2, 'exited'))
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/first-finish')
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+    await Promise.resolve()
+    dispatchCompletion.mockClear()
 
-    runtimeCall.mockResolvedValue(remoteInspection(null, false))
-    await vi.advanceTimersByTimeAsync(20_000)
-    expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('codex', {
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/second-finish')
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
       source: 'process-exit',
       quietedHookDone: false,
       terminalIdleConfirmed: true
     })
-
     coordinator.dispose()
   })
-
-  it.each([
-    {
-      failure: {
-        ok: false,
-        error: { code: 'no_connected_pty', message: 'remote transport is unavailable' }
-      },
-      kind: 'an unavailable response'
-    },
-    {
-      failure: new Error('Runtime request timed out before terminal.inspectProcess completed'),
-      kind: 'a thrown transport failure'
-    }
-  ])(
-    'requires two new idle samples when $kind interrupts exit confirmation',
-    async ({ failure }) => {
-      const dispatchCompletion = vi.fn()
-      const coordinator = createAgentCompletionCoordinator({
-        paneKey: 'tab-remote:leaf-partitioned-exit',
-        getPtyId: () => REMOTE_PTY_ID,
-        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
-        inspectProcess: inspectRuntimeTerminalProcess,
-        dispatchCompletion,
-        isLive: () => true
-      })
-
-      runtimeCall.mockResolvedValue(remoteInspection('codex'))
-      coordinator.startProcessTracking()
-      await vi.advanceTimersByTimeAsync(2_000)
-
-      runtimeCall.mockResolvedValue(remoteInspection(null, false))
-      await vi.advanceTimersByTimeAsync(750)
-      expect(runtimeCall).toHaveBeenCalledTimes(2)
-      expect(dispatchCompletion).not.toHaveBeenCalled()
-
-      if (failure instanceof Error) {
-        runtimeCall.mockRejectedValue(failure)
-      } else {
-        runtimeCall.mockResolvedValue(failure)
-      }
-      await vi.advanceTimersByTimeAsync(750)
-      expect(runtimeCall).toHaveBeenCalledTimes(3)
-      expect(dispatchCompletion).not.toHaveBeenCalled()
-
-      runtimeCall.mockResolvedValue(remoteInspection(null, false))
-      await vi.advanceTimersByTimeAsync(1_500)
-      expect(runtimeCall).toHaveBeenCalledTimes(4)
-      expect(dispatchCompletion).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(750)
-      expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('codex', {
-        source: 'process-exit',
-        quietedHookDone: false,
-        terminalIdleConfirmed: true
-      })
-
-      coordinator.dispose()
-    }
-  )
 
   it('preserves distinct stopped, exited, and successful completion evidence', async () => {
     const outcomes: (
@@ -150,6 +209,8 @@ describe('remote agent completion authority', () => {
       createAgentCompletionCoordinator({
         paneKey,
         getPtyId: () => REMOTE_PTY_ID,
+        isRemotePtyId: () => true,
+        getExpectedIncarnationId: () => 'inc-remote',
         getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
         inspectProcess: inspectRuntimeTerminalProcess,
         dispatchCompletion: (_title: string, meta?: AgentCompletionDispatchMeta) => {
@@ -197,6 +258,51 @@ function remoteInspection(foregroundProcess: string | null, hasChildProcesses = 
   return {
     ok: true,
     result: { process: { foregroundProcess, hasChildProcesses } },
+    _meta: { runtimeId: 'remote-host' }
+  }
+}
+
+function remoteInspectionWithEvidence(
+  processName: string | null,
+  observationEpoch = 1,
+  verdict: 'live' | 'exited' = 'live'
+) {
+  return {
+    ok: true,
+    result: {
+      process: {
+        foregroundProcess: processName,
+        hasChildProcesses: processName !== null,
+        foregroundProcessEvidence:
+          verdict === 'live'
+            ? {
+                verdict,
+                processName,
+                authorityGeneration: 'runtime-authority',
+                observationEpoch,
+                capturedAgeMs: 0,
+                ptyId: 'term_remote_agent',
+                ptyIncarnationId: 'inc-remote',
+                fence: {
+                  platform: 'posix' as const,
+                  shellPid: 100,
+                  shellStartTime: 'shell-start',
+                  tty: '/dev/pts/2',
+                  foregroundPgid: 101,
+                  process: { pid: 101, startTime: 'agent-start' }
+                }
+              }
+            : {
+                verdict,
+                reason: 'pty_exit_0',
+                authorityGeneration: 'runtime-authority',
+                observationEpoch,
+                capturedAgeMs: 0,
+                ptyId: 'term_remote_agent',
+                ptyIncarnationId: 'inc-remote'
+              }
+      }
+    },
     _meta: { runtimeId: 'remote-host' }
   }
 }

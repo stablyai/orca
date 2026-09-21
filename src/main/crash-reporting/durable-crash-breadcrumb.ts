@@ -41,11 +41,12 @@ function traceDurableBreadcrumb(
 export function recordDurableCrashBreadcrumb(
   name: string,
   data?: CrashReportBreadcrumbData,
-  failureCause?: string
+  failureCause?: string,
+  origin?: string
 ): void {
   const sanitizedName = sanitizeCrashReportString(name)
   const lifecycleData = buildLifecycleData(data)
-  recordCrashBreadcrumb(sanitizedName, lifecycleData)
+  recordCrashBreadcrumb(sanitizedName, lifecycleData, origin)
   traceDurableBreadcrumb(sanitizedName, lifecycleData, failureCause)
 }
 
@@ -56,12 +57,14 @@ export function recordCoalescedDurableCrashBreadcrumb({
   name,
   data,
   coalesceKey,
-  minIntervalMs
+  minIntervalMs,
+  origin
 }: {
   name: string
   data?: CrashReportBreadcrumbData
   coalesceKey: string
   minIntervalMs: number
+  origin?: string
 }): void {
   const sanitizedName = sanitizeCrashReportString(name)
   const lifecycleData = buildLifecycleData(data)
@@ -69,7 +72,8 @@ export function recordCoalescedDurableCrashBreadcrumb({
     name: sanitizedName,
     data: lifecycleData,
     coalesceKey,
-    minIntervalMs
+    minIntervalMs,
+    ...(origin ? { origin } : {})
   })
   if (!coalesced) {
     return

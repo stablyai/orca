@@ -239,6 +239,15 @@ export function looksLikeSearchQuery(input: string): boolean {
   return true
 }
 
+/** True for input shaped like an absolute filesystem path (POSIX, Windows drive, or UNC). */
+export function isAbsoluteFilesystemPathInput(input: string): boolean {
+  return (
+    UNIX_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_UNC_PATH_PATTERN.test(input)
+  )
+}
+
 function absolutePathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/')
   const segments = normalizedPath.split('/').map((segment, index) => {

@@ -6,6 +6,7 @@ import { useSourceControlHostedReviewPolling } from './use-hosted-review-polling
 import { useSourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
 import { useSourceControlHostedReviewState } from './use-hosted-review-state'
 import { useSourceControlLinkedReviews } from './use-linked-reviews'
+import { resolveSourceControlSuppressedGitHubPRState } from './suppressed-github-pr'
 
 /**
  * Resolves what review the active branch belongs to and which refs it is compared against — the
@@ -45,10 +46,16 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeWorktreeId,
     branchName,
     hostedReviewCacheKey,
-    hostedReviewEntryData
+    hostedReviewEntryData,
+    linkedPR: activeWorktree?.linkedPR ?? null,
+    suppressedGitHubPR: activeWorktree?.suppressedGitHubPR ?? null
   })
-  const { hostedReview, hostedReviewCreation, hostedReviewCreationProviderHintRef } =
-    hostedReviewState
+  const {
+    hasSuppressedGitHubPR,
+    hostedReview,
+    hostedReviewCreation,
+    hostedReviewCreationProviderHintRef
+  } = hostedReviewState
   const baseRefs = useSourceControlBaseRefs({
     activeRepoConnectionId,
     activeRepoExecutionHostId,
@@ -85,7 +92,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     worktreePath
   })
   const linkedReviews = useSourceControlLinkedReviews({
-    activePrFromQueue,
+    activePrFromQueue: hasSuppressedGitHubPR ? null : activePrFromQueue,
     activeRepo,
     activeWorktree,
     branchName,
@@ -140,6 +147,18 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedGitLabMR,
     linkedGiteaPR
   })
+  const suppressedGitHubPRState = resolveSourceControlSuppressedGitHubPRState({
+    worktree: activeWorktree ?? null,
+    isFolder,
+    provider: providerHint.provisionalHostedReviewProvider,
+    hasMatchingSuppressedPR: hasSuppressedGitHubPR,
+    hostedReview,
+    hostedReviewCreation,
+    isHostedReviewCreationLoading: providerHint.isHostedReviewCreationLoading,
+    hostedReviewCreationRequestFailed:
+      providerHint.hostedReviewCreationRequestMatchesCurrent &&
+      hostedReviewState.hostedReviewCreationRequestState?.status === 'failed'
+  })
 
   return {
     ...hostedReviewState,
@@ -147,7 +166,8 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     ...branchCompare,
     ...createPrIntentTarget,
     ...linkedReviews,
-    ...providerHint
+    ...providerHint,
+    suppressedGitHubPRState
   }
 }
 

@@ -314,7 +314,19 @@ describe('Agent Map workspace context menu', () => {
       clientX: 100,
       clientY: 110
     })
-    fireEvent.click(await screen.findByText('Create new worktree for Orca', {}, { timeout: 5_000 }))
+    const createWorktree = await screen.findByText(
+      'Create new worktree for Orca',
+      {},
+      { timeout: 5_000 }
+    )
+    // Radix restores focus after unmount; drain it before the next test opens a menu.
+    const focusRestored = new Promise<void>((resolve) => {
+      screen
+        .getByRole('menu')
+        .addEventListener('focusScope.autoFocusOnUnmount', () => resolve(), { once: true })
+    })
+    fireEvent.click(createWorktree)
+    await act(async () => focusRestored)
 
     expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
     expect(useAppStore.getState().modalData).toEqual({

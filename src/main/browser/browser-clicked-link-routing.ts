@@ -1,7 +1,13 @@
 export const BROWSER_CLICKED_LINK_ROUTING_WORLD_ID = 1208
 
+export type BrowserClickedLinkFrameNames = {
+  foreground: string
+  background: string
+}
+
 type BrowserClickedLinkRoutingState = {
-  frameName: string
+  foregroundFrameName: string
+  backgroundFrameName: string
   isMac: boolean
   allowUntrustedEvents: boolean
   listener: (event: MouseEvent) => void
@@ -16,21 +22,24 @@ type BrowserClickedLinkRoutingGlobal = typeof globalThis & {
  * can distinguish them from opener-dependent window.open calls.
  */
 export function installBrowserClickedLinkRouting(
-  frameName: string,
+  foregroundFrameName: string,
+  backgroundFrameName: string,
   isMac: boolean,
   allowUntrustedEvents = false
 ): void {
   const routingGlobal = globalThis as BrowserClickedLinkRoutingGlobal
   const existing = routingGlobal.__orcaBrowserClickedLinkRouting
   if (existing) {
-    existing.frameName = frameName
+    existing.foregroundFrameName = foregroundFrameName
+    existing.backgroundFrameName = backgroundFrameName
     existing.isMac = isMac
     existing.allowUntrustedEvents = allowUntrustedEvents
     return
   }
 
   const state: BrowserClickedLinkRoutingState = {
-    frameName,
+    foregroundFrameName,
+    backgroundFrameName,
     isMac,
     allowUntrustedEvents,
     listener: () => {}
@@ -68,15 +77,16 @@ export function installBrowserClickedLinkRouting(
     }
     // Shift alone is browser-native new-window intent; keep OAuth and other
     // opener-dependent window flows in Orca's guarded popup window.
-    if (event.shiftKey && !modifierClick) {
+    if (event.shiftKey && !modifierClick && !middleClick) {
       return
     }
 
     const baseTarget = document.querySelector('base[target]')?.getAttribute('target') ?? ''
     const ownTarget = link.getAttribute('target')
     const effectiveTarget = (ownTarget === null ? baseTarget : ownTarget).trim().toLowerCase()
-    const opensNewContext = middleClick || modifierClick
-    if (!opensNewContext && effectiveTarget !== '_blank') {
+    // target=_blank is a new-tab request, exactly as it is in every other
+    // browser; the modifiers are the other two ways to ask for one.
+    if (!(middleClick || modifierClick || effectiveTarget === '_blank')) {
       return
     }
 
@@ -96,18 +106,15 @@ export function installBrowserClickedLinkRouting(
       return
     }
 
-    if (!opensNewContext) {
-      // Why: changing only the browsing context keeps Chromium's native anchor
-      // navigation, including referrer policy, attribution, and history.
-      link.setAttribute('target', '_self')
-      return
-    }
-
     // Why: Electron reports direct link clicks and featureless window.open()
     // with the same disposition. The private frame name preserves that one
     // distinction without weakening OAuth popups that need window.opener.
     event.preventDefault()
-    window.open(targetUrl.toString(), state.frameName)
+    const openInBackground = (middleClick || modifierClick) && !event.shiftKey
+    window.open(
+      targetUrl.toString(),
+      openInBackground ? state.backgroundFrameName : state.foregroundFrameName
+    )
   }
   routingGlobal.__orcaBrowserClickedLinkRouting = state
 
@@ -118,11 +125,12 @@ export function installBrowserClickedLinkRouting(
 }
 
 /**
- * Keeps plain target=_blank clicks inside the top-level guest when Electron's
- * isolated-world API cannot target a child frame.
+ * Same routing for links inside child frames, which Electron's isolated-world
+ * API cannot reach, so this runs in the page world against a one-use token.
  */
 export function installBrowserIframeClickedLinkRouting(
-  frameName: string,
+  foregroundFrameName: string,
+  backgroundFrameName: string,
   isMac: boolean,
   allowUntrustedEvents = false
 ): () => void {
@@ -154,15 +162,14 @@ export function installBrowserIframeClickedLinkRouting(
 
     const modifierClick = isMac ? event.metaKey : event.ctrlKey
     const otherPlatformModifier = isMac ? event.ctrlKey : event.metaKey
-    if (otherPlatformModifier || (event.shiftKey && !modifierClick)) {
+    if (otherPlatformModifier || (event.shiftKey && !modifierClick && !middleClick)) {
       return
     }
 
     const baseTarget = document.querySelector('base[target]')?.getAttribute('target') ?? ''
     const ownTarget = link.getAttribute('target')
     const effectiveTarget = (ownTarget === null ? baseTarget : ownTarget).trim().toLowerCase()
-    const opensNewContext = middleClick || modifierClick
-    if (!opensNewContext && effectiveTarget !== '_blank') {
+    if (!(middleClick || modifierClick || effectiveTarget === '_blank')) {
       return
     }
 
@@ -182,18 +189,12 @@ export function installBrowserIframeClickedLinkRouting(
       return
     }
 
-    if (!opensNewContext) {
-      // Why: WebContents isolated worlds only cover the main frame. Rewriting
-      // to `_top` preserves native anchor semantics without opening a popup.
-      link.setAttribute('target', '_top')
-      return
-    }
-
     // Why: child-frame code runs in the page world, so each token is one-use.
     // A page that observes a real click cannot replay it to create more tabs.
     event.preventDefault()
     cleanup()
-    window.open(targetUrl.toString(), frameName)
+    const openInBackground = (middleClick || modifierClick) && !event.shiftKey
+    window.open(targetUrl.toString(), openInBackground ? backgroundFrameName : foregroundFrameName)
   }
 
   const cleanup = (): void => {
@@ -205,13 +206,18 @@ export function installBrowserIframeClickedLinkRouting(
   return cleanup
 }
 
-export function buildBrowserClickedLinkRoutingScript(frameName: string, isMac: boolean): string {
-  return `(${installBrowserClickedLinkRouting.toString()})(${JSON.stringify(frameName)},${JSON.stringify(isMac)});`
+export function buildBrowserClickedLinkRoutingScript(
+  foregroundFrameName: string,
+  backgroundFrameName: string,
+  isMac: boolean
+): string {
+  return `(${installBrowserClickedLinkRouting.toString()})(${JSON.stringify(foregroundFrameName)},${JSON.stringify(backgroundFrameName)},${JSON.stringify(isMac)});`
 }
 
 export function buildBrowserIframeClickedLinkRoutingScript(
-  frameName: string,
+  foregroundFrameName: string,
+  backgroundFrameName: string,
   isMac: boolean
 ): string {
-  return `void (${installBrowserIframeClickedLinkRouting.toString()})(${JSON.stringify(frameName)},${JSON.stringify(isMac)});`
+  return `void (${installBrowserIframeClickedLinkRouting.toString()})(${JSON.stringify(foregroundFrameName)},${JSON.stringify(backgroundFrameName)},${JSON.stringify(isMac)});`
 }

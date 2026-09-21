@@ -15,6 +15,7 @@ import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerE
 import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
+import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
 
 /**
@@ -22,7 +23,7 @@ import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-
  * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
  * absent entirely on the landing path.
  */
-export function useAppShellServices(): void {
+export function useAppShellServices(options: { floatingPanelVisible: boolean }): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
@@ -31,6 +32,7 @@ export function useAppShellServices(): void {
 
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useLocalStructuredSessionTabsSync()
   // Subscribe to IPC push events
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()
@@ -40,7 +42,7 @@ export function useAppShellServices(): void {
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
   useGlobalFileDrop()
-  useAutoAckViewedAgent()
+  useAutoAckViewedAgent(options.floatingPanelVisible)
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  mergeProcessLivenessVerdict,
   queryWindowsProcess,
   readLinuxProcessStartedAtMs,
   readMacosProcessStartedAtMs,
@@ -112,6 +113,48 @@ describe('daemon process inspection', () => {
     await expect(
       readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand })
     ).resolves.toBe(1_699_000_010_000)
+  })
+
+  // Several daemon-v<N>.pid records can name the same app version; the merged verdict decides
+  // whether pruneOldDaemonHosts may delete that version's host dir, so a wrong winner deletes a
+  // live host. Precedence: live > unverifiable > exited, regardless of record order.
+  describe('mergeProcessLivenessVerdict', () => {
+    const unverifiable = { status: 'unverifiable', reason: 'probe failed' } as const
+
+    it('keeps a live verdict when a later record for the same version reports exited', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'live' }, { status: 'exited' })).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('keeps a live verdict when a later record reports unverifiable', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'live' }, unverifiable)).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('never lets an exited record downgrade an unverifiable verdict', () => {
+      expect(mergeProcessLivenessVerdict(unverifiable, { status: 'exited' })).toEqual(unverifiable)
+    })
+
+    it('lets a live record supersede an earlier exited or unverifiable verdict', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'exited' }, { status: 'live' })).toEqual({
+        status: 'live'
+      })
+      expect(mergeProcessLivenessVerdict(unverifiable, { status: 'live' })).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('lets an unverifiable record upgrade an earlier exited verdict', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'exited' }, unverifiable)).toEqual(unverifiable)
+    })
+
+    it('adopts the first verdict when there is no prior one', () => {
+      expect(mergeProcessLivenessVerdict(undefined, { status: 'exited' })).toEqual({
+        status: 'exited'
+      })
+    })
   })
 
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(

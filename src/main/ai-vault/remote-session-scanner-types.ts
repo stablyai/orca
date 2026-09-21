@@ -33,6 +33,7 @@ export type RemoteSessionSource = {
   codexHome?: string
   extensions: readonly string[]
   filePredicate?: (path: string) => boolean
+  contentDependencyPath?: (path: string) => string
   // Depth 0 denotes a direct child of rootDir.
   directoryPredicate?: (name: string, depth: number) => boolean
   // A canonical file directly beneath every top-level session directory.

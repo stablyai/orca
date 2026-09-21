@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
 import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
-import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
+import {
+  buildPaletteDocument,
+  comparePaletteDocumentRank,
+  type PaletteDocumentInput
+} from './palette-document'
 import { segmentPaletteText } from './text-segments'
 import { isWithinOnePaletteEdit } from './typo-distance'
 
@@ -19,13 +23,22 @@ function run(input: PaletteDocumentInput, query: string) {
   return matchPaletteDocument({
     document: buildPaletteDocument(input),
     tokens: prepared.tokens,
-    normalizedQuery: prepared.normalized
+    normalizedQuery: prepared.normalized,
+    tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
   })
 }
 
 const labelOnly = (text: string): PaletteDocumentInput => ({
   id: 'doc',
-  visibleFields: [{ id: 'name', profile: 'structured-label', text }],
+  visibleFields: [
+    {
+      id: 'name',
+      profile: 'structured-label',
+      text,
+      role: 'primary',
+      destinationEligible: true
+    }
+  ],
   evidence: []
 })
 
@@ -40,6 +53,25 @@ describe('palette query preparation', () => {
 
   it('deduplicates repeated tokens', () => {
     expect(ready('scan scan daily').tokens.map((token) => token.text)).toEqual(['scan', 'daily'])
+  })
+
+  it('collapses whitespace runs so the whole-query tier still matches', () => {
+    // Why: field text is always single-spaced, so an uncollapsed run could never satisfy
+    // the whole-query equality tier and the exactly-named row silently lost its rank.
+    expect(ready('scan  daily').normalized).toBe('scan daily')
+    expect(run(labelOnly('scan daily'), 'scan  daily')?.rank.placement).toBe(
+      run(labelOnly('scan daily'), 'scan daily')?.rank.placement
+    )
+  })
+
+  it('treats emoji and symbols as content, not punctuation', () => {
+    // Why: the palette input expands `:rocket:` into 🚀, so dropping symbol tokens made the
+    // palette unable to match a query it produced itself.
+    expect(ready('🚀 rocket').tokens[0]?.isPunctuationOnly).toBe(false)
+    expect(run(labelOnly('🚀 rocket ship'), '🚀 rocket ship')).not.toBeNull()
+    expect(run(labelOnly('a → b'), '→')).not.toBeNull()
+    // A genuinely punctuation-only token stays rejected.
+    expect(ready('--').tokens[0]?.isPunctuationOnly).toBe(true)
   })
 
   it('parses repo/branch per token', () => {
@@ -162,7 +194,7 @@ describe('structured label matching', () => {
 
   it('applies light typo matching to long letter-only words', () => {
     expect(run(document, 'dayly')).not.toBeNull()
-    expect(run(document, 'scam')?.rank.fuzzyTokenCount).toBe(1)
+    expect(run(document, 'scam')?.rank.recovery).toBe(1)
   })
 
   it('limits single Latin characters to word equality or prefix', () => {
@@ -182,7 +214,15 @@ describe('structured label matching', () => {
 describe('identifier fields', () => {
   const review = (sigil: '#' | '!'): PaletteDocumentInput => ({
     id: 'doc',
-    visibleFields: [{ id: 'name', profile: 'structured-label', text: 'reconnect flow' }],
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'reconnect flow',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
     evidence: [
       {
         unit: { id: 'review', kind: 'pr', text: '#4123 · Fix reconnect', accessibilityLabel: 'PR' },
@@ -229,15 +269,93 @@ describe('identifier fields', () => {
 
   it('combines an identity token with one evidence token', () => {
     const match = run(review('#'), 'reconnect 4123')
-    expect(match?.rank.usesSupportingEvidence).toBe(1)
+    expect(match?.rank.coverage).toBe(3)
     expect(match?.supportingEvidence).toHaveLength(1)
+  })
+})
+
+describe('duplicate evidence unit ids', () => {
+  // Two listeners on one port with different process names: the scanner keys ports on
+  // host:port:pid, so a parent and a forked child both survive.
+  const duplicateUnits: PaletteDocumentInput = {
+    id: 'doc',
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'checkout',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
+    evidence: [
+      {
+        unit: {
+          id: 'port:3000',
+          kind: 'port',
+          text: '3000 · next-server',
+          accessibilityLabel: 'Port'
+        },
+        fields: [
+          {
+            id: 'port:3000#name',
+            profile: 'structured-label',
+            text: 'next-server',
+            evidenceId: 'port:3000',
+            renderOffset: 7
+          }
+        ]
+      },
+      {
+        unit: { id: 'port:3000', kind: 'port', text: '3000 · node', accessibilityLabel: 'Port' },
+        fields: [
+          {
+            id: 'port:3000#name',
+            profile: 'structured-label',
+            text: 'node',
+            evidenceId: 'port:3000',
+            renderOffset: 0
+          }
+        ]
+      }
+    ]
+  }
+
+  it('keeps the first unit so its text matches the indexed fields', () => {
+    // Why first-wins: indexPaletteFields keeps the first entry's fields, so overwriting the
+    // unit paired one record's rendered text with another's offsets.
+    const match = run(duplicateUnits, 'next-server')
+    const evidence = match?.supportingEvidence[0]
+    expect(evidence?.text).toBe('3000 · next-server')
+    expect(evidence?.text.slice(evidence.ranges[0].start, evidence.ranges[0].end)).toBe(
+      'next-server'
+    )
+  })
+
+  it('never emits a range past the end of the rendered unit text', () => {
+    for (const query of ['next-server', 'node', '3000']) {
+      for (const evidence of run(duplicateUnits, query)?.supportingEvidence ?? []) {
+        for (const range of evidence.ranges) {
+          expect(range.end).toBeLessThanOrEqual(evidence.text.length)
+          expect(range.start).toBeLessThan(range.end)
+        }
+      }
+    }
   })
 })
 
 describe('evidence limits', () => {
   const twoUnits: PaletteDocumentInput = {
     id: 'doc',
-    visibleFields: [{ id: 'name', profile: 'structured-label', text: 'checkout' }],
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'checkout',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
     evidence: [
       {
         unit: { id: 'port:3000', kind: 'port', text: '3000 · node', accessibilityLabel: 'Port' },
@@ -282,7 +400,7 @@ describe('evidence limits', () => {
 
   it('prefers visible evidence over supporting evidence', () => {
     const match = run(twoUnits, 'checkout')
-    expect(match?.rank.usesSupportingEvidence).toBe(0)
+    expect(match?.rank.coverage).toBe(0)
     expect(match?.supportingEvidence).toHaveLength(0)
   })
 })
@@ -298,5 +416,118 @@ describe('typo distance', () => {
     ['daily', 'da', false]
   ])('%s vs %s -> %s', (a, b, expected) => {
     expect(isWithinOnePaletteEdit(a, b)).toBe(expected)
+  })
+})
+
+describe('container field matching', () => {
+  it('counts a container-only token and demotes quality class when every token lands on containers', () => {
+    const tabDoc: PaletteDocumentInput = {
+      id: 'tab-1',
+      visibleFields: [
+        {
+          id: 'title',
+          profile: 'structured-label',
+          text: 'README.md',
+          role: 'primary',
+          destinationEligible: true
+        },
+        {
+          id: 'worktree',
+          profile: 'structured-label',
+          text: 'STA-4360-feature',
+          role: 'container',
+          destinationEligible: false
+        }
+      ],
+      evidence: []
+    }
+    const match = run(tabDoc, '4360')
+    expect(match).not.toBeNull()
+    expect(match?.rank.coverage).toBe(2)
+    expect(match?.qualityClass).toBe('exact-evidence')
+  })
+
+  it('does not count a token that lands on a direct field', () => {
+    const tabDoc: PaletteDocumentInput = {
+      id: 'tab-1',
+      visibleFields: [
+        {
+          id: 'title',
+          profile: 'structured-label',
+          text: 'wsl-transcript-4360.ts',
+          role: 'primary',
+          destinationEligible: true
+        },
+        {
+          id: 'worktree',
+          profile: 'structured-label',
+          text: 'STA-4360-feature',
+          role: 'container',
+          destinationEligible: false
+        }
+      ],
+      evidence: []
+    }
+    const match = run(tabDoc, '4360')
+    expect(match).not.toBeNull()
+    expect(match?.rank.coverage).toBe(0)
+    expect(match?.qualityClass).toBe('exact-visible')
+  })
+
+  it('ranks an all-direct multi-token match ahead of a mixed direct and container match', () => {
+    const direct = run(
+      {
+        id: 'direct',
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'alpha',
+            role: 'primary',
+            destinationEligible: true
+          },
+          {
+            id: 'path',
+            profile: 'structured-label',
+            text: 'beta',
+            role: 'secondary',
+            destinationEligible: true
+          }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+    const mixed = run(
+      {
+        id: 'mixed',
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'alpha',
+            role: 'primary',
+            destinationEligible: true
+          },
+          {
+            id: 'worktree',
+            profile: 'structured-label',
+            text: 'beta',
+            role: 'container',
+            destinationEligible: false
+          }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+
+    expect(direct).not.toBeNull()
+    expect(mixed).not.toBeNull()
+    expect(direct?.rank.coverage).toBe(1)
+    expect(mixed?.rank.coverage).toBe(2)
+    if (direct && mixed) {
+      expect(comparePaletteDocumentRank(direct.rank, mixed.rank)).toBeLessThan(0)
+    }
   })
 })

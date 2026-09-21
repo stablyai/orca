@@ -26,7 +26,9 @@ const mocks = vi.hoisted(() => ({
   moveUnifiedTabToGroup: vi.fn(),
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
-  applyFreshWebSessionTabsSnapshot: vi.fn(),
+  applyWebSessionTabsSnapshot: vi.fn(),
+  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
+  getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
@@ -46,9 +48,14 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
-    mocks.setState(buildPatch),
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
+    mocks.setState(buildPatch)
+    // The production caller invokes the returned settle receipt.
+    return () => {}
+  },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -186,6 +193,76 @@ describe('createWebRuntimeSessionTerminal', () => {
     }
   )
 
+  it.each([
+    { gated: false, authority: false },
+    { gated: true, authority: true }
+  ])(
+    'routes a Kimi resume by capability (advertised=$gated) instead of the generic host-authority probe',
+    async ({ gated, authority }) => {
+      // Why: an old host answers the widened ensureAgentSession enum with invalid_argument, which
+      // runRemoteAgentSessionLaunch does not retry on — the per-agent probe is the only thing
+      // keeping a remote Kimi resume from dying instead of degrading to a legacy launch.
+      const runtimeCall = vi.fn(async (request: { method: string }) => {
+        if (request.method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: {
+              runtimeId: 'runtime-1',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [
+                'agent-session.host-authority.v1',
+                ...(gated ? ['agent-session.kimi-resume.v1'] : [])
+              ]
+            }
+          }
+        }
+        if (request.method === 'terminal.ensureAgentSession') {
+          return {
+            id: 'ensure',
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'term-kimi',
+                worktreeId: WORKTREE_ID,
+                tabId: 'host-tab-kimi',
+                paneKey: `host-tab-kimi:${FOCUS_LEAF_ID}`
+              },
+              disposition: 'created'
+            }
+          }
+        }
+        if (request.method === 'session.tabs.createTerminal') {
+          return {
+            id: 'legacy-create',
+            ok: true,
+            result: { tab: { id: 'host-tab-kimi', leafId: FOCUS_LEAF_ID } }
+          }
+        }
+        return { id: 'list', ok: true, result: makeSnapshot() }
+      })
+      vi.stubGlobal('window', {
+        api: { runtimeEnvironments: { call: runtimeCall } }
+      })
+
+      await expect(
+        createWebRuntimeSessionTerminal({
+          worktreeId: WORKTREE_ID,
+          agentSessionKind: 'resume',
+          launchAgent: 'kimi',
+          command: "kimi '--session' 'session_431324d7'",
+          providerSession: { key: 'session_id', id: 'session_431324d7' }
+        })
+      ).resolves.toEqual({ status: 'created' })
+
+      const methods = runtimeCall.mock.calls.map(([request]) => request.method)
+      expect(methods.includes('terminal.ensureAgentSession')).toBe(authority)
+      expect(methods.includes('session.tabs.createTerminal')).toBe(!authority)
+    }
+  )
+
   it('creates paired web agents through host authority so activation is mirrored', async () => {
     const snapshot = {
       ...makeSnapshot(),
@@ -313,7 +390,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       },
       timeoutMs: 15_000
     })
-    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before', activeWorktreeId: WORKTREE_ID },
       snapshot,
       ENVIRONMENT_ID

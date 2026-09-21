@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 
 const LEGACY_DATA_FILE_NAME = 'orca-data.json'
@@ -13,12 +13,12 @@ export const LEGACY_BACKUP_COUNT = 5
 let profileUserDataPath: string | null = null
 
 export function initOrcaProfilePaths(): void {
-  profileUserDataPath = app.getPath('userData')
+  profileUserDataPath = getAppEnvironment().getPath('userData')
 }
 
 export function getProfileUserDataPath(): string {
   if (!profileUserDataPath) {
-    profileUserDataPath = app.getPath('userData')
+    profileUserDataPath = getAppEnvironment().getPath('userData')
   }
   return profileUserDataPath
 }

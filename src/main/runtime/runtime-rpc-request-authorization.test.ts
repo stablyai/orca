@@ -92,9 +92,19 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     try {
-      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'before reset' })
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'worker',
+        to: 'coordinator',
+        subject: 'before reset'
+      })
       const first = await resetMessages('reset-first', firstDevice.token)
-      db.insertMessage({ from: 'worker', to: 'coordinator', subject: 'after reset' })
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'worker',
+        to: 'coordinator',
+        subject: 'after reset'
+      })
       const replay = await resetMessages('reset-replay', firstDevice.token)
 
       expect(first).toMatchObject({
@@ -129,6 +139,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const device = server['deviceRegistry']!.addDevice('existing-cli', 'runtime')
     const existingFingerprint = createHash('sha256').update(device.token).digest('hex')
     db.createRemoteDispatchAttachment({
+      runId: 'run_home',
       dispatchId: 'ctx_existing_remote',
       taskId: 'task_existing_remote',
       homePeerFingerprint: existingFingerprint,

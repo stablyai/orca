@@ -50,16 +50,18 @@ export function resetAuthoritativelyRemovedWorktreeMemoryForTests(): void {
   authoritativelyRemovedWorktreeIdsByHost.clear()
 }
 
-// Why: SSH WorktreeMeta is exempt from gcStaleWorktreeMeta (persistence.ts:407,415) and outlives the remote
-// worktree, so a scan-proven removal must retire the metadata itself — otherwise the next launch's fallback
-// re-lists the deleted row before the host connects, and the in-memory suppression above is already gone.
+// Why: off-host WorktreeMeta is exempt from gcStaleWorktreeMeta -- it skips any row whose repo or hostId is
+// not local -- and outlives the remote worktree, so a scan-proven removal must retire the metadata itself.
+// Otherwise the next launch's fallback re-lists the deleted row before the host connects, and the in-memory
+// suppression above is already gone. Runtime hosts were excluded until #17776, which is why a paired client
+// accumulated a row per remote worktree it had ever seen and never dropped one.
 export function forgetPersistedWorktreeMetaForRemovals(
   repoId: string,
   hostId: ExecutionHostId,
   worktreeIds: readonly string[]
 ): void {
   const parsedHost = parseExecutionHostId(hostId)
-  if (worktreeIds.length === 0 || parsedHost?.kind !== 'ssh') {
+  if (worktreeIds.length === 0 || (parsedHost?.kind !== 'ssh' && parsedHost?.kind !== 'runtime')) {
     return
   }
   const forget = window.api.worktrees.forgetRemovedForExecutionHost

@@ -277,6 +277,21 @@ describe('cold activation tab deferral', () => {
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
 
+  it('passes the owning worktree to the live-tab predicate', () => {
+    const isTabLive = vi.fn(() => false)
+    planColdActivationTabDeferral({
+      restrictions: new Map(),
+      deferredMountTabIdsByWorktree: new Map(),
+      worktreeId: 'wt-scoped',
+      allTabIds: ['tab-1'],
+      isTabLive,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-1'])
+    })
+
+    expect(isTabLive).toHaveBeenCalledWith('tab-1', 'wt-scoped')
+  })
+
   it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)

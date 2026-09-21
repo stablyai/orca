@@ -22,6 +22,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
       overrides.serializeTerminalBuffer?.(ptyId, opts))
   return {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},

@@ -77,6 +77,7 @@ export function removeEditorStateForReplacedPreview(
     | 'editorDrafts'
     | 'editorCursorLine'
     | 'markdownViewMode'
+    | 'markdownRichModeSizeOverride'
     | 'editorViewMode'
     | 'markdownFrontmatterVisible'
     | 'markdownTableOfContentsVisible'
@@ -89,6 +90,7 @@ export function removeEditorStateForReplacedPreview(
   | 'editorDrafts'
   | 'editorCursorLine'
   | 'markdownViewMode'
+  | 'markdownRichModeSizeOverride'
   | 'editorViewMode'
   | 'markdownFrontmatterVisible'
   | 'markdownTableOfContentsVisible'
@@ -110,6 +112,7 @@ export function removeEditorStateForReplacedPreview(
       editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
+      markdownRichModeSizeOverride: state.markdownRichModeSizeOverride,
       editorViewMode: state.editorViewMode,
       markdownFrontmatterVisible: state.markdownFrontmatterVisible,
       markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
@@ -124,6 +127,11 @@ export function removeEditorStateForReplacedPreview(
     ),
     markdownViewMode: Object.fromEntries(
       Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFile.id)
+    ),
+    markdownRichModeSizeOverride: Object.fromEntries(
+      Object.entries(state.markdownRichModeSizeOverride).filter(
+        ([fileId]) => fileId !== replacedFile.id
+      )
     ),
     editorViewMode: Object.fromEntries(
       Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)

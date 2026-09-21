@@ -1,3 +1,4 @@
+import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import type {
@@ -12,6 +13,7 @@ export type UiWindowApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
   }) => Promise<string | null>
+  readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
   writeSelectionClipboardText: (text: string) => Promise<void>

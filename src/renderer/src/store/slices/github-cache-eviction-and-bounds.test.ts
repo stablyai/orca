@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { issueCacheKey, workItemsCacheKey } from './github'
+import { issueCacheKey, workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
   githubSourceContext,
@@ -60,6 +60,58 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(Object.keys(state.checksCache)).toEqual(['repo-2::pr-checks::12'])
     expect(Object.keys(state.commentsCache)).toEqual(['repo-2::pr-comments::12'])
     expect(state.workItemsInvalidationNonce).toBe(5)
+  })
+
+  it('preserves runtime and explicit-source-prefixed entries during repo eviction', () => {
+    const store = createTestStore()
+    const sourceContext = githubSourceContext('runtime:source-env', 'source-repo')
+    const runtimeKey = workItemsCacheKey('repo-1', 20, '', 'runtime:owner-env')
+    const sourceKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(sourceContext))
+    store.setState({
+      workItemsInvalidationNonce: 4,
+      workItemsCache: {
+        [runtimeKey]: { data: [], fetchedAt: 1 },
+        [sourceKey]: { data: [], fetchedAt: 1 }
+      }
+    })
+
+    store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
+
+    expect(store.getState().workItemsCache).toEqual({
+      [runtimeKey]: { data: [], fetchedAt: 1 },
+      [sourceKey]: { data: [], fetchedAt: 1 }
+    })
+    expect(store.getState().workItemsInvalidationNonce).toBe(4)
+  })
+
+  it('preference invalidation removes local keys but preserves prefixed host/source keys', async () => {
+    const store = createTestStore()
+    const sourceContext = githubSourceContext('runtime:source-env', 'source-repo')
+    const localKey = workItemsCacheKey('repo-1', 20, '')
+    const runtimeKey = workItemsCacheKey('repo-1', 20, '', 'runtime:owner-env')
+    const sourceKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(sourceContext))
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo/one', name: 'one', kind: 'git' }],
+      workItemsInvalidationNonce: 4,
+      workItemsCache: {
+        [localKey]: { data: [], fetchedAt: 1 },
+        [runtimeKey]: { data: [], fetchedAt: 1 },
+        [sourceKey]: { data: [], fetchedAt: 1 }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.repos.update.mockResolvedValueOnce(undefined)
+
+    await store.getState().setIssueSourcePreference('repo-1', '/repo/one', 'origin')
+
+    expect(store.getState().workItemsCache).toEqual({
+      [runtimeKey]: { data: [], fetchedAt: 1 },
+      [sourceKey]: { data: [], fetchedAt: 1 }
+    })
+    expect(store.getState().workItemsInvalidationNonce).toBe(5)
+    expect(mockApi.repos.update).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      updates: { issueSourcePreference: 'origin' }
+    })
   })
 
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {

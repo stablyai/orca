@@ -19,6 +19,7 @@ import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placehold
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
+import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 
 type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
@@ -96,19 +97,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.
-  // Split on first space — creationId is a UUID (no space) so a space-containing repoId stays intact.
   const pendingCreationKeys = useAppStore(
-    useShallow((s) =>
-      Object.values(s.pendingWorktreeCreations ?? {}).map(
-        (creation) => `${creation.creationId} ${creation.request.repoId}`
-      )
-    )
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
   const pendingCreations = useMemo(
     () =>
       pendingCreationKeys.map((key) => {
         const separator = key.indexOf(' ')
-        return { creationId: key.slice(0, separator), repoId: key.slice(separator + 1) }
+        return {
+          creationId: key.slice(0, separator),
+          repoId: key.slice(separator + 1)
+        }
       }),
     [pendingCreationKeys]
   )

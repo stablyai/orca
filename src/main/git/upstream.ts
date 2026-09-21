@@ -7,9 +7,11 @@ import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 import { gitExecFileAsync } from './runner'
 import { validateGitPushTarget } from './push-target-validation'
 import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 type GitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export function invalidateGitUpstreamStatusReads(): void {
@@ -19,8 +21,12 @@ export function invalidateGitUpstreamStatusReads(): void {
 function gitExecOptions(
   cwd: string,
   options: GitExecOptions = {}
-): { cwd: string; wslDistro?: string } {
-  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+): { cwd: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
+  return {
+    cwd,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+  }
 }
 
 async function getBehindCommitsArePatchEquivalent(

@@ -27,6 +27,52 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  it('keeps hook monitoring mode across an equivalent OSC ping until a hook clears it', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        hookEventName: 'Stop',
+        payload: {
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch the build',
+          agentType: 'claude'
+        }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        hookEventName: 'PreToolUse',
+        payload: {
+          state: 'working',
+          prompt: 'watch the build',
+          agentType: 'claude',
+          toolName: 'Read'
+        }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]?.workingMode).toBeUndefined()
+  })
+
   it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

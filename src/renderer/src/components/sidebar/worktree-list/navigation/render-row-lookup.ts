@@ -109,6 +109,14 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
   let fallbackIndex = -1
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
+    // Why: host-qualified reveals are emitted for folder workspaces too, and a
+    // walker that only knows item rows returns -1 so the reveal never lands.
+    if (row.type === 'folder-workspace') {
+      if (folderWorkspaceKey(row.folderWorkspace.id) === worktree.id) {
+        return index
+      }
+      continue
+    }
     const itemRows = row.type === 'lineage-group' ? row.rows : row.type === 'item' ? [row] : []
     const itemRow = itemRows.find(
       (candidate) => getWorktreeHostIdentity(candidate.worktree) === identity

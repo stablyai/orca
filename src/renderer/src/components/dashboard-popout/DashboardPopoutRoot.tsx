@@ -1,21 +1,17 @@
-import { useEffect, useState } from 'react'
-import { AgentKanbanBoard, type AgentDashboardView } from './AgentKanbanBoard'
+import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
+import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
+import { AgentKanbanBoard } from './AgentKanbanBoard'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
-
-type DashboardPopoutRootProps = {
-  /** The layout requested via popout.html?view=<name>. */
-  view: string | null
-}
 
 /**
  * Root of the pop-out dashboard window. Subscribes to the live snapshot relayed
- * from the main window and renders the requested layout.
+ * from the main window and renders the agent board.
  */
-export function DashboardPopoutRoot(_props: DashboardPopoutRootProps): React.JSX.Element {
+export function DashboardPopoutRoot(): React.JSX.Element {
+  // Why: this window has no App shell, so nothing else would translate the
+  // Edit-menu IPC into the ownership events the terminal preview claims.
+  useAppMenuPaste()
+  useAppMenuSelectionActions()
   const snapshot = useDashboardSnapshot()
-  const [view, setView] = useState<AgentDashboardView>(() =>
-    _props.view === 'map' || _props.view === 'rings' ? 'map' : 'board'
-  )
-  useEffect(() => window.api.dashboard.onViewRequested(setView), [])
-  return <AgentKanbanBoard key={view} snapshot={snapshot} initialView={view} />
+  return <AgentKanbanBoard snapshot={snapshot} />
 }

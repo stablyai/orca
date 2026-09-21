@@ -14,7 +14,7 @@ export type BrowserPageUrlSetter = (
   options?: { preserveLoadError?: boolean }
 ) => void
 
-export type BrowserFindShortcutScope = 'focused' | 'inactive' | 'owned-target'
+export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
 
 export type GrabIntent = 'copy' | 'annotate'
 

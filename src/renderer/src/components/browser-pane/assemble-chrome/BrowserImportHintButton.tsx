@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,7 +103,7 @@ export function BrowserImportHintButton({
               value2: browserProfile ? ` (${browserProfile})` : ''
             }
           ),
-          result.executionHostLabel
+          result
         )
         return
       }
@@ -123,7 +124,7 @@ export function BrowserImportHintButton({
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
         ),
-        result.executionHostLabel
+        result
       )
       return
     }
@@ -215,6 +216,7 @@ export function BrowserImportHintButton({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-52">
+                <BrowserCookieImportMachineNotice />
                 {detectedBrowsers.map((browser) =>
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>

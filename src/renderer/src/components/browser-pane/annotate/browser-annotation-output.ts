@@ -35,7 +35,7 @@ function inlineText(
   // scanning only the bounded text we will actually retain.
   let normalized = ''
   let pendingSpace = false
-  for (let index = 0; index < content.length && normalized.length < maxLength; ) {
+  for (let index = 0; index < content.length && normalized.length < maxLength;) {
     const code = content.charCodeAt(index)
     if (isInlineWhitespaceCode(code)) {
       if (code === 13 && content.charCodeAt(index + 1) === 10) {

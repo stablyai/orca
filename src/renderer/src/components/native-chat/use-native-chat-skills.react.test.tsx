@@ -44,6 +44,7 @@ function stateForHost(hostId: string) {
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
       'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', path: '/repo/worktree', hostId }]
     }
@@ -109,6 +110,46 @@ describe('useNativeChatSkills', () => {
       { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
       { timeoutMs: 10_000 }
     )
+  })
+
+  it('resolves the catalog for a structured session tab', async () => {
+    mocks.state = {
+      ...stateForHost('local'),
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'worktree-1': [{ id: 'tab-1', contentType: 'agent-session', entityId: 'session-1' }]
+      }
+    }
+    render(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.snapshots.at(-1)?.skills.map((skill) => skill.name)).toEqual(['browser'])
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'skills.discover',
+      { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
+      { timeoutMs: 10_000 }
+    )
+  })
+
+  it('surfaces discovery failure instead of remaining loading', async () => {
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('scan failed'))
+    render(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('error'))
+    expect(mocks.snapshots.at(-1)?.error?.message).toBe('scan failed')
+  })
+
+  it('surfaces missing tab ownership instead of remaining loading', () => {
+    mocks.state = {
+      ...stateForHost('local'),
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {}
+    }
+    render(<Probe enabled />)
+
+    expect(mocks.snapshots.at(-1)?.status).toBe('error')
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('shares one in-flight request between sibling panes', async () => {

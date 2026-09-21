@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcContext, type RpcMethod } from '../core'
 import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
-import { listPluginsForClients } from '../../../ipc/plugins'
+import { listPluginsForClients } from '../../../plugins/plugin-client-list'
 import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
 import type { PluginService } from '../../../plugins/plugin-service'
 import {

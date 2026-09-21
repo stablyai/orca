@@ -25,9 +25,20 @@ afterEach(() => {
   container.remove()
 })
 
-function render(prompt: AskPrompt, onAnswer: (s: AskAnswerSelection[]) => void): void {
+function render(
+  prompt: AskPrompt,
+  onAnswer: (s: AskAnswerSelection[]) => void,
+  allowOther: boolean | readonly boolean[] = true
+): void {
   act(() => {
-    root.render(<NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />)
+    root.render(
+      <NativeChatQuestionCard
+        prompt={prompt}
+        onAnswer={onAnswer}
+        onCancel={() => {}}
+        allowOther={allowOther}
+      />
+    )
   })
 }
 
@@ -136,5 +147,79 @@ describe('NativeChatQuestionCard', () => {
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
+  })
+
+  it('hides free text when the provider requires a listed option', () => {
+    render(tabsOrSpaces, vi.fn(), false)
+
+    expect(container.querySelector('input')).toBeNull()
+    expect(container.textContent).not.toContain('Type your answer')
+  })
+
+  it('applies free-text capability per question in a grouped prompt', () => {
+    render(
+      {
+        questions: [
+          {
+            header: 'Listed',
+            question: 'Pick a listed value',
+            multiSelect: false,
+            options: [{ label: 'One' }]
+          },
+          {
+            header: 'Custom',
+            question: 'Provide a custom value',
+            multiSelect: false,
+            options: []
+          }
+        ]
+      },
+      vi.fn(),
+      [false, true]
+    )
+
+    expect(container.querySelector('input')).toBeNull()
+    clickAction('Skip')
+    expect(container.querySelector('input')).not.toBeNull()
+  })
+
+  it('submits grouped multi-select and free-text answers together', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            header: 'Targets',
+            question: 'Which targets?',
+            multiSelect: true,
+            options: [{ label: 'Web' }, { label: 'Mobile' }]
+          },
+          {
+            header: 'Notes',
+            question: 'Anything else?',
+            multiSelect: false,
+            options: []
+          }
+        ]
+      },
+      onAnswer,
+      [false, true]
+    )
+
+    clickOption('Web')
+    clickOption('Mobile')
+    clickAction('Next')
+    const input = container.querySelector('input')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, 'SSH host')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([
+      { indices: [0, 1], other: '' },
+      { indices: [], other: 'SSH host' }
+    ])
   })
 })

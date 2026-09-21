@@ -41,6 +41,74 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it.each([undefined, 'legacy-orchestration-worker'])(
+    'new host ignores an old client resume fence (%s)',
+    (automaticResumeBlockedBy) => {
+      const record = {
+        paneKey: 'tab1:pane-1',
+        tabId: 'tab1',
+        worktreeId: 'wt',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'codex-session' },
+        prompt: 'continue',
+        state: 'done',
+        capturedAt: 10,
+        updatedAt: 10,
+        origin: 'worktree-sleep'
+      }
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        sleepingAgentSessionsByPaneKey: {
+          [record.paneKey]: { ...record, automaticResumeBlockedBy }
+        }
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.sleepingAgentSessionsByPaneKey?.[record.paneKey]).toEqual(record)
+      }
+    }
+  )
+
+  it('hydrates a persisted Kimi sleeping agent record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'kimi',
+          providerSession: {
+            key: 'session_id',
+            id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+          },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          terminalTitle: 'Kimi',
+          origin: 'live'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: the record must survive the resumable-agent refine, or restore silently drops it.
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
+        agent: 'kimi',
+        providerSession: { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
+      })
+    }
+  })
+
   it('preserves the authoritative Pi session file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

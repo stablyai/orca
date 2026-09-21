@@ -96,6 +96,28 @@ describe('react error boundary reporting', () => {
     })
   })
 
+  it('derives #185 attribution from the error itself, without boundary opt-in', async () => {
+    await reportReactErrorBoundaryCrash({
+      boundaryId: 'page.settings',
+      surface: 'page',
+      error: new Error('Minified React error #185; visit https://react.dev/errors/185')
+    })
+
+    expect(mocks.recordRendererError).toHaveBeenCalledWith(
+      expect.objectContaining({ attribution: 'unreliable' })
+    )
+  })
+
+  it('omits attribution for ordinary render errors', () => {
+    const args = buildReactErrorBoundaryReportArgs({
+      boundaryId: 'page.settings',
+      surface: 'page',
+      error: new Error('render failed')
+    })
+
+    expect(args).not.toHaveProperty('attribution')
+  })
+
   it('reports a caught render error once per boundary signature', async () => {
     const error = new Error('render failed')
     await reportReactErrorBoundaryCrash({

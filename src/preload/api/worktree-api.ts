@@ -112,7 +112,11 @@ export type WorktreeApi = {
     expectedHead: string
     hostId?: ExecutionHostId
   }) => Promise<ForceDeleteWorktreeBranchResult>
-  updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+  updateMeta: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    updates: Partial<WorktreeMeta>
+  }) => Promise<Worktree>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>

@@ -41,6 +41,8 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    // A consuming check now requires a live pane; these transport tests only need it to block.
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -116,6 +118,8 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    // A consuming check now requires a live pane; these transport tests only need it to block.
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
     seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
     const server = new OrcaRuntimeRpcServer({

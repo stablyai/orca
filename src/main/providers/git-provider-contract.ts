@@ -15,6 +15,7 @@ import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -46,7 +47,11 @@ export type IGitProvider = {
   abortRebase(worktreePath: string): Promise<void>
   checkoutBranch(worktreePath: string, branch: string): Promise<void>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
-  getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getBranchCompare(
+    worktreePath: string,
+    baseRef: string,
+    options?: { admissionTier?: GitAdmissionTier }
+  ): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
   pushBranch(

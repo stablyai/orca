@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
-import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear/links'

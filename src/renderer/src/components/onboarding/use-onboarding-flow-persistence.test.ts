@@ -28,6 +28,8 @@ type CloseWithCallback = (
   dismissedExtras?: DismissedExtras
 ) => Promise<boolean>
 
+const probeStartTime = Date.now()
+
 function makeOnboardingState(): OnboardingState {
   return {
     ...getDefaultOnboardingState(),
@@ -47,7 +49,7 @@ function setApi(api: {
 function CloseWithProbe(props: { onReady: (closeWith: CloseWithCallback) => void }): null {
   const closeWith = useCloseWith({
     onOnboardingChange: vi.fn(),
-    startTimeRef: { current: Date.now() },
+    startTimeRef: { current: probeStartTime },
     setError: vi.fn()
   })
   useEffect(() => props.onReady(closeWith), [closeWith, props])

@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { getActiveWorktreeId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -12,7 +13,7 @@ import { splitMarkerEchoCommand } from './terminal-marker-echo-command'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 async function createWorkspace(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   await dialog.getByPlaceholder(/Type a name/i).fill(name)

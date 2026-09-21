@@ -4,6 +4,11 @@ import type { Automation } from '../../shared/automations-types'
 import type { WorkspaceRunContext } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
+import {
+  projectAutomationSelector,
+  type AutomationProjectionContext
+} from '../../shared/automation-list-scope'
+import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -46,7 +51,10 @@ function makeRunContext(overrides: Partial<WorkspaceRunContext> = {}): Workspace
   }
 }
 
-function makeAutomation(runContext: WorkspaceRunContext): Automation {
+function makeAutomation(
+  runContext: WorkspaceRunContext | null,
+  overrides: Partial<Automation> = {}
+): Automation {
   return {
     id: 'automation-1',
     name: 'Nightly',
@@ -69,16 +77,63 @@ function makeAutomation(runContext: WorkspaceRunContext): Automation {
     missedRunGraceMinutes: 720,
     createdAt: 1,
     updatedAt: 1,
-    runContext
+    runContext,
+    ...overrides
   } as Automation
 }
 
-function makeStore(setups: ProjectHostSetup[], repos: Repo[]): Store {
+function makeStore(
+  setups: ProjectHostSetup[],
+  repos: Repo[],
+  projectedAutomation?: Automation
+): Store {
+  const projectionContext: AutomationProjectionContext = {
+    storageAuthority: 'desktop',
+    sshTargetGeneration: () => 7,
+    repoConnectionId: (repoId) => {
+      const repo = repos.find((entry) => entry.id === repoId)
+      return repo ? repo.connectionId?.trim() || null : undefined
+    }
+  }
   return {
     getProjectHostSetups: () => setups,
-    getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    automationOwnerPrecondition: () =>
+      projectedAutomation
+        ? toAutomationOwnerPrecondition(
+            projectAutomationSelector(projectedAutomation, projectionContext)
+          )
+        : { selector: { kind: 'self' } },
+    automationCapturedHostIssue: () => null
   } as unknown as Store
 }
+
+describe('resolveAutomationRunTarget owner projection', () => {
+  it('refuses a context-less local selector whose SSH-backed repo makes it malformed', () => {
+    const repo = makeRepo({ connectionId: 'ssh-1' })
+    const automation = makeAutomation(null)
+    const store = makeStore([], [repo], automation)
+
+    expect(resolveAutomationRunTarget(store, automation)).toEqual({
+      ok: false,
+      error: 'This automation has no host to run on.'
+    })
+  })
+
+  it('keeps a generation-less legacy SSH selector runnable when its host is current', () => {
+    const repo = makeRepo({ connectionId: 'ssh-1' })
+    const automation = makeAutomation(null, {
+      executionTargetType: 'ssh',
+      executionTargetId: 'ssh-1'
+    })
+    const store = makeStore([], [repo], automation)
+
+    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
+      ok: true,
+      cwd: '/repo'
+    })
+  })
+})
 
 describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {

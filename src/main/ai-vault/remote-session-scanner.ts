@@ -12,6 +12,11 @@ import {
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
+import {
+  parseRemoteSessionFileCached,
+  remoteSessionParseHostKey
+} from './remote-session-parse-cache'
+import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { discoverRemoteSourceCandidates } from './remote-session-scanner-discovery'
 import { remoteSessionSources } from './remote-session-scanner-sources'
 import type {
@@ -25,6 +30,7 @@ import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
+import { refreshCodexTitleFromIndex } from './session-scanner-codex-cached-title'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
 
@@ -224,12 +230,21 @@ async function parseRemoteSessionCandidate(
 ): Promise<AiVaultSession | null> {
   try {
     throwIfAiVaultScanCancelled(context.signal)
-    const read = await context.provider.readFile(candidate.file.path)
-    throwIfAiVaultScanCancelled(context.signal)
-    if (read.isBinary) {
-      return null
-    }
-    const session = await candidate.source.parse(candidate.file, read.content, context)
+    // The read is inside the cached parse: an unchanged transcript must not be
+    // pulled off the remote disk at all, which is the whole cost of #13753.
+    const session = await parseRemoteSessionFileCached({
+      candidate,
+      hostKey: remoteSessionParseHostKey(context),
+      parse: async () => {
+        const read = await context.provider.readFile(candidate.file.path)
+        throwIfAiVaultScanCancelled(context.signal)
+        if (read.isBinary) {
+          return null
+        }
+        return await candidate.source.parse(candidate.file, read.content, context)
+      },
+      refreshReusedSession: reusedCodexTitleRefresh(candidate, context)
+    })
     throwIfAiVaultScanCancelled(context.signal)
     // Mirror the local rule: every session carries its sibling subagent
     // transcript count (row badge; recoverable signal at zero turns). The
@@ -249,6 +264,22 @@ async function parseRemoteSessionCandidate(
     })
     return null
   }
+}
+
+// Codex thread names live in `<CODEX_HOME>/session_index.jsonl`, not the
+// rollout, and are written after it — so a transcript-keyed cache hit would
+// pin the fallback title forever. Local counterpart:
+// session-scanner-parse-cache.ts's reuse path.
+function reusedCodexTitleRefresh(
+  candidate: RemoteSessionCandidate,
+  context: RemoteScannerContext
+): ((session: AiVaultSession) => Promise<AiVaultSession>) | undefined {
+  const codexHome = candidate.source.agent === 'codex' ? candidate.source.codexHome : undefined
+  if (!codexHome) {
+    return undefined
+  }
+  const readIndexedTitle = remoteCodexIndexedTitleReader(codexHome, context)
+  return (session) => refreshCodexTitleFromIndex(session, readIndexedTitle)
 }
 
 function mergeRemoteSessions(

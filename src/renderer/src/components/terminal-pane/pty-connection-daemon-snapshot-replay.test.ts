@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   RESET_GRAPHIC_RENDITION
@@ -218,6 +219,42 @@ describe('connectPanePty', () => {
     } finally {
       rendered.dispose()
     }
+  })
+
+  it('returns a shell-owned daemon snapshot to the normal buffer on reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+      sessionId
+        ? {
+            id: sessionId,
+            snapshot: '\x1b[?1049h\x1b[?1003hSTALE-TUI',
+            isAlternateScreen: true,
+            snapshotTerminalOwner: 'shell'
+          }
+        : null
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
+    } as StoreState
+
+    const pane = createPane(1)
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_DEAD_TUI_RESET,
+      expect.any(Function)
+    )
   })
 
   it('drops a too-wide daemon alt frame and keeps the scrollback prefix', async () => {

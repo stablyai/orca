@@ -8,7 +8,8 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

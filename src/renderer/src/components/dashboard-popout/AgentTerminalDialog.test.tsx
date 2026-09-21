@@ -91,6 +91,32 @@ describe('AgentTerminalDialog', () => {
     expect(screen.getByTestId('preview')).toHaveAttribute('data-terminal-input', 'null')
   })
 
+  it('does not claim a remote pane closed when the card carries no live pty', () => {
+    render(
+      <AgentTerminalDialog
+        card={card({ ptyId: null, hostKind: 'ssh' })}
+        onOpenChange={() => {}}
+        onReveal={() => {}}
+      />
+    )
+
+    // Loss of contact with an SSH host is `unverifiable`, never `exited`.
+    expect(screen.getByText(/remote session/)).toBeInTheDocument()
+    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
+  })
+
+  it('still reports a closed pane for a local card with no live pty', () => {
+    render(
+      <AgentTerminalDialog
+        card={card({ ptyId: null, hostKind: 'local' })}
+        onOpenChange={() => {}}
+        onReveal={() => {}}
+      />
+    )
+
+    expect(screen.getByText(/pane has closed/)).toBeInTheDocument()
+  })
+
   it('labels acknowledged completions idle without review or pin controls', () => {
     render(
       <AgentTerminalDialog

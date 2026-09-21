@@ -25,23 +25,27 @@ import {
   absorbPendingRipgrepSpawnError,
   isRipgrepUnavailableAfterLaunchFailure,
   isRipgrepUnavailableExit,
+  isTransientRipgrepSpawnError,
   killSpawnedRipgrepProcess,
+  RipgrepLaunchFailureError,
   RipgrepUnavailableError
 } from '../shared/ripgrep-process-availability'
+import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
 export function listFilesWithRg(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal; maxResults?: number } = {}
+  options: { signal?: AbortSignal; maxResults?: number; searchQuery?: string } = {}
 ): Promise<string[]> {
-  const { signal, maxResults } = options
+  const { signal, maxResults, searchQuery } = options
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
+    let rankedPaths: string[] | null = null
     let done = false
     const children: {
       child: ChildProcess
@@ -58,7 +62,7 @@ export function listFilesWithRg(
       forceSlashSeparator: true
     })
 
-    const processLine = (rawLine: string): boolean => {
+    const processLine = (rawLine: string, attemptRanker: QuickOpenPathRanker | null): boolean => {
       const relPath = normalizeQuickOpenRgLine(rawLine, { kind: 'cwd-relative' })
       if (relPath === null) {
         return false
@@ -71,6 +75,10 @@ export function listFilesWithRg(
       if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
         return true
       }
+      if (attemptRanker) {
+        attemptRanker.consider(relPath)
+        return true
+      }
       files.add(relPath)
       if (maxResults !== undefined && files.size >= maxResults) {
         finishAtLimit()
@@ -78,8 +86,10 @@ export function listFilesWithRg(
       return true
     }
 
-    const runPass = (args: string[]): Promise<void> =>
+    const runPassOnce = (args: string[]): Promise<void> =>
       new Promise((passResolve, passReject) => {
+        const attemptRanker =
+          searchQuery === undefined ? null : new QuickOpenPathRanker(searchQuery, maxResults ?? 16)
         let passBuf = ''
         let passDone = false
         let passFileCount = 0
@@ -92,10 +102,20 @@ export function listFilesWithRg(
         // are evaluated against rg's working directory, not the absolute
         // search target. Without cwd, nested-worktree exclusions silently
         // stop working.
-        const child = spawn('rg', ['--no-messages', ...args], {
-          cwd: rootPath,
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
+        let child: ChildProcess
+        try {
+          child = spawn('rg', ['--no-messages', ...args], {
+            cwd: rootPath,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true
+          })
+        } catch (error) {
+          throw isTransientRipgrepSpawnError(error)
+            ? new RipgrepLaunchFailureError(
+                `rg failed to start (${(error as NodeJS.ErrnoException).code})`
+              )
+            : error
+        }
         let timer: ReturnType<typeof setTimeout> | null = null
         const cleanup = (): void => {
           if (timer) {
@@ -126,6 +146,9 @@ export function listFilesWithRg(
           }
           passDone = true
           cleanup()
+          if (attemptRanker) {
+            rankedPaths = attemptRanker.result().paths
+          }
           passResolve()
         }
         const rejectLaunchFailure = (error: Error): void => {
@@ -156,7 +179,7 @@ export function listFilesWithRg(
           let start = 0
           let idx = passBuf.indexOf('\n', start)
           while (idx !== -1) {
-            if (processLine(passBuf.substring(start, idx))) {
+            if (processLine(passBuf.substring(start, idx), attemptRanker)) {
               passFileCount++
             }
             if (done) {
@@ -170,8 +193,12 @@ export function listFilesWithRg(
         function handleStderrData(): void {
           /* drain to prevent backpressure stalls */
         }
-        function handleError(err: Error): void {
+        function handleError(err: NodeJS.ErrnoException): void {
           processErrorObserved = true
+          if (isTransientRipgrepSpawnError(err)) {
+            rejectPass(new RipgrepLaunchFailureError(`rg failed to start (${err.code})`))
+            return
+          }
           if (isRipgrepUnavailableExit(child, null, null)) {
             passBuf = ''
             rejectLaunchFailure(err)
@@ -202,7 +229,7 @@ export function listFilesWithRg(
           }
           // Flush residual line only on clean exit.
           if (passBuf) {
-            if (processLine(passBuf)) {
+            if (processLine(passBuf, attemptRanker)) {
               passFileCount++
             }
           }
@@ -225,6 +252,14 @@ export function listFilesWithRg(
         child.stderr!.on('data', handleStderrData)
         child.once('error', handleError)
         child.once('close', handleClose)
+      })
+
+    const runPass = (args: string[]): Promise<void> =>
+      runPassOnce(args).catch((error: unknown) => {
+        if (!(error instanceof RipgrepLaunchFailureError) || signal?.aborted || done) {
+          throw error
+        }
+        return runPassOnce(args)
       })
 
     const killSurvivors = (reason: string): void => {
@@ -266,17 +301,21 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
-    const primaryPass = runPass(primary)
     const passes =
-      maxResults === undefined
-        ? children[0]?.child.pid === undefined
-          ? primaryPass
-          : Promise.all([primaryPass, runPass(ignoredPass)])
-        : // Why: deterministic primary-first budgeting prevents a large ignored
-          // tree from starving ordinary source paths on a remote host.
-          primaryPass.then(() =>
-            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
-          )
+      searchQuery !== undefined
+        ? runPass(ignoredPass)
+        : (() => {
+            const primaryPass = runPass(primary)
+            return maxResults === undefined
+              ? children[0]?.child.pid === undefined
+                ? primaryPass.then(() => runPass(ignoredPass))
+                : Promise.all([primaryPass, runPass(ignoredPass)])
+              : // Why: deterministic primary-first budgeting prevents a large ignored
+                // tree from starving ordinary source paths on a remote host.
+                primaryPass.then(() =>
+                  files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+                )
+          })()
 
     passes
       .then(() => {
@@ -285,7 +324,7 @@ export function listFilesWithRg(
         }
         done = true
         signal?.removeEventListener('abort', onAbort)
-        resolve(Array.from(files))
+        resolve(rankedPaths ?? Array.from(files))
       })
       .catch((err) => {
         if (done) {

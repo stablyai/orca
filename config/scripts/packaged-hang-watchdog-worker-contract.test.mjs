@@ -19,6 +19,8 @@ describe('packaged hang watchdog worker contract', () => {
     expect(smokeSource).toContain(
       "process.platform === 'linux' ? ['--no-sandbox', launcherDir] : [launcherDir]"
     )
+    expect(smokeSource).toContain('const LAUNCH_TIMEOUT_MS = 30_000')
+    expect(smokeSource).toContain('timeout: LAUNCH_TIMEOUT_MS')
   })
 
   // Why: Electron ignores process.exitCode, so the gate needs app.exit plus a stdout assertion.

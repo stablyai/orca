@@ -155,17 +155,126 @@ describe('resolveWorktreeOperationRouteResult', () => {
     expect(resolveWorktreeOperationRouteResult({}, WORKTREE_ID)).toEqual({ kind: 'missing' })
   })
 
-  it('fails a paired-client ownerless stale publication closed instead of routing it locally', () => {
+  it('routes the reported unstamped local shape with one saved runtime', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
           repos: [{ id: 'repo-1' } as never],
-          runtimeEnvironments: [{ id: 'disconnected-hub' }],
-          worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          runtimeEnvironments: [{ id: 'saved-runtime' }],
+          runtimeEnvironmentCatalogHydrated: true,
+          settings: { activeRuntimeEnvironmentId: null } as never,
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          detectedWorktreesByRepo: {
+            'repo-1': { worktrees: [worktree(undefined)] }
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
+  })
+
+  it('ignores the number of unrelated saved runtimes for unstamped local identity', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [{ id: 'repo-1' } as never],
+          runtimeEnvironments: [{ id: 'runtime-a' }, { id: 'runtime-b' }, { id: 'runtime-c' }],
+          runtimeEnvironmentCatalogHydrated: true,
+          settings: { activeRuntimeEnvironmentId: null } as never,
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          detectedWorktreesByRepo: {
+            'repo-1': { worktrees: [worktree(undefined)] }
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
+  })
+
+  it('does not treat a repo row alone as positive local identity', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [{ id: 'repo-1' } as never],
+          runtimeEnvironments: [{ id: 'saved-runtime' }],
+          runtimeEnvironmentCatalogHydrated: true
         },
         WORKTREE_ID
       )
     ).toEqual({ kind: 'missing' })
+  })
+
+  it('fails a paired-client ownerless stale publication closed instead of routing it locally', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          runtimeEnvironments: [{ id: 'saved-runtime' }],
+          runtimeEnvironmentCatalogHydrated: true
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({ kind: 'missing' })
+  })
+
+  it('keeps an unstamped row ambiguous when another owner names a different host', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [{ id: 'repo-1' } as never],
+          runtimeEnvironments: [{ id: 'saved-runtime' }],
+          runtimeEnvironmentCatalogHydrated: true,
+          worktreesByRepo: {
+            'repo-1': [worktree('local'), worktree('runtime:hub-a')]
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({ kind: 'ambiguous' })
+  })
+
+  it('routes a focused runtime only when it is the single saved runtime', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
+          runtimeEnvironments: [{ id: 'hub-a' }],
+          runtimeEnvironmentCatalogHydrated: true,
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+    })
+  })
+
+  it('ignores unrelated removed-runtime tombstones for positive local identity', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [{ id: 'repo-1' } as never],
+          runtimeEnvironments: [{ id: 'saved-runtime' }],
+          runtimeEnvironmentCatalogHydrated: true,
+          removedRuntimeEnvironmentIds: new Set(['removed-runtime']),
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          detectedWorktreesByRepo: {
+            'repo-1': { worktrees: [worktree(undefined)] }
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
   })
 
   it('fails ownerless rows closed until the saved-runtime catalog is hydrated', () => {
@@ -198,6 +307,26 @@ describe('resolveWorktreeOperationRouteResult', () => {
   })
 
   it('preserves ownerless local compatibility after an empty catalog hydrates', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [{ id: 'repo-1' } as never],
+          runtimeEnvironments: [],
+          runtimeEnvironmentCatalogHydrated: true,
+          worktreesByRepo: { 'repo-1': [worktree(undefined)] },
+          detectedWorktreesByRepo: {
+            'repo-1': { worktrees: [worktree(undefined)] }
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
+  })
+
+  it('preserves ownerless local compatibility before detected scan with no saved runtimes', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {

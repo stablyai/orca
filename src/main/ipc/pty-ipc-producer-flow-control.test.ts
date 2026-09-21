@@ -206,6 +206,24 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
+  it('releases a paused producer when handlers re-register for a replacement window', () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      provider.emitData('flood-pty', 'x'.repeat(320 * 1024))
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+
+      // Re-registration hands delivery to a new window; the outgoing session must run its real
+      // lifecycle reset before the bridge is neutralized or this shell stays paused forever.
+      registerPtyHandlers(mainWindow as never)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('fences synchronous producer data and duplicate exit while releasing an exiting PTY', () => {
     vi.useFakeTimers()
     try {

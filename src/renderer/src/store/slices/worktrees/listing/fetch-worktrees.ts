@@ -110,7 +110,7 @@ export function createFetchWorktrees(
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
       if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
-        await refreshRemoteWorktreeLineageBestEffort(settings, set)
+        await refreshRemoteWorktreeLineageBestEffort(settings, set, get)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
     } catch (err) {

@@ -164,6 +164,42 @@ it('normalizes compatibility-read failures to operation_unknown', async () => {
   ).rejects.toMatchObject({ code: 'operation_unknown' })
 })
 
+it('preserves the worker_done mutation identity when post-verification fails', async () => {
+  callMock
+    .mockResolvedValueOnce({
+      result: {
+        message: { id: 'msg_unconfirmed', run_id: 'run_1' },
+        mutation: { requestId: 'mutation_worker_done', replayed: false }
+      }
+    })
+    .mockResolvedValueOnce({
+      result: { dispatch: { id: 'ctx_1', status: 'dispatched' } }
+    })
+    .mockResolvedValueOnce({ result: { tasks: [] } })
+
+  await expect(
+    ORCHESTRATION_HANDLERS['orchestration send']({
+      flags: new Map([
+        ['from', 'term_worker'],
+        ['subject', 'done'],
+        ['type', 'worker_done'],
+        ['task-id', 'task_1'],
+        ['dispatch-id', 'ctx_1'],
+        ['outcome', 'succeeded']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+  ).rejects.toMatchObject({
+    code: 'operation_unknown',
+    data: { orchestrationRequestId: 'mutation_worker_done' },
+    message: expect.stringMatching(
+      /Do not send a new completion.*--retry-request mutation_worker_done/s
+    )
+  })
+})
+
 it('accepts a legacy response only after the authoritative dispatch is terminal', async () => {
   callMock
     .mockResolvedValueOnce({

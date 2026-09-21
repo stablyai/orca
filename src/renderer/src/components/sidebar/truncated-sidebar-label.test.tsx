@@ -105,4 +105,40 @@ describe('TruncatedSidebarLabel', () => {
     expect(container.textContent).toContain('feature/really-long-branch-name')
     expect(container.querySelector('[data-tooltip-content]')).toBeNull()
   })
+
+  // Why: worktree titles change on the hot store-write path. Remounting the
+  // span per text change tore down and rebuilt its ResizeObserver every time.
+  it('keeps one ResizeObserver across a label text change', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let constructed = 0
+    let disconnected = 0
+    class CountingResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {
+        constructed += 1
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {
+        disconnected += 1
+      }
+    }
+    globalThis.ResizeObserver = CountingResizeObserver as unknown as typeof ResizeObserver
+
+    try {
+      await act(async () => {
+        root.render(<TruncatedSidebarLabel text="feature/short" />)
+      })
+      expect(constructed).toBe(1)
+
+      await act(async () => {
+        root.render(<TruncatedSidebarLabel text="fix/short" />)
+      })
+
+      expect(container.textContent).toBe('fix/short')
+      expect(constructed).toBe(1)
+      expect(disconnected).toBe(0)
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
 })

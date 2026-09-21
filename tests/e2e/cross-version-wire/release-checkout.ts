@@ -1,24 +1,18 @@
 import { execFileSync } from 'node:child_process'
+import { constants } from 'node:fs'
+import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { lock } from 'proper-lockfile'
 import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+  extractReleaseCheckoutTree,
+  scavengeReleaseCheckoutStaging
+} from './release-checkout-tree.ts'
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
-const CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
+const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
 
 // Bump when extraction or the alias rewrite changes so cached trees are rebuilt.
-const CHECKOUT_FORMAT = 1
-
-// Why: the wire endpoints only need the runtime RPC host, the renderer client, and
-// the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
-const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
+const CHECKOUT_FORMAT = 3
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
 const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
@@ -32,6 +26,56 @@ export type ReleaseCheckout = {
   label: string
   /** Absolute path to the extracted checkout root (contains `src/`). */
   root: string
+}
+
+export type MaterializeReleaseCheckoutOptions = {
+  cacheRoot?: string
+  /** Test-only lifecycle seams; production callers must use the defaults. */
+  testHooks?: MaterializeReleaseCheckoutTestHooks
+}
+
+export type CheckoutLockOptions = {
+  realpath: false
+  stale: number
+  update: number
+  retries: {
+    retries: number
+    factor: number
+    minTimeout: number
+    maxTimeout: number
+    randomize: boolean
+  }
+}
+
+type CheckoutLockRelease = () => Promise<void>
+type AcquireCheckoutLock = (
+  root: string,
+  options: CheckoutLockOptions
+) => Promise<CheckoutLockRelease>
+
+export type CheckoutLifecycleContext = {
+  root: string
+  stagingPrefix: string
+}
+
+export type CheckoutStagingContext = CheckoutLifecycleContext & {
+  staging: string
+}
+
+export type MaterializeReleaseCheckoutTestHooks = {
+  lockOptions?: CheckoutLockOptions
+  acquireLock?: AcquireCheckoutLock
+  onLockAttempt?: (context: CheckoutLifecycleContext) => void
+  onLockAcquired?: (context: CheckoutLifecycleContext) => void | Promise<void>
+  onStagingCreated?: (context: CheckoutStagingContext) => void | Promise<void>
+  populateStaging?: (context: CheckoutStagingContext) => Promise<void>
+}
+
+const DEFAULT_LOCK_OPTIONS: CheckoutLockOptions = {
+  realpath: false,
+  stale: 60_000,
+  update: 10_000,
+  retries: { retries: 480, factor: 1, minTimeout: 250, maxTimeout: 250, randomize: true }
 }
 
 function git(args: string[]): string {
@@ -112,130 +156,142 @@ function resolveCommit(ref: string): string {
   }
 }
 
-function isRewritableSource(name: string): boolean {
-  return name.endsWith('.ts') || name.endsWith('.tsx')
-}
-
-function isTestSource(name: string): boolean {
-  return /\.(test|bench|spec)\.(ts|tsx)$/.test(name)
-}
-
-const ALIAS_SPECIFIER =
-  /(\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(['"])@(renderer)?\/([^'"]+)\2/g
-
-/**
- * The extracted tree is imported directly, so `@/…` must resolve inside that tree.
- * Vite's alias is global and points at the working tree, which would silently run
- * current renderer code inside the "old" client. Rewrite to relative paths instead.
- */
-function rewriteRendererAliases(file: string, rendererRoot: string): boolean {
-  const source = readFileSync(file, 'utf8')
-  if (!source.includes("'@/") && !source.includes('"@/') && !source.includes('@renderer/')) {
-    return false
-  }
-  const rewritten = source.replace(
-    ALIAS_SPECIFIER,
-    (_match, keyword: string, quote: string, _renderer: string | undefined, target: string) => {
-      const absolute = join(rendererRoot, target)
-      let relativePath = relative(dirname(file), absolute).split('\\').join('/')
-      if (!relativePath.startsWith('.')) {
-        relativePath = `./${relativePath}`
-      }
-      return `${keyword}${quote}${relativePath}${quote}`
-    }
-  )
-  if (rewritten === source) {
-    return false
-  }
-  writeFileSync(file, rewritten)
-  return true
-}
-
-function prepareExtractedTree(root: string): { rewritten: number; pruned: number } {
-  const rendererRoot = join(root, 'src', 'renderer', 'src')
-  let rewritten = 0
-  let pruned = 0
-  const walk = (directory: string): void => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const full = join(directory, entry.name)
-      if (entry.isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!entry.isFile()) {
-        continue
-      }
-      // Why: the old tree is imported, never collected. Dropping its tests keeps the
-      // cache small and keeps stale specs out of every repo-wide tool's file walk.
-      if (isTestSource(entry.name)) {
-        rmSync(full)
-        pruned++
-        continue
-      }
-      if (isRewritableSource(entry.name) && rewriteRendererAliases(full, rendererRoot)) {
-        rewritten++
-      }
-    }
-  }
-  walk(join(root, 'src'))
-  return { rewritten, pruned }
-}
-
 type CheckoutStamp = { commit: string; format: number }
 
-function readStamp(root: string): CheckoutStamp | null {
+async function readStamp(root: string): Promise<CheckoutStamp | null> {
   try {
-    return JSON.parse(readFileSync(join(root, 'checkout-stamp.json'), 'utf8')) as CheckoutStamp
+    return JSON.parse(await readFile(join(root, 'checkout-stamp.json'), 'utf8')) as CheckoutStamp
   } catch {
     return null
   }
+}
+
+async function checkoutMatches(root: string, commit: string): Promise<boolean> {
+  const stamp = await readStamp(root)
+  return stamp?.commit === commit && stamp.format === CHECKOUT_FORMAT
+}
+
+async function assertCheckoutWireSurface(root: string, ref: string): Promise<void> {
+  try {
+    await access(join(root, 'src', 'shared', 'terminal-stream-protocol.ts'), constants.F_OK)
+  } catch {
+    throw new Error(
+      `Cross-version checkout for ${ref} is missing the terminal stream protocol; ` +
+        'the wire surface moved and the harness needs updating.'
+    )
+  }
+}
+
+function checkoutModulePath(checkout: ReleaseCheckout, rootRelativePath: string): string {
+  const fromRoot = rootRelativePath.replace(/^[/\\]+/, '')
+  const absolute = resolve(checkout.root, fromRoot)
+  const fromCheckout = relative(checkout.root, absolute)
+  if (
+    !fromRoot ||
+    fromCheckout === '..' ||
+    fromCheckout.startsWith(`..${sep}`) ||
+    isAbsolute(fromCheckout)
+  ) {
+    throw new Error(
+      `Cross-version module path must stay inside the release checkout: ${rootRelativePath}`
+    )
+  }
+  return absolute.split('\\').join('/')
+}
+
+/**
+ * Import a source module with `/src/...` anchored to the extracted release root.
+ *
+ * The specifier handed to `importModule` is a raw absolute forward-slash path,
+ * never a `file://` URL: CI vite-node resolves URL specifiers as root-relative
+ * ids and fails with `ERR_MODULE_NOT_FOUND` (run 33049571360). `importModule`
+ * is injectable only so tests can pin that contract deterministically.
+ */
+export function importReleaseCheckoutModule(
+  checkout: ReleaseCheckout,
+  rootRelativePath: string,
+  importModule: (specifier: string) => Promise<Record<string, unknown>> = (specifier) =>
+    import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
+): Promise<Record<string, unknown>> {
+  return importModule(checkoutModulePath(checkout, rootRelativePath))
 }
 
 /**
  * Extract `src/` at `ref` into a cached, gitignored checkout the test can import.
  * Cached by resolved commit, so a moved tag or a bumped rewrite format re-extracts.
  */
-export function materializeReleaseCheckout(ref: string): ReleaseCheckout {
+export async function materializeReleaseCheckout(
+  ref: string,
+  options: MaterializeReleaseCheckoutOptions = {}
+): Promise<ReleaseCheckout> {
   const commit = resolveCommit(ref)
   const label = ref.replace(/[^A-Za-z0-9._-]/g, '_')
-  const root = join(CACHE_ROOT, label)
-  const stamp = readStamp(root)
-  if (stamp?.commit === commit && stamp.format === CHECKOUT_FORMAT) {
+  const cacheRoot = options.cacheRoot ?? DEFAULT_CACHE_ROOT
+  const root = join(cacheRoot, label, `${commit}-format-${CHECKOUT_FORMAT}`)
+  if (await checkoutMatches(root, commit)) {
     return { ref, commit, label, root }
   }
 
-  mkdirSync(CACHE_ROOT, { recursive: true })
-  const staging = join(CACHE_ROOT, `.staging-${label}-${process.pid}`)
-  rmSync(staging, { recursive: true, force: true })
-  mkdirSync(staging, { recursive: true })
+  const stagingPrefix = `.staging-${commit}-format-${CHECKOUT_FORMAT}-`
+  const lifecycleContext = { root, stagingPrefix }
+  const hooks = options.testHooks
+  const lockOptions = hooks?.lockOptions ?? DEFAULT_LOCK_OPTIONS
+  const acquireLock: AcquireCheckoutLock =
+    hooks?.acquireLock ?? ((target, value) => lock(target, value))
+  await mkdir(dirname(root), { recursive: true })
+  let releaseLock: CheckoutLockRelease | undefined
   try {
-    // `git archive | tar -x` keeps the extraction independent of the working tree,
-    // so an injected violation in the working tree cannot leak into the old side.
-    execFileSync(
-      'sh',
-      ['-c', `git archive ${commit} ${ARCHIVE_PATHS.join(' ')} | tar -x -C "${staging}"`],
-      { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'pipe'] }
-    )
-    prepareExtractedTree(staging)
-    writeFileSync(
+    const acquiring = acquireLock(root, lockOptions)
+    try {
+      hooks?.onLockAttempt?.(lifecycleContext)
+    } catch (error) {
+      await acquiring.then(
+        async (release) => release(),
+        () => undefined
+      )
+      throw error
+    }
+    releaseLock = await acquiring
+  } catch (error) {
+    if (await checkoutMatches(root, commit)) {
+      return { ref, commit, label, root }
+    }
+    throw new Error(`Cross-version harness could not lock ${ref} (${commit}): ${String(error)}`)
+  }
+
+  let staging: string | undefined
+  try {
+    await hooks?.onLockAcquired?.(lifecycleContext)
+    if (await checkoutMatches(root, commit)) {
+      return { ref, commit, label, root }
+    }
+    await scavengeReleaseCheckoutStaging(dirname(root), stagingPrefix)
+    staging = await mkdtemp(join(dirname(root), stagingPrefix))
+    const stagingContext = { ...lifecycleContext, staging }
+    await hooks?.onStagingCreated?.(stagingContext)
+    await (hooks?.populateStaging
+      ? hooks.populateStaging(stagingContext)
+      : extractReleaseCheckoutTree(REPO_ROOT, staging, commit))
+    await assertCheckoutWireSurface(staging, ref)
+    await writeFile(
       join(staging, 'checkout-stamp.json'),
       `${JSON.stringify({ commit, format: CHECKOUT_FORMAT } satisfies CheckoutStamp, null, 2)}\n`
     )
-    rmSync(root, { recursive: true, force: true })
-    renameSync(staging, root)
+    await rm(root, { recursive: true, force: true })
+    await rename(staging, root)
+    staging = undefined
   } catch (error) {
-    rmSync(staging, { recursive: true, force: true })
-    if (readStamp(root)?.commit === commit) {
+    if (await checkoutMatches(root, commit)) {
       return { ref, commit, label, root }
     }
     throw new Error(`Cross-version harness failed to extract ${ref} (${commit}): ${String(error)}`)
+  } finally {
+    if (staging) {
+      await rm(staging, { recursive: true, force: true })
+    }
+    await releaseLock()
   }
 
-  if (!existsSync(join(root, 'src', 'shared', 'terminal-stream-protocol.ts'))) {
-    throw new Error(
-      `Cross-version checkout for ${ref} is missing the terminal stream protocol; ` +
-        'the wire surface moved and the harness needs updating.'
-    )
-  }
+  await assertCheckoutWireSurface(root, ref)
   return { ref, commit, label, root }
 }

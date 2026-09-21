@@ -29,6 +29,7 @@ describe('terminal subscribe mount replay', () => {
     let mounted = false
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       hasHeadlessTerminalState: vi.fn(() => mounted),
       requestRendererTerminalTabMount: vi.fn(() => true),
@@ -98,6 +99,7 @@ describe('terminal subscribe mount replay', () => {
     let serializeCalls = 0
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       hasHeadlessTerminalState: vi.fn(() => headlessPresent),
       requestRendererTerminalTabMount: vi.fn(() => true),
@@ -189,6 +191,7 @@ describe('terminal subscribe mount replay', () => {
     })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-delayed' }),
       hasHeadlessTerminalState: vi.fn(() => false),
       requestRendererTerminalTabMount: vi.fn(() => true),
@@ -289,6 +292,7 @@ describe('terminal subscribe mount replay', () => {
     })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue(null),
       waitForLeafPtyId: vi.fn(async () => {
         // A redraw may reach main before the PTY wait completes, but it does
@@ -368,6 +372,7 @@ describe('terminal subscribe mount replay', () => {
     let waitSignal: AbortSignal | undefined
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       hasHeadlessTerminalState: vi.fn(() => false),
       requestRendererTerminalTabMount: vi.fn(() => true),

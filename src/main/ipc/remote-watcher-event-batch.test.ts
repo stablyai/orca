@@ -182,13 +182,10 @@ describe('createRemoteWatcherEventBatch', () => {
 
     for (let i = 0; i < 3; i++) {
       batch.push(
-        Array.from(
-          { length: 50 },
-          (_unused, index): FsChangeEvent => ({
-            kind: 'update',
-            absolutePath: `${ROOT}/wave-${i}-${index}.ts`
-          })
-        )
+        Array.from({ length: 50 }, (_unused, index): FsChangeEvent => ({
+          kind: 'update',
+          absolutePath: `${ROOT}/wave-${i}-${index}.ts`
+        }))
       )
     }
     vi.advanceTimersByTime(150)

@@ -119,7 +119,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     transport.destroy?.()
   })
 
-  it('replays a claim before input typed during the subscribe round-trip', async () => {
+  it('replays a claim before separately framed input and query replies', async () => {
     vi.useFakeTimers()
     try {
       runtimeSubscribe.mockImplementation(
@@ -144,6 +144,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
       expect(transport.claimViewport?.(101, 33)).toBe(true)
       expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInputImmediate('\x1b[?1;2c')).toBe(true)
+      expect(transport.sendInput('z')).toBe(true)
       await vi.advanceTimersByTimeAsync(8)
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.send' })
@@ -158,9 +160,18 @@ describe('createRemoteRuntimePtyTransport', () => {
           TerminalStreamOpcode.Subscribe,
           TerminalStreamOpcode.ClaimViewport,
           TerminalStreamOpcode.Resize,
+          TerminalStreamOpcode.Input,
+          TerminalStreamOpcode.Input,
           TerminalStreamOpcode.Input
         ])
       })
+      // Query replies must stay their own frames: concatenating them with keystrokes
+      // produces a mixed payload the host classifier cannot recognise as a reply.
+      const input = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      expect(input).toEqual(['x', '\x1b[?1;2c', 'z'])
       transport.destroy?.()
     } finally {
       vi.useRealTimers()
@@ -622,5 +633,43 @@ describe('createRemoteRuntimePtyTransport', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+  it('bounds query replies buffered during a viewport claim', async () => {
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+    for (let index = 0; index < 10_000; index += 1) {
+      expect(transport.sendInputImmediate(`\x1b[?${index};2c`)).toBe(true)
+    }
+
+    emitMultiplexReady()
+    await vi.waitFor(() => {
+      const input = subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      expect(input).toHaveLength(64)
+      expect(input.at(0)).toBe('\x1b[?9936;2c')
+      expect(input.at(-1)).toBe('\x1b[?9999;2c')
+    })
+    transport.destroy?.()
   })
 })

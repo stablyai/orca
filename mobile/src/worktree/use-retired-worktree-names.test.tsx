@@ -6,7 +6,10 @@ import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
 } from '../../../src/shared/worktree/retired-name-registry'
-import { useRetiredWorktreeNames } from './use-retired-worktree-names'
+import {
+  buildRetiredWorktreeNamesRefreshKey,
+  useRetiredWorktreeNames
+} from './use-retired-worktree-names'
 
 type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
 
@@ -66,6 +69,22 @@ function mountNames() {
 }
 
 describe('useRetiredWorktreeNames', () => {
+  it('builds a stable refresh key without copied-array methods or input mutation', () => {
+    const paths = ['/repo/zebra', '/repo/antelope']
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted')
+    Reflect.deleteProperty(Array.prototype, 'toSorted')
+
+    try {
+      expect(buildRetiredWorktreeNamesRefreshKey(paths)).toBe('/repo/antelope\0/repo/zebra')
+      expect(buildRetiredWorktreeNamesRefreshKey(undefined)).toBe('')
+      expect(paths).toEqual(['/repo/zebra', '/repo/antelope'])
+    } finally {
+      if (descriptor) {
+        Reflect.defineProperty(Array.prototype, 'toSorted', descriptor)
+      }
+    }
+  })
+
   it('reads the selected repo out of the response envelope', async () => {
     const probe = mountNames()
     expect(probe.requests[0]).toEqual({

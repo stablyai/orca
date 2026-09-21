@@ -51,8 +51,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -143,8 +143,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -237,8 +237,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -302,8 +302,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -341,6 +341,64 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
+  it('suppresses auto-repeat workspace deletes from before-input-event', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const isDarwin = process.platform === 'darwin'
+    const input = {
+      type: 'keyDown',
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: true
+    }
+    windowHandlers['before-input-event']({ preventDefault: vi.fn() } as never, input)
+    expect(webContents.send).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
+
+    webContents.send.mockClear()
+    const repeatPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: repeatPreventDefault } as never, {
+      ...input,
+      isAutoRepeat: true
+    })
+
+    expect(repeatPreventDefault).toHaveBeenCalledOnce()
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
   it('lets Terminal-first pass risky app shortcuts through when terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -366,8 +424,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -428,8 +486,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -507,8 +565,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -572,8 +630,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -624,7 +682,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
   })
 
-  it('forwards the configured workspace delete shortcut while terminal input is focused', () => {
+  it('forwards the default workspace delete shortcut while terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -649,8 +707,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -662,7 +720,7 @@ describe('createMainWindow', () => {
         getSettings: () => ({ terminalShortcutPolicy: 'terminal-first' })
       } as never,
       {
-        getKeybindings: () => ({ 'workspace.delete': ['Mod+Shift+Backspace'] })
+        getKeybindings: () => ({})
       }
     )
 
@@ -719,8 +777,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance

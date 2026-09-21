@@ -424,6 +424,108 @@ describe('setActiveWorktree', () => {
     expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
   })
 
+  it('uses unified MRU selection when closing an active browser tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com')
+    store.getState().createBrowserTab(wt, 'https://neighbor.example.com')
+    const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')
+    store.getState().setActiveBrowserTab(previous.id)
+    store.getState().setActiveBrowserTab(closing.id)
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(store.getState().activeBrowserTabId).toBe(previous.id)
+    expect(store.getState().activeBrowserTabIdByWorktree[wt]).toBe(previous.id)
+  })
+
+  it('keeps the unified MRU target when closing the last browser tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().createTab(wt)
+    const previous = store.getState().createTab(wt)
+    const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(store.getState().activeTabId).toBe(previous.id)
+    expect(store.getState().activeTabType).toBe('terminal')
+  })
+
+  it('keeps a valid browser target for an inactive worktree after close', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/path/active'
+    const backgroundWt = 'repo1::/path/background'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: activeWt, repoId: 'repo1', path: '/path/active' }),
+          makeWorktree({ id: backgroundWt, repoId: 'repo1', path: '/path/background' })
+        ]
+      },
+      activeWorktreeId: activeWt
+    })
+
+    const previous = store
+      .getState()
+      .createBrowserTab(backgroundWt, 'https://previous.example.com', {
+        activate: false
+      })
+    const closing = store.getState().createBrowserTab(backgroundWt, 'https://closing.example.com', {
+      activate: false
+    })
+    store.setState({ activeBrowserTabIdByWorktree: { [backgroundWt]: closing.id } })
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(store.getState().activeBrowserTabIdByWorktree[backgroundWt]).toBe(previous.id)
+  })
+
+  it('keeps the global browser target when closing a legacy tab without a unified wrapper', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com', {
+      activate: false
+    })
+    const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com', {
+      activate: false
+    })
+    store.setState({
+      unifiedTabsByWorktree: {},
+      activeBrowserTabId: closing.id,
+      activeBrowserTabIdByWorktree: { [wt]: closing.id }
+    })
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(store.getState().activeBrowserTabId).toBe(previous.id)
+  })
+
   it('queues and consumes a one-shot address-bar focus request for a fresh blank browser tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

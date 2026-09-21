@@ -26,7 +26,6 @@ const {
   (await import('./daemon-init-test-harness')).createDaemonInitMocks()
 )
 
-vi.mock('electron', () => moduleFactories.electron())
 vi.mock('fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
@@ -303,6 +302,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const unreachableClient = function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {
+          throw new Error('connect ENOENT')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
           throw new Error('connect ENOENT')
         }),
         request: vi.fn(),

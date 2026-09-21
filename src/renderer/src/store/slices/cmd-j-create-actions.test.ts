@@ -85,7 +85,8 @@ describe('Cmd+J lifted creation actions', () => {
       worktreeId: 'wt-1',
       environmentId: 'runtime-1',
       url: 'about:blank',
-      targetGroupId: 'group-1'
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1'
     })
     expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
@@ -118,7 +119,8 @@ describe('Cmd+J lifted creation actions', () => {
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
       url: 'about:blank',
-      targetGroupId: 'group-1'
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1'
     })
     // Remote-owned: no local fallback even when the remote create fails.
     expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])

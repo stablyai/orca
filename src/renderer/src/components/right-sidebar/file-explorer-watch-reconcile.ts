@@ -68,7 +68,9 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
 
   const dirsToRefresh = new Set<string>()
   const childPathIndexes = new Map<string, Set<string>>()
-  const cachePathIndex = createCachedDirPathIndex(cache)
+  let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
+  const cachePathIndex = (): ReadonlyMap<string, string> =>
+    (cachedDirPathIndex ??= createCachedDirPathIndex(cache))
   const cachedDirsToPurge = new Set<string>()
   const reconciledRenameSources = new Set<string>()
   let needsFullRefresh = false

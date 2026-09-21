@@ -23,9 +23,9 @@ const EMPTY_EVIDENCE: WorkspaceCleanupGitEvidenceState = {
 }
 
 /**
- * Fills in git evidence the broad scan deferred with one targeted batch scan.
- * Only runs while a git-dependent filter or sort is active — the initial list
- * render never waits on it, so an unfiltered browse stays instant.
+ * Fills in git evidence the broad scan deferred with targeted batch scans.
+ * The initial list render never waits on these requests, so the browse stays
+ * responsive while each row transitions from an unknown status to its result.
  */
 export function useWorkspaceCleanupGitEvidence({
   enabled,

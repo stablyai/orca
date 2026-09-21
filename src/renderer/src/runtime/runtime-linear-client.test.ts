@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  linearListIssues,
+  linearSearchIssues,
+  linearSelectWorkspace,
+  linearStatus
+} from './runtime-linear-client'
+import {
   linearCreateIssue,
-  linearCreateProject,
   linearCreateSubIssue,
+  linearUpdateIssue
+} from './runtime-linear-issue-mutations'
+import {
+  linearCreateProject,
   linearGetCustomView,
   linearGetProject,
   linearListCustomViewIssues,
@@ -10,13 +19,8 @@ import {
   linearListCustomViews,
   linearListProjectIssues,
   linearListProjects,
-  linearListTeams,
-  linearListIssues,
-  linearSearchIssues,
-  linearSelectWorkspace,
-  linearStatus,
-  linearUpdateIssue
-} from './runtime-linear-client'
+  linearListTeams
+} from './runtime-linear-project-client'
 import {
   createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,

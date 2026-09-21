@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
-vi.mock('./ipc/ssh', () => ({
+vi.mock('./ssh/ssh-target-registry', () => ({
   getActiveMultiplexer: mocks.getActiveMultiplexer
 }))
 

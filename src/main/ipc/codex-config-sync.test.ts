@@ -21,6 +21,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
+import { getCodexSettingsBaselinePath } from '../codex/config-settings-baseline'
 
 let root: string
 
@@ -76,6 +77,22 @@ describe('codexConfigSync:status handler', () => {
       state: 'synced',
       reason: null,
       systemConfigPath: join(root, '.codex', 'config.toml')
+    })
+  })
+
+  it('reports a stall when the selected home baseline cannot be read', () => {
+    const perAccountHome = join(root, 'codex-accounts', 'acct-1', 'home')
+    mkdirSync(perAccountHome, { recursive: true })
+    writeFileSync(join(perAccountHome, 'config.toml'), 'model = "runtime-model"\n', 'utf-8')
+    writeFileSync(join(root, '.codex', 'config.toml'), 'model = "system-model"\n', 'utf-8')
+    const baselinePath = getCodexSettingsBaselinePath(perAccountHome)
+    mkdirSync(baselinePath)
+
+    expect(invokeHandler(perAccountHome)).toEqual({
+      state: 'stalled',
+      reason: 'managed-home-unavailable',
+      systemConfigPath: join(root, '.codex', 'config.toml'),
+      managedStatePath: baselinePath
     })
   })
 

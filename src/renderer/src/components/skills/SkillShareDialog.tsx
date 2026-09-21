@@ -231,7 +231,12 @@ export function SkillShareDialog({
     } catch {
       cancellationRequested.current = false
       setCancelling(false)
-      setError('Orca could not send the cancellation request. The upload may still finish.')
+      setError(
+        translate(
+          'auto.components.skills.SkillShareDialog.cancelRequestFailed',
+          'Orca could not send the cancellation request. The upload may still finish.'
+        )
+      )
     }
   }
 

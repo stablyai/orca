@@ -19,6 +19,10 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
+}))
+
 type CarrierBehavior =
   // Carrier silently drops the SYN to a LAN/CGNAT destination: the socket sits
   // CONNECTING until the client's 12s connect timeout fires.

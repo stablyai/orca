@@ -3,6 +3,7 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from './terminal-link-activation'
+import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64
@@ -17,26 +18,16 @@ export type TerminalLinkPtyMouseSuppression = IDisposable & {
   handlePtyInput: (data: string, forward: (data: string) => void) => void
 }
 
-function isXtermMouseReport(data: string): boolean {
-  return (
-    (data.startsWith('\x1b[M') && data.length === 6) ||
-    (data.startsWith('\x1b[<') && /^\d+;\d+;\d+[Mm]$/.test(data.slice(3)))
-  )
-}
-
 export function installTerminalLinkPtyMouseSuppression(
   terminal: Terminal,
   shouldSuppressMouseEvent: (event: MouseEvent) => boolean,
   shouldDeferPlainMouseEvent: (event: MouseEvent) => boolean = () => false,
-  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true,
-  // Why a getter, not a snapshot: applyTerminalAppearance owns this option and can
-  // rewrite it mid-gesture, so restoring a saved value would strand the pane.
-  getMouseEventsRequireAlt: () => boolean = () => false
+  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true
 ): TerminalLinkPtyMouseSuppression {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
-  let suppressing = false
+  let previousMouseEventsRequireAlt: boolean | null = null
   let restoreQueued = false
   let deferredPtyInput: DeferredPtyInput[] | null = null
   let capturesPtyInput = false
@@ -46,16 +37,16 @@ export function installTerminalLinkPtyMouseSuppression(
 
   const restore = (): void => {
     restoreQueued = false
-    if (!suppressing) {
+    if (previousMouseEventsRequireAlt === null) {
       return
     }
-    terminal.options.mouseEventsRequireAlt = getMouseEventsRequireAlt()
-    suppressing = false
+    terminal.options.mouseEventsRequireAlt = previousMouseEventsRequireAlt
+    previousMouseEventsRequireAlt = null
     ownerDocument?.removeEventListener('mouseup', queueRestore)
     ownerWindow?.removeEventListener('blur', restore)
   }
   const queueRestore = (): void => {
-    if (restoreQueued || !suppressing) {
+    if (restoreQueued || previousMouseEventsRequireAlt === null) {
       return
     }
     restoreQueued = true
@@ -93,7 +84,7 @@ export function installTerminalLinkPtyMouseSuppression(
       return
     }
     restore()
-    suppressing = true
+    previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
     // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
     terminal.options.mouseEventsRequireAlt = true
     ownerDocument?.addEventListener('mouseup', queueRestore)

@@ -19,6 +19,37 @@ const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 const GROK_ROOT = join(HOME, '.grok', 'sessions')
 
 describe('validateAiVaultSessionDeleteTarget', () => {
+  it('allows a canonical Cline manifest and removes its whole session directory', () => {
+    const root = join('/tmp', 'cline-sessions')
+    const sessionId = '1786466194549_xrzrl'
+    const sessionDir = join(root, sessionId)
+    const result = validateAiVaultSessionDeleteTarget({
+      agent: 'cline',
+      filePath: join(sessionDir, `${sessionId}.json`),
+      executionHostId: 'local',
+      rootOptions: { clineSessionsDir: root }
+    })
+
+    expect(result).toMatchObject({
+      allowed: true,
+      agent: 'cline',
+      removals: [{ path: sessionDir, kind: 'directory' }]
+    })
+  })
+
+  it('rejects a Cline messages companion as an undiscoverable delete target', () => {
+    const root = join('/tmp', 'cline-sessions')
+    const sessionId = '1786466194549_xrzrl'
+    const result = validateAiVaultSessionDeleteTarget({
+      agent: 'cline',
+      filePath: join(root, sessionId, `${sessionId}.messages.json`),
+      executionHostId: 'local',
+      rootOptions: { clineSessionsDir: root }
+    })
+
+    expect(result).toEqual({ allowed: false, agent: 'cline', reason: 'undiscoverable-path' })
+  })
+
   it('allows a supported agent whose file resolves inside its known root', () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'gemini',

@@ -54,6 +54,23 @@ import {
   updateMRReviewers
 } from './client'
 import { resetGitLabMrMocks } from './client-mr-test-harness'
+import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
+
+describe('stripGitLabDraftTitlePrefix', () => {
+  it.each([
+    ['Draft: Ship it', 'Ship it'],
+    ['wip:   Ship it', 'Ship it'],
+    ['[Draft] Ship it', 'Ship it'],
+    ['(WIP)Ship it', 'Ship it'],
+    ['Draft - Ship it', 'Ship it']
+  ])('strips a GitLab draft marker from %s', (title, expected) => {
+    expect(stripGitLabDraftTitlePrefix(title)).toBe(expected)
+  })
+
+  it('leaves markerless titles unchanged', () => {
+    expect(stripGitLabDraftTitlePrefix('Ship it')).toBeNull()
+  })
+})
 
 describe('gitlab client — MR operations', () => {
   beforeEach(() => {
@@ -209,6 +226,58 @@ describe('gitlab client — MR operations', () => {
         ],
         {}
       )
+    })
+
+    it('fetches the current title before marking a merge request ready', async () => {
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({ stdout: JSON.stringify({ title: 'Draft: Fresh title' }) })
+        .mockResolvedValueOnce({ stdout: '{}' })
+
+      await expect(
+        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
+      ).resolves.toEqual({ ok: true })
+
+      expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(
+        1,
+        ['api', '--hostname', 'git.internal', 'projects/g%2Fp/merge_requests/12'],
+        {}
+      )
+      expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(
+        2,
+        [
+          'api',
+          '--hostname',
+          'git.internal',
+          '-X',
+          'PUT',
+          'projects/g%2Fp/merge_requests/12',
+          '-f',
+          'title=Fresh title'
+        ],
+        {}
+      )
+    })
+
+    it('treats a freshly markerless title as already ready', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ title: 'Fresh title' })
+      })
+
+      await expect(
+        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
+      ).resolves.toEqual({ ok: true })
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects a draft marker that would leave an empty title', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify({ title: 'Draft:' }) })
+
+      await expect(
+        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
+      ).resolves.toEqual({ ok: false, error: 'Title is required' })
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
   })
 

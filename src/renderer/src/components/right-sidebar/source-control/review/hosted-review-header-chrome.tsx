@@ -2,7 +2,7 @@ import React from 'react'
 import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
-import { PullRequestIcon } from '../../checks-panel-content'
+import { PullRequestIcon } from '../../checks-panel/check-presentation'
 
 function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {
@@ -43,7 +43,7 @@ export function HostedReviewIcon({
 }): React.JSX.Element {
   const providerIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = hostedReviewStateIcon(review) ?? providerIcon
-  return <Icon className={cn(className, hostedReviewStateClass(review))} />
+  return React.createElement(Icon, { className: cn(className, hostedReviewStateClass(review)) })
 }
 
 function hostedReviewLabel(review: HostedReviewInfo): string {

@@ -13,6 +13,7 @@ import {
   listAvailableWorkerTerminals,
   warnStaleDispatches
 } from './coordinator-task-dispatch'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../shared/nested-worker-depth'
 
 export type CoordinatorOptions = {
   spec: string
@@ -283,6 +284,8 @@ export class Coordinator {
           baseDrift,
           coordinatorHandle: this.opts.coordinatorHandle,
           worktree: this.opts.worktree,
+          nestedWorkerMaxDepth:
+            this.runtime.getNestedWorkerMaxDepth?.() ?? NESTED_WORKER_MAX_DEPTH_DEFAULT,
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })

@@ -189,6 +189,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         <SourceControlBranchSection
           branchSummary={branchSummary}
           filteredBranchEntries={filteredBranchEntries}
+          totalBranchEntryCount={branchEntries.length}
           collapsedSections={collapsedSections}
           toggleSection={toggleSection}
           sourceControlViewMode={sourceControlViewMode}

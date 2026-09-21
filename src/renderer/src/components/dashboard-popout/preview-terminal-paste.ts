@@ -9,6 +9,8 @@ import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/terminal-pa
 import { pasteTerminalText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 
+export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
+
 /**
  * Clipboard paste for the preview terminal, on the pane's coordinator: large
  * pastes stream as bounded IPC payloads, and the plan re-checks that the same
@@ -20,7 +22,7 @@ export function createPreviewClipboardPaster(deps: {
   getTerminal: () => Terminal | null
   getTerminalInput: () => DashboardCardTerminalInput | null
   isDisposed: () => boolean
-}): (activeElementAtDispatch: Element | null, source: 'keyboard' | 'app-menu') => Promise<void> {
+}): (activeElementAtDispatch: Element | null, source: PreviewTerminalPasteSource) => Promise<void> {
   return async (activeElementAtDispatch, source) => {
     let text: string
     try {

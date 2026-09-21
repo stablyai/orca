@@ -50,7 +50,8 @@ function createRuntimeCommands(): RuntimeFileCommands {
   return new RuntimeFileCommands({
     requireStore: () => store,
     resolveRuntimeFileTarget: async () => ({
-      worktree: { id: 'wt-1', repoId: 'repo-1', path: REPO_PATH }
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: REPO_PATH },
+      executionHostId: 'local'
     })
   } as never)
 }

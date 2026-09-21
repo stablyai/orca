@@ -33,7 +33,7 @@ import { CodexHookService } from './hook-service'
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 describe('CodexHookService', () => {
-  it('removes managed trust entries when userData resolves through a symlink', () => {
+  it('removes managed trust entries when userData resolves through a symlink', async () => {
     const linkedUserDataDir = join(homes.tmpHome, 'linked-user-data')
     symlinkSync(
       homes.userDataDir,
@@ -43,14 +43,14 @@ describe('CodexHookService', () => {
     process.env.ORCA_USER_DATA_PATH = linkedUserDataDir
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const linkedManagedCodexHome = join(linkedUserDataDir, 'codex-runtime-home', 'home')
     const linkedHooksPath = join(linkedManagedCodexHome, 'hooks.json')
     let runtimeToml = readFileSync(join(linkedManagedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${linkedHooksPath}:permission_request:0:0`))
 
-    const status = service.remove()
+    const status = await service.remove()
 
     expect(status.state).toBe('not_installed')
     runtimeToml = readFileSync(join(linkedManagedCodexHome, 'config.toml'), 'utf-8')
@@ -58,9 +58,9 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(':stop:0:0')
   })
 
-  it('removes legacy managed trust entries hashed before hook timeouts existed', () => {
+  it('removes legacy managed trust entries hashed before hook timeouts existed', async () => {
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -88,13 +88,13 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(service.remove().state).toBe('not_installed')
+    expect((await service.remove()).state).toBe('not_installed')
 
     const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(runtimeToml).not.toContain(':permission_request:0:0')
   })
 
-  it('mirrors system Codex config while preserving runtime hook trust on hook install', () => {
+  it('mirrors system Codex config while preserving runtime hook trust on hook install', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
@@ -114,7 +114,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    const status = new CodexHookService().install()
+    const status = await new CodexHookService().install()
 
     expect(status.state).toBe('installed')
     const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
@@ -128,9 +128,9 @@ describe('CodexHookService', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'treats legacy forward-slash runtime trust keys as installed before canonicalizing on reinstall',
-    () => {
+    async () => {
       const service = new CodexHookService()
-      expect(service.install().state).toBe('installed')
+      expect((await service.install()).state).toBe('installed')
 
       const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
       const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -154,7 +154,7 @@ describe('CodexHookService', () => {
       expect(legacyToml).toContain(legacyPermissionHeader)
       expect(service.getStatus().state).toBe('installed')
 
-      expect(service.install().state).toBe('installed')
+      expect((await service.install()).state).toBe('installed')
 
       const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(repairedToml).not.toContain(legacyPermissionHeader)
@@ -163,13 +163,13 @@ describe('CodexHookService', () => {
     }
   )
 
-  it('repairs duplicate managed PermissionRequest trust tables on restart install', () => {
+  it('repairs duplicate managed PermissionRequest trust tables on restart install', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -209,7 +209,7 @@ describe('CodexHookService', () => {
 
     // Why: preserving `enabled = false` is the repair contract; status can be
     // partial because the user-disabled managed hook remains disabled.
-    expect(['installed', 'partial']).toContain(service.install().state)
+    expect(['installed', 'partial']).toContain((await service.install()).state)
 
     const repairedToml = readFileSync(runtimeTomlPath, 'utf-8')
     expect(repairedToml.split(permissionRequestHeader)).toHaveLength(2)
@@ -219,7 +219,7 @@ describe('CodexHookService', () => {
     expect(repairedToml).toContain('model = "system-model"')
   })
 
-  it('preserves runtime-only project trust while honoring system project untrust', () => {
+  it('preserves runtime-only project trust while honoring system project untrust', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(
@@ -247,7 +247,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    const status = new CodexHookService().install()
+    const status = await new CodexHookService().install()
 
     expect(status.state).toBe('installed')
     const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')

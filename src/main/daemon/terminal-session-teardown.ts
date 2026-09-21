@@ -1,7 +1,7 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { Session } from './session'
 
-type AgentTeardownOperation = {
+type TeardownOperation = {
   promise: Promise<void>
   immediate: boolean
   rootSignalled: boolean
@@ -9,15 +9,21 @@ type AgentTeardownOperation = {
   session: Session
 }
 
-/** Owns agent teardown by session id until descendant capture and root
- * signalling finish, even when the root exits and its Session is reaped. */
+/** Owns teardown by session id until descendant capture and root signalling
+ * finish, even when the root exits and its Session is reaped. */
 export class TerminalSessionTeardown {
-  private operations = new Map<string, AgentTeardownOperation>()
+  private operations = new Map<string, TeardownOperation>()
 
   constructor(private sessions: ReadonlyMap<string, Session>) {}
 
   get(sessionId: string): Promise<void> | undefined {
     return this.operations.get(sessionId)?.promise
+  }
+
+  /** Resolves once this id's tracked teardown has released the process — a rejected teardown
+   *  released it too. Callers re-read session state afterwards and decide for themselves. */
+  async settle(sessionId: string): Promise<void> {
+    await this.operations.get(sessionId)?.promise.catch(() => {})
   }
 
   requestImmediate(sessionId: string): Promise<void> | undefined {
@@ -38,9 +44,40 @@ export class TerminalSessionTeardown {
       return this.killAgentSession(sessionId, session, immediate)
     }
     if (immediate) {
-      return this.forceKillPlainShellSession(sessionId, session)
+      // Why tracked like the agent path: this claims termination on the Session and then awaits
+      // an OS probe and taskkill, and a create landing inside that window must be able to wait it
+      // out rather than be told the id is absent (#18046).
+      return this.track(sessionId, session, immediate, () =>
+        this.forceKillPlainShellSession(sessionId, session)
+      )
     }
     session.kill()
+  }
+
+  /** Publishes an operation for `sessionId` and retires it once the teardown settles. */
+  private track(
+    sessionId: string,
+    session: Session,
+    immediate: boolean,
+    run: (entry: TeardownOperation) => Promise<void>
+  ): Promise<void> {
+    const entry: TeardownOperation = {
+      promise: Promise.resolve(),
+      immediate,
+      rootSignalled: false,
+      rootCompletion: Promise.resolve(),
+      session
+    }
+    const operation = run(entry)
+    entry.promise = operation
+    this.operations.set(sessionId, entry)
+    const clearOperation = (): void => {
+      if (this.operations.get(sessionId) === entry) {
+        this.operations.delete(sessionId)
+      }
+    }
+    void operation.then(clearOperation, clearOperation)
+    return operation
   }
 
   /**
@@ -60,7 +97,8 @@ export class TerminalSessionTeardown {
       session.beginTermination()
       await killWithDescendantSweep(session.pid, () => {}, {
         // Why: the descendant tree is only ours while this Session still owns the live root PID.
-        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive
+        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
+        terminateOwnedTree: () => session.terminateOwnedTree()
       })
     }
     await session.forceKillAndWaitForExit()
@@ -91,47 +129,34 @@ export class TerminalSessionTeardown {
       session.scheduleForceDisposeFallback()
     }
 
-    const entry: AgentTeardownOperation = {
-      promise: Promise.resolve(),
-      immediate,
-      rootSignalled: false,
-      rootCompletion: Promise.resolve(),
-      session
-    }
-    const sweep = Promise.resolve(
-      killWithDescendantSweep(
-        session.pid,
-        () => {
-          // Why: natural exit reaps the PID while ps is running. Never signal that
-          // stale numeric PID after the Session no longer represents a live root.
-          if (!session.isAlive) {
-            return
+    return this.track(sessionId, session, immediate, (entry) => {
+      const sweep = Promise.resolve(
+        killWithDescendantSweep(
+          session.pid,
+          () => {
+            // Why: natural exit reaps the PID while ps is running. Never signal that
+            // stale numeric PID after the Session no longer represents a live root.
+            if (!session.isAlive) {
+              return
+            }
+            entry.rootSignalled = true
+            if (entry.immediate) {
+              entry.rootCompletion = session.forceKillAndWaitForExit()
+            } else {
+              session.signalTerminationRoot()
+            }
+          },
+          {
+            // Why: the descendant rows are only authoritative while this exact
+            // Session still owns the root PID captured by ps.
+            ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
+            terminateOwnedTree: () => session.terminateOwnedTree()
           }
-          entry.rootSignalled = true
-          if (entry.immediate) {
-            entry.rootCompletion = session.forceKillAndWaitForExit()
-          } else {
-            session.signalTerminationRoot()
-          }
-        },
-        {
-          // Why: the descendant rows are only authoritative while this exact
-          // Session still owns the root PID captured by ps.
-          ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive
-        }
+        )
       )
-    )
-    // Why: descendant capture completion only proves signals were requested;
-    // destructive callers must retain the native owner until OS-confirmed exit.
-    const operation = sweep.then(() => entry.rootCompletion)
-    entry.promise = operation
-    this.operations.set(sessionId, entry)
-    const clearOperation = (): void => {
-      if (this.operations.get(sessionId) === entry) {
-        this.operations.delete(sessionId)
-      }
-    }
-    void operation.then(clearOperation, clearOperation)
-    return operation
+      // Why: descendant capture completion only proves signals were requested;
+      // destructive callers must retain the native owner until OS-confirmed exit.
+      return sweep.then(() => entry.rootCompletion)
+    })
   }
 }

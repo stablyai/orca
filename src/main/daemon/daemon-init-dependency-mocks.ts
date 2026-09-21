@@ -17,10 +17,7 @@ export type { MockAdapter, MockSpawner } from './daemon-init-mock-types'
 /** The module objects each test file's own hoisted `vi.mock` factories return. */
 export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   const {
-    getPathMock,
-    getAppPathMock,
     forkMock,
-    isPackagedMock,
     probeSocketExistsMock,
     writeFileSyncMock,
     readFileSyncMock,
@@ -53,7 +50,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
     trackDaemonReplacedMock,
-    trackDaemonRetiredMock
+    trackDaemonRetiredMock,
+    trackDaemonAdoptedMock
   } = state
 
   // Why: both fakes are annotated with constructor types so the exported factories widen to
@@ -62,6 +60,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly launcher: unknown
     readonly ensureRunning: Mock
     readonly resetHandle: Mock
+    readonly resetRespawnWindow: Mock
     readonly shutdown: Mock
     readonly getHandle: Mock
     private socketCounter: number
@@ -84,6 +83,9 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
           if (result.mode) {
             this.handle.mode = result.mode
           }
+          if (result.adopted) {
+            this.handle.adopted = true
+          }
           return {
             socketPath: result.socketPath,
             tokenPath: result.tokenPath
@@ -99,6 +101,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         }
       })
       this.resetHandle = vi.fn()
+      this.resetRespawnWindow = vi.fn()
       this.shutdown = vi.fn(async () => {})
       this.getHandle = vi.fn(() => this.handle)
       spawnerInstances.push(this as unknown as MockSpawner)
@@ -159,16 +162,6 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   }
 
   return {
-    electron: () => ({
-      app: {
-        get isPackaged() {
-          return isPackagedMock()
-        },
-        getPath: getPathMock,
-        getAppPath: getAppPathMock,
-        getVersion: () => '1.2.3'
-      }
-    }),
     fs: () => ({
       mkdirSync: vi.fn<(...args: unknown[]) => void>(),
       existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
@@ -209,6 +202,9 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     daemonLifecycleEvent: () => ({
       trackDaemonReplaced: trackDaemonReplacedMock,
       trackDaemonRetired: trackDaemonRetiredMock
+    }),
+    daemonAdoptionTelemetryEvent: () => ({
+      trackDaemonAdopted: trackDaemonAdoptedMock
     }),
     daemonSpawner: () => ({
       DaemonSpawner: MockDaemonSpawner,

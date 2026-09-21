@@ -25,6 +25,18 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
   return { body, headers }
 }
 
+/** A GitLab pagination header, or undefined when absent, unparseable, or below `minimum`. */
+export function parseGlabPaginationHeader(
+  value: string | undefined,
+  minimum: number
+): number | undefined {
+  if (!value) {
+    return undefined
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed >= minimum ? parsed : undefined
+}
+
 /** A non-list body carrying no GitLab error text — opaque data, so there is nothing to classify. */
 export class GlabNonListResponseError extends Error {}
 

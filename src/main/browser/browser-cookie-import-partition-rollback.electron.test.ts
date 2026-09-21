@@ -20,7 +20,6 @@ type CdpCookie = { name: string; value: string; partitionKey?: Record<string, un
 type FixtureResult = {
   beforePartitionKey: Record<string, unknown> | undefined
   clearError: string | null
-  bulkClearCalls: number
   remainingChips: CdpCookie[]
   remainingPlain: CdpCookie[]
   remainingExcluded: CdpCookie[]
@@ -35,7 +34,7 @@ function buildFixtureMain(bundlePath: string, resultPath: string): string {
   return `
 const { app, BrowserWindow, session } = require('electron')
 const { writeFileSync } = require('node:fs')
-const { openCookieClearStore, removeTransplantableCookies } = require(${JSON.stringify(bundlePath)})
+const { openCookieClearStore, removeTransplantableCookies, importedDomainScope } = require(${JSON.stringify(bundlePath)})
 const resultPath = ${JSON.stringify(resultPath)}
 let currentStep = 'starting'
 const mark = (step) => {
@@ -81,9 +80,8 @@ async function run() {
   await targetSession.cookies.set({ url: 'https://accounts.google.com/', name: 'SID', value: 'live', secure: true })
   mark('removable cookies set')
 
-  // Why: the bulk clear is the ordinary path now, so rejecting it routes this fixture onto
-  // the per-cookie fallback where a later removal can fail after earlier ones succeeded.
-  let bulkClearCalls = 0
+  // Why (STA-4797): the per-coordinate plan is the only removal path, so a rejection partway
+  // through it is exactly the failure this fixture needs — no bulk clear to force off first.
   const cookieClearStore = openCookieClearStore(targetSession)
   const clearSession = {
     cookies: {
@@ -93,17 +91,21 @@ async function run() {
         return targetSession.cookies.remove(url, name)
       }
     },
-    clearData: async () => {
-      bulkClearCalls++
-      throw new Error('forced bulk clear failure')
-    },
     snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
     restoreClearIdentities: (identities) => cookieClearStore.restoreClearIdentities(identities)
   }
+  // Why: the import these removals stand in for writes all three fixture domains, so all three
+  // are in scope. accounts.google.com stays out by policy, not by scope.
+  const importScope = importedDomainScope([
+    'app.acme-chips.test',
+    'plain.example',
+    'victim.example',
+    'accounts.google.com'
+  ])
 
   let clearError = null
   try {
-    await removeTransplantableCookies(clearSession)
+    await removeTransplantableCookies(clearSession, new Set(), importScope)
   } catch (error) {
     clearError = String(error?.message || error)
   } finally {
@@ -119,7 +121,6 @@ async function run() {
   writeFileSync(resultPath, JSON.stringify({
     beforePartitionKey: beforeChips.partitionKey,
     clearError,
-    bulkClearCalls,
     remainingChips: project('chips-auth'),
     remainingPlain: project('plain'),
     remainingExcluded: project('SID')
@@ -147,7 +148,8 @@ async function runFixture(): Promise<FixtureResult> {
     bundleEntryPath,
     [
       `export { openCookieClearStore } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-cookie-clear-store.ts'))}`,
-      `export { removeTransplantableCookies } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-cookie-import-clear.ts'))}`
+      `export { removeTransplantableCookies } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-cookie-import-clear.ts'))}`,
+      `export { importedDomainScope } from ${JSON.stringify(join(process.cwd(), 'src/main/browser/browser-cookie-import-policy.ts'))}`
     ].join('\n')
   )
   await buildVite({
@@ -191,7 +193,6 @@ describe('non-Google partitioned cookie under a failed Electron cookie clear', (
     const result = await runFixture()
 
     expect(result.beforePartitionKey).toEqual(EXPECTED_PARTITION_KEY)
-    expect(result.bulkClearCalls).toBe(1)
     expect(result.remainingExcluded.map(({ name }) => name)).toEqual(['SID'])
     expect(result.clearError).toContain('Could not clear existing cookies')
     expect(result.remainingChips).toEqual([

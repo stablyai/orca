@@ -23,8 +23,8 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     expect(entries).toHaveLength(1)
     const [entry] = entries
     expect(entry.title).toBe('MiniMax Usage')
-    expect(entry.description).toContain('platform.minimax.io')
     expect(entry.description.toLowerCase()).toContain('cookie')
+    expect(entry.description.toLowerCase()).toContain('api key')
   })
 
   it('exposes the keywords that drive the Settings search index', () => {

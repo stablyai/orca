@@ -247,4 +247,78 @@ describe('CandidateRow', () => {
     expect(container?.querySelector(`[aria-label="Select ${remoteName}"]`)).not.toBeNull()
     expect(container?.querySelector(`[aria-label="Host: builder"]`)).not.toBeNull()
   })
+
+  it('colors the review pill by state the way the PR page and item dialog do', () => {
+    const states = [
+      { state: 'merged' as const, label: 'PR #1', hue: 'purple' },
+      { state: 'closed' as const, label: 'PR #2', hue: 'rose' },
+      { state: 'open' as const, label: 'PR #3', hue: 'emerald' },
+      { state: 'draft' as const, label: 'PR #4', hue: 'slate' }
+    ]
+
+    for (const { state, label, hue } of states) {
+      const candidate = makeCandidate()
+
+      act(() => {
+        root?.render(
+          <CandidateRow
+            identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+            candidate={candidate}
+            expanded={false}
+            last
+            lastActivityLabel="1d ago"
+            reviewInfo={{
+              hasReview: true,
+              label,
+              provider: 'github',
+              state,
+              title: 'Some change'
+            }}
+            selected={false}
+            onIgnore={vi.fn()}
+            onRemove={vi.fn()}
+            onToggleExpanded={vi.fn()}
+            onToggleSelected={vi.fn()}
+            onView={vi.fn()}
+          />
+        )
+      })
+
+      const pill = container?.querySelector(`[aria-label*="${label}"]`)
+      expect(pill?.className).toContain(`text-${hue}-`)
+      expect(pill?.className).not.toContain('text-muted-foreground')
+    }
+  })
+
+  it('leaves a review with an unfetched state neutral', () => {
+    const candidate = makeCandidate()
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+          candidate={candidate}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          reviewInfo={{
+            hasReview: true,
+            label: 'PR #9',
+            provider: 'github',
+            state: 'unknown',
+            title: null
+          }}
+          selected={false}
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    const pill = container?.querySelector('[aria-label*="PR #9"]')
+    expect(pill?.className).toContain('text-muted-foreground')
+  })
 })

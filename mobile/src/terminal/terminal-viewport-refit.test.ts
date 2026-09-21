@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
+import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
@@ -13,10 +14,10 @@ import {
 } from './terminal-viewport-refit-state'
 
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
-const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
-  'utf8'
-)
+const sessionSource = [
+  readMobileSessionRouteSource('../session/use-mobile-session-keyboard-state.ts'),
+  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx')
+].join('\n')
 
 describe('terminal viewport refit', () => {
   it('refits when the window dimensions change (fold/unfold, rotation)', () => {

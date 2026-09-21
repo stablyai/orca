@@ -4,6 +4,10 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import {
+  clineMessagesPathForMetadata,
+  isClineSessionMetadataPath
+} from './session-scanner-cline-parser'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -40,6 +44,8 @@ const DEVIN_TRANSCRIPTS_DIR = join(
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
+const CLINE_SESSIONS_DIR =
+  process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
 
 /**
  * Where one agent's session files live and which of them count as sessions.
@@ -55,6 +61,8 @@ export type AiVaultAgentSource = {
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
+  // A sibling whose stat participates in candidate freshness and recency.
+  contentDependencyPath?: (filePath: string) => string
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
   // Roots that are alternates for one install rather than distinct locations,
@@ -220,6 +228,19 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ])
     ],
     extensions: ['.jsonl']
+  },
+  cline: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.clineSessionsDir ?? CLINE_SESSIONS_DIR, wslHomeDirs, [
+        '.cline',
+        'data',
+        'sessions'
+      ]),
+    extensions: ['.json'],
+    filePredicate: isClineSessionMetadataPath,
+    contentDependencyPath: clineMessagesPathForMetadata,
+    // Cline stores one manifest directly beneath each session directory.
+    directoryPredicate: (_name, depth) => depth === 0
   },
   kimi: {
     rootDirs: (options, wslHomeDirs) =>

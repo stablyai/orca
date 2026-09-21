@@ -1,5 +1,6 @@
 import type { DispatchContextRow } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 export function getActiveDispatchForTask(
   db: OrchestrationDb,
@@ -17,14 +18,24 @@ export function reconcileTaskAfterDispatchInterruption(
   taskId: string,
   dispatchId: string
 ): void {
-  db.db
+  const task = db.getTask(taskId)
+  if (!task || !['dispatched', 'blocked'].includes(task.status)) {
+    return
+  }
+  const next = db.db
     .prepare(
-      `UPDATE tasks
-       SET status = CASE WHEN EXISTS (
-         SELECT 1 FROM dispatch_contexts
-         WHERE task_id = tasks.id AND id != ? AND status IN ('pending', 'dispatched')
-       ) THEN 'dispatched' ELSE 'blocked' END
-       WHERE id = ? AND status IN ('dispatched', 'blocked')`
+      "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND id != ? AND status IN ('pending', 'dispatched')"
     )
-    .run(dispatchId, taskId)
+    .get(taskId, dispatchId)
+    ? 'dispatched'
+    : 'blocked'
+  if (task.status === next) {
+    return
+  }
+  transitionLifecycleWithDb(db.db, {
+    entity: 'task',
+    id: taskId,
+    from: task.status,
+    to: next
+  })
 }

@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { getRequiredStringFlag } from '../flags'
+import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
 
 export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
@@ -12,7 +12,8 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   },
   'storage local set': async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
-    const value = getRequiredStringFlag(flags, 'value')
+    // Why: the server accepts any string value; setItem(key, '') differs from an unset key.
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.storage.local.set', {
       key,
@@ -34,7 +35,7 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   },
   'storage session set': async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.storage.session.set', {
       key,

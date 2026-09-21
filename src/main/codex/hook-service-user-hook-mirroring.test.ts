@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { upsertHookTrustEntriesInContent } from './config-toml-trust'
@@ -32,6 +32,36 @@ import { CodexHookService } from './hook-service'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
+function seedSystemUserHook(command: string): {
+  systemHooksPath: string
+  managedHooksPath: string
+} {
+  const systemCodexHome = join(homes.tmpHome, '.codex')
+  const systemHooksPath = join(systemCodexHome, 'hooks.json')
+  mkdirSync(systemCodexHome, { recursive: true })
+  writeFileSync(
+    systemHooksPath,
+    `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command }] }] } })}\n`,
+    'utf-8'
+  )
+  writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
+  return {
+    systemHooksPath,
+    managedHooksPath: join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
+  }
+}
+
+function readRuntimeHookCommands(managedHooksPath: string): string[] {
+  const runtime = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
+    hooks: Record<string, { hooks?: { command?: string }[] }[]>
+  }
+  return Object.values(runtime.hooks).flatMap((definitions) =>
+    definitions.flatMap(
+      (definition) => definition.hooks?.flatMap((hook) => hook.command ?? []) ?? []
+    )
+  )
+}
+
 function markHookTrustDisabled(toml: string, header: string): string {
   const headerIndex = toml.indexOf(header)
   expect(headerIndex).not.toBe(-1)
@@ -43,7 +73,49 @@ function markHookTrustDisabled(toml: string, header: string): string {
 }
 
 describe('CodexHookService', () => {
-  it('mirrors trusted system user hook approvals into the runtime CODEX_HOME', () => {
+  it('preserves mirrored user hooks when the system hooks file cannot be read', async () => {
+    const service = new CodexHookService()
+    const { systemHooksPath, managedHooksPath } = seedSystemUserHook('user-hook')
+    expect((await service.install()).state).toBe('installed')
+    const systemBefore = readFileSync(systemHooksPath, 'utf-8')
+    const before = readFileSync(managedHooksPath, 'utf-8')
+
+    rmSync(systemHooksPath)
+    mkdirSync(systemHooksPath)
+
+    for (const retry of [() => service.install(), () => service.refreshRuntimeUserHooks()]) {
+      expect(await retry()).toMatchObject({
+        state: 'error',
+        detail: 'Could not read system Codex hooks.json'
+      })
+      expect(readFileSync(managedHooksPath, 'utf-8')).toBe(before)
+    }
+
+    rmSync(systemHooksPath, { recursive: true })
+    writeFileSync(systemHooksPath, systemBefore, 'utf-8')
+    expect((await service.install()).state).toBe('installed')
+    expect(readRuntimeHookCommands(managedHooksPath)).toContain('user-hook')
+  })
+
+  it.each(['absent', 'malformed'] as const)(
+    'rebuilds mirrored user hooks when the system source is %s',
+    async (sourceState) => {
+      const service = new CodexHookService()
+      const { systemHooksPath, managedHooksPath } = seedSystemUserHook('stale-user-hook')
+      expect((await service.install()).state).toBe('installed')
+
+      if (sourceState === 'absent') {
+        rmSync(systemHooksPath)
+      } else {
+        writeFileSync(systemHooksPath, '{ not json', 'utf-8')
+      }
+
+      expect((await service.install()).state).toBe('installed')
+      expect(readRuntimeHookCommands(managedHooksPath)).not.toContain('stale-user-hook')
+    }
+  )
+
+  it('mirrors trusted system user hook approvals into the runtime CODEX_HOME', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -91,7 +163,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -111,7 +183,7 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:0:0`, true))
   })
 
-  it('runs managed PostToolUse status before mirrored user hooks', () => {
+  it('runs managed PostToolUse status before mirrored user hooks', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -138,7 +210,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -159,7 +231,7 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_tool_use:0:0`, true))
   })
 
-  it('mirrors system user hook approvals when the system trust indices are stale', () => {
+  it('mirrors system user hook approvals when the system trust indices are stale', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -200,7 +272,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -212,7 +284,7 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:stop:1:0`, true))
   })
 
-  it('skips plugin-placeholder system hooks when mirroring into runtime CODEX_HOME', () => {
+  it('skips plugin-placeholder system hooks when mirroring into runtime CODEX_HOME', async () => {
     const pluginCommands = [
       'node "${CLAUDE_PLUGIN_ROOT}/scripts/on-stop.mjs"',
       'node "${CLAUDE_PLUGIN_DATA}/scripts/on-stop.mjs"',
@@ -268,7 +340,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -296,7 +368,7 @@ describe('CodexHookService', () => {
     }
   })
 
-  it('mirrors compact-event user hook approvals and disabled trust entries', () => {
+  it('mirrors compact-event user hook approvals and disabled trust entries', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -337,7 +409,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -358,7 +430,7 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true))
   })
 
-  it('removes runtime user hook trust after system approval is revoked', () => {
+  it('removes runtime user hook trust after system approval is revoked', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -384,7 +456,7 @@ describe('CodexHookService', () => {
     )
     const service = new CodexHookService()
 
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
@@ -394,14 +466,14 @@ describe('CodexHookService', () => {
     )
 
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).not.toContain(runtimeUserTrustHeader)
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
   })
 
-  it('refreshes mirrored system user hooks when the system hooks file changes', () => {
+  it('refreshes mirrored system user hooks when the system hooks file changes', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -414,7 +486,7 @@ describe('CodexHookService', () => {
     )
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     writeFileSync(
       systemHooksPath,
@@ -423,7 +495,7 @@ describe('CodexHookService', () => {
       })}\n`,
       'utf-8'
     )
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const managedHooksPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
@@ -437,7 +509,7 @@ describe('CodexHookService', () => {
     expect(stopCommands).not.toContain('user-hook-old')
   })
 
-  it('refreshes runtime user hooks without installing Orca-managed hooks', () => {
+  it('refreshes runtime user hooks without installing Orca-managed hooks', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -465,7 +537,7 @@ describe('CodexHookService', () => {
     )
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     const runtimeTomlPath = join(managedCodexHome, 'config.toml')
@@ -487,7 +559,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    const status = service.refreshRuntimeUserHooks()
+    const status = await service.refreshRuntimeUserHooks()
 
     expect(status.state).toBe('not_installed')
     expect(status.managedHooksPresent).toBe(false)

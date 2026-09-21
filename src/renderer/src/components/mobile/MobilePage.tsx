@@ -39,6 +39,7 @@ export default function MobilePage(): React.JSX.Element {
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
@@ -93,7 +94,8 @@ export default function MobilePage(): React.JSX.Element {
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setRelayMintFailure
+    setRelayMintFailure,
+    refreshAuthStatus
   })
   useLayoutEffect(() => {
     pairingAddressChangeRef.current = ({ address, source }) => {

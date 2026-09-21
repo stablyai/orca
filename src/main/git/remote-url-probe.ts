@@ -4,6 +4,7 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { gitExecFileAsync } from './runner'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 /**
  * The `git remote get-url` probe every forge integration runs to decide whether
@@ -23,6 +24,7 @@ export type RemoteUrlProbeContext = {
   repoPath: string
   connectionId?: string | null
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 /** Reads a remote URL, or null when the repo's SSH runtime is not connected. */
@@ -43,7 +45,8 @@ export async function readRemoteUrl(
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+    ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
   })
   return stdout
 }

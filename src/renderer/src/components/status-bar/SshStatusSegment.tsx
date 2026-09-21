@@ -36,20 +36,29 @@ import {
   runtimeHostConnectionState,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export async function connectRuntimeHostForNavigation(args: {
   environmentId: string
   refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
   fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
-  fetchWorktrees: (repoId: string) => Promise<unknown>
-  fetchLineage: () => Promise<unknown>
+  fetchWorktrees: (
+    repoId: string,
+    options: { executionHostId: ExecutionHostId; suppressRemoteLineageRefresh: true }
+  ) => Promise<unknown>
+  fetchLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
 }): Promise<boolean> {
   if (!(await args.refreshStatus(args.environmentId, 5_000))) {
     return false
   }
   const repos = await args.fetchRepos(args.environmentId)
-  await Promise.all(repos.map((repo) => args.fetchWorktrees(repo.id)))
-  await args.fetchLineage()
+  await refreshRuntimeProjectWorktreesAndLineage(
+    args.environmentId,
+    repos,
+    args.fetchWorktrees,
+    args.fetchLineage
+  )
   return true
 }
 
@@ -99,7 +108,7 @@ export function SshStatusSegment({
         hasStatusEntry: Boolean(statusEntry),
         status: statusEntry?.status ?? null,
         active: settings?.activeRuntimeEnvironmentId === environment.id,
-        remoteControl: statusEntry?.status?.remoteControl ?? null
+        remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
       }
     })
   const runtimeHostRows = runtimeHosts.map((host) => ({
@@ -260,6 +269,7 @@ export function SshStatusSegment({
             label={host.label}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
+            diagnostics={host.remoteControl}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
@@ -279,6 +289,7 @@ export function SshStatusSegment({
             label={host.label}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
+            diagnostics={host.remoteControl}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
           />

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 export type LegacyStorageCutoverFixture = {
   dbPath: string
@@ -38,7 +39,8 @@ export function createLegacyStorageCutoverFixture(): {
     coordinatorHandle: 'term_unrelated_coord',
     coordinatorPaneKey: 'tab_unrelated:55555555-5555-4555-8555-555555555555'
   })
-  const currentDispatch = first.createDispatchContext(
+  const currentDispatch = createRootDispatch(
+    first,
     currentTask.id,
     'term_current_worker',
     'tab_current:22222222-2222-4222-9222-222222222222',
@@ -52,10 +54,12 @@ export function createLegacyStorageCutoverFixture(): {
   })
 
   const legacyTask = first.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy',
     createdByTerminalHandle: 'term_legacy_coord'
   })
-  first.createDispatchContext(
+  createRootDispatch(
+    first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'
@@ -65,23 +69,27 @@ export function createLegacyStorageCutoverFixture(): {
     question: 'Retained gate?'
   })
   first.resolveGate(legacyGate.id, 'continue')
-  const retryDispatch = first.createDispatchContext(
+  const retryDispatch = createRootDispatch(
+    first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'
   )
   const legacyMessages = [
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_coord',
       to: 'term_legacy_worker',
       subject: 'read worker mail'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'read coordinator mail'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_coord',
       to: 'term_legacy_worker',
       subject: 'second worker page'
@@ -95,6 +103,7 @@ export function createLegacyStorageCutoverFixture(): {
     question: 'Retained question?'
   })
   const rejection = first.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_legacy_worker',
     to: 'term_legacy_coord',
     subject: 'Rejected heartbeat',
@@ -102,6 +111,7 @@ export function createLegacyStorageCutoverFixture(): {
     payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration', reason: 'cutover' } })
   })
   const lookalike = first.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_legacy_worker',
     to: 'term_legacy_coord',
     subject: 'Ordinary legacy mail',
@@ -111,36 +121,42 @@ export function createLegacyStorageCutoverFixture(): {
   })
   const malformedRejections = [
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Invalid JSON marker',
       payload: '{"_orcaLifecycleRejection":'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: [] })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: 'migration' })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Incomplete marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration' } })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Non-string marker fields',
       payload: JSON.stringify({ _orcaLifecycleRejection: { code: 19, reason: false } })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array root',
@@ -149,6 +165,7 @@ export function createLegacyStorageCutoverFixture(): {
       ])
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String root',
@@ -162,10 +179,15 @@ export function createLegacyStorageCutoverFixture(): {
   raw
     .prepare(
       `INSERT INTO deliveries (
-         id, run_id, consumer_generation, message_ids, status
-       ) VALUES (?, ?, 0, ?, 'outstanding')`
+         id, run_id, mailbox_handle, consumer_generation, message_ids, status
+       ) VALUES (?, ?, ?, 0, ?, 'outstanding')`
     )
-    .run(legacyDeliveryId, LEGACY_RUN_ID, JSON.stringify([legacyMessages[0].id]))
+    .run(
+      legacyDeliveryId,
+      LEGACY_RUN_ID,
+      `run:${LEGACY_RUN_ID}`,
+      JSON.stringify([legacyMessages[0].id])
+    )
   raw
     .prepare("UPDATE messages SET delivery_contract = 'legacy_direct' WHERE id = ?")
     .run(rejection.id)

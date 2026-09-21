@@ -20,19 +20,30 @@ export function mintDispatchCapability(
     )
   }
   const capability = `dcap_${randomBytes(32).toString('base64url')}`
-  this.db
-    .prepare(
-      `UPDATE dispatch_contexts
-       SET capability_hash = ?, assignee_pane_key = ?, process_incarnation = ?,
-           capability_revoked_at = NULL
-       WHERE id = ?`
-    )
-    .run(
-      hashDispatchCapability(capability),
-      params.paneKey,
-      params.processIncarnation,
-      params.dispatchId
-    )
+  // Why: re-pointing the Dispatch at a pane/process must fence the prior consumer's Delivery in
+  // the same transaction, or both processes keep acking one outstanding Delivery.
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    this.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET capability_hash = ?, assignee_pane_key = ?, process_incarnation = ?,
+             capability_revoked_at = NULL,
+             consumer_generation = consumer_generation + 1
+         WHERE id = ?`
+      )
+      .run(
+        hashDispatchCapability(capability),
+        params.paneKey,
+        params.processIncarnation,
+        params.dispatchId
+      )
+    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
   return capability
 }
 
@@ -56,7 +67,12 @@ export function verifyDispatchCapability(
     return { valid: false, reason: `Dispatch ${params.dispatchId} capability is revoked.` }
   }
   if (!params.capability) {
-    return { valid: false, reason: 'The Dispatch capability is missing.' }
+    // Why: a worker that omits the flag needs the flag name, not just the diagnosis.
+    return {
+      valid: false,
+      reason:
+        'The Dispatch capability is missing. Pass --dispatch-capability <token> from your dispatch preamble.'
+    }
   }
   const expected = Buffer.from(dispatch.capability_hash, 'hex')
   const observed = Buffer.from(hashDispatchCapability(params.capability), 'hex')

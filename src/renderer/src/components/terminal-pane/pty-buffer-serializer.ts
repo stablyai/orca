@@ -7,7 +7,6 @@ import type { IDisposable } from '@xterm/xterm'
 
 export type SerializeOpts = {
   scrollbackRows?: number
-  altScreenForcesZeroRows?: boolean
 }
 
 export type SerializedBuffer = {

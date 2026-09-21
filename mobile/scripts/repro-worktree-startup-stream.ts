@@ -4,10 +4,15 @@
  * Usage:
  *   pnpm exec tsx mobile/scripts/repro-worktree-startup-stream.ts <repoSelector> <worktreeName> [startupCommand]
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
+import {
+  saveStartupCaptures,
+  summarizeStartupCapture,
+  type StartupTerminalCapture
+} from './repro-worktree-startup-output'
 
 const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
 const USER_DATA =
@@ -15,7 +20,6 @@ const USER_DATA =
 const repoSelector = process.argv[2]
 const worktreeName = process.argv[3]
 const startupCommand = process.argv[4] || 'claude'
-const ESC = String.fromCharCode(27)
 
 type RpcResponse = {
   id: string
@@ -34,13 +38,6 @@ type PendingRequest = {
 type TerminalInfo = {
   handle: string
   title: string | null
-}
-
-type Capture = {
-  handle: string
-  title: string | null
-  scrollback: Record<string, unknown> | null
-  chunks: string[]
 }
 
 if (!repoSelector || !worktreeName) {
@@ -141,26 +138,6 @@ function formatError(response: RpcResponse): string {
   return JSON.stringify(response.error ?? response.result ?? response).slice(0, 1000)
 }
 
-function stripAnsi(value: string): string {
-  return (
-    value
-      // eslint-disable-next-line no-control-regex -- intentional terminal escape stripping for repro summaries
-      .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
-      // eslint-disable-next-line no-control-regex -- intentional terminal escape stripping for repro summaries
-      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
-      .replace(/\r/g, '\n')
-  )
-}
-
-function normalizePreview(value: string): string {
-  return stripAnsi(value)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 8)
-    .join('\n')
-}
-
 async function waitForTerminals(ws: WebSocket, worktreeId: string): Promise<TerminalInfo[]> {
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
@@ -185,7 +162,7 @@ async function waitForTerminals(ws: WebSocket, worktreeId: string): Promise<Term
   throw new Error('Timed out waiting for startup terminals')
 }
 
-async function subscribe(ws: WebSocket, capture: Capture): Promise<void> {
+async function subscribe(ws: WebSocket, capture: StartupTerminalCapture): Promise<void> {
   const id = nextId()
   streamListeners.set(id, (result) => {
     if (result.type === 'scrollback') {
@@ -202,44 +179,6 @@ async function subscribe(ws: WebSocket, capture: Capture): Promise<void> {
     method: 'terminal.subscribe',
     params: { terminal: capture.handle }
   })
-}
-
-function summarize(capture: Capture): Record<string, unknown> {
-  const serialized =
-    typeof capture.scrollback?.serialized === 'string' ? capture.scrollback.serialized : ''
-  const live = capture.chunks.join('')
-  const serializedPreview = normalizePreview(serialized)
-  const livePreview = normalizePreview(live)
-  return {
-    handle: capture.handle,
-    title: capture.title,
-    cols: capture.scrollback?.cols ?? null,
-    rows: capture.scrollback?.rows ?? null,
-    serializedBytes: Buffer.byteLength(serialized),
-    liveBytes: Buffer.byteLength(live),
-    liveChunks: capture.chunks.length,
-    serializedSgr: (serialized.match(new RegExp(`${ESC}\\[[0-9;:]*m`, 'g')) ?? []).length,
-    liveSgr: (live.match(new RegExp(`${ESC}\\[[0-9;:]*m`, 'g')) ?? []).length,
-    livePreviewContainedInSerialized:
-      livePreview.length > 0 && stripAnsi(serialized).includes(livePreview.split('\n')[0] ?? ''),
-    serializedPreview,
-    livePreview
-  }
-}
-
-function save(captures: Capture[], worktreeName: string): string {
-  const dir = join(process.cwd(), 'terminal-startup-repro', worktreeName)
-  mkdirSync(dir, { recursive: true })
-  for (const capture of captures) {
-    const base = capture.handle.replace(/[^a-z0-9_-]/gi, '-')
-    const serialized =
-      typeof capture.scrollback?.serialized === 'string' ? capture.scrollback.serialized : ''
-    writeFileSync(join(dir, `${base}.serialized.ansi`), serialized)
-    writeFileSync(join(dir, `${base}.live.ansi`), capture.chunks.join(''))
-    writeFileSync(join(dir, `${base}.json`), JSON.stringify(capture, null, 2))
-  }
-  writeFileSync(join(dir, 'summary.json'), JSON.stringify(captures.map(summarize), null, 2))
-  return dir
 }
 
 async function run(ws: WebSocket): Promise<void> {
@@ -312,8 +251,8 @@ async function run(ws: WebSocket): Promise<void> {
   for (const capture of captures) {
     await send(ws, 'terminal.unsubscribe', { subscriptionId: capture.handle }).catch(() => null)
   }
-  const dir = save(captures, worktreeName)
-  console.table(captures.map(summarize))
+  const dir = saveStartupCaptures(captures, worktreeName)
+  console.table(captures.map(summarizeStartupCapture))
   console.log(`saved: ${dir}`)
 }
 

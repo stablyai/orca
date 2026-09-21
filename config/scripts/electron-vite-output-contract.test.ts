@@ -7,14 +7,20 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
+  DEV_BUNDLE_ID,
+  DEV_HELPER_BUNDLE_ID,
+  getDevHelperPlistPatches
+} from './dev-electron-bundle-identity.mjs'
+import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
+import { createRequire } from 'node:module'
 import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
-const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
+const targetConfig = readFileSync('config/electron-vite-target.config.cts', 'utf8')
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
 
 type BootstrapProcessMock = EventEmitter & {
@@ -67,7 +73,26 @@ function failBootstrapWithBanner(options: {
   return processMock
 }
 
+const electronBuilderConfig = createRequire(import.meta.url)('../electron-builder.config.cjs') as {
+  files: string[]
+}
+
 describe('Electron Vite output contract', () => {
+  it("minifies main and renderer with rolldown's in-process minifier", () => {
+    // Why: 'esbuild' routes every chunk through a second, undeclared transpiler.
+    expect(electronViteConfig.main?.build?.minify).toBe('oxc')
+    expect(electronViteConfig.renderer?.build?.minify).toBe('oxc')
+    expect(electronViteConfig.main?.esbuild).toBeUndefined()
+    expect(electronViteConfig.renderer?.esbuild).toBeUndefined()
+  })
+
+  it('emits hidden main source maps that packaging strips from app.asar', () => {
+    // Hidden maps decode minified crash traces without the bundle referencing
+    // files that the packaged app never ships.
+    expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
+    expect(electronBuilderConfig.files).toContain('!out/**/*.map')
+  })
+
   it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
     const output = electronViteConfig.main?.build?.rollupOptions?.output
     if (!output || Array.isArray(output)) {
@@ -95,6 +120,10 @@ describe('Electron Vite output contract', () => {
     expect(external('zod', undefined, false)).toBe(false)
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('psl')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
+  })
+
+  it('bundles validation dependencies used by the sandboxed preload', () => {
+    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
   })
 
   it('exits when a static import fails before source error guards load', () => {
@@ -201,10 +230,13 @@ describe('Electron Vite output contract', () => {
   })
 
   it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
-    expect(devRunner).toContain('const helperBundleId = `${bundleId}.helper`')
+    // Asserted on the values rather than the source text: the ids moved into
+    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
+    expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
+    expect(getDevHelperPlistPatches()).toEqual([
+      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
+    ])
     expect(devRunner).toContain("'Electron Helper.app',")
-    expect(devRunner).toContain(
-      "setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)"
-    )
+    expect(devRunner).toContain('setPlistValue(helperPlistPath, key, value)')
   })
 })

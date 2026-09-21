@@ -146,7 +146,7 @@ describe('SshGitProvider status read leases', () => {
   })
 
   it('isolates status reads by worktree and output-affecting options', async () => {
-    const pendingRequests = Array.from({ length: 5 }, () =>
+    const pendingRequests = Array.from({ length: 8 }, () =>
       deferredPromise<{ entries: never[]; conflictOperation: 'unknown' }>()
     )
     mux.request.mockImplementation(
@@ -157,22 +157,28 @@ describe('SshGitProvider status read leases', () => {
       provider.getStatus('/home/user/repo'),
       provider.getStatus('/home/user/other'),
       provider.getStatus('/home/user/repo', { includeIgnored: true }),
+      provider.getStatus('/home/user/repo', { includeLineStats: false }),
       provider.getStatus('/home/user/repo', {
         bypassEffectiveUpstreamNegativeCache: true
       }),
-      provider.getStatus('/home/user/repo', { reuseLineStats: true })
+      provider.getStatus('/home/user/repo', { reuseLineStats: true }),
+      provider.getStatus('/home/user/repo', { admissionTier: 'background' }),
+      provider.getStatus('/home/user/repo', { admissionTier: 'interactive' })
     ]
-    await waitForRequestCount(mux.request, 5)
+    await waitForRequestCount(mux.request, 8)
 
     expect(mux.request.mock.calls.map(([, payload]) => payload)).toEqual([
       { worktreePath: '/home/user/repo' },
       { worktreePath: '/home/user/other' },
       { worktreePath: '/home/user/repo', includeIgnored: true },
+      { worktreePath: '/home/user/repo', includeLineStats: false },
       {
         worktreePath: '/home/user/repo',
         bypassEffectiveUpstreamNegativeCache: true
       },
-      { worktreePath: '/home/user/repo', reuseLineStats: true }
+      { worktreePath: '/home/user/repo', reuseLineStats: true },
+      { worktreePath: '/home/user/repo', admissionTier: 'background' },
+      { worktreePath: '/home/user/repo', admissionTier: 'interactive' }
     ])
     pendingRequests.forEach((pending) =>
       pending.resolve({ entries: [], conflictOperation: 'unknown' })

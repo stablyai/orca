@@ -14,6 +14,14 @@ describe('isTransientReconnectError', () => {
     expect(isTransientReconnectError(err)).toBe(true)
   })
 
+  it('treats the bounded ssh2 authentication watchdog as recoverable', () => {
+    const err = Object.assign(new Error('Timed out while waiting for SSH authentication'), {
+      level: 'client-timeout'
+    })
+
+    expect(isTransientReconnectError(err)).toBe(true)
+  })
+
   it.each([
     'System SSH probe failed (exit 255).',
     'System SSH probe failed (exit 255). stderr: ssh: connect to host box port 22: Connection refused',

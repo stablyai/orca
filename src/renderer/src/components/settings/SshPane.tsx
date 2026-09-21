@@ -6,7 +6,10 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
-import { terminateSshSessionsWithReconnect } from './ssh-session-termination'
+import {
+  describeSshTerminateOutcome,
+  terminateSshSessionsWithReconnect
+} from './ssh-session-termination'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
@@ -218,10 +221,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
-      await terminateSshSessionsWithReconnect(targetId)
-      toast.success(
-        translate('auto.components.settings.SshPane.90e308c98b', 'Remote terminals ended')
-      )
+      const report = describeSshTerminateOutcome(await terminateSshSessionsWithReconnect(targetId))
+      toast[report.level](report.message)
     } catch (err) {
       toast.error(
         err instanceof Error

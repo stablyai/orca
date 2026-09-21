@@ -7,7 +7,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
+import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {

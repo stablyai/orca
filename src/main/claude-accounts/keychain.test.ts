@@ -15,6 +15,10 @@ vi.mock('node:child_process', () => ({
 
 const execFileMock = vi.mocked(execFile)
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+const originalUser = process.env.USER
+const originalUsername = process.env.USERNAME
+const TEST_USER = 'orca-test-user'
+const SSO_USER = 'sso.user@example.com'
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -42,12 +46,24 @@ describe('Claude Keychain credentials', () => {
   beforeEach(() => {
     setPlatform('darwin')
     execFileMock.mockReset()
+    process.env.USER = TEST_USER
+    delete process.env.USERNAME
   })
 
   afterEach(() => {
     vi.useRealTimers()
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalUser === undefined) {
+      delete process.env.USER
+    } else {
+      process.env.USER = originalUser
+    }
+    if (originalUsername === undefined) {
+      delete process.env.USERNAME
+    } else {
+      process.env.USERNAME = originalUsername
     }
   })
 
@@ -69,7 +85,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_USER,
       '-w'
     ])
   })
@@ -94,7 +110,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       'Claude Code-credentials',
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_USER,
       '-w'
     ])
   })
@@ -115,7 +131,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_USER,
       '-w',
       'credentials-json'
     ])
@@ -138,7 +154,7 @@ describe('Claude Keychain credentials', () => {
         '-s',
         scopedService,
         '-a',
-        process.env.USER || process.env.USERNAME || 'user',
+        TEST_USER,
         '-w',
         'credentials-json'
       ],
@@ -148,7 +164,7 @@ describe('Claude Keychain credentials', () => {
         '-s',
         'Claude Code-credentials',
         '-a',
-        process.env.USER || process.env.USERNAME || 'user',
+        TEST_USER,
         '-w',
         'credentials-json'
       ]
@@ -171,7 +187,7 @@ describe('Claude Keychain credentials', () => {
       '-s',
       scopedService,
       '-a',
-      process.env.USER || process.env.USERNAME || 'user',
+      TEST_USER,
       '-w'
     ])
   })
@@ -217,20 +233,47 @@ describe('Claude Keychain credentials', () => {
     await deleteActiveClaudeKeychainCredentials(configDir)
 
     expect(execFileMock.mock.calls.map((call) => call[1])).toEqual([
-      [
-        'delete-generic-password',
-        '-s',
-        scopedService,
-        '-a',
-        process.env.USER || process.env.USERNAME || 'user'
-      ],
-      [
-        'delete-generic-password',
-        '-s',
-        'Claude Code-credentials',
-        '-a',
-        process.env.USER || process.env.USERNAME || 'user'
-      ]
+      ['delete-generic-password', '-s', scopedService, '-a', TEST_USER],
+      ['delete-generic-password', '-s', 'Claude Code-credentials', '-a', TEST_USER]
+    ])
+  })
+
+  it('looks up claude-code-user when $USER contains @ (#12857)', async () => {
+    process.env.USER = SSO_USER
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeExecFileCallback(callback, null, '{"claudeAiOauth":{"accessToken":"ok"}}\n', '')
+      return null as never
+    })
+
+    await expect(readActiveClaudeKeychainCredentials()).resolves.toBe(
+      '{"claudeAiOauth":{"accessToken":"ok"}}'
+    )
+    expect(execFileMock.mock.calls[0][1]).toEqual([
+      'find-generic-password',
+      '-s',
+      'Claude Code-credentials',
+      '-a',
+      'claude-code-user',
+      '-w'
+    ])
+  })
+
+  it('cleans both Claude Code and raw $USER Keychain accounts after a failed SSO login', async () => {
+    process.env.USER = SSO_USER
+    const configDir = '/tmp/orca-claude-login-test'
+    const scopedService = serviceForConfigDir(configDir)
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      invokeExecFileCallback(callback, null, '', '')
+      return null as never
+    })
+
+    await deleteActiveClaudeKeychainCredentials(configDir)
+
+    expect(execFileMock.mock.calls.map((call) => call[1])).toEqual([
+      ['delete-generic-password', '-s', scopedService, '-a', 'claude-code-user'],
+      ['delete-generic-password', '-s', scopedService, '-a', SSO_USER],
+      ['delete-generic-password', '-s', 'Claude Code-credentials', '-a', 'claude-code-user'],
+      ['delete-generic-password', '-s', 'Claude Code-credentials', '-a', SSO_USER]
     ])
   })
 })

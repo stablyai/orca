@@ -33,6 +33,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       | undefined
     const runtime = {
       getRuntimeId: () => 'test-runtime',
+      subscribeToPtyExit: vi.fn(() => vi.fn()),
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-output-race' }),
       hasHeadlessTerminalState: vi.fn(() => false),
       requestRendererTerminalTabMount: vi.fn(() => true),

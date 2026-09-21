@@ -50,7 +50,9 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).toEqual({
       terminal: 'term-1',
-      text: '\x1b[200~/tmp/orca-attach.png\x1b[201~',
+      // Trailing space: the user types on this same line next, so a bare
+      // `…\x1b[201~` would arrive as `…pngadd` (STA-4847).
+      text: '\x1b[200~/tmp/orca-attach.png\x1b[201~ ',
       enter: false,
       client: { id: 'device-9', type: 'mobile' }
     })

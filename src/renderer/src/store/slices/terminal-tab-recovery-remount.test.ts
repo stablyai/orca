@@ -28,6 +28,20 @@ describe('remountTerminalTabForRecovery', () => {
     expect(after?.pendingActivationSpawn).toBeTruthy()
   })
 
+  it('gives a remounted pane a distinct queued startup owner', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    const startup = { command: 'echo recover' }
+    store.getState().queueTabStartupCommand(tabId, startup)
+    const before = store.getState().pendingStartupByTabId[tabId]
+
+    expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(true)
+
+    const after = store.getState().pendingStartupByTabId[tabId]
+    expect(after).toEqual(before)
+    expect(after).not.toBe(before)
+  })
+
   it('leaves sibling tabs untouched', () => {
     const store = createTestStore()
     const tabId = seedWorktreeWithTab(store)

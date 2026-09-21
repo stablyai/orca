@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createHookListenerState,
-  hasPendingAgentResultText,
-  normalizeHookPayload,
-  preparePendingGrokResultDiscovery,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import {
+  hasPendingAgentResultText,
+  preparePendingGrokResultDiscovery
+} from './agent-hook-listener/grok-result-discovery'
+import { normalizeHookPayload } from './agent-hook-listener'
 import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId

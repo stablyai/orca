@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusUpdate } from '../store/slices/agent-status'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
@@ -20,6 +20,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('preserves queued set-clear order for working removal and done retention', async () => {
@@ -163,7 +167,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('does not recurse when flushing a pending status re-enters via the store subscriber', async () => {
     // Repro for crash 9fc89529 (RangeError: Maximum call stack size exceeded):
-    // the store subscriber calls flushPendingAgentStatuses() on every update.
+    // the store subscriber retries pending statuses synchronously on hydration.
     // flush -> applyAgentStatus -> store.setAgentStatus notifies subscribers
     // synchronously (like Zustand) -> subscriber -> flush again while the same
     // event is still queued -> infinite recursion. Model setAgentStatus with a
@@ -173,10 +177,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       current: null
     }
     let setAgentStatusCalls = 0
-    const notify = (): void => {
+    const notify = (previousState: StoreLike = storeState): void => {
       const listener = subscribeListenerRef.current
       if (listener) {
-        listener(storeState, storeState)
+        listener(storeState, previousState)
       }
     }
     const storeState: StoreLike = buildStoreState({
@@ -243,6 +247,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     // Tab hydrates; the next store update flushes the pending event. Without the
     // re-entrancy guard this overflows the stack instead of applying once.
+    const beforeHydration = { ...storeState }
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
     }
@@ -254,7 +259,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }
 
-    expect(() => notify()).not.toThrow()
+    expect(() => notify(beforeHydration)).not.toThrow()
     // Applied exactly once — the re-entrant flush is a no-op, not a loop.
     expect(setAgentStatusCalls).toBe(1)
   })
@@ -263,6 +268,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   // buffered event permanently. Before batching the queue was only replaced after the loop,
   // so a throw left it intact — keep that.
   it('keeps pending statuses queued when the retry fold throws', async () => {
+    vi.useFakeTimers()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
@@ -284,8 +290,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {}
     })
-    const notify = (): void => subscribeListenerRef.current?.(storeState, storeState)
-
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
       useAppStore: {
@@ -325,7 +329,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       stateStartedAt: 1_700_000_000_100
     })
 
-    // Tab hydrates, so the next store update flushes the pending event — and throws.
+    // The timer-owned retry throws after clearing its handle.
+    expect(() => vi.advanceTimersByTime(100)).toThrow('fold blew up')
+
+    // Hydrate without publishing so only the re-armed timer can recover the event.
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
     }
@@ -336,10 +343,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
-    expect(() => notify()).toThrow('fold blew up')
 
-    // The event must still be queued, so the next flush replays it.
-    notify()
+    vi.advanceTimersByTime(100)
     const replayedAfterThrow = setAgentStatuses.mock.calls
       .slice(1)
       .flatMap((call) => call[0].map((update) => update.payload.prompt))

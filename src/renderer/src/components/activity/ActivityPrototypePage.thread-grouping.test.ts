@@ -1,11 +1,15 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   buildActivityThreadGroups,
   buildActivityEvents,
   buildAgentPaneThreads,
-  getActivityThreadGroup
+  getActivityThreadGroup,
+  ThreadAgentStateIndicator
 } from './ActivityPrototypePage'
 import {
   makeActivityResult,
@@ -22,6 +26,28 @@ import {
   PANE_KEY_B1,
   UNKNOWN_PANE_KEY
 } from './ActivityPrototypePage-test-fixtures'
+
+describe('ThreadAgentStateIndicator', () => {
+  it('labels the state through its Radix tooltip only', () => {
+    const threads = makeThreads(
+      makeActivityResult({ entries: { [PANE_KEY]: makeWorkingEntryWithoutHistory() } })
+    )
+
+    const markup = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(ThreadAgentStateIndicator, { thread: threads[0]! })
+      )
+    )
+    const titles = [...markup.matchAll(/\stitle="([^"]*)"/g)].map((match) => match[1])
+
+    expect(markup).toContain('data-slot="tooltip-trigger"')
+    expect(markup).toContain('aria-label="Working"')
+    // A native title here would fire alongside the Radix tooltip as a double label.
+    expect(titles).toEqual([])
+  })
+})
 
 describe('activity thread grouping', () => {
   it('status grouping separates interrupted done from normal done and keeps Interrupted label', () => {
@@ -67,8 +93,10 @@ describe('activity thread grouping', () => {
     const groups = buildActivityThreadGroups(threads, 'status')
 
     expect(groups).toHaveLength(2)
-    expect(groups[0].key).toBe('done:interrupted')
+    expect(groups[0].key).toBe('interrupted')
     expect(groups[0].label).toBe('Interrupted')
+    // Interrupted rows keep the done glyph (#2569); the header mirrors the row.
+    expect(groups[0].state).toBe('done')
     expect(groups[1].key).toBe('done')
     expect(groups[1].label).toBe('Done')
   })
@@ -180,5 +208,18 @@ describe('activity thread grouping', () => {
 
   it('returns no groups for empty thread input', () => {
     expect(buildActivityThreadGroups([], 'status')).toEqual([])
+  })
+
+  it('keeps all threads in one ungrouped list', () => {
+    const threads = makeThreads(
+      makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+          [PANE_KEY_2]: makeWorkingEntryWithoutHistory()
+        }
+      })
+    )
+
+    expect(buildActivityThreadGroups(threads, 'none')).toEqual([{ key: 'all', label: '', threads }])
   })
 })

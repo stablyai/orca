@@ -14,6 +14,32 @@ describe('classifyConnection auth-failed verdict', () => {
   })
 })
 
+describe('classifyConnection pairing-rejected verdict', () => {
+  it('outranks a pending Relay recovery that would otherwise read as progress', () => {
+    const verdict = classifyConnection({
+      state: 'disconnected',
+      reconnectAttempts: 1,
+      lastConnectedAt: 1_000,
+      pendingPath: 'relay',
+      pairingRejected: true,
+      nowMs: 1_000_000
+    })
+    expect(verdict.kind).toBe('auth-failed')
+    expect(verdictDisplayLabel(verdict)).toBe('Pairing invalid — re-pair with your desktop')
+  })
+
+  it('never overrides a live connection', () => {
+    const verdict = classifyConnection({
+      state: 'connected',
+      reconnectAttempts: 0,
+      lastConnectedAt: 999_000,
+      pairingRejected: true,
+      nowMs: 1_000_000
+    })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connected' })
+  })
+})
+
 describe('classifyConnection Tailscale hint', () => {
   const base = {
     state: 'reconnecting' as const,
@@ -100,6 +126,18 @@ describe('classifyConnection Tailscale hint', () => {
       reason: 'never-connected'
     })
     expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
+  })
+
+  it('does not call an idle Relay path Connecting when no retry is active', () => {
+    const verdict = classifyConnection({
+      state: 'disconnected',
+      reconnectAttempts: 0,
+      lastConnectedAt: 1_000,
+      pendingPath: 'relay',
+      nowMs: 1_000_000
+    })
+
+    expect(verdict).toEqual({ kind: 'normal', label: 'Disconnected' })
   })
 })
 

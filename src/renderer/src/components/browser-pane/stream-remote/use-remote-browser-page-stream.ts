@@ -24,6 +24,7 @@ export function useRemoteBrowserPageStream({
   browserPageId,
   isActive,
   lifecycle,
+  stagedPage,
   runtimeWorktree,
   runtimeTarget,
   remoteViewportRef,
@@ -47,6 +48,7 @@ export function useRemoteBrowserPageStream({
   browserPageId: string
   isActive: boolean
   lifecycle: RemoteBrowserStreamLifecycle
+  stagedPage: boolean
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
@@ -292,7 +294,8 @@ export function useRemoteBrowserPageStream({
     isActive,
     lifecycle,
     reopenNonce,
-    runtimeWorktree
+    runtimeWorktree,
+    stagedPage
   })
 
   return { reconnectRemoteStream }

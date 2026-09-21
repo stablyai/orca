@@ -105,6 +105,56 @@ function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...env, ...extra }
 }
 
+/**
+ * What the two cases below wait on: a ~280MB clone of Electron.app, two swiftc
+ * helper builds, and `codesign --deep` over the result. Six seconds on an idle
+ * machine; the swiftc builds alone pass fifteen when this file runs inside the
+ * full suite and every core is taken. The generous ceiling only costs time on a
+ * run that is already failing.
+ */
+const PREPARE_TIMEOUT_MS = 90_000
+
+/**
+ * Spawns the wrapper with its output retained.
+ *
+ * Why retained: the wrapper reports its own failures on stderr, and discarding
+ * them turned a crash in prepare into a bare "Timed out waiting for condition"
+ * with nothing to act on.
+ */
+function spawnDevWrapper(
+  args: string[],
+  env: NodeJS.ProcessEnv
+): { wrapper: ChildProcess; readOutput: () => string } {
+  const wrapper = spawn(process.execPath, args, {
+    cwd: resolve('.'),
+    env,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  let output = ''
+  const collect = (chunk: Buffer): void => {
+    output += chunk.toString()
+  }
+  wrapper.stdout?.on('data', collect)
+  wrapper.stderr?.on('data', collect)
+  return { wrapper, readOutput: () => output }
+}
+
+async function waitForEnvFile(envFile: string, readOutput: () => string): Promise<void> {
+  try {
+    await waitFor(() => {
+      try {
+        return readFileSync(envFile, 'utf8').trim().length > 0
+      } catch {
+        return false
+      }
+    }, PREPARE_TIMEOUT_MS)
+  } catch (error) {
+    throw new Error(
+      `${(error as Error).message}: the dev wrapper never wrote ${envFile}. Wrapper output:\n${readOutput() || '(none)'}`
+    )
+  }
+}
+
 describe('run-electron-vite-dev', () => {
   afterEach(async () => {
     for (const pid of processesToCleanUp) {
@@ -351,26 +401,19 @@ describe('run-electron-vite-dev', () => {
       async function runWrapper(runId: string): Promise<{ electronExecPath: string }> {
         const pidFile = join(tempDir, `${runId}.pid`)
         const envFile = join(tempDir, `${runId}.json`)
-        const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9448'], {
-          cwd: resolve('.'),
-          env: {
+        const { wrapper, readOutput } = spawnDevWrapper(
+          [wrapperPath, '--remote-debugging-port=9448'],
+          {
             ...baseEnv,
             ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
             ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile
-          },
-          stdio: 'ignore'
-        })
+          }
+        )
 
         expect(wrapper.pid).toBeTypeOf('number')
         processesToCleanUp.add(wrapper.pid!)
 
-        await waitFor(() => {
-          try {
-            return readFileSync(envFile, 'utf8').trim().length > 0
-          } catch {
-            return false
-          }
-        }, 20000)
+        await waitForEnvFile(envFile, readOutput)
 
         const trackedPids = trackPidFile(pidFile)
 
@@ -409,7 +452,8 @@ describe('run-electron-vite-dev', () => {
         }
       }
     },
-    30000
+    // Two full prepares, each budgeted at PREPARE_TIMEOUT_MS.
+    PREPARE_TIMEOUT_MS * 2 + 30_000
   )
 
   it.skipIf(process.platform !== 'darwin')(
@@ -421,9 +465,9 @@ describe('run-electron-vite-dev', () => {
       const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
-      const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9448'], {
-        cwd: resolve('.'),
-        env: devWrapperTestEnv({
+      const { wrapper, readOutput } = spawnDevWrapper(
+        [wrapperPath, '--remote-debugging-port=9448'],
+        devWrapperTestEnv({
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_SKIP_DEV_WEB_PREPARE: '1',
@@ -431,20 +475,13 @@ describe('run-electron-vite-dev', () => {
           ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
           ORCA_DEV_BRANCH: 'feature/framework-symlinks',
           ORCA_DEV_WORKTREE_NAME: 'symlink-ui'
-        }),
-        stdio: 'ignore'
-      })
+        })
+      )
 
       expect(wrapper.pid).toBeTypeOf('number')
       processesToCleanUp.add(wrapper.pid!)
 
-      await waitFor(() => {
-        try {
-          return readFileSync(envFile, 'utf8').trim().length > 0
-        } catch {
-          return false
-        }
-      }, 20000)
+      await waitForEnvFile(envFile, readOutput)
 
       const trackedPids = trackPidFile(pidFile)
 
@@ -464,6 +501,6 @@ describe('run-electron-vite-dev', () => {
 
       await stopWrapperAndTrackedPids(wrapper, trackedPids)
     },
-    30000
+    PREPARE_TIMEOUT_MS + 30_000
   )
 })

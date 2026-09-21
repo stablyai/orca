@@ -9,6 +9,7 @@ import {
   buildMobileDiffReviewQueue,
   filterMobileDiffReviewQueue,
   mobileDiffReviewCommentMatchesItem,
+  summarizeMobileDiffReviewQueue,
   type MobileDiffReviewQueueFilter,
   type MobileDiffReviewQueueItem
 } from './mobile-diff-review-queue'
@@ -133,12 +134,12 @@ export function useMobileDiffReviewController(input: ControllerInput) {
 
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
   const currentItem = filteredQueue[currentIndex] ?? null
-  const reviewedCount = queue.filter((item) => item.isReviewed).length
+  const { reviewedCount, reviewedUnstagedCount } = useMemo(
+    () => summarizeMobileDiffReviewQueue(queue),
+    [queue]
+  )
   const unsentComments =
     screenState.kind === 'ready' ? getUnsentMobileDiffComments(screenState.comments) : []
-  const reviewedUnstagedCount = queue.filter(
-    (item) => item.scope === 'unstaged' && item.isReviewed && item.canStage
-  ).length
 
   useEffect(() => {
     seededInitialTargetRef.current = false

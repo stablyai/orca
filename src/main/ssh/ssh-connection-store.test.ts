@@ -17,8 +17,19 @@ function createMockStore() {
   let deletedAliases: string[] = []
   const removedTombstones: RemovedSshTargetTombstone[] = []
   const reassignments: { oldTargetId: string; newTargetId: string }[] = []
+  let generationCounter = 0
+
+  const dropTombstone = (oldTargetId: string) => {
+    const kept = removedTombstones.filter((t) => t.oldTargetId !== oldTargetId)
+    removedTombstones.length = 0
+    removedTombstones.push(...kept)
+  }
 
   return {
+    allocateSshTargetGeneration: vi.fn(() => {
+      generationCounter += 1
+      return generationCounter
+    }),
     getSshTargets: vi.fn(() => [...targets]),
     getSshTarget: vi.fn((id: string) => targets.find((t) => t.id === id)),
     addSshTarget: vi.fn((target: SshTarget) => targets.push(target)),
@@ -56,11 +67,9 @@ function createMockStore() {
       removedTombstones.length = 0
       removedTombstones.push(...filtered, tombstone)
     }),
-    removeRemovedSshTargetTombstone: vi.fn((oldTargetId: string) => {
-      const kept = removedTombstones.filter((t) => t.oldTargetId !== oldTargetId)
-      removedTombstones.length = 0
-      removedTombstones.push(...kept)
-    }),
+    removeRemovedSshTargetTombstone: vi.fn(dropTombstone),
+    // Nothing in this mock stores automations, so releasing always drops.
+    releaseRemovedSshTargetTombstone: vi.fn(dropTombstone),
     reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
       reassignments.push({ oldTargetId, newTargetId })
       // Pretend one repo referenced the old id.

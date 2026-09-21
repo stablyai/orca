@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearClaudeAnsweredQuestionWait,
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots
+} from './agent-hook-listener/providers/claude-roster-state'
+import {
   clearPaneCacheState,
   createHookListenerState,
-  markClaudeLeadTurnInterrupted,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
@@ -673,6 +675,27 @@ describe('shared agent-hook-listener', () => {
       expect(childDriven?.payload.state).toBe('working')
       expect(childDriven?.payload.toolName).toBeUndefined()
       expect(childDriven?.payload.interactivePrompt).toBeUndefined()
+    })
+
+    it('preserves tool-output provenance when restoring the lead preview after an answer', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'inspect and ask' })
+      claudeEvent({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_response: { content: [{ type: 'text', text: 'raw command output' }] }
+      })
+      claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Continue?' }] }
+      })
+
+      clearClaudeAnsweredQuestionWait(state, PANE_KEY)
+
+      expect(state.lastToolByPaneKey.get(PANE_KEY)).toMatchObject({
+        lastAssistantMessage: 'raw command output',
+        lastAssistantMessageIsToolOutput: true
+      })
     })
 
     it('restores the stashed lead state for an answered child question', () => {

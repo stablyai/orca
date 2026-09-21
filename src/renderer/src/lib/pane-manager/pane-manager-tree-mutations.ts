@@ -1,4 +1,4 @@
-import type { ManagedPane } from './pane-manager-types'
+import type { ManagedPane, PaneSplitOptions } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -13,7 +13,7 @@ export function splitPaneOnManager(
   host: PaneManagerHost,
   paneId: number,
   direction: 'vertical' | 'horizontal',
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: PaneSplitOptions
 ): ManagedPane | null {
   return splitManagedPane({
     paneId,

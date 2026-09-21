@@ -159,16 +159,20 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
   async function spawnPtys(count: number): Promise<string[]> {
     const ids: string[] = []
     for (let i = 0; i < count; i++) {
+      let dataCallback!: (data: string) => void
+      let exitCallback!: (event: { exitCode: number }) => void
       mockPtySpawn.mockReturnValueOnce({
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
-          dataCallbacks.set(`pty-${i + 1}`, cb)
+          dataCallback = cb
         }),
         onExit: vi.fn((cb: (event: { exitCode: number }) => void) => {
-          exitCallbacks.set(`pty-${i + 1}`, cb)
+          exitCallback = cb
         })
       })
       const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+      dataCallbacks.set(spawned.id, dataCallback)
+      exitCallbacks.set(spawned.id, exitCallback)
       ids.push(spawned.id)
     }
     return ids

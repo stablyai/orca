@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
@@ -13,7 +13,6 @@ import {
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { launchDashboardAgent } from './launch-dashboard-agent'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { translate } from '@/i18n/i18n'
 
@@ -48,8 +47,7 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
-      activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+      revealDashboardAgent(args)
       onClose()
     },
     [onClose]
@@ -62,23 +60,15 @@ function AgentDashboardDrawerBody({
     void window.api.dashboard.openPopout?.()
   }, [onClose])
 
-  const handleOpenMap = useCallback(() => {
-    onClose()
-    void window.api.dashboard.openPopout?.('map')
-  }, [onClose])
-
   return (
     <AgentKanbanBoard
       snapshot={snapshot}
-      initialView="board"
       // Why: bg-transparent lets the sheet's worktree-sidebar surface through
       // so the board reads as the same companion panel as the workspace board.
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
-      onSpawnAgent={launchDashboardAgent}
       onClose={onClose}
-      onOpenMap={handleOpenMap}
       headerActions={
         <AgentDashboardSettingsMenu
           onSwitchToPopout={handleSwitchToPopout}

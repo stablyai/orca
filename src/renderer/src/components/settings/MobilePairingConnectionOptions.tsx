@@ -4,8 +4,12 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
-import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
+import type {
+  MobileRelayStatus,
+  MobileRelayStatusDetail
+} from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 
@@ -37,6 +41,16 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   )
 }
 
+// Support needs the cell a slow session actually landed on; the scheme adds
+// nothing a reader can act on, so only the host is shown.
+function relayCellLabel(cellUrl: string): string | null {
+  try {
+    return new URL(cellUrl).host || null
+  } catch {
+    return null
+  }
+}
+
 export function MobilePairingConnectionOptions({
   value,
   onChange,
@@ -54,8 +68,8 @@ export function MobilePairingConnectionOptions({
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
+  const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
@@ -93,26 +107,28 @@ export function MobilePairingConnectionOptions({
     optionRefs.current[next]?.focus()
   }
 
-  useEffect(() => {
-    if (!authStatus) {
-      void fetchAuthStatus()
-    }
-  }, [authStatus, fetchAuthStatus])
+  const relayCell = relayCellUrl ? relayCellLabel(relayCellUrl) : null
+
+  useOrcaProfileAuthStatusRefresh()
 
   useEffect(() => {
     let receivedEvent = false
     let active = true
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((status) => {
+    const apply = (detail: MobileRelayStatusDetail): void => {
+      setRelayStatus(detail.status)
+      setRelayCellUrl(detail.cellUrl)
+    }
+    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
       if (active) {
-        setRelayStatus(status)
+        apply(detail)
       }
     })
     void window.api.mobile
       .getRelayStatus()
-      .then(({ status }) => {
+      .then((detail) => {
         if (active && !receivedEvent) {
-          setRelayStatus(status)
+          apply(detail)
         }
       })
       .catch(() => {})
@@ -229,6 +245,18 @@ export function MobilePairingConnectionOptions({
                   )}
             </Button>
           </div>
+        ) : null}
+        {value === 'automatic' && relayCell ? (
+          <p
+            className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
+            data-testid="relay-cell-line"
+          >
+            {translate(
+              'auto.components.settings.MobilePairingConnectionOptions.relayCell',
+              'Relay cell'
+            )}
+            {`: ${relayCell}`}
+          </p>
         ) : null}
         <div className="border-t border-border" />
         <MobilePairingPathOption

@@ -1,6 +1,4 @@
-import { execFile } from 'node:child_process'
 import { join, posix } from 'node:path'
-import { promisify } from 'node:util'
 import type { SkillPackageManifestV1 } from '../../shared/skill-package-manifest'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -8,13 +6,29 @@ import {
   observeSkillPackage,
   type ObservedSkillPackage
 } from './skill-package-identity'
-import type { SkillInstallFilesystem, SkillInstalledFileMode } from './skill-install-filesystem'
+import type {
+  SkillDirectoryEntry,
+  SkillInstallFilesystem,
+  SkillInstalledFileMode,
+  SkillPathInspection
+} from './skill-install-filesystem'
+import {
+  parseWslInspectPathsOutput,
+  parseWslListEntriesOutput,
+  WSL_INSPECT_PATHS_SCRIPT,
+  WSL_LIST_ENTRIES_SCRIPT
+} from './skill-delete/wsl-enumeration-protocol'
 import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { runWslProcess } from '../wsl/wsl-runner'
 
-const execFileAsync = promisify(execFile)
 const BATCH_FILE_COUNT = 8
 const GUEST_COMMAND_TIMEOUT_MS = 30_000
+const GUEST_COMMAND_MAX_OUTPUT_BYTES = 64 * 1024
+// Why far above the default: one batched `listEntries` covers every discovery
+// root of a WSL home at once, which is orders of magnitude more output than any
+// install call. Matched to the discovery scanner's own bound.
+const ENUMERATION_MAX_BUFFER_BYTES = 128 * 1024 * 1024
 
 function isWindowsBackedGuestPath(path: string): boolean {
   return /^\/mnt\/[a-z](?:\/|$)/iu.test(path)
@@ -150,6 +164,34 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     )
   }
 
+  async listEntries(directories: readonly string[]): Promise<Map<string, SkillDirectoryEntry[]>> {
+    if (directories.length === 0) {
+      return new Map()
+    }
+    return parseWslListEntriesOutput(
+      await this.runOutput(
+        WSL_LIST_ENTRIES_SCRIPT,
+        directories.map((directory) => this.requireReadable(directory)),
+        ENUMERATION_MAX_BUFFER_BYTES
+      ),
+      directories
+    )
+  }
+
+  async inspectPaths(paths: readonly string[]): Promise<Map<string, SkillPathInspection>> {
+    if (paths.length === 0) {
+      return new Map()
+    }
+    return parseWslInspectPathsOutput(
+      await this.runOutput(
+        WSL_INSPECT_PATHS_SCRIPT,
+        paths.map((path) => this.requireReadable(path)),
+        ENUMERATION_MAX_BUFFER_BYTES
+      ),
+      paths
+    )
+  }
+
   private async applyModes(entries: { path: string; mode: string }[]): Promise<void> {
     for (let offset = 0; offset < entries.length; offset += BATCH_FILE_COUNT) {
       await this.run(
@@ -207,26 +249,46 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     return guestPath
   }
 
+  /** Enumeration also has to reach an authorized root *itself*, which
+   *  `requireAllowed` refuses because it demands strict containment. Read-only,
+   *  so admitting the root adds no mutation surface. */
+  private requireReadable(path: string): string {
+    const guestPath = this.toGuestPath(path)
+    const allowed = this.guestAllowedRoots.some((root) => {
+      const child = posix.relative(root, guestPath)
+      return child !== '..' && !child.startsWith('../') && !posix.isAbsolute(child)
+    })
+    if (!allowed) {
+      throw new Error('skill-install-wsl-path-outside-root')
+    }
+    return guestPath
+  }
+
   private async run(script: string, args: string[]): Promise<void> {
     await this.runOutput(script, args)
   }
 
-  private async runOutput(script: string, args: string[]): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync(
-        'wsl.exe',
-        ['-d', this.distro, '--exec', 'sh', '-c', script, 'orca-skill', ...args],
-        {
-          encoding: 'utf8',
-          timeout: GUEST_COMMAND_TIMEOUT_MS,
-          windowsHide: true,
-          maxBuffer: 64 * 1024
-        }
-      )
-      return stdout.trim()
-    } catch (error) {
-      throw Object.assign(new Error('skill-install-wsl-guest-operation-failed'), { cause: error })
+  private async runOutput(
+    script: string,
+    args: string[],
+    maxOutputBytes = GUEST_COMMAND_MAX_OUTPUT_BYTES
+  ): Promise<string> {
+    const result = await runWslProcess({
+      distro: this.distro,
+      loginPath: 'none',
+      script,
+      // POSIX file operations; declared because the payload is opaque here.
+      shell: 'sh',
+      args,
+      timeoutMs: GUEST_COMMAND_TIMEOUT_MS,
+      maxOutputBytes
+    })
+    if (result.code !== 0 || result.timedOut) {
+      throw Object.assign(new Error('skill-install-wsl-guest-operation-failed'), {
+        cause: new Error(`wsl exited ${result.code}: ${result.stderr}`)
+      })
     }
+    return result.stdout.trim()
   }
 }
 

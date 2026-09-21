@@ -15,6 +15,7 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { TerminalHost } from './terminal-host'
 import type { DaemonFileLog } from './daemon-file-log'
+import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
@@ -46,6 +47,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExit?.(0), 1)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExit?.(137)),
     signal: vi.fn(),
     onData(callback) {
@@ -208,6 +210,38 @@ describe('STA-4091 previously recoverable restore depth', () => {
       } finally {
         live.dispose()
       }
+    })
+
+    it('revokes persisted shell ownership when newer output starts a TUI', async () => {
+      const restoreInfo: ColdRestoreInfo = {
+        snapshotAnsi: 'stale-tui',
+        scrollbackAnsi: '',
+        rehydrateSequences: '\x1b[?1049h',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+        modes: {
+          bracketedPaste: false,
+          mouseTracking: true,
+          applicationCursor: false,
+          alternateScreen: true
+        },
+        terminalOwner: 'shell'
+      }
+      const liveSnapshot = {
+        ...restoreInfo,
+        scrollbackLines: 0,
+        outputSequence: 42
+      } as TerminalSnapshot
+
+      const durable = await buildDurableCheckpointSnapshot({
+        liveSnapshot,
+        restoreInfo,
+        pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }]
+      })
+
+      expect(durable.modes.alternateScreen).toBe(true)
+      expect(durable.terminalOwner).toBeUndefined()
     })
 
     it('falls back to the live window when pending resize records are invalid', async () => {

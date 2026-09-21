@@ -17,6 +17,7 @@ import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from './workspace-cleanup-host-identity'
+import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 
 /**
  * Streaming ticks replace only the candidate objects they touched, so all
@@ -105,7 +106,10 @@ export function computeWorkspaceCleanupFacetList(args: {
     const sizeBytes =
       sources.sizeBytesByWorktreeId.get(hostIdentity) ??
       sources.sizeBytesByWorktreeId.get(candidate.worktreeId)
-    const lastVisitedAt = sources.lastVisitedAtByWorktreeId[candidate.worktreeId]
+    const lastVisitedAt = getWorktreeVisitTimestamp(sources.lastVisitedAtByWorktreeId, {
+      id: candidate.worktreeId,
+      hostId: getWorkspaceCleanupCandidateHostId(candidate)
+    })
     const agentState = sources.liveAgentStatusByWorktreeId.get(candidate.worktreeId)
     const review =
       sources.reviewInfoByWorktreeId.get(hostIdentity) ??

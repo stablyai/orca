@@ -22,12 +22,12 @@ vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
+import { getActiveMultiplexer } from './ssh'
 import {
   beginSshShutdown,
   SSH_SHUTDOWN_BUDGET_MS,
-  getActiveMultiplexer,
   type SshShutdownResult
-} from './ssh'
+} from './ssh-shutdown-drain'
 import type { SshTarget } from '../../shared/ssh-types'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'

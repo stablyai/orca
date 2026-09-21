@@ -20,6 +20,10 @@ import {
   recordAgentHibernationPaneOutput,
   resetAgentHibernationOutputActivityForTests
 } from './agent-hibernation-output-activity'
+import {
+  observeHibernationPtyBindings,
+  resetHibernationPaneAgeForTests
+} from './agent-hibernation-pane-age'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
 import type { AppState } from '@/store/types'
@@ -104,6 +108,17 @@ function installEligibleState(
     shutdownWorktreeTerminals: vi.fn() as never,
     ...overrides
   })
+  // Why: a pane idle long enough to hibernate has necessarily been observed by earlier
+  // coordinator passes, so its PTY binding is old. Seed that here — otherwise the
+  // binding-age floor (which exists to stop a wake or app restart sleeping the whole
+  // backlog immediately) would defer every candidate on its first observed tick.
+  const state = useAppStore.getState()
+  observeHibernationPtyBindings({
+    tabsByWorktree: state.tabsByWorktree,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    now: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 60_000,
+    idleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
+  })
   return shutdownCompletedAgentPaneForHibernation
 }
 
@@ -177,6 +192,7 @@ afterEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   resetForegroundTerminalTabIdsForTests()
   resetAgentHibernationOutputActivityForTests()
+  resetHibernationPaneAgeForTests()
   hydrateDrivers([])
   mockRuntimeEnvironmentCall.mockReset()
   vi.useRealTimers()
@@ -281,7 +297,9 @@ describe('agent sleep coordinator', () => {
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
-    useAppStore.setState({ activeWorktreeId: 'wt-bg' })
+    // Why: returning to the tab between the plan and the confirm is the eligibility change this
+    // must observe. The active worktree is no longer skipped wholesale, so it is no longer a lever.
+    setForegroundTerminalTabIds(['tab-1'])
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()
@@ -527,6 +545,53 @@ describe('agent sleep coordinator', () => {
     ).toHaveLength(3)
   })
 
+  it('revalidates a confirmed pane without listing unrelated runtime worktrees', async () => {
+    installRuntimeListResponses(...Array.from({ length: 5 }, () => runtimeListResult(['pty-1'])))
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      worktreesByRepo: {
+        'fixture-repo': [
+          {
+            id: 'wt-bg',
+            repoId: 'fixture-repo',
+            hostId: 'runtime:runtime-1',
+            runtimeOwnerEnvironmentId: 'runtime-1'
+          },
+          {
+            id: 'wt-unrelated',
+            repoId: 'fixture-repo',
+            hostId: 'runtime:runtime-2',
+            runtimeOwnerEnvironmentId: 'runtime-2'
+          }
+        ]
+      } as never,
+      tabsByWorktree: {
+        'wt-bg': [tab()],
+        'wt-unrelated': [{ ...tab(), id: 'tab-2', worktreeId: 'wt-unrelated' }]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+
+    await runAgentHibernationTick()
+    await runAgentHibernationTick()
+
+    expect(shutdown).toHaveBeenCalledTimes(1)
+    const listCalls = mockRuntimeEnvironmentCall.mock.calls.filter(
+      ([args]) => args.method === 'terminal.list'
+    )
+    // Two global confirmation samples list both worktrees; the destructive
+    // recheck lists only the candidate's owner: 2W + C, not 2W + C×W.
+    expect(listCalls).toHaveLength(5)
+    expect(listCalls.at(-1)?.[0]).toMatchObject({
+      selector: 'runtime-1',
+      params: { worktree: expect.anything() }
+    })
+  })
+
   it('uses fresh store state after awaiting runtime liveness before shutdown', async () => {
     vi.useFakeTimers()
     const delayed = deferred<ReturnType<typeof runtimeListResult>>()
@@ -568,7 +633,7 @@ describe('agent sleep coordinator', () => {
 
     await vi.advanceTimersByTimeAsync(1000)
     await vi.advanceTimersByTimeAsync(1000)
-    useAppStore.setState({ activeWorktreeId: 'wt-bg' })
+    setForegroundTerminalTabIds(['tab-1'])
     delayed.resolve(runtimeListResult(['pty-1']))
     await Promise.resolve()
 
@@ -669,5 +734,44 @@ describe('agent sleep coordinator', () => {
     expect(
       mockRuntimeEnvironmentCall.mock.calls.filter(([args]) => args.method === 'terminal.list')
     ).toHaveLength(2)
+  })
+})
+
+describe('teardown drains sequentially', () => {
+  // Why: each shutdown re-runs a full runtime-liveness sweep and then a stopExact RPC.
+  // Firing the whole confirmed set at once meant ~100 concurrent sweeps plus ~100
+  // concurrent stops on the first pass after a backlog — hundreds of near-simultaneous
+  // RPCs on an SSH runtime.
+  it('never runs two pane teardowns at the same time', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const shutdown = vi.fn().mockImplementation(async () => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      inFlight -= 1
+    })
+    const second = '22222222-2222-4222-8222-222222222222'
+    const third = '33333333-3333-4333-8333-333333333333'
+    const leafIds = [LEAF, second, third]
+    const entries = leafIds.map((leafId) => ({ ...entry(), paneKey: `tab-1:${leafId}` }))
+    installEligibleState(shutdown, {
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF },
+          activeLeafId: LEAF,
+          expandedLeafId: null,
+          ptyIdsByLeafId: Object.fromEntries(leafIds.map((id, i) => [id, `pty-${i + 1}`]))
+        }
+      } as never,
+      ptyIdsByTabId: { 'tab-1': leafIds.map((_, i) => `pty-${i + 1}`) },
+      agentStatusByPaneKey: Object.fromEntries(entries.map((e) => [e.paneKey, e])) as never
+    })
+
+    await runAgentHibernationTick()
+    await runAgentHibernationTick()
+
+    expect(shutdown).toHaveBeenCalledTimes(leafIds.length)
+    expect(maxInFlight).toBe(1)
   })
 })

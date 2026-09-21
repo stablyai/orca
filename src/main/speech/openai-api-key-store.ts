@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -43,7 +43,7 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
 
 export function hasOpenAiSpeechApiKey(): boolean {
   // Why: Settings and model-state refresh call this on startup; checking file
-  // existence avoids decrypting safeStorage and triggering macOS keychain prompts.
+  // existence avoids a decrypt that triggers macOS keychain prompts.
   return existsSync(getOpenAiKeyPath())
 }
 
@@ -53,15 +53,13 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
     throw new Error('OpenAI API key is required')
   }
   ensureOrcaDir()
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), safeStorage.encryptString(trimmed), { mode: 0o600 })
+  if (getSecretStore().isEncryptionAvailable()) {
+    writeFileSync(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
     cachedOpenAiSpeechApiKey = trimmed
     return
   }
 
-  console.warn(
-    '[speech] safeStorage encryption unavailable — storing OpenAI speech key in plaintext'
-  )
+  console.warn('[speech] secret encryption unavailable — storing OpenAI speech key in plaintext')
   writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
   cachedOpenAiSpeechApiKey = trimmed
 }
@@ -79,13 +77,13 @@ export function readOpenAiSpeechApiKey(): string {
     const raw = readFileSync(keyPath)
     const legacyJson = readLegacyJsonStoredOpenAiKey()
     if (legacyJson) {
-      cachedOpenAiSpeechApiKey = safeStorage.decryptString(
+      cachedOpenAiSpeechApiKey = getSecretStore().decryptString(
         Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
       )
       return cachedOpenAiSpeechApiKey
     }
-    cachedOpenAiSpeechApiKey = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
+    cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
+      ? getSecretStore().decryptString(raw)
       : raw.toString('utf8')
     return cachedOpenAiSpeechApiKey
   } catch {

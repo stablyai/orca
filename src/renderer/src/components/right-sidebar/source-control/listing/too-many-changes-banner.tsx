@@ -68,9 +68,12 @@ export function TooManyChangesBanner({
   }
 
   return (
-    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+    <div
+      data-testid="too-many-changes-banner"
+      className="flex flex-col gap-2 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2"
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-px size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="min-w-0 flex-1 text-xs text-foreground">
           {translate(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
@@ -78,18 +81,18 @@ export function TooManyChangesBanner({
             { value0: limit.toLocaleString() }
           )}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="w-24 shrink-0 text-xs"
-          disabled={isRetrying}
-          onClick={() => void handleRetry()}
-        >
-          {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
-          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
-        </Button>
       </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        className="self-end text-xs"
+        disabled={isRetrying}
+        onClick={() => void handleRetry()}
+      >
+        {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
+        {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+      </Button>
     </div>
   )
 }

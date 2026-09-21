@@ -33,6 +33,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     | undefined
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-restored' }),
     handleMobileSubscribe: vi.fn().mockResolvedValue(true),
@@ -108,6 +109,7 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
     .mockResolvedValue({ data: 'restored tui', cols: 80, rows: 24 })
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-tui' }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),

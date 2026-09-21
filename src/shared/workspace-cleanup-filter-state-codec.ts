@@ -11,7 +11,6 @@ import {
   WORKSPACE_CLEANUP_SORT_DIRECTION_VALUES,
   WORKSPACE_CLEANUP_SORT_FIELD_VALUES,
   WORKSPACE_CLEANUP_TICKET_SOURCE_VALUES,
-  WORKSPACE_CLEANUP_TIER_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
 } from './workspace-cleanup-facet-rankings'
 import {
@@ -110,9 +109,7 @@ export function normalizeWorkspaceCleanupFilterState(value: unknown): WorkspaceC
         WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES,
         base.safety.blockerMode
       ),
-      tiers: asEnumList(safety.tiers, WORKSPACE_CLEANUP_TIER_VALUES),
-      dismissed: asTriState(safety.dismissed, base.safety.dismissed),
-      selectableOnly: asBoolean(safety.selectableOnly, base.safety.selectableOnly)
+      dismissed: asTriState(safety.dismissed, base.safety.dismissed)
     }
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import { workItemsCacheKey } from './github'
+import { workItemsCacheKey } from '../github/cache-identity'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'

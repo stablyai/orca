@@ -1,18 +1,14 @@
 import { readdir, stat, lstat, realpath } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
 import { sortDirEntries } from '../shared/file-name-sort'
+import { forEachWithConcurrency } from '../shared/map-with-concurrency'
 import { expandTilde } from './context'
 
-async function isDirectoryEntry(
+async function resolveSymlinkDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
 ): Promise<boolean> {
-  if (entry.isDirectory()) {
-    return true
-  }
-  if (!entry.isSymbolicLink()) {
-    return false
-  }
   try {
     // Why: the file explorer needs target type for symlinked directories so a
     // workspace link to an external folder expands instead of opening as a file.
@@ -40,16 +36,38 @@ function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
   }
 }
 
+// Why bounded: a pnpm `node_modules` is hundreds-to-thousands of package symlinks, and one
+// unbounded `Promise.all` of stats from a single readDir saturates libuv's four-thread pool —
+// delaying every other relay filesystem operation, including the interactive reads the
+// list-files scan coordinator exists to protect. Matches the cap every other bounded probe in
+// this codebase uses.
+const SYMLINK_DIRECTORY_PROBE_CONCURRENCY = 8
+
 export async function readRelayDir(params: Record<string, unknown>) {
   const dirPath = expandTilde(params.dirPath as string)
   const entries = await readdir(dirPath, { withFileTypes: true })
-  const mapped = await Promise.all(
-    entries.map(async (entry) => ({
+  const mapped: { name: string; isDirectory: boolean; isSymlink: boolean }[] = []
+  const symlinkEntries: { entry: Dirent; mappedEntry: (typeof mapped)[number] }[] = []
+  for (const entry of entries) {
+    const mappedEntry = {
       name: entry.name,
-      isDirectory: await isDirectoryEntry(dirPath, entry),
+      isDirectory: entry.isDirectory(),
       isSymlink: entry.isSymbolicLink()
-    }))
-  )
+    }
+    mapped.push(mappedEntry)
+    if (!mappedEntry.isDirectory && mappedEntry.isSymlink) {
+      symlinkEntries.push({ entry, mappedEntry })
+    }
+  }
+  if (symlinkEntries.length > 0) {
+    await forEachWithConcurrency(
+      symlinkEntries,
+      SYMLINK_DIRECTORY_PROBE_CONCURRENCY,
+      async ({ entry, mappedEntry }) => {
+        mappedEntry.isDirectory = await resolveSymlinkDirectoryEntry(dirPath, entry)
+      }
+    )
+  }
   return sortDirEntries(mapped)
 }
 

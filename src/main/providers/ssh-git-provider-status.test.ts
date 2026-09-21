@@ -57,6 +57,18 @@ describe('SshGitProvider', () => {
     )
   })
 
+  it('getStatus forwards a false line-stats request', async () => {
+    mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await provider.getStatus('/home/user/repo', { includeLineStats: false })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.status',
+      { worktreePath: '/home/user/repo', includeLineStats: false },
+      { signal: expect.any(AbortSignal) }
+    )
+  })
+
   it('getStatus forwards upstream-negative-cache bypass only when requested', async () => {
     const statusResult = { entries: [], conflictOperation: 'unknown' }
     mux.request.mockResolvedValue(statusResult)
@@ -193,10 +205,13 @@ describe('SshGitProvider', () => {
     const compareResult = { summary: { ahead: 2, behind: 0 }, entries: [] }
     mux.request.mockResolvedValue(compareResult)
 
-    const result = await provider.getBranchCompare('/home/user/repo', 'main')
+    const result = await provider.getBranchCompare('/home/user/repo', 'main', {
+      admissionTier: 'background'
+    })
     expect(mux.request).toHaveBeenCalledWith('git.branchCompare', {
       worktreePath: '/home/user/repo',
-      baseRef: 'main'
+      baseRef: 'main',
+      admissionTier: 'background'
     })
     expect(result).toEqual(compareResult)
   })

@@ -181,6 +181,87 @@ describe('AiVaultScannerServiceClient', () => {
     client.dispose()
   })
 
+  it('starts a queued retry immediately when a forced refresh clears backoff', async () => {
+    vi.useFakeTimers()
+    const children: AiVaultServiceTestChild[] = []
+    const client = new AiVaultScannerServiceClient({
+      processFactory: () => {
+        const child = new AiVaultServiceTestChild(18_345 + children.length)
+        children.push(child)
+        return child.asChildProcess()
+      },
+      init: { sessionParseCache: null }
+    })
+    const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
+
+    vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
+    await Promise.resolve()
+    expect(children).toHaveLength(1)
+
+    client.clearRestartCircuit()
+    expect(children).toHaveLength(2)
+
+    readyAiVaultServiceChild(children[1]!)
+    await vi.waitFor(() =>
+      expect(children[1]!.sent).toContainEqual(expect.objectContaining({ operation: 'titles' }))
+    )
+    children[1]!.emit('message', {
+      type: 'result',
+      id: aiVaultServiceRequestId(children[1]!, 'titles'),
+      operation: 'titles',
+      value: { titles: [] }
+    })
+    await expect(titles).resolves.toEqual({ titles: [] })
+    client.dispose()
+  })
+
+  it('lets a forced refresh reopen the circuit instead of waiting out the window', async () => {
+    vi.useFakeTimers()
+    const children: AiVaultServiceTestChild[] = []
+    const client = new AiVaultScannerServiceClient({
+      processFactory: () => {
+        const child = new AiVaultServiceTestChild(22_345 + children.length)
+        children.push(child)
+        return child.asChildProcess()
+      },
+      init: { sessionParseCache: null }
+    })
+    // Each request retries its cold start once, so two requests spend the three
+    // faults the circuit breaker needs.
+    const first = client.request({ type: 'request', operation: 'titles', requests: [] })
+    vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
+    await Promise.resolve()
+    vi.advanceTimersByTime(250)
+    await Promise.resolve()
+    vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
+    await expect(first).rejects.toThrow('did not become ready')
+    vi.advanceTimersByTime(1_000)
+    await Promise.resolve()
+
+    const blocked = client.request({ type: 'request', operation: 'titles', requests: [] })
+    vi.advanceTimersByTime(AI_VAULT_SERVICE_READY_TIMEOUT_MS)
+    await Promise.resolve()
+    vi.advanceTimersByTime(5_000)
+    await expect(blocked).rejects.toThrow('circuit is open')
+    expect(children).toHaveLength(3)
+
+    client.clearRestartCircuit()
+    const retried = client.request({ type: 'request', operation: 'titles', requests: [] })
+    await vi.waitFor(() => expect(children).toHaveLength(4))
+    readyAiVaultServiceChild(children[3]!)
+    await vi.waitFor(() =>
+      expect(children[3]!.sent).toContainEqual(expect.objectContaining({ operation: 'titles' }))
+    )
+    children[3]!.emit('message', {
+      type: 'result',
+      id: aiVaultServiceRequestId(children[3]!, 'titles'),
+      operation: 'titles',
+      value: { titles: [] }
+    })
+    await expect(retried).resolves.toEqual({ titles: [] })
+    client.dispose()
+  })
+
   it('acknowledges cache invalidation through the running child', async () => {
     const { child, client } = setup()
     const invalidation = client.invalidate(['/tmp/deleted.jsonl'])

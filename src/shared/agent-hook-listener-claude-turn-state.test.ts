@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import {
   CLAUDE_PREVIOUS_PROMPT_ID,
@@ -223,22 +223,23 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('maps an identity-matched Claude manual compact lifecycle', () => {
+  it('maps a Claude manual compact lifecycle, ignoring the pre-validation event', () => {
     normalizeAndAccept(state, 'claude', {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'work before compact',
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
       session_id: 'session-a'
     })
+    // Why: PreCompact fires before the compact is validated — an aborted compact emits it alone —
+    // so it is neither registered nor mapped. Only the completion may move the pane.
     const pre = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PreCompact',
       trigger: 'manual',
       prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
-    expect(pre).not.toBeNull()
-    expect(pre!.payload.state).toBe('working')
-    expect(pre!.payload.agentType).toBe('claude')
+    expect(pre).toBeNull()
+    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
 
     const post = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PostCompact',
@@ -249,6 +250,7 @@ describe('shared agent-hook-listener', () => {
     expect(post).not.toBeNull()
     expect(post!.payload.state).toBe('done')
     expect(post!.payload.agentType).toBe('claude')
+    expect(post!.payload.sessionBoundary).toBe(true)
   })
 
   it('keeps the preceding user prompt on the completed compact row', () => {
@@ -256,12 +258,6 @@ describe('shared agent-hook-listener', () => {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'work before compact',
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
-      session_id: 'session-a'
-    })
-    normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'PreCompact',
-      trigger: 'manual',
-      prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
     const post = normalizeAndAccept(state, 'claude', {

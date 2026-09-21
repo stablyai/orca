@@ -10,16 +10,23 @@ import {
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
-import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import {
+  findIndexedDetectedWorktrees,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
+import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
+import { branchName } from '@/lib/git-utils'
+
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
   worktreeId: string,
-  rawUpdates: Partial<WorktreeMeta>
+  rawUpdates: Partial<WorktreeMeta>,
+  executionHostId?: ExecutionHostId
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
@@ -29,12 +36,20 @@ export function applyDetectedWorktreeUpdates(
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
     const nextWorktrees = result.worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
+      if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
         return worktree
       }
       repoChanged = true
       changed = true
-      return { ...worktree, ...updates }
+      const next = { ...worktree, ...updates }
+      if (updates.displayNameIsPinned !== undefined) {
+        next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+        if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
+          const automaticName = branchName(next.branch)
+          next.displayName = automaticName || worktree.displayName
+        }
+      }
+      return next
     })
     nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
   }
@@ -87,16 +102,21 @@ export function findKnownWorktreeById(
   if (visible) {
     return visible
   }
-  for (const result of Object.values(state.detectedWorktreesByRepo)) {
-    const detected = result.worktrees.find(
-      (worktree) =>
-        worktree.id === worktreeId &&
-        (!executionHostId ||
-          worktreeMatchesHost(worktree, executionHostId, {
-            unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
-          }))
-    )
-    if (detected) {
+  // Why the index: this miss path runs per activity row for exactly the worktrees the
+  // feature targets (retained agents on deleted worktrees); the cached index replaces a
+  // full scan of every repo's detected worktrees. The index holds the same row objects,
+  // so the cast restores the listing's row type.
+  const detectedCandidates = findIndexedDetectedWorktrees(
+    state.detectedWorktreesByRepo,
+    worktreeId
+  ) as DetectedWorktreeListResult['worktrees']
+  for (const detected of detectedCandidates) {
+    if (
+      !executionHostId ||
+      worktreeMatchesHost(detected, executionHostId, {
+        unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
+      })
+    ) {
       return detected
     }
   }

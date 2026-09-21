@@ -35,6 +35,7 @@ export function createHostTerminalRuntimeStub(
     cols?: number
     rows?: number
     initialBuffer?: string
+    overflowInitialSnapshots?: boolean
   } = {}
 ): HostTerminalRuntimeStub {
   const terminalHandle = options.terminalHandle ?? 'terminal-journey'
@@ -89,9 +90,27 @@ export function createHostTerminalRuntimeStub(
     rows: number
     seq: number
     source: 'headless'
+    alternateScreen: false
+    terminalOwner: 'shell'
   }> => {
     stub.serializeCount++
-    return { data: stub.buffer, cols, rows, seq: outputSequence, source: 'headless' }
+    const snapshot = {
+      data: stub.buffer,
+      cols,
+      rows,
+      seq: outputSequence,
+      source: 'headless' as const,
+      alternateScreen: false as const,
+      terminalOwner: 'shell' as const
+    }
+    if (options.overflowInitialSnapshots && stub.serializeCount <= 2) {
+      const data = 'x'.repeat(300 * 1024)
+      outputSequence += data.length
+      for (const listener of Array.from(dataListeners)) {
+        listener(data, { seq: outputSequence, rawLength: data.length })
+      }
+    }
+    return snapshot
   }
 
   const runtime: Record<string, unknown> = {

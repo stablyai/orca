@@ -1,4 +1,5 @@
-import { DaemonServer, type DaemonServerOptions } from './daemon-server'
+import { DaemonServer } from './daemon-server'
+import type { DaemonServerOptions } from './daemon-server-options'
 import type { DaemonFileLog } from './daemon-file-log'
 
 export type DaemonStartOptions = {

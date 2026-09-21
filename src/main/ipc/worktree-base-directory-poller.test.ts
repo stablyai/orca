@@ -10,6 +10,7 @@ import {
   type WorktreeBasePollEvent,
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
+import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget
@@ -401,7 +402,7 @@ describe('worktree base directory poller', () => {
       () => target.repos,
       (events) => received.push(events),
       // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -441,7 +442,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -468,7 +469,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -493,7 +494,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -517,7 +518,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -539,7 +540,7 @@ describe('worktree base directory poller', () => {
       () => target.repos,
       (events) => received.push(events),
       // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -571,7 +572,7 @@ describe('worktree base directory poller', () => {
       (events) => received.push(events),
       {
         pollIntervalMs: POLL_MS,
-        platform: 'linux',
+        platform: 'freebsd',
         visibility: visibility.source,
         onFullScan: () => fullScans.push(Date.now())
       }
@@ -644,28 +645,25 @@ describe('worktree base directory poller', () => {
       )
     })
 
-    it('covers primary-checkout metadata alongside the narrow stream', async () => {
+    it('covers primary-checkout metadata through its bounded fallback poll', async () => {
       const commonDir = await makeRoot()
-      await mkdir(join(commonDir, 'worktrees'))
       const received: WorktreeBasePollEvent[][] = []
-      const target = makeTarget('git-common', commonDir)
-      const poller = await startWorktreeBaseDirectoryPoller(
-        target,
-        () => target.repos,
+      const visibility = createWorktreePollerWindowVisibility(() => null)
+      const poller = await startGitCommonPrimaryPolling(
+        commonDir,
+        () => [],
         (events) => received.push(events),
-        { pollIntervalMs: POLL_MS, platform: 'darwin' }
+        POLL_MS,
+        visibility
       )
       cleanups.push(() => poller.unsubscribe())
 
-      // The narrow stream is rooted at worktrees/, so top-level HEAD writes
-      // must arrive through the companion metadata poll.
       const headFile = join(commonDir, 'HEAD')
       await writeFile(headFile, 'ref: refs/heads/main')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'create' && event.path === headFile)
       )
 
-      await new Promise((resolve) => setTimeout(resolve, 10))
       await writeFile(headFile, 'ref: refs/heads/feature')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'update' && event.path === headFile)

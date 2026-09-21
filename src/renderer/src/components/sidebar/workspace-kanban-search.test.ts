@@ -116,13 +116,9 @@ describe('matchWorkspaceBoardWorktrees', () => {
     expect(match(worktrees, 'x'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1))).toBeNull()
   })
 
-  // KNOWN GAP (STA-4343): the board cannot yet tell two same-id host rows apart, and the
-  // cause is upstream of this module — searchWorktrees looks up evidence in a
-  // `documents` map keyed by BARE worktree id (worktree-palette-search.ts), so the second
-  // row's document overwrites the first and only one row can ever match. The matched set
-  // below is host-qualified and ready for the fix; closing the gap means host-qualifying
-  // that document map, which belongs with the palette work, not this PR.
-  it('cannot yet separate two same-id host rows (documents map is id-keyed upstream)', () => {
+  // STA-4343 closed: the documents map is keyed by host identity, so two workspaces sharing
+  // `repoId::path` across hosts each keep their own searchable document.
+  it('separates two same-id host rows', () => {
     const local = worktree({ id: 'shared', branch: 'refs/heads/local-only' })
     const remote = worktree({
       id: local.id,
@@ -130,10 +126,9 @@ describe('matchWorkspaceBoardWorktrees', () => {
       branch: 'refs/heads/remote-only'
     })
 
-    // Documents collapse on the shared id, so the local row's branch is not searchable.
-    expect(match([local, remote], 'local-only')).toEqual(new Set())
-    // What DOES hold today: the matched set is keyed by host identity, not bare id, so a
-    // match never leaks across hosts once the upstream map is fixed.
+    // Each row matches on its OWN branch, and neither match leaks to the other host.
+    expect(match([local, remote], 'local-only')).toEqual(identities(local))
+    expect(match([local, remote], 'remote-only')).toEqual(identities(remote))
     expect(match([local], 'local-only')).toEqual(identities(local))
   })
 })

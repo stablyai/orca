@@ -260,9 +260,10 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Why: the reply leaves the query's own turn so a still-cooked tty cannot
-      // echo it back as text instead of delivering it to the agent (#12112).
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      // Answered in the query's own turn. A cooked tty echoes the reply as well as
+      // delivering it, and the echo is contained by the output-side projections (#12112);
+      // withholding the write is what let replies overtake each other (#15559).
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
@@ -299,8 +300,8 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Why: both slots of a duplicate-slot query leave the query's own turn too (#12112).
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      // Both slots of a duplicate-slot query are answered in that same turn.
+      expect(mockProc.proc.write).toHaveBeenCalledTimes(2)
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')

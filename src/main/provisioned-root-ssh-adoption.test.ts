@@ -73,6 +73,33 @@ describe('adoptProvisionedRootSshCheckout', () => {
     })
   })
 
+  it('pins an explicit label even when it equals the adopted branch', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi.fn().mockResolvedValue([gitWorktree(projectRoot)]),
+      exec: sparseCheckoutProbe(false)
+    } as never)
+    const { store, setWorktreeMeta } = makeStore()
+
+    const result = await adoptProvisionedRootSshCheckout({
+      userDataPath,
+      request: {
+        ...request(projectRoot),
+        displayName: 'fix-sandbox',
+        displayNameKind: 'user'
+      },
+      repo: repo(projectRoot),
+      store,
+      isRepoCurrent: () => true
+    })
+
+    expect(result.worktree.displayName).toBe('fix-sandbox')
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      `repo-1::${projectRoot}`,
+      expect.objectContaining({ displayName: 'fix-sandbox', displayNameIsPinned: true })
+    )
+  })
+
   it('rejects a recipe checkout on a branch Orca did not request', async () => {
     seedRuntime(userDataPath, projectRoot)
     registerSshGitProvider(connectionId, {

@@ -154,7 +154,10 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             )}
           />
         )}
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        {React.createElement(FileIcon, {
+          className: 'size-3.5 shrink-0',
+          style: { color: STATUS_COLORS[entry.status] }
+        })}
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>

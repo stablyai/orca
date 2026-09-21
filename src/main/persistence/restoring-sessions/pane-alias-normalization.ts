@@ -1,5 +1,6 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
+import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import {
   isTerminalLeafId,
   parseLegacyNumericPaneKey,
@@ -113,15 +114,18 @@ export function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKe
     ) {
       return false
     }
-    const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
-    const relocatedSource = parsePaneKey(candidate.legacyPaneKey)
-    const stable = parsePaneKey(candidate.stablePaneKey)
-    return Boolean(stable && ((legacy && legacy.tabId === stable.tabId) || relocatedSource))
+    return (
+      canRegisterPaneKeyAlias(candidate.legacyPaneKey, candidate.stablePaneKey) ||
+      Boolean(parsePaneKey(candidate.legacyPaneKey) && parsePaneKey(candidate.stablePaneKey))
+    )
   })
 }
 
 export function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
-  if (parseLegacyNumericPaneKey(entry.legacyPaneKey)) {
+  if (
+    parseLegacyNumericPaneKey(entry.legacyPaneKey) ||
+    isOpaqueRemintedPaneKey(entry.legacyPaneKey)
+  ) {
     agentHookServer.registerPaneKeyAlias(
       entry.legacyPaneKey,
       entry.stablePaneKey,

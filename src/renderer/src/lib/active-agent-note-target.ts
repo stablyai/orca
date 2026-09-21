@@ -1,4 +1,5 @@
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -174,9 +175,11 @@ export async function findActiveRuntimeTerminal(
     },
     { timeoutMs }
   )
+  // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
+  const runtimeTabId = toHostSessionTabId(noteTarget.tabId)
   return (
     terminals.find(
-      (terminal) => terminal.tabId === noteTarget.tabId && terminal.leafId === noteTarget.leafId
+      (terminal) => terminal.tabId === runtimeTabId && terminal.leafId === noteTarget.leafId
     ) ?? null
   )
 }

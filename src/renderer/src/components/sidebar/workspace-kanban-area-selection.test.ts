@@ -6,7 +6,7 @@ import {
   getAreaSelectionCardIds,
   updatePreviewSelection
 } from './workspace-kanban-area-selection-dom'
-import { shouldCommitWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
+import { shouldCommitWorkspaceKanbanAreaSelection } from './workspace-kanban-area-selection-state'
 
 describe('workspace kanban area selection finish', () => {
   it('commits an empty non-additive surface click so selection clears', () => {

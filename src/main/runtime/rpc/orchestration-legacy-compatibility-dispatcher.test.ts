@@ -15,6 +15,7 @@ import {
   WORKER_HANDLE,
   WORKER_PANE
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
@@ -190,8 +191,11 @@ describe('legacy compatibility through RpcDispatcher', () => {
       launchTokenHash: createHash('sha256').update('worker-token').digest('hex'),
       processIncarnation: 'process-1'
     })
-    harness.db.updateTaskStatus(harness.taskId, 'ready')
-    const currentDispatch = harness.db.createDispatchContext(
+    // Recreate the pre-boundary state where A settled before a current attempt was persisted.
+    const sqlite = (harness.db as unknown as { db: Database.Database }).db
+    sqlite.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(harness.taskId)
+    const currentDispatch = createRootDispatch(
+      harness.db,
       harness.taskId,
       'term_current_worker',
       'tab_current_worker:77777777-7777-4777-8777-777777777777',
@@ -395,7 +399,8 @@ describe('legacy compatibility through RpcDispatcher', () => {
       coordinatorPaneKey: 'tab_current_coord:55555555-5555-4555-8555-555555555555'
     })
     const task = harness.db.createTask({ spec: 'current assignment', runId: run.id })
-    const dispatch = harness.db.createDispatchContext(
+    const dispatch = createRootDispatch(
+      harness.db,
       task.id,
       'term_current_worker',
       'tab_current_worker:66666666-6666-4666-8666-666666666666',
@@ -697,11 +702,11 @@ describe('legacy compatibility through RpcDispatcher', () => {
       )
       expect(first).toMatchObject({
         ok: true,
-        result: { binding: { consumerGeneration: 1 }, mutation: { replayed: false } }
+        result: { run: { consumer_generation: 1 }, mutation: { replayed: false } }
       })
       expect(replay).toMatchObject({
         ok: true,
-        result: { binding: { consumerGeneration: 1 }, mutation: { replayed: true } }
+        result: { run: { consumer_generation: 1 }, mutation: { replayed: true } }
       })
       expect(harness.db.getRun(harness.adoptedRunId)?.consumer_generation).toBe(1)
     }

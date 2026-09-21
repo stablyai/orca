@@ -1,18 +1,12 @@
 import { useEffect } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { useAppStore } from '../store'
 import { isMac } from './app-window-chrome'
+import { selectWindowVisibilityActions } from './window-visibility-actions-selector'
 
 /** Window-visibility reactions that must run app-wide, not per-surface. */
 export function useWindowVisibilityEffects(): void {
-  const actions = useAppStore(
-    useShallow((s) => ({
-      refreshAllGitHub: s.refreshAllGitHub,
-      reportVisibleGitHubPRRefreshCandidates: s.reportVisibleGitHubPRRefreshCandidates,
-      bumpGitHubPRVisibleRefreshGeneration: s.bumpGitHubPRVisibleRefreshGeneration
-    }))
-  )
+  const actions = useAppStore(selectWindowVisibilityActions)
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {

@@ -395,25 +395,27 @@ describe('normalizeTerminalTitle', () => {
     )
   })
 
-  it('collapses Pi spinner and idle titles to stable labels', () => {
-    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
-    expect(normalizeTerminalTitle('π -')).toBe('Pi')
-    expect(normalizeTerminalTitle('π:')).toBe('Pi')
-    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  it('preserves Pi titles and canonicalizes only the spinner frame', () => {
+    // Only the braille frame churns; the rest is the session name and cwd (#16093).
+    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('⠙ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('π - my-project')).toBe('π - my-project')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ π: my-project')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('π: my-project')
+    expect(normalizeTerminalTitle('π -')).toBe('π -')
+    expect(normalizeTerminalTitle('π:')).toBe('π:')
+    expect(normalizeTerminalTitle('π ')).toBe('π ')
   })
 
-  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
-    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
+  it('does not route Pi titles whose cwd mentions Gemini into Gemini normalization', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ π - gemini')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('π - gemini')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ π: gemini')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('π: gemini')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ π gemini')
+    expect(normalizeTerminalTitle('π gemini')).toBe('π gemini')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ π - gemini-project')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('π - gemini-project')
   })
 })
 

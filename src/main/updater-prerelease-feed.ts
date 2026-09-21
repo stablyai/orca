@@ -105,16 +105,71 @@ function getManifestAssetNames(manifestText: string): string[] {
 
 type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
 
-async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<ReleaseReadiness> {
+function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadiness> {
+  return new Promise((resolve) => {
+    const request = net.request({ method: 'HEAD', url: assetUrl, redirect: 'manual' })
+    let settled = false
+    const settle = (readiness: ReleaseReadiness): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      resolve(readiness)
+    }
+    const timeout = setTimeout(() => {
+      try {
+        request.abort()
+      } catch {
+        // The request may already have been cancelled by Electron.
+      }
+      settle('unavailable')
+    }, FETCH_TIMEOUT_MS)
+
+    request.on('redirect', (statusCode) => {
+      // Why: GitHub's 302 proves the asset exists without probing its signed storage URL.
+      settle(statusCode >= 300 && statusCode < 400 ? 'ready' : 'unavailable')
+    })
+    request.on('response', (response) => {
+      settle(
+        response.statusCode === 404
+          ? 'not-ready'
+          : response.statusCode >= 200 && response.statusCode < 300
+            ? 'ready'
+            : 'unavailable'
+      )
+    })
+    request.on('error', () => settle('unavailable'))
+    try {
+      request.end()
+    } catch {
+      settle('unavailable')
+    }
+  })
+}
+
+async function getReleaseAssetReadiness(tag: string, assetName: string): Promise<ReleaseReadiness> {
+  const isRelativeAsset = !/^https?:\/\//i.test(assetName)
+  const isGitHubReleaseAsset =
+    process.platform === 'win32' &&
+    (isRelativeAsset ||
+      /^https:\/\/github\.com\/stablyai\/orca\/releases\/download\//i.test(assetName))
+  const assetUrl = isRelativeAsset
+    ? getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
+    : assetName
+  if (isGitHubReleaseAsset) {
+    return getGitHubReleaseAssetReadiness(assetUrl)
+  }
+
   try {
-    const assetUrl = assetName.startsWith('http')
-      ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     const res = await net.fetch(assetUrl, {
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     })
-    return res.status === 404 ? 'not-ready' : res.ok ? 'ready' : 'unavailable'
+    if (res.status === 404) {
+      return 'not-ready'
+    }
+    return res.ok ? 'ready' : 'unavailable'
   } catch {
     return 'unavailable'
   }
@@ -144,7 +199,7 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
       return 'not-ready'
     }
     const assetResults = await Promise.all(
-      assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName))
+      assetNames.map((assetName) => getReleaseAssetReadiness(tag, assetName))
     )
     return assetResults.includes('not-ready')
       ? 'not-ready'

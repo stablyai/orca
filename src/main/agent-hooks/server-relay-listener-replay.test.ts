@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from '../../shared/agent-hook-listener'
+} from '../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { createShedSubagentsField } from '../../shared/agent-hook-relay'
 import { buildBody, PANE } from './server.test-fixtures'
 
@@ -63,6 +63,7 @@ describe('AgentHookServer listener replay', () => {
     send(restartedRelay, { hook_event_name: 'SubagentStop', agent_id: 'child-a' })
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       state: 'working',
+      prompt: 'coordinate reviewers',
       model: 'gpt-5.4',
       providerSession: { key: 'session_id', id: 'root-session' },
       subagents: [expect.objectContaining({ id: 'child-b' })]

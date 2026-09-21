@@ -33,6 +33,13 @@ function resolveQuickCommandGroupId(
   )
 }
 
+function resolveQuickCommandLaunchGroupId(
+  worktreeId: string,
+  requestedGroupId: string | null | undefined
+): string | null {
+  return requestedGroupId ?? useAppStore.getState().activeGroupIdByWorktree[worktreeId] ?? null
+}
+
 /**
  * Spawn a fresh terminal tab in the given group and queue the quick-command
  * text as the startup command. The PTY connection layer writes the command
@@ -70,6 +77,15 @@ export function runQuickCommandInNewTab({
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
       return { tabId: result.tabId }
+    }
+    // Structured launches publish their tab asynchronously and therefore do not
+    // return a local tab id; preserve quick-command recency immediately using
+    // the caller's group (or its active group fallback).
+    if (result?.focusAfterMenuClose === 'structured-session') {
+      const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
+      if (launchedGroupId) {
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
+      }
     }
     if (result) {
       return null

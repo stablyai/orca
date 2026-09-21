@@ -22,6 +22,9 @@ export type NativeChatSubscriptionFrame =
       hasMore: boolean
       error?: string
       lifecycle?: NativeChatTurnLifecycle
+      /** No transcript exists behind this window yet — render it, but do not
+       *  treat it as a settled read of the session's history. */
+      pending?: boolean
     }
   | {
       type: 'replacement'

@@ -45,6 +45,34 @@ describe('findSkillFiles', () => {
     expect(found).toEqual([join(root, 'near', 'SKILL.md')])
   })
 
+  it('does not stat directory links beyond the depth bound but still follows in-bound links', async () => {
+    const base = await makeTree()
+    const root = join(base, 'skills')
+    const edge = join(root, 'a', 'b', 'c', 'd')
+    const target = join(base, 'linked')
+    await writeFileAt(join(edge, 'SKILL.md'))
+    await writeFileAt(join(target, 'SKILL.md'))
+    for (let index = 0; index < 32; index += 1) {
+      await symlink(
+        target,
+        join(edge, `link${index.toString().padStart(2, '0')}`),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+    }
+    const statPaths: string[] = []
+    onStat = async (path) => {
+      statPaths.push(path)
+    }
+
+    expect(await findSkillFiles(root, 4)).toEqual([join(edge, 'SKILL.md')])
+    expect(statPaths).toEqual([])
+    expect(await findSkillFiles(root, 5)).toEqual([
+      join(edge, 'SKILL.md'),
+      join(edge, 'link00', 'SKILL.md')
+    ])
+    expect(statPaths).toHaveLength(32)
+  })
+
   it('returns nothing for a missing root rather than throwing', async () => {
     expect(await findSkillFiles(join(await makeTree(), 'absent'), 4)).toEqual([])
   })

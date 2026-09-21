@@ -71,6 +71,26 @@ describe('hosted review RPC methods', () => {
     )
   })
 
+  it('carries interactive card refresh admission through to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('hostedReview.forBranch', {
+        repo: '/repo',
+        branch: 'feature/refresh',
+        admissionTier: 'interactive'
+      })
+    )
+
+    expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive' })
+    )
+  })
+
   it('dispatches creation eligibility requests to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

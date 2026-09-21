@@ -20,6 +20,8 @@ export function createUIStore(): StoreApi<AppState> {
     combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
+    // Why: acknowledgeAgents clears the agent-completion marker the terminal slice owns.
+    unreadAgentCompletionPanes: {},
     ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))

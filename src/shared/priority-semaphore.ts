@@ -1,6 +1,8 @@
 type Waiter = {
   priority: number
   resolve: (release: () => void) => void
+  signal?: AbortSignal
+  onAbort?: () => void
 }
 
 export class PrioritySemaphore {
@@ -11,7 +13,10 @@ export class PrioritySemaphore {
     this.available = concurrency
   }
 
-  acquire(priority: number): Promise<() => void> {
+  acquire(priority: number, signal?: AbortSignal): Promise<() => void> {
+    if (signal?.aborted) {
+      return Promise.reject(signal.reason)
+    }
     if (this.available > 0) {
       this.available--
       let released = false
@@ -24,8 +29,20 @@ export class PrioritySemaphore {
       })
     }
 
-    return new Promise<() => void>((resolve) => {
-      this.waiters.push({ priority, resolve })
+    return new Promise<() => void>((resolve, reject) => {
+      const waiter: Waiter = { priority, resolve, signal }
+      if (signal) {
+        waiter.onAbort = () => {
+          const index = this.waiters.indexOf(waiter)
+          if (index === -1) {
+            return
+          }
+          this.waiters.splice(index, 1)
+          reject(signal.reason)
+        }
+        signal.addEventListener('abort', waiter.onAbort, { once: true })
+      }
+      this.waiters.push(waiter)
     })
   }
 
@@ -45,6 +62,9 @@ export class PrioritySemaphore {
     }
 
     const waiter = this.waiters.splice(bestIdx, 1)[0]
+    if (waiter.signal && waiter.onAbort) {
+      waiter.signal.removeEventListener('abort', waiter.onAbort)
+    }
     let released = false
     waiter.resolve(() => {
       if (released) {

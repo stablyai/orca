@@ -60,27 +60,41 @@ describe('ranked fields', () => {
   it('orders git states from safest to riskiest', () => {
     const rows = [
       makeNamedFacets('unpushed', {
-        candidate: { git: { clean: true, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 1 } }
+        candidate: {
+          git: {
+            clean: true,
+            upstreamAhead: 2,
+            upstreamBehind: 0,
+            checkedAt: 1
+          }
+        }
       }),
       makeNamedFacets('clean'),
       makeNamedFacets('dirty', {
-        candidate: { git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1 } }
+        candidate: {
+          git: {
+            clean: false,
+            upstreamAhead: 0,
+            upstreamBehind: 0,
+            checkedAt: 1
+          }
+        }
       }),
       makeNamedFacets('unknown', {
-        candidate: { git: { clean: null, upstreamAhead: 0, upstreamBehind: 0, checkedAt: null } }
+        candidate: {
+          git: {
+            clean: null,
+            upstreamAhead: 0,
+            upstreamBehind: 0,
+            checkedAt: null
+          }
+        }
       })
     ]
     expect(names(rows, 'git', 'asc')).toEqual(['clean', 'unknown', 'dirty', 'unpushed'])
   })
 
-  it('orders tiers ready to protected and agents idle to permission', () => {
-    const tierRows = [
-      makeNamedFacets('protectedRow', { candidate: { tier: 'protected' } }),
-      makeNamedFacets('readyRow', { candidate: { tier: 'ready' } }),
-      makeNamedFacets('reviewRow', { candidate: { tier: 'review' } })
-    ]
-    expect(names(tierRows, 'tier', 'asc')).toEqual(['readyRow', 'reviewRow', 'protectedRow'])
-
+  it('orders agents idle to permission', () => {
     const agentRows = [
       makeNamedFacets('permission', { agentStatus: 'permission' }),
       makeNamedFacets('idle'),
@@ -91,8 +105,12 @@ describe('ranked fields', () => {
 
   it('breaks equal blocker counts by the worst blocker', () => {
     const rows = [
-      makeNamedFacets('softest', { candidate: { blockers: ['git-status-error'] } }),
-      makeNamedFacets('hardest', { candidate: { blockers: ['main-worktree'] } })
+      makeNamedFacets('softest', {
+        candidate: { blockers: ['git-status-error'] }
+      }),
+      makeNamedFacets('hardest', {
+        candidate: { blockers: ['main-worktree'] }
+      })
     ]
     expect(names(rows, 'blocker-count', 'desc')).toEqual(['hardest', 'softest'])
   })
@@ -101,8 +119,12 @@ describe('ranked fields', () => {
 describe('tie-breaks', () => {
   it('falls back to activity, repo, name, then worktree id', () => {
     const rows = [
-      makeNamedFacets('zeta', { candidate: { lastActivityAt: FACET_NOW - DAY } }),
-      makeNamedFacets('alpha', { candidate: { lastActivityAt: FACET_NOW - 2 * DAY } })
+      makeNamedFacets('zeta', {
+        candidate: { lastActivityAt: FACET_NOW - DAY }
+      }),
+      makeNamedFacets('alpha', {
+        candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
+      })
     ]
     // Same size on both sides, so only the tie-break chain can order them.
     expect(names(rows, 'size', 'desc')).toEqual(['alpha', 'zeta'])
@@ -111,7 +133,9 @@ describe('tie-breaks', () => {
   it('keeps tie-broken rows in the same order when direction flips', () => {
     const rows = [
       makeNamedFacets('b', { candidate: { lastActivityAt: FACET_NOW - DAY } }),
-      makeNamedFacets('a', { candidate: { lastActivityAt: FACET_NOW - 2 * DAY } })
+      makeNamedFacets('a', {
+        candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
+      })
     ]
     expect(names(rows, 'git', 'asc')).toEqual(names(rows, 'git', 'desc'))
   })

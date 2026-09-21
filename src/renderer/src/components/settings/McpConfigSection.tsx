@@ -90,12 +90,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   )
   const missingInspections = useMemo(
     () =>
-      MCP_CONFIG_CANDIDATES.map(
-        (candidate): LoadedMcpConfigInspection => ({
-          ...inspectMcpConfigContent(candidate, null),
-          absolutePath: joinPath(targetRootPath, candidate.relativePath)
-        })
-      ),
+      MCP_CONFIG_CANDIDATES.map((candidate): LoadedMcpConfigInspection => ({
+        ...inspectMcpConfigContent(candidate, null),
+        absolutePath: joinPath(targetRootPath, candidate.relativePath)
+      })),
     [targetRootPath]
   )
   const serverCount = useMemo(() => countServers(configs), [configs])

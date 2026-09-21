@@ -46,9 +46,16 @@ describe('task drawer source boundaries', () => {
   })
 
   it('threads GitLab task source context through the shared drawer selector', () => {
-    const source = componentSource('GitLabItemDialog.tsx')
+    const controllerSource = componentSource('GitLabItemDialog.tsx')
+    const source = [
+      controllerSource,
+      componentSource('gitlab-item-dialog/use-gitlab-item-dialog-effects.ts'),
+      componentSource('gitlab-item-dialog/use-gitlab-details-editing.ts'),
+      componentSource('gitlab-item-dialog/use-gitlab-primary-actions.ts'),
+      componentSource('gitlab-item-dialog/use-gitlab-review-actions.ts')
+    ].join('\n')
     const selector = sourceBetween(
-      source,
+      controllerSource,
       'const repoSelector = useMemo',
       'const updateCommentDraft'
     )
@@ -64,13 +71,13 @@ describe('task drawer source boundaries', () => {
   })
 
   it('uses Linear task source context for drawer reads, mutations, and optimistic patches', () => {
-    const source = componentSource('LinearItemDrawer.tsx')
-    const editSection = sourceBetween(
-      source,
-      'export function LinearIssueEditSection',
-      'export function LinearIssueCommentFooter'
+    const drawerSource = componentSource('LinearItemDrawer.tsx')
+    const editSection = componentSource('linear-item-drawer-edit-controller.tsx')
+    const drawer = sourceBetween(
+      drawerSource,
+      'export default function LinearItemDrawer',
+      'return renderLinearItemDrawerSheet'
     )
-    const drawer = sourceBetween(source, 'export default function LinearItemDrawer', 'return (')
 
     expect(editSection).toContain('const providerSettings = sourceContext ?? settings')
     expect(editSection).toContain('linearUpdateIssue(providerSettings')

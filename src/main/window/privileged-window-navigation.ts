@@ -1,6 +1,6 @@
 import { shell, type WebContents } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { normalizeExternalBrowserUrl } from '../../shared/browser-url'
+import { isRendererDocumentNavigation } from './renderer-document-navigation'
 
 /** Keep remote documents from inheriting an Orca window's privileged preload. */
 export function installPrivilegedWindowNavigationPolicy(contents: WebContents): void {
@@ -13,19 +13,13 @@ export function installPrivilegedWindowNavigationPolicy(contents: WebContents): 
   })
 
   contents.on('will-navigate', (event, url) => {
+    // Why: location.reload() is a renderer-initiated navigation, so blocking it here
+    // silently kills the lazy-chunk recovery reload with no unload-prevented signal.
+    if (isRendererDocumentNavigation(contents.getURL(), url)) {
+      return
+    }
     const externalUrl = normalizeExternalBrowserUrl(url)
     if (externalUrl) {
-      if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-        try {
-          const target = new URL(externalUrl)
-          const allowed = new URL(process.env.ELECTRON_RENDERER_URL)
-          if (target.origin === allowed.origin) {
-            return
-          }
-        } catch {
-          // Fall through and block malformed navigation targets.
-        }
-      }
       void shell.openExternal(externalUrl)
     }
     event.preventDefault()

@@ -58,9 +58,8 @@ export function useCreatePullRequestDialogFields({
   const generationRequestIdRef = useRef(0)
   const generationSeedRef = useRef<GenerationSeed | null>(null)
   const restoredExternalGenerationSeedRef = useRef<string | null>(null)
-  const fieldRevisionsRef = useRef<PullRequestFieldRevisions>(
-    createInitialPullRequestFieldRevisions()
-  )
+  const fieldRevisionsRef = useRef<PullRequestFieldRevisions>(undefined!)
+  fieldRevisionsRef.current ??= createInitialPullRequestFieldRevisions()
   const [base, setBase] = useState('')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')

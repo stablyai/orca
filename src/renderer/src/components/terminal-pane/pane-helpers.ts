@@ -1,4 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
@@ -16,7 +17,9 @@ export function focusActivePane(manager: PaneManager): void {
   }
   const panes = manager.getPanes()
   const activePane = manager.getActivePane() ?? panes[0]
-  activePane?.terminal.focus()
+  if (activePane) {
+    focusPanePreservingOverlays(activePane)
+  }
 }
 
 export function fitAndFocusPanes(manager: PaneManager): void {

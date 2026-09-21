@@ -3,6 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
+import {
   ensureTerminalVisible,
   getActiveTabId,
   switchToOtherWorktree,
@@ -17,6 +21,8 @@ import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/s
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-orchestration-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+const fakeCodexPath = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+const fakeCodexCommand = buildFakeAgentCommandOverride(fakeCodexPath)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 function appendLedger(envName, event) {
@@ -111,6 +117,15 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   electronApp
 }) => {
   await waitForSessionReady(orcaPage)
+  await orcaPage.evaluate(
+    async ({ agentCommand, terminalWindowsShell }) => {
+      await window.__store?.getState().updateSettings({
+        agentCmdOverrides: { codex: agentCommand },
+        terminalWindowsShell
+      })
+    },
+    { agentCommand: fakeCodexCommand, terminalWindowsShell: FAKE_AGENT_WINDOWS_SHELL }
+  )
   const worktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   const coordinatorTabId = await getActiveTabId(orcaPage)
@@ -160,7 +175,7 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
 
   const terminals = await client.call<RuntimeTerminalListResult>('terminal.list')
   const workerTerminal = terminals.result.terminals.find(
-    (terminal) => terminal.title === 'Codex Ready'
+    (terminal) => terminal.handle === workerHandle
   )
   expect(workerTerminal?.tabId).toBeTruthy()
   expect(workerTerminal?.leafId).toBeTruthy()

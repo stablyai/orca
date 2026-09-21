@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -61,18 +62,13 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
 
-  useEffect(() => {
-    if (!authStatus) {
-      void fetchAuthStatus()
-    }
-  }, [authStatus, fetchAuthStatus])
+  useOrcaProfileAuthStatusRefresh()
 
   const confirmSignOut = async (): Promise<void> => {
     if (signingOut) {

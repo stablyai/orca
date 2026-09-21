@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { safeStorage } from 'electron'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureJsonFile } from '../../shared/secure-file'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -29,6 +29,11 @@ export type OrcaCloudSessionReadResult =
   | { status: 'found'; session: OrcaCloudSession; persistence: OrcaCloudSessionPersistence }
   | { status: 'missing'; persistence: 'none' }
   | { status: 'decrypt-failed'; persistence: 'none'; error: string }
+  /**
+   * The file is there and this process may not read it. Distinct from `decrypt-failed` because
+   * that one means "read it, it was garbage" and licenses replacing it; this one licenses nothing.
+   */
+  | { status: 'unreadable'; persistence: 'none'; error: string }
 
 type PersistedEncryptedSession = {
   version: 1
@@ -215,7 +220,14 @@ export function readOrcaCloudSession(
       return { status: 'found', session: parsed.session, persistence: 'dev-plaintext' }
     }
     return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
-  } catch {
+  } catch (error) {
+    if (isUnreadableError(error)) {
+      return {
+        status: 'unreadable',
+        persistence: 'none',
+        error: 'Cannot read the saved Orca account session: the read failed.'
+      }
+    }
     return {
       status: 'decrypt-failed',
       persistence: 'none',

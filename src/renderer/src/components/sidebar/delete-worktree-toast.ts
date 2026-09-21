@@ -74,6 +74,23 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+    if (forceDeleteReason === 'running-agent-session') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        // Why this is not the "could not confirm" wording: Orca watched these sessions stay
+        // attached, so there is no doubt to waive — Force Delete ends a conversation that is
+        // running right now, and any work it holds goes with it.
+        description: translate(
+          'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
+          'This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold.'
+        ),
+        isDestructive: false
+      }
+    }
     if (forceDeleteReason === 'missing-registration') {
       return {
         title: translate(

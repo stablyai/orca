@@ -1,11 +1,13 @@
 import type {
   ConfirmForegroundProcessRequest,
+  ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
   InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
+  ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
   InspectProcessRequest
 } from './daemon-foreground-process-protocol'
@@ -317,6 +319,7 @@ export type DaemonRequest =
   | GetForegroundProcessRequest
   | InspectProcessRequest
   | ConfirmForegroundProcessRequest
+  | ConfirmShellForegroundRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest
@@ -388,7 +391,7 @@ export type DaemonSessionInfo = SessionInfo & {
 
 // Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
 // existing importers keep one types entry point.
-export * from './daemon-stream-events'
+export type * from './daemon-stream-events'
 
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:

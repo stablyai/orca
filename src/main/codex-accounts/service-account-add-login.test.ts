@@ -176,7 +176,7 @@ describe('CodexAccountService config sync', () => {
       '[model_providers.codex-lb]',
       'name = "Codex load balancer"',
       'base_url = "https://codex-lb.example.test/v1"',
-      'env_key = "CODEX_LB_API_KEY"',
+      'env_key = "EXAMPLE_GATEWAY_TOKEN"',
       ''
     ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')

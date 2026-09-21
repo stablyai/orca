@@ -40,7 +40,8 @@ const terminalResult: Extract<OpenTabSearchResult, { source: 'workspace' }> = {
   tabId: 'tab-1',
   entityId: 'term-1',
   groupId: 'group-2',
-  relativePath: null
+  relativePath: null,
+  occupantAgent: null
 }
 
 const editorResult: OpenTabSearchResult = {
@@ -61,7 +62,9 @@ const browserResult: OpenTabSearchResult = {
   worktreeId: 'wt-1',
   contentType: 'browser',
   pageId: 'page-1',
-  workspaceId: 'ws-1'
+  workspaceId: 'ws-1',
+  url: 'https://example.com/docs',
+  faviconUrl: null
 }
 
 const simulatorResult: OpenTabSearchResult = {

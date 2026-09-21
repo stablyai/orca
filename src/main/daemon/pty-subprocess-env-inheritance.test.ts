@@ -70,8 +70,9 @@ vi.mock('../providers/agent-foreground-process', () => ({
 // fake timers; default to "shell-only" so the degraded-scan guard falls through
 // to its existing retirement logic (the degraded-scan behavior itself is
 // covered in pty-subprocess-foreground-degraded-scan.test.ts).
-vi.mock('../providers/windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: () => Promise.resolve(new Set([12345]))
+vi.mock('../providers/windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: () => new Set([12345]),
+  isWindowsPtyJobReadable: () => true
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
@@ -217,6 +218,79 @@ describe('createPtySubprocess', () => {
     expect(spawnMock.mock.calls.at(-1)?.[2].env.fish_history).toBe(expected)
   })
 
+  it.each([
+    // HISTFILE is exported too, so a daemon started from an Orca pane would hand
+    // every session the launching worktree's history file.
+    ['drops an inherited Orca HISTFILE', undefined, undefined],
+    [
+      'keeps the path this spawn injected',
+      '/fake/userData/terminal-history/00112233445566aa/zsh_history',
+      '/fake/userData/terminal-history/00112233445566aa/zsh_history'
+    ],
+    ['keeps a caller-supplied value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+  ])('%s', async (_name, requested, expected) => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const saved = process.env.HISTFILE
+    process.env.HISTFILE = '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        ...(requested === undefined ? {} : { env: { HISTFILE: requested } })
+      })
+    } finally {
+      if (saved === undefined) {
+        delete process.env.HISTFILE
+      } else {
+        process.env.HISTFILE = saved
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.HISTFILE).toBe(expected)
+  })
+
+  it.each([
+    // ORCA_HISTFILE is exported into every pane, so a daemon started from an
+    // Orca pane inherits one. Left in place it BOTH re-scopes the pane to
+    // another worktree's history file (#11146) and wraps a zsh pane nothing
+    // asked to wrap, since `history` is selected on its presence.
+    ['drops an inherited Orca ORCA_HISTFILE', undefined, undefined],
+    [
+      'keeps the path this spawn injected',
+      '/fake/userData/terminal-history/00112233445566aa/zsh_history',
+      '/fake/userData/terminal-history/00112233445566aa/zsh_history'
+    ],
+    ['keeps a caller-supplied value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+  ])('%s', async (_name, requested, expected) => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const saved = process.env.ORCA_HISTFILE
+    process.env.ORCA_HISTFILE = '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: '/bin/zsh',
+        ...(requested === undefined ? {} : { env: { ORCA_HISTFILE: requested } })
+      })
+    } finally {
+      if (saved === undefined) {
+        delete process.env.ORCA_HISTFILE
+      } else {
+        process.env.ORCA_HISTFILE = saved
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.ORCA_HISTFILE).toBe(expected)
+    // The wrapping consequence: no inherited value may point a pane at Orca's
+    // ZDOTDIR that the client scoped no history for.
+    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+  })
+
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {
     // Why: the daemon is forked with ELECTRON_RUN_AS_NODE=1. If that flag
     // reaches user shells, nested Electron commands run as plain Node.
@@ -237,6 +311,41 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('does not forward a half-activated conda env from the daemon process env', async () => {
+    // Why here as well as the main process: the daemon fork composes its own
+    // inherited env, which main never sees, so it is the default terminal's
+    // only chance to drop a CONDA_SHLVL sentinel left without a prefix (#14195).
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = {
+      CONDA_SHLVL: process.env.CONDA_SHLVL,
+      CONDA_PREFIX: process.env.CONDA_PREFIX,
+      CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
+      CONDA_EXE: process.env.CONDA_EXE
+    }
+    delete process.env.CONDA_PREFIX
+    process.env.CONDA_SHLVL = '1'
+    process.env.CONDA_DEFAULT_ENV = 'base'
+    process.env.CONDA_EXE = '/opt/miniconda3/bin/conda'
+
+    try {
+      await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.CONDA_SHLVL).toBeUndefined()
+    expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
   })
 
   it('does not inherit legacy attribution state from a pre-upgrade daemon', async () => {

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { prChecksCacheSuffix } from '../github/cache-identity'
 import {
   _clearGitHubPRRefreshStartedEntriesForTest,
-  _getGitHubPRRefreshStartedEntryCountForTest,
-  prChecksCacheSuffix
-} from './github'
+  _getGitHubPRRefreshStartedEntryCountForTest
+} from '../github/request-coordination'
 import {
   createTestStore,
   makePR,

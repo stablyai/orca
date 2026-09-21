@@ -254,8 +254,35 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).toHaveBeenCalledWith('final output')
     expect(onExitCallback).toHaveBeenCalledWith(17)
     expect(onDisconnect).toHaveBeenCalledTimes(1)
-    expect(onPtyExit).toHaveBeenCalledWith(sessionId)
+    expect(onPtyExit).toHaveBeenCalledWith(sessionId, 17)
     expect(transport.isConnected()).toBe(false)
+  })
+
+  it('respawns a sole-newborn preserved exit at reveal instead of replaying it', async () => {
+    const { bufferPreHandlerPtyExit, consumePreHandlerPtyState, clearPreHandlerPtyState } =
+      await import('./pty-pre-handler-buffer')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'reveal-pty' })
+    const onExitCallback = vi.fn()
+    const sessionId = 'sole-newborn-dead-session'
+    // The parked sidecar's sole-newborn guard consumed the buffered exit
+    // (pre-fix primary parity), so reveal must take the readmission/spawn path.
+    // exitedBeforeAttach here would drain the exit into the reattached session
+    // — where spawnedFreshPtyId is null — and close the kept tab on reveal.
+    bufferPreHandlerPtyExit(sessionId, 1)
+    consumePreHandlerPtyState(sessionId)
+
+    const result = await createIpcPtyTransport({}).connect({
+      url: '',
+      sessionId,
+      callbacks: { onExit: onExitCallback }
+    })
+
+    expect(result).not.toEqual(expect.objectContaining({ exitedBeforeAttach: true }))
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId }))
+    expect(onExitCallback).not.toHaveBeenCalled()
+    clearPreHandlerPtyState(sessionId)
   })
 
   it('rejects a buffered dead-session exit before publishing its final frame', async () => {

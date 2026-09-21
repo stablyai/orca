@@ -7,6 +7,11 @@ import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from '@/runtime/
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import {
+  closeStructuredTerminalSessionWithRetry,
+  disposeStructuredTerminalSession,
+  structuredTerminalSessionId
+} from './structured-terminal-session-disposal'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -29,7 +34,10 @@ function isPinnedVisibleTab(
   )
 }
 
-export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {
+export async function closeOtherTerminalTabs(
+  tabId: string,
+  activeWorktreeId: string | null
+): Promise<void> {
   if (!activeWorktreeId) {
     return
   }
@@ -44,8 +52,21 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
     activeWorktreeId
   )?.runtimeEnvironmentId
   const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
+  const runtimeTarget = runtimeEnvironmentId
+    ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
+    : ({ kind: 'local' } as const)
   for (const tab of currentTabs) {
     if (tab.id === tabId || isPinnedVisibleTab(state, activeWorktreeId, tab.id)) {
+      continue
+    }
+    const structuredSessionId = structuredTerminalSessionId(
+      state.unifiedTabsByWorktree?.[activeWorktreeId],
+      tab.id
+    )
+    if (
+      structuredSessionId &&
+      !(await closeStructuredTerminalSessionWithRetry(runtimeTarget, structuredSessionId))
+    ) {
       continue
     }
     if (closeHostTerminalTabs) {
@@ -57,13 +78,32 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
         environmentId: runtimeEnvironmentId,
         reason: 'user'
       })
+      if (!structuredSessionId) {
+        disposeStructuredTerminalSession({
+          unifiedTabs: state.unifiedTabsByWorktree?.[activeWorktreeId],
+          terminalTabId: tab.id,
+          target: runtimeTarget,
+          reason: 'user'
+        })
+      }
     } else {
       state.closeTab(tab.id)
+      if (!structuredSessionId) {
+        disposeStructuredTerminalSession({
+          unifiedTabs: state.unifiedTabsByWorktree?.[activeWorktreeId],
+          terminalTabId: tab.id,
+          target: runtimeTarget,
+          reason: 'user'
+        })
+      }
     }
   }
 }
 
-export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string | null): void {
+export async function closeTerminalTabsToRight(
+  tabId: string,
+  activeWorktreeId: string | null
+): Promise<void> {
   if (!activeWorktreeId) {
     return
   }
@@ -79,6 +119,9 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     activeWorktreeId
   )?.runtimeEnvironmentId
   const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
+  const runtimeTarget = runtimeEnvironmentId
+    ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
+    : ({ kind: 'local' } as const)
   const terminalIds = currentTerminalTabs.map((tab) => tab.id)
   const terminalIdSet = new Set(terminalIds)
   const orderedIds = reconcileTabOrder(
@@ -96,6 +139,16 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
       continue
     }
     if (terminalIdSet.has(id)) {
+      const structuredSessionId = structuredTerminalSessionId(
+        state.unifiedTabsByWorktree?.[activeWorktreeId],
+        id
+      )
+      if (
+        structuredSessionId &&
+        !(await closeStructuredTerminalSessionWithRetry(runtimeTarget, structuredSessionId))
+      ) {
+        continue
+      }
       if (closeHostTerminalTabs) {
         // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
         closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
@@ -105,8 +158,24 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
           environmentId: runtimeEnvironmentId,
           reason: 'user'
         })
+        if (!structuredSessionId) {
+          disposeStructuredTerminalSession({
+            unifiedTabs: state.unifiedTabsByWorktree?.[activeWorktreeId],
+            terminalTabId: id,
+            target: runtimeTarget,
+            reason: 'user'
+          })
+        }
       } else {
         state.closeTab(id)
+        if (!structuredSessionId) {
+          disposeStructuredTerminalSession({
+            unifiedTabs: state.unifiedTabsByWorktree?.[activeWorktreeId],
+            terminalTabId: id,
+            target: runtimeTarget,
+            reason: 'user'
+          })
+        }
       }
       continue
     }

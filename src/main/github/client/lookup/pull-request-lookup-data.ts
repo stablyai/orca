@@ -5,6 +5,7 @@ import type {
   PRReviewDecision
 } from '../../../../shared/github/pull-request-types'
 import { gitExecFileAsync } from '../../gh-utils'
+import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -158,7 +159,7 @@ export function normalizePullRequestLookupData(data: PullRequestLookupData): Pul
 export async function getCurrentHeadOid(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: { wslDistro?: string } = {}
+  localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string | null> {
   const provider = connectionId ? getSshGitProvider(connectionId) : null
   if (connectionId && !provider) {
@@ -171,7 +172,8 @@ export async function getCurrentHeadOid(
   try {
     const result = await gitExecFileAsync(['rev-parse', 'HEAD'], {
       cwd: repoPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
     return result.stdout.trim() || null
   } catch {

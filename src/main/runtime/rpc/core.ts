@@ -77,10 +77,16 @@ export type RpcContext = {
   clientKind?: 'mobile' | 'runtime'
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
   clientCapabilities?: readonly RuntimeCapability[]
+  // Why: mobile v2 auth is exact-key validated; capability upgrades must mutate only the authenticated socket after auth.
+  updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
   // Why: Dispatch authority rides in the authenticated RPC envelope, never in user payload fields.
   orchestrationCapability?: string
   // Why: long-lived mutations such as ask can durably expose acceptance before their waiter settles.
   recordMutationReceipt?: (receipt: unknown) => void
+  // Why: only local worker_done makes pending proof that its atomic settlement transaction never committed.
+  markWorkerDoneMutationEffectFree?: () => void
+  // Why: prompt receipts may retry only until the PTY write boundary makes effects ambiguous.
+  markMutationEffectPossible?: () => void
   // Why: worker-start commits this identity with its starting Dispatch so crash recovery always has an inspectable operation.
   orchestrationMutation?: {
     callerFingerprint: string
@@ -88,6 +94,8 @@ export type RpcContext = {
     method: string
     payloadHash: string
   }
+  // Why: a prompt retry with --wait-submit observes its durable receipt instead of writing again.
+  replayedMutationReceipt?: unknown
   // Why: Run-scoped handlers must compare declared handles with request attestation.
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Why: only the compatibility authority router can set this trusted scope; user params cannot bypass Run consumer binding.
@@ -104,6 +112,10 @@ export type RpcContext = {
   registerBinaryStreamHandler?: (
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
+  ) => () => void
+  // Why: non-terminal binary protocols own their dedicated authenticated subscription socket.
+  registerBinaryMessageHandler?: (
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
   ) => () => void
 }
 

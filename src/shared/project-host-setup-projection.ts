@@ -1,9 +1,12 @@
 import { getRepoExecutionHostId } from './execution-host'
+import {
+  normalizeProjectHostSetupRow,
+  normalizeProjectRow
+} from './project-catalog-row-normalization'
 import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
 import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
-import type { WorktreeMeta } from './worktree/meta-types'
 
 type ProjectAccumulator = {
   project: Project
@@ -312,7 +315,9 @@ export function projectHostSetupProjectionFromRepos(
     const project = existing
       ? mergeProjectRepo(existing.project, repo)
       : createProjectFromRepo(repo)
-    const setup = createSetupFromRepo(repo, projectId)
+    // Why normalize here: a repo row is untrusted persisted/wire data too, and these
+    // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
+    const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
     projectById.set(projectId, {
       project
     })
@@ -320,7 +325,7 @@ export function projectHostSetupProjectionFromRepos(
   }
 
   return {
-    projects: [...projectById.values()].map((entry) => entry.project),
+    projects: [...projectById.values()].map((entry) => normalizeProjectRow(entry.project)),
     setups
   }
 }
@@ -330,26 +335,4 @@ export function getProjectHostSetupsForProject(
   projectId: string
 ): readonly ProjectHostSetup[] {
   return setups.filter((setup) => setup.projectId === projectId)
-}
-
-export function getProjectHostSetupForRepo(
-  setups: readonly ProjectHostSetup[],
-  repo: Repo
-): ProjectHostSetup {
-  return (
-    setups.find((setup) => setup.repoId === repo.id) ??
-    projectHostSetupProjectionFromRepos([repo]).setups[0]
-  )
-}
-
-export function getProjectHostSetupWorktreeMeta(
-  setups: readonly ProjectHostSetup[],
-  repo: Repo
-): Pick<WorktreeMeta, 'projectId' | 'hostId' | 'projectHostSetupId'> {
-  const setup = getProjectHostSetupForRepo(setups, repo)
-  return {
-    projectId: setup.projectId,
-    hostId: setup.hostId,
-    projectHostSetupId: setup.id
-  }
 }

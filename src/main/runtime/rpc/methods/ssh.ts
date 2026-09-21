@@ -4,16 +4,29 @@ import {
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
-} from '../../../ipc/ssh'
+} from '../../../ssh/ssh-target-registry'
 import { defineMethod, type RpcMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
+import type { SshTargetSummary } from '../../../../shared/ssh-types'
 
 const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
-function listRegisteredSshTargetSummaries(): { id: string; label: string }[] {
-  return listRegisteredSshTargets().map(({ id, label }) => ({ id, label }))
+// Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
+function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
+  return listRegisteredSshTargets().map(({ id, label, generation }) => {
+    const state = getRegisteredSshState(id)
+    const remotePlatform = state?.remotePlatform
+    return {
+      id,
+      label,
+      ...(generation === undefined ? {} : { generation }),
+      connected: state?.status === 'connected',
+      ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
+      ...(remotePlatform === undefined ? {} : { remotePlatform })
+    }
+  })
 }
 
 export const SSH_METHODS: RpcMethod[] = [

@@ -60,7 +60,9 @@ export type WorkspaceCleanupCandidate = {
   displayName: string
   branch: string
   path: string
+  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
   tier: WorkspaceCleanupTier
+  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
   selectedByDefault: boolean
   reasons: WorkspaceCleanupReason[]
   blockers: WorkspaceCleanupBlocker[]
@@ -98,12 +100,6 @@ export type WorkspaceCleanupScanArgs = {
 
 export const WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT = 500
 
-export type WorkspaceCleanupLocalProcessArgs = {
-  worktreeId: string
-  connectionId?: string | null
-  worktreePath?: string
-}
-
 export type WorkspaceCleanupSnapshotPruneBatchArgs = {
   batchId: string
 }
@@ -117,6 +113,8 @@ export type WorkspaceCleanupScanError = {
   repoId: string
   repoName: string
   message: string
+  /** Optional for compatibility with older hosts that did not qualify scan errors. */
+  executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupScanResult = {
@@ -132,8 +130,12 @@ export type WorkspaceCleanupScanProgress = WorkspaceCleanupScanResult & {
   candidateMode?: 'append' | 'snapshot'
 }
 
-export type WorkspaceCleanupLocalProcessResult = {
-  hasKillableProcesses: boolean | null
+/** One-shot consent to remove a workspace whose git status could not be read. */
+export type WorkspaceCleanupUnverifiedRemovalConsent = {
+  /** Host-qualified candidate identity, never a bare worktree id. */
+  identity: string
+  /** Minted for one removal call and released when that call settles. */
+  attemptId: string
 }
 
 export type WorkspaceCleanupDismissArgs = {
@@ -142,7 +144,7 @@ export type WorkspaceCleanupDismissArgs = {
   removedWorktreeIds?: string[]
 }
 
-export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
+const LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
   'pinned',
@@ -164,23 +166,19 @@ export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocke
 const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
-  'dismissed'
+  'ssh-disconnected'
 ])
 
 export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =
-  new Set(['dirty-files', 'unpushed-commits', 'unknown-base', 'git-status-error'])
+  new Set(['dirty-files', 'unpushed-commits', 'unknown-base'])
 
-export function isWorkspaceCleanupHardBlocker(blocker: WorkspaceCleanupBlocker): boolean {
-  return WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
-}
+export const WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS: ReadonlySet<WorkspaceCleanupBlocker> =
+  new Set(['active-workspace', 'live-agent', 'dismissed'])
 
 export function canQueueWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'reasons'>
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers'>
 ): boolean {
-  return (
-    candidate.reasons.length > 0 &&
-    !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_QUEUE_BLOCKERS.has(blocker))
-  )
+  return !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_QUEUE_BLOCKERS.has(blocker))
 }
 
 export function shouldForceWorkspaceCleanupRemoval(
@@ -193,22 +191,27 @@ export function shouldForceWorkspaceCleanupRemoval(
   )
 }
 
-export function canSelectWorkspaceCleanupCandidate(
+function canSelectWorkspaceCleanupCandidate(
   candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'reasons'>
 ): boolean {
   return (
     candidate.reasons.length > 0 &&
     candidate.git.clean === true &&
     candidate.git.checkedAt !== null &&
-    !candidate.blockers.some(isWorkspaceCleanupHardBlocker)
+    !candidate.blockers.some((blocker) => LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker))
   )
 }
 
+type WorkspaceCleanupPolicyInput = Omit<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'> &
+  Partial<Pick<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'>>
+
 export function applyWorkspaceCleanupPolicy(
-  candidate: WorkspaceCleanupCandidate
+  candidate: WorkspaceCleanupPolicyInput
 ): WorkspaceCleanupCandidate {
   const canSelect = canSelectWorkspaceCleanupCandidate(candidate)
-  const hasHardBlocker = candidate.blockers.some(isWorkspaceCleanupHardBlocker)
+  const hasHardBlocker = candidate.blockers.some((blocker) =>
+    LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
+  )
   const tier: WorkspaceCleanupTier = hasHardBlocker ? 'protected' : canSelect ? 'ready' : 'review'
 
   return {

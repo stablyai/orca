@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
+import { isSkillStagingEntryName } from './skill-delete/staging-names'
 
 export const SKILL_FILE_NAME = 'SKILL.md'
 
@@ -42,9 +43,6 @@ export async function findSkillFiles(
     // indistinguishable from a genuinely small root, and a caller that cached it
     // would publish "these skills no longer exist".
     signal?.throwIfAborted()
-    if (!isWithinDepth(rootPath, dirPath, maxDepth)) {
-      return
-    }
     let resolvedDirPath: string
     try {
       resolvedDirPath = await realpath(dirPath)
@@ -60,8 +58,15 @@ export async function findSkillFiles(
     if (!entries) {
       return
     }
+    // Directory entry names add one segment, so siblings share the depth verdict.
+    let childrenWithinDepth: boolean | undefined
     for (const entry of entries) {
       signal?.throwIfAborted()
+      // Why: a staged sibling sits directly in a scanned root, so without this a
+      // skill mid-transaction surfaces as a second, separately actionable row.
+      if (isSkillStagingEntryName(entry.name)) {
+        continue
+      }
       const entryPath = join(dirPath, entry.name)
       if (entry.name === SKILL_FILE_NAME) {
         if (entry.isFile()) {
@@ -80,10 +85,15 @@ export async function findSkillFiles(
         continue
       }
       if (entry.isDirectory()) {
-        await visit(entryPath)
+        if ((childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))) {
+          await visit(entryPath)
+        }
         continue
       }
-      if (entry.isSymbolicLink()) {
+      if (
+        entry.isSymbolicLink() &&
+        (childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))
+      ) {
         // Why: users commonly symlink agent skill dirs across providers; follow
         // directory links but guard by realpath so recursive links cannot loop.
         let linksToDirectory = false

@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
 import type { HostedReviewProvider } from '../../../../shared/hosted-review'
-import type { WorkspaceCleanupTier } from '../../../../shared/workspace-cleanup'
 import type {
   WorkspaceCleanupAgentState,
   WorkspaceCleanupBlockerMode,
@@ -49,8 +48,6 @@ export function getWorkspaceCleanupSortFieldLabel(field: WorkspaceCleanupSortFie
       return translate('components.workspace.cleanup.browse.sort.ticket', 'Ticket')
     case 'local-context':
       return translate('components.workspace.cleanup.browse.sort.localContext', 'Open context')
-    case 'tier':
-      return translate('components.workspace.cleanup.browse.sort.tier', 'Safety')
     case 'blocker-count':
       return translate('components.workspace.cleanup.browse.sort.blockerCount', 'Blockers')
   }
@@ -121,17 +118,6 @@ export function getWorkspaceCleanupTicketSourceLabel(source: WorkspaceCleanupTic
       return translate('components.workspace.cleanup.browse.ticket.linear', 'Linear')
     case 'issue':
       return translate('components.workspace.cleanup.browse.ticket.issue', 'Issue')
-  }
-}
-
-export function getWorkspaceCleanupTierLabel(tier: WorkspaceCleanupTier): string {
-  switch (tier) {
-    case 'ready':
-      return translate('components.workspace.cleanup.browse.tier.ready', 'Ready')
-    case 'review':
-      return translate('components.workspace.cleanup.browse.tier.review', 'Needs review')
-    case 'protected':
-      return translate('components.workspace.cleanup.browse.tier.protected', 'Protected')
   }
 }
 

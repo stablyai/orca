@@ -144,6 +144,8 @@ describe('keybindings', () => {
   it('formats keybindings with platform labels', () => {
     expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
     expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+Shift+J')
+    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'darwin')).toBe('⌘⇧⌫')
+    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'linux')).toBe('Ctrl+Shift+Backspace')
     expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
   })
 

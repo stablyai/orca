@@ -1,8 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
-import type {
-  AiVaultServiceInit,
-  AiVaultServiceLane,
-  AiVaultServiceRequest
+import {
+  AI_VAULT_SERVICE_PROTOCOL_VERSION,
+  type AiVaultServiceInit,
+  type AiVaultServiceLane,
+  type AiVaultServiceRequest
 } from './session-scanner-service-protocol'
 
 export const AI_VAULT_SERVICE_READY_TIMEOUT_MS = 5_000
@@ -110,6 +111,28 @@ export function armAiVaultServiceCancellationTimeout(
  * A cold start that faults before the request reached the child self-heals on
  * the scheduled respawn. Requeue once; the caller rejects when this returns false.
  */
+/** Wires a freshly forked child to the client's callbacks and hands it the init frame. */
+export function attachAiVaultServiceChild(
+  child: ChildProcess,
+  init: AiVaultServiceClientOptions['init'],
+  handlers: {
+    onMessage: (message: unknown) => void
+    onFault: (error: Error) => void
+    onStderr?: (text: string) => void
+  }
+): void {
+  child.on('message', handlers.onMessage)
+  child.on('error', handlers.onFault)
+  child.on('disconnect', () => handlers.onFault(new Error('AI Vault service disconnected.')))
+  child.on('exit', (code) => handlers.onFault(new Error(`AI Vault service exited (${code}).`)))
+  child.stderr?.on('data', (chunk: Buffer) => handlers.onStderr?.(String(chunk)))
+  child.send({
+    type: 'init',
+    protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
+    ...init
+  } satisfies AiVaultServiceInit)
+}
+
 export function requeueAiVaultServiceStart(
   call: AiVaultServicePendingCall,
   queue: AiVaultServicePendingCall[]

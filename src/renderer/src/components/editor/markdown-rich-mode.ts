@@ -1,5 +1,7 @@
+import { defaultSchema } from 'rehype-sanitize'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
 
 export type MarkdownRichModeUnsupportedReason =
@@ -13,6 +15,26 @@ type UnsupportedMatch = {
   message: string
   pattern: RegExp
 }
+
+export type MarkdownRichModeEligibility = {
+  exceedsSizeLimit: boolean
+  unsupportedMessage: string | null
+}
+
+/**
+ * The part of rich-mode eligibility that is a pure function of the document.
+ *
+ * Why this is split out: `unsupportedMessage` is deliberately late-bound — the
+ * matcher messages are `get message()` accessors that call `translate()` at
+ * access time, so they follow the active UI language. Anything that caches
+ * eligibility must cache this decision and re-resolve the message per read.
+ */
+export type MarkdownRichModeEligibilityDecision = {
+  exceedsSizeLimit: boolean
+  unsupportedReason: MarkdownRichModeUnsupportedReason | null
+}
+
+const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
@@ -51,6 +73,25 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
 ]
 
 export function getMarkdownRichModeUnsupportedMessage(content: string): string | null {
+  return resolveMarkdownRichModeUnsupportedMessage(getMarkdownRichModeUnsupportedReason(content))
+}
+
+/**
+ * Reads the matcher's localized message through its getter, so the string
+ * always reflects the language active at call time.
+ */
+export function resolveMarkdownRichModeUnsupportedMessage(
+  reason: MarkdownRichModeUnsupportedReason | null
+): string | null {
+  if (reason === null) {
+    return null
+  }
+  return UNSUPPORTED_PATTERNS.find((matcher) => matcher.reason === reason)?.message ?? null
+}
+
+export function getMarkdownRichModeUnsupportedReason(
+  content: string
+): MarkdownRichModeUnsupportedReason | null {
   // Why: front-matter is handled externally — stripped before the rich editor
   // sees the content and displayed as a read-only block. Only the body needs
   // to pass the unsupported-content checks.
@@ -66,14 +107,14 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
   // opinion when HTML is detected, to verify the HTML survives the round-trip
   // before blocking the user from rich mode.
   const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
-  const hasHtml = htmlMatcher && htmlMatcher.pattern.test(contentWithoutCode)
+  const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
 
   for (const matcher of UNSUPPORTED_PATTERNS) {
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
     if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.message
+      return matcher.reason
     }
   }
 
@@ -85,10 +126,58 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
-    return htmlMatcher!.message
+    return htmlMatcher!.reason
   }
 
   return null
+}
+
+export function getMarkdownRichModeEligibilityDecision({
+  content,
+  sizeOverridden
+}: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibilityDecision {
+  return {
+    exceedsSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content),
+    unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
+  }
+}
+
+export function getMarkdownRichModeEligibility(params: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibility {
+  const decision = getMarkdownRichModeEligibilityDecision(params)
+  return {
+    exceedsSizeLimit: decision.exceedsSizeLimit,
+    unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
+  }
+}
+
+function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
+  for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
+    if (isHtmlOrJsxFragment(match[0])) {
+      return true
+    }
+  }
+  return false
+}
+
+function isHtmlOrJsxFragment(fragment: string): boolean {
+  if (fragment.startsWith('<!--') || fragment.startsWith('</')) {
+    return true
+  }
+
+  const tagMatch = fragment.match(/^<([A-Za-z][\w.:-]*)/)
+  const tagName = tagMatch?.[1]
+  if (!tagName) {
+    return false
+  }
+
+  const suffix = fragment.slice(tagName.length + 1, -1)
+  return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
 }
 
 function stripMarkdownCode(content: string): string {

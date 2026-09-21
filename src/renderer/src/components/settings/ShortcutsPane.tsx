@@ -73,6 +73,9 @@ export function ShortcutsPane(): React.JSX.Element {
       ] as const
     })
   )
+  const agentDashboardEnabled = useAppStore(
+    (state) => state.settings?.experimentalAgentDashboardPopout === true
+  )
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
@@ -134,11 +137,13 @@ export function ShortcutsPane(): React.JSX.Element {
         platform,
         managedBrowserCreationEnabled,
         mobileEmulatorCreationEnabled,
+        agentDashboardEnabled,
         settingsSearchQuery: searchQuery,
         shortcutQuery,
         shortcutFilter
       }),
     [
+      agentDashboardEnabled,
       conflictByAction,
       groups,
       keybindings,

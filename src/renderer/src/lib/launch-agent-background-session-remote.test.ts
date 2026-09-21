@@ -219,6 +219,54 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     }
   })
 
+  // #18767: a plain Codex launch carries no shell-ready hint, but the remote host
+  // still arms the marker for it, so writing early would display the launch twice.
+  it('waits for shell-ready for a promptless SSH background Codex launch', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({ agent: 'codex', worktreeId: 'wt-1' })
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(1_400)
+
+      expect(mockWrite).not.toHaveBeenCalled()
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips the shell-ready wait when the host reports it did not arm the marker', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      mockSpawn.mockResolvedValue({ id: 'pty-1', shellReadyArmed: false })
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({ agent: 'codex', worktreeId: 'wt-1' })
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('falls back when an SSH shell produces no observable startup data', async () => {
     vi.useFakeTimers()
     try {

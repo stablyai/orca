@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 
 function runWsl(distro, script, options = {}) {
-  return execFileSync('wsl.exe', ['-d', distro, '--', 'bash', '-se'], {
+  return execFileSync('wsl.exe', ['-d', distro, '--exec', 'bash', '-se'], {
     cwd: rootDir,
     encoding: 'utf8',
     input: script,

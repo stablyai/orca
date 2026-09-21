@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../../shared/app-environment'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -11,7 +11,7 @@ let _dataFile: string | null = null
 let _userDataDir: string | null = null
 
 export function initDataPath(): void {
-  const userDataDir = app.getPath('userData')
+  const userDataDir = getAppEnvironment().getPath('userData')
   _userDataDir = userDataDir
   _dataFile = join(userDataDir, 'orca-data.json')
 }
@@ -19,7 +19,7 @@ export function initDataPath(): void {
 export function getDataFile(): string {
   if (!_dataFile) {
     // Safety fallback — should not be hit in normal startup.
-    const userDataDir = app.getPath('userData')
+    const userDataDir = getAppEnvironment().getPath('userData')
     _userDataDir = userDataDir
     _dataFile = join(userDataDir, 'orca-data.json')
   }
@@ -51,14 +51,14 @@ export function readGithubCacheSnapshot(dataFile: string): PersistedState['githu
 }
 
 /**
- * Return the userData directory captured at initDataPath() time, before app.setName() can change how app.getPath('userData') resolves.
+ * Return the userData directory captured at initDataPath() time, before app.setName() can change how getAppEnvironment().getPath('userData') resolves.
  *
  * Subsystems sharing storage with orca-data.json read this instead of resolving late, which on case-sensitive FS can lose paired devices.
  */
 export function getCanonicalUserDataPath(): string {
   if (!_userDataDir) {
     // Safety fallback — should not be hit in normal startup.
-    _userDataDir = app.getPath('userData')
+    _userDataDir = getAppEnvironment().getPath('userData')
   }
   return _userDataDir
 }

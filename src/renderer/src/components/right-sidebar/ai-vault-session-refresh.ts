@@ -4,6 +4,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
+import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   requestedExecutionHostScope,
@@ -27,6 +28,7 @@ let lastForcedRescanAt = 0
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
   lastForcedRescanAt = 0
+  agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
   resetAiVaultSessionResultCacheForTest()
 }
 
@@ -45,6 +47,33 @@ function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
   return requestedExecutionHostScope(scope) === ALL_EXECUTION_HOSTS_SCOPE
 }
 
+// Why: this selector runs on every store write; index each immutable status snapshot once.
+// Why resettable: every production writer replaces the map, but test fixtures commonly
+// mutate `mockStoreState.agentStatusByPaneKey[key]` in place, which would keep serving the
+// key cached for the identity they mutated.
+let agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
+
+function getAgentSessionIdsKey(
+  agentStatusByPaneKey: Record<string, { providerSession?: { id?: string } | null }> | undefined
+): string {
+  if (!agentStatusByPaneKey) {
+    return ''
+  }
+  const cached = agentSessionIdsKeyBySnapshot.get(agentStatusByPaneKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const ids: string[] = []
+  for (const entry of Object.values(agentStatusByPaneKey)) {
+    if (entry.providerSession?.id) {
+      ids.push(entry.providerSession.id)
+    }
+  }
+  const key = ids.sort().join('\n')
+  agentSessionIdsKeyBySnapshot.set(agentStatusByPaneKey, key)
+  return key
+}
+
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
@@ -60,7 +89,8 @@ export function useAiVaultSessionRefresh(
   const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const requestTokenRef = useRef(crypto.randomUUID())
+  const requestTokenRef = useRef<string>(undefined!)
+  requestTokenRef.current ??= crypto.randomUUID()
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
@@ -68,7 +98,8 @@ export function useAiVaultSessionRefresh(
   const pendingBackgroundRef = useRef(true)
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
-  const publicationGateRef = useRef(new AiVaultSessionPublicationGate())
+  const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
+  publicationGateRef.current ??= new AiVaultSessionPublicationGate()
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
@@ -193,7 +224,7 @@ export function useAiVaultSessionRefresh(
           refreshIdRef.current === refreshId &&
           scanKey === currentScanScopeKey()
         ) {
-          setError(err instanceof Error ? err.message : String(err))
+          setError(describeAiVaultScanError(err instanceof Error ? err.message : String(err)))
         }
       } finally {
         refreshInFlightRef.current = false
@@ -308,15 +339,7 @@ export function useAiVaultSessionRefresh(
   // can't surface them. Agent hooks already report provider sessions; re-scan
   // only when a session id we haven't seen appears — state transitions are
   // deliberately ignored, they fire constantly while agents work.
-  const agentSessionIdsKey = useAppStore((s) => {
-    const ids: string[] = []
-    for (const entry of Object.values(s.agentStatusByPaneKey)) {
-      if (entry.providerSession?.id) {
-        ids.push(entry.providerSession.id)
-      }
-    }
-    return ids.sort().join('\n')
-  })
+  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')

@@ -27,10 +27,12 @@ import {
   createSourceToken,
   markSourceExitPublished,
   requireSourceSpan,
+  requireSourceReservation,
   rollbackCommittedSourceSpan,
   sealSourceToken,
   snapshotSourceToken,
   type ReservationRecord,
+  type SpanRecord,
   type TokenRecord
 } from './ssh-pty-source-obligation-state'
 import {
@@ -54,7 +56,7 @@ export class SshPtySourceObligationLedger {
   private readonly tokens = new Map<string, TokenRecord>()
   private readonly closedSnapshots = new Map<string, SshPtySourceTokenSnapshot>()
   private readonly reservations = new Map<string, ReservationRecord>()
-  private readonly spanOwners = new Map<string, TokenRecord>()
+  private readonly spanOwners = new Map<string, SpanRecord>()
   private nextReservationId = 1
 
   constructor(
@@ -113,10 +115,14 @@ export class SshPtySourceObligationLedger {
     if (token.state !== 'active' || token.receivedEndSu !== reservation.span.sourceStartSu) {
       throw new Error('SSH PTY source admission reservation became stale')
     }
-    const spanRecord = createSourceSpanRecord(reservation.span, reservation.requiredConsumers)
+    const spanRecord = createSourceSpanRecord(
+      token,
+      reservation.span,
+      reservation.requiredConsumers
+    )
     token.spans.push(spanRecord)
     token.receivedEndSu = reservation.span.sourceEndSu
-    this.spanOwners.set(reservation.span.spanId, token)
+    this.spanOwners.set(reservation.span.spanId, spanRecord)
     this.reservations.delete(reservation.reservationId)
   }
 
@@ -312,11 +318,7 @@ export class SshPtySourceObligationLedger {
   }
 
   private requireReservation(reservation: SshPtySourceAdmissionReservation): ReservationRecord {
-    const record = this.reservations.get(reservation.reservationId)
-    if (!record || record.reservation !== reservation) {
-      throw new Error('Unknown SSH PTY source admission reservation')
-    }
-    return record
+    return requireSourceReservation(this.reservations, reservation)
   }
 
   private requireToken(identity: PtySourceDeliveryIdentity): TokenRecord {

@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../../shared/secure-file'
 
 export type RelayDeviceBinding = {
   relayHostId: string
@@ -37,6 +41,8 @@ function isItem(value: unknown): value is RelayRevokeOutboxItem {
 export class RelayRevokeOutbox {
   private readonly path: string
   private items: RelayRevokeOutboxItem[]
+  /** Set when the outbox exists but could not be read, so `items` is not what is on disk. */
+  private outboxUnreadable = false
 
   constructor(userDataPath: string) {
     this.path = join(userDataPath, OUTBOX_FILENAME)
@@ -83,12 +89,20 @@ export class RelayRevokeOutbox {
       hardenExistingSecureFile(this.path)
       const parsed: unknown = JSON.parse(readFileSync(this.path, 'utf-8'))
       return Array.isArray(parsed) ? parsed.filter(isItem) : []
-    } catch {
+    } catch (error) {
+      // An outbox we were denied is not an empty outbox. Saving [] over it would drop
+      // revocations that have not reached the relay, so a revoked device stays live.
+      this.outboxUnreadable = isUnreadableError(error)
       return []
     }
   }
 
   private save(items: readonly RelayRevokeOutboxItem[]): void {
+    if (this.outboxUnreadable) {
+      throw new Error(
+        `Cannot read the relay revoke outbox at ${this.path}: the read failed. Refusing to overwrite it, which would drop pending revocations.`
+      )
+    }
     writeSecureJsonFile(this.path, items)
   }
 }

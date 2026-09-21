@@ -2,8 +2,8 @@ import type { WebSocket } from 'ws'
 
 // Why: one unanswered probe is UNKNOWN, not death — a cellular/Tailscale blackhole or a stalled TCP
 // retransmit routinely swallows a single pong from a peer that is still there (STA-3320). Only a run of
-// consecutive unanswered probes is evidence. Three matches the web client's own 45s liveness budget
-// (25s idle + 20s probe grace), so both ends of a paired session give up on roughly the same evidence.
+// consecutive unanswered probes is evidence. Three matches the web client's liveness budget, so both
+// ends of a paired session give up on roughly the same evidence after the initial grace interval.
 const MISSED_PROBE_LIMIT = 3
 
 export class RemoteRuntimeServerHeartbeat {
@@ -33,11 +33,6 @@ export class RemoteRuntimeServerHeartbeat {
     this.lastTickAt = this.now()
     this.timer = setInterval(() => this.sweep(getClients()), this.intervalMs)
     this.timer.unref?.()
-    // Why: the interval's first tick is a full intervalMs (~15s) out, so arming on the first accepted
-    // connection would leave that socket unprobed for the whole window. Sweep once now so the first
-    // liveness ping goes out immediately; seeded-alive sockets are pinged (not reaped) and have until
-    // the next tick to pong. WS pong is answered at the protocol level, so a live socket always survives.
-    this.sweep(getClients())
   }
 
   stop(): void {

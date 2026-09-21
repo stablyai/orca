@@ -119,3 +119,39 @@ describe('worktree list folder reveal', () => {
     ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
   })
 })
+
+describe('reveal keys under non-repo grouping', () => {
+  const group = makeProjectGroup({ id: 'group-child', connectionId: 'target-1' })
+  const folderWorkspace = makeFolderWorkspace({ workspaceStatus: 'in-progress' })
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+
+  it('returns the status lane key so a collapsed lane can be expanded', () => {
+    // Pre-fix only project-group headers came back, and those do not exist
+    // under status grouping, so the reveal could never expand the lane.
+    const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
+      groupBy: 'workspace-status',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+    expect(keys).toContain('workspace-status:in-progress')
+  })
+
+  it('returns the host key so a collapsed host can be expanded too', () => {
+    const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
+      groupBy: 'workspace-status',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+    expect(keys).toContain('host:ssh:target-1')
+  })
+
+  it('still returns project-group keys under repo grouping', () => {
+    const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
+      groupBy: 'repo',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+    expect(keys).toContain(getProjectGroupHeaderKey(group.id))
+    expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
+  })
+})

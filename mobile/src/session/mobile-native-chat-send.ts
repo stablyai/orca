@@ -9,22 +9,11 @@ type MobileTerminalClient = {
   type: 'mobile'
 }
 
-// Why: Ctrl+U kills the TUI's current input line (desktop native chat sends the
-// same byte before its body), so a launch-context prefill parked there cannot
-// concatenate with a mobile chat message. The host writes text bytes verbatim.
-//
-// One Ctrl+U clears ONE logical line, which is all this prefix can do. A parked
-// launch draft is routinely multi-line (every Linear block is); callers that know
-// one is parked must call clearMobileNativeChatInput FIRST — see
-// src/shared/agent-tui-input-clear.ts for the measured 2N-1 law.
-const CLEAR_UNSUBMITTED_INPUT = '\x15'
-
 type MobileNativeChatSendArgs = {
   client: RpcClient
   terminal: string
   text: string
   enter?: boolean
-  clearInputFirst?: boolean
   /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
@@ -65,7 +54,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
       'terminal.send',
       {
         terminal: args.terminal,
-        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        text: args.text,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})

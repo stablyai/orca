@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
+import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -83,6 +84,16 @@ export function useWorktreeSidebarHeaderDrag(args: {
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
   )
+  // Why: an id shared by two hosts has no single owner, so leave it unrouted rather than guess.
+  const projectGroupOwnerHostIdByGroupId = useMemo(() => {
+    const byGroupId = new Map<string, ExecutionHostId | null>()
+    for (const group of projectGroups) {
+      const hostId = getProjectGroupHostId(group)
+      const existing = byGroupId.get(group.id)
+      byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
+    }
+    return byGroupId
+  }, [projectGroups])
 
   // Why: reorder keeps scrollTop stable; flag direct scroll input so anchor-restore won't chase the moved row (jumpy drop).
   const suppressScrollCorrectionForHeaderCommit = useCallback(() => {
@@ -157,9 +168,11 @@ export function useWorktreeSidebarHeaderDrag(args: {
         return
       }
       suppressScrollCorrectionForHeaderCommit()
-      void updateProjectGroup(groupId, { tabOrder })
+      // Why: manual order persists on the group's own host; the focused host may not hold this row.
+      const ownerHostId = projectGroupOwnerHostIdByGroupId.get(groupId)
+      void updateProjectGroup(groupId, { tabOrder }, { hostId: ownerHostId ?? undefined })
     },
-    [suppressScrollCorrectionForHeaderCommit, updateProjectGroup]
+    [projectGroupOwnerHostIdByGroupId, suppressScrollCorrectionForHeaderCommit, updateProjectGroup]
   )
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({

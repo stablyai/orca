@@ -301,8 +301,9 @@ describe('web UI preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS, installWebPreloadApi } =
-      await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } =
+      await import('./preload-api/web-clipboard-api')
     const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
     installClipboardImageBase64(contentBase64)
     installWebPreloadApi()
@@ -414,8 +415,9 @@ describe('web UI preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS, installWebPreloadApi } =
-      await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS } =
+      await import('./preload-api/web-clipboard-api')
     installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
     installWebPreloadApi()
 
@@ -578,8 +580,8 @@ describe('web UI preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { MAX_CLIPBOARD_IMAGE_SOURCE_BYTES, installWebPreloadApi } =
-      await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { MAX_CLIPBOARD_IMAGE_SOURCE_BYTES } = await import('./preload-api/web-clipboard-api')
     const clipboard = installClipboardImageBlob(
       new Blob([new Uint8Array(MAX_CLIPBOARD_IMAGE_SOURCE_BYTES + 1)], { type: 'image/png' })
     )
@@ -624,7 +626,8 @@ describe('web UI preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { MAX_CLIPBOARD_IMAGE_PIXELS, installWebPreloadApi } = await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { MAX_CLIPBOARD_IMAGE_PIXELS } = await import('./preload-api/web-clipboard-api')
     installClipboardImageBlob(new Blob(['small'], { type: 'image/jpeg' }))
     vi.stubGlobal(
       'createImageBitmap',

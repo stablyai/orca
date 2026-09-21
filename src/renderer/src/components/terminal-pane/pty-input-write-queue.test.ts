@@ -18,6 +18,7 @@ import {
   needsCookedEchoSafeQueryReply
 } from '../../../../shared/terminal-query-reply'
 import { installTerminalCapabilityReplyHandlers } from './terminal-capability-replies'
+import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 
 const WHEEL_UP_REPORT = '\x1b[<64;60;20M'
 
@@ -192,6 +193,18 @@ describe('pty input write queue', () => {
     ])
   })
 
+  it('keeps all query replies atomic for host-side ordering (#13892)', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const replies = ['\x1b[?1;2c', '\x1b[1;1R']
+
+    for (const reply of replies) {
+      expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
+    }
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data)).toEqual(replies)
+  })
+
   it('does not coalesce a color-scheme reply with a following keystroke', async () => {
     const { writes, queue } = createRecordingQueue()
     const reply = mode2031SequenceFor('dark')
@@ -234,6 +247,28 @@ describe('pty input write queue', () => {
     ])
     expect(replyWrites.every((write) => needsCookedEchoSafeQueryReply(write.data))).toBe(true)
     expect(writes.at(-1)?.data).toBe('k')
+  })
+
+  it('applies the same bound to DA1 replies kept atomic for ordering', async () => {
+    const { writes, pendingYields, queue } = createParkedQueue()
+    const replies = Array.from({ length: 10_000 }, (_, index) => `\x1b[?${index};2c`)
+
+    for (const reply of replies) {
+      expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
+    }
+    expect(queue.enqueue('pty-1', 'k')).toBe(true)
+
+    await Promise.resolve()
+    for (let turn = 0; turn < PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES; turn += 1) {
+      await releaseNextWrite(writes, pendingYields)
+    }
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data)).toEqual([
+      replies[0],
+      ...replies.slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES),
+      'k'
+    ])
   })
 
   it('drops the oldest reply-only payload when the reply text budget fills', async () => {
@@ -396,6 +431,126 @@ describe('pty input write queue', () => {
     }
   })
 
+  it('serializes accepted input at its invocation position', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        return acceptedWrite.promise
+      }
+    })
+
+    expect(queue.enqueue('pty-1', 'first')).toBe(true)
+    const accepted = queue.enqueueAccepted('pty-1', 'second')
+    expect(queue.enqueue('pty-1', 'third')).toBe(true)
+    expect(queue.enqueueQueryReply('pty-1', 'fourth')).toBe(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['ordinary:first', 'accepted:second'])
+
+    acceptedWrite.resolve(true)
+    await expect(accepted).resolves.toBe(true)
+    await queue.waitForDrain()
+
+    expect(delivered).toEqual([
+      'ordinary:first',
+      'accepted:second',
+      'ordinary:third',
+      'ordinary:fourth'
+    ])
+  })
+
+  it('reserves one drain before an accepted write enqueues reentrantly', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    let reentered = false
+    let queue!: ReturnType<typeof createPtyInputWriteQueue>
+    queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        if (!reentered) {
+          reentered = true
+          queue.enqueue('pty-1', 'later')
+        }
+        return acceptedWrite.promise
+      }
+    })
+
+    const accepted = queue.enqueueAccepted('pty-1', 'first')
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:first'])
+
+    acceptedWrite.resolve(true)
+    await expect(accepted).resolves.toBe(true)
+    await queue.waitForDrain()
+
+    expect(delivered).toEqual(['accepted:first', 'ordinary:later'])
+  })
+
+  it('keeps draining fresh input when an accepted write clears reentrantly', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const delivered: string[] = []
+    let queue!: ReturnType<typeof createPtyInputWriteQueue>
+    queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        queue.clear()
+        queue.enqueue('pty-1', 'fresh')
+        return acceptedWrite.promise
+      }
+    })
+
+    const accepted = queue.enqueueAccepted('pty-1', 'stale')
+
+    await expect(accepted).resolves.toBe(false)
+    await queue.waitForDrain()
+    expect(delivered).toEqual(['accepted:stale', 'ordinary:fresh'])
+
+    acceptedWrite.resolve(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:stale', 'ordinary:fresh'])
+  })
+
+  it('clear settles active and pending accepted input before same-id queue reuse', async () => {
+    const acceptedWrite = createDeferred<boolean>()
+    const acceptedStarted = createDeferred<void>()
+    const delivered: string[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => delivered.push(`ordinary:${data}`),
+      writeAccepted: async (_id, data) => {
+        delivered.push(`accepted:${data}`)
+        acceptedStarted.resolve()
+        return acceptedWrite.promise
+      }
+    })
+    const active = queue.enqueueAccepted('pty-1', 'stale-active')
+    const pending = queue.enqueueAccepted('pty-1', 'stale-pending')
+    await acceptedStarted.promise
+
+    queue.clear()
+    expect(queue.enqueue('pty-1', 'fresh')).toBe(true)
+
+    await expect(active).resolves.toBe(false)
+    await expect(pending).resolves.toBe(false)
+    await queue.waitForDrain()
+    expect(delivered).toEqual(['accepted:stale-active', 'ordinary:fresh'])
+
+    acceptedWrite.resolve(true)
+    await flushAsyncTicks()
+
+    expect(delivered).toEqual(['accepted:stale-active', 'ordinary:fresh'])
+  })
+
   it('reports the pty id that failed so a rebound owner can ignore the drain failure', async () => {
     const failure = new Error('yield failed')
     const onDrainFailure = vi.fn()
@@ -475,7 +630,14 @@ describe('pty input write queue', () => {
     // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
     vi.useFakeTimers()
     const reply = mode2031SequenceFor('dark')
-    const caretEcho = (data: string): string => data.replaceAll('\x1b', '^[')
+    // ECHOCTL carets every control, not just ESC. Identical for this reply (it carries no
+    // other control), but modelled correctly so this does not drift from the encoder.
+    const caretEcho = (data: string): string =>
+      [...data]
+        .map((ch) =>
+          ch.charCodeAt(0) < 0x20 ? `^${String.fromCharCode(ch.charCodeAt(0) + 0x40)}` : ch
+        )
+        .join('')
     const masterWrites: string[] = []
     const emissions: PtyIngressEmission[] = []
     let ingress!: PtyStartupIngress
@@ -490,7 +652,7 @@ describe('pty input write queue', () => {
 
     // Same intercept shape as LocalPtyProvider.write / Session.write / relay writeData.
     const hostWrite = (_id: string, data: string): void => {
-      if (extractOnlyCookedEchoSafeQueryReplies(data) && ingress.answerLiveQueryReply(data)) {
+      if (ingress.answerLiveQueryReply(data)) {
         return
       }
       masterWrites.push(`RAW:${data}`)
@@ -579,5 +741,25 @@ describe('pty input write queue', () => {
     await queue.waitForDrain()
 
     expect(extractReplyWrites(writes)).toEqual([reply, reply])
+  })
+
+  it('does not retain a reaction record per acknowledged write', async () => {
+    // Regression: racing every accepted write against one queue-lifetime promise
+    // retained a reaction until that promise settled — ~440 bytes per write.
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: () => undefined,
+      writeAccepted: async () => true,
+      yieldBetweenWrites: async () => undefined
+    })
+    globalThis.gc?.()
+    const heapBefore = process.memoryUsage().heapUsed
+    for (let index = 0; index < 20_000; index += 1) {
+      await queue.enqueueAccepted('pty-1', 'x')
+    }
+    await queue.waitForDrain()
+    globalThis.gc?.()
+    const growthMb = (process.memoryUsage().heapUsed - heapBefore) / 1024 / 1024
+    expect(growthMb).toBeLessThan(2)
   })
 })

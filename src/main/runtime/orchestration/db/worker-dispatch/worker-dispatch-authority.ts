@@ -49,18 +49,22 @@ export function prepareStartingWorkerAuthority(
       )
     }
     const capability = `dcap_${randomBytes(32).toString('base64url')}`
+    const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(
         `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?,
+             host_scope = ?,
              capability_hash = ?, launch_token_hash = COALESCE(launch_token_hash, ?),
-             capability_revoked_at = NULL
+             capability_revoked_at = NULL,
+             consumer_generation = consumer_generation + 1
          WHERE id = ? AND status = 'pending'`
       )
       .run(
         params.handle,
         params.paneKey,
         params.processIncarnation,
+        params.hostScope ?? null,
         hashDispatchCapability(capability),
         params.launchTokenHash ?? null,
         params.dispatchId
@@ -71,6 +75,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
@@ -109,6 +114,8 @@ export function prepareStartingWorkerAuthority(
           terminalHandle: params.handle,
           paneKey: params.paneKey,
           processIncarnation: params.processIncarnation,
+          endpointId,
+          endpointIncarnation: params.processIncarnation,
           hostScope: params.hostScope,
           ownership: 'owned'
         })
@@ -126,6 +133,8 @@ export function prepareStartingWorkerAuthority(
             terminalHandle: params.handle,
             paneKey: params.paneKey,
             processIncarnation: params.processIncarnation,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope ?? null
           })
         } else {
@@ -135,6 +144,8 @@ export function prepareStartingWorkerAuthority(
             terminalHandle: params.handle,
             paneKey: params.paneKey,
             processIncarnation: params.processIncarnation,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope,
             ownership: 'external'
           })

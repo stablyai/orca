@@ -217,10 +217,41 @@ export const NEVER_TRANSLATE_VALUES = new Set([
 ])
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
+  zh: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  },
+  ko: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  },
+  ja: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  },
+  es: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  },
+  fr: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  }
 }
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
@@ -351,10 +382,13 @@ function phraseFixMatchesEnglish(enValue, fix) {
   return enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())
 }
 
-function applyPhraseFixes(enValue, localeValue, locale) {
+function applyPhraseFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
     if (!phraseFixMatchesEnglish(enValue, fix)) {
+      continue
+    }
+    if (fix.skipKeyPrefixes?.some((prefix) => key.startsWith(prefix))) {
       continue
     }
     result = result.replace(fix.pattern, fix.replacement)
@@ -367,7 +401,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
     let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
+    result = applyPhraseFixes(enValue, result, locale, key)
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
@@ -377,7 +411,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
   if (valueOverride) {
     let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
+    result = applyPhraseFixes(enValue, result, locale, key)
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
@@ -398,7 +432,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   }
 
   result = applyBrandMistranslationFixes(enValue, result, locale, key)
-  result = applyPhraseFixes(enValue, result, locale)
+  result = applyPhraseFixes(enValue, result, locale, key)
   if (['zh', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)
   }

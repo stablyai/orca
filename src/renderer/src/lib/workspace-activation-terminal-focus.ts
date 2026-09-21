@@ -46,7 +46,7 @@ export function queueWorkspaceActivationTerminalFocus(
     // Why: creation closes a Radix dialog immediately after activation. Queue
     // focus past that close so focus restoration cannot leave the user on the
     // removed composer field after Cmd/Ctrl+Enter.
-    if (!focusRuntimeTerminalSurface(tabId)) {
+    if (!focusRuntimeTerminalSurface(tabId, null, worktreeId)) {
       focusTerminalTabSurface(tabId)
     }
   })

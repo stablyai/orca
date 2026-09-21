@@ -178,6 +178,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes Kimi Code by the kimi-code process its launcher becomes', () => {
+    expect(recognizeAgentProcess('/home/dev/.kimi-code/bin/kimi')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi'
+    })
+    expect(recognizeAgentProcess('kimi-code')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi-code'
+    })
+    expect(isExpectedAgentProcess('/home/dev/.kimi-code/bin/kimi', 'kimi')).toBe(true)
+    expect(isRecognizedAgentType('kimi-code')).toBe(true)
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',
@@ -358,6 +371,22 @@ describe('agent process recognition', () => {
     expect(isAgentForegroundWrapperProcess('python3.12.exe')).toBe(true)
     expect(isAgentForegroundWrapperProcess('bash')).toBe(false)
     expect(isAgentForegroundWrapperProcess('vim.exe')).toBe(false)
+  })
+
+  it('recognizes the Antigravity CLI from bare, POSIX and Windows command lines', () => {
+    const agy = { agent: 'antigravity', processName: 'agy' }
+
+    expect(recognizeAgentProcess('agy')).toEqual(agy)
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/agy')).toEqual(agy)
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Local\agy\bin\agy.exe`)).toEqual(
+      agy
+    )
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`"C:\Users\dev\AppData\Local\agy\bin\agy.exe" --dangerously-skip-permissions`
+      )
+    ).toEqual(agy)
+    expect(recognizeAgentProcessFromCommandLine('agy --dangerously-skip-permissions')).toEqual(agy)
   })
 
   it('recognizes versioned Grok process names observed from the installed CLI', () => {

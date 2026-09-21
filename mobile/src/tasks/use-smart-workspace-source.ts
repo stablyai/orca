@@ -180,6 +180,64 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   }
 }
 
+type PasteLookup = { paste: PasteResolved; crossRepoPrompt: SmartCrossRepoPrompt | null }
+
+const EMPTY_PASTE_LOOKUP: PasteLookup = {
+  paste: { github: null, gitlab: null },
+  crossRepoPrompt: null
+}
+
+// Resolves a pasted issue/PR/MR reference to the exact item it names.
+async function resolvePastedItem(args: {
+  client: RpcClient
+  intent: NonNullable<ReturnType<typeof resolvePasteIntent>>
+  repoId: string
+  repos: readonly PasteRepoCandidate[]
+  repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>
+}): Promise<PasteLookup> {
+  const { client, intent, repoId, repos, repoSlugCache } = args
+  if (intent.kind === 'github-number') {
+    return {
+      paste: {
+        github: await lookupGitHubItemByNumber(client, repoId, intent.number),
+        gitlab: null
+      },
+      crossRepoPrompt: null
+    }
+  }
+  if (intent.kind === 'github-link') {
+    const matchingRepo = await findRepoMatchingSlugForPaste(
+      client,
+      repos,
+      intent.link.slug,
+      repoSlugCache
+    )
+    if (matchingRepo && matchingRepo.id !== repoId) {
+      return {
+        paste: { github: null, gitlab: null },
+        crossRepoPrompt: { link: intent.link, matchingRepo }
+      }
+    }
+    return {
+      paste: {
+        github: await lookupGitHubItemByOwnerRepo(
+          client,
+          repoId,
+          intent.link.slug,
+          intent.link.number,
+          intent.link.type
+        ),
+        gitlab: null
+      },
+      crossRepoPrompt: null
+    }
+  }
+  return {
+    paste: { github: null, gitlab: await lookupGitLabItemByPath(client, repoId, intent.link) },
+    crossRepoPrompt: null
+  }
+}
+
 async function runSmartSearch(args: {
   client: RpcClient
   mode: SmartNameMode
@@ -199,42 +257,21 @@ async function runSmartSearch(args: {
   crossRepoPrompt: SmartCrossRepoPrompt | null
 }> {
   const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
-  const fan = await fanOutSmartSearch(args)
-  const paste: PasteResolved = { github: null, gitlab: null }
-  let crossRepoPrompt: SmartCrossRepoPrompt | null = null
-
   const intent =
     mode === 'branches' || dismissedPasteRef.current === query.trim()
       ? null
       : resolvePasteIntent(query)
-  if (intent && repoId) {
-    try {
-      if (intent.kind === 'github-number') {
-        paste.github = await lookupGitHubItemByNumber(client, repoId, intent.number)
-      } else if (intent.kind === 'github-link') {
-        const matchingRepo = await findRepoMatchingSlugForPaste(
-          client,
-          repos,
-          intent.link.slug,
-          repoSlugCache
+  // Why: the paste lookup and the provider fan-out hit different host endpoints,
+  // so awaiting the fan-out first stacked two full round trips on the one path a
+  // user is most likely to take — typing a PR/issue number. Run them together.
+  const [fan, pasteLookup] = await Promise.all([
+    fanOutSmartSearch(args),
+    intent && repoId
+      ? resolvePastedItem({ client, intent, repoId, repos, repoSlugCache }).catch(
+          // Best-effort paste resolution; fall back to the fan-out results.
+          () => EMPTY_PASTE_LOOKUP
         )
-        if (matchingRepo && matchingRepo.id !== repoId) {
-          crossRepoPrompt = { link: intent.link, matchingRepo }
-        } else {
-          paste.github = await lookupGitHubItemByOwnerRepo(
-            client,
-            repoId,
-            intent.link.slug,
-            intent.link.number,
-            intent.link.type
-          )
-        }
-      } else if (intent.kind === 'gitlab-link') {
-        paste.gitlab = await lookupGitLabItemByPath(client, repoId, intent.link)
-      }
-    } catch {
-      // Best-effort paste resolution; fall back to the fan-out results.
-    }
-  }
-  return { fan, paste, crossRepoPrompt }
+      : Promise.resolve(EMPTY_PASTE_LOOKUP)
+  ])
+  return { fan, paste: pasteLookup.paste, crossRepoPrompt: pasteLookup.crossRepoPrompt }
 }

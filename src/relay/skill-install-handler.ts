@@ -54,6 +54,7 @@ import { listManagedSkillInstalls } from '../main/skills/skill-install-provenanc
 import { executeSkillInstallRequest } from '../main/skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../main/skills/skill-bundle-install-request-service'
 import { SkillUploadSessionService } from '../main/skills/skill-upload-session-service'
+import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../main/skills/skill-upload-staging-ownership'
 import {
   SkillInstallOperationError,
   skillInstallFailureFromError
@@ -93,7 +94,7 @@ export class SkillInstallHandler {
     this.homeDirectory = options.homeDirectory ?? homedir()
     this.stateDirectory = options.stateDirectory ?? join(this.homeDirectory, '.orca')
     this.uploads = new SkillUploadSessionService(
-      join(this.stateDirectory, 'skill-installs', 'remote-uploads')
+      join(this.stateDirectory, 'skill-installs', SKILL_UPLOAD_STAGING_ROOT_NAME)
     )
     this.detectProviders = options.detectProviders ?? detectRelaySkillProviders
     this.recovery = (
@@ -219,6 +220,10 @@ export class SkillInstallHandler {
       }
       throw new SkillInstallOperationError(failure, { cause: error })
     }
+  }
+
+  async dispose(): Promise<void> {
+    await this.uploads.dispose()
   }
 
   private async listManagedInstalls(

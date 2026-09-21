@@ -30,6 +30,8 @@ import {
   resolveAiVaultSessionResumeState
 } from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
+import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
+import { resolveAiVaultSessionResumeInChatForWorkspace } from './ai-vault-session-resume-in-chat-workspace'
 import {
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
@@ -287,6 +289,22 @@ export default function AiVaultPanel(): React.JSX.Element {
     [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
   )
 
+  // Resuming into a chat asks a different question from resuming into a terminal: not "can this
+  // workspace host a PTY" but "will the provider still find this conversation from the workspace we
+  // would run it in". The workspace it targets is the session's own when that is open, because
+  // Claude looks its transcript up under a directory derived from the launch cwd.
+  const getSessionResumeInChat = useCallback(
+    (session: AiVaultSession): AiVaultResumeInChatEligibility =>
+      resolveAiVaultSessionResumeInChatForWorkspace({
+        session,
+        resumeState: getSessionResumeState(session),
+        activeWorkspaceId: effectiveActiveWorktreeId,
+        targetState: resumeTargetState,
+        settings
+      }),
+    [effectiveActiveWorktreeId, getSessionResumeState, resumeTargetState, settings]
+  )
+
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
     preferredScopeRef.current = nextScope
     userChangedScopeRef.current = nextScope !== DEFAULT_AI_VAULT_SCOPE
@@ -366,7 +384,9 @@ export default function AiVaultPanel(): React.JSX.Element {
         onJumpToOriginalPane={jumpToOriginalPane}
         onJumpToWorktree={jumpToWorktree}
         onResume={launchActions.handleResume}
+        getSessionResumeInChat={getSessionResumeInChat}
         onContinueInNewSession={launchActions.handleContinueInNewSession}
+        onResumeInNewChat={launchActions.handleResumeInNewChat}
         onCopyResume={(session, worktreeId) =>
           void launchActions.copyResumeCommand(session, worktreeId)
         }

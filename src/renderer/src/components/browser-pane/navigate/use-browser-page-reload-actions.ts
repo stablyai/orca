@@ -14,11 +14,13 @@ import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 export function useBrowserPageReloadActions({
   browserTab,
   webviewRef,
+  trackNextLoadingEventRef,
   retryGuestRecoveryRef,
   onUpdatePageStateRef
 }: {
   browserTab: BrowserPageState
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  trackNextLoadingEventRef?: MutableRefObject<boolean>
   retryGuestRecoveryRef: MutableRefObject<() => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
 }): {
@@ -44,13 +46,30 @@ export function useBrowserPageReloadActions({
       if (!webview) {
         return
       }
-      if (reloadBrowserPageWebview(webview, { ignoreCache }) === 'guest-missing') {
+      if (trackNextLoadingEventRef) {
+        trackNextLoadingEventRef.current = true
+      }
+      const result = reloadBrowserPageWebview(webview, { ignoreCache })
+      if (result === 'reloaded') {
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+      } else if (result === 'guest-missing') {
+        if (trackNextLoadingEventRef) {
+          trackNextLoadingEventRef.current = false
+        }
         // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
         onUpdatePageStateRef.current(browserTab.id, { loading: true })
         retryGuestRecoveryRef.current()
+      } else if (trackNextLoadingEventRef) {
+        trackNextLoadingEventRef.current = false
       }
     },
-    [browserTab.id, onUpdatePageStateRef, retryGuestRecoveryRef, webviewRef]
+    [
+      browserTab.id,
+      onUpdatePageStateRef,
+      retryGuestRecoveryRef,
+      trackNextLoadingEventRef,
+      webviewRef
+    ]
   )
   const runReloadTrigger = useCallback(
     (trigger: BrowserReloadTrigger) => {

@@ -92,7 +92,8 @@ export function GitHistoryPanel({
   const loadedCommitsRef = useRef<{
     result: GitHistoryResult | undefined
     ids: Set<string>
-  }>({ result, ids: new Set() })
+  }>(undefined!)
+  loadedCommitsRef.current ??= { result, ids: new Set() }
 
   // A new history result can reorder or replace commits, so drop any expansion
   // and cached file lists rather than risk showing stale files under a row.

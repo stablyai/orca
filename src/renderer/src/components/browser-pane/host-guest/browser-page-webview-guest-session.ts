@@ -134,6 +134,10 @@ export function createBrowserPageWebviewGuestSession({
       guestRecoveryPendingRef.current = pending
     },
     validateRegistration: async () => {
+      // Budget eviction can remove a hidden guest while its pane stays mounted.
+      if (!webview.isConnected) {
+        return false
+      }
       let webContentsId: number
       try {
         webContentsId = webview.getWebContentsId()

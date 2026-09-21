@@ -37,7 +37,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       return
     }
     closeModal()
-    activateAndRevealWorktree(targetWorktree.id)
+    activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
     const state = useAppStore.getState()
     // Why: open the browser into the worktree's active group so it lands beside
     // the user's current work rather than spawning a detached surface.

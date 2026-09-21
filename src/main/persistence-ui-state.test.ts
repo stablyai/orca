@@ -7,12 +7,12 @@ import { getDefaultPersistedState } from '../shared/constants'
 import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 import {
   testState,
-  createStore,
   dataFile,
   writeDataFile,
   readDataFile,
   makeRepo
 } from './persistence-test-harness'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -32,19 +32,31 @@ const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
-  },
-  safeStorage: {
+  }
+}))
+
+async function createStore() {
+  vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
     isEncryptionAvailable: () => true,
-    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext: Buffer) => {
+    encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext) => {
       const decoded = ciphertext.toString('utf-8')
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
       return decoded.slice('encrypted:'.length)
-    }
-  }
-}))
+    },
+    describeProtectionGap: () => null
+  })
+  const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
+  initDataPath()
+  return new Store()
+}
 
 vi.mock('./telemetry/client', () => ({
   track: trackMock
@@ -93,6 +105,31 @@ describe('Store', () => {
       { hostId: 'runtime:node-b', repoId: 'shared' },
       { hostId: 'local', repoId: 'alpha' }
     ])
+  })
+
+  // The RPC now strips manualRepoOrder, so every paired-client ui.set reaches the store without
+  // the key. Absent has to mean preserve: if it read as clear, the strip would erase the desktop's
+  // order on the first unrelated setting a phone or web client changes.
+  // Absent-means-preserve is what makes the pairing-local strip safe: a client's ui.set arrives
+  // without these fields, so the desktop's own values must survive the update.
+  it('updateUI preserves the manual repo and host-section order when an update omits them', async () => {
+    const store = await createStore()
+    store.updateUI({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'alpha' },
+        { hostId: 'ssh:box', repoId: 'bravo' }
+      ] as never,
+      workspaceHostOrder: ['ssh:box', 'local'] as never
+    })
+
+    store.updateUI({ sidebarWidth: 400 })
+
+    expect(store.getUI().manualRepoOrder).toEqual([
+      { hostId: 'local', repoId: 'alpha' },
+      { hostId: 'ssh:box', repoId: 'bravo' }
+    ])
+    expect(store.getUI().workspaceHostOrder).toEqual(['ssh:box', 'local'])
+    expect(store.getUI().sidebarWidth).toBe(400)
   })
 
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {

@@ -4,22 +4,42 @@ import { TerminalHost } from './terminal-host'
 
 vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
 
-function mockSubprocess(): SubprocessHandle {
+type MockSubprocess = SubprocessHandle & {
+  emitData: (data: string) => void
+  emitExit: (code: number) => void
+}
+
+function mockSubprocess(
+  options: { confirmShellForeground?: () => Promise<boolean> } = {}
+): MockSubprocess {
+  let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 4242,
     getForegroundProcess: vi.fn(() => null),
+    ...(options.confirmShellForeground
+      ? { confirmShellForeground: options.confirmShellForeground }
+      : {}),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 1)),
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
-    onData: vi.fn(),
+    terminateOwnedTree: () => 'unavailable' as const,
+    onData(cb) {
+      onDataCb = cb
+    },
     onExit(cb) {
       onExitCb = cb
     },
-    dispose: vi.fn()
-  } as unknown as SubprocessHandle
+    dispose: vi.fn(),
+    emitData(data) {
+      onDataCb?.(data)
+    },
+    emitExit(code) {
+      onExitCb?.(code)
+    }
+  } as MockSubprocess
 }
 
 const streamClient = { onData: vi.fn(), onExit: vi.fn() }
@@ -50,6 +70,28 @@ describe('concurrent createOrAttach across the async spawn', () => {
     expect(results.map((result) => result.isNew).sort()).toEqual([false, true])
     expect(host.listSessions()).toHaveLength(1)
 
+    await host.dispose()
+  })
+
+  it('attaches immediately while an ownership proof is still in flight', async () => {
+    // The proof never resolves: attach must not wait on it. The viewer takes
+    // the pre-reset snapshot and the in-stream reset heals its first frame.
+    const first = mockSubprocess({
+      confirmShellForeground: vi.fn(() => new Promise<boolean>(() => {}))
+    })
+    const spawnSubprocess = vi
+      .fn<() => Promise<SubprocessHandle>>()
+      .mockResolvedValueOnce(first)
+      .mockImplementation(async () => mockSubprocess())
+    const host = new TerminalHost({ spawnSubprocess })
+    await host.createOrAttach(createOptions('settle-free'))
+    first.emitData('\x1b[?1049hTUI\x1b]133;D;137\x07')
+    await vi.waitFor(() => expect(first.confirmShellForeground).toHaveBeenCalledOnce())
+
+    await expect(host.createOrAttach(createOptions('settle-free'))).resolves.toMatchObject({
+      isNew: false
+    })
+    expect(spawnSubprocess).toHaveBeenCalledOnce()
     await host.dispose()
   })
 

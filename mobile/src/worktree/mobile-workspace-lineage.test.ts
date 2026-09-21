@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
+import {
+  applyMobileWorkspaceLineage,
+  getMobileWorkspaceLineageGroupKey
+} from './mobile-workspace-lineage'
 import type { Worktree } from './workspace-list-sections'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -61,7 +64,10 @@ describe('applyMobileWorkspaceLineage', () => {
     const parent = worktree({ worktreeId: 'parent' })
     const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
 
-    const rows = applyMobileWorkspaceLineage([child, parent], new Set(['workspace-lineage:parent']))
+    const rows = applyMobileWorkspaceLineage(
+      [child, parent],
+      new Set([getMobileWorkspaceLineageGroupKey(parent)])
+    )
 
     expect(rows.map((row) => row.worktreeId)).toEqual(['parent'])
     expect(rows[0]?.lineageChildCount).toBe(1)
@@ -100,5 +106,14 @@ describe('applyMobileWorkspaceLineage', () => {
     const rows = applyMobileWorkspaceLineage([first, second])
 
     expect(rows.map((row) => row.worktreeId).sort()).toEqual(['first', 'second'])
+  })
+
+  it('keeps same-id rows on different hosts visible', () => {
+    const local = worktree({ worktreeId: 'shared', hostId: 'local' })
+    const remote = worktree({ worktreeId: 'shared', hostId: 'ssh:builder' })
+
+    const rows = applyMobileWorkspaceLineage([local, remote])
+
+    expect(rows.map((row) => row.hostId)).toEqual(['local', 'ssh:builder'])
   })
 })
