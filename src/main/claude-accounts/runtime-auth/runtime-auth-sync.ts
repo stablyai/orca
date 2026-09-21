@@ -8,14 +8,12 @@ import {
 } from '../runtime-selection'
 import { hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
-import {
-  readActiveClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentialsForRuntime
-} from '../keychain'
+import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { mergeSharedClaudeCredentialFields } from '../shared-credential-fields'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
+  /** Materializes the currently selected Claude account's credentials into the runtime. */
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
@@ -270,7 +268,10 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
         // credential's copy of those fields back in before overwriting, mirroring the
         // external claude-swap tool's own live-wins rule for this exact Keychain item, so
         // an Orca-driven switch stops silently dropping every MCP connection every time.
-        const liveCredentialsJson = await readActiveClaudeKeychainCredentials(paths.configDir)
+        // Best-effort: a transient read failure should skip the merge, not abort the switch.
+        const liveCredentialsJson = await this.readAggregateClaudeKeychainCredentialsBestEffort(
+          paths.configDir
+        )
         const credentialsJsonForKeychain = mergeSharedClaudeCredentialFields(
           credentialsJson,
           liveCredentialsJson
