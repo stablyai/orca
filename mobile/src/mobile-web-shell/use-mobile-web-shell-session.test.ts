@@ -197,6 +197,8 @@ type Mounted = {
   retry: () => void
   rerender: () => void
   states: () => readonly MobileWebShellSessionState[]
+  /** Whether the page had spoken, as every render of the hook reported it. */
+  handshakes: () => readonly boolean[]
   documentLoaded: () => void
   pageReady: () => void
   timers: ReturnType<typeof createTimerSeam>
@@ -209,11 +211,13 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => void
     pageReady: () => void
     states: MobileWebShellSessionState[]
+    handshakes: boolean[]
   } = {
     retry: () => {},
     documentLoaded: () => {},
     pageReady: () => {},
-    states: []
+    states: [],
+    handshakes: []
   }
   function Probe() {
     const session = useMobileWebShellSession({
@@ -230,6 +234,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.documentLoaded = session.reportDocumentLoaded
     handle.pageReady = session.reportPageReady
     handle.states.push(session.state)
+    handle.handshakes.push(session.pageReady)
     return null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -245,6 +250,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     retry: () => handle.retry(),
     rerender: () => tree.update(createElement(Probe)),
     states: () => handle.states,
+    handshakes: () => handle.handshakes,
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     timers
@@ -458,6 +464,23 @@ describe('the wait for the page to speak', () => {
       mounted.timers.fire()
     })
     expect(mounted.states().at(-1)?.kind).toBe('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  /**
+   * The bridge host is rebuilt when the client under it changes and the page is never told, so it
+   * takes "this session has handshaken" from here. It is a fact about the session, and a render is
+   * the only thing that carries it to the mount that builds the next host.
+   */
+  it('reports the handshake the page completed, for the host that is rebuilt over it', async () => {
+    const mounted = await ready()
+    expect(mounted.handshakes().at(-1)).toBe(false)
+    await act(async () => {
+      mounted.pageReady()
+    })
+    expect(mounted.handshakes().at(-1)).toBe(true)
     await act(async () => {
       mounted.tree.unmount()
     })

@@ -121,6 +121,8 @@ function DeliverDuringCommit(props: {
 
 function Harness(props: {
   session: MobileWebShellSessionState
+  /** What the screen's own reducer says about this session; false for every case but the fence's. */
+  sessionEstablished?: boolean
   posted: PostedFrame[]
   probe: Probe
   faults: BridgeErrorCapture[]
@@ -129,6 +131,7 @@ function Harness(props: {
   const view = useMobileWebShellBridge({
     hostId: 'host-1',
     session: props.session,
+    sessionEstablished: props.sessionEstablished ?? false,
     // Built inline on every render, as a caller writes it: the host is not rebuilt for it.
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
@@ -749,5 +752,44 @@ describe('the props one render passed', () => {
     // Announced once, to the render that was on screen when the one host was built.
     expect(first.droppedBinaryFrames).toEqual([0])
     expect(second.droppedBinaryFrames).toEqual([])
+  })
+})
+
+describe('a session that handshook before this host existed', () => {
+  /**
+   * A host is rebuilt when the client under it changes, and the page is never told: the session id
+   * is the same, so it neither handshakes again nor hears that the shell was replaced.
+   *
+   * Whether the session is open is a fact about the session, so the host takes it from the render
+   * rather than from anything this mount remembered — which is what makes it survive a mount.
+   */
+  it('serves a request from a page that never said `ready` to this host', async () => {
+    const probe = newProbe()
+    await act(async () => {
+      create(
+        createElement(Harness, {
+          session: readyState('session-one'),
+          sessionEstablished: true,
+          posted: [],
+          probe,
+          faults: [],
+          readies: []
+        })
+      )
+    })
+    await act(async () => {
+      probe.view?.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'request', id: ID, method: 'status.get' }) }
+      })
+    })
+    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
+  })
+
+  /** The control: the same frame on a session the caller has not opened is still refused, so the
+   *  case above is the fence moving rather than the fence going. */
+  it('refuses one on a session the caller says nothing about', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    expect(fakeClient().requests).toEqual([])
   })
 })
