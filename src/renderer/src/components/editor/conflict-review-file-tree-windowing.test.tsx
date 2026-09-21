@@ -3,10 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  SOURCE_CONTROL_FILE_ROW_OVERSCAN,
-  SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS
-} from '@/components/right-sidebar/source-control/listing/virtual-file-list'
+import { VIRTUALIZED_LIST_MIN_ROWS, VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
 import type {
   GitConflictKind,
   GitConflictResolutionStatus,
@@ -25,7 +22,7 @@ const FILES_PER_DIRECTORY = MERGE_FILE_COUNT / MERGE_DIRECTORY_COUNT
 // happy-dom has no layout, so the viewport and every row height come from the `offsetHeight` and
 // `getBoundingClientRect` spies below; `offsetHeight` feeds both virtual-core's viewport rect and
 // `measureElement`, while `getBoundingClientRect` is read only by
-// `measureSourceControlScrollMargin`. The rect spy puts the scroller at `top: 0` and the virtual
+// `measureVirtualizedListScrollMargin`. The rect spy puts the scroller at `top: 0` and the virtual
 // list `MEASURED_SCROLL_MARGIN_PX` into its scrollable content, so the margin this consumer
 // measures is the real one rather than an accidental 0.
 const ROWS_PER_VIEWPORT = Math.floor(VIEWPORT_HEIGHT_PX / CONFLICT_REVIEW_ROW_HEIGHT_PX)
@@ -80,11 +77,11 @@ afterEach(() => {
 /**
  * Synthetic layout top for the rect spy. Everything sits at 0 except the virtual list, which sits
  * `MEASURED_SCROLL_MARGIN_PX` into the scroller's content: the offset is taken against the
- * scroller's current `scrollTop`, which `measureSourceControlScrollMargin` adds back, so a
+ * scroller's current `scrollTop`, which `measureVirtualizedListScrollMargin` adds back, so a
  * re-measure mid-scroll reports the same margin as the one at mount.
  */
 function synthesizedTop(element: Element): number {
-  if (!element.matches('[data-testid="source-control-virtual-list"]')) {
+  if (!element.matches('[data-testid="virtualized-list"]')) {
     return 0
   }
   const scroller = element.closest('.overflow-auto')
@@ -245,7 +242,7 @@ function expectWindowMatchesProjection(projection: readonly string[]): void {
 }
 
 function getVirtualListContainer(): HTMLElement {
-  const container = host.querySelector('[data-testid="source-control-virtual-list"]')
+  const container = host.querySelector('[data-testid="virtualized-list"]')
   if (!(container instanceof HTMLElement)) {
     throw new Error('virtual list container not found')
   }
@@ -255,7 +252,7 @@ function getVirtualListContainer(): HTMLElement {
 /**
  * The range virtual-core resolves: it ends at the first row whose end reaches or passes the
  * viewport bottom, so a partly visible last row is still in range; then
- * `SOURCE_CONTROL_FILE_ROW_OVERSCAN` extends both edges, clamped to the list. Two
+ * `VIRTUALIZED_LIST_OVERSCAN` extends both edges, clamped to the list. Two
  * preconditions: the scroll offset must be row-aligned (a partially scrolled row makes the real
  * range one row longer), and `CONFLICT_REVIEW_ROW_HEIGHT_PX` must divide `VIEWPORT_HEIGHT_PX` — the
  * floor in `ROWS_PER_VIEWPORT` keeps the expectation a whole number, but a row height that leaves a
@@ -265,10 +262,10 @@ function expectedWindow(
   startIndex: number,
   totalRows: number
 ): { first: number; last: number; count: number } {
-  const first = Math.max(0, startIndex - SOURCE_CONTROL_FILE_ROW_OVERSCAN)
+  const first = Math.max(0, startIndex - VIRTUALIZED_LIST_OVERSCAN)
   const last = Math.min(
     totalRows - 1,
-    startIndex + ROWS_PER_VIEWPORT - 1 + SOURCE_CONTROL_FILE_ROW_OVERSCAN
+    startIndex + ROWS_PER_VIEWPORT - 1 + VIRTUALIZED_LIST_OVERSCAN
   )
   return { first, last, count: last - first + 1 }
 }
@@ -322,9 +319,9 @@ describe('conflict review file tree row windowing', () => {
 
     const projection = buildProjection(fileCount, directoryCount)
     expect(projection.length).toBe(1 + directoryCount + fileCount)
-    expect(projection.length).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(projection.length).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(getMountedRows().map(getRowLabel)).toEqual(projection)
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
     // Natural flow: no absolutely positioned wrappers, exactly the pre-virtualization markup.
     expect(host.querySelectorAll('[data-index]')).toHaveLength(0)
   })
@@ -379,7 +376,7 @@ describe('conflict review file tree row windowing', () => {
       scroller.dispatchEvent(new Event('scroll'))
     })
 
-    expect(getMountedWindow()[0]?.index).toBe(250 - SOURCE_CONTROL_FILE_ROW_OVERSCAN - 1)
+    expect(getMountedWindow()[0]?.index).toBe(250 - VIRTUALIZED_LIST_OVERSCAN - 1)
     expectWindowMatchesProjection(projection)
   })
 
@@ -476,7 +473,7 @@ describe('conflict review file tree row windowing', () => {
     const collapsed = buildProjection(MERGE_FILE_COUNT, MERGE_DIRECTORY_COUNT, new Set(['dir-04']))
     expect(collapsed.length).toBe(461)
     // Still far above the threshold, so the list cannot have fallen back to natural flow.
-    expect(collapsed.length).toBeGreaterThanOrEqual(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(collapsed.length).toBeGreaterThanOrEqual(VIRTUALIZED_LIST_MIN_ROWS)
     expect(getVirtualListContainer().style.height).toBe(
       `${collapsed.length * CONFLICT_REVIEW_ROW_HEIGHT_PX}px`
     )
@@ -594,10 +591,10 @@ describe('conflict review file tree row windowing', () => {
 
     // Each duplicate is its own row, titled with its full path rather than the shared basename.
     const projection = ['src', directoryA, pathA, padA, directoryB, pathB, padB]
-    expect(projection.length + 1).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(projection.length + 1).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(getMountedRows().map(getRowLabel)).toEqual(projection)
     // Natural flow has no keyed wrappers, so the row element's own key is all React reconciles by.
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
     expect(host.querySelectorAll('[data-index]')).toHaveLength(0)
 
     const beforeA = getRow(pathA)
@@ -679,6 +676,6 @@ describe('conflict review file tree row windowing', () => {
     // guard above it the panel would be blank instead of explaining itself.
     expect(getScroller().textContent).toContain('No conflicts in this snapshot.')
     expect(getMountedRows()).toHaveLength(0)
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
   })
 })

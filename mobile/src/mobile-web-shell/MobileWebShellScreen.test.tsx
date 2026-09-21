@@ -28,6 +28,8 @@ type ScreenDependencies = {
   /** Whether the view refuses what it is handed, which is a page the post never reached. */
   postFails: boolean
   state: MobileWebShellSessionState
+  /** What the session reducer says about the page's handshake; true only for the fence's case. */
+  pageReady: boolean
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
   client: FakeRpcClient | null
 }
@@ -66,6 +68,7 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     posted: [],
     postFails: false,
     state: { kind: 'checking' },
+    pageReady: false,
     client: null
   }
 })
@@ -199,11 +202,12 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     retry: dependencies.retry,
     reportShellFailure: dependencies.reportShellFailure,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
-    reportPageReady: dependencies.reportPageReady
+    reportPageReady: dependencies.reportPageReady,
+    pageReady: dependencies.pageReady
   })
 }))
 
-import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -306,6 +310,7 @@ beforeEach(() => {
   dependencies.posted.length = 0
   dependencies.postFails = false
   dependencies.client = null
+  dependencies.pageReady = false
   dependencies.routeGrants = DEFAULT_ROUTE_GRANTS
   dependencies.back.mockReset()
   dependencies.openUrl.mockReset()
@@ -572,6 +577,28 @@ describe('the hybrid shell screen', () => {
       })
     })
     expect(dependencies.reportPageReady).toHaveBeenCalled()
+  })
+
+  /**
+   * The host is rebuilt when the client under it changes, and the page is never told: the session
+   * id does not move, so it neither handshakes again nor hears that the shell was replaced. The
+   * screen hands over what its reducer already knows about the session rather than the bridge
+   * remembering it for the life of one mount.
+   */
+  it('serves a page whose session handshook before this host was built', async () => {
+    const client = createFakeRpcClient()
+    dependencies.client = client
+    dependencies.pageReady = true
+    const tree = await render(readyState('session-one'))
+    // No `ready` first, which is exactly what a page that was never told cannot send.
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({ type: 'request', id: bridgeId(1), method: 'status.get' })
+        }
+      })
+    })
+    expect(client.requests.map((request) => request.method)).toEqual(['status.get'])
   })
 
   it('fails the session on a page fault, so a blank page becomes the failure screen', async () => {

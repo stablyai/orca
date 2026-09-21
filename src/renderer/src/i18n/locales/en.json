@@ -4184,7 +4184,8 @@
           "rangeLast7Days": "Last 7 days",
           "rangeLast30Days": "Last 30 days",
           "rangeLast90Days": "Last 90 days",
-          "rangeAllTime": "All time"
+          "rangeAllTime": "All time",
+          "costExcludesUnpricedModels": "• excludes unpriced models"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
