@@ -21,7 +21,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as esbuild from 'esbuild'
 import { PNG } from 'pngjs'
 import { chromium, webkit } from 'playwright-core'
@@ -29,7 +29,12 @@ import { lucideBarrelPlugin } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from './mobile-web-app-render-harness.mjs'
 import { createCspReportSink, reportedDirectives } from './mobile-web-app-preview-csp-reports.mjs'
-import { previewFrame, waitForLoadedFrame } from './mobile-web-app-preview-frame-readiness.mjs'
+import {
+  previewFrame,
+  settleAfterMount,
+  waitForLoadedFrame,
+  waitForRecordedNavigation
+} from './mobile-web-app-preview-frame-readiness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 
@@ -721,6 +726,35 @@ for (const engine of ['chromium', 'webkit']) {
         expect(blank.popups).toBe(0)
       }, 180_000)
 
+      // The navigation wait's sampling branch, driven once. It fires only when an arm is slow, so
+      // nothing here had ever executed it: a name out of scope inside it throws where no lint runs
+      // and no case looks. The printed reading is the proof that it ran and returned one.
+      it('reads the frame while a navigation it expects has not arrived', async (ctx) => {
+        void ctx
+        const page = await browser().newPage()
+        const printed = []
+        const spy = vi.spyOn(console, 'error').mockImplementation((line) => {
+          printed.push(String(line))
+        })
+        const stop = new AbortController()
+        const timer = setTimeout(() => stop.abort(), 300)
+        await waitForRecordedNavigation(
+          page,
+          [],
+          () => false,
+          stop.signal,
+          { arm: 'arm sampling-probe', browserVersion: browser().version() },
+          25
+        )
+        clearTimeout(timer)
+        spy.mockRestore()
+        await page.close()
+        expect(printed).toHaveLength(1)
+        expect(printed[0]).toContain('arm sampling-probe')
+        // Not the placeholder: this string is only there if the sampling branch produced a reading.
+        expect(printed[0]).toContain('frames [')
+      }, 60_000)
+
       it('keeps the Preview/Source toggle, and Source shows the source', async (ctx) => {
         const read = await open(browser(), {
           signal: ctx.signal,
@@ -776,85 +810,6 @@ describe('the HTML preview needs no policy change', () => {
     expect(tokens).not.toContain('allow-same-origin')
   })
 })
-
-/**
- * Where an arm's counters are read: after the thing it is about, whatever that thing is.
- *
- * `expectNavigation` names what the arm is waiting for, and an arm that expects one waits for the
- * record itself rather than for a clock. An arm that expects none has nothing to await, so it takes
- * the bounded path below.
- */
-async function settleAfterMount(page, navigations, expectNavigation, signal, reading) {
-  if (expectNavigation === 'main-frame') {
-    return await waitForRecordedNavigation(page, navigations, (one) => one.main, signal, reading)
-  }
-  if (expectNavigation === 'frame') {
-    return await waitForRecordedNavigation(
-      page,
-      navigations,
-      (one) => !one.main && !one.foreign,
-      signal,
-      reading
-    )
-  }
-  return await settleWithoutNavigation(page)
-}
-
-/**
- * The moment the arm's navigation exists, for an arm that expects one.
- *
- * No clock at all: the route handler above records a main-frame navigation as the browser dispatches
- * it, so the oracles are read after the thing under test rather than after a wait, and the only
- * bound is the case's own timeout through `ctx.signal`. An arm whose click missed its target prints
- * what it did record and lets the case fail as the timeout it is.
- *
- * Measured, so it is not sold as more than it is: with this replaced by a no-op every arm still
- * passes, because the reads that follow are each a round trip and the record lands during them. It is
- * the load the CI runner was under that this is for, which is the same condition that produced the
- * frame-commit race above.
- */
-async function waitForRecordedNavigation(page, navigations, matches, signal, reading) {
-  // Sampled while waiting, for the same reason `untilAborted` samples: a reading taken at the abort
-  // can lose its race with vitest's teardown and never reach the log.
-  let latest = 'no reading was taken before the case ended'
-  let since = Date.now()
-  while (!navigations.some((one) => matches(one))) {
-    if (signal?.aborted) {
-      console.error(
-        `[html-preview-render] the arm produced no navigation of the kind it expects; recorded ${JSON.stringify(navigations)}: ${reading?.arm ?? 'arm unknown'} | ${latest}`
-      )
-      return
-    }
-    if (Date.now() - since > 5000) {
-      since = Date.now()
-      latest = await describePreviewFrame(page, reading?.frame, reading?.browserVersion).catch(
-        (error) => `the reading itself failed: ${String(error).split('\n')[0]}`
-      )
-    }
-    await page.waitForTimeout(10)
-  }
-}
-
-/**
- * Where an absence is read, for the arms that expect no navigation at all.
- *
- * Nothing signals "the tap produced nothing", so this one is bounded rather than awaited. Two painted
- * frames inside the page come first: by the second, a navigation the click started has been dispatched
- * and would already be in the list the arms above read. The 200 ms after it is for the popup queue,
- * which is a browser-process event with no in-page counterpart to await.
- *
- * What keeps these absences honest is not the length of that wait: the arms that read 1 on the same
- * counters take the path above, so a counter that had stopped counting reds there.
- */
-async function settleWithoutNavigation(page) {
-  await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      })
-  )
-  await page.waitForTimeout(200)
-}
 
 /** One pixel of the frame's own fill, which is what says the artifact parsed and painted. */
 async function probePixel(page) {

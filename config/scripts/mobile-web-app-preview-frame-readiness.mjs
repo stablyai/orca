@@ -1,5 +1,6 @@
 /**
- * Where the render rig decides a preview frame is ready, and the world it asks in.
+ * Where the render rig decides a preview frame is ready and when an arm's counters may be read, and
+ * the world it asks in.
  *
  * Every wait here is `frame.evaluate`, which needs only the frame's own main execution context.
  * Playwright's `waitForSelector` and `waitForFunction` need its injected script as well, and
@@ -94,7 +95,13 @@ export async function waitForLoadedFrame(
   if (!frame) {
     return null
   }
-  await frame.waitForLoadState('load').catch(() => {})
+  // Bound to the case like every other wait here: `waitForLoadState` carries its own timeout and
+  // goes on waiting after the case has been aborted.
+  await untilAborted(
+    pollFrameUntil(page, () => document.readyState === 'complete', signal),
+    signal,
+    async () => await reading('the frame never finished loading')
+  )
   if (frameReady === 'script') {
     await untilAborted(
       pollFrameUntil(page, () => document.documentElement.dataset.ran === '1', signal),
@@ -122,4 +129,90 @@ export async function waitForLoadedFrame(
     )
   }
   return previewFrame(page)
+}
+
+/**
+ * Where an absence is read, for the arms that expect no navigation at all.
+ *
+ * Nothing signals "the tap produced nothing", so this one is bounded rather than awaited. Two painted
+ * frames inside the page come first: by the second, a navigation the click started has been dispatched
+ * and would already be in the list the arms above read. The 200 ms after it is for the popup queue,
+ * which is a browser-process event with no in-page counterpart to await.
+ *
+ * What keeps these absences honest is not the length of that wait: the arms that read 1 on the same
+ * counters take the path above, so a counter that had stopped counting reds there.
+ */
+async function settleWithoutNavigation(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      })
+  )
+  await page.waitForTimeout(200)
+}
+
+/**
+ * Where an arm's counters are read: after the thing it is about, whatever that thing is.
+ *
+ * `expectNavigation` names what the arm is waiting for, and an arm that expects one waits for the
+ * record itself rather than for a clock. An arm that expects none has nothing to await, so it takes
+ * the bounded path below.
+ */
+export async function settleAfterMount(page, navigations, expectNavigation, signal, reading) {
+  if (expectNavigation === 'main-frame') {
+    return await waitForRecordedNavigation(page, navigations, (one) => one.main, signal, reading)
+  }
+  if (expectNavigation === 'frame') {
+    return await waitForRecordedNavigation(
+      page,
+      navigations,
+      (one) => !one.main && !one.foreign,
+      signal,
+      reading
+    )
+  }
+  return await settleWithoutNavigation(page)
+}
+
+/**
+ * The moment the arm's navigation exists, for an arm that expects one.
+ *
+ * No clock at all: the route handler above records a main-frame navigation as the browser dispatches
+ * it, so the oracles are read after the thing under test rather than after a wait, and the only
+ * bound is the case's own timeout through `ctx.signal`. An arm whose click missed its target prints
+ * what it did record and lets the case fail as the timeout it is.
+ *
+ * Measured, so it is not sold as more than it is: with this replaced by a no-op every arm still
+ * passes, because the reads that follow are each a round trip and the record lands during them. It is
+ * the load the CI runner was under that this is for, which is the same condition that produced the
+ * frame-commit race above.
+ */
+export async function waitForRecordedNavigation(
+  page,
+  navigations,
+  matches,
+  signal,
+  reading,
+  sampleEveryMs = 5000
+) {
+  // Sampled while waiting, for the same reason `untilAborted` samples: a reading taken at the abort
+  // can lose its race with vitest's teardown and never reach the log.
+  let latest = 'no reading was taken before the case ended'
+  let since = Date.now()
+  while (!navigations.some((one) => matches(one))) {
+    if (signal?.aborted) {
+      console.error(
+        `[html-preview-render] the arm produced no navigation of the kind it expects; recorded ${JSON.stringify(navigations)}: ${reading?.arm ?? 'arm unknown'} | ${latest}`
+      )
+      return
+    }
+    if (Date.now() - since > sampleEveryMs) {
+      since = Date.now()
+      latest = await describePreviewFrame(page, reading?.frame, reading?.browserVersion).catch(
+        (error) => `the reading itself failed: ${String(error).split('\n')[0]}`
+      )
+    }
+    await page.waitForTimeout(10)
+  }
 }
