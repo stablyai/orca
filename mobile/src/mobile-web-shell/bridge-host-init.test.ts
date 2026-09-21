@@ -79,15 +79,33 @@ describe('init and state', () => {
     expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
   })
 
-  it('refuses a grant name the manifest grammar refuses, rather than forwarding it', () => {
+  it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {
     // The host reads the manifest through the same grammar the desktop wrote it under, so a name
     // the bundle could not have declared cannot reach the page through this field either.
     const bridge = harness({
       pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['native.clipboard'] }]
     })
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.routeRefusals.length).toBe(1)
     expect(bridge.posted.length).toBe(0)
+    expect(bridge.routeRefusals).toHaveLength(1)
+    const [reason] = bridge.routeRefusals
+    // The prefix is the whole point: this route is well formed, so a reason that does not name the
+    // field sends whoever reads the refusal to look at a pathname that was never the problem.
+    expect(reason.startsWith('pageRouteGrants: ')).toBe(true)
+    expect(reason.slice('pageRouteGrants: '.length)).not.toBe('')
+    // The callback and the diagnostic are two readers of one verdict; they must not disagree.
+    expect(bridge.diagnostics).toEqual([{ kind: 'route-refused', issue: reason }])
+  })
+
+  it('blames the route, not the pairs, when the route is the malformed one', () => {
+    // The control for the case above. Both refusals arrive through one string, so without an
+    // opener that fails for the other reason the prefix assertion holds on any reason at all.
+    const bridge = harness({ route: { pathname: '/h/a?b' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.routeRefusals).toHaveLength(1)
+    const [reason] = bridge.routeRefusals
+    expect(reason.startsWith('pageRouteGrants: ')).toBe(false)
+    expect(reason).not.toBe('')
   })
 
   it('names the screen the page is standing in for, which its own `/` cannot tell it', () => {
