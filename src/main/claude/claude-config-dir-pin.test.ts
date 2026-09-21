@@ -1,7 +1,11 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { claudeConfigDirEnvPatch, defaultClaudeConfigDir } from './claude-config-dir-pin'
+import {
+  claudeConfigDirEnvPatch,
+  defaultClaudeConfigDir,
+  isCustomClaudeConfigDir
+} from './claude-config-dir-pin'
 
 describe('claude config dir pin', () => {
   it('does not pin the CLI default home, so the macOS Keychain stays reachable', () => {
@@ -30,5 +34,17 @@ describe('claude config dir pin', () => {
     expect(claudeConfigDirEnvPatch('c:\\users\\work\\.claude', { env, platform: 'win32' })).toEqual(
       {}
     )
+  })
+})
+
+describe('isCustomClaudeConfigDir', () => {
+  // The one predicate the pin and all three gate readers share, so a no-op binding cannot read as
+  // a custom home in one place and as the shared home in another.
+  it('answers exactly when the pin would emit something', () => {
+    const env = { CLAUDE_CONFIG_DIR: '/inherited/home' }
+    expect(isCustomClaudeConfigDir('/inherited/home', { env })).toBe(false)
+    expect(isCustomClaudeConfigDir('/other/home', { env })).toBe(true)
+    expect(isCustomClaudeConfigDir(defaultClaudeConfigDir({}), { env: {} })).toBe(false)
+    expect(isCustomClaudeConfigDir('   ', { env: {} })).toBe(false)
   })
 })

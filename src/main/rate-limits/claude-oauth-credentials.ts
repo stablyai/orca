@@ -139,6 +139,9 @@ export async function readFromCredentialsFile(
  * Deliberately no legacy-Keychain fallback, unlike `readClaudeOAuthCredentials`: that item answers
  * for the shared login, so a signed-out bound directory would read as signed in and the launch
  * would land on another organisation's account.
+ *
+ * A Keychain that could not be read is reported as such rather than as "no credentials": the two
+ * have different remedies, and a locked keychain is not a directory nobody signed into.
  */
 export async function readClaudeConfigDirScopedOAuthCredentials(
   configDir: string,
@@ -147,6 +150,7 @@ export async function readClaudeConfigDirScopedOAuthCredentials(
     readScopedKeychain?: (configDir: string) => Promise<string | null>
   }
 ): Promise<ClaudeOAuthCredentialReadResult> {
+  let keychainUnavailable = false
   if ((options?.platform ?? process.platform) === 'darwin') {
     const scoped = options?.readScopedKeychain
       ? await readInjectedScopedKeychain(configDir, options.readScopedKeychain)
@@ -154,8 +158,12 @@ export async function readClaudeConfigDirScopedOAuthCredentials(
     if (scoped.token || scoped.hasRefreshableCredentials) {
       return scoped
     }
+    keychainUnavailable = scoped.keychainUnavailable === true
   }
-  return readFromCredentialsFile(configDir)
+  const file = await readFromCredentialsFile(configDir)
+  return !file.token && !file.hasRefreshableCredentials && keychainUnavailable
+    ? unavailableKeychainResult()
+    : file
 }
 
 async function readInjectedScopedKeychain(

@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   ClaudeBoundHomeRefusalError,
-  assertClaudeBoundHomeUsable
+  assertClaudeBoundHomeUsable,
+  type ClaudeBoundHomeRefusal
 } from './claude-bound-home-refusal'
 
 const ROOT = mkdtempSync(join(tmpdir(), 'orca-bound-home-'))
@@ -37,6 +38,10 @@ function usable(
     probe: { platform: 'linux' },
     ...overrides
   })
+}
+
+function refusalMessageOf(refusal: ClaudeBoundHomeRefusal): string {
+  return new ClaudeBoundHomeRefusalError(refusal).message
 }
 
 async function refusalOf(promise: Promise<void>) {
@@ -164,6 +169,43 @@ describe('bound Claude home usability', () => {
         })
       ).resolves.toBeUndefined()
     }
+  })
+
+  // A Keychain the process cannot read is not a directory that was never signed into, and
+  // "sign in again" writes a second credential for an identity that is already there.
+  it('refuses an unreadable Keychain as unreadable, not as signed out', async () => {
+    const dir = boundDir('keychain-locked')
+    const refusal = await refusalOf(
+      usable(dir, {
+        probe: {
+          platform: 'darwin',
+          readScopedKeychainCredentials: async () => {
+            throw new Error('User interaction is not allowed.')
+          }
+        }
+      })
+    )
+
+    expect(refusal).toMatchObject({
+      code: 'claude_bound_home_credentials_unreadable',
+      configDir: dir,
+      groupId: 'group-1'
+    })
+    expect(refusalMessageOf(refusal)).not.toMatch(/sign in to claude under that directory/i)
+  })
+
+  it('lets a readable `.credentials.json` answer even when the Keychain is unreadable', async () => {
+    const dir = boundDir('keychain-locked-file-signed-in', { credentials: true })
+    await expect(
+      usable(dir, {
+        probe: {
+          platform: 'darwin',
+          readScopedKeychainCredentials: async () => {
+            throw new Error('User interaction is not allowed.')
+          }
+        }
+      })
+    ).resolves.toBeUndefined()
   })
 
   it('names the group and the directory in the user-facing message', async () => {

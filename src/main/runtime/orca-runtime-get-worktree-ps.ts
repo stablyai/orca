@@ -21,6 +21,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
+import { resolveClaudeHomeBindingForSession } from '../claude/claude-structured-account-home'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { hostname } from 'node:os'
@@ -162,6 +163,14 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      // Read per acquisition from the same catalog the create path reads, so a chat created before
+      // its group was bound is told rather than left running on the old account.
+      readClaudeHomeBinding: (location) =>
+        resolveClaudeHomeBindingForSession({
+          store: this.store ?? null,
+          workspaceId: location.workspaceId,
+          executionHostId: location.executionHostId
+        }),
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {

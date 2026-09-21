@@ -35,3 +35,21 @@ the user already has in theirs.
 
 Forking is therefore not incidental to the feature; it is the feature's price, and it is paid only
 by groups that opt in.
+
+## Consequences
+
+**A binding is only a binding when it forks something.** The Claude CLI resolves its own default
+home, and pinning that same path moves it off the Keychain item a claude.ai login wrote, so
+`claudeConfigDirEnvPatch` deliberately emits nothing for it. A group bound to `~/.claude` therefore
+forks nothing and runs on the shared home — which means it also keeps every gate that protects the
+shared home: the managed-account gate and the auth-switch settle assertions are skipped for a
+*custom* home, never for a declared binding that resolves to the default one. `isCustomClaudeConfigDir`
+is the single predicate all three readers (create support, account-home resolution, launch
+resolution) ask, so they cannot drift.
+
+**A binding reaches new chats, not existing ones.** The account home is pinned into the durable
+record when a chat is created, and a resume rebuilds it verbatim — a resume that drifted would look
+for the conversation's transcript under a home that does not hold it. Binding a group therefore
+does not move the chats already in it, and a launch whose record predates the group's binding
+refuses by name (`claude_bound_home_predates_binding`) rather than quietly continuing to bill the
+old account.

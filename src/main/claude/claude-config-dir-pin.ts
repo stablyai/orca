@@ -37,3 +37,17 @@ export function claudeConfigDirEnvPatch(
   }
   return { CLAUDE_CONFIG_DIR: resolved }
 }
+
+/**
+ * Whether pinning this home actually changes which credentials the child reads.
+ *
+ * The one place the "custom home" question is decided, so the pin and every gate that keys off a
+ * custom home cannot drift: a binding the patch above declines to emit is a no-op, and a no-op
+ * binding must not switch off a gate.
+ */
+export function isCustomClaudeConfigDir(
+  accountHome: string,
+  options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {}
+): boolean {
+  return claudeConfigDirEnvPatch(accountHome, options).CLAUDE_CONFIG_DIR !== undefined
+}

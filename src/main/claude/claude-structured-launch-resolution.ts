@@ -27,9 +27,14 @@ import {
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import {
+  ClaudeBoundHomeRefusalError,
   assertClaudeBoundHomeUsable,
+  sameClaudeConfigDir,
   type AssertClaudeBoundHomeUsable
 } from './claude-bound-home-refusal'
+import { isCustomClaudeConfigDir } from './claude-config-dir-pin'
+import { claudeChildLaunchEnv, isEffectiveBoundClaudeHome } from './claude-structured-account-home'
+import type { ResolvedClaudeHomeBinding } from '../../shared/claude-home-binding'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 
@@ -124,6 +129,16 @@ export type ClaudeStructuredLaunchResolverDeps = {
   readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   /** Re-proves a bound home per acquisition. Overridden only by tests. */
   assertBoundHomeUsable?: AssertClaudeBoundHomeUsable
+  /**
+   * The binding this workspace's group carries *now*. The account home is pinned when the chat is
+   * created and a resume rebuilds it verbatim, so a binding added afterwards never reaches an
+   * existing chat — this is what lets the launch say so instead of billing the old account
+   * silently. Absent leaves the check off, for embedders with no project catalog.
+   */
+  readClaudeHomeBinding?: (location: {
+    workspaceId: string
+    executionHostId: string
+  }) => ResolvedClaudeHomeBinding | null
 }
 
 /**
@@ -154,11 +169,19 @@ export function createClaudeStructuredLaunchResolver(
   deps: ClaudeStructuredLaunchResolverDeps
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
   return async ({ identity }) => {
+    // Resolved first because every check below that has to agree with the config-dir pin reads the
+    // environment the child actually receives, not the overlay alone.
+    const overlay = await deps.resolveEnv?.()
+    const childEnv = claudeChildLaunchEnv(overlay)
     const record = deps.store.getRecord(identity.sessionId)
-    // A project-group binding is a custom home, not a managed one: it does not read the shared
+    // A project-group binding to a *custom* home is not a managed one: it does not read the shared
     // runtime auth a switch mutates, and the active managed selection does not describe it. Both
-    // the switch gate and the managed-account gate therefore have nothing to say about it.
-    const boundHome = record?.accountHome.binding?.kind === 'project-group'
+    // the switch gate and the managed-account gate therefore have nothing to say about it. A
+    // binding that resolves to the home the CLI would find anyway is none of that — it pins
+    // nothing, so it keeps every gate, decided by the one predicate all three readers share.
+    const boundHome = record
+      ? isEffectiveBoundClaudeHome(record.accountHome, { env: childEnv })
+      : false
     // Ahead of the record validations, exactly where it sat before the bound branch existed: an
     // unbound caller's error precedence is unchanged.
     if (!boundHome) {
@@ -213,8 +236,7 @@ export function createClaudeStructuredLaunchResolver(
     )
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
-    const overlay = await deps.resolveEnv?.()
-    // A switch can begin while the policy and overlay resolve, exactly as it can
+    // A switch can begin while the env, policy and permission mode resolve, exactly as it can
     // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
     if (!boundHome) {
       await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
@@ -223,14 +245,33 @@ export function createClaudeStructuredLaunchResolver(
     // been deleted or signed out since the create refuses by name here rather than spawning an
     // unauthenticated child against whatever the path has become.
     const binding = record.accountHome.binding
-    if (binding) {
+    if (boundHome && binding) {
       await (deps.assertBoundHomeUsable ?? assertClaudeBoundHomeUsable)({
         binding: { configDir: record.accountHome.path, groupId: binding.groupId },
         location: {
           executionHostId: record.location.executionHostId,
           wslDistro: record.location.wslDistro
         },
-        launchEnv: overlay ?? {}
+        launchEnv: childEnv
+      })
+    }
+    // A binding the group gained after this chat was created cannot be applied to it — the
+    // conversation's transcript lives under the home it was pinned to — so the user is told rather
+    // than left believing the group setting reached every chat in it.
+    const groupBinding = deps.readClaudeHomeBinding?.({
+      workspaceId: record.location.workspaceId,
+      executionHostId: record.location.executionHostId
+    })
+    if (
+      groupBinding &&
+      isCustomClaudeConfigDir(groupBinding.configDir, { env: childEnv }) &&
+      !sameClaudeConfigDir(groupBinding.configDir, record.accountHome.path)
+    ) {
+      throw new ClaudeBoundHomeRefusalError({
+        code: 'claude_bound_home_predates_binding',
+        groupId: groupBinding.groupId,
+        configDir: groupBinding.configDir,
+        accountHomePath: record.accountHome.path
       })
     }
     // Under a managed account the pinned credential is the only auth this launch may

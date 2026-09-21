@@ -11,6 +11,13 @@ import { readClaudeConfigDirScopedOAuthCredentials } from '../rate-limits/claude
 export type ClaudeBoundHomeRefusal =
   | { code: 'claude_bound_home_missing'; groupId: string; configDir: string }
   | { code: 'claude_bound_home_signed_out'; groupId: string; configDir: string }
+  | { code: 'claude_bound_home_credentials_unreadable'; groupId: string; configDir: string }
+  | {
+      code: 'claude_bound_home_predates_binding'
+      groupId: string
+      configDir: string
+      accountHomePath: string
+    }
   | { code: 'claude_bound_home_host_unsupported'; groupId: string; configDir: string }
   | {
       code: 'claude_bound_home_env_conflict'
@@ -30,6 +37,10 @@ function refusalMessage(refusal: ClaudeBoundHomeRefusal): string {
       return `${prefix}, which holds no Claude credentials. Sign in to Claude under that directory first.`
     case 'claude_bound_home_env_conflict':
       return `${prefix}, but the launch environment sets CLAUDE_CONFIG_DIR to ${refusal.launchEnvDir}.`
+    case 'claude_bound_home_credentials_unreadable':
+      return `${prefix}, whose Claude credentials this machine cannot read right now — the login keychain is locked, or access to it was denied. Unlock the keychain or grant access and try again; that directory is already signed in, so signing in again would only add a second credential.`
+    case 'claude_bound_home_predates_binding':
+      return `${prefix}, but this conversation was created under ${refusal.accountHomePath} and keeps it — an account home is pinned when the chat is created, so a binding added later never reaches it. Start a new chat in this group to work under ${refusal.configDir}.`
   }
 }
 
@@ -60,7 +71,11 @@ function comparablePath(value: string, platform: NodeJS.Platform): string {
  * Alias-aware config-dir identity, through the same realpath expansion the Keychain lookup uses:
  * macOS `/tmp` is `/private/tmp`, so two spellings of one directory must not read as two homes.
  */
-function sameClaudeConfigDir(left: string, right: string, platform: NodeJS.Platform): boolean {
+export function sameClaudeConfigDir(
+  left: string,
+  right: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
   const leftAliases = new Set(
     claudeConfigDirKeychainAliases(left.trim()).map((alias) => comparablePath(alias, platform))
   )
@@ -74,15 +89,24 @@ function isAbsoluteBinding(configDir: string): boolean {
 }
 
 /** The repo's own config-dir-scoped credential read, on every platform: the scoped Keychain item
- *  a macOS OAuth login writes, then this directory's `.credentials.json`. */
-async function hasCredentials(configDir: string, probe: ClaudeBoundHomeProbe): Promise<boolean> {
+ *  a macOS OAuth login writes, then this directory's `.credentials.json`.
+ *
+ *  `unreadable` is kept apart from `absent` because the two have different remedies: a directory
+ *  nobody signed into needs a sign-in, and a Keychain this process cannot open does not. */
+async function readCredentialStatus(
+  configDir: string,
+  probe: ClaudeBoundHomeProbe
+): Promise<'present' | 'absent' | 'unreadable'> {
   const credentials = await readClaudeConfigDirScopedOAuthCredentials(configDir, {
     platform: probe.platform ?? process.platform,
     ...(probe.readScopedKeychainCredentials
       ? { readScopedKeychain: probe.readScopedKeychainCredentials }
       : {})
   })
-  return Boolean(credentials.token || credentials.hasRefreshableCredentials)
+  if (credentials.token || credentials.hasRefreshableCredentials) {
+    return 'present'
+  }
+  return credentials.keychainUnavailable ? 'unreadable' : 'absent'
 }
 
 /**
@@ -117,7 +141,11 @@ export async function assertClaudeBoundHomeUsable(input: {
   if (launchEnvDir && !sameClaudeConfigDir(launchEnvDir, configDir, platform)) {
     refuse({ code: 'claude_bound_home_env_conflict', groupId, configDir, launchEnvDir })
   }
-  if (!(await hasCredentials(configDir, probe))) {
+  const credentials = await readCredentialStatus(configDir, probe)
+  if (credentials === 'unreadable') {
+    refuse({ code: 'claude_bound_home_credentials_unreadable', groupId, configDir })
+  }
+  if (credentials === 'absent') {
     refuse({ code: 'claude_bound_home_signed_out', groupId, configDir })
   }
 }

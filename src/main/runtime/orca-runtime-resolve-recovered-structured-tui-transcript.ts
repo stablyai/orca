@@ -23,6 +23,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
+  claudeChildLaunchEnv,
   hasClaudeHomeBindingForSupport,
   resolveClaudeStructuredAccountHome
 } from '../claude/claude-structured-account-home'
@@ -73,7 +74,13 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         hasClaudeHomeBindingForSupport({
           store: this.store ?? null,
           workspaceId: location.workspaceId,
-          executionHostId: location.executionHostId
+          executionHostId: location.executionHostId,
+          // A binding that resolves to the home the CLI would find anyway pins nothing, so it is
+          // not the custom home this gate may be skipped for — the same test the launch uses.
+          readChildEnv: () =>
+            claudeChildLaunchEnv(
+              resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv)
+            )
         }),
       adapterSupportsCreate:
         agent === 'claude'
