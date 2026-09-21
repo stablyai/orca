@@ -13,6 +13,9 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
+import { useAppStore } from '@/store'
+import { usePluginTaskSourceContributions } from '@/store/plugin-task-source-contributions'
+import { TaskPagePluginSourceGroup } from './plugin-source/SourceGroup'
 export function TaskPageSourceBar({
   model
 }: {
@@ -48,6 +51,10 @@ export function TaskPageSourceBar({
     handleLinearTeamSelectionChange,
     handleLinearScopeOpen
   } = model
+  usePluginTaskSourceContributions()
+  const pluginTaskSources = useAppStore((state) => state.pluginTaskSources)
+  const selectedPluginTaskSource = useAppStore((state) => state.selectedPluginTaskSource)
+  const selectPluginTaskSource = useAppStore((state) => state.selectPluginTaskSource)
   return (
     <div className="flex items-center justify-between gap-2">
       <div
@@ -87,6 +94,9 @@ export function TaskPageSourceBar({
                       return
                     }
                     taskSourceManuallyChangedRef.current = true
+                    // Without this the plugin list stays mounted over the
+                    // built-in source the user just picked.
+                    selectPluginTaskSource(null)
                     openTaskPage(
                       {
                         taskSource: source.id
@@ -126,6 +136,11 @@ export function TaskPageSourceBar({
             </Tooltip>
           )
         })}
+        <TaskPagePluginSourceGroup
+          sources={pluginTaskSources}
+          selected={selectedPluginTaskSource}
+          onSelect={selectPluginTaskSource}
+        />
         <div
           className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
           title={taskSourceContextSummary.title}

@@ -2332,7 +2332,10 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "pluginTaskSourceEmpty": "No tasks found",
+        "pluginTaskSourceEmptyHint": "This source returned no items.",
+        "pluginTaskSourceUnassigned": "Unassigned"
       },
       "Terminal": {
         "73768427cf": "Close",

@@ -4,12 +4,14 @@ import { TaskPageSourceBar } from './SourceBar'
 import { AlertCircle } from 'lucide-react'
 import { TaskPageGitHubModeControls } from './github/ModeControls'
 import { TaskPageProviderFilters } from './ProviderFilters'
+import { useAppStore } from '@/store'
 export function TaskPageListChrome({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const { taskSourceAvailabilityNotice, taskPageListChromeHidden } = model
+  const selectedPluginTaskSource = useAppStore((state) => state.selectedPluginTaskSource)
   return (
     <div className={cn('flex-none flex flex-col gap-2', taskPageListChromeHidden && 'hidden')}>
       <section className="flex flex-col gap-2">
@@ -27,9 +29,16 @@ export function TaskPageListChrome({
             </div>
           ) : null}
 
-          <TaskPageGitHubModeControls model={model} />
+          {/* A contributed source owns the whole list surface; the built-in
+              provider's mode and filter toolbars would describe a list that
+              isn't showing. */}
+          {selectedPluginTaskSource ? null : (
+            <>
+              <TaskPageGitHubModeControls model={model} />
 
-          <TaskPageProviderFilters model={model} />
+              <TaskPageProviderFilters model={model} />
+            </>
+          )}
         </div>
       </section>
     </div>
