@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { BoundClaudeHomeStatus, ProviderRateLimits } from '../../shared/rate-limit-types'
+import {
+  readClaudeCredentialsFromStrictKeychain,
+  readClaudeOAuthCredentialsFile,
+  type ClaudeOAuthCredentialReadResult
+} from './claude-oauth-credentials'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
 
 export type BoundClaudeHomeUsageResult = {
@@ -12,10 +17,6 @@ type BoundClaudeHomeCredentials =
   | { kind: 'token'; token: string }
   | { kind: 'status'; status: Exclude<BoundClaudeHomeStatus, 'ok'> }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 function unavailable(
   status: Exclude<BoundClaudeHomeStatus, 'ok'>
 ): BoundClaudeHomeUsageResult & { status: Exclude<BoundClaudeHomeStatus, 'ok'> } {
@@ -23,49 +24,60 @@ function unavailable(
 }
 
 /**
- * Deliberately not `parseClaudeOAuthCredentialsJson`: that one ignores `expiresAt` and lets the
- * server decide, because its callers may refresh. Orca never refreshes a bound directory (D9), so
- * here a lapsed token is a status the user can act on, not a request worth sending.
+ * Why re-read the file instead of trusting the resolver's empty result: it collapses "never signed
+ * in", "malformed" and "unreachable" into one shape, and the switcher shows the user a different
+ * line for each. Only reached when no source produced a token.
  */
-function parseBoundClaudeHomeCredentials(raw: string, now: number): BoundClaudeHomeCredentials {
-  let parsed: unknown
+async function classifyTokenlessBoundHome(
+  configDir: string
+): Promise<Exclude<BoundClaudeHomeStatus, 'ok'>> {
   try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return { kind: 'status', status: 'unreadable' }
+    JSON.parse(await readFile(path.join(configDir, '.credentials.json'), 'utf-8'))
+  } catch (error) {
+    const code = error instanceof Error ? Reflect.get(error, 'code') : undefined
+    // A directory nobody has signed into reads as signed-out; a permissions error, a dead mount or
+    // malformed JSON is a state Orca cannot judge.
+    return code === 'ENOENT' ? 'signed-out' : 'unreadable'
   }
-  const oauth = isRecord(parsed) ? parsed.claudeAiOauth : undefined
-  const accessToken = isRecord(oauth) ? oauth.accessToken : undefined
-  const token = typeof accessToken === 'string' ? accessToken.trim() : ''
+  return 'signed-out'
+}
+
+/**
+ * Deliberately not `readClaudeOAuthCredentials`: for a *bound* directory its legacy step would let
+ * the unscoped `Claude Code-credentials` item — the user's own `~/.claude` token — answer for a
+ * directory that was never signed into, rendering one identity's quota under another's name.
+ * Scoped item then file, on every platform, parsing the payload rather than testing for existence.
+ */
+async function readBoundClaudeHomeCredentials(
+  configDir: string,
+  now: number
+): Promise<BoundClaudeHomeCredentials> {
+  const scoped = await readClaudeCredentialsFromStrictKeychain(configDir, 'scoped-keychain')
+  const credentials: ClaudeOAuthCredentialReadResult = scoped.token
+    ? scoped
+    : await readClaudeOAuthCredentialsFile(configDir)
+  const token = credentials.token?.trim() ?? ''
   if (!token) {
-    return { kind: 'status', status: 'signed-out' }
+    // Why: a Keychain Orca could not reach is not evidence that the directory is signed out.
+    return {
+      kind: 'status',
+      status: scoped.keychainUnavailable
+        ? 'unreadable'
+        : await classifyTokenlessBoundHome(configDir)
+    }
   }
-  const expiresAt = isRecord(oauth) ? oauth.expiresAt : undefined
+  // Why act on expiresAt here alone: callers that may refresh let the server decide, but Orca never
+  // refreshes a bound directory (D9), so a lapsed token is a status the user can act on.
+  const { expiresAt } = credentials
   if (typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt <= now) {
     return { kind: 'status', status: 'expired' }
   }
   return { kind: 'token', token }
 }
 
-async function readBoundClaudeHomeCredentials(
-  configDir: string,
-  now: number
-): Promise<BoundClaudeHomeCredentials> {
-  let raw: string
-  try {
-    raw = await readFile(path.join(configDir, '.credentials.json'), 'utf-8')
-  } catch (error) {
-    // A directory the user has simply not signed into yet reads as signed-out; anything else
-    // (permissions, a directory in place of the file, a dead mount) is a state Orca cannot judge.
-    const code = error instanceof Error ? Reflect.get(error, 'code') : undefined
-    return { kind: 'status', status: code === 'ENOENT' ? 'signed-out' : 'unreadable' }
-  }
-  return parseBoundClaudeHomeCredentials(raw, now)
-}
-
 /**
- * HTTP-only usage for one bound CLAUDE_CONFIG_DIR (D10). Reads the directory's credentials file
- * and, only when it holds a live access token, makes exactly one OAuth usage call. Nothing on this
+ * HTTP-only usage for one bound CLAUDE_CONFIG_DIR (D10). Reads the directory's credentials and,
+ * only when they hold a live access token, makes exactly one OAuth usage call. Nothing on this
  * path writes: no credential staging, no PTY, no Keychain item, no token refresh.
  */
 export async function fetchBoundClaudeHomeUsage(

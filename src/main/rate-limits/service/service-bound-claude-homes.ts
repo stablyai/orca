@@ -49,8 +49,11 @@ export abstract class RateLimitServiceBoundClaudeHomes extends RateLimitServiceI
           })
         } catch {
           // Why: per-directory try/catch keeps one unreachable home or usage-endpoint error from
-          // aborting the remaining bound groups in the batch.
-          this.boundClaudeHomeCache.delete(binding.groupId)
+          // aborting the remaining bound groups in the batch. Drop the row only when it is already
+          // stale — a transient 500 must not make a still-bound group vanish from the menu.
+          if (this.isStaleBoundClaudeHomeFetch(signal, fetchGeneration, binding)) {
+            this.boundClaudeHomeCache.delete(binding.groupId)
+          }
         }
         this.boundClaudeHomeFetching.delete(binding.groupId)
         this.pushToRenderer()

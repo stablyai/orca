@@ -193,6 +193,56 @@ describe('bound Claude home usage previews', () => {
     expect(service.getState().boundClaudeHomes).toEqual([])
   })
 
+  it('keeps the last-known row when a transient usage error hits a still-bound group', async () => {
+    // Why: an unconditional delete makes the group vanish from the menu entirely on one dropped
+    // request — the user reads a 500 as "the binding is gone".
+    vi.useFakeTimers()
+    try {
+      const service = new RateLimitService()
+      service.setBoundClaudeHomesResolver(() => [{ groupId: 'group-a', configDir: '/tmp/home-a' }])
+      vi.mocked(fetchBoundClaudeHomeUsage).mockResolvedValueOnce(okUsage(40))
+
+      await service.fetchBoundClaudeHomesOnOpen()
+      expect(service.getState().boundClaudeHomes?.[0]?.rateLimits?.session?.usedPercent).toBe(40)
+
+      vi.advanceTimersByTime(61_000)
+      vi.mocked(fetchBoundClaudeHomeUsage).mockRejectedValueOnce(new Error('HTTP 500'))
+      await service.fetchBoundClaudeHomesOnOpen()
+
+      expect(service.getState().boundClaudeHomes).toEqual([
+        {
+          groupId: 'group-a',
+          configDir: '/tmp/home-a',
+          rateLimits: expect.objectContaining({ provider: 'claude' }),
+          status: 'ok',
+          updatedAt: expect.any(Number),
+          isFetching: false
+        }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a row whose binding moved mid-fetch without any evict call', async () => {
+    // Why: production never calls evict on a rebind mid-flight; the live resolver comparison is
+    // what has to catch it.
+    const service = new RateLimitService()
+    const pending = deferred<BoundClaudeHomeUsageResult>()
+    let bindings = [{ groupId: 'group-a', configDir: '/tmp/home-a' }]
+    service.setBoundClaudeHomesResolver(() => bindings)
+    vi.mocked(fetchBoundClaudeHomeUsage).mockReturnValueOnce(pending.promise)
+
+    const inFlight = service.fetchBoundClaudeHomesOnOpen()
+    await Promise.resolve()
+
+    bindings = [{ groupId: 'group-a', configDir: '/tmp/home-moved' }]
+    pending.resolve(okUsage(88))
+    await inFlight
+
+    expect(service.getState().boundClaudeHomes).toEqual([])
+  })
+
   it('keeps one failing directory from aborting the rest of the batch', async () => {
     const service = new RateLimitService()
     service.setBoundClaudeHomesResolver(() => [
