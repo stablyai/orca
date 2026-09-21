@@ -194,10 +194,7 @@ async function screencastNoiseJpegBytes(
     })
     // The noise is painted after the screencast is running, and through this same CDP session, so
     // the reply orders it against the frame events. Two animation frames are awaited inside it, so
-    // when it resolves the paint has been committed to the compositor and every later capture
-    // carries it. `painted` is how many frames had already arrived by then; only what comes after
-    // is a frame of the noise, which is what makes this a measurement of the canvas rather than of
-    // whatever the surface held when the capture began.
+    // when it resolves the paint has been committed to the compositor.
     await session.send('Runtime.evaluate', {
       awaitPromise: true,
       expression: `(async () => {
@@ -216,11 +213,20 @@ async function screencastNoiseJpegBytes(
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       })()`
     })
+
+    // A commit is not a raster. The screencast hands over whatever the compositor has drawn so far,
+    // so after a resize it emits frames at the full size carrying only the tiles rastered yet.
+    // Measured 2026-09-21 under CPU starvation: 87 of 444 post-commit frames at 1400x1600 read
+    // under the noise floor, one of them 447491 bytes against the full frame's 1221117 — bytes the
+    // shell posts inside the cap, which is this sweep reading a budget as fitting when it does not.
+    // `Page.captureScreenshot` returns only once a compositor frame of the current content exists,
+    // so it is the raster this wants rather than a longer wait, and over the same rounds with it
+    // none read under the floor. Quality 0 because nothing reads its bytes; 17 ms a call.
+    await session.send('Page.captureScreenshot', { format: 'jpeg', quality: 0 })
     painted = sizes.length
 
-    // Nudged until a frame lands after that commit. A capture already in flight can still be the
-    // old surface, so two are taken and the larger is used: a blank frame is a fraction of a noise
-    // frame, so the maximum over the post-commit frames is the noise one whichever order they came.
+    // Nudged until a frame lands after that raster. Two are taken and the larger is used, so a
+    // capture already in flight when the barrier returned cannot be the one this measures.
     const deadline = Date.now() + 20_000
     for (let nudge = 0; sizes.length - painted < 2 && Date.now() < deadline; nudge += 1) {
       await session.send('Runtime.evaluate', {
@@ -234,10 +240,10 @@ async function screencastNoiseJpegBytes(
   }
   const afterPaint = sizes.slice(painted)
   if (afterPaint.length === 0) {
-    // Never fall back to a frame from before the paint: that is the understatement this exists to
+    // Never fall back to a frame from before the raster: that is the understatement this exists to
     // rule out, and a silent one would look like a cheaper encoder.
     throw new Error(
-      `no screencast frame after the noise was committed for ${frame.width}x${frame.height}`
+      `no screencast frame after the noise was rastered for ${frame.width}x${frame.height}`
     )
   }
   return Math.max(...afterPaint)
