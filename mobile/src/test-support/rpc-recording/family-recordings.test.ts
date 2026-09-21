@@ -1,18 +1,8 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readScenarios } from './scenario-input'
-import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
-import {
-  REPLY_MATRIX_NORMAL_RESULT_INVENTORY,
-  replyMatrixNormalResult
-} from './reply-matrix-normal-result'
-import {
-  bindCompletions,
-  interruptionSchedules,
-  lifecycleSchedules,
-  siblingSchedules
-} from './schedule-driver'
-import { hoistPreludeCheckpoints } from './prelude-checkpoints'
+import { familyGoldens } from './derived-goldens'
+import { REPLY_MATRIX_NORMAL_RESULT_INVENTORY } from './reply-matrix-normal-result'
 import { runRecording } from './run-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
@@ -48,7 +38,7 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
         checkpoints.push({ ...checkpoint, id: `${scenario.id}:${checkpoint.id}` })
       }
     }
-    const golden = goldenRecording(root, input.baseline, scenarios[0], {
+    const golden = goldenRecording(root, input.baseline, scenarios, {
       scenario: id,
       checkpoints
     })
@@ -66,95 +56,29 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
 }
 
 describe('family reply partitions and owned schedules', () => {
-  const families = new Map<string, RecordingScenario[]>()
-  for (const scenario of input.scenarios) {
-    families.set(scenario.family, [...(families.get(scenario.family) ?? []), scenario])
-  }
-  const goldenIds = new Set<string>()
-  // Filled only when a site actually generates a test, so the census below is independent of
-  // replyMatrixSites throwing on an empty list: the mechanism this replaced skipped families.
-  const matrixed = new Set<string>()
-  const liveSites = new Set<string>()
+  const goldens = familyGoldens(input.scenarios)
+  const families = [...new Set(input.scenarios.map((scenario) => scenario.family))]
+  // Read off the goldens that actually generate a test, so the census is independent of whether
+  // replyMatrixSites would throw on an empty list: the mechanism this replaced skipped families.
+  const sites = goldens.flatMap((golden) => (golden.site ? [golden] : []))
   it('matrices every family in the manifest', () => {
-    expect([...matrixed]).toEqual([...families.keys()])
+    expect([...new Set(sites.map((golden) => golden.family))]).toEqual(families)
   })
   // The inventory is only consulted for a live site, so a stale entry would retire silently.
   it('lists only live matrix sites in the normal-result inventory', () => {
+    const live = new Set(sites.map((golden) => `${golden.family}\0${golden.site}`))
     const stale = REPLY_MATRIX_NORMAL_RESULT_INVENTORY.filter(
-      (entry) => !liveSites.has(`${entry.family}\0${entry.request}`)
+      (entry) => !live.has(`${entry.family}\0${entry.request}`)
     ).map((entry) => `${entry.family} ${entry.request}`)
     expect(stale).toEqual([])
   })
-  for (const [family, scenarios] of families) {
-    const base = scenarios[0]!
-    for (const request of replyMatrixSites(base)) {
-      const id = replyMatrixGoldenId(family, request)
-      if (goldenIds.has(id)) {
-        throw new Error(`Two matrix sites share a golden: ${id}`)
-      }
-      goldenIds.add(id)
-      matrixed.add(family)
-      liveSites.add(`${family}\0${request}`)
-      it(`${family}: reply partitions at ${request}`, async () => {
-        await certify(
-          id,
-          driveReplyMatrix(base, request, replyMatrixNormalResult(family, scenarios, request))
-        )
-      }, 30_000)
-    }
-  }
-  for (const id of [
-    'b3',
-    'settings-new-tab-ssh',
-    'settings-home-providers-fulfilled',
-    'settings-workspace-context-fulfilled',
-    'settings-resume-metadata-fulfilled',
-    'settings-task-hydration-fulfilled',
-    'settings-repo-metadata-fulfilled'
-  ]) {
-    const base = input.scenarios.find((scenario) => scenario.id === id)!
-    const replies = base.steps.filter((step) => 'complete' in step)
-    // Complete prerequisites before permuting the sibling barrier.
-    const first = replies.find((step) =>
-      step.complete.startsWith(id === 'b3' ? 'linear.getIssue' : 'settings.get')
-    )!
-    const second = replies[replies.indexOf(first) + 1]
-    if (!second) {
-      continue
-    }
-    it(`${id}: completion orders and correlated faults`, async () => {
-      await certify(`schedules-${id}`, siblingSchedules(base, first, second))
-    })
-  }
-  for (const id of ['inventory-lifecycle', 'settings-bot-overrides-fulfilled']) {
-    const base = input.scenarios.find((scenario) => scenario.id === id)!
-    it(`${id}: timeout, disconnect and stable-client cutover`, async () => {
-      await certify(`interruptions-${id}`, interruptionSchedules(base))
-    })
-  }
-  for (const id of [
-    'inventory-lifecycle',
-    'b3',
-    'settings-bot-overrides-fulfilled',
-    'settings-workspace-context-fulfilled',
-    'settings-task-hydration-fulfilled'
-  ]) {
-    const base = input.scenarios.find((scenario) => scenario.id === id)!
-    const actions = id.includes('hydration')
-      ? (['unmount'] as const)
-      : id.includes('context')
-        ? (['unmount', 'blur'] as const)
-        : (['reset', 'unmount', 'blur'] as const)
-    it(`${id}: lifecycle boundaries`, async () => {
-      await certify(
-        `lifecycle-${id}`,
-        hoistPreludeCheckpoints(
-          { ...base, steps: bindCompletions(base.steps) },
-          actions
-            .flatMap((action) => lifecycleSchedules(base, action))
-            .filter(({ scenario }) => !id.includes('hydration') || !scenario.id.endsWith('-1'))
-        )
-      )
-    })
+  for (const golden of goldens) {
+    it(
+      golden.title,
+      async () => {
+        await certify(golden.id, golden.scenarios())
+      },
+      golden.timeoutMs
+    )
   }
 })

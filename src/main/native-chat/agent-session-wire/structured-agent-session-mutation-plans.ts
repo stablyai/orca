@@ -96,20 +96,23 @@ export function cancelPlan(params: {
   turnId: string
   scope?: 'background-tasks'
   taskId?: string
+  prompt?: { itemId: string; expectedRevision: number }
 }): MutationPlan<AgentSessionCancelResult> {
   return {
     method: 'agentSession.cancel',
     fields: {
       turnId: params.turnId,
       ...(params.scope ? { scope: params.scope } : {}),
-      ...(params.taskId ? { taskId: params.taskId } : {})
+      ...(params.taskId ? { taskId: params.taskId } : {}),
+      ...(params.prompt ? { prompt: params.prompt } : {})
     },
     run: (ctx) =>
       performCancel(ctx, {
         clientOperationId: params.envelope.clientOperationId,
         turnId: params.turnId,
         ...(params.scope ? { scope: params.scope } : {}),
-        ...(params.taskId ? { taskId: params.taskId } : {})
+        ...(params.taskId ? { taskId: params.taskId } : {}),
+        ...(params.prompt ? { prompt: params.prompt } : {})
       }),
     // Interrupting twice would kill a turn the client never asked to stop, so a
     // replay reports the turn as already handled instead.

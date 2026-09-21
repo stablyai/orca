@@ -20,8 +20,14 @@
 
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
 
-/** Local admission refused the frame before any transport was involved. */
+/** Local admission refused the frame before any transport was involved. Two
+ *  strings rather than one provider-neutral marker because both are already
+ *  durable journal reasons; rewording either would relabel rows on disk. */
 export const DISPATCH_REJECTED_QUEUE_FULL = 'claude structured dispatch queue is full'
+export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch queue is full'
+
+/** The provider confirmed a queued frame was withdrawn before execution. */
+export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
@@ -45,6 +51,9 @@ export function dispatchRejectionWasTransportWriteFailure(
  */
 export function dispatchRejectionReasonIsInternal(reason: string | null | undefined): boolean {
   return (
-    dispatchRejectionWasTransportWriteFailure(reason) || reason === DISPATCH_REJECTED_QUEUE_FULL
+    dispatchRejectionWasTransportWriteFailure(reason) ||
+    reason === DISPATCH_REJECTED_QUEUE_FULL ||
+    reason === DISPATCH_REJECTED_CODEX_QUEUE_FULL ||
+    reason === DISPATCH_REJECTED_CANCELLED
   )
 }

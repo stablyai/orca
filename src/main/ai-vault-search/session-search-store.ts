@@ -198,28 +198,33 @@ export class SessionSearchStore {
    */
   files(): SessionSearchFileRow[] {
     return (
-      this.db
-        .prepare(
-          `SELECT path, dev, ino, mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema and SELECT aliases define this row; REAL casts return numeric IDs or null.
+      (
+        this.db
+          .prepare(
+            // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
+            `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+          )
+          .all() as (Omit<SessionSearchFileRow, 'identity'> & {
+          dev: number | null
+          ino: number | null
+        })[]
+      ).map((row) => ({
+        path: row.path,
+        identity:
+          typeof row.dev === 'number' && typeof row.ino === 'number'
+            ? { dev: row.dev, ino: row.ino }
+            : null,
+        mtimeMs: row.mtimeMs,
+        sizeBytes: row.sizeBytes,
+        state: row.state,
+        failCount: row.failCount,
+        failedMtimeMs: row.failedMtimeMs
+      }))
+    )
   }
 
   /**

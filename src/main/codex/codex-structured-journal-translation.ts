@@ -59,8 +59,10 @@ export function createCodexJournalTranslator(
     (threadId, turnId) => genericFrames.suppress(threadId, turnId)
   )
   const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
-  const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
-    items.detailFor(threadId, itemId)
+  const prompts = new CodexJournalPrompts(
+    deps,
+    (threadId, itemId) => items.detailFor(threadId, itemId),
+    (threadId) => activeTurns.current(threadId)
   )
   const subagents = new CodexSubagentRoster({
     sink: deps.sink,
@@ -82,6 +84,8 @@ export function createCodexJournalTranslator(
     primaryThreadId: () => deps.primaryThreadId?.() ?? null,
     activeTurns,
     items,
+    pendingPrompts: prompts.pending,
+    ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
     ...(deps.now ? { now: deps.now } : {})
@@ -269,6 +273,7 @@ export function createCodexJournalTranslator(
         genericFrames.appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
       )
     },
+    cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
     flush: () => {
       items.streams.flush()

@@ -10,15 +10,20 @@ import {
   type InternedRecording,
   type ValuePool
 } from './golden-value-pool'
+import { adapterSha256 } from './adapter-digest'
+import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
 import { recorderSha256 } from './recorder-digest'
+import { scenarioSha256 } from './scenario-digest'
+import type { MountedOperationModule } from './mounted-operation-module'
 import type { Recording, RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
 export const RUNNER_VERSION = 1
 // 2 stamps every settlement with startedAt/settledAt on the pinned virtual clock.
 export const PROJECTION_VERSION = 2
-// 3 interns each entry of a list or map field, not the whole field; an older file is not comparable.
-export const GOLDEN_FORMAT_VERSION = 3
+// 5 splits the mount adapters out of recorderSha256 into adapterSha256. As with 4, the byte compare
+// would fail a stale golden anyway; the bump buys the diagnosis instead of an opaque `(encoding)`.
+export const GOLDEN_FORMAT_VERSION = 5
 export type GoldenRecording = {
   operation: string
   family: string
@@ -27,6 +32,8 @@ export type GoldenRecording = {
   baseline: string
   lockfileSha256: string
   recorderSha256: string
+  adapterSha256: string
+  scenarioSha256: string
   platform: string
   scenarioVersion: number
   projectionVersion: number
@@ -40,9 +47,14 @@ type GoldenFile = Omit<GoldenRecording, 'recording'> & {
 export function goldenRecording(
   root: string,
   baseline: string,
-  scenario: RecordingScenario,
-  recording: Recording
+  scenarios: readonly RecordingScenario[],
+  recording: Recording,
+  registered: readonly MountedOperationModule[] = MOUNTED_OPERATION_MODULES
 ): GoldenRecording {
+  const [scenario] = scenarios
+  if (!scenario) {
+    throw new Error('A golden records at least one scenario')
+  }
   return {
     operation: scenario.operation,
     family: scenario.family,
@@ -53,6 +65,8 @@ export function goldenRecording(
       .update(readFileSync(join(root, 'mobile/pnpm-lock.yaml')))
       .digest('hex'),
     recorderSha256: recorderSha256(root),
+    adapterSha256: adapterSha256(root, scenarios, registered),
+    scenarioSha256: scenarioSha256(scenarios),
     platform: process.platform,
     scenarioVersion: scenario.version,
     projectionVersion: PROJECTION_VERSION,

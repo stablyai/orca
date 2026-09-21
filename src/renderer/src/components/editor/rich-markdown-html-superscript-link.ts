@@ -1,5 +1,8 @@
 import { Node } from '@tiptap/core'
-import type { RichMarkdownSourceTransport } from './rich-markdown-source-transport'
+import {
+  skipInlineTransportStartScan,
+  type RichMarkdownSourceTransport
+} from './rich-markdown-source-transport'
 import {
   HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT,
   parseHtmlSuperscriptLinkSource,
@@ -41,7 +44,7 @@ export function createRichMarkdownHtmlSuperscriptLink(
     markdownTokenizer: {
       name: 'richMarkdownHtmlSuperscriptLink',
       level: 'inline',
-      start: transport.startFor('html-superscript-link'),
+      start: skipInlineTransportStartScan,
       tokenize(source) {
         const matched = transport.match(source, 'html-superscript-link')
         if (!matched) {

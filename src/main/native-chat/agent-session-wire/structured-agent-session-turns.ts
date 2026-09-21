@@ -21,6 +21,7 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -34,6 +35,8 @@ export type AgentSessionTurnContext = {
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
   publish: () => void
+  /** Drains provider lifecycle already accepted by the execution host. */
+  flushStreamedEvents: () => Promise<void>
   now: () => number
 }
 
@@ -186,8 +189,15 @@ export async function performCancel(
     turnId: string
     scope?: 'background-tasks'
     taskId?: string
+    prompt?: { itemId: string; expectedRevision: number }
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
+  if (input.prompt) {
+    const validated = validatePendingPrompt(ctx, input.prompt)
+    if (!validated.ok) {
+      return validated
+    }
+  }
   let cancelled = false
   let note = 'Cancellation requested.'
   try {
@@ -203,16 +213,23 @@ export async function performCancel(
           await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
             turnId: input.turnId,
-            fence: ctx.fence
+            fence: ctx.fence,
+            ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
         ).cancelled
     if (!cancelled) {
       note = 'The provider had already finished this turn.'
     }
   } catch (error) {
+    if (input.prompt) {
+      throw error
+    }
     note = `Cancellation was not confirmed: ${
       error instanceof Error ? error.message : String(error)
     }`
+  }
+  if (cancelled && input.prompt) {
+    await ctx.flushStreamedEvents()
   }
   if (input.scope) {
     return { ok: true, value: { turnId: input.turnId, cancelled } }

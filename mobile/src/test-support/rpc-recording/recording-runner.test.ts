@@ -1,10 +1,19 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
 import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
+import { RECORDING_DRIVERS } from './recording-drivers'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
@@ -390,17 +399,46 @@ describe('recording boundaries', () => {
     try {
       const directory = join(root, RECORDER_DIRECTORY)
       mkdirSync(directory, { recursive: true })
-      mkdirSync(join(root, 'mobile/rpc-foundation'), { recursive: true })
-      writeFileSync(join(root, 'mobile/rpc-foundation/pilot-scenarios.json'), '{}')
       writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
       const original = recorderSha256(root)
       writeFileSync(join(directory, 'README.md'), 'prose')
-      expect(recorderSha256(join(root, '.'))).toBe(original)
+      // Each call spells the root differently: `recorderSha256` caches per root string, so reusing
+      // one would assert nothing.
+      expect(recorderSha256(`${root}/`)).toBe(original)
       writeFileSync(join(directory, 'runner.ts'), 'export const runner = 2')
-      expect(recorderSha256(join(root, './'))).not.toBe(original)
+      expect(recorderSha256(`${root}//`)).not.toBe(original)
     } finally {
       rmSync(root, { recursive: true })
     }
+  })
+
+  // A suite that only reads goldens cannot put an observation in one, so it is not provenance; the
+  // drivers are, because a golden's bytes come from them.
+  it('digests the recording drivers and no other suite', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rpc-drivers-'))
+    try {
+      const directory = join(root, RECORDER_DIRECTORY)
+      mkdirSync(directory, { recursive: true })
+      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
+      const original = recorderSha256(root)
+      writeFileSync(join(directory, 'reads-goldens.test.ts'), 'export const suite = 1')
+      expect(recorderSha256(`${root}/`)).toBe(original)
+      writeFileSync(join(directory, RECORDING_DRIVERS[0]), 'export const suite = 1')
+      expect(recorderSha256(`${root}//`)).not.toBe(original)
+    } finally {
+      rmSync(root, { recursive: true })
+    }
+  })
+
+  it('keeps every named driver real and unimported by the engine', () => {
+    const directory = resolve(import.meta.dirname)
+    const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
+    const imported = readdirSync(directory)
+      .filter((file) => file.endsWith('.ts'))
+      .filter((file) =>
+        /(?:from|import\()\s*'\.[^']*\.test'/.test(readFileSync(join(directory, file), 'utf8'))
+      )
+    expect({ missing, imported }).toEqual({ missing: [], imported: [] })
   })
 
   it('refuses a mutation anchor that matches more than once', () => {
@@ -413,7 +451,14 @@ describe('recording boundaries', () => {
         join(root, 'mod/settings-read-operations.ts'),
         `const raw = {} as { settings?: unknown }\nconst settings = raw.settings\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
       )
-      const loader = operationModuleLoader(root, 'bot-overrides-envelope')
+      // Its own spec, not one borrowed from the mutant table: the guard is the loader's, and the
+      // table is not an input to anything the loader does while recording.
+      const loader = operationModuleLoader(root, {
+        name: 'repeated-anchor',
+        file: 'settings-read-operations.ts',
+        before: anchor,
+        after: 'const overrides = undefined'
+      })
       expect(() => loader.load('mod/settings-read-operations.ts')).toThrow(
         'matched 2 sites, expected 1'
       )
@@ -466,6 +511,7 @@ function sampleGolden(id: string): GoldenRecording {
     baseline: 'a'.repeat(40),
     lockfileSha256: 'b'.repeat(64),
     recorderSha256: 'c'.repeat(64),
+    scenarioSha256: 'd'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,
     projectionVersion: PROJECTION_VERSION,

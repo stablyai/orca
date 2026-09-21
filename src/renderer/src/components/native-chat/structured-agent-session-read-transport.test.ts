@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
@@ -70,11 +74,55 @@ describe('structured agent-session read transport generations', () => {
       applyError,
       getCursor: () => null,
       onHistoryReadInvalidated: () => undefined,
-      refreshTail: async () => undefined,
+      hydrate: async () => undefined,
       sessionId: 'session-a',
       target
     })
   }
+
+  it('flushes queued rows before reading the applied cursor for reconnect', async () => {
+    vi.useFakeTimers()
+    try {
+      let state = EMPTY_STRUCTURED_AGENT_SESSION
+      const transport = startStructuredAgentSessionReadTransport({
+        applyEvent: (event) => {
+          state = reduceStructuredAgentSession(state, { type: 'event', event })
+        },
+        applyError: vi.fn(),
+        getCursor: () => state.cursor,
+        onHistoryReadInvalidated: () => undefined,
+        sessionId: 'session-a',
+        target
+      })
+      attempts[0].onEvent(snapshot(100))
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onClose()
+      await vi.advanceTimersByTimeAsync(720)
+      attempts[0].onEvent({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 101 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      expect(state.cursor?.sequence).toBe(100)
+      await vi.advanceTimersByTimeAsync(30)
+      expect(state.cursor?.sequence).toBe(101)
+      expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({
+        sessionId: 'session-a',
+        cursor: { epoch: 'epoch-a', sequence: 101 }
+      })
+      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+      await flushPromises()
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('ignores opening frames after disposal and a replacement transport starts', async () => {
     const applyEvent = vi.fn()
@@ -159,8 +207,8 @@ describe('structured agent-session read transport unattached refusals', () => {
     })
   })
 
-  function startWithTail(
-    refreshTail: () => Promise<void>,
+  function startWithHydration(
+    hydrate: () => Promise<void>,
     applyError: (message: string) => void,
     applyEvent = vi.fn()
   ) {
@@ -169,7 +217,7 @@ describe('structured agent-session read transport unattached refusals', () => {
       applyError,
       getCursor: () => null,
       onHistoryReadInvalidated: () => undefined,
-      refreshTail,
+      hydrate,
       sessionId: 'session-a',
       target
     })
@@ -186,7 +234,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     vi.useFakeTimers()
     try {
       const applyError = vi.fn()
-      const transport = startWithTail(async () => {
+      const transport = startWithHydration(async () => {
         throw rpcRefusal(UNATTACHED)
       }, applyError)
       await flushPromises()
@@ -204,7 +252,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     vi.useFakeTimers()
     try {
       const applyError = vi.fn()
-      const transport = startWithTail(async () => {
+      const transport = startWithHydration(async () => {
         throw rpcRefusal(UNATTACHED)
       }, applyError)
       await flushPromises()
@@ -232,7 +280,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     vi.useFakeTimers()
     try {
       const applyError = vi.fn()
-      const transport = startWithTail(async () => {
+      const transport = startWithHydration(async () => {
         throw new Error('journal read failed')
       }, applyError)
       await flushPromises()
@@ -247,7 +295,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     vi.useFakeTimers()
     try {
       const applyError = vi.fn()
-      const transport = startWithTail(async () => undefined, applyError)
+      const transport = startWithHydration(async () => undefined, applyError)
       await flushPromises()
       expect(attempts).toHaveLength(1)
 
@@ -267,7 +315,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     try {
       const applyError = vi.fn()
       const applyEvent = vi.fn()
-      const transport = startWithTail(async () => undefined, applyError, applyEvent)
+      const transport = startWithHydration(async () => undefined, applyError, applyEvent)
       await flushPromises()
       expect(attempts).toHaveLength(1)
 

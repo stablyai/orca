@@ -134,7 +134,13 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
           return { handle, tabId: leaf.tabId, title }
         }
       }
-      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, title }
+      const tabId = pty.pty.tabId ?? pty.record.tabId
+      // A notifier can exist before its pane graph; retain the rename on the known tab.
+      if (this.notifier?.renameTerminal && tabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
+        this.notifier.renameTerminal(tabId, title)
+      }
+      return { handle, tabId, title }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)

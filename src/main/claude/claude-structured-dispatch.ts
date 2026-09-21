@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
 } from './claude-structured-item-translation'
-import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeLateDispatchOutcome,
+  ClaudeSession
+} from './claude-structured-session-state'
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import {
   claudeDispatchContentKey,
@@ -17,6 +18,7 @@ import {
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import {
+  DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_QUEUE_FULL,
   dispatchWriteFailureReason
 } from '../../shared/structured-agent-session-dispatch-rejection'
@@ -25,11 +27,8 @@ import { claudeUserMessageWasProvablyUnwritten } from './claude-agent-sdk-user-m
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
-/** Directly settles provider-proven delivery; the durable replay row independently reconciles it. */
-export type ClaudeLateDispatchSettlement = (input: {
-  clientMessageId: string
-  providerIdentity: AgentJournalItemIdentity
-}) => void
+/** Settles a provider-proven late outcome; replay rows independently reconcile acceptance. */
+export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
 
 export function resolveClaudeReplayWaiter(
   session: ClaudeSession,
@@ -225,6 +224,34 @@ function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): voi
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)
+  }
+}
+
+export function settleCancelledClaudeDispatchWaiters(
+  session: ClaudeSession,
+  cancelledUuids: readonly string[],
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
+  const cancelled = new Set(cancelledUuids)
+  const activeWaiters = session.dispatchWaiters.filter((waiter) => cancelled.has(waiter.sentUuid))
+  const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
+    cancelled.has(waiter.sentUuid)
+  )
+  for (const waiter of activeWaiters) {
+    forgetWaiter(session, waiter)
+    waiter.resolve(null)
+  }
+  for (const waiter of retiredWaiters) {
+    forgetRetiredWaiter(session, waiter)
+  }
+  for (const waiter of [...activeWaiters, ...retiredWaiters]) {
+    if (waiter.clientMessageId) {
+      onSettledLate?.({
+        clientMessageId: waiter.clientMessageId,
+        state: 'rejected',
+        reason: DISPATCH_REJECTED_CANCELLED
+      })
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import {
 import { getCachedWslDistros, hasCachedWslDistros, listRunningWslHomeDirsAsync } from '../wsl'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultScanOptions } from './session-scanner-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
@@ -49,6 +50,28 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
+/**
+ * The trees a local scan enumerates, resolved fresh because a WSL distro can start
+ * or stop between scans. The search index reads the same function, so it walks
+ * exactly what the session list walks.
+ */
+export async function localAiVaultScanRoots(): Promise<
+  Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
+    Pick<AiVaultScanOptions, 'executionHostId'>
+> {
+  const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
+    filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
+    getAiVaultWslHomeDirs()
+  ])
+  return {
+    additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
+    wslHomeDirs,
+    // Why: this scan is always host-local; callers addressing this host by a
+    // runtime id get the result restamped at the RPC edge, never rescanned.
+    executionHostId: LOCAL_EXECUTION_HOST_ID
+  }
+}
+
 /** The extra Codex homes session discovery scans. Anything that decides what a listed row may be
  *  resumed from must read the same set, or a row can be listed and then refuse to resume. */
 export function configuredAdditionalCodexHomePaths(): readonly string[] {
@@ -86,24 +109,12 @@ export async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: async (scanSignal) => {
-      const configuredCodexHomes = sources.getAdditionalCodexHomePaths?.() ?? []
-      const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
-        filterPathsToRunningWslDistrosAsync(configuredCodexHomes),
-        getAiVaultWslHomeDirs()
-      ])
-      const additionalCodexSessionsDirs = additionalCodexHomes.map((homePath) =>
-        join(homePath, 'sessions')
-      )
       const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,
-          additionalCodexSessionsDirs,
-          wslHomeDirs,
-          // Why: this scan is always host-local; callers addressing this host by a
-          // runtime id get the result restamped at the RPC edge, never rescanned.
-          executionHostId: LOCAL_EXECUTION_HOST_ID
+          ...(await localAiVaultScanRoots())
         },
         scanSignal
       )

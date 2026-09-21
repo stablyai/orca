@@ -22,7 +22,7 @@ import {
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
-import { settleStaleRunningTurnsOnAcquire } from './structured-agent-session-stale-turn-verdict'
+import { settleStaleSessionStateOnAcquire } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -105,7 +105,7 @@ export function attachStructuredAgentSession(
         try {
           if (acquiredOwner) {
             // Before the drain: the buffered events are the new child's, never a stale row's.
-            await settleStaleRunningTurnsOnAcquire({
+            await settleStaleSessionStateOnAcquire({
               journal: attached.journal,
               sessionId,
               fence,

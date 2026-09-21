@@ -2,11 +2,24 @@ import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 
 // Why: a named spy type keeps the harness's inferred return type portable across the test files.
 type StructuredSessionSpy = Mock
+
+type StructuredSessionMessageListProps = {
+  allowFileUriLinks?: boolean
+  onLinkClick?: (...args: unknown[]) => void
+  showTurnStatus?: boolean
+  showLiveTurnActivity?: boolean
+  isWorking?: boolean
+  runtimeContext?: unknown
+}
+
+const initialMessageListProps: StructuredSessionMessageListProps | null = null
+const initialApprovalCardProps: NativeChatApprovalCardProps | null = null
 
 /**
  * Shared mock state and `vi.mock` factories for the NativeChatStructuredSession test files.
@@ -20,20 +33,17 @@ export function createStructuredSessionMocks() {
     mode: 'static' as 'static' | 'outbox',
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
     messages: null as null | unknown[],
-    messageListProps: null as null | {
-      allowFileUriLinks?: boolean
-      onLinkClick?: (...args: unknown[]) => void
-      showTurnStatus?: boolean
-      runtimeContext?: unknown
-    },
+    messageListProps: initialMessageListProps,
     composerProps: null as null | {
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown>
       isWorking?: boolean
     },
+    approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
     respond: vi.fn() as StructuredSessionSpy,
+    cancel: vi.fn() as StructuredSessionSpy,
     handlePasteEvent: vi.fn() as StructuredSessionSpy,
     pasteFromClipboard: vi.fn() as StructuredSessionSpy,
     submissions: [] as unknown[],
@@ -105,7 +115,7 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
-            cancel: vi.fn() as StructuredSessionSpy,
+            cancel: mocks.cancel,
             stopBackgroundTask: (taskId?: string) =>
               mocks.stopBackgroundTask(props.sessionId, taskId),
             respond: mocks.respond,
@@ -171,7 +181,12 @@ export function createStructuredSessionMocks() {
       })
     }),
     nativeChatEmptyState: () => ({ NativeChatEmptyState: () => null }),
-    nativeChatApprovalCard: () => ({ NativeChatApprovalCard: () => null }),
+    nativeChatApprovalCard: () => ({
+      NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {
+        mocks.approvalCardProps = props
+        return null
+      }
+    }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
@@ -187,9 +202,11 @@ export function createStructuredSessionMocks() {
     mocks.messages = null
     mocks.messageListProps = null
     mocks.composerProps = null
+    mocks.approvalCardProps = null
     mocks.questionCardProps = null
     mocks.promptItems = []
     mocks.respond.mockReset()
+    mocks.cancel.mockReset()
     mocks.handlePasteEvent.mockReset()
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []

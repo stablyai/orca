@@ -12,6 +12,7 @@ import {
   codexTurnUserItemId,
   publishCodexTurnLifecycle
 } from './codex-structured-journal-translation-turns'
+import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import {
   readCodexTurnDurationMs,
   readCodexTurnId,
@@ -33,6 +34,8 @@ export class CodexJournalTurnBoundaries {
       primaryThreadId: () => string | null
       activeTurns: CodexJournalActiveTurns
       items: Pick<CodexJournalItems, 'streams' | 'activeItems' | 'ordinals'>
+      pendingPrompts: Map<string, CodexPendingJournalPrompt>
+      clearPromptTurn?: (threadId: string, turnId: string) => void
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
       now?: () => number
@@ -93,7 +96,9 @@ export class CodexJournalTurnBoundaries {
             )
           : null,
       streams: this.deps.items.streams,
-      activeItems: this.deps.items.activeItems
+      activeItems: this.deps.items.activeItems,
+      pendingPrompts: this.deps.pendingPrompts,
+      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
     })
     if (admission.accepted) {
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)

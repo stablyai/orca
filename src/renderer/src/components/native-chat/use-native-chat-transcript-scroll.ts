@@ -6,10 +6,22 @@
 // about, not what they decide: rows resolving their measured height move the
 // content constantly, so "the content changed" and "the reader scrolled" stopped
 // being the same event and only the latter may ask for another page.
+//
+// The offset belongs to the virtualizer — every pin goes through it, so a scroll
+// it is still reconciling is replaced rather than raced. Its public write adapter
+// marks every application offset; follow intent changes only on an unmarked
+// reader event, never from delayed geometry alone.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  isNearBottom,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type UIEventHandler
+} from 'react'
+import {
+  nextFollowingEnd,
   shouldLoadEarlier,
   shouldShowJumpToLatest,
   type ScrollGeometry
@@ -25,7 +37,7 @@ function geometryOf(element: HTMLElement): ScrollGeometry {
 
 export type NativeChatTranscriptScroll = {
   showJump: boolean
-  onScroll: () => void
+  onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: () => void
   /** Align an element inside the transcript with the top of the viewport. */
   scrollMessageToTop: (element: HTMLElement) => void
@@ -40,7 +52,10 @@ export function useNativeChatTranscriptScroll({
   hasMore,
   loadingEarlier,
   loadEarlier,
-  alignToViewportTop
+  alignToViewportTop,
+  scrollToEnd,
+  consumeProgrammaticScroll,
+  reconcileReaderScroll
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   contentRef: React.RefObject<HTMLDivElement | null>
@@ -51,74 +66,88 @@ export function useNativeChatTranscriptScroll({
   loadingEarlier: boolean
   loadEarlier: () => void
   alignToViewportTop: (element: HTMLElement) => void
+  scrollToEnd: () => void
+  consumeProgrammaticScroll: (event: Event) => boolean
+  reconcileReaderScroll: (isTakingOver: boolean) => void
 }): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
-  const stuckToBottomRef = useRef(true)
+  const followingRef = useRef(true)
   const previousScrollTopRef = useRef(0)
   const loadEarlierRequestedAtRef = useRef<number | null>(null)
 
-  const syncScrollState = useCallback((): ScrollGeometry | null => {
-    const element = scrollRef.current
-    if (!element) {
-      return null
-    }
-    const geometry = geometryOf(element)
-    const stick = isNearBottom(geometry)
-    stuckToBottomRef.current = stick
-    setShowJump(shouldShowJumpToLatest(stick, geometry))
-    return geometry
-  }, [scrollRef])
+  const syncScrollState = useCallback(
+    (event?: Event): ScrollGeometry | null => {
+      const element = scrollRef.current
+      if (!element) {
+        return null
+      }
+      const geometry = geometryOf(element)
+      if (event) {
+        const wasFollowing = followingRef.current
+        const programmatic = consumeProgrammaticScroll(event)
+        const following = nextFollowingEnd({
+          following: followingRef.current,
+          programmatic,
+          geometry
+        })
+        followingRef.current = following
+        if (!programmatic) {
+          reconcileReaderScroll(wasFollowing && !following)
+        }
+      }
+      setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
+      return geometry
+    },
+    [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef]
+  )
 
   // Only a real scroll event pages in older history. Every row that resolves its
   // true height moves the content and re-fires the size observers; routing those
   // through here too would ask for the next page once per measurement.
-  const onScroll = useCallback(() => {
-    const geometry = syncScrollState()
-    if (!geometry) {
-      return
-    }
-    const previousScrollTop = previousScrollTopRef.current
-    previousScrollTopRef.current = geometry.scrollTop
-    if (
-      shouldLoadEarlier({
-        geometry,
-        previousScrollTop,
-        hasMore,
-        loadingEarlier,
-        itemCount,
-        requestedAtItemCount: loadEarlierRequestedAtRef.current
-      })
-    ) {
-      loadEarlierRequestedAtRef.current = itemCount
-      loadEarlier()
-    }
-  }, [hasMore, itemCount, loadEarlier, loadingEarlier, syncScrollState])
+  const onScroll = useCallback<UIEventHandler<HTMLDivElement>>(
+    (event) => {
+      const geometry = syncScrollState(event.nativeEvent)
+      if (!geometry) {
+        return
+      }
+      const previousScrollTop = previousScrollTopRef.current
+      previousScrollTopRef.current = geometry.scrollTop
+      if (
+        shouldLoadEarlier({
+          geometry,
+          previousScrollTop,
+          hasMore,
+          loadingEarlier,
+          itemCount,
+          requestedAtItemCount: loadEarlierRequestedAtRef.current
+        })
+      ) {
+        loadEarlierRequestedAtRef.current = itemCount
+        loadEarlier()
+      }
+    },
+    [hasMore, itemCount, loadEarlier, loadingEarlier, syncScrollState]
+  )
 
   const scrollToBottom = useCallback(() => {
-    const element = scrollRef.current
-    if (!element) {
-      return
-    }
-    // The document's own bottom, not the window's last row: the typing indicator,
-    // the activity line and the column's end padding all live past it.
-    element.scrollTop = element.scrollHeight
-    stuckToBottomRef.current = true
+    followingRef.current = true
+    scrollToEnd()
     setShowJump(false)
-  }, [scrollRef])
+  }, [scrollToEnd])
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
-      stuckToBottomRef.current = false
+      followingRef.current = false
       alignToViewportTop(element)
     },
     [alignToViewportTop]
   )
 
   useLayoutEffect(() => {
-    if (stuckToBottomRef.current) {
-      scrollToBottom()
+    if (followingRef.current) {
+      scrollToEnd()
     }
-  }, [itemCount, isWorking, showTypingIndicator, scrollToBottom])
+  }, [itemCount, isWorking, showTypingIndicator, scrollToEnd])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -126,8 +155,8 @@ export function useNativeChatTranscriptScroll({
       return
     }
     const observer = new ResizeObserver(() => {
-      if (stuckToBottomRef.current) {
-        scrollToBottom()
+      if (followingRef.current) {
+        scrollToEnd()
       } else {
         syncScrollState()
       }
@@ -139,7 +168,7 @@ export function useNativeChatTranscriptScroll({
       observer.observe(contentRef.current)
     }
     return () => observer.disconnect()
-  }, [contentRef, scrollRef, scrollToBottom, syncScrollState])
+  }, [contentRef, scrollRef, scrollToEnd, syncScrollState])
 
   return { showJump, onScroll, scrollToBottom, scrollMessageToTop }
 }

@@ -75,6 +75,8 @@ export type AgentSessionTurnActivity = {
   text: string
 }
 
+export const AGENT_SESSION_ID_MAX_LENGTH = 512
+
 /** Backward paging is the client's normal read; 40 matches the page size the
  *  mobile list renders without a visible fill-in. */
 export const AGENT_SESSION_HISTORY_DEFAULT_LIMIT = 40

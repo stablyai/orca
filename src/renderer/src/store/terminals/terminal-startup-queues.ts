@@ -62,7 +62,7 @@ export function createTerminalStartupQueueActions(
       }
       set((s) => {
         if (s.pendingStartupByTabId[tabId] !== pending) {
-          return {}
+          return s
         }
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]

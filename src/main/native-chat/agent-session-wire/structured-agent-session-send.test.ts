@@ -6,7 +6,10 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  DISPATCH_DOUBT_PROVIDER_EXITED,
+  DISPATCH_DOUBT_SUBMISSION_MISSING
+} from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import {
   accepted,
   attach,
@@ -169,13 +172,15 @@ describe('send', () => {
     expect(state.ok && state.page.submissions).toHaveLength(2)
   })
 
-  it('refuses to redeliver a retry for a turn the provider already owns', async () => {
+  it('refuses to redeliver a retry for a message the provider may already hold', async () => {
     await attach()
+    // A dead child ends the wait without proving non-delivery: the message was
+    // already written to that child's stdin.
     dispatch.mockImplementationOnce(async () => ({
       state: 'unknown' as const,
-      reason: 'codex app-server started a turn it did not name in time'
+      reason: DISPATCH_DOUBT_PROVIDER_EXITED
     }))
-    const body = hostTestMessage('a turn codex owns but did not name')
+    const body = hostTestMessage('a message the provider may already hold')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     const first = await host.send(CALLER, params)
@@ -183,8 +188,8 @@ describe('send', () => {
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
     })
-    // The turn is running; a second delivery would be a duplicate, so Retry
-    // replays the recorded outcome instead of re-sending.
+    // No `unknown` is re-delivered under its own id, whatever its reason says,
+    // so Retry replays the recorded outcome instead of writing again.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }

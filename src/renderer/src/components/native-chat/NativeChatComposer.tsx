@@ -174,10 +174,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       resolvePendingImageAttachment,
       dropPendingImageAttachment
     } = attachments
-    const workspaceFileDropHandlers = useNativeChatWorkspaceFileDrop({
+    useNativeChatWorkspaceFileDrop({
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
       disabled,
+      paneKey,
       attachResolvedPaths,
       setNotice
     })
@@ -421,7 +422,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         }}
         onRemoveImageAttachment={(id) => removeImageAttachment(id)}
         onAttach={pickAttachment}
-        workspaceFileDropHandlers={workspaceFileDropHandlers}
         onDictationToggle={toggleDictation}
         onDictationHoldStart={startHoldDictation}
         onDictationHoldEnd={stopHoldDictation}

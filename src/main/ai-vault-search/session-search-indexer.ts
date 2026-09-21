@@ -58,6 +58,7 @@ export type SessionSearchIndexStatus = {
  * counter with a reset rule.
  *
  * What is left here, and why none of it can be a row:
+ * - `roots`, the latest full-sweep snapshot reused by recent cycles.
  * - `previousRootsWithFiles`, the one bit per root the retirement walk's grace
  *   needs. Deliberately not durable: see the mountpoint trade in
  *   `session-search-deleted-sources.ts`.
@@ -81,6 +82,7 @@ export type SessionSearchIndexStatus = {
  * one reconcile interval. Everything else is reached by the periodic sweep.
  */
 export class SessionSearchIndexer {
+  private roots: SessionSearchIndexerOptions['roots']
   private readonly ownershipPath: string
   private readonly clock: SessionSearchClock
   private readonly intervalMs: number
@@ -104,6 +106,7 @@ export class SessionSearchIndexer {
   private closed = false
 
   constructor(private readonly options: SessionSearchIndexerOptions) {
+    this.roots = options.roots
     this.ownershipPath = resolve(options.databasePath)
     this.clock = options.clock ?? systemSessionSearchClock
     this.intervalMs = options.reconcileIntervalMs ?? DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS
@@ -273,9 +276,16 @@ export class SessionSearchIndexer {
     // end would erase that request along with this pass's own.
     this.sweepNext = false
     try {
+      if (full && this.options.resolveRoots) {
+        const roots = await this.options.resolveRoots(signal)
+        if (signal.aborted) {
+          return
+        }
+        this.roots = roots
+      }
       const result = await runSessionSearchPass({
         store: this.store,
-        roots: this.options.roots,
+        roots: this.roots,
         full,
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,

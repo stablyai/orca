@@ -1,0 +1,567 @@
+{
+  "operation": "tasks.workspace-ssh-local",
+  "family": "tasks.workspace-ssh-local",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "28f7ba289c188bfc121ef7b969133711189e887fbfc7b37c8a5401ea7f30b56a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00d70c40c34c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "0846bea730cf": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "1317fc33bdbe": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "163b91b6fe9c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "327b46fb8bef": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "41b0d115f434": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "6e5fcf24648d": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "70d128c20ae4": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "71225024ccf5": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "7400f4eebe66": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex", "claude"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "87d7d24a30d2": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9f152ed6e897": {
+      "name": "workspaceDetectedAgentIds",
+      "value": []
+    },
+    "cb93b17470e8": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
+    "cbb858a786ac": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex", "claude"]
+    },
+    "cf32edc950ac": {
+      "name": "preflight.detectAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "ea709e13f0f0": {
+      "name": "workspaceAgentOverridden",
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed6189938d78": {
+      "name": "workspaceAgent",
+      "value": "claude"
+    },
+    "fb640b2bca4c": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fbb9eef78275": {
+      "name": "preflight.detectAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-ssh-local-preflight.detectagents-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-ssh-local-agents.normal:local-agents-detected",
+        "observation": {
+          "sender": ["cb93b17470e8"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7400f4eebe66",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "cbb858a786ac"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.result-absent:local-agents-detected",
+        "observation": {
+          "sender": ["6e5fcf24648d"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.result-null:local-agents-detected",
+        "observation": {
+          "sender": ["1317fc33bdbe"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-ok-missing:local-agents-detected",
+        "observation": {
+          "sender": ["327b46fb8bef"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-false-string-error:local-agents-detected",
+        "observation": {
+          "sender": ["0846bea730cf"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.inner-false-object-error:local-agents-detected",
+        "observation": {
+          "sender": ["00d70c40c34c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.outer-refused:local-agents-detected",
+        "observation": {
+          "sender": ["fb640b2bca4c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.outer-refused-no-message:local-agents-detected",
+        "observation": {
+          "sender": ["163b91b6fe9c"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.method-not-found:local-agents-detected",
+        "observation": {
+          "sender": ["87d7d24a30d2"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.transport-rejection:local-agents-detected",
+        "observation": {
+          "sender": ["fbb9eef78275"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-local-agents.transport-rejection-no-message:local-agents-detected",
+        "observation": {
+          "sender": ["70d128c20ae4"],
+          "payloads": ["cf32edc950ac"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "9f152ed6e897"]
+        }
+      }
+    ]
+  }
+}

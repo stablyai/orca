@@ -62,17 +62,20 @@ export type ClaudeStructuredSessionEvent =
       observedAt?: number
     }
 
+export type ClaudeLateDispatchOutcome =
+  | {
+      clientMessageId: string
+      providerIdentity: AgentJournalItemIdentity
+    }
+  | { clientMessageId: string; state: 'rejected'; reason: string }
+
 export type ClaudeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  /** Direct settlement path for a provider replay; its durable item row also reconciles delivery. */
-  onDispatchSettledLate?: (input: {
-    sessionId: string
-    clientMessageId: string
-    providerIdentity: AgentJournalItemIdentity
-  }) => void
+  /** Direct settlement path for provider-proven late dispatch outcomes. */
+  onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null

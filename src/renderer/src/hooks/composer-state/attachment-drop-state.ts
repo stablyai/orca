@@ -20,12 +20,26 @@ import { joinPath } from '@/lib/path'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { showComposerDropFailureToast } from '../composer-drop-failure-toast'
 import {
-  collectComposerDropUploadResult,
-  shouldReportComposerDropUploadFailure
-} from '../composer-drop-upload-result'
+  collectComposerDropResult,
+  type ComposerDropFailure,
+  type ComposerDropItemResult
+} from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
 import { useComposerDropListener } from './composer-drop-listener'
+
+// Local drops bypass the runtime importer's skip classification.
+function localDropFailure(detail: string | undefined): ComposerDropFailure {
+  if (detail?.startsWith('ENOENT')) {
+    return { status: 'skipped', reason: 'missing' }
+  }
+  if (/^(EACCES|EPERM)/.test(detail ?? '')) {
+    return { status: 'skipped', reason: 'permission-denied' }
+  }
+  return { status: 'failed', reason: detail }
+}
 
 export function useAttachmentDropState(input: AttachmentDropStateInput) {
   const {
@@ -164,14 +178,13 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         destinationDir,
         { ensureDestinationDir: true, assertCurrent }
       )
-      const uploadResult = collectComposerDropUploadResult(results)
-      if (shouldReportComposerDropUploadFailure(uploadResult, canReportFailure)) {
-        toast.error(
-          translate(
-            'auto.hooks.useComposerState.a9ff236145',
-            'Some attachments could not be uploaded.'
-          )
-        )
+      const uploadResult = collectComposerDropResult(results)
+      if (uploadResult.failureCount > 0 && canReportFailure()) {
+        showComposerDropFailureToast({
+          failureCount: uploadResult.failureCount,
+          total: sourcePaths.length,
+          commonFailure: uploadResult.commonFailure
+        })
       }
       return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
@@ -199,27 +212,34 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
 
   const applyLocalComposerDrop = useCallback(
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
-      const fileAttachments: string[] = []
-      const folderPaths: string[] = []
+      const results: ComposerDropItemResult[] = []
       for (const filePath of paths) {
         try {
           await window.api.fs.authorizeExternalPath({ targetPath: filePath })
           const stat = await window.api.fs.stat({ filePath })
-          if (stat.isDirectory) {
-            folderPaths.push(filePath)
-          } else {
-            fileAttachments.push(filePath)
-          }
-        } catch {
-          // Skip paths we cannot authorize or stat.
+          results.push({
+            status: 'imported',
+            destPath: filePath,
+            kind: stat.isDirectory ? 'directory' : 'file'
+          })
+        } catch (error) {
+          results.push(localDropFailure(readIpcErrorMessage(error)))
         }
       }
 
       if (!canApply()) {
         return
       }
-      addComposerAttachments(fileAttachments)
-      insertComposerFolderPaths(folderPaths)
+      const dropResult = collectComposerDropResult(results)
+      addComposerAttachments(dropResult.filePaths)
+      insertComposerFolderPaths(dropResult.folderPaths)
+      if (dropResult.failureCount > 0) {
+        showComposerDropFailureToast({
+          failureCount: dropResult.failureCount,
+          total: paths.length,
+          commonFailure: dropResult.commonFailure
+        })
+      }
     },
     [addComposerAttachments, insertComposerFolderPaths]
   )

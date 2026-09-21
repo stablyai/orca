@@ -14,7 +14,12 @@ import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
-import { exec } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import {
+  forceTerminateProcessTree,
+  signalProcessTree
+} from '../shared/child-process/process-tree-termination'
+import { createOutputSink } from '../shared/child-process/bounded-output-sink'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 
@@ -53,50 +58,21 @@ function classifyHookProcessResult(
 
 const SIGTERM_GRACE_MS = 2_000
 
-/** Signal the hook's whole process group where the platform has one, else just the child. */
-export type TerminableChild = {
-  pid?: number
-  exitCode: number | null
-  signalCode: NodeJS.Signals | null
-  kill: (signal: NodeJS.Signals) => boolean
+/**
+ * `exec` capped output at 1 MiB and killed the hook on overflow; `spawn` has no cap at all, and a
+ * hook flooding stdout for the full deadline can take the main process's heap with it. Truncation
+ * is reported in the output rather than as a failure — a chatty hook that exits 0 did succeed, and
+ * failing it for being chatty is the `exec` behaviour this is replacing.
+ */
+const HOOK_OUTPUT_LIMIT_BYTES = 10 * 1024 * 1024
+
+function readSink(sink: ReturnType<typeof createOutputSink>): string {
+  return sink.truncated()
+    ? `${sink.text()}\n[output truncated at ${HOOK_OUTPUT_LIMIT_BYTES} bytes]`
+    : sink.text()
 }
 
-export function terminateHookTree(child: TerminableChild, signal: NodeJS.Signals): void {
-  // Why probe the GROUP and not the child: the escalation exists for descendants that outlive the
-  // shell. A hook that backgrounds a server typically loses its leader to the first SIGTERM while
-  // the server keeps running, so keying this on `child.exitCode` would skip the SIGKILL in exactly
-  // the case it was added for.
-  //
-  // The trade-off it does not solve: signalling by negative pid names whatever group owns that pid
-  // now. Once the leader is reaped its pid can be recycled, and a probe cannot tell a surviving
-  // descendant from a stranger that inherited the number. Killing a runaway hook is the likelier
-  // event and the one the deadline promises, so the group is signalled whenever it answers; the
-  // residual window is pid wraparound inside the two-second grace.
-  if (process.platform !== 'win32' && child.pid) {
-    try {
-      // Signal 0 tests for members without delivering anything: ESRCH means the group is empty.
-      process.kill(-child.pid, 0)
-    } catch {
-      return
-    }
-    try {
-      process.kill(-child.pid, signal)
-      return
-    } catch {
-      // Raced with the last member exiting; fall through to the direct kill.
-    }
-  }
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return
-  }
-  try {
-    child.kill(signal)
-  } catch {
-    // Already dead.
-  }
-}
-
-/** An `exec` failure: a string `code` (ENOENT) means it never started, so no exit was observed. */
+/** A spawn failure: the process never started, so no exit was ever observed. */
 function hookProcessError(
   error: Error,
   stdout: string,
@@ -287,8 +263,7 @@ export function runHook(
     // reports whatever it chose to do, so a hook that traps SIGTERM and exits 0 came back as a
     // PASS — a hook cut off mid-archive, indistinguishable from one that finished. Settle on the
     // deadline instead, and settle AT it, so a hook that traps and keeps running cannot hold a
-    // removal open. `exec` stays because it owns the per-platform shell invocation (`cmd.exe`
-    // wants `/d /s /c`, not `-c`), which is not this change's to re-derive.
+    // removal open.
     let settled = false
     let deadline: NodeJS.Timeout | undefined
     const settle = (result: HookProcessOutcome): void => {
@@ -301,42 +276,71 @@ export function runHook(
       }
       resolve(result)
     }
-    const child = exec(
-      script,
-      {
-        cwd,
-        shell: getHookShell(),
-        // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
-        env: promptGuardShellEnv(shellHookEnv),
-        // Signal the whole group on POSIX: the script is a shell, and the work is its children.
-        ...(process.platform === 'win32' ? {} : { detached: true })
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          settle(hookProcessError(error, stdout, stderr, { hookName, cwd }))
-          return
-        }
-        settle(
-          classifyHookProcessResult(
-            { code: 0, stdout, stderr, timedOut: false },
-            { hookName, cwd, timeoutMs }
-          )
+    // Why `spawn` and not `exec` (#19334 follow-up): `detached` is a spawn-only option — `exec`
+    // accepts and ignores it, so the shell never became a group leader and the group signal below
+    // had nothing to reach. Passing `shell` as a string keeps Node's own platform invocation, which
+    // is what `exec` was being kept for: `cmd.exe /d /s /c` on Windows rather than a bare `-c`.
+    const child = spawn(script, {
+      cwd,
+      shell: getHookShell(),
+      // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
+      env: promptGuardShellEnv(shellHookEnv),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Pinned, not left to Node's default, for the same reason `runProcess` pins it: a `cmd.exe`
+      // hook otherwise flashes a console window and takes focus. Pre-existing — `exec` did not set
+      // it either — but AGENTS.md asks for it pinned on every Windows spawn.
+      windowsHide: true,
+      // Make the shell a group leader so its children can be reached. Not on Windows, which has no
+      // process groups in this sense and where `detached` means a new console instead.
+      ...(process.platform === 'win32' ? {} : { detached: true })
+    })
+    const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+    const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+    child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
+    child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+    // Why listeners that do nothing: an unhandled `error` on a stream is an uncaught exception, and
+    // in the Electron main process that is the whole app. `exec` never covered this either — its
+    // only `error` listener is on the child — so this is a pre-existing gap, closed the way
+    // `runProcess` closes it. Losing output is not worth a crash; the exit code still gets through.
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      stream?.on('error', () => {})
+    }
+    child.on('error', (error) => {
+      settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
+    })
+    child.on('close', (code, signal) => {
+      settle(
+        classifyHookProcessResult(
+          // A signalled exit reports no code, which stays `unverifiable` rather than becoming a 0.
+          {
+            code: signal ? null : code,
+            stdout: readSink(stdout),
+            stderr: readSink(stderr),
+            timedOut: false
+          },
+          { hookName, cwd, timeoutMs }
         )
-      }
-    )
-    // Why guarded: `exec`'s callback can fire synchronously (the unit test's mock does), and arming
-    // a deadline on an already-settled run would later signal a process group whose pid is long
-    // gone — and may by then belong to something else.
+      )
+    })
+    // Why guarded: a spawn failure can settle before the deadline is armed, and arming one on a
+    // finished run would later signal a pid that is gone — and may by then belong to something else.
     if (!settled) {
       deadline = setTimeout(() => {
         settle(
           classifyHookProcessResult(
-            { code: null, stdout: '', stderr: '', timedOut: true },
+            // Keep what the hook printed: it is the only clue to why the removal gate says
+            // `unverifiable`.
+            { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
             { hookName, cwd, timeoutMs }
           )
         )
-        terminateHookTree(child, 'SIGTERM')
-        setTimeout(() => terminateHookTree(child, 'SIGKILL'), SIGTERM_GRACE_MS).unref?.()
+        // Orca's own tree terminator: POSIX process groups, `taskkill /t /f` on Windows (where a
+        // bare `child.kill` reaches only the shell and leaves its descendants running), and the
+        // recycled-pid guard that hazard needs. SIGTERM first so a well-behaved hook can clean up.
+        void signalProcessTree(child, 'SIGTERM')
+        setTimeout(() => {
+          void forceTerminateProcessTree(child)
+        }, SIGTERM_GRACE_MS).unref?.()
       }, timeoutMs)
     }
   })

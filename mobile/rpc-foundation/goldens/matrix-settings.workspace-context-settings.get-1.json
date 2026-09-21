@@ -1,24 +1,18 @@
 {
   "operation": "settings.workspace-context",
   "family": "settings.workspace-context",
-  "namedDeltas": ["new-workspace-runtime-context-null-settings-typeerror"],
+  "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"],
   "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "797ea410af6536410335ebe93b8bc354cd633cf980eb95efbb10bc46f5516cb7",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 5,
   "values": {
-    "045f11564884": {
-      "name": "unhandled-rejection",
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of null (reading 'settings')"
-      }
-    },
     "090c88478661": {
       "name": "settings.get#1",
       "args": [
@@ -291,14 +285,6 @@
             "ui": {}
           }
         }
-      }
-    },
-    "4fdb20ad5654": {
-      "name": "unhandled-rejection",
-      "value": {
-        "category": "TypeError",
-        "isRpcDeliveryUnknown": false,
-        "message": "Cannot read properties of undefined (reading 'settings')"
       }
     },
     "563e4c82b345": {
@@ -682,8 +668,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f6a09f8c5b85",
-          "effects": ["4fdb20ad5654"]
+          "state": "3a834cb85dd8",
+          "effects": []
         }
       },
       {
@@ -694,8 +680,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f6a09f8c5b85",
-          "effects": ["045f11564884"]
+          "state": "3a834cb85dd8",
+          "effects": []
         }
       },
       {

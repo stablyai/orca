@@ -12,7 +12,10 @@ import { projectStructuredItemsToNativeChat } from '../../../../shared/structure
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
+import {
+  NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
+  NATIVE_CHAT_FOLLOW_REARM_PX
+} from './native-chat-autoscroll'
 import {
   estimateNativeChatRowHeight,
   NATIVE_CHAT_ROW_GAP_PX,
@@ -30,6 +33,13 @@ const TRANSCRIPT_LENGTH = 200
  *  a pin computed from the virtualizer's totals and one computed from the
  *  document disagree. */
 const BELOW_TRANSCRIPT_PX = 24
+let belowTranscriptPx = BELOW_TRANSCRIPT_PX
+
+/** Everything the document holds above the spacer: the scroll root's top gutter,
+ *  and the "load earlier" block whenever there is older history to page in. This
+ *  is the virtualizer's `scrollMargin`, and it is the larger half of the gap
+ *  between the document's end and the end the virtualizer computes. */
+let aboveTranscriptPx = 0
 
 /** Heights the stubbed layout reports per row index, when a case wants a row to
  *  measure as something other than its estimate. Empty means "every row at its
@@ -87,9 +97,13 @@ function reservedTranscriptHeight(root: ParentNode): number {
 // bottom and the cases above are about where the window sits, not where it lands.
 function stubLayout({
   scrollGeometry = false,
+  offsetChain = false,
   viewportHeight = () => VIEWPORT_PX
 }: {
   scrollGeometry?: boolean
+  /** Give the spacer an `offsetTop` and a chain to walk up to the scroll root,
+   *  so `scrollMargin` can be something other than zero. */
+  offsetChain?: boolean
   viewportHeight?: () => number
 } = {}): () => void {
   const scrollTops = new WeakMap<HTMLElement, number>()
@@ -109,7 +123,7 @@ function stubLayout({
         // The transcript column: as tall as the window it wraps, plus what sits
         // under it. This is the element the list observes for streamed growth.
         return this.classList.contains('max-w-4xl')
-          ? reservedTranscriptHeight(this) + BELOW_TRANSCRIPT_PX
+          ? reservedTranscriptHeight(this) + belowTranscriptPx
           : 0
       }
     })
@@ -124,7 +138,7 @@ function stubLayout({
       overrideLayoutProperty('scrollHeight', {
         get(this: HTMLElement): number {
           return this.hasAttribute('data-native-chat-scroll')
-            ? reservedTranscriptHeight(this) + BELOW_TRANSCRIPT_PX
+            ? aboveTranscriptPx + reservedTranscriptHeight(this) + belowTranscriptPx
             : 0
         }
       }),
@@ -137,6 +151,22 @@ function stubLayout({
           // the view past the end and every distance-from-bottom would read 0.
           const max = Math.max(0, this.scrollHeight - this.clientHeight)
           scrollTops.set(this, Math.min(Math.max(0, value), max))
+        }
+      })
+    )
+  }
+  if (offsetChain) {
+    restores.push(
+      overrideLayoutProperty('offsetTop', {
+        get(this: HTMLElement): number {
+          return this.hasAttribute('data-native-chat-window') ? aboveTranscriptPx : 0
+        }
+      }),
+      // happy-dom has no `offsetParent` at all, so production's walk to the
+      // scroll root ends before it starts and every margin reads zero.
+      overrideLayoutProperty('offsetParent', {
+        get(this: HTMLElement): HTMLElement | null {
+          return this.parentElement?.closest<HTMLElement>('[data-native-chat-scroll]') ?? null
         }
       })
     )
@@ -431,6 +461,125 @@ describe('revealing a diff from a turn rollup', () => {
     // Pinned, not paged to: the window is still a window.
     expect(windowState(container).indexes.length).toBeLessThanOrEqual(mountedBefore + 2)
   })
+
+  it('lets a rail jump supersede a previously revealed diff', () => {
+    const withPrompts = [
+      ...items.slice(0, 2),
+      journalItem(
+        'user-2',
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Second prompt' }] },
+        3
+      ),
+      journalItem(
+        'user-3',
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Third prompt' }] },
+        4
+      ),
+      ...items.slice(2)
+    ].map((item, index) => ({ ...item, sequence: index + 1 }))
+    const scrollTo = vi.fn()
+    vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+    const { container } = render(
+      <NativeChatMessageList
+        session={session(projectStructuredItemsToNativeChat(withPrompts))}
+        journalItems={withPrompts}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
+    fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+    scrollTranscript(container, 6000)
+    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    scrollTo.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Edited file')).toBeNull()
+
+    scrollTranscript(container, 0)
+    scrollTo.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
+    fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The rail borrows the reveal's pin to reach a row the window has left behind.
+// Borrowing the pin means it also has to give it back: the request is what
+// outranks a later reveal, and `slots` is rebuilt every render, so an effect that
+// merely watched it would re-scroll forever.
+describe('jumping to a message from the rail', () => {
+  let restoreLayout = (): void => {}
+  beforeEach(() => {
+    restoreLayout = stubLayout()
+  })
+  afterEach(() => {
+    restoreLayout()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function userMarker(index: number): NativeChatMessage {
+    return {
+      id: `message-${index}`,
+      role: 'user',
+      blocks: [{ type: 'text', text: `prompt-${index}` }],
+      timestamp: index + 1,
+      source: 'transcript'
+    }
+  }
+
+  const conversation = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+    index % 10 === 0 ? userMarker(index) : marker(index)
+  )
+
+  /** Open the hover panel through the trigger and click the first prompt. */
+  function jumpToFirstPrompt(): void {
+    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'prompt-0' }))
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+  }
+
+  it('scrolls once for a selection, not again on every later render', () => {
+    vi.useFakeTimers()
+    const scrollTo = vi.fn()
+    vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+    const { container, rerender } = render(list(conversation))
+    scrollTranscript(container, 6000)
+
+    jumpToFirstPrompt()
+    expect(scrollTo).toHaveBeenCalled()
+
+    // A streaming turn re-renders constantly with the same messages. The jump is
+    // spent; nothing here may drag the reader back to the row they left.
+    scrollTo.mockClear()
+    rerender(list(conversation))
+    rerender(list(conversation))
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('releases the pin once the jump is spent', () => {
+    vi.useFakeTimers()
+    const scrollTo = vi.fn()
+    vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+    const { container } = render(list(conversation))
+    scrollTranscript(container, 6000)
+
+    jumpToFirstPrompt()
+    expect(scrollTo).toHaveBeenCalled()
+
+    // The request is spent as soon as the scroll is issued, so the row it pinned
+    // is not held in the window afterwards. A pin still standing here would also
+    // still outrank a diff reveal, which shares the same slot.
+    expect(windowState(container).indexes).not.toContain(0)
+  })
 })
 
 describe('transcript with a hidden scroll root', () => {
@@ -468,11 +617,8 @@ describe('transcript with a hidden scroll root', () => {
 // arrive at their final height and are a different case; this is the one where
 // the row the reader is looking at keeps changing size underneath them.
 //
-// Two mechanisms are supposed to hold the pin, and both are exercised here: the
-// list's own resize observer on the transcript column (which re-runs
-// `scrollToBottom` against the document) and the virtualizer's end anchor (which
-// compensates `scrollTop` by the growth when the view was already at the end).
-describe('a row growing in place while the view is pinned to the bottom', () => {
+// Exercise the real virtualizer together with the transcript's follow owner.
+describe('transcript follow ownership across growth and appends', () => {
   const TAIL_INDEX = TRANSCRIPT_LENGTH - 1
   const GROWTH_STEPS = 24
   const LINES_PER_STEP = 12
@@ -488,6 +634,13 @@ describe('a row growing in place while the view is pinned to the bottom', () => 
   const TURN_STARTED_AT = Date.now()
 
   const transcript = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) => marker(index))
+
+  function appendedTranscript(count: number): NativeChatMessage[] {
+    return [
+      ...transcript,
+      ...Array.from({ length: count }, (_, index) => marker(TRANSCRIPT_LENGTH + index))
+    ]
+  }
 
   function tailHeightAt(step: number): number {
     return Math.max(ROW_PX, (1 + step * LINES_PER_STEP) * STREAM_LINE_PX)
@@ -564,14 +717,19 @@ describe('a row growing in place while the view is pinned to the bottom', () => 
   let restoreLayout = (): void => {}
   let restoreResizeObserver = (): void => {}
   beforeEach(() => {
-    restoreLayout = stubLayout({ scrollGeometry: true })
+    restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     restoreResizeObserver = stubResizeObserver()
+    belowTranscriptPx = BELOW_TRANSCRIPT_PX
+    aboveTranscriptPx = 0
     setMeasuredTail(0)
   })
   afterEach(() => {
     restoreResizeObserver()
     restoreLayout()
     measuredRowHeights = []
+    belowTranscriptPx = BELOW_TRANSCRIPT_PX
+    aboveTranscriptPx = 0
+    vi.restoreAllMocks()
   })
 
   it('holds the pin, the mount and the reserved total at every frame of the growth', () => {
@@ -636,5 +794,340 @@ describe('a row growing in place while the view is pinned to the bottom', () => 
     }
 
     expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+  })
+
+  it.each([0, 100])(
+    'keeps a reader parked above a growing row with a %i px initial measurement delta',
+    (measurementDelta) => {
+      setMeasuredTail(4)
+      measuredRowHeights = measuredRowHeights.map((height, index) =>
+        index === TAIL_INDEX ? height + measurementDelta : height
+      )
+      const { container, rerender } = render(streamingList(4))
+      paint(container)
+      const scroller = scrollRoot(container)
+
+      const parkGapPx = NATIVE_CHAT_BOTTOM_THRESHOLD_PX - 8
+      const parkedAt = scroller.scrollHeight - scroller.clientHeight - parkGapPx
+      scrollTranscript(container, parkedAt)
+      expect(distanceFromBottom(container)).toBe(parkGapPx)
+      // Not the "scrolled far away" case above: the latest message is still on
+      // screen, so there is nothing to offer a way back to yet.
+      expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
+
+      setMeasuredTail(5)
+      rerender(streamingList(5))
+      paint(container)
+      expect(scroller.scrollTop).toBe(parkedAt)
+
+      let previousDistance = distanceFromBottom(container)
+      for (let step = 6; step <= GROWTH_STEPS; step += 1) {
+        setMeasuredTail(step)
+        rerender(streamingList(step))
+        paint(container)
+
+        // The offset stops moving at all...
+        expect(scroller.scrollTop).toBe(parkedAt)
+        // ...so the end runs away from the reader instead of carrying them along.
+        const distance = distanceFromBottom(container)
+        expect(distance).toBeGreaterThan(previousDistance)
+        previousDistance = distance
+      }
+
+      expect(previousDistance).toBeGreaterThan(VIEWPORT_PX)
+      expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+    }
+  )
+
+  it('leaves a parked reader in place through repeated appends', () => {
+    const { container, rerender } = render(list(transcript))
+    paint(container)
+    const scroller = scrollRoot(container)
+    const parkedAt = scroller.scrollHeight - scroller.clientHeight - 40
+    scrollTranscript(container, parkedAt)
+
+    for (let count = 1; count <= 8; count += 1) {
+      rerender(list(appendedTranscript(count)))
+      paint(container)
+      expect(scroller.scrollTop).toBe(parkedAt)
+      expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
+    }
+    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+  })
+
+  it('follows repeated appends until the reader detaches', () => {
+    const { container, rerender } = render(list(transcript))
+    paint(container)
+    const scroller = scrollRoot(container)
+    for (let count = 1; count <= 8; count += 1) {
+      rerender(list(appendedTranscript(count)))
+      paint(container)
+      expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
+      fireEvent.scroll(scroller)
+    }
+
+    const parkedAt = scroller.scrollTop - 22
+    scrollTranscript(container, parkedAt)
+    rerender(list(appendedTranscript(9)))
+    paint(container)
+    expect(scroller.scrollTop).toBe(parkedAt)
+  })
+
+  it('follows an empty transcript through underflow into scrollable output', () => {
+    const { container, rerender } = render(list([]))
+    paint(container)
+    expect(scrollRoot(container).scrollTop).toBe(0)
+    rerender(list(transcript.slice(0, 1)))
+    paint(container)
+    expect(scrollRoot(container).scrollTop).toBe(0)
+    fireEvent.scroll(scrollRoot(container))
+    rerender(list(transcript))
+    paint(container)
+    expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
+    expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
+  })
+
+  it.each(['reader', 'jump'] as const)('rearms growth and append following via %s', (rearm) => {
+    setMeasuredTail(4)
+    const { container, rerender } = render(streamingList(4))
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    const parkedAt = scroller.scrollTop - 22
+    scrollTranscript(container, parkedAt)
+    setMeasuredTail(5)
+    rerender(streamingList(5))
+    paint(container)
+    expect(scroller.scrollTop).toBe(parkedAt)
+
+    if (rearm === 'reader') {
+      scrollTranscript(
+        container,
+        scroller.scrollHeight - scroller.clientHeight - NATIVE_CHAT_FOLLOW_REARM_PX
+      )
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: /jump to latest/i }))
+    }
+    paint(container)
+    expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
+    for (let step = 6; step <= 8; step += 1) {
+      setMeasuredTail(step)
+      rerender(streamingList(step))
+      paint(container)
+      expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
+      expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
+    }
+    rerender(list([...transcriptAt(8), marker(TRANSCRIPT_LENGTH)]))
+    paint(container)
+    expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
+  })
+
+  it('preserves the visible row anchor across prepends while detached', () => {
+    const { container, rerender } = render(list(transcript))
+    paint(container)
+    const readingAt = 2000
+    scrollTranscript(container, readingAt)
+    paint(container)
+
+    const earlier = Array.from({ length: 10 }, (_, index) => marker(index - 10))
+    rerender(list([...earlier, ...transcript]))
+    paint(container)
+    expect(scrollRoot(container).scrollTop).toBe(readingAt + earlier.length * ROW_PITCH_PX)
+    expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
+    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+  })
+
+  it('compensates a measurement entirely above the viewport without reattaching', () => {
+    const { container, rerender } = render(list(transcript))
+    paint(container)
+    const scroller = scrollRoot(container)
+    // Establish a forward scroll direction before reading at this offset. The
+    // backward-scroll suppression below covers the separate case where a reader
+    // is still moving upward while overscan rows settle.
+    scrollTranscript(container, 0)
+    paint(container)
+    const readingAt = 2000
+    scrollTranscript(container, readingAt)
+    paint(container)
+    const aboveIndex = windowState(container).indexes[0]!
+    expect((aboveIndex + 1) * ROW_PITCH_PX).toBeLessThan(readingAt)
+    for (const growth of [100, 200]) {
+      measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+        index === aboveIndex ? ROW_PX + growth : ROW_PX
+      )
+      paint(container)
+      expect(scroller.scrollTop).toBe(readingAt + growth)
+    }
+    rerender(list(appendedTranscript(1)))
+    paint(container)
+    expect(scroller.scrollTop).toBe(readingAt + 200)
+    expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
+  })
+
+  it('keeps following when a pin echo arrives after the document grows', () => {
+    setMeasuredTail(0)
+    const { container } = render(streamingList(0))
+    paint(container)
+    const scroller = scrollRoot(container)
+
+    setMeasuredTail(1)
+    expect(deliverResizes()).toBe(true)
+    const pinnedAt = scroller.scrollTop
+    belowTranscriptPx += 2_000
+
+    fireEvent.scroll(scroller)
+
+    expect(scroller.scrollTop).toBe(pinnedAt)
+    expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
+    paint(container)
+    expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
+  })
+
+  it('does not counter upward scrolling when measured overscan rows settle', () => {
+    const readingAt = 2000
+    const aboveIndex = Math.floor(readingAt / ROW_PITCH_PX) - 1
+    const { container } = render(list(transcript))
+    paint(container)
+    scrollTranscript(container, readingAt + 100)
+    paint(container)
+    measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+      index === aboveIndex ? ROW_PX + 10 : ROW_PX
+    )
+    paint(container)
+    scrollTranscript(container, readingAt)
+    paint(container)
+    const scroller = scrollRoot(container)
+    const scrollTo = vi.spyOn(scroller, 'scrollTo')
+
+    measuredRowHeights = measuredRowHeights.map((height, index) =>
+      index === aboveIndex ? height + 20 : height
+    )
+    paint(container)
+
+    expect(scroller.scrollTop).toBe(readingAt)
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('keeps the offset when a visible row shrinks past the viewport top', () => {
+    const focusedIndex = 45
+    const { container } = render(list(transcript))
+    paint(container)
+    scrollTranscript(container, focusedIndex * ROW_PITCH_PX)
+    paint(container)
+    measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+      index === focusedIndex ? 100 : ROW_PX
+    )
+    paint(container)
+    const readingAt = focusedIndex * ROW_PITCH_PX + 60
+    scrollTranscript(container, readingAt)
+    paint(container)
+    const scroller = scrollRoot(container)
+    const scrollTo = vi.spyOn(scroller, 'scrollTo')
+
+    measuredRowHeights = measuredRowHeights.map((height, index) =>
+      index === focusedIndex ? 30 : height
+    )
+    paint(container)
+
+    expect(scroller.scrollTop).toBe(readingAt)
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('settles a pending end reconcile after the reader keeps scrolling away', async () => {
+    setMeasuredTail(0)
+    const { container } = render(streamingList(0))
+    const scroller = scrollRoot(container)
+    // Trigger a pin outside React's act wrapper so its TanStack rAF reconcile is
+    // still pending when the reader moves away.
+    setMeasuredTail(1)
+    expect(deliverResizes()).toBe(true)
+    const scheduleSpy = vi.spyOn(window, 'requestAnimationFrame')
+    const scrollToSpy = vi.spyOn(scroller, 'scrollTo')
+    const readingAt = 2000
+    scroller.scrollTop = readingAt
+    fireEvent.scroll(scroller)
+    expect(scrollToSpy).toHaveBeenLastCalledWith({ behavior: 'auto', top: readingAt })
+    scroller.scrollTop = 1800
+    fireEvent.scroll(scroller)
+    expect(scrollToSpy).toHaveBeenLastCalledWith({ behavior: 'auto', top: 1800 })
+
+    await act(async () => {
+      for (let frame = 0; frame < 6; frame += 1) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      }
+    })
+
+    const scheduledFrames = scheduleSpy.mock.calls.length
+    scheduleSpy.mockRestore()
+    scrollToSpy.mockRestore()
+    expect(scheduledFrames).toBeLessThanOrEqual(8)
+    expect(scroller.scrollTop).toBe(1800)
+    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+  })
+
+  // With something above the spacer, the two parties stop agreeing on where the
+  // end is: the transcript measures it from the document, the virtualizer from
+  // the spacer's own height against a container-absolute offset. The second is
+  // short by everything outside the spacer, so it reads a reader who is clearly
+  // above the end as sitting on it.
+  describe('with a gutter above the transcript', () => {
+    /** `pt-10` plus the "Load earlier" block and its gap — what sits above the
+     *  spacer once a resumed session still has older history to page in. */
+    const GUTTER_PX = 92
+    /** Far enough up that the transcript itself calls the reader detached, and
+     *  still inside the band the virtualizer computes (48 + 92 + 24). */
+    const READING_ABOVE_END_PX = 96
+    // A nonzero delta seeds the size cache; zero exercises first-measure growth.
+    const MEASURE_SKEW_PX = 7
+
+    function setSkewedTail(step: number, skew = MEASURE_SKEW_PX): void {
+      const heights = Array.from({ length: TRANSCRIPT_LENGTH }, () => ROW_PX)
+      heights[TAIL_INDEX] = tailHeightAt(step) + skew
+      measuredRowHeights = heights
+    }
+
+    beforeEach(() => {
+      aboveTranscriptPx = GUTTER_PX
+    })
+
+    it.each([0, MEASURE_SKEW_PX])(
+      'leaves a reader just above the end while the row grows (skew %i)',
+      (skew) => {
+        setSkewedTail(4, skew)
+        const { container, rerender } = render(streamingList(4))
+        paint(container)
+        const scroller = scrollRoot(container)
+
+        const readingAt = scroller.scrollHeight - scroller.clientHeight - READING_ABOVE_END_PX
+        scrollTranscript(container, readingAt)
+        paint(container)
+        expect(distanceFromBottom(container)).toBe(READING_ABOVE_END_PX)
+
+        for (let step = 5; step <= 10; step += 1) {
+          setSkewedTail(step, skew)
+          rerender(streamingList(step))
+          paint(container)
+
+          // Not dragged along: the offset the reader chose is the offset they keep,
+          // however much the row below them grows.
+          expect(scroller.scrollTop).toBe(readingAt)
+        }
+      }
+    )
+
+    it('still pins a reader who is at the end, with the gutter in the document', () => {
+      setSkewedTail(4)
+      const { container, rerender } = render(streamingList(4))
+      paint(container)
+      expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
+
+      for (let step = 5; step <= 10; step += 1) {
+        setSkewedTail(step)
+        rerender(streamingList(step))
+        paint(container)
+
+        expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
+      }
+    })
   })
 })

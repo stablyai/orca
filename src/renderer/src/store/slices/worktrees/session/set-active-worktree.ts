@@ -217,15 +217,15 @@ export function createSetActiveWorktree(
         pendingActivationTerminalPrepCancels.delete(worktreeId)
         set((s) => {
           if (s.activeWorktreeId !== worktreeId) {
-            return {}
+            return s
           }
           const tabs = s.tabsByWorktree[worktreeId] ?? []
           if (tabs.length === 0) {
-            return {}
+            return s
           }
           const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
           if (!allDead && !shouldTagTerminalTabs) {
-            return {}
+            return s
           }
           return {
             tabsByWorktree: {

@@ -3,13 +3,15 @@
   "family": "hostedReview.create-chain",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "7d6099248aa6a2ef19f2e169ff917af794649d9d64d139aa9ffeea6a41355ddc",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 5,
   "values": {
     "1617f98dc371": {
       "name": "hostedReview.create#1",

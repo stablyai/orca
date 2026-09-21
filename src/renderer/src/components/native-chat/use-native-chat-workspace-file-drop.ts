@@ -18,6 +18,7 @@ import {
   nativeChatWorkspaceAttachmentMismatchNotice,
   type NativeChatResolvedPathOptions
 } from './native-chat-resolved-path-ownership'
+import { useNativeChatPaneFileDropClaim } from './NativeChatPaneFileDropSurface'
 
 type WorkspaceFileDropHandlers = {
   onDragOverCapture: DragEventHandler<HTMLDivElement>
@@ -31,6 +32,9 @@ type Args = {
     options?: NativeChatResolvedPathOptions
   ) => void
   disabled: boolean
+  /** Composer identity the preload drop route addresses; published to the pane
+   *  so an OS drop anywhere in it resolves to this composer. */
+  paneKey: string
   setNotice: (notice: string | null) => void
   structuredWorktreeId?: string
   terminalTabId: string
@@ -63,6 +67,7 @@ function setDropEffect(dataTransfer: DataTransfer, effect: 'copy' | 'none'): voi
 export function useNativeChatWorkspaceFileDrop({
   attachResolvedPaths,
   disabled,
+  paneKey,
   setNotice,
   structuredWorktreeId,
   terminalTabId
@@ -162,6 +167,15 @@ export function useNativeChatWorkspaceFileDrop({
     },
     [attachResolvedPaths, disabled, setNotice, structuredWorktreeId, terminalTabId]
   )
+
+  // The pane around the composer is the drop surface; these handlers run from
+  // there so the whole chat, not just the input box, accepts a file.
+  useNativeChatPaneFileDropClaim({
+    scopeKey: paneKey,
+    disabled,
+    onDragOverCapture,
+    onDropCapture
+  })
 
   return { onDragOverCapture, onDropCapture }
 }

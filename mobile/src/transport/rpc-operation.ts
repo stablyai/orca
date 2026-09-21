@@ -247,11 +247,19 @@ export async function interpretAtRpcBarrier<
   ) as RpcBarrierVerdicts<Pending>
 }
 
-/** Preserves omitted sender arguments as well as explicit undefined. */
+/**
+ * Preserves omitted sender arguments as well as explicit undefined.
+ *
+ * A params type with no required field may be omitted too, because the raw port always allowed it
+ * and several hosts' schemas are entirely optional (`preflight.check`). Forcing `{}` there would
+ * put a new object on the wire where main sent no params at all.
+ */
 type RpcSendArguments<Method extends RpcMethodName> =
   void extends RpcSendParams<Method>
     ? [params?: RpcSendParams<Method>, options?: SendRequestOptions]
-    : [params: RpcSendParams<Method>, options?: SendRequestOptions]
+    : Record<never, never> extends RpcSendParams<Method>
+      ? [params?: RpcSendParams<Method>, options?: SendRequestOptions]
+      : [params: RpcSendParams<Method>, options?: SendRequestOptions]
 
 /** Binds sending and interpretation while preserving the transport promise identity. */
 export function bindDeferredRpcOperation<

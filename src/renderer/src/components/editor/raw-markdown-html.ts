@@ -7,15 +7,13 @@ import type {
   RichMarkdownSourceKind,
   RichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
-import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
+import {
+  isReservedRichMarkdownTransportBody,
+  skipInlineTransportStartScan
+} from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
-
-function matchInlineHtml(src: string): string | null {
-  const match = src.match(INLINE_HTML_PATTERN)
-  return match?.[0] ?? null
-}
 
 function isEscaped(content: string, index: number): boolean {
   let backslashCount = 0
@@ -186,7 +184,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
       const inlineHtml =
         normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
           ? null
-          : matchInlineHtml(normalizedContent.slice(index))
+          : (normalizedContent.slice(index).match(INLINE_HTML_PATTERN)?.[0] ?? null)
       if (inlineHtml) {
         result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length
@@ -284,7 +282,7 @@ function createRawSourceNode({
     markdownTokenizer: {
       name,
       level: inline ? 'inline' : 'block',
-      start: transport.startFor(kind),
+      start: inline ? skipInlineTransportStartScan : transport.startFor(kind),
       tokenize(src) {
         const matched = transport.match(src, kind)
         if (!matched) {

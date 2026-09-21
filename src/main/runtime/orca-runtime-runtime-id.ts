@@ -274,6 +274,9 @@ export class OrcaRuntimeWithRuntimeId {
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 
+  /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
+  protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
+
   protected leaves = new Map<string, RuntimeLeafRecord>()
 
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by

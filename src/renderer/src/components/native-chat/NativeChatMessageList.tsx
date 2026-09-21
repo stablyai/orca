@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
@@ -26,6 +26,9 @@ import {
 } from './native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
+import { useNativeChatMessageRail } from './use-native-chat-message-rail'
+import { NativeChatMessageRail } from './NativeChatMessageRail'
+import type { NativeChatRailItem } from './native-chat-message-rail-items'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
@@ -41,6 +44,10 @@ export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
 const MAX_EXPANDED_TURNS = 128
 
+type NativeChatNavigationRequest =
+  | { kind: 'diff'; target: NativeChatDiffReveal }
+  | { kind: 'rail'; messageId: string; requestId: number }
+
 export function NativeChatMessageList({
   session,
   journalItems,
@@ -53,6 +60,7 @@ export function NativeChatMessageList({
   settledTurns,
   failedDeliveryMessageIds,
   showTurnStatus = true,
+  showLiveTurnActivity = true,
   turnActivity,
   runtimeContext
 }: {
@@ -71,12 +79,23 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
+  /** Whether the active turn's foreground activity row should be visible. */
+  showLiveTurnActivity?: boolean
   turnActivity?: NativeChatTurnActivity | null
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
-  const [revealedDiff, setRevealedDiff] = useState<NativeChatDiffReveal | null>(null)
+  const [navigationRequest, setNavigationRequest] = useState<NativeChatNavigationRequest | null>(
+    null
+  )
+  const navigationSequence = useRef(0)
+  const revealedDiff = navigationRequest?.kind === 'diff' ? navigationRequest.target : null
+  const railJump = navigationRequest?.kind === 'rail' ? navigationRequest : null
   const revealDiff = useCallback((target: NativeChatDiffTarget) => {
-    setRevealedDiff((current) => ({ ...target, requestId: (current?.requestId ?? 0) + 1 }))
+    navigationSequence.current += 1
+    setNavigationRequest({
+      kind: 'diff',
+      target: { ...target, requestId: navigationSequence.current }
+    })
   }, [])
   const receipts = useMemo(
     () =>
@@ -195,7 +214,9 @@ export function NativeChatMessageList({
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
-    revealIndex: nativeChatSlotIndexOf(slots, revealedDiff?.messageId)
+    // One pin serves both: revealing a diff and jumping from the rail are
+    // mutually exclusive things to be doing.
+    revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId)
   })
   const { showJump, onScroll, scrollToBottom, scrollMessageToTop } = useNativeChatTranscriptScroll({
     scrollRef,
@@ -206,8 +227,46 @@ export function NativeChatMessageList({
     hasMore,
     loadingEarlier,
     loadEarlier,
-    alignToViewportTop: transcriptWindow.alignToViewportTop
+    alignToViewportTop: transcriptWindow.alignToViewportTop,
+    scrollToEnd: transcriptWindow.scrollToEnd,
+    consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
+    reconcileReaderScroll: transcriptWindow.reconcileReaderScroll
   })
+  const rail = useNativeChatMessageRail({
+    scrollRef,
+    slots,
+    virtualItems: transcriptWindow.virtualItems
+  })
+  const servicedRailJumpRef = useRef(0)
+  const selectRailItem = useCallback((item: NativeChatRailItem) => {
+    navigationSequence.current += 1
+    setNavigationRequest({
+      kind: 'rail',
+      messageId: item.id,
+      requestId: navigationSequence.current
+    })
+  }, [])
+  // Pinning the target mounts it in the same commit, so the row exists by the time
+  // layout runs. Routed through `scrollMessageToTop` rather than the virtualizer
+  // because that is what releases the bottom pin — without it the next streamed
+  // token snaps the reader straight back down.
+  //
+  // Serviced once per request, then released. `slots` takes a new identity on
+  // every render, so an effect that merely depended on it would re-scroll to this
+  // row forever; and a request left standing would keep its pin, which outranks
+  // the diff reveal that shares it.
+  useLayoutEffect(() => {
+    if (railJump === null || servicedRailJumpRef.current === railJump.requestId) {
+      return
+    }
+    servicedRailJumpRef.current = railJump.requestId
+    const index = nativeChatSlotIndexOf(slots, railJump.messageId)
+    const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
+    if (row) {
+      scrollMessageToTop(row)
+    }
+    setNavigationRequest(null)
+  }, [railJump, scrollMessageToTop, slots])
 
   const rowContext = useMemo<NativeChatTranscriptRowContext>(
     () => ({
@@ -250,7 +309,8 @@ export function NativeChatMessageList({
             // Named so measurement can find the scroll root without depending on
             // which utility class happens to make it scroll.
             data-native-chat-scroll
-            className="scrollbar-sleek relative h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]"
+            // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
+            className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]"
             // Why: `zoom` scales the chat transcript's text and layout together,
             // scoped to this pane so the rest of the app is untouched. It sits on
             // the scroll container rather than the content inside it so that
@@ -285,7 +345,7 @@ export function NativeChatMessageList({
                   context={rowContext}
                   window={transcriptWindow}
                 />
-                {showTurnStatus && isWorking ? (
+                {showTurnStatus && showLiveTurnActivity && isWorking ? (
                   <NativeChatTurnActivityLine
                     activity={turnActivity}
                     status={turnStatuses.active}
@@ -295,6 +355,7 @@ export function NativeChatMessageList({
               </div>
             </div>
           </div>
+          <NativeChatMessageRail rail={rail} scrollRef={scrollRef} onSelect={selectRailItem} />
           {showJump ? (
             <button
               type="button"

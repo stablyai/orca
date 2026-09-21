@@ -3,13 +3,15 @@
   "family": "settings.resume-metadata",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "def0640be601a8013f9537f161b60d8c14ac9551931e5ee4d4cc2acd3c2baf2a",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 5,
   "values": {
     "14a657727096": {
       "name": "worktree.ps#1",

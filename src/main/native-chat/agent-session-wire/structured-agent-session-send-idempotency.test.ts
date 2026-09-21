@@ -8,7 +8,6 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 
 const journals = createTrackedJournalOpener()
@@ -39,7 +38,10 @@ describe('structured send idempotency', () => {
   it.each([
     ['a refused write', 'provider_write_failed: broken pipe'],
     ['a dead host', 'host_restarted_before_acknowledgement'],
-    ['a codex turn it could not name', DISPATCH_DOUBT_CODEX_TURN_UNNAMED]
+    [
+      'a codex turn an older Orca could not name',
+      'codex app-server started a turn it did not name in time'
+    ]
   ])('never puts an unknown back on the wire after %s', async (_case, reason) => {
     const body: AgentJournalMessageItem = {
       kind: 'message',
@@ -61,6 +63,7 @@ describe('structured send idempotency', () => {
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
         publish: vi.fn(),
+        flushStreamedEvents: async () => undefined,
         now: () => 1
       },
       input
@@ -101,6 +104,7 @@ describe('structured send idempotency', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
     const input = {

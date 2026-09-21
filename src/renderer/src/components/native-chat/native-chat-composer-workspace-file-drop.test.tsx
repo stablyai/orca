@@ -151,6 +151,7 @@ function ComposerProbe({
     terminalTabId: 'terminal-tab-1',
     structuredWorktreeId: structured ? (structuredWorkspaceId ?? workspaceId) : undefined,
     disabled,
+    paneKey: `pane:${workspaceId}`,
     attachResolvedPaths: attachments.attachResolvedPaths,
     setNotice
   })
@@ -160,49 +161,52 @@ function ComposerProbe({
 
   return (
     <div onDrop={bubbledDrop}>
-      <NativeChatComposerField
-        composerScopeKey={`pane:${workspaceId}`}
-        textareaRef={inputRef}
-        draft={draft}
-        disabled={disabled}
-        hasPty
-        canSend={!disabled}
-        autocomplete={{ mode: 'none' }}
-        activeSuggestion={0}
-        notice={notice}
-        imageAttachments={attachments.imageAttachments}
-        sendButtonDisabled={false}
-        isWorking={false}
-        attachDisabled={disabled}
-        dictationDisabled
-        isDictating={false}
-        isDictationHoldMode={false}
-        imeEnterGesture={imeEnterGesture}
-        onDraftChange={(value, input) => {
-          setDraft(value)
-          setCaret(input.selectionStart ?? value.length)
-        }}
-        onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
-        onKeyDown={() => {}}
-        onImeSettled={(input) => {
-          setDraft(input.value)
-          attachments.flushPendingAttachments()
-        }}
-        onPaste={() => {}}
-        pickerListboxId="picker"
-        onChoosePickerItem={() => {}}
-        onRetrySkills={() => {}}
-        onAcceptMention={() => {}}
-        onRemoveImageAttachment={attachments.removeImageAttachment}
-        onAttach={() => {}}
-        workspaceFileDropHandlers={workspaceFileDropHandlers}
-        onDictationToggle={() => {}}
-        onDictationHoldStart={() => {}}
-        onDictationHoldEnd={() => {}}
-        onSend={() => {}}
-        sessionOptionsSurface={null}
-        sessionOptionsSnapshot={[]}
-      />
+      {/* The pane around the composer mounts these in production; here they sit
+          on a bare wrapper so the drop logic is exercised on its own. */}
+      <div {...workspaceFileDropHandlers}>
+        <NativeChatComposerField
+          composerScopeKey={`pane:${workspaceId}`}
+          textareaRef={inputRef}
+          draft={draft}
+          disabled={disabled}
+          hasPty
+          canSend={!disabled}
+          autocomplete={{ mode: 'none' }}
+          activeSuggestion={0}
+          notice={notice}
+          imageAttachments={attachments.imageAttachments}
+          sendButtonDisabled={false}
+          isWorking={false}
+          attachDisabled={disabled}
+          dictationDisabled
+          isDictating={false}
+          isDictationHoldMode={false}
+          imeEnterGesture={imeEnterGesture}
+          onDraftChange={(value, input) => {
+            setDraft(value)
+            setCaret(input.selectionStart ?? value.length)
+          }}
+          onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
+          onKeyDown={() => {}}
+          onImeSettled={(input) => {
+            setDraft(input.value)
+            attachments.flushPendingAttachments()
+          }}
+          onPaste={() => {}}
+          pickerListboxId="picker"
+          onChoosePickerItem={() => {}}
+          onRetrySkills={() => {}}
+          onAcceptMention={() => {}}
+          onRemoveImageAttachment={attachments.removeImageAttachment}
+          onAttach={() => {}}
+          onDictationToggle={() => {}}
+          onDictationHoldStart={() => {}}
+          onDictationHoldEnd={() => {}}
+          onSend={() => {}}
+          sessionOptionsSurface={null}
+          sessionOptionsSnapshot={[]}
+        />
+      </div>
       <output data-testid="draft">{draft}</output>
     </div>
   )

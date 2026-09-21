@@ -28,7 +28,10 @@ import {
   hasUnansweredStructuredAgentSessionDispatch
 } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  supportsStructuredAgentSessionPromptCancel
+} from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
@@ -43,6 +46,8 @@ import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
+
+type StructuredPromptCancelTarget = { itemId: string; expectedRevision: number }
 
 export function useStructuredAgentSession(args: {
   sessionId: string
@@ -271,7 +276,16 @@ export function useStructuredAgentSession(args: {
     turnActivity,
     backgroundTasks,
     turnId,
-    cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
+      // Capability negotiation must complete before mutate constructs the payload
+      // fingerprint and operation id: older hosts reject the strict prompt field.
+      const promptSupported =
+        prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
+      return mutate('agentSession.cancel', 'agentSession.cancel', {
+        turnId,
+        ...(promptSupported ? { prompt } : {})
+      })
+    },
     stopBackgroundTask: (taskId?: string) =>
       mutate('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',

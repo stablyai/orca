@@ -1,6 +1,9 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcPayloadMember, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import {
+  rpcUncheckedMemberReader,
+  rpcUncheckedPayloadReader
+} from '../transport/rpc-reader-payload'
 import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
@@ -58,27 +61,18 @@ export const gitHistoryRead = bindDeferredRpcOperation(
   })
 )
 
-const commitCompareEntriesReader: RpcCompatibleReader<
-  unknown,
-  'commit-compare-entries',
-  unknown
-> = (raw) => ({
-  compatible: true,
-  variant: 'commit-compare-entries',
-  // Keeps the property-read exception the expanded-commit list already relies on: a null result
-  // throws inside the load, which is what leaves an already-loaded file list alone.
-  value: rpcPayloadMember(raw, 'entries'),
-  salvage: { droppedPaths: [], droppedCount: 0 }
-})
-
-/** A refused compare leaves the row's file list untouched, so refusal is a skip, not a throw. */
+/**
+ * A refused compare leaves the row's file list untouched, so refusal is a skip, not a throw. The
+ * member read keeps the property-read exception a null result throws, which is what leaves an
+ * already-loaded file list alone.
+ */
 export const gitCommitCompareRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.commit-compare-entries-or-skip',
     method: 'git.commitCompare',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: commitCompareEntriesReader
+    read: rpcUncheckedMemberReader('commit-compare-entries', 'entries')
   })
 )
 

@@ -120,7 +120,6 @@ describe('useStructuredAgentSession working state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
-    items = []
     submissions = []
     mocks.call.mockResolvedValue(null)
   })

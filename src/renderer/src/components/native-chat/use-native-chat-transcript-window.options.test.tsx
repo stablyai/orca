@@ -14,21 +14,27 @@ type VirtualizerOptionsCapture = {
     | null
 }
 
-const virtualizerMock = vi.hoisted(() => ({
-  options: { current: null } as VirtualizerOptionsCapture,
-  getTotalSize: vi.fn(() => 0),
-  getVirtualItems: vi.fn(() => []),
-  measureElement: vi.fn(),
-  measure: vi.fn(),
-  resizeItem: vi.fn(),
-  scrollToOffset: vi.fn(),
-  takeSnapshot: vi.fn<() => VirtualItem[]>(() => [])
-}))
+const virtualizerMock = vi.hoisted(() => {
+  const scrollElement: { current: HTMLElement | null } = { current: null }
+  return {
+    options: { current: null } as VirtualizerOptionsCapture,
+    getTotalSize: vi.fn(() => 0),
+    getVirtualItems: vi.fn(() => []),
+    measureElement: vi.fn(),
+    measure: vi.fn(),
+    resizeItem: vi.fn(),
+    scrollElement,
+    scrollToEnd: vi.fn(),
+    scrollToOffset: vi.fn(),
+    takeSnapshot: vi.fn<() => VirtualItem[]>(() => [])
+  }
+})
 
 vi.mock('@tanstack/react-virtual', () => ({
+  elementScroll: vi.fn(),
   useVirtualizer: (options: VirtualizerOptionsCapture['current']) => {
     virtualizerMock.options.current = options
-    return { ...virtualizerMock, scrollElement: null }
+    return { ...virtualizerMock, scrollElement: virtualizerMock.scrollElement.current }
   }
 }))
 
@@ -56,11 +62,12 @@ function slot(id: string): NativeChatTranscriptSlot {
 afterEach(() => {
   cleanup()
   virtualizerMock.options.current = null
+  virtualizerMock.scrollElement.current = null
   vi.clearAllMocks()
 })
 
 describe('native chat transcript virtualizer contract', () => {
-  it('configures prepend anchoring and matching bottom-follow behavior', () => {
+  it('retains prepend anchoring without independently following the end', () => {
     renderHook(() =>
       useNativeChatTranscriptWindow({
         scrollRef: { current: null },
@@ -71,8 +78,8 @@ describe('native chat transcript virtualizer contract', () => {
 
     expect(virtualizerMock.options.current).toMatchObject({
       anchorTo: 'end',
-      followOnAppend: true,
-      scrollEndThreshold: 48
+      followOnAppend: false,
+      scrollEndThreshold: -1
     })
   })
 
@@ -117,5 +124,56 @@ describe('native chat transcript virtualizer contract', () => {
     rerender({ text: 'streamed revision' })
 
     expect(virtualizerMock.options.current?.getItemKey).toBe(getItemKey)
+  })
+
+  it('attributes a clamped fallback landing after content grows before its echo', () => {
+    const scrollElement = document.createElement('div')
+    let scrollHeight = 1_000
+    let scrollTop = 0
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, get: () => 100 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = Math.max(0, Math.min(value, scrollHeight - 100))
+        }
+      }
+    })
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        revealIndex: -1
+      })
+    )
+
+    result.current.scrollToEnd()
+    expect(scrollTop).toBe(900)
+    scrollHeight = 1_400
+
+    expect(result.current.consumeProgrammaticScroll(new Event('scroll'))).toBe(true)
+  })
+
+  it('lets an explicit reveal supersede a pending reader takeover', () => {
+    const scrollElement = document.createElement('div')
+    const target = document.createElement('div')
+    scrollElement.append(target)
+    virtualizerMock.scrollElement.current = scrollElement
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        revealIndex: -1
+      })
+    )
+
+    result.current.reconcileReaderScroll(true)
+    result.current.alignToViewportTop(target)
+    virtualizerMock.scrollToOffset.mockClear()
+    result.current.reconcileReaderScroll(false)
+
+    expect(virtualizerMock.scrollToOffset).not.toHaveBeenCalled()
   })
 })

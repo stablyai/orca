@@ -35,6 +35,8 @@ export function useMobileNativeChatController(args: {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  /** Host capability fact from the shared runtime status probe. */
+  agentSessionPromptCancelSupported?: boolean | null
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
@@ -51,6 +53,7 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    agentSessionPromptCancelSupported = null,
     onSendError,
     onSendResolved
   } = args
@@ -90,6 +93,7 @@ export function useMobileNativeChatController(args: {
       callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
+      promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
   const {
@@ -258,6 +262,10 @@ export function useMobileNativeChatController(args: {
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
   const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+  const structuredCancelPrompt = useNativeChatAcceptedAction(
+    activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
+    onSendResolved
+  )
 
   return {
     isTabChatView,
@@ -292,6 +300,9 @@ export function useMobileNativeChatController(args: {
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
+    // Heuristic/legacy cards have no durable prompt identity, so keep their
+    // cancel affordance absent instead of exposing a dead action.
+    handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
     handleNativeChatRespondPermission: respond,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,

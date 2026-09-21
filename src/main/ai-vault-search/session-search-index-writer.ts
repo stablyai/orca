@@ -109,9 +109,12 @@ export class SessionSearchIndexWriter {
    * and the decline would be the only thing that ever forced the whole read.
    */
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema defines FileRow; REAL casts return numeric IDs or null.
     const row = this.db
       .prepare(
-        'SELECT dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?'
+        // REAL recovers the original numeric stat IDs, including existing oversized INTEGER rows.
+        `SELECT CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
+                byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?`
       )
       .get(path) as FileRow | undefined
     if (!row) {

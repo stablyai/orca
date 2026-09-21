@@ -99,6 +99,7 @@ export function createStructuredAgentSessionHostHandoff(
         return { state: 'stopped-cleanup-failed', error }
       }
     },
+    acknowledgeNativeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId),
     acquireNative: (input) => acquireNativeHandoffOwner(deps, host, input),
     acquireNativeStop: async (sessionId, turnId, fence) =>
       (await deps.adapter.cancelTurn({ sessionId, turnId, fence })).cancelled,

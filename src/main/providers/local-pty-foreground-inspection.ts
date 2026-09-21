@@ -1,3 +1,4 @@
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
@@ -21,21 +22,26 @@ import {
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
-export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
+export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdict {
   const proc = ptyProcesses.get(id)
   if (!proc) {
-    return false
+    return 'no-children'
   }
   try {
     const foreground = proc.process
     const shell = ptyShellName.get(id)
     if (!shell) {
-      return true
+      return 'children'
     }
-    return foreground !== shell
+    return foreground === shell ? 'no-children' : 'children'
   } catch {
-    return false
+    // An unreadable PTY is not evidence that its children exited.
+    return 'unverifiable'
   }
+}
+
+export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
+  return inspectLocalPtyChildProcesses(id) === 'children'
 }
 
 /**

@@ -2,19 +2,20 @@
 const IPC_INVOKE_PREFIX = /Error invoking remote method '[^']*':\s*(?:Error:\s*)?/
 const IPC_HANDLER_PREFIX = /Error occurred in handler for '[^']*':\s*(?:Error:\s*)?/
 
+function unwrapIpcErrorMessage(message: string): string | undefined {
+  const detail = message.replace(IPC_INVOKE_PREFIX, '').replace(IPC_HANDLER_PREFIX, '').trim()
+  return detail || undefined
+}
+
+export function compactIpcErrorMessage(message: string): string | undefined {
+  return unwrapIpcErrorMessage(message)?.split('\n')[0]?.trim() || undefined
+}
 export function readIpcErrorDetail(error: unknown): string | undefined {
-  if (!(error instanceof Error)) {
-    return undefined
-  }
-  const message = error.message
-    .replace(IPC_INVOKE_PREFIX, '')
-    .replace(IPC_HANDLER_PREFIX, '')
-    .trim()
-  return message || undefined
+  return error instanceof Error ? unwrapIpcErrorMessage(error.message) : undefined
 }
 
 export function readIpcErrorMessage(error: unknown): string | undefined {
-  return readIpcErrorDetail(error)?.split('\n')[0]?.trim() || undefined
+  return error instanceof Error ? compactIpcErrorMessage(error.message) : undefined
 }
 
 // Preserve the legacy contract: wrapped errors are compact, while plain errors retain detail.

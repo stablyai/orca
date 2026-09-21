@@ -1,0 +1,100 @@
+{
+  "operation": "tasks.worktree-capabilities",
+  "family": "worktree.runtime-capabilities",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "scenarioSha256": "9d79bcfd6957d11d5ce8c3296f1038a3cfab81eedad7f990b44071104dfd0f91",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "5242fad3532f": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
+            "platform": "linux",
+            "worktreeCreateIdempotency": {
+              "dedupeTtlMs": 45000
+            }
+          }
+        }
+      }
+    },
+    "62aaf19f0b16": {
+      "capabilities": {
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "b33d34bddc4e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-capabilities-advertised",
+    "checkpoints": [
+      {
+        "id": "probed",
+        "observation": {
+          "sender": ["5242fad3532f"],
+          "payloads": ["1e5b32902af7"],
+          "settlements": {
+            "probe": "b33d34bddc4e"
+          },
+          "state": "62aaf19f0b16",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -170,7 +170,8 @@ export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
   /** Provider key of the user item that opened the turn; clients resolve a
-   *  submission alias through it. Absent on rows from older hosts. */
+   *  submission alias through it. A lifecycle row may key itself when provider
+   *  output opened a turn with no user item; absent means an older host. */
   userItemId?: string
   startedAt?: number
   completedAt?: number

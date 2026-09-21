@@ -2,11 +2,12 @@ import { z } from 'zod'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
+  AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
 
-export const MAX_ID_LENGTH = 512
+export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = 1024
@@ -164,11 +165,23 @@ export const CancelParams = z
     envelope: MutationEnvelope,
     turnId: Identifier('Invalid turn id'),
     scope: z.literal('background-tasks').optional(),
-    taskId: Identifier('Invalid task id').optional()
+    taskId: Identifier('Invalid task id').optional(),
+    prompt: z
+      .object({
+        itemId: Identifier('Invalid item id'),
+        expectedRevision: z.number().int().positive()
+      })
+      .strict()
+      .optional()
   })
   .strict()
-  .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
-    message: 'A task id requires background-task scope'
+  .superRefine((value, ctx) => {
+    if (value.taskId !== undefined && value.scope !== 'background-tasks') {
+      ctx.addIssue({ code: 'custom', message: 'A task id requires background-task scope' })
+    }
+    if (value.prompt !== undefined && value.scope === 'background-tasks') {
+      ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
+    }
   })
 
 export const RespondParams = z

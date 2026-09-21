@@ -10,7 +10,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
-import { Markdown } from '@tiptap/markdown'
+import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
 import {
   acquireLocalImageSrcLease,
@@ -43,12 +43,6 @@ import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 
 const lowlight = createCachedLowlight(createLowlight(common))
-
-const RichMarkdownLink = Link.extend({
-  // Why: link's priority must stay below code's default 100 so Markdown
-  // serializes code-styled labels as [`label`](href).
-  priority: 90
-})
 
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
@@ -95,7 +89,7 @@ export function createRichMarkdownExtensions({
       lowlight,
       defaultLanguage: null
     }),
-    RichMarkdownLink.configure({
+    Link.configure({
       openOnClick: false,
       autolink: true,
       linkOnPaste: true
@@ -249,7 +243,7 @@ export function createRichMarkdownExtensions({
     createRawMarkdownHtmlBlock(codec.transport),
     createMarkdownDocLink(codec.transport),
     DragSelectionGuard,
-    Markdown.configure({
+    createRichMarkdownExtension(codec, htmlSuperscriptLinks).configure({
       marked: codec.marked,
       markedOptions: {
         gfm: true

@@ -1,0 +1,320 @@
+{
+  "operation": "tasks.workspace-ssh",
+  "family": "tasks.workspace-ssh",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "495f51d9c2f7f3d71f53a53e88786b8d1f767a5bf66b8655c28222d2909a964c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ba2cee4b538": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      }
+    },
+    "1739575ac53e": {
+      "name": "workspaceSshConnecting",
+      "value": true
+    },
+    "17e35b25d15d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "18e6a3ac6471": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "3571f351281f": {
+      "name": "workspaceDetectedAgentIds",
+      "value": ["codex"]
+    },
+    "37921d9fdeb7": {
+      "name": "preflight.detectRemoteAgents#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "41b0d115f434": {
+      "name": "workspaceDetectedAgentIds",
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "43ead075ce12": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      },
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "43fd3e2f4b53": {
+      "name": "workspaceSshConnecting",
+      "value": false
+    },
+    "71d817ffdd81": {
+      "name": "ssh.connect#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 120000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    },
+    "7c9498659f58": {
+      "name": "ssh.connect#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "80a4af19f556": {
+      "name": "repo.hooks#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "  pnpm install  "
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "contentHash": "hash-1",
+              "scriptContent": "pnpm install"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "921f72d7827e": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "a1f755a38636": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "ea709e13f0f0": {
+      "name": "workspaceAgentOverridden",
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed6189938d78": {
+      "name": "workspaceAgent",
+      "value": "claude"
+    },
+    "f0a9f62da106": {
+      "name": "repo.hooks#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "fbfdbb919268": {
+      "name": "workspaceSshState",
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connecting",
+        "targetId": "ssh-1"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-ssh-connected",
+    "checkpoints": [
+      {
+        "id": "agents-detected",
+        "observation": {
+          "sender": ["17e35b25d15d"],
+          "payloads": ["37921d9fdeb7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "18e6a3ac6471",
+          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "3571f351281f"]
+        }
+      },
+      {
+        "id": "connected",
+        "observation": {
+          "sender": ["17e35b25d15d", "71d817ffdd81"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "a1f755a38636",
+          "effects": [
+            "ed6189938d78",
+            "ea709e13f0f0",
+            "41b0d115f434",
+            "3571f351281f",
+            "1739575ac53e",
+            "fbfdbb919268",
+            "921f72d7827e",
+            "43fd3e2f4b53"
+          ]
+        }
+      },
+      {
+        "id": "setup-prompted",
+        "observation": {
+          "sender": ["17e35b25d15d", "71d817ffdd81", "80a4af19f556"],
+          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "43ead075ce12",
+          "effects": [
+            "ed6189938d78",
+            "ea709e13f0f0",
+            "41b0d115f434",
+            "3571f351281f",
+            "1739575ac53e",
+            "fbfdbb919268",
+            "921f72d7827e",
+            "43fd3e2f4b53"
+          ]
+        }
+      }
+    ]
+  }
+}

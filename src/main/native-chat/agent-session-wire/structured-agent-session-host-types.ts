@@ -31,6 +31,11 @@ export type StructuredAgentSessionHostSession = {
    *  restored for reading has none, and neither has a session a TUI owns — so neither may be
    *  evicted to free a child, and neither may have its lease released as an observed exit. */
   hasProviderChild: boolean
+  /** The wind-down this host still owes for a child it started: settling that generation's work
+   *  and handing the lease back. A separate fact from `hasProviderChild`, which goes false the
+   *  moment the adapter proves the exit — an eviction that aborts after that point must still be
+   *  able to finish the wind-down on the next close. */
+  owesProviderChildWindDown?: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
 }

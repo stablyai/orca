@@ -676,7 +676,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-approval',
       kind: 'approval',
       optionId: 'allowForSession',
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     // The answer resolves the SDK's own callback promise; the SDK writes the wire response.
     await expect(answered.promise).resolves.toEqual({
@@ -712,7 +713,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-q1',
       kind: 'question',
       optionId: encodeClaudeQuestionOptionId('Library?', 'Luxon'),
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     await tick()
     expect(answered.settled()).toBe(false)
@@ -721,7 +723,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-q2',
       kind: 'question',
       optionId: encodeClaudeQuestionOptionId('Ship now?', 'Yes'),
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     await expect(answered.promise).resolves.toMatchObject({
       behavior: 'allow',
@@ -752,7 +755,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
         itemId: 'journal-9',
         kind: 'approval',
         optionId: 'allow',
-        fence: 7
+        fence: 7,
+        commit: async () => undefined
       })
     ).rejects.toThrow(/no longer waiting/)
   })

@@ -17,6 +17,7 @@ import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-re
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 
 export type StructuredAgentSessionTurnVerdict =
   | { state: 'interrupted'; completedAt: number }
@@ -58,6 +59,28 @@ export function runningTurnLifecycleRevisions(
   return revisions
 }
 
+function staleSessionLifecycleRevisions(
+  items: readonly AgentJournalRenderItem[]
+): JournalLifecycleMutationInput[] {
+  const revisions: JournalLifecycleMutationInput[] = []
+  for (const item of items) {
+    const identity = parseAgentJournalItemKey(item.itemId)
+    if (!identity) {
+      continue
+    }
+    const cancelled =
+      (item.body.kind === 'approval' || item.body.kind === 'question') &&
+      item.body.resolution.state === 'pending'
+        ? cancelledJournalPromptBody(item.body)
+        : null
+    if (cancelled) {
+      revisions.push({ kind: 'item', identity, body: cancelled })
+    }
+  }
+  revisions.push(...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT))
+  return revisions
+}
+
 function settledLifecycle(
   lifecycle: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
@@ -77,19 +100,16 @@ function settledLifecycle(
 
 /** A running row found when a NEW child is acquired belongs to a generation whose exit nobody
  *  observed. Must run before that child's buffered events land, or a live turn would be judged. */
-export async function settleStaleRunningTurnsOnAcquire(input: {
+export async function settleStaleSessionStateOnAcquire(input: {
   journal: AgentSessionJournal
   sessionId: string
   fence: number
   acquisitionGeneration: string | null
 }): Promise<number> {
   const { journal } = input
-  const revisions = runningTurnLifecycleRevisions(
-    journal.snapshot().items,
-    UNVERIFIABLE_TURN_VERDICT
-  )
+  const revisions = staleSessionLifecycleRevisions(journal.snapshot().items)
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  const settlementId = `stale-turn:${input.sessionId}:${input.fence}:${generation}`
+  const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
   for (const chunk of partitionJournalLifecycleMutations(settlementId, revisions)) {
     await journal.appendLifecycleBatch({
       settlementId: chunk.settlementId,

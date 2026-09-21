@@ -23,6 +23,7 @@ import { StructuredAgentSessionHostRuntimeState } from './structured-agent-sessi
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import {
   createStructuredAgentSessionHolds,
+  evictOwnedStructuredAgentSessions,
   evictHeldStructuredAgentSession,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -244,14 +245,20 @@ export class StructuredAgentSessionHost {
     this.runtimeState.flushEventSink(sessionId)
 
   async flushAllStreamedEvents(): Promise<void> {
+    const retainSessionIds = new Set<string>()
     await tearDownStructuredAgentSessionHost({
       phases: structuredAgentSessionHostTeardownPhases({
         holds: this.holds,
         runtimeState: this.runtimeState,
         handoffs: this.handoffs,
-        tasks: this.tasks
+        tasks: this.tasks,
+        evictOwnedSessions: () =>
+          evictOwnedStructuredAgentSessions(this.lifetimeContext(), retainSessionIds)
       }),
-      sessions: this.sessions
+      sessions: this.sessions,
+      retainSessionIds,
+      acknowledgeSessionRelease: (sessionId) =>
+        this.deps.adapter.acknowledgeSessionRelease?.(sessionId)
     }).finally(() => this.clientDelivery.closeAll())
   }
 
@@ -260,6 +267,7 @@ export class StructuredAgentSessionHost {
       deps: this.deps,
       sessions: this.sessions,
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
+      flushStreamedEvents: this.flushStreamedEvents,
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       now: () => this.now()

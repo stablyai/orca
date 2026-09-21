@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type {
   AgentSessionDispatchOutcome,
@@ -87,33 +87,28 @@ async function attach(): Promise<AgentSessionRecord | null> {
   return store.getRecord(SESSION)
 }
 
-/** Puts a pending approval in the journal BEFORE attach, which is the only way
- *  1d can stage one: the adapter that would emit it is phase 2's. */
+/** Emits a pending approval through the acquired provider sink. */
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
-  const journalDir = journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  const journal = await journals.open({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
-    },
-    journalDir
+  const events = acquire.mock.calls.at(-1)?.[0].events
+  if (!events) {
+    throw new Error('seedApproval requires an acquired session')
+  }
+  events.appendItem(identity, {
+    kind: 'approval',
+    title: 'Run the command?',
+    detail: null,
+    options: [{ id: optionId, label: 'Allow' }],
+    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
   })
-  const appended = await journal.appendItem(
-    identity,
-    {
-      kind: 'approval',
-      title: 'Run the command?',
-      detail: null,
-      options: [{ id: optionId, label: 'Allow' }],
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    },
-    { fence: 1 }
-  )
-  return { itemId: appended.itemId, revision: appended.revision }
+  await host.flushStreamedEvents(SESSION)
+  const itemId = agentJournalItemKey(identity)
+  const page = host.history({ sessionId: SESSION, direction: 'tail' })
+  const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
+  if (!appended) {
+    throw new Error('provider approval was not written to the journal')
+  }
+  return { itemId, revision: appended.revision }
 }
 
 beforeEach(async () => {
@@ -138,7 +133,7 @@ beforeEach(async () => {
   releaseAcquisition = vi.fn(async () => true)
   dispatch = vi.fn(async () => accepted())
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
-  answerPrompt = vi.fn(async () => undefined)
+  answerPrompt = vi.fn(async ({ commit }) => commit())
   setOption = vi.fn(async () => undefined)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   host = new StructuredAgentSessionHost({

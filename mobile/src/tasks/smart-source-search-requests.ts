@@ -3,8 +3,13 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
-import { extractLinearIssueReadItems } from './linear-mobile-issue-read'
+import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
+import {
+  githubWorkItemSearchRead,
+  gitlabWorkItemSearchRead,
+  linearAssignedIssueListRead,
+  linearIssueSearchRead
+} from './mobile-task-source-search-operations'
 import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 
@@ -26,15 +31,13 @@ export async function searchGitHubItems(
   repoId: string,
   query: string
 ): Promise<GitHubWorkItem[]> {
-  const response = await client.sendRequest('github.listWorkItems', {
+  const reply = await githubWorkItemSearchRead.request(client, {
     repo: `id:${repoId}`,
     limit: PER_REPO_FETCH_LIMIT,
     query: scopeGitHubQuery(query)
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const envelope = (response as RpcSuccess).result as { items: GitHubWorkItem[] }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const envelope = githubWorkItemSearchRead.interpret(reply) as { items: GitHubWorkItem[] }
   // Stamp repoId so the shared row builder + create flow can attribute each item
   // to the searched repo (the runtime omits it, like the desktop fetcher).
   return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
@@ -46,17 +49,15 @@ export async function searchGitLabItems(
   query: string,
   state: MrStateFilter
 ): Promise<GitLabWorkItem[]> {
-  const response = await client.sendRequest('gitlab.listWorkItems', {
+  const reply = await gitlabWorkItemSearchRead.request(client, {
     repo: `id:${repoId}`,
     state,
     page: 1,
     perPage: GITLAB_PER_PAGE,
     query: query.trim() || undefined
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const envelope = (response as RpcSuccess).result as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
     items: GitLabWorkItem[]
     error?: { type?: string; message: string }
   }
@@ -72,25 +73,27 @@ export async function searchLinearIssues(
   linearWorkspaceId: string | null | undefined
 ): Promise<LinearIssue[]> {
   const trimmed = query.trim()
-  const response = trimmed
-    ? await client.sendRequest('linear.searchIssues', {
-        query: trimmed,
-        limit: LINEAR_LIMIT,
-        workspaceId: linearWorkspaceId ?? undefined
-      })
-    : await client.sendRequest('linear.listIssues', {
-        // Empty query lists the viewer's assigned issues, matching desktop's
-        // Smart picker default (SmartWorkspaceNameField uses listLinearIssues('assigned')).
-        filter: 'assigned',
-        limit: LINEAR_LIMIT,
-        workspaceId: linearWorkspaceId ?? undefined
-      })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  // extractLinearIssueReadItems yields the mobile issue-read shape; the fields the
-  // row builder/create flow read (id/identifier/title/url/state/team) are a subset.
-  return extractLinearIssueReadItems((response as RpcSuccess).result) as unknown as LinearIssue[]
+  // The reader yields the mobile issue-read shape; the fields the row builder/create flow read
+  // (id/identifier/title/url/state/team) are a subset.
+  const issues = trimmed
+    ? linearIssueSearchRead.interpret(
+        await linearIssueSearchRead.request(client, {
+          query: trimmed,
+          limit: LINEAR_LIMIT,
+          workspaceId: linearWorkspaceId ?? undefined
+        })
+      )
+    : linearAssignedIssueListRead.interpret(
+        await linearAssignedIssueListRead.request(client, {
+          // Empty query lists the viewer's assigned issues, matching desktop's
+          // Smart picker default (SmartWorkspaceNameField uses listLinearIssues('assigned')).
+          filter: 'assigned',
+          limit: LINEAR_LIMIT,
+          workspaceId: linearWorkspaceId ?? undefined
+        })
+      )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return issues as LinearIssue[]
 }
 
 export async function searchBranches(
@@ -98,15 +101,13 @@ export async function searchBranches(
   repoId: string,
   query: string
 ): Promise<BaseRefSearchResult[]> {
-  const response = await client.sendRequest(
-    'repo.searchRefs',
+  const reply = await repoBaseRefSearchRead.request(
+    client,
     { repo: `id:${repoId}`, query: query.trim(), limit: BRANCH_LIMIT },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const result = repoBaseRefSearchRead.interpret(reply) as {
     refDetails?: BaseRefSearchResult[]
     refs?: string[]
   }

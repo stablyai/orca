@@ -3,13 +3,15 @@
   "family": "git.commit-message-ai",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
+  "scenarioSha256": "15bf6c17f4b524dfbf5373b2eeed61ee2e659421cf8b6e3cff6c0378c7692cc1",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 5,
   "values": {
     "0aeb6552c58a": {
       "name": "git.generateCommitMessage#1",

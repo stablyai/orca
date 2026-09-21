@@ -1,11 +1,6 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type {
-  ClipboardEventHandler,
-  DragEventHandler,
-  KeyboardEventHandler,
-  RefObject
-} from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
 import { ImageOff } from 'lucide-react'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -53,10 +48,6 @@ export type NativeChatComposerFieldProps = {
   onAcceptMention: () => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
-  workspaceFileDropHandlers?: {
-    onDragOverCapture: DragEventHandler<HTMLDivElement>
-    onDropCapture: DragEventHandler<HTMLDivElement>
-  }
   onDictationToggle: () => void
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
@@ -129,7 +120,6 @@ export function NativeChatComposerField({
   onAcceptMention,
   onRemoveImageAttachment,
   onAttach,
-  workspaceFileDropHandlers,
   onDictationToggle,
   onDictationHoldStart,
   onDictationHoldEnd,
@@ -195,7 +185,6 @@ export function NativeChatComposerField({
             </div>
           ) : null}
           <div
-            {...workspaceFileDropHandlers}
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             data-composer-scope-key={composerScopeKey}
             className={cn(
@@ -203,7 +192,15 @@ export function NativeChatComposerField({
               // no focus/click border flash. The box is a container, not a
               // focus target.
               'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              'bg-muted/50 dark:bg-input/40',
+              // Why (#10481): the native caret blink invalidates paint up to the
+              // nearest containment boundary; without this the whole transcript
+              // re-rasterizes twice a second. Pickers are siblings and every menu
+              // and tooltip in here is a Radix portal, so nothing floating clips.
+              // Tightest descendant is the attachment remove button, which
+              // overhangs its thumbnail by 6px and clears this box's padding by
+              // 4px — keep that slack if the padding below ever shrinks.
+              '[contain:paint]'
             )}
           >
             {imageAttachments.length > 0 ? (

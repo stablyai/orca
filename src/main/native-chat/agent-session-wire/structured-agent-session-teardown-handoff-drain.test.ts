@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { structuredAgentSessionHostTeardownPhases } from './structured-agent-session-host-teardown'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -145,6 +146,26 @@ describe('structured agent-session host teardown', () => {
       handoffStage: null
     })
     expect(host.hasSession(SESSION)).toBe(false)
+  })
+
+  it('names every phase, so the quit-path order is pinned rather than incidental', () => {
+    const noop = async (): Promise<void> => undefined
+    const phases = structuredAgentSessionHostTeardownPhases({
+      holds: { dispose: noop },
+      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      handoffs: { stopTuiHistoryCatchup: () => undefined, drain: noop },
+      tasks: { drainAttaches: noop },
+      evictOwnedSessions: noop
+    })
+    expect(phases.map((phase) => phase.name)).toEqual([
+      'dispose-holds',
+      'stop-lease-renewal',
+      'stop-tui-catchup',
+      'drain-handoffs',
+      'drain-attaches',
+      'evict-owned-sessions',
+      'flush-event-sinks'
+    ])
   })
 
   it('gives up on a wedged handoff instead of holding the quit open', async () => {

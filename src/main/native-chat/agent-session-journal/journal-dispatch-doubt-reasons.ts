@@ -23,13 +23,6 @@ export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_fa
 /** The operation tombstone survived recovery but its journal submission did not. */
 export const DISPATCH_DOUBT_SUBMISSION_MISSING = 'durable_send_submission_missing'
 
-/** Codex owns a turn it started but did not name, because its turn-start still
- *  settles on a deadline. The turn IS running, so this must never be treated as
- *  proof of non-delivery. Delete it once Codex settles on the app-server's
- *  turn-start response instead. */
-export const DISPATCH_DOUBT_CODEX_TURN_UNNAMED =
-  'codex app-server started a turn it did not name in time'
-
 /** The SDK took the frame, but its input pump did not prove whether the write completed. */
 export const DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN = 'provider_write_outcome_unknown'
 

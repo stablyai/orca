@@ -235,11 +235,14 @@ jobs:
             fi
           done
           echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
-          # Why the main repo's tags: package.json on a branch is as stale as the
-          # main it forked from, and stable patches never merge back into it.
-          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
-            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
-            --json tagName --jq '.[].tagName' || true)"
+          # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
+          # GitHub release and leaves the tag, which still owns that number.
+          # Releases-only let adhoc sit on a number already taken, so the updater
+          # would not install it. Empty on failure — the script then falls back
+          # to package.json.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
+            "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
             node config/scripts/adhoc-build-version.mjs \
             >"$RUNNER_TEMP/adhoc-identity.txt"

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { runProcess } from '../../src/shared/child-process/run-process.ts'
+import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-drivers.ts'
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
 
 if (process.argv[2] !== '--record' || process.env.RPC_FOUNDATION_RECORD !== '1') {
@@ -56,8 +57,7 @@ const result = await runProcess({
   args: [
     resolve(require.resolve('vitest/package.json'), '../vitest.mjs'),
     'run',
-    'src/test-support/rpc-recording/pilot-recordings.test.ts',
-    'src/test-support/rpc-recording/family-recordings.test.ts'
+    ...RECORDING_DRIVERS.map((driver) => `src/test-support/rpc-recording/${driver}`)
   ],
   cwd: resolve(root, 'mobile'),
   timeoutMs: 120_000,

@@ -38,7 +38,7 @@ const botOverridesReader: RpcCompatibleReader<unknown, 'bot-logins', string[]> =
   }
 }
 
-/** Workspace context, submit, task hydration/create and home providers share this acceptance. */
+/** Submit, task hydration/create and home providers: a null result throws the settings read. */
 export const settingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.member-or-skip',
@@ -49,7 +49,7 @@ export const settingsRead = bindDeferredRpcOperation(
   })
 )
 
-/** History resume and repo labels historically tolerate an absent or null result. */
+/** Workspace context, history resume and repo metadata: a null result reads as absent settings. */
 export const optionalSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.optional-member-or-skip',

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
 
 const fakes = vi.hoisted(() => ({
   configs: [] as Array<Record<string, unknown>>,
@@ -119,11 +120,16 @@ describe('PostgreSQL relay deadlines', () => {
     })
 
     expect(ddl.length).toBeGreaterThan(0)
+    expect(ddl).toContain(POSTGRES_STATEMENT_STATS_MIGRATION)
     // Statements can open with a leading `--` rationale comment.
     const body = (statement: string): string =>
       statement.replace(/^(?:\s*--[^\n]*\n)*\s*/, '')
     expect(
-      ddl.every((statement) => /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement)))
+      ddl.every(
+        (statement) =>
+          statement === POSTGRES_STATEMENT_STATS_MIGRATION ||
+          /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement))
+      )
     ).toBe(true)
     // The backfill is DML, so it stays on the deadline-bearing serving pool.
     expect(ddl.some((statement) => statement.includes('INSERT INTO'))).toBe(false)

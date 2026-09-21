@@ -21,7 +21,7 @@ export function createSessionSearchService({
   indexer: Pick<SessionSearchIndexer, 'status' | 'reconcile'>
 }): SessionSearchService {
   return {
-    reconcile: () => indexer.reconcile({ full: false }),
+    reconcile: () => indexer.reconcile({ full: true }),
     status: async () => ({ enabled: true, ...indexer.status(), generation: engine.generation() }),
     search: async (request) => {
       if (request.cursor === '') {

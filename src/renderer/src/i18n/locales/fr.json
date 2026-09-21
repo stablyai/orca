@@ -835,7 +835,6 @@
       "useComposerState": {
         "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
         "b2ead86962": "Échec de la résolution de la base de la PR.",
-        "a9ff236145": "Certaines pièces jointes n'ont pas pu être envoyées.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
         "ba6cb77082": "Échec de la connexion au projet.",
         "chooseOrAddProjectBeforeWorkspace": "Choisissez ou ajoutez un projet avant de créer un espace de travail.",
@@ -2382,6 +2381,10 @@
                 "7c302f8174": "Sans titre"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Cette vue ne contient encore aucun élément.",
+            "7e4a2f80c6": "Les éléments ajoutés récemment peuvent mettre un moment à apparaître."
           }
         },
         "GitHubMarkdownComposer": {

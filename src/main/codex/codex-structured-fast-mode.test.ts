@@ -112,7 +112,9 @@ describe('Codex structured Fast mode dispatch', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toMatchObject({ state: 'accepted' })
+        // `admitted`, not `accepted`: a Codex send now settles its identity on
+        // the provider echo. What this test pins is the tier the turn carries.
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(
         codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
       ).toMatchObject({ serviceTier: 'default' })

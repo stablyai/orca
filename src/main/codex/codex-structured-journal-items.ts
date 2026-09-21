@@ -29,6 +29,7 @@ import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structu
 import type { CodexActiveJournalItem } from './codex-structured-journal-settlement'
 import { readCodexJournalString } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexDispatchEcho } from './codex-structured-dispatch-echo'
 
 export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
@@ -40,7 +41,7 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
+      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'onUserMessageEcho'
     > & { maxMetadataBytes?: number },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
@@ -78,6 +79,10 @@ export class CodexJournalItems {
     const identity = this.identityFor(event.threadId, turnId, item)
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
+      const echo = readCodexDispatchEcho(item, identity)
+      if (echo) {
+        this.deps.onUserMessageEcho?.(echo.clientMessageId, echo.providerIdentity)
+      }
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
     if (item.type === 'contextCompaction' && event.method === 'item/started') {

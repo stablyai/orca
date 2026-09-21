@@ -8,11 +8,13 @@ import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
   dispatchWriteFailureReason,
+  DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_QUEUE_FULL
 } from './structured-agent-session-dispatch-rejection'
 import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
 import {
   createStructuredAgentSessionOutboxEntry,
+  reconcileStructuredAgentSessionOutbox,
   type StructuredAgentSessionOutboxEntry
 } from './structured-agent-session-outbox'
 
@@ -55,6 +57,15 @@ function notice(reason: string | null): string | null {
 }
 
 describe('what a rejection shows the user', () => {
+  it('removes a queued message the provider confirms Stop cancelled', () => {
+    const result = rejectedWith(DISPATCH_REJECTED_CANCELLED)
+    if (!result.ok) {
+      throw new Error('expected rejected submission fixture')
+    }
+
+    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission])).toEqual([])
+  })
+
   it('never puts the transport marker on screen', () => {
     const shown = notice(dispatchWriteFailureReason(new Error('broken pipe')))
     // `provider_write_failed: broken pipe` names nothing a person can act on.

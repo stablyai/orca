@@ -17,6 +17,19 @@ import {
   type FirstPartyAgentStatus
 } from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
+
+/**
+ * Why null counts as quiet: a record with no output timestamp has produced nothing the
+ * RUNTIME OBSERVED since it was created. That is not the same as silence — the reachable
+ * case is a daemon-hosted pane whose bytes never reach the runtime, which may still be
+ * streaming. The trade is deliberate: "never settles" becomes "settles uncorroborated",
+ * the caller keeps its timeout, and delivery cannot reach this lane. Reading it as `0ms since output`
+ * inverted that — `0 >= quiescenceMs` is false forever, so an adopted pane that never
+ * emitted could not settle no matter how long the caller waited.
+ */
+function isQuietForQuiescence(lastOutputAt: number | null, quiescenceMs: number): boolean {
+  return lastOutputAt === null ? true : Date.now() - lastOutputAt >= quiescenceMs
+}
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
@@ -141,7 +154,7 @@ export class RuntimeTerminalIdlePolls {
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs
+          isQuietForQuiescence(live.lastOutputAt, this.deps.quiescenceMs)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
@@ -206,7 +219,7 @@ export class RuntimeTerminalIdlePolls {
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0) >= this.deps.quiescenceMs
+          isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))

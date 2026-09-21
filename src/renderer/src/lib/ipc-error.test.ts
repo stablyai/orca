@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { extractIpcErrorMessage, readIpcErrorDetail, readIpcErrorMessage } from './ipc-error'
+import {
+  compactIpcErrorMessage,
+  extractIpcErrorMessage,
+  readIpcErrorDetail,
+  readIpcErrorMessage
+} from './ipc-error'
 
 describe('readIpcErrorMessage', () => {
   it('strips the Electron invoke wrapper Electron adds to a rejected handler', () => {
@@ -42,6 +47,16 @@ describe('readIpcErrorMessage', () => {
     expect(
       readIpcErrorMessage(new Error("Error invoking remote method 'x': Error: "))
     ).toBeUndefined()
+  })
+})
+
+describe('compactIpcErrorMessage', () => {
+  it('normalizes string error fields without manufacturing an Error', () => {
+    expect(
+      compactIpcErrorMessage(
+        "Error invoking remote method 'files:import': Error: permission denied\nstack"
+      )
+    ).toBe('permission denied')
   })
 })
 

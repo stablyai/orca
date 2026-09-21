@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { worktreeCreateCapabilityRead } from './mobile-workspace-create-operations'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 import {
   WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS,
@@ -36,11 +36,14 @@ export async function readNewWorktreeRuntimeCapabilities(
 ): Promise<NewWorktreeRuntimeCapabilities> {
   for (let migrationRetry = 0; ; migrationRetry += 1) {
     try {
-      const response = await client.sendRequest('status.get')
-      if (!response.ok) {
+      const status = worktreeCreateCapabilityRead.interpret(
+        await worktreeCreateCapabilityRead.request(client)
+      )
+      if (!status.accepted) {
         return UNSUPPORTED_CAPABILITIES
       }
-      const result = (response as RpcSuccess).result as {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const result = status.value as {
         capabilities?: string[]
         worktreeCreateIdempotency?: unknown
       }

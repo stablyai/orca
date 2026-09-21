@@ -994,14 +994,20 @@
       "useComposerState": {
         "7eb3f44ff7": "Selected agent is disabled. Choose an enabled agent before creating.",
         "b2ead86962": "Failed to resolve PR base.",
-        "a9ff236145": "Some attachments could not be uploaded.",
         "3db83fc58a": "No project path is available on this host for attachments.",
         "ba6cb77082": "Failed to connect to project.",
         "chooseOrAddProjectBeforeWorkspace": "Choose or add a project before creating a workspace.",
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
         "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
-        "5f3d2c8a1b": "Failed to resolve MR base."
+        "5f3d2c8a1b": "Failed to resolve MR base.",
+        "dropPartiallyAttached": "{{failureCount}} of {{count}} items could not be attached.",
+        "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
+        "attachSkipMissing": "No longer at its original path.",
+        "attachSkipSymlink": "Symbolic links cannot be attached.",
+        "attachSkipPermissionDenied": "Permission denied.",
+        "attachSkipUnsupported": "Unsupported file type."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -2588,7 +2594,9 @@
           },
           "ProjectViewStates": {
             "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
-            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet.",
+            "3b9c1d5e47": "This view has no items yet.",
+            "7e4a2f80c6": "Recently added items can take a while to appear."
           }
         },
         "GitHubMarkdownComposer": {
@@ -11812,7 +11820,9 @@
               "storedAuthFailed": "The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.",
               "storedCredential": "Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.",
               "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
-              "disconnectFailed": "Could not remove the saved Bitbucket credential."
+              "disconnectFailed": "Could not remove the saved Bitbucket credential.",
+              "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
+              "replaceCredentials": "Add or replace credentials"
             }
           }
         },
@@ -12374,7 +12384,12 @@
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "entryStageFailed": "Failed to stage “{{value0}}”",
+            "entryUnstageFailed": "Failed to unstage “{{value0}}”",
+            "entryDiscardFailed": "Failed to discard “{{value0}}”",
+            "entryDeleteFailed": "Failed to delete “{{value0}}”",
+            "entryFailedInWorkspace": "{{value0}} in {{value1}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -14300,7 +14315,8 @@
                 "4e71d72912": "Claude sign-in failed.",
                 "9ddeb558f9": "Claude account added.",
                 "29d0653961": "Sign in",
-                "945865332e": "Signing in"
+                "945865332e": "Signing in",
+                "accountStatusUnknown": "Account status unknown"
               },
               "UsagePage": {
                 "64265cb295": "29% used 5h",
@@ -17230,6 +17246,9 @@
       "scrollMessageToTop": "Scroll this message to top",
       "loadingEarlier": "Loading…",
       "loadEarlier": "Load earlier messages",
+      "railLabel": "Your messages",
+      "railImageMessage": "Image attachment",
+      "railEmptyMessage": "Message",
       "question": {
         "step": "Step {{value0}}",
         "other": "Other…",
@@ -17243,7 +17262,8 @@
       "approval": {
         "title": "Allow {{value0}}?",
         "allow": "Allow",
-        "deny": "Deny"
+        "deny": "Deny",
+        "cancel": "Cancel"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
       "structuredSessionCloseFailed": "Could not close this chat session",
@@ -17308,7 +17328,12 @@
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "unconfirmed": "Conversation operation was not confirmed."
-      }
+      },
+      "drop": {
+        "title": "Drop to attach to this chat",
+        "subtitle": "Files are added to your message as paths the agent can read."
+      },
+      "copyCode": "Copy code"
     },
     "tab": {
       "bar": {
@@ -17872,5 +17897,15 @@
       "stopped": "stopped",
       "finished": "finished"
     }
+  },
+  "aiVault": {
+    "subagents": {
+      "loading": "Loading subagents…",
+      "loadError": "Could not load all subagents.",
+      "empty": "No subagents found."
+    }
+  },
+  "common": {
+    "retry": "Retry"
   }
 }

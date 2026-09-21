@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "scenarios": [
     {
       "id": "b1",
@@ -514,7 +514,7 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": ["new-workspace-runtime-context-null-settings-typeerror"]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-workspace-context-refused",
@@ -586,7 +586,7 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": ["new-workspace-runtime-context-null-settings-typeerror"]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-workspace-context-transport-error",
@@ -655,7 +655,7 @@
           "checkpoint": "settled"
         }
       ],
-      "namedDeltas": ["new-workspace-runtime-context-null-settings-typeerror"]
+      "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
     },
     {
       "id": "settings-home-providers-fulfilled",
@@ -1827,6 +1827,173 @@
         },
         {
           "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-create-linear",
+      "operation": "settings.task-workspace-create",
+      "version": 1,
+      "family": "settings.task-workspace-create",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit",
+          "args": {
+            "item": {
+              "key": "linear:1",
+              "provider": "linear",
+              "title": "Recorded issue",
+              "source": {
+                "identifier": "ORC-1",
+                "title": "Recorded issue",
+                "url": "https://linear.app/orca/issue/ORC-1"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": [],
+                "defaultTuiAgent": "codex"
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "orc-1",
+            "displayName": "ORC-1 Recorded issue",
+            "displayNameKind": "generated",
+            "linkedLinearIssue": "ORC-1",
+            "setupDecision": "inherit",
+            "activate": true,
+            "startupDraft": "https://linear.app/orca/issue/ORC-1",
+            "createdWithAgent": "claude"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "wt-1",
+                "displayName": "ORC-1 Recorded issue"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "settings-task-workspace-create-pr-start-point",
+      "operation": "settings.task-workspace-create",
+      "version": 1,
+      "family": "settings.task-workspace-create",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "submit",
+          "id": "submit",
+          "args": {
+            "item": {
+              "key": "github:7",
+              "provider": "github",
+              "title": "Recorded pull request",
+              "source": {
+                "type": "pr",
+                "repoId": "repo-1",
+                "number": 7,
+                "title": "Recorded pull request",
+                "url": "https://github.com/o/r/pull/7"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": [],
+                "defaultTuiAgent": "codex"
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 7
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "main"
+            }
+          }
+        },
+        {
+          "checkpoint": "pr-base-resolved"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "pr-7",
+            "displayName": "Recorded pull request",
+            "displayNameKind": "generated",
+            "setupDecision": "inherit",
+            "activate": true,
+            "startupDraft": "https://github.com/o/r/pull/7",
+            "createdWithAgent": "claude",
+            "baseBranch": "main",
+            "linkedPR": 7
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "wt-2"
+              },
+              "warning": "shallow clone"
+            }
+          }
+        },
+        {
+          "checkpoint": "created-from-pr-base"
         }
       ]
     },
@@ -5135,6 +5302,1455 @@
         },
         {
           "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-created",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w",
+                "displayName": "kestrel"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-warning-kept",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w"
+              },
+              "warning": "  startup terminal failed  "
+            }
+          }
+        },
+        {
+          "checkpoint": "created-with-warning"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-name-collision",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "conflict",
+              "message": "Branch \"kestrel\" already exists."
+            }
+          }
+        },
+        {
+          "checkpoint": "retrying"
+        },
+        {
+          "complete": "worktree.create#2",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel-2",
+            "clientMutationId": "mutation-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "id": "repo-1::/w2",
+                "displayName": "kestrel-2"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created-suffixed"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-unretryable-refusal",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-while-connected",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel",
+            "clientMutationId": "mutation-1"
+          },
+          "reject": {
+            "message": "Request timed out",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unknown-not-failed"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-after-drop",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "action": "disconnect",
+          "id": "drop"
+        },
+        {
+          "checkpoint": "waiting-for-reconnect"
+        },
+        {
+          "advance": 20000
+        },
+        {
+          "checkpoint": "replay-window-abandoned"
+        }
+      ]
+    },
+    {
+      "id": "tw-create-retry-ambiguous-without-idempotency",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.create-retry",
+      "sites": ["mobile/src/tasks/worktree-create-retry.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "idempotency": false
+          }
+        },
+        {
+          "complete": "worktree.create#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "kestrel"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unstamped-create-is-not-replayed"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-advertised",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
+              "worktreeCreateIdempotency": {
+                "dedupeTtlMs": 45000
+              },
+              "platform": "linux"
+            }
+          }
+        },
+        {
+          "checkpoint": "probed"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-legacy-idempotency",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["worktree.create-idempotency.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "legacy-host-window"
+        }
+      ]
+    },
+    {
+      "id": "tw-capabilities-cutover-retried",
+      "operation": "tasks.worktree-capabilities",
+      "version": 1,
+      "family": "worktree.runtime-capabilities",
+      "sites": ["mobile/src/tasks/worktree-create-capability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "probe",
+          "id": "probe"
+        },
+        {
+          "action": "cutover",
+          "id": "migrate"
+        },
+        {
+          "bind": "status-after-cutover",
+          "request": "status.get#2",
+          "params": {
+            "$undefined": true
+          }
+        },
+        {
+          "checkpoint": "reprobing-after-cutover"
+        },
+        {
+          "complete": "status-after-cutover",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["mobile.tasks.v1"]
+            }
+          }
+        },
+        {
+          "checkpoint": "probed-on-replacement"
+        }
+      ]
+    },
+    {
+      "id": "tw-hosted-base-resolved",
+      "operation": "tasks.composer-hosted-base",
+      "version": 1,
+      "family": "worktree.hosted-base",
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pr-base",
+          "id": "pr"
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 12,
+            "headRefName": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "main",
+              "compareBaseRef": "origin/main"
+            }
+          }
+        },
+        {
+          "checkpoint": "pr-base-resolved"
+        },
+        {
+          "action": "mr-base",
+          "id": "mr"
+        },
+        {
+          "complete": "worktree.resolveMrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "mrIid": 7,
+            "sourceBranch": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "baseBranch": "develop"
+            }
+          }
+        },
+        {
+          "checkpoint": "mr-base-resolved"
+        }
+      ]
+    },
+    {
+      "id": "tw-hosted-base-soft-error",
+      "operation": "tasks.composer-hosted-base",
+      "version": 1,
+      "family": "worktree.hosted-base",
+      "sites": ["mobile/src/tasks/composer-source-base-resolve.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pr-base",
+          "id": "pr"
+        },
+        {
+          "complete": "worktree.resolvePrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "prNumber": 12,
+            "headRefName": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "error": "pull request not found"
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-error"
+        },
+        {
+          "action": "mr-base",
+          "id": "mr"
+        },
+        {
+          "complete": "worktree.resolveMrBase#1",
+          "params": {
+            "repo": "id:repo-1",
+            "mrIid": 7,
+            "sourceBranch": "feature"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "error": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-empty-error"
+        }
+      ]
+    },
+    {
+      "id": "tw-setup-hook-trust-approved",
+      "operation": "tasks.setup-hook-trust",
+      "version": 1,
+      "family": "worktree.setup-hook-trust",
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "approve",
+          "id": "approve"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "approved"
+        }
+      ]
+    },
+    {
+      "id": "tw-setup-hook-trust-always",
+      "operation": "tasks.setup-hook-trust",
+      "version": 1,
+      "family": "worktree.setup-hook-trust",
+      "sites": ["mobile/src/tasks/setup-hook-trust.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "approve",
+          "id": "approve",
+          "args": {
+            "always": true
+          }
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "all": {
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-all-providers",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "github",
+          "id": "github"
+        },
+        {
+          "complete": "github.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "limit": 36,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "number": 1,
+                  "title": "one"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "github-items"
+        },
+        {
+          "action": "gitlab",
+          "id": "gitlab"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "state": "opened",
+            "page": 1,
+            "perPage": 50,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "iid": 2,
+                  "title": "two"
+                }
+              ],
+              "error": {
+                "type": "not_found",
+                "message": "missing"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "gitlab-items"
+        },
+        {
+          "action": "linear",
+          "id": "linear"
+        },
+        {
+          "complete": "linear.searchIssues#1",
+          "params": {
+            "query": "bug",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "linear-search"
+        },
+        {
+          "action": "branches",
+          "id": "branches"
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "bug",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refs": ["main", "release"]
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-refs"
+        },
+        {
+          "action": "linear",
+          "id": "linear-assigned",
+          "args": {
+            "query": "  ",
+            "workspace": null
+          }
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$undefined": true
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-3"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "linear-assigned-listed"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-linear-listed",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "linear",
+          "id": "linear",
+          "args": {
+            "query": "  ",
+            "workspace": null
+          }
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$undefined": true
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "linear-assigned"
+        }
+      ]
+    },
+    {
+      "id": "tw-smart-search-gitlab-provider-error",
+      "operation": "tasks.smart-source-search",
+      "version": 1,
+      "family": "tasks.smart-source-search",
+      "sites": ["mobile/src/tasks/smart-source-search-requests.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "gitlab",
+          "id": "gitlab"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1",
+          "params": {
+            "repo": "id:repo-1",
+            "state": "opened",
+            "page": 1,
+            "perPage": 50,
+            "query": "bug"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [],
+              "error": {
+                "type": "quota",
+                "message": "rate limited"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "in-band-provider-error"
+        },
+        {
+          "action": "branches",
+          "id": "branches",
+          "args": {
+            "query": " main "
+          }
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "main",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refDetails": [
+                {
+                  "refName": "origin/main",
+                  "localBranchName": "main"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-ref-details"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-resolved",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "by-number",
+          "id": "by-number"
+        },
+        {
+          "complete": "github.workItem#1",
+          "params": {
+            "repo": "id:repo-1",
+            "number": 12
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "number": 12,
+              "title": "twelve"
+            }
+          }
+        },
+        {
+          "checkpoint": "by-number"
+        },
+        {
+          "action": "by-slug",
+          "id": "by-slug"
+        },
+        {
+          "complete": "github.workItemByOwnerRepo#1",
+          "params": {
+            "repo": "id:repo-1",
+            "owner": "owner",
+            "ownerRepo": "repo",
+            "number": 12,
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "number": 12,
+              "title": "twelve"
+            }
+          }
+        },
+        {
+          "checkpoint": "by-slug"
+        },
+        {
+          "action": "gitlab-path",
+          "id": "gitlab-path"
+        },
+        {
+          "complete": "gitlab.workItemByPath#1",
+          "params": {
+            "repo": "id:repo-1",
+            "host": "gitlab.com",
+            "path": "group/project",
+            "iid": 7,
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "iid": 7,
+              "title": "seven"
+            }
+          }
+        },
+        {
+          "checkpoint": "gitlab-path"
+        },
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "checkpoint": "repo-slug-matched"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-slug-unsupported",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "checkpoint": "host-wide-probe-cached"
+        },
+        {
+          "action": "repo-slug-again",
+          "id": "repo-slug-again"
+        },
+        {
+          "checkpoint": "no-second-probe"
+        }
+      ]
+    },
+    {
+      "id": "tw-paste-lookup-slug-refused",
+      "operation": "tasks.paste-lookup",
+      "version": 1,
+      "family": "tasks.paste-lookup",
+      "sites": ["mobile/src/tasks/smart-source-paste-intent.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "repo-slug",
+          "id": "repo-slug"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "complete": "github.repoSlug#2",
+          "params": {
+            "repo": "id:repo-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": null
+          }
+        },
+        {
+          "checkpoint": "refusal-is-per-repo"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-source-presets",
+      "operation": "tasks.workspace-source",
+      "version": 1,
+      "family": "tasks.workspace-source",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.sparsePresets#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "presets": [
+                {
+                  "id": "p1",
+                  "name": "docs",
+                  "directories": ["docs"]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "presets-loaded"
+        },
+        {
+          "action": "branch-query",
+          "id": "branch-query"
+        },
+        {
+          "complete": "repo.searchRefs#1",
+          "params": {
+            "repo": "id:repo-1",
+            "query": "main",
+            "limit": 20
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "refs": ["main"]
+            }
+          }
+        },
+        {
+          "checkpoint": "branches-loaded"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-source-presets-refused",
+      "operation": "tasks.workspace-source",
+      "version": 1,
+      "family": "tasks.workspace-source",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.sparsePresets#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "presets-refused-empty-message"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-sparse-saved",
+      "operation": "tasks.workspace-sparse",
+      "version": 1,
+      "family": "tasks.workspace-sparse",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "connected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "ssh-state-read"
+        },
+        {
+          "action": "save-preset",
+          "id": "save"
+        },
+        {
+          "complete": "repo.saveSparsePreset#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "docs",
+            "directories": ["docs"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "preset": {
+                "id": "p1",
+                "name": "docs",
+                "directories": ["docs"]
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "preset-saved"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-sparse-missing-preset",
+      "operation": "tasks.workspace-sparse",
+      "version": 1,
+      "family": "tasks.workspace-sparse",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "action": "save-preset",
+          "id": "save"
+        },
+        {
+          "complete": "repo.saveSparsePreset#1",
+          "params": {
+            "repo": "id:repo-1",
+            "name": "docs",
+            "directories": ["docs"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "checkpoint": "saved-without-preset"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-connected",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex"]
+          }
+        },
+        {
+          "checkpoint": "agents-detected"
+        },
+        {
+          "action": "connect",
+          "id": "connect"
+        },
+        {
+          "complete": "ssh.connect#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "connected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "connected"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {
+                  "setup": "  pnpm install  "
+                }
+              },
+              "setupRunPolicy": "ask",
+              "source": "repo",
+              "setupTrust": {
+                "contentHash": "hash-1",
+                "scriptContent": "pnpm install"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "setup-prompted"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-not-ready",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "action": "ensure-ready",
+          "id": "ensure"
+        },
+        {
+          "complete": "ssh.getState#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "state": {
+                "targetId": "ssh-1",
+                "status": "disconnected",
+                "error": null,
+                "reconnectAttempt": 0
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "ensure-rejected"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "no-setup-script"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-connect-refused",
+      "operation": "tasks.workspace-ssh",
+      "version": 1,
+      "family": "tasks.workspace-ssh",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectRemoteAgents#1",
+          "params": {
+            "connectionId": "ssh-1"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "action": "connect",
+          "id": "connect"
+        },
+        {
+          "complete": "ssh.connect#1",
+          "params": {
+            "targetId": "ssh-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "ssh_failed",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "connect-refused-empty-message"
+        },
+        {
+          "action": "resolve-setup",
+          "id": "setup"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hooks": {
+                "scripts": {
+                  "setup": "pnpm i"
+                }
+              },
+              "setupRunPolicy": "never"
+            }
+          }
+        },
+        {
+          "checkpoint": "setup-skipped"
+        }
+      ]
+    },
+    {
+      "id": "tw-workspace-ssh-local-agents",
+      "operation": "tasks.workspace-ssh-local",
+      "version": 1,
+      "family": "tasks.workspace-ssh-local",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "preflight.detectAgents#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        },
+        {
+          "checkpoint": "local-agents-detected"
+        }
+      ]
+    },
+    {
+      "id": "tw-task-preferences-resume-write",
+      "operation": "settings.task-preferences",
+      "version": 1,
+      "family": "settings-best-effort",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "resume",
+          "id": "resume"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "taskResumeState": {
+              "githubItemsPreset": "issues"
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "no access"
+            }
+          }
+        },
+        {
+          "checkpoint": "best-effort-resume-write"
+        },
+        {
+          "action": "trust",
+          "id": "trust"
+        },
+        {
+          "complete": "ui.set#2",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": ""
+            }
+          }
+        },
+        {
+          "checkpoint": "awaited-trust-write-refused"
         }
       ]
     }

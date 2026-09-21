@@ -54,6 +54,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -101,6 +102,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -133,6 +135,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -164,6 +167,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 

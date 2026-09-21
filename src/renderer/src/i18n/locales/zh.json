@@ -716,7 +716,6 @@
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
-        "a9ff236145": "部分附件无法上传。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
@@ -2221,6 +2220,10 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "此视图暂无任何项目。",
+            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示。"
           }
         },
         "GitHubMarkdownComposer": {

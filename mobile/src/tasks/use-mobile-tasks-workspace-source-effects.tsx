@@ -1,6 +1,9 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
 import { type BaseRefSearchResult, type SparsePreset, useEffect } from './mobile-tasks-dependencies'
-import { isSuccess } from './mobile-tasks-legacy-foundation'
+import {
+  repoBaseRefSearchRead,
+  repoSparsePresetListRead
+} from './mobile-workspace-source-operations'
 
 export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProjectionModel) {
   const {
@@ -45,16 +48,15 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     setWorkspaceSparsePresetsLoading(true)
     setWorkspaceSparsePresetsLoaded(false)
     setWorkspaceSparsePresetsError('')
-    void client
-      .sendRequest('repo.sparsePresets', { repo: `id:${workspaceCreateTargetRepo.id}` })
-      .then((response) => {
+    void repoSparsePresetListRead
+      .request(client, { repo: `id:${workspaceCreateTargetRepo.id}` })
+      .then((reply) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const presets = (response.result as { presets?: SparsePreset[] }).presets ?? []
+        const presets =
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          (repoSparsePresetListRead.interpret(reply) as SparsePreset[] | undefined) ?? []
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)
         setWorkspaceSparsePresetId((current) =>
@@ -112,20 +114,18 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     let stale = false
     setWorkspaceBaseBranchLoading(true)
     setWorkspaceBaseBranchError('')
-    void client
-      .sendRequest(
-        'repo.searchRefs',
+    void repoBaseRefSearchRead
+      .request(
+        client,
         { repo: `id:${workspaceCreateTargetRepo.id}`, query, limit: 20 },
         { timeoutMs: 30_000 }
       )
-      .then((response) => {
+      .then((reply) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const result = repoBaseRefSearchRead.interpret(reply) as {
           refDetails?: BaseRefSearchResult[]
           refs?: string[]
         }

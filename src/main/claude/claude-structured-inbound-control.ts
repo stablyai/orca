@@ -25,6 +25,7 @@ export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
   emit: (event: ClaudeStructuredSessionEvent) => void
+  currentTurnId?: () => string | null
 }
 
 function denySafeResult(toolUseId: string | undefined): PermissionResult {
@@ -36,7 +37,7 @@ function denySafeResult(toolUseId: string | undefined): PermissionResult {
 }
 
 /**
- * Build the SDK permission callbacks from the durable prompt registry.
+ * Build the SDK permission callbacks from the session-local prompt registry.
  *
  * A decodable `can_use_tool` becomes a durable prompt whose `settle` resolves this callback;
  * a malformed one is denied without registering. The SDK's abort signal fires on
@@ -57,7 +58,8 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         toolUseId: options.toolUseID,
         input,
         suggestions: options.suggestions ?? [],
-        settle: resolve as (response: Record<string, unknown> | null) => void
+        settle: resolve,
+        turnId: deps.currentTurnId?.() ?? null
       })
       if (!prompt) {
         resolve(denySafeResult(options.toolUseID))

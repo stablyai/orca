@@ -119,9 +119,16 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
   return harness
 }
 
+async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
+  host['runtimeState'].stopLeaseRenewal()
+  host['holds'].dispose()
+  await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
+  host['sessions'].clear()
+}
+
 afterEach(async () => {
   const completed = harnesses.splice(0)
-  await Promise.all(completed.map(async ({ host }) => host.flushAllStreamedEvents()))
+  await Promise.all(completed.map(async ({ host }) => abandonHost(host)))
   await Promise.all(completed.map(async ({ root }) => rm(root, { recursive: true })))
 })
 

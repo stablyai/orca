@@ -14,6 +14,11 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  CODEX_COMMAND_APPROVAL_METHOD,
+  CODEX_USER_INPUT_METHOD,
+  CodexPromptRegistry
+} from './codex-structured-prompt-replies'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSession } from './codex-structured-session-state'
@@ -85,6 +90,123 @@ afterEach(async () => {
 })
 
 describe('codex turn lifecycle rows', () => {
+  it('binds a prompt without a provider turn id to the active turn before cleanup', () => {
+    const tap = recorder()
+    const registry = new CodexPromptRegistry()
+    registry.register({
+      id: 1,
+      method: CODEX_COMMAND_APPROVAL_METHOD,
+      params: {
+        itemId: 'exec-fallback',
+        approvalId: 'approval-fallback',
+        threadId: THREAD_ID
+      }
+    })
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID,
+      bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
+        registry.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
+      clearPromptTurn: (threadId, turnId) => registry.clearTurn(threadId, turnId)
+    })
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
+    translator.handle({
+      type: 'prompt',
+      sessionId: SESSION_ID,
+      threadId: THREAD_ID,
+      method: CODEX_COMMAND_APPROVAL_METHOD,
+      params: { availableDecisions: ['accept', 'decline'] },
+      codexItemId: 'exec-fallback',
+      promptKey: 'approval-fallback'
+    })
+
+    expect(registry.find('approval-fallback')?.turnId).toBe(TURN_ID)
+    translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+    expect(registry.find('approval-fallback')).toBeNull()
+  })
+
+  it('settles prompts when a turn completes while awaiting approval', () => {
+    const tap = recorder()
+    const clearPromptTurn = vi.fn()
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID,
+      clearPromptTurn
+    })
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
+    translator.handle({
+      type: 'prompt',
+      sessionId: SESSION_ID,
+      threadId: THREAD_ID,
+      method: CODEX_COMMAND_APPROVAL_METHOD,
+      params: { turnId: TURN_ID, availableDecisions: ['accept', 'decline'] },
+      codexItemId: 'exec-cancelled',
+      promptKey: 'approval-cancelled'
+    })
+
+    expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
+      accepted: true
+    })
+    expect(tap.rows.map((row) => row.body)).toEqual([
+      expect.objectContaining({ kind: 'turn', state: 'running' }),
+      expect.objectContaining({
+        kind: 'approval',
+        resolution: expect.objectContaining({ state: 'pending' })
+      }),
+      expect.objectContaining({
+        kind: 'approval',
+        resolution: expect.objectContaining({ state: 'cancelled' })
+      }),
+      expect.objectContaining({ kind: 'turn', state: 'completed' })
+    ])
+    expect(clearPromptTurn).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
+  })
+
+  it('settles questions when a turn completes while awaiting input', () => {
+    const tap = recorder()
+    const clearPromptTurn = vi.fn()
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID,
+      clearPromptTurn
+    })
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
+    translator.handle({
+      type: 'prompt',
+      sessionId: SESSION_ID,
+      threadId: THREAD_ID,
+      method: CODEX_USER_INPUT_METHOD,
+      params: {
+        turnId: TURN_ID,
+        questions: [
+          { id: 'question-cancelled', question: 'Continue?', options: [{ label: 'yes' }] }
+        ]
+      },
+      codexItemId: 'exec-question-cancelled',
+      promptKey: 'question-cancelled'
+    })
+
+    expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
+      accepted: true
+    })
+    expect(tap.rows.map((row) => row.body)).toEqual([
+      expect.objectContaining({ kind: 'turn', state: 'running' }),
+      expect.objectContaining({
+        kind: 'question',
+        resolution: expect.objectContaining({ state: 'pending' })
+      }),
+      expect.objectContaining({
+        kind: 'question',
+        resolution: expect.objectContaining({ state: 'cancelled' })
+      }),
+      expect.objectContaining({ kind: 'turn', state: 'completed' })
+    ])
+    expect(clearPromptTurn).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
+  })
+
   it('opens the running row with the host receipt time and pins the row time to it', async () => {
     const journal = await journals.open({
       identity: {

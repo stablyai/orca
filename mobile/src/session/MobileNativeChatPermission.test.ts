@@ -10,7 +10,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion' }))
+vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion', X: 'X' }))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -41,5 +41,25 @@ describe('MobileNativeChatPermission', () => {
 
     expect(onRespond).toHaveBeenCalledOnce()
     await act(async () => resolveResponse(true))
+  })
+
+  it('passes the rendered prompt identity to cancel', async () => {
+    const onCancel = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Approve?',
+            prompt: { itemId: 'approval-1', expectedRevision: 4 },
+            options: [{ label: 'Allow', send: '1' }]
+          },
+          onRespond: vi.fn(async () => true),
+          onCancel
+        })
+      )
+    })
+    const cancel = renderer.root.findByProps({ accessibilityLabel: 'Cancel' })
+    await act(async () => cancel.props.onPress())
+    expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 4 })
   })
 })

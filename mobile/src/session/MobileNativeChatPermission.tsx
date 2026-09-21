@@ -1,6 +1,6 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ShieldQuestion } from 'lucide-react-native'
+import { ShieldQuestion, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
@@ -9,10 +9,12 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 // accent button so the affirmative choice reads as distinct from the rest.
 function MobileNativeChatPermissionImpl({
   permission,
-  onRespond
+  onRespond,
+  onCancel
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
 }): React.JSX.Element {
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
@@ -33,6 +35,17 @@ function MobileNativeChatPermissionImpl({
       <View style={styles.header}>
         <ShieldQuestion size={16} color={colors.accentBlue} strokeWidth={2} />
         <Text style={styles.title}>{permission.title}</Text>
+        {onCancel ? (
+          <Pressable
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+            style={styles.cancel}
+            onPress={() => void onCancel(permission.prompt)}
+            disabled={submitting}
+          >
+            <X size={16} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
       {permission.detail ? <Text style={styles.detail}>{permission.detail}</Text> : null}
       <View style={styles.options}>
@@ -80,9 +93,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   title: {
+    flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  cancel: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   detail: {
     color: colors.textSecondary,

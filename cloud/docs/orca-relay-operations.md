@@ -2,6 +2,21 @@
 
 This runbook applies to the stable Cloud Run director and the production-shaped GCE cells in both environments. It does not authorize a full Terraform apply: staging and production contain unrelated drift, so inspect a saved targeted plan and its destroy count before every apply.
 
+## PostgreSQL statement statistics
+
+Relay schema startup exposes `pg_stat_statements` when the server already preloads
+that collector and the schema identity can install its extension. Servers without
+the collector or the required privileges continue normally. Installation does not
+change preload settings, reset collected counters, or require a database restart;
+concurrent startups yield to one installer. An existing extension is left in place.
+
+For SQL incidents, inspect bounded aggregates of `calls`, `total_exec_time`,
+`shared_blks_read`, `shared_blks_dirtied`, and `wal_bytes`, scoped to the relay
+database and identified query IDs. Compare counter deltas over the same interval
+as fleet runtime metrics; retain the statistics reset timestamp. Do not export
+query text, identities, credentials, or invoke `pg_stat_statements_reset()` during
+an investigation. Treat an unavailable view as missing evidence, not zero work.
+
 The relay is automatically active for entitled signed-in desktops. There is no rollout flag, cohort, or user toggle. The emergency product kill switch is the auth plane refusing relay-token exchange; use cell drains only to move or terminate existing data-plane work.
 
 ## Safety rules

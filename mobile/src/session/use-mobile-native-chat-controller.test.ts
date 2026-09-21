@@ -17,6 +17,7 @@ const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
+const structuredCancelPrompt = vi.fn(async () => true)
 const structuredRespondPermission = vi.fn(async () => true)
 const structuredRespondQuestion = vi.fn(async () => true)
 const structuredSetOption = vi.fn(async () => true)
@@ -90,6 +91,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     ...structuredActivity,
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
+    cancelPrompt: structuredCancelPrompt,
     permission: structuredPermission,
     question: structuredQuestion,
     optionSnapshot: structuredOptionSnapshot,
@@ -225,6 +227,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     act(() => renderer?.unmount())
     renderer = null
     controller = null
+  })
+
+  it('leaves structured prompt cancellation unavailable on the legacy bridge lane', () => {
+    expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
   })
 
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {

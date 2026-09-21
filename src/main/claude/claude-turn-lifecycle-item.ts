@@ -2,6 +2,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalTurnItem
 } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeText } from './claude-structured-item-translation'
@@ -10,7 +11,8 @@ export type ClaudeCurrentTurn = {
   sessionId: string
   turnId: string
   startedAt: number
-  /** Provider key of the user echo that opened the turn. */
+  /** Provider key of the user echo, or the lifecycle row itself when provider
+   *  output opened a turn with no user row to receive its timing. */
   userItemId: string
 }
 
@@ -48,6 +50,12 @@ export function claudeTurnLifecycleIdentity(
     sessionId,
     recordId: `turn-lifecycle:${turnId}`
   }
+}
+
+/** Keep provider-resumed timing off the preceding prompt on clients that treat
+ *  a missing user key as an older-host lifecycle row. */
+export function claudeProviderResumedTurnTimingAnchor(sessionId: string, turnId: string): string {
+  return agentJournalItemKey(claudeTurnLifecycleIdentity(sessionId, turnId))
 }
 
 /** The lifecycle row is revised to its terminal state, never tombstoned, so the
