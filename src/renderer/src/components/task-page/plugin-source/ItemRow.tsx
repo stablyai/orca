@@ -1,4 +1,5 @@
 import { ArrowRight, ExternalLink } from 'lucide-react'
+import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,21 +15,55 @@ export const PLUGIN_TASK_ROW_GRID_CLASS =
 
 const VISIBLE_LABELS = 3
 
+/** "David Mugisha" -> "DM"; single word -> its first letter; empty/whitespace -> "-". */
+function getAssigneeInitials(displayName: string): string {
+  const words = displayName.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) {
+    return '-'
+  }
+  if (words.length === 1) {
+    return words[0].slice(0, 1).toUpperCase()
+  }
+  return `${words[0].slice(0, 1)}${words.at(-1)?.slice(0, 1) ?? ''}`.toUpperCase()
+}
+
+function AssigneeAvatar({
+  displayName,
+  avatarUrl
+}: {
+  displayName: string
+  avatarUrl: string | null | undefined
+}): React.JSX.Element {
+  // Some providers (e.g. Azure Boards) send auth-gated avatar URLs the renderer
+  // can never load; fall back to initials on load failure, not just when absent.
+  const [imageFailed, setImageFailed] = useState(false)
+
+  if (avatarUrl && !imageFailed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={displayName}
+        className="size-5 shrink-0 rounded-full"
+        onError={() => setImageFailed(true)}
+      />
+    )
+  }
+
+  return (
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+      {getAssigneeInitials(displayName)}
+    </span>
+  )
+}
+
 function AssigneeCell({ item }: { item: PluginTaskItem }): React.JSX.Element {
   const unassigned = translate('auto.components.TaskPage.pluginTaskSourceUnassigned', 'Unassigned')
   return (
     <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-      {item.assignee?.avatarUrl ? (
-        <img
-          src={item.assignee.avatarUrl}
-          alt={item.assignee.displayName}
-          className="size-5 shrink-0 rounded-full"
-        />
-      ) : (
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-          {item.assignee?.displayName.slice(0, 1) ?? '-'}
-        </span>
-      )}
+      <AssigneeAvatar
+        displayName={item.assignee?.displayName ?? ''}
+        avatarUrl={item.assignee?.avatarUrl}
+      />
       <span className="truncate">{item.assignee?.displayName ?? unassigned}</span>
     </div>
   )
