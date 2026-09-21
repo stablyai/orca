@@ -338,6 +338,22 @@ describe('ProjectGroupSettingsDialog', () => {
     expect(container.textContent).toContain('/home/alice/.claude-other')
   })
 
+  // The notice invites the user to type the original value back; that draft is not pristine, so a
+  // second external edit must not treat it as one and overwrite it.
+  it('keeps a draft retyped back to the original when a second external edit lands', async () => {
+    const { rerenderConfigDir } = await render({ configDir: '/home/alice/.claude-client' })
+
+    await type('/home/alice/.claude-new')
+    await rerenderConfigDir('/home/alice/.claude-other')
+    expect(getInput().value).toBe('/home/alice/.claude-new')
+
+    await type('/home/alice/.claude-client')
+    await rerenderConfigDir('/home/alice/.claude-third')
+
+    expect(getInput().value).toBe('/home/alice/.claude-client')
+    expect(container.textContent).toContain('/home/alice/.claude-third')
+  })
+
   it('re-seeds a pristine field when the stored binding changes elsewhere', async () => {
     const { rerenderConfigDir } = await render({ configDir: '/home/alice/.claude-client' })
 

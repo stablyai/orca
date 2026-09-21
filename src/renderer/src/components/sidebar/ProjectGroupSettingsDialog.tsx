@@ -77,6 +77,9 @@ export function ProjectGroupSettingsDialog({
         setExternalConfigDir(null)
       } else {
         setExternalConfigDir(seed)
+        // Why also here: the pristine test compares against the last seeded value, so a kept draft
+        // must still advance it or a later external edit reads a stale seed as "untouched".
+        setSeededDraft(seed)
       }
       setSubmitting(false)
     }
