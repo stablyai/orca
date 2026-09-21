@@ -29,6 +29,11 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.ipynb': 'notebook',
   '.md': 'markdown',
   '.mdx': 'markdown',
+  // Why: Quarto/R Markdown are Markdown plus a YAML header and executable
+  // cells; the 'markdown' grammar leaves ```{r}/```{python} cells uncolored.
+  '.qmd': 'quarto',
+  '.rmd': 'quarto',
+  '.rmarkdown': 'quarto',
   '.mmd': 'mermaid',
   '.mermaid': 'mermaid',
   '.css': 'css',
