@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useId, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import {
   Dialog,
@@ -48,7 +48,6 @@ export function ProjectGroupSettingsDialog({
 }: ProjectGroupSettingsDialogProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
-  const adviceId = useId()
   const [draft, setDraft] = useState(configDir ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, configDir })
@@ -130,13 +129,13 @@ export function ProjectGroupSettingsDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle size="compact">
+          <DialogTitle size="sm">
             {translate(
               'auto.components.sidebar.ProjectGroupSettingsDialog.title',
               'Group Settings'
             )}
           </DialogTitle>
-          <DialogDescription size="compact">
+          <DialogDescription size="sm">
             {translate(
               'auto.components.sidebar.ProjectGroupSettingsDialog.description',
               'Settings for {{value0}} and the groups nested inside it.',
@@ -152,7 +151,7 @@ export function ProjectGroupSettingsDialog({
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor={inputId} size="compact">
+            <Label htmlFor={inputId} size="sm">
               {translate(
                 'auto.components.sidebar.ProjectGroupSettingsDialog.fieldLabel',
                 'Claude config directory'
@@ -170,7 +169,7 @@ export function ProjectGroupSettingsDialog({
                   'Claude’s default home'
                 )}
                 onChange={(event) => setDraft(event.target.value)}
-                size="compact"
+                size="sm"
               />
               {/* The picker can only browse this client, so it is offered for no other host. */}
               {isLocalHost ? (
@@ -188,7 +187,6 @@ export function ProjectGroupSettingsDialog({
             </div>
           </div>
           <ClaudeConfigDirFieldNote
-            adviceId={adviceId}
             adviceMessage={advice?.message ?? null}
             inherited={showInherited ? inherited : null}
             remoteHostLabel={isLocalHost ? null : getExecutionHostLabel(executionHostId)}
@@ -231,18 +229,25 @@ export function ProjectGroupSettingsDialog({
 }
 
 function ClaudeConfigDirFieldNote({
-  adviceId,
   adviceMessage,
   inherited,
   remoteHostLabel
 }: {
-  adviceId: string
   adviceMessage: string | null
   inherited: InheritedClaudeConfigDir | null
   remoteHostLabel: string | null
 }): React.JSX.Element {
+  // Why deferred into its own region: a live region announces a *mutation*, so text already
+  // present when the region mounts is silent — and an advisory can be true at open time. The
+  // `null` initial value commits the region empty first, so the first advisory is an update too.
+  // The visible copy below carries no role, so nothing announces it a second time.
+  const announced = useDeferredValue(adviceMessage, null)
+
   return (
     <div className="space-y-1 text-[11px]">
+      <span role="status" data-claude-config-dir-live="" className="sr-only">
+        {announced}
+      </span>
       {remoteHostLabel ? (
         <p className="text-muted-foreground">
           {translate(
@@ -253,12 +258,7 @@ function ClaudeConfigDirFieldNote({
         </p>
       ) : null}
       {adviceMessage ? (
-        <p
-          id={adviceId}
-          role="status"
-          data-claude-config-dir-advice=""
-          className="text-muted-foreground"
-        >
+        <p data-claude-config-dir-advice="" className="text-muted-foreground">
           {adviceMessage}
         </p>
       ) : null}

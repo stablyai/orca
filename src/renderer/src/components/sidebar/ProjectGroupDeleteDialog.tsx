@@ -107,13 +107,13 @@ export function ProjectGroupDeleteDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
+          <DialogTitle size="sm">
             {translate(
               'auto.components.sidebar.ProjectGroupDeleteDialog.591f330288',
               'Delete Project Group'
             )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription size="sm">
             {translate('auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0', 'Delete')}{' '}
             <span className="break-all font-medium text-foreground">{groupName}</span>.
           </DialogDescription>
@@ -185,8 +185,7 @@ export function ProjectGroupDeleteDialog({
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            className="text-xs"
+            size="sm-compact"
             disabled={deleting}
             onClick={() => onOpenChange(false)}
           >
@@ -196,8 +195,7 @@ export function ProjectGroupDeleteDialog({
             ref={confirmButtonRef}
             type="button"
             variant="destructive"
-            size="sm"
-            className="text-xs"
+            size="sm-compact"
             disabled={deleting}
             onClick={handleConfirm}
           >

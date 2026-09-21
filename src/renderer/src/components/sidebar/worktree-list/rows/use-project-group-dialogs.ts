@@ -7,7 +7,6 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getProjectGroupExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import {
@@ -21,15 +20,18 @@ export type ProjectGroupNameDialogState =
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
 
+/** Only what identifies the row. Everything shown is derived live — see `settingsTarget`. */
 export type ProjectGroupSettingsDialogState = {
   groupId: string
+  hostId?: ExecutionHostId
+}
+
+export type ProjectGroupSettingsTarget = {
   groupName: string
-  /** The group's own binding, captured at open time; ancestors arrive through `inherited`. */
   configDir: string | null
   inherited: InheritedClaudeConfigDir | null
   /** The row's resolved owner host, so the dialog never probes or browses the wrong filesystem. */
   executionHostId: ExecutionHostId
-  hostId?: ExecutionHostId
 }
 
 export type ProjectGroupDeleteDialogState = {
@@ -162,19 +164,48 @@ export function useProjectGroupDialogs(args: {
     [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
   )
 
+  // Why live rather than captured at open: the hint names *which* ancestor supplies the binding,
+  // and an ancestor edited from another window or arriving on a catalog refresh would otherwise
+  // leave the dialog attributing the account to the wrong group. Null means the row no longer
+  // resolves on its own host, which is never treated as "local".
+  const settingsTarget = useMemo<ProjectGroupSettingsTarget | null>(() => {
+    if (!settingsDialog) {
+      return null
+    }
+    const { groupId, hostId } = settingsDialog
+    const group = selectProjectGroupForHost(projectGroups, groupId, hostId)
+    if (!group) {
+      return null
+    }
+    return {
+      groupName: group.name,
+      configDir: group.claudeConfigDir ?? null,
+      inherited: selectInheritedClaudeConfigDir(projectGroups, groupId, hostId),
+      executionHostId: getProjectGroupExecutionHostId(group)
+    }
+  }, [projectGroups, settingsDialog])
+
   const handleOpenProjectGroupSettings = useCallback(
     (groupId: string, hostId?: ExecutionHostId) => {
-      const group = selectProjectGroupForHost(projectGroups, groupId, hostId)
-      setSettingsDialog({
-        groupId,
-        groupName: group?.name ?? groupId,
-        configDir: group?.claudeConfigDir ?? null,
-        inherited: selectInheritedClaudeConfigDir(projectGroups, groupId, hostId),
-        executionHostId: group
-          ? getProjectGroupExecutionHostId(group)
-          : (hostId ?? LOCAL_EXECUTION_HOST_ID),
-        hostId
-      })
+      // Why refuse instead of assuming: a config dir is a filesystem path on exactly one host, so
+      // a row whose owner cannot be resolved must not open a dialog that probes, browses and saves
+      // against this client. Defaulting an unknown host to `local` is the wrong-host failure.
+      if (!selectProjectGroupForHost(projectGroups, groupId, hostId)) {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHost',
+            'Cannot open group settings'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHostDesc',
+              "Orca could not tell which host owns this group, and a Claude config directory means something different on each one. Reconnect the group's host and try again."
+            )
+          }
+        )
+        return
+      }
+      setSettingsDialog({ groupId, hostId })
     },
     [projectGroups]
   )
@@ -262,6 +293,7 @@ export function useProjectGroupDialogs(args: {
     setDeleteDialog,
     settingsDialog,
     setSettingsDialog,
+    settingsTarget,
     deleteProjectCount,
     deleteProjectNames,
     removeContainedProjects,

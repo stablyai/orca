@@ -128,6 +128,14 @@ function advisoryText(): string {
   return container.querySelector('[data-claude-config-dir-advice]')?.textContent ?? ''
 }
 
+function liveRegion(): Element {
+  const region = container.querySelector('[data-claude-config-dir-live]')
+  if (!region) {
+    throw new Error('advisory live region not found')
+  }
+  return region
+}
+
 async function type(value: string): Promise<void> {
   const input = getInput()
   await act(async () => {
@@ -270,6 +278,47 @@ describe('ProjectGroupSettingsDialog', () => {
 
     expect(advisoryText()).toContain('does not exist')
     expect(getInput().getAttribute('aria-describedby')).toBeNull()
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1)
+  })
+
+  // N5: a live region announces a mutation, so the region has to already be in the DOM — and
+  // empty — before the first advisory arrives, or an advisory present at open is never announced.
+  it('mounts the live region empty when there is nothing to announce', async () => {
+    await render({ configDir: null })
+
+    expect(liveRegion().textContent).toBe('')
+    expect(liveRegion().getAttribute('role')).toBe('status')
+  })
+
+  it('announces an advisory that is already true at open time', async () => {
+    // A stored relative binding needs no probe: the advice is synchronous at first paint.
+    await render({ configDir: '.claude-relative' })
+
+    expect(liveRegion().textContent).toContain('absolute')
+  })
+
+  it('fills the same live-region node rather than mounting a new one with the text', async () => {
+    await render({ configDir: null })
+    const before = liveRegion()
+
+    await type('.claude')
+
+    expect(liveRegion()).toBe(before)
+    expect(liveRegion().textContent).toContain('absolute')
+  })
+
+  it('closes the dialog when the save lands', async () => {
+    const { onOpenChange } = await render({
+      configDir: null,
+      onSubmit: () => Promise.resolve(true)
+    })
+
+    await type('/home/alice/.claude-child')
+    await act(async () => {
+      findButton('Save').click()
+    })
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
   it('seeds the platform directory picker with the current draft', async () => {

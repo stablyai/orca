@@ -5732,7 +5732,9 @@
           "failedUnnestWorkspace": "Failed to unnest workspace",
           "projectGroupSettings": "Group settings…",
           "groupSettingsSaveFailed": "Failed to save group settings",
-          "groupSettingsSaveFailedDesc": "Orca could not confirm the Claude config directory with the group's host. Check that the path is absolute and recheck the group after reconnecting."
+          "groupSettingsSaveFailedDesc": "Orca could not confirm the Claude config directory with the group's host. Check that the path is absolute and recheck the group after reconnecting.",
+          "groupSettingsUnresolvedHost": "Cannot open group settings",
+          "groupSettingsUnresolvedHostDesc": "Orca could not tell which host owns this group, and a Claude config directory means something different on each one. Reconnect the group's host and try again."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

@@ -81,26 +81,35 @@ const REMOTE_CHILD: ProjectGroup = {
   executionHostId: 'runtime:env-1'
 }
 
+const DEFAULT_GROUPS: readonly ProjectGroup[] = [PARENT, UNBOUND_CHILD, REMOTE_CHILD]
+
 let latest: ProjectGroupDialogs | null = null
 const roots: Root[] = []
 
-function HookProbe(): null {
+function HookProbe({ groups }: { groups: readonly ProjectGroup[] }): null {
   latest = useProjectGroupDialogs({
     repos: [],
     repoMap: new Map(),
-    projectGroups: [PARENT, UNBOUND_CHILD, REMOTE_CHILD]
+    projectGroups: groups
   })
   return null
 }
 
-async function renderHookProbe(): Promise<void> {
+async function renderHookProbe(
+  groups: readonly ProjectGroup[] = DEFAULT_GROUPS
+): Promise<(next: readonly ProjectGroup[]) => Promise<void>> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(<HookProbe />)
+    root.render(<HookProbe groups={groups} />)
   })
+  return async (next) => {
+    await act(async () => {
+      root.render(<HookProbe groups={next} />)
+    })
+  }
 }
 
 beforeEach(() => {
@@ -162,12 +171,13 @@ describe('useProjectGroupDialogs settings flow', () => {
       latest?.handleOpenProjectGroupSettings('child')
     })
 
-    expect(latest?.settingsDialog).toMatchObject({
-      groupId: 'child',
+    expect(latest?.settingsDialog).toMatchObject({ groupId: 'child' })
+    expect(latest?.settingsTarget).toMatchObject({
+      groupName: 'Child',
       configDir: null,
       executionHostId: 'local'
     })
-    expect(latest?.settingsDialog?.inherited).toEqual({
+    expect(latest?.settingsTarget?.inherited).toEqual({
       configDir: '/home/alice/.claude-client',
       groupId: 'parent',
       groupName: 'Client Work'
@@ -214,6 +224,84 @@ describe('useProjectGroupDialogs settings flow', () => {
       latest?.handleOpenProjectGroupSettings('remote-child', 'runtime:env-1')
     })
 
-    expect(latest?.settingsDialog?.executionHostId).toBe('runtime:env-1')
+    expect(latest?.settingsTarget?.executionHostId).toBe('runtime:env-1')
+  })
+
+  // N1: the host-stamped row cannot be resolved without its hostId, and `local` is the one answer
+  // that silently points the probe, the folder picker and the save at the wrong filesystem.
+  it('refuses to open a row whose owner host cannot be resolved instead of assuming local', async () => {
+    await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('remote-child')
+    })
+
+    expect(latest?.settingsDialog).toBeNull()
+    expect(latest?.settingsTarget).toBeNull()
+    expect(mocks.toastError).toHaveBeenCalled()
+  })
+
+  it('refuses a group id that is in no catalog at all', async () => {
+    await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('does-not-exist')
+    })
+
+    expect(latest?.settingsDialog).toBeNull()
+    expect(latest?.settingsTarget).toBeNull()
+  })
+
+  // N7: the hint's job is to name *which* ancestor supplies the binding, so a snapshot taken at
+  // open time can attribute the account to the wrong group after the ancestor changes.
+  it('renames the inherited ancestor while the dialog is open', async () => {
+    const rerender = await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('child')
+    })
+    expect(latest?.settingsTarget?.inherited?.configDir).toBe('/home/alice/.claude-client')
+
+    await rerender([
+      { ...PARENT, name: 'Client Work v2', claudeConfigDir: '/home/alice/.claude-v2' },
+      UNBOUND_CHILD,
+      REMOTE_CHILD
+    ])
+
+    expect(latest?.settingsTarget?.inherited).toEqual({
+      configDir: '/home/alice/.claude-v2',
+      groupId: 'parent',
+      groupName: 'Client Work v2'
+    })
+  })
+
+  it("follows the group's own binding while the dialog is open", async () => {
+    const rerender = await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('child')
+    })
+    expect(latest?.settingsTarget?.configDir).toBeNull()
+
+    await rerender([
+      PARENT,
+      { ...UNBOUND_CHILD, claudeConfigDir: '/home/alice/.claude-own' },
+      REMOTE_CHILD
+    ])
+
+    expect(latest?.settingsTarget?.configDir).toBe('/home/alice/.claude-own')
+  })
+
+  it('drops the target when the open group leaves the catalog', async () => {
+    const rerender = await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('child')
+    })
+    expect(latest?.settingsTarget).not.toBeNull()
+
+    await rerender([PARENT, REMOTE_CHILD])
+
+    expect(latest?.settingsTarget).toBeNull()
   })
 })

@@ -29,7 +29,7 @@ export function SidebarWorktreeListDialogs({
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
-  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog, settingsDialog } = dialogs
+  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog, settingsTarget } = dialogs
   return (
     <>
       <ProjectGroupNameDialog
@@ -114,19 +114,23 @@ export function SidebarWorktreeListDialogs({
         }}
         onConfirm={dialogs.handleConfirmDeleteProjectGroup}
       />
-      <ProjectGroupSettingsDialog
-        open={settingsDialog !== null}
-        groupName={settingsDialog?.groupName ?? ''}
-        configDir={settingsDialog?.configDir ?? null}
-        inherited={settingsDialog?.inherited ?? null}
-        executionHostId={settingsDialog?.executionHostId ?? 'local'}
-        onOpenChange={(open) => {
-          if (!open) {
-            dialogs.setSettingsDialog(null)
-          }
-        }}
-        onSubmit={dialogs.handleSubmitProjectGroupSettings}
-      />
+      {/* Why mounted only with a resolved target: there is no safe host to fall back to, so the
+          dialog simply does not exist while the row does not resolve. */}
+      {settingsTarget ? (
+        <ProjectGroupSettingsDialog
+          open
+          groupName={settingsTarget.groupName}
+          configDir={settingsTarget.configDir}
+          inherited={settingsTarget.inherited}
+          executionHostId={settingsTarget.executionHostId}
+          onOpenChange={(open) => {
+            if (!open) {
+              dialogs.setSettingsDialog(null)
+            }
+          }}
+          onSubmit={dialogs.handleSubmitProjectGroupSettings}
+        />
+      ) : null}
     </>
   )
 }
