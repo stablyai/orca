@@ -132,4 +132,14 @@ describe('the editor document, from markdown and back', () => {
     expect(html).not.toContain('<a')
     expect(html).not.toContain('href')
   })
+
+  it('round-trips a code block that holds a fence of its own', () => {
+    // The fence has to be longer than the longest run inside it, or the block ends at its content:
+    // a three-backtick reader took the inner line for the close and the rest became paragraphs.
+    const markdown = ['````', '```', 'nested', '```', '````'].join('\n')
+    const { scope, html } = surface(markdown)
+
+    expect(html).toContain('<pre data-language=""><code>```\nnested\n```</code></pre>')
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
 })

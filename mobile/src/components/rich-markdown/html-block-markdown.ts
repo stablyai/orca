@@ -1,3 +1,4 @@
+import { codeFenceFor } from './markdown-code-fence'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { listMarkdown } from './html-list-markdown'
 
@@ -31,7 +32,8 @@ export function blockMarkdown(node: Node): string {
   if (tag === 'pre') {
     const language = node.getAttribute('data-language') ?? ''
     const code = textContent(node.querySelector('code') ?? node).replace(/\n+$/g, '')
-    return `\`\`\`${language}\n${code}\n\`\`\``
+    const fence = codeFenceFor(code)
+    return `${fence}${language}\n${code}\n${fence}`
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)
