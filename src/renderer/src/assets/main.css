@@ -765,6 +765,19 @@
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+/* Why: a plugin ships only the glyph shape, in --plugin-task-source-icon; the
+   element's own background-color paints it, so it tracks the theme. */
+.plugin-task-source-icon {
+  -webkit-mask-image: var(--plugin-task-source-icon);
+  mask-image: var(--plugin-task-source-icon);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See
