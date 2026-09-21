@@ -118,6 +118,127 @@ describe('createPluginTaskSourcesSlice', () => {
     expect(store.getState().pluginTaskSourceItems).toEqual([])
   })
 
+  it('loads the scopes a selected source declares', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockResolvedValue({
+      ok: true,
+      data: [
+        { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
+        { id: 'NssfDevOps/redesign', name: 'NssfDevOps / NssfGo-Redesign' }
+      ]
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceScopes()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith({ ...BOARDS_SOURCE, method: 'listScopes' })
+    expect(store.getState().pluginTaskSourceScopes.map((scope) => scope.name)).toEqual([
+      'NssfDevOps / Dashboards',
+      'NssfDevOps / NssfGo-Redesign'
+    ])
+    expect(store.getState().pluginTaskSourceScopesError).toBeNull()
+    expect(store.getState().pluginTaskSourceScopesLoading).toBe(false)
+  })
+
+  it('reports a listScopes failure rather than an empty scope list', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: false, code: 'forbidden', message: 'No project read access.' })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceScopes()
+
+    expect(store.getState().pluginTaskSourceScopes).toEqual([])
+    expect(store.getState().pluginTaskSourceScopesError).toEqual({
+      code: 'forbidden',
+      message: 'No project read access.'
+    })
+  })
+
+  it('narrows the list request to a single selected scope', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'listItems',
+      params: {
+        scopeIds: ['NssfDevOps/dashboards'],
+        search: null,
+        cursor: null,
+        limit: 50
+      }
+    })
+  })
+
+  it('carries every selected scope into the list request', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards', 'nssf-dolphin/platform'])
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          scopeIds: ['NssfDevOps/dashboards', 'nssf-dolphin/platform']
+        })
+      })
+    )
+  })
+
+  it('asks for every scope again once the selection is cleared', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    await store.getState().loadPluginTaskSourceItems()
+    store.getState().setPluginTaskSourceScopeIds([])
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenLastCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ scopeIds: [] }) })
+    )
+  })
+
+  it('drops a response whose scope selection the user has already replaced', async () => {
+    const store = createTestStore()
+    let resolveCall!: (value: unknown) => void
+    const invokeTaskSource = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveCall = resolve
+      })
+    )
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    const request = store.getState().loadPluginTaskSourceItems()
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+
+    resolveCall({ ok: true, data: { items: [taskItem('stale')], nextCursor: null } })
+    await request
+
+    expect(store.getState().pluginTaskSourceItems).toEqual([])
+  })
+
   it('reads declared filters off the status probe', async () => {
     const store = createTestStore()
     const invokeTaskSource = vi.fn().mockResolvedValue({

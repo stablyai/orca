@@ -2338,7 +2338,14 @@
         "pluginTaskSourceUnassigned": "Unassigned",
         "pluginTaskSourceOpen": "Open {{value0}}",
         "pluginTaskSourceFilters": "Filters",
-        "pluginTaskSourceSearch": "Search tasks..."
+        "pluginTaskSourceSearch": "Search tasks...",
+        "pluginTaskSourceScopes": "Projects",
+        "pluginTaskSourceAllScopes": "All projects",
+        "pluginTaskSourceScopeCount": "{{value0}} projects",
+        "pluginTaskSourceScopeSearch": "Search projects...",
+        "pluginTaskSourceScopesNoMatch": "No projects match your search.",
+        "pluginTaskSourceScopesLoading": "Loading projects...",
+        "pluginTaskSourceScopesFailed": "Projects unavailable"
       },
       "Terminal": {
         "73768427cf": "Close",

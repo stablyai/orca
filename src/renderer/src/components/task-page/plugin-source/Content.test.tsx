@@ -49,15 +49,19 @@ function stubInvokeTaskSource(invoke: ReturnType<typeof vi.fn>): void {
   )
 }
 
-/** Routes by method so the status probe and the item load each see their own
- *  payload, the way a real source answers them. */
+/** Routes by method so the status probe, the scope probe and the item load each
+ *  see their own payload, the way a real source answers them. */
 function stubSource(
   page: { items: unknown[] },
-  status: unknown = STATUS
+  status: unknown = STATUS,
+  scopes: unknown = []
 ): ReturnType<typeof vi.fn> {
   const invoke = vi.fn().mockImplementation(async (args: { method: string }) => {
     if (args.method === 'status') {
       return { ok: true, data: status }
+    }
+    if (args.method === 'listScopes') {
+      return { ok: true, data: scopes }
     }
     return { ok: true, data: { items: page.items, nextCursor: null } }
   })
@@ -122,6 +126,43 @@ describe('TaskPage contributed source content', () => {
 
     expect(await screen.findByText('Ship the source bar')).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Filters' })).not.toBeInTheDocument()
+  })
+
+  it('offers the scopes the source declares and reloads items in the picked one', async () => {
+    const user = userEvent.setup()
+    const invoke = stubSource({ items: [ITEM] }, STATUS, [
+      { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
+      { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+    ])
+    selectBoards()
+
+    renderContent()
+
+    await user.click(await screen.findByRole('combobox', { name: 'Projects' }))
+    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith({
+        ...BOARDS,
+        method: 'listItems',
+        params: {
+          scopeIds: ['NssfDevOps/dashboards'],
+          search: null,
+          cursor: null,
+          limit: 50
+        }
+      })
+    })
+  })
+
+  it('renders no scope picker for a source that declares no scopes', async () => {
+    stubSource({ items: [ITEM] })
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByText('Ship the source bar')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Projects' })).not.toBeInTheDocument()
   })
 
   it('surfaces a load failure instead of an empty board', async () => {

@@ -1,11 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
+import { z } from 'zod'
 import {
   pluginTaskPageSchema,
+  pluginTaskScopeSchema,
   pluginTaskSourceStatusSchema,
   type PluginTaskPage,
   type PluginTaskQuery,
+  type PluginTaskScope,
   type PluginTaskSourceResult
 } from '../../../../shared/plugins/plugin-task-source-contract'
 import type {
@@ -27,12 +30,15 @@ export type {
 
 const PLUGIN_TASK_SOURCE_PAGE_SIZE = 50
 const UNFILTERED_QUERY: PluginTaskSourceQuery = { search: null, filterId: null }
+const ALL_SCOPES: string[] = []
+
+const pluginTaskScopeListSchema = z.array(pluginTaskScopeSchema)
 
 /** `filterId` is omitted rather than sent as null so a source that never
  *  declared filters sees the exact request it saw before they existed. */
-function buildListQuery(query: PluginTaskSourceQuery): PluginTaskQuery {
+function buildListQuery(query: PluginTaskSourceQuery, scopeIds: string[]): PluginTaskQuery {
   return {
-    scopeIds: [],
+    scopeIds,
     search: query.search,
     cursor: null,
     limit: PLUGIN_TASK_SOURCE_PAGE_SIZE,
@@ -70,7 +76,8 @@ function isSameSelection(a: SelectedPluginTaskSource | null, b: SelectedPluginTa
  *  never `PluginService.invokeTaskSource` directly (see plugin-task-source-invoker.ts). */
 async function requestPluginTaskSourceItems(
   selection: SelectedPluginTaskSource,
-  query: PluginTaskSourceQuery
+  query: PluginTaskSourceQuery,
+  scopeIds: string[]
 ): Promise<PluginTaskSourceResult<PluginTaskPage>> {
   const invoke = window.api?.plugins?.invokeTaskSource
   if (!invoke) {
@@ -81,7 +88,7 @@ async function requestPluginTaskSourceItems(
       pluginKey: selection.pluginKey,
       sourceId: selection.sourceId,
       method: 'listItems',
-      params: buildListQuery(query)
+      params: buildListQuery(query, scopeIds)
     })
     if (!result.ok) {
       return result
@@ -121,6 +128,35 @@ async function requestPluginTaskSourceFilters(
   }
 }
 
+/** Unlike filters, a failure here is reported rather than swallowed: an empty
+ *  scope list is a real answer ("this source has no projects") and must stay
+ *  distinguishable from a call that never succeeded. */
+async function requestPluginTaskSourceScopes(
+  selection: SelectedPluginTaskSource
+): Promise<PluginTaskSourceResult<PluginTaskScope[]>> {
+  const invoke = window.api?.plugins?.invokeTaskSource
+  if (!invoke) {
+    return { ok: false, code: 'unavailable', message: 'Plugin bridge is unavailable.' }
+  }
+  try {
+    const result = await invoke({
+      pluginKey: selection.pluginKey,
+      sourceId: selection.sourceId,
+      method: 'listScopes'
+    })
+    if (!result.ok) {
+      return result
+    }
+    return { ok: true, data: pluginTaskScopeListSchema.parse(result.data) }
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'unavailable',
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
 export const createPluginTaskSourcesSlice: StateCreator<
   AppState,
   [],
@@ -134,6 +170,10 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceError: null,
   pluginTaskSourceFilters: [],
   pluginTaskSourceQuery: UNFILTERED_QUERY,
+  pluginTaskSourceScopes: [],
+  pluginTaskSourceScopesLoading: false,
+  pluginTaskSourceScopesError: null,
+  selectedPluginTaskSourceScopeIds: ALL_SCOPES,
 
   setPluginTaskSources: (sources) => {
     set({ pluginTaskSources: sources })
@@ -146,12 +186,20 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceError: null,
       pluginTaskSourceLoading: false,
       pluginTaskSourceFilters: [],
-      pluginTaskSourceQuery: UNFILTERED_QUERY
+      pluginTaskSourceQuery: UNFILTERED_QUERY,
+      pluginTaskSourceScopes: [],
+      pluginTaskSourceScopesLoading: false,
+      pluginTaskSourceScopesError: null,
+      selectedPluginTaskSourceScopeIds: ALL_SCOPES
     })
   },
 
   setPluginTaskSourceQuery: (query) => {
     set({ pluginTaskSourceQuery: query })
+  },
+
+  setPluginTaskSourceScopeIds: (scopeIds) => {
+    set({ selectedPluginTaskSourceScopeIds: scopeIds })
   },
 
   loadPluginTaskSourceFilters: async () => {
@@ -166,19 +214,47 @@ export const createPluginTaskSourcesSlice: StateCreator<
     set({ pluginTaskSourceFilters: filters })
   },
 
+  loadPluginTaskSourceScopes: async () => {
+    const selection = get().selectedPluginTaskSource
+    if (!selection) {
+      return
+    }
+    set({ pluginTaskSourceScopesLoading: true })
+    const result = await requestPluginTaskSourceScopes(selection)
+    if (!isSameSelection(get().selectedPluginTaskSource, selection)) {
+      return
+    }
+    if (result.ok) {
+      set({
+        pluginTaskSourceScopes: result.data,
+        pluginTaskSourceScopesError: null,
+        pluginTaskSourceScopesLoading: false
+      })
+    } else {
+      set({
+        pluginTaskSourceScopes: [],
+        pluginTaskSourceScopesError: { code: result.code, message: result.message },
+        pluginTaskSourceScopesLoading: false
+      })
+    }
+  },
+
   loadPluginTaskSourceItems: async () => {
     const selection = get().selectedPluginTaskSource
     if (!selection) {
       return
     }
     const query = get().pluginTaskSourceQuery
+    const scopeIds = get().selectedPluginTaskSourceScopeIds
     set({ pluginTaskSourceLoading: true })
-    const result = await requestPluginTaskSourceItems(selection, query)
-    // A stale response from a since-abandoned source or a since-replaced query
-    // must never overwrite what the user is looking at by the time it arrives.
+    const result = await requestPluginTaskSourceItems(selection, query, scopeIds)
+    // A stale response from a since-abandoned source, a since-replaced query, or
+    // a since-replaced scope selection must never overwrite what the user is
+    // looking at by the time it arrives.
     if (
       !isSameSelection(get().selectedPluginTaskSource, selection) ||
-      get().pluginTaskSourceQuery !== query
+      get().pluginTaskSourceQuery !== query ||
+      get().selectedPluginTaskSourceScopeIds !== scopeIds
     ) {
       return
     }

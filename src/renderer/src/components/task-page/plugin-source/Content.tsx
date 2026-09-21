@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { TaskPagePluginSourceList } from './List'
 import { usePluginTaskItemWorkspaceSeed } from './workspace-seed'
@@ -13,18 +13,40 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   const filters = useAppStore((state) => state.pluginTaskSourceFilters)
   const query = useAppStore((state) => state.pluginTaskSourceQuery)
   const setQuery = useAppStore((state) => state.setPluginTaskSourceQuery)
+  const scopes = useAppStore((state) => state.pluginTaskSourceScopes)
+  const scopesLoading = useAppStore((state) => state.pluginTaskSourceScopesLoading)
+  const scopesError = useAppStore((state) => state.pluginTaskSourceScopesError)
+  const selectedScopeIds = useAppStore((state) => state.selectedPluginTaskSourceScopeIds)
+  const setScopeIds = useAppStore((state) => state.setPluginTaskSourceScopeIds)
   const loadFilters = useAppStore((state) => state.loadPluginTaskSourceFilters)
+  const loadScopes = useAppStore((state) => state.loadPluginTaskSourceScopes)
   const loadItems = useAppStore((state) => state.loadPluginTaskSourceItems)
 
   useEffect(() => {
     void loadFilters()
   }, [loadFilters, selected])
 
-  // The query is part of the request, so a chip or a debounced search lands
-  // here as one reload rather than a second code path.
+  useEffect(() => {
+    void loadScopes()
+  }, [loadScopes, selected])
+
+  // The query and the scope selection are both part of the request, so a chip,
+  // a debounced search, or a picked project lands here as one reload rather
+  // than a second code path.
   useEffect(() => {
     void loadItems()
-  }, [loadItems, selected, query])
+  }, [loadItems, selected, query, selectedScopeIds])
+
+  const scopeFilter = useMemo(
+    () => ({
+      scopes,
+      selectedScopeIds,
+      loading: scopesLoading,
+      error: scopesError,
+      onScopeIdsChange: setScopeIds
+    }),
+    [scopes, scopesLoading, scopesError, selectedScopeIds, setScopeIds]
+  )
 
   const contributed = sources.find(
     (source) => source.pluginKey === selected?.pluginKey && source.sourceId === selected?.sourceId
@@ -39,6 +61,7 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
       filters={filters}
       query={query}
       onQueryChange={setQuery}
+      scopeFilter={scopeFilter}
       onUseItem={onUseItem}
     />
   )

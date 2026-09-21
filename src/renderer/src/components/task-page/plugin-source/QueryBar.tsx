@@ -9,6 +9,7 @@ import type {
   PluginTaskSourceFilter,
   PluginTaskSourceQuery
 } from '@/store/slices/plugin-task-sources-slice-contract'
+import { TaskPagePluginSourceScopePicker, type PluginTaskSourceScopeFilter } from './ScopePicker'
 
 function normalizeSearch(value: string): string | null {
   const trimmed = value.trim()
@@ -21,11 +22,13 @@ export const PLUGIN_TASK_SOURCE_SEARCH_DEBOUNCE_MS = 300
 export function TaskPagePluginSourceQueryBar({
   filters,
   query,
-  onQueryChange
+  onQueryChange,
+  scopeFilter
 }: {
   filters: PluginTaskSourceFilter[]
   query: PluginTaskSourceQuery
   onQueryChange: (query: PluginTaskSourceQuery) => void
+  scopeFilter: PluginTaskSourceScopeFilter
 }): React.JSX.Element {
   const [searchInput, setSearchInput] = useState(query.search ?? '')
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -95,6 +98,7 @@ export function TaskPagePluginSourceQueryBar({
       ) : null}
 
       <div className="flex items-center gap-2">
+        <TaskPagePluginSourceScopePicker {...scopeFilter} />
         <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <Input
           value={searchInput}

@@ -12,6 +12,7 @@ import type {
 } from '@/store/slices/plugin-task-sources-slice-contract'
 import { PLUGIN_TASK_ROW_GRID_CLASS, TaskPagePluginSourceItemRow } from './ItemRow'
 import { TaskPagePluginSourceQueryBar } from './QueryBar'
+import type { PluginTaskSourceScopeFilter } from './ScopePicker'
 import { groupPluginTaskItemsByState } from './state-grouping'
 
 function ColumnHeader(): React.JSX.Element {
@@ -145,6 +146,7 @@ export function TaskPagePluginSourceList({
   filters,
   query,
   onQueryChange,
+  scopeFilter,
   onUseItem
 }: {
   title: string
@@ -154,6 +156,7 @@ export function TaskPagePluginSourceList({
   filters: PluginTaskSourceFilter[]
   query: PluginTaskSourceQuery
   onQueryChange: (query: PluginTaskSourceQuery) => void
+  scopeFilter: PluginTaskSourceScopeFilter
   onUseItem: (item: PluginTaskItem) => void
 }): React.JSX.Element {
   return (
@@ -167,7 +170,12 @@ export function TaskPagePluginSourceList({
         </div>
       </div>
 
-      <TaskPagePluginSourceQueryBar filters={filters} query={query} onQueryChange={onQueryChange} />
+      <TaskPagePluginSourceQueryBar
+        filters={filters}
+        query={query}
+        onQueryChange={onQueryChange}
+        scopeFilter={scopeFilter}
+      />
 
       <ColumnHeader />
 

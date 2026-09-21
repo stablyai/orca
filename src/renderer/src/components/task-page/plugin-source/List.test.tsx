@@ -14,10 +14,18 @@ import type {
   PluginTaskSourceQuery
 } from '@/store/slices/plugin-task-sources-slice-contract'
 import { TaskPagePluginSourceList } from './List'
+import type { PluginTaskSourceScopeFilter } from './ScopePicker'
 
 afterEach(cleanup)
 
 const UNFILTERED: PluginTaskSourceQuery = { search: null, filterId: null }
+const NO_SCOPES: PluginTaskSourceScopeFilter = {
+  scopes: [],
+  selectedScopeIds: [],
+  loading: false,
+  error: null,
+  onScopeIdsChange: () => {}
+}
 
 function taskItem(overrides: Partial<PluginTaskItem> = {}): PluginTaskItem {
   return {
@@ -41,6 +49,7 @@ function renderList(
     filters?: PluginTaskSourceFilter[]
     query?: PluginTaskSourceQuery
     onQueryChange?: (query: PluginTaskSourceQuery) => void
+    scopeFilter?: PluginTaskSourceScopeFilter
     onUseItem?: (item: PluginTaskItem) => void
   } = {}
 ): ReturnType<typeof render> {
@@ -54,6 +63,7 @@ function renderList(
         filters={props.filters ?? []}
         query={props.query ?? UNFILTERED}
         onQueryChange={props.onQueryChange ?? vi.fn()}
+        scopeFilter={props.scopeFilter ?? NO_SCOPES}
         onUseItem={props.onUseItem ?? vi.fn()}
       />
     </TooltipProvider>
