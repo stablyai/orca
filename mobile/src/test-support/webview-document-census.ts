@@ -102,28 +102,71 @@ export function parseModule(name: string, source: string) {
 }
 
 /**
- * The top-level statements that are not declarations, and the initialisers that run something.
+ * A statement kind whose own body is not evaluated when the module is.
  *
- * A declaration counts as work when its initialiser calls, constructs, awaits, or reaches into
- * `document` or `window`, which is the exact form that survived a remount still holding the first
- * mount's node.
+ * `export default function () {}` declares a function; the calls inside it run when something
+ * calls it. Without this the default-export reader below would walk into that body and report the
+ * first call it found there, which is every module with a default export.
+ */
+const DECLARES_WITHOUT_RUNNING = new Set(['FunctionDeclaration', 'TSDeclareFunction'])
+
+/**
+ * The top-level statements that are not declarations, and the declarations that run something.
+ *
+ * A declaration counts as work when it calls, constructs, awaits, or reaches into `document` or
+ * `window` as the module is evaluated, which is the exact form that survived a remount still
+ * holding the first mount's node. There are three shapes of it, and a reader that knew only the
+ * first would accept the other two:
+ *
+ * - `const editor = document.getElementById('editor')` — a declaration by shape.
+ * - `class A { static value = install() }` — a static member is evaluated with the class.
+ * - `export default install()` — the default export is an expression, evaluated where it is.
  */
 export function parseTimeEffects(name: string, source: string): string[] {
   const effects: string[] = []
+  const report = (node: unknown) => {
+    effects.push(`${name}: ${source.slice(numberField(node, 'start'), numberField(node, 'end'))}`)
+  }
+
   for (const statement of parseModule(name, source).body) {
     if (!DECLARATION_KINDS.has(statement.type)) {
       effects.push(`${name}: ${statement.type}`)
       continue
     }
-    const declaration =
-      statement.type === 'ExportNamedDeclaration' ? (statement.declaration ?? statement) : statement
-    if (declaration.type !== 'VariableDeclaration') {
+    const exported =
+      statement.type === 'ExportNamedDeclaration' || statement.type === 'ExportDefaultDeclaration'
+    const declared = exported ? (field(statement, 'declaration') ?? statement) : statement
+    const declaredType = stringField(declared, 'type')
+
+    if (declaredType === 'VariableDeclaration') {
+      for (const declarator of arrayField(declared, 'declarations')) {
+        const init = field(declarator, 'init')
+        if (init && initialiserRuns(init)) {
+          report(declarator)
+        }
+      }
       continue
     }
-    for (const declarator of declaration.declarations) {
-      if (declarator.init && initialiserRuns(declarator.init)) {
-        effects.push(`${name}: ${source.slice(declarator.start, declarator.end)}`)
+
+    if (declaredType === 'ClassDeclaration' || declaredType === 'ClassExpression') {
+      for (const member of arrayField(field(declared, 'body'), 'body')) {
+        // A static block is parse-time work by construction; a static field is when its value runs.
+        // An instance field is not: it runs per `new`, and nothing here is ever constructed.
+        if (stringField(member, 'type') === 'StaticBlock') {
+          report(member)
+        } else if (field(member, 'static') === true && initialiserRuns(field(member, 'value'))) {
+          report(member)
+        }
       }
+      continue
+    }
+
+    if (
+      statement.type === 'ExportDefaultDeclaration' &&
+      !DECLARES_WITHOUT_RUNNING.has(declaredType) &&
+      initialiserRuns(declared)
+    ) {
+      report(declared)
     }
   }
   return effects
@@ -192,6 +235,11 @@ const OWNS_ITS_BINDINGS = new Set([
   'ClassExpression',
   'TSDeclareFunction'
 ])
+
+function arrayField(node: unknown, key: string): unknown[] {
+  const found = field(node, key)
+  return Array.isArray(found) ? found : []
+}
 
 function numberField(node: unknown, key: string): number {
   const found = field(node, key)

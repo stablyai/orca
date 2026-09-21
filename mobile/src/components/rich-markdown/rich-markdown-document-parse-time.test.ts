@@ -54,6 +54,40 @@ describe('the rich Markdown editor document at parse time', () => {
     }
   })
 
+  it('would report work in every declaration that runs as the module is evaluated', () => {
+    // Three shapes, because a reader that knew only the first would accept the other two and the
+    // empty list above would be about nothing. A statement-kind filter waves all three through:
+    // each is a declaration by shape and parse-time work by effect.
+    const planted: [string, string, string][] = [
+      [
+        'a const read from the document',
+        "const editor = document.getElementById('editor')\n",
+        "planted: editor = document.getElementById('editor')"
+      ],
+      [
+        'a static class member',
+        'class Reporter {\n  static installed = install()\n}\n',
+        'planted: static installed = install()'
+      ],
+      ['a default export that is an expression', 'export default install()\n', 'planted: install()']
+    ]
+    expect(
+      planted.map(([written, source]) => [written, parseTimeEffects('planted', source)])
+    ).toEqual(planted.map(([written, , named]) => [written, [named]]))
+  })
+
+  it('leaves declarations that only declare alone, so the empty list is a measurement', () => {
+    // The other direction, and the two that look like the shapes above but are not: an instance
+    // field runs per `new`, and nothing in a document is ever constructed at parse; a default
+    // export of a function declares a body that runs when something calls it.
+    const inert = [
+      'const options = { capture: true, passive: false }\n',
+      'class Reporter {\n  pending = install()\n}\n',
+      'export default function () {\n  return install()\n}\n'
+    ]
+    expect(inert.map((source) => parseTimeEffects('inert', source))).toEqual([[], [], []])
+  })
+
   it('holds no mutable binding of its own: every one is a field of the scope', () => {
     // Ruling 21. The factory gives each call its own scope, so a `let` in a module would be the one
     // thing two editors on one page still shared — the second mount would inherit the first's
