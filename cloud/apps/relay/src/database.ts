@@ -327,7 +327,8 @@ CREATE TABLE IF NOT EXISTS relay_cell_admission (
   cell_id TEXT PRIMARY KEY,
   admission_state TEXT NOT NULL
     CHECK (admission_state IN ('existing-only', 'migration-only', 'general')),
-  updated_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL,
+  roll_isolated_at BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS relay_admission_selectors (
@@ -680,6 +681,12 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
   // Nullable with no default, so the rewrite is catalog-only; every row
   // aborted before this column existed reads as an unattributed abort.
   `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS abort_reason TEXT`,
+  // migration-only alone cannot say why a cell is parked there: five flows park loaded cells in
+  // that state durably. This stamps only the same-cap roll's isolate step, so placement can tell a
+  // cell being rolled from an evacuation target or an Asia rollback. Nullable with no default, so
+  // the rewrite is catalog-only; a cell isolated before this column existed reads as unmarked and
+  // keeps its hosts pinned, which is the pre-existing behaviour.
+  `ALTER TABLE relay_cell_admission ADD COLUMN IF NOT EXISTS roll_isolated_at BIGINT`,
   // Dropped, not created: see the comment on relay_assignment_activity_leases. Deferrable because
   // this is the one boot where it has to take ACCESS EXCLUSIVE on a table under continuous write,
   // and all 28 directors reach it at once; a lock timeout here must not restart the instance, which
