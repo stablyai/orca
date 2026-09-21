@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 // Execute the generated module against legacy and current plugin contracts.
-describe('OpenCode 2 setup and prompt ordering', () => {
+describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (agent) => {
   type PostBody = { payload?: unknown }
 
   function record(value: unknown): Record<string, unknown> | undefined {
@@ -48,6 +48,7 @@ describe('OpenCode 2 setup and prompt ordering', () => {
   // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
   const ENV_KEYS = [
     'ORCA_PANE_KEY',
+    'ORCA_OPENCODE_AGENT',
     'ORCA_AGENT_HOOK_ENDPOINT',
     'ORCA_AGENT_HOOK_PORT',
     'ORCA_AGENT_HOOK_TOKEN'
@@ -64,6 +65,7 @@ describe('OpenCode 2 setup and prompt ordering', () => {
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+    process.env.ORCA_OPENCODE_AGENT = agent
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -94,6 +96,21 @@ describe('OpenCode 2 setup and prompt ordering', () => {
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
   }
 
+  it('does not register hooks for the other pane variant', async () => {
+    process.env.ORCA_OPENCODE_AGENT = agent === 'opencode' ? 'opencode2' : 'opencode'
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const hook = vi.fn()
+    const subscribe = vi.fn()
+    const cleanup = await module.default?.setup?.({ session: { hook }, event: { subscribe } })
+    expect(hook).not.toHaveBeenCalled()
+    expect(subscribe).not.toHaveBeenCalled()
+    await cleanup?.()
+  })
+
   it('subscribes through the OpenCode 2 setup API and disposes its registrations', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const posts: unknown[] = []
@@ -103,7 +120,11 @@ describe('OpenCode 2 setup and prompt ordering', () => {
     })
     const dispose = vi.fn()
     let subscriptionSignal: AbortSignal | undefined
-    const module = await loadPluginModule(_internals.getOpenCode2PluginSource())
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
     expect(module.default?.setup).toBeTypeOf('function')
     const cleanup = await module.default?.setup?.({
       session: {
@@ -137,6 +158,10 @@ describe('OpenCode 2 setup and prompt ordering', () => {
         ])
       )
     })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `http://127.0.0.1:59999/hook/${agent}`,
+      expect.objectContaining({ method: 'POST' })
+    )
     await cleanup?.()
     expect(dispose).toHaveBeenCalledOnce()
     expect(subscriptionSignal?.aborted).toBe(true)
@@ -149,7 +174,11 @@ describe('OpenCode 2 setup and prompt ordering', () => {
       posts.push({ body: record(JSON.parse(String(init?.body))) ?? {} })
       return new Response('{}', { status: 200 })
     })
-    const module = await loadPluginModule(_internals.getOpenCode2PluginSource())
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
     const cleanup = await module.default?.setup?.({
       session: {
         get: async ({ sessionID }: { sessionID: string }) => ({ data: { id: sessionID } }),
@@ -239,7 +268,11 @@ describe('OpenCode 2 setup and prompt ordering', () => {
       const lookup = new Promise<{ data: { id: string } }>((resolve) => {
         releaseLookup = resolve
       })
-      const module = await loadPluginModule(_internals.getOpenCode2PluginSource())
+      const module = await loadPluginModule(
+        agent === 'opencode2'
+          ? _internals.getOpenCode2PluginSource()
+          : _internals.getOpenCodePluginSource()
+      )
       const hooks = await module.default?.server?.({ client: { session: { get: () => lookup } } })
       expect(hooks).toBeDefined()
       const prompt = hooks?.event({
