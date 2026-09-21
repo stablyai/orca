@@ -39,6 +39,28 @@ const MODEL_DOWNLOAD_FILES = {
       ['tokens.txt', 93_939, 'd58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d']
     ]
   ),
+  'parakeet-tdt-0.6b-v3-pt-br-int8': huggingFaceFiles(
+    'joaorura/parakeet-tdt-0.6b-v3-ptBR-sherpa-onnx-int8',
+    'bf31b612b9ea9602c21b9faf0dec038ff2c9a3fc',
+    [
+      [
+        'encoder.int8.onnx',
+        652_282_302,
+        '260aff7bf778b016b42385e186d88a57224bd6958001993dbb6070a9a75b6690'
+      ],
+      [
+        'decoder.int8.onnx',
+        11_845_274,
+        '6b77e877b1dc29ebead07c0f461a7385d1ac5f8eff5be6422fdddb390d4a9967'
+      ],
+      [
+        'joiner.int8.onnx',
+        6_355_277,
+        'eb365a33945103cb787aa849b344cbf2abc093b43211e3b969ff97be3fdfc0e4'
+      ],
+      ['tokens.txt', 93_939, 'd58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d']
+    ]
+  ),
   'parakeet-tdt-0.6b-v2-int8': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8',
     '1ab9323565ddb038682214b292f588070a538ce2',
