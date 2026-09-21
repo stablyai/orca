@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
+  markClaudeWorkspaceTrusted: vi.fn(),
   markCodexProjectTrusted: vi.fn(),
   markCopilotFolderTrusted: vi.fn(),
   markCursorWorkspaceTrusted: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../agent-trust-presets', () => ({
+  markClaudeWorkspaceTrusted: mocks.markClaudeWorkspaceTrusted,
   markCodexProjectTrusted: mocks.markCodexProjectTrusted,
   markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
   markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
@@ -140,4 +142,11 @@ describe('markLocalWorktreeTrusted', () => {
 
     await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
   })
+
+  it('marks Claude workspace trusted for claude agent', async () => {
+    await markLocalWorktreeTrusted('claude', '/workspace/claude-project')
+
+    expect(mocks.markClaudeWorkspaceTrusted).toHaveBeenCalledWith('/workspace/claude-project')
+  })
 })
+

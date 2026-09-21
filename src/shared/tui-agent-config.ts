@@ -17,6 +17,8 @@ export type DraftPasteReadySignal =
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'claude'
+
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
@@ -37,7 +39,7 @@ export type TuiAgentConfig = {
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
+  preflightTrust?: AgentTrustPreset
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
@@ -73,7 +75,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
+    preflightTrust: 'claude'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.

@@ -26,6 +26,8 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'claude') {
+    await markRemoteClaudeWorkspaceTrusted(fsProvider, home, workspacePath)
   }
 }
 
@@ -146,3 +148,43 @@ async function markRemoteCopilotFolderTrusted(
   await fsProvider.createDir(configDir)
   await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function markRemoteClaudeWorkspaceTrusted(
+  fsProvider: IFilesystemProvider,
+  remoteHome: string,
+  workspacePath: string
+): Promise<void> {
+  const configPath = `${remoteHome}/.claude.json`
+  const raw = await readRemoteTextFile(fsProvider, configPath)
+  let config: Record<string, unknown> = {}
+  if (raw.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (isRecord(parsed)) {
+        config = parsed
+      }
+    } catch {
+      return
+    }
+  }
+  const rawProjects = config.projects
+  const projects = isRecord(rawProjects) ? rawProjects : {}
+  const rawProjectEntry = projects[workspacePath]
+  const projectEntry = isRecord(rawProjectEntry) ? rawProjectEntry : {}
+  if (projectEntry.hasTrustDialogAccepted === true) {
+    return
+  }
+  config.projects = {
+    ...projects,
+    [workspacePath]: {
+      ...projectEntry,
+      hasTrustDialogAccepted: true
+    }
+  }
+  await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+

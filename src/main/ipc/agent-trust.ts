@@ -1,10 +1,5 @@
 import { ipcMain } from 'electron'
-import {
-  type AgentTrustPreset,
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
+import { type AgentTrustPreset, markAgentWorkspaceTrusted } from '../agent-trust-presets'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 
 /**
@@ -29,21 +24,14 @@ export function registerAgentTrustHandlers(): void {
       }
       try {
         const connectionId = typeof args.connectionId === 'string' ? args.connectionId.trim() : ''
-        if (connectionId) {
-          // Why: SSH-launched agents read trust artifacts from the remote
-          // user's home, not from this desktop process.
-          await markRemoteAgentWorkspaceTrusted({
-            preset: args.preset,
-            connectionId,
-            workspacePath: args.workspacePath
-          })
-        } else if (args.preset === 'cursor') {
-          markCursorWorkspaceTrusted(args.workspacePath)
-        } else if (args.preset === 'copilot') {
-          markCopilotFolderTrusted(args.workspacePath)
-        } else if (args.preset === 'codex') {
-          markCodexProjectTrusted(args.workspacePath)
-        }
+        // Why: SSH-launched agents read trust artifacts from remote host, local agents from desktop.
+        await (connectionId
+          ? markRemoteAgentWorkspaceTrusted({
+              preset: args.preset,
+              connectionId,
+              workspacePath: args.workspacePath
+            })
+          : markAgentWorkspaceTrusted(args.preset, args.workspacePath))
       } catch {
         // Best-effort: see Why above. The user can still accept the trust
         // prompt manually if writing the artifact fails.

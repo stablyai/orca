@@ -38,8 +38,13 @@ vi.mock('node:os', async () => {
   }
 })
 
-const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
-  await import('./agent-trust-presets')
+const {
+  markAgentWorkspaceTrusted,
+  markClaudeWorkspaceTrusted,
+  markCodexProjectTrusted,
+  markCopilotFolderTrusted,
+  markCursorWorkspaceTrusted
+} = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 
@@ -299,6 +304,90 @@ describe('markCodexProjectTrusted', () => {
       expect(runtimeWritten).toContain('notes = "keep-runtime"')
       expect(runtimeWritten).toContain('trust_level = "trusted"')
       expect(runtimeWritten).not.toContain('trust_level = "untrusted"')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('markClaudeWorkspaceTrusted', () => {
+  it('writes hasTrustDialogAccepted to ~/.claude.json under projects', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-ws-'))
+    const realpath = realpathSync(workspace)
+    try {
+      markClaudeWorkspaceTrusted(workspace)
+      const configPath = join(testState.fakeHomeDir, '.claude.json')
+      expect(existsSync(configPath)).toBe(true)
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      expect(parsed.projects?.[realpath]?.hasTrustDialogAccepted).toBe(true)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves existing keys in ~/.claude.json and in the specific project entry', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-ws-'))
+    const realpath = realpathSync(workspace)
+    try {
+      writeFileSync(
+        join(testState.fakeHomeDir, '.claude.json'),
+        JSON.stringify({
+          numStartups: 10,
+          theme: 'dark',
+          projects: {
+            [realpath]: {
+              allowedTools: ['Bash'],
+              hasTrustDialogAccepted: false
+            }
+          }
+        })
+      )
+      markClaudeWorkspaceTrusted(workspace)
+      const parsed = JSON.parse(readFileSync(join(testState.fakeHomeDir, '.claude.json'), 'utf-8'))
+      expect(parsed.numStartups).toBe(10)
+      expect(parsed.theme).toBe('dark')
+      expect(parsed.projects[realpath].allowedTools).toEqual(['Bash'])
+      expect(parsed.projects[realpath].hasTrustDialogAccepted).toBe(true)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('no-ops when hasTrustDialogAccepted is already true', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-ws-'))
+    const realpath = realpathSync(workspace)
+    try {
+      const initialContent = JSON.stringify(
+        {
+          projects: {
+            [realpath]: {
+              hasTrustDialogAccepted: true
+            }
+          }
+        },
+        null,
+        2
+      )
+      const configPath = join(testState.fakeHomeDir, '.claude.json')
+      writeFileSync(configPath, `${initialContent}\n`)
+      markClaudeWorkspaceTrusted(workspace)
+      expect(readFileSync(configPath, 'utf-8')).toBe(`${initialContent}\n`)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('markAgentWorkspaceTrusted', () => {
+  it('dispatches to markClaudeWorkspaceTrusted when preset is claude', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-unified-'))
+    const realpath = realpathSync(workspace)
+    try {
+      await markAgentWorkspaceTrusted('claude', workspace)
+      const configPath = join(testState.fakeHomeDir, '.claude.json')
+      expect(existsSync(configPath)).toBe(true)
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      expect(parsed.projects?.[realpath]?.hasTrustDialogAccepted).toBe(true)
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

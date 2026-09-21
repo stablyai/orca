@@ -6,7 +6,9 @@ import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+import type { AgentTrustPreset } from '../shared/tui-agent-config'
+
+export type { AgentTrustPreset }
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
@@ -124,6 +126,62 @@ export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
       upsertProjectTrustLevel(runtimeTomlPath, absPath, 'trusted')
     })
   )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Claude Code stores project trust in ~/.claude.json under:
+ *   projects."<realpath>".hasTrustDialogAccepted = true
+ */
+export function markClaudeWorkspaceTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  const configPath = join(homedir(), '.claude.json')
+  let config: Record<string, unknown> = {}
+  try {
+    if (existsSync(configPath)) {
+      const raw = readFileSync(configPath, 'utf-8')
+      const parsed: unknown = JSON.parse(raw)
+      if (isRecord(parsed)) {
+        config = parsed
+      }
+    }
+  } catch {
+    // Why: a corrupted .claude.json is the user's to fix — refuse to overwrite from this side effect.
+    return
+  }
+  const rawProjects = config.projects
+  const projects = isRecord(rawProjects) ? rawProjects : {}
+  const rawProjectEntry = projects[absPath]
+  const projectEntry = isRecord(rawProjectEntry) ? rawProjectEntry : {}
+  if (projectEntry.hasTrustDialogAccepted === true) {
+    return
+  }
+  config.projects = {
+    ...projects,
+    [absPath]: {
+      ...projectEntry,
+      hasTrustDialogAccepted: true
+    }
+  }
+  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+export async function markAgentWorkspaceTrusted(
+  preset: AgentTrustPreset,
+  workspacePath: string
+): Promise<void> {
+  if (preset === 'cursor') {
+    markCursorWorkspaceTrusted(workspacePath)
+  } else if (preset === 'copilot') {
+    markCopilotFolderTrusted(workspacePath)
+  } else if (preset === 'codex') {
+    await markCodexProjectTrusted(workspacePath)
+  } else if (preset === 'claude') {
+    markClaudeWorkspaceTrusted(workspacePath)
+  }
 }
 
 function resolveCodexProjectTrustRoot(workspacePath: string): string {

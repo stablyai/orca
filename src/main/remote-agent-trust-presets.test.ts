@@ -138,10 +138,49 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     expect(fsProvider.createDir).toHaveBeenCalledWith('/home/u/.copilot')
     const written = writeFile.mock.calls[0]?.[1]
     expect(typeof written).toBe('string')
-    expect(JSON.parse(written as string)).toEqual({
-      firstLaunchAt: '2026-01-01',
-      trustedFolders: ['/old', '/real/repo/worktree']
+    if (typeof written === 'string') {
+      expect(JSON.parse(written)).toEqual({
+        firstLaunchAt: '2026-01-01',
+        trustedFolders: ['/old', '/real/repo/worktree']
+      })
+    }
+  })
+
+  it('writes Claude trust to remote ~/.claude.json under projects', async () => {
+    const writeFile = vi.fn(async (_filePath: string, _content: string) => undefined)
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => ({
+        content: JSON.stringify({
+          numStartups: 5,
+          projects: { '/old': { hasTrustDialogAccepted: true } }
+        }),
+        isBinary: false
+      })),
+      writeFile
     })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'claude',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo/worktree'
+    })
+
+    expect(writeFile).toHaveBeenCalledWith(
+      '/home/u/.claude.json',
+      expect.stringContaining('"hasTrustDialogAccepted": true')
+    )
+    const written = writeFile.mock.calls[0]?.[1]
+    expect(typeof written).toBe('string')
+    if (typeof written === 'string') {
+      expect(JSON.parse(written)).toEqual({
+        numStartups: 5,
+        projects: {
+          '/old': { hasTrustDialogAccepted: true },
+          '/real/repo/worktree': { hasTrustDialogAccepted: true }
+        }
+      })
+    }
   })
 
   it('does nothing when the SSH home cannot be resolved safely', async () => {
