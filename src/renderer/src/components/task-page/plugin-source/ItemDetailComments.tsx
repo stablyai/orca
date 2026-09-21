@@ -1,10 +1,16 @@
-import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle, Reply } from 'lucide-react'
 
 import { CommentMarkdownAsync } from '@/components/sidebar/comment-markdown-lazy'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { PluginTaskComment } from '../../../../../shared/plugins/plugin-task-source-contract'
 import type { PluginTaskSourceLoadError } from '@/store/slices/plugin-task-sources-slice-contract'
 import { formatRelativeTime } from '../../task-page-source-context'
+import { useCommentReplyDraft } from './comment-reply-draft'
+import {
+  TaskPagePluginSourceCommentComposer,
+  type PluginTaskSourceCommentControl
+} from './ItemDetailCommentComposer'
 
 /** Only a body the source declared as markdown is parsed. `'text'` and the
  *  legacy `'html'` render as literal characters, so third-party markup can
@@ -26,15 +32,62 @@ function CommentBody({ comment }: { comment: PluginTaskComment }): React.JSX.Ele
   )
 }
 
+function CommentCard({
+  comment,
+  onReply
+}: {
+  comment: PluginTaskComment
+  onReply: ((comment: PluginTaskComment) => void) | null
+}): React.JSX.Element {
+  return (
+    <article className="rounded-md border border-border/50 bg-muted/20">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
+        <span className="truncate text-[13px] font-semibold text-foreground">
+          {comment.author.displayName}
+        </span>
+        <span className="shrink-0 text-[12px] text-muted-foreground">
+          {formatRelativeTime(comment.createdAt)}
+        </span>
+        {onReply ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => onReply(comment)}
+            aria-label={translate(
+              'auto.components.TaskPage.pluginTaskSourceReplyTo',
+              'Reply to {{value0}}',
+              { value0: comment.author.displayName }
+            )}
+          >
+            <Reply className="size-3.5" />
+            {translate('auto.components.TaskPage.pluginTaskSourceReply', 'Reply')}
+          </Button>
+        ) : null}
+      </div>
+      <div className="px-3 py-2">
+        <CommentBody comment={comment} />
+      </div>
+    </article>
+  )
+}
+
 export function TaskPagePluginSourceItemComments({
   comments,
   loading,
-  error
+  error,
+  composer
 }: {
   comments: PluginTaskComment[]
   loading: boolean
   error: PluginTaskSourceLoadError | null
+  /** Null when the source did not declare `supports.comment`, so a source that
+   *  cannot post shows neither a composer nor a reply action. */
+  composer: PluginTaskSourceCommentControl | null
 }): React.JSX.Element {
+  const { draft, setDraft, textareaRef, quoteReply } = useCommentReplyDraft()
+
   return (
     <section className="px-4 py-4">
       <div className="mb-3 flex items-center gap-2">
@@ -66,22 +119,23 @@ export function TaskPagePluginSourceItemComments({
       ) : (
         <div className="flex flex-col gap-3">
           {comments.map((comment) => (
-            <article key={comment.id} className="rounded-md border border-border/50 bg-muted/20">
-              <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
-                <span className="truncate text-[13px] font-semibold text-foreground">
-                  {comment.author.displayName}
-                </span>
-                <span className="shrink-0 text-[12px] text-muted-foreground">
-                  {formatRelativeTime(comment.createdAt)}
-                </span>
-              </div>
-              <div className="px-3 py-2">
-                <CommentBody comment={comment} />
-              </div>
-            </article>
+            <CommentCard
+              key={comment.id}
+              comment={comment}
+              onReply={composer ? quoteReply : null}
+            />
           ))}
         </div>
       )}
+
+      {composer ? (
+        <TaskPagePluginSourceCommentComposer
+          draft={draft}
+          onDraftChange={setDraft}
+          textareaRef={textareaRef}
+          submit={composer.submit}
+        />
+      ) : null}
     </section>
   )
 }

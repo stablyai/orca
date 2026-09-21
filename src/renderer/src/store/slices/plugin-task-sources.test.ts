@@ -265,6 +265,7 @@ describe('createPluginTaskSourcesSlice', () => {
 
     expect(store.getState().pluginTaskSourceFilters).toEqual([{ id: 'open', label: 'All open' }])
     expect(store.getState().pluginTaskSourceSupportsCreate).toBe(true)
+    expect(store.getState().pluginTaskSourceSupportsComment).toBe(false)
   })
 
   it('leaves the chip row empty when the status probe fails', async () => {
@@ -279,6 +280,7 @@ describe('createPluginTaskSourcesSlice', () => {
 
     expect(store.getState().pluginTaskSourceFilters).toEqual([])
     expect(store.getState().pluginTaskSourceSupportsCreate).toBe(false)
+    expect(store.getState().pluginTaskSourceSupportsComment).toBe(false)
     expect(store.getState().pluginTaskSourceError).toBeNull()
   })
 

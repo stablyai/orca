@@ -23,6 +23,7 @@ import type {
 
 export type {
   ContributedPluginTaskSource,
+  PluginTaskCommentDraft,
   PluginTaskSourceFilter,
   PluginTaskSourceLoadError,
   PluginTaskSourceQuery,
@@ -131,6 +132,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceError: null,
   pluginTaskSourceFilters: [],
   pluginTaskSourceSupportsCreate: false,
+  pluginTaskSourceSupportsComment: false,
   pluginTaskSourceQuery: UNFILTERED_QUERY,
   pluginTaskSourceScopes: [],
   pluginTaskSourceScopesLoading: false,
@@ -150,6 +152,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceLoading: false,
       pluginTaskSourceFilters: [],
       pluginTaskSourceSupportsCreate: false,
+      pluginTaskSourceSupportsComment: false,
       pluginTaskSourceQuery: UNFILTERED_QUERY,
       pluginTaskSourceScopes: [],
       pluginTaskSourceScopesLoading: false,
@@ -181,7 +184,8 @@ export const createPluginTaskSourcesSlice: StateCreator<
     }
     set({
       pluginTaskSourceFilters: result.ok ? (result.data.filters ?? []) : [],
-      pluginTaskSourceSupportsCreate: result.ok ? result.data.supports.create : false
+      pluginTaskSourceSupportsCreate: result.ok ? result.data.supports.create : false,
+      pluginTaskSourceSupportsComment: result.ok ? result.data.supports.comment : false
     })
   },
 
@@ -297,6 +301,17 @@ export const createPluginTaskSourcesSlice: StateCreator<
     }
     return invokePluginTaskSource(selection, 'listComments', pluginTaskCommentListSchema, {
       id: itemId
+    })
+  },
+
+  addPluginTaskSourceComment: async ({ itemId, body }) => {
+    const selection = get().selectedPluginTaskSource
+    if (!selection) {
+      return NO_SELECTION
+    }
+    return invokePluginTaskSource(selection, 'addComment', pluginTaskCommentSchema, {
+      id: itemId,
+      body
     })
   }
 })

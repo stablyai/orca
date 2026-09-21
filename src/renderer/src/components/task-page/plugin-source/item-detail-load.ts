@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { useAppStore } from '@/store'
 import type {
@@ -14,6 +14,12 @@ export type PluginTaskItemDetailState = {
   comments: PluginTaskComment[]
   commentsLoading: boolean
   commentsError: PluginTaskSourceLoadError | null
+}
+
+export type PluginTaskItemDetailView = PluginTaskItemDetailState & {
+  /** Shows a just-posted comment without a second round trip. Re-sorted on the
+   *  source's own `createdAt`, never appended blindly at the end. */
+  appendComment: (comment: PluginTaskComment) => void
 }
 
 const LOADING: PluginTaskItemDetailState = {
@@ -37,7 +43,7 @@ function byOldestFirst(a: PluginTaskComment, b: PluginTaskComment): number {
  * Callers mount this per item — keyed by item id — so a second item never
  * shows the first one's body while its own request is in flight.
  */
-export function usePluginTaskItemDetail(itemId: string): PluginTaskItemDetailState {
+export function usePluginTaskItemDetail(itemId: string): PluginTaskItemDetailView {
   const getItem = useAppStore((state) => state.getPluginTaskSourceItem)
   const listComments = useAppStore((state) => state.listPluginTaskSourceComments)
   const [state, setState] = useState<PluginTaskItemDetailState>(LOADING)
@@ -74,5 +80,12 @@ export function usePluginTaskItemDetail(itemId: string): PluginTaskItemDetailSta
     }
   }, [itemId, getItem, listComments])
 
-  return state
+  const appendComment = useCallback((comment: PluginTaskComment) => {
+    setState((previous) => ({
+      ...previous,
+      comments: [...previous.comments, comment].sort(byOldestFirst)
+    }))
+  }, [])
+
+  return { ...state, appendComment }
 }

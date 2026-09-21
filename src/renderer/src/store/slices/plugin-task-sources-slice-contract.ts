@@ -57,6 +57,9 @@ export type PluginTaskSourcesSlice = {
   /** Straight from `status().supports.create`. False until the probe answers,
    *  so a source is never offered a create control it did not declare. */
   pluginTaskSourceSupportsCreate: boolean
+  /** Straight from `status().supports.comment`. False until the probe answers,
+   *  so a source that cannot post is never shown a composer. */
+  pluginTaskSourceSupportsComment: boolean
   pluginTaskSourceQuery: PluginTaskSourceQuery
   /** Projects/boards the source can be narrowed to, as `listScopes` named
    *  them. Core never re-derives or reformats `name`. */
@@ -99,6 +102,18 @@ export type PluginTaskSourcesSlice = {
   listPluginTaskSourceComments: (
     itemId: string
   ) => Promise<PluginTaskSourceResult<PluginTaskComment[]>>
+  /** Returns the envelope rather than setting state: a rejected post belongs
+   *  beside the composer that still holds the typed body. */
+  addPluginTaskSourceComment: (
+    input: PluginTaskCommentDraft
+  ) => Promise<PluginTaskSourceResult<PluginTaskComment>>
+}
+
+/** Named rather than two positional strings: `(itemId, body)` are the same
+ *  type, so a swapped pair would post the id as the comment. */
+export type PluginTaskCommentDraft = {
+  itemId: string
+  body: string
 }
 
 type PluginTaskSourcesStateCreator = StateCreator<AppState, [], [], PluginTaskSourcesSlice>

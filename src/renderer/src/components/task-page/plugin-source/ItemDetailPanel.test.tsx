@@ -49,10 +49,20 @@ const COMMENT = {
   createdAt: THREE_HOURS_AGO
 }
 
+const POSTED = {
+  id: 'c2',
+  author: { id: 'u3', displayName: 'Isaac Obella', avatarUrl: null },
+  body: 'Shipping today',
+  bodyFormat: 'text',
+  createdAt: new Date().toISOString()
+}
+
 type SourceAnswers = {
   item?: PluginTaskItem
   detail?: unknown
   comments?: unknown
+  supportsComment?: boolean
+  addComment?: () => unknown
 }
 
 /** Routes by method so the detail fetch and the comment fetch can fail or
@@ -61,7 +71,13 @@ function stubSource(answers: SourceAnswers = {}): ReturnType<typeof vi.fn> {
   const item = answers.item ?? ITEM
   const invoke = vi.fn().mockImplementation(async (args: { method: string }) => {
     if (args.method === 'status') {
-      return { ok: true, data: STATUS }
+      return {
+        ok: true,
+        data: {
+          ...STATUS,
+          supports: { ...STATUS.supports, comment: answers.supportsComment ?? false }
+        }
+      }
     }
     if (args.method === 'listScopes') {
       return { ok: true, data: [] }
@@ -71,6 +87,9 @@ function stubSource(answers: SourceAnswers = {}): ReturnType<typeof vi.fn> {
     }
     if (args.method === 'getItem') {
       return answers.detail ?? { ok: true, data: { ...item, descriptionFormat: 'text' } }
+    }
+    if (args.method === 'addComment') {
+      return answers.addComment ? answers.addComment() : { ok: true, data: POSTED }
     }
     return answers.comments ?? { ok: true, data: [] }
   })
@@ -209,6 +228,107 @@ describe('TaskPage contributed source detail panel', () => {
     expect(await screen.findByRole('button', { name: 'Copy key' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Open in Azure Boards' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Copy URL' })).not.toBeInTheDocument()
+  })
+
+  it('shows a composer only for a source that declared supports.comment', async () => {
+    await openPanel({ supportsComment: true })
+
+    expect(await screen.findByRole('textbox', { name: 'Comment body' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
+  })
+
+  it('shows no composer for a source that cannot post', async () => {
+    await openPanel()
+
+    // Waits for the same probe that would have enabled the composer, so the
+    // absence below is a decision rather than a race.
+    expect(await screen.findByText('No comments yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Comment body' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument()
+  })
+
+  it('posts the typed body through addComment with the item id', async () => {
+    const { invoke, user } = await openPanel({ supportsComment: true })
+
+    await user.type(await screen.findByRole('textbox', { name: 'Comment body' }), 'Shipping today')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith({
+        ...BOARDS,
+        method: 'addComment',
+        params: { id: 'nssf/proj/41', body: 'Shipping today' }
+      })
+    })
+  })
+
+  it('shows the posted comment and clears the draft', async () => {
+    const { user } = await openPanel({ supportsComment: true })
+
+    const field = await screen.findByRole('textbox', { name: 'Comment body' })
+    await user.type(field, 'Shipping today')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    expect(await screen.findByText('Isaac Obella')).toBeInTheDocument()
+    expect(field).toHaveValue('')
+  })
+
+  it('keeps the typed body when the post fails, and shows the error', async () => {
+    const { user } = await openPanel({
+      supportsComment: true,
+      addComment: () => ({ ok: false, code: 'unavailable', message: 'Azure rejected the comment.' })
+    })
+
+    const field = await screen.findByRole('textbox', { name: 'Comment body' })
+    await user.type(field, 'Shipping today')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    expect(await screen.findByText('Azure rejected the comment.')).toBeInTheDocument()
+    expect(field).toHaveValue('Shipping today')
+  })
+
+  it('does not post twice while one post is in flight', async () => {
+    let settle: (result: unknown) => void = () => {}
+    const pending = new Promise((resolve) => {
+      settle = resolve
+    })
+    const { invoke, user } = await openPanel({
+      supportsComment: true,
+      addComment: () => pending
+    })
+
+    await user.type(await screen.findByRole('textbox', { name: 'Comment body' }), 'Shipping today')
+    const submit = screen.getByRole('button', { name: 'Comment' })
+    await user.click(submit)
+    await user.click(submit)
+
+    const posts = invoke.mock.calls.filter((call) => call[0].method === 'addComment')
+    expect(posts).toHaveLength(1)
+
+    settle({ ok: true, data: POSTED })
+    expect(await screen.findByText('Isaac Obella')).toBeInTheDocument()
+  })
+
+  it('does not post a whitespace-only body', async () => {
+    const { invoke, user } = await openPanel({ supportsComment: true })
+
+    await user.type(await screen.findByRole('textbox', { name: 'Comment body' }), '   ')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    expect(invoke.mock.calls.filter((call) => call[0].method === 'addComment')).toHaveLength(0)
+  })
+
+  it('prefills the composer with an attributed quote when replying', async () => {
+    const { user } = await openPanel({
+      supportsComment: true,
+      comments: { ok: true, data: [COMMENT] }
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Reply to Amelia Kato' }))
+
+    expect(screen.getByRole('textbox', { name: 'Comment body' })).toHaveValue(
+      '> **Amelia Kato wrote:**\n>\n> Looks **good** to me.\n\n'
+    )
   })
 
   it('returns to the list when the panel is closed', async () => {

@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   PluginTaskItem,
   PluginTaskItemDetail
@@ -212,9 +213,23 @@ function DetailBody({
   onClose: () => void
 }): React.JSX.Element {
   const state = usePluginTaskItemDetail(item.id)
+  const supportsComment = useAppStore((store) => store.pluginTaskSourceSupportsComment)
+  const addComment = useAppStore((store) => store.addPluginTaskSourceComment)
   // The row's snapshot stands in until the fetch lands, so the panel opens on
   // what the user clicked instead of an empty frame.
   const displayed: PluginTaskItem = state.detail ?? item
+
+  const composer = supportsComment
+    ? {
+        submit: async (body: string) => {
+          const result = await addComment({ itemId: item.id, body })
+          if (result.ok) {
+            state.appendComment(result.data)
+          }
+          return result
+        }
+      }
+    : null
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -236,6 +251,7 @@ function DetailBody({
             comments={state.comments}
             loading={state.commentsLoading}
             error={state.commentsError}
+            composer={composer}
           />
         </div>
         <DetailActions item={displayed} sourceTitle={sourceTitle} />
@@ -244,8 +260,9 @@ function DetailBody({
   )
 }
 
-/** Read-only view of one contributed task item. The body and the comments are
- *  fetched when it opens: list rows carry neither, by design. */
+/** One contributed task item: its body, its comments, and — only where the
+ *  source declared `supports.comment` — a composer. Body and comments are
+ *  fetched when it opens; list rows carry neither, by design. */
 export function TaskPagePluginSourceItemDetailPanel({
   item,
   sourceTitle,

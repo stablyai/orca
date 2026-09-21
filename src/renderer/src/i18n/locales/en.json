@@ -2361,7 +2361,13 @@
         "pluginTaskSourceCopyUrlLabel": "URL",
         "pluginTaskSourceCopyKeyLabel": "Key",
         "pluginTaskSourceCopied": "{{value0}} copied",
-        "pluginTaskSourceCopyFailed": "Failed to copy {{value0}}"
+        "pluginTaskSourceCopyFailed": "Failed to copy {{value0}}",
+        "pluginTaskSourceCommentPlaceholder": "Add a comment...",
+        "pluginTaskSourceCommentDraft": "Comment body",
+        "pluginTaskSourceCommentSubmit": "Comment",
+        "pluginTaskSourceReply": "Reply",
+        "pluginTaskSourceReplyTo": "Reply to {{value0}}",
+        "pluginTaskSourceReplyAttribution": "{{value0}} wrote:"
       },
       "Terminal": {
         "73768427cf": "Close",
