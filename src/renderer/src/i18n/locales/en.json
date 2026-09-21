@@ -2367,7 +2367,8 @@
         "pluginTaskSourceCommentSubmit": "Comment",
         "pluginTaskSourceReply": "Reply",
         "pluginTaskSourceReplyTo": "Reply to {{value0}}",
-        "pluginTaskSourceReplyAttribution": "{{value0}} wrote:"
+        "pluginTaskSourceReplyAttribution": "{{value0}} wrote:",
+        "pluginTaskSourceCommentPostedWhileErrored": "Your comment was posted. The rest of the list is still unavailable."
       },
       "Terminal": {
         "73768427cf": "Close",

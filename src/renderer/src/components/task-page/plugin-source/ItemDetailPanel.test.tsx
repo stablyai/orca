@@ -60,6 +60,9 @@ const POSTED = {
 type SourceAnswers = {
   item?: PluginTaskItem
   detail?: unknown
+  /** A plain envelope, or a function returning one — the function form lets a
+   *  test vary the answer across calls, e.g. the initial load fails and a
+   *  retry after a successful post succeeds. */
   comments?: unknown
   supportsComment?: boolean
   addComment?: () => unknown
@@ -90,6 +93,9 @@ function stubSource(answers: SourceAnswers = {}): ReturnType<typeof vi.fn> {
     }
     if (args.method === 'addComment') {
       return answers.addComment ? answers.addComment() : { ok: true, data: POSTED }
+    }
+    if (typeof answers.comments === 'function') {
+      return answers.comments()
     }
     return answers.comments ?? { ok: true, data: [] }
   })
@@ -270,6 +276,48 @@ describe('TaskPage contributed source detail panel', () => {
     await user.click(screen.getByRole('button', { name: 'Comment' }))
 
     expect(await screen.findByText('Isaac Obella')).toBeInTheDocument()
+    expect(field).toHaveValue('')
+  })
+
+  it('retries the comment list on a successful post, and shows the new comment once it loads', async () => {
+    let call = 0
+    const comments = (): unknown => {
+      call += 1
+      return call === 1
+        ? { ok: false, code: 'unavailable', message: 'Comments are unavailable.' }
+        : { ok: true, data: [COMMENT, POSTED] }
+    }
+    const { user } = await openPanel({ supportsComment: true, comments })
+
+    expect(await screen.findByText('Comments are unavailable.')).toBeInTheDocument()
+
+    const field = await screen.findByRole('textbox', { name: 'Comment body' })
+    await user.type(field, 'Shipping today')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    expect(await screen.findByText('Isaac Obella')).toBeInTheDocument()
+    expect(screen.queryByText('Comments are unavailable.')).not.toBeInTheDocument()
+    expect(field).toHaveValue('')
+  })
+
+  it('keeps the error banner and confirms the post when the retried list still fails', async () => {
+    const { user } = await openPanel({
+      supportsComment: true,
+      comments: () => ({ ok: false, code: 'unavailable', message: 'Comments are unavailable.' })
+    })
+
+    expect(await screen.findByText('Comments are unavailable.')).toBeInTheDocument()
+
+    const field = await screen.findByRole('textbox', { name: 'Comment body' })
+    await user.type(field, 'Shipping today')
+    await user.click(screen.getByRole('button', { name: 'Comment' }))
+
+    expect(
+      await screen.findByText('Your comment was posted. The rest of the list is still unavailable.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Comments are unavailable.')).toBeInTheDocument()
+    expect(screen.queryByText('Isaac Obella')).not.toBeInTheDocument()
+    // The post itself still succeeded, so the draft still clears.
     expect(field).toHaveValue('')
   })
 

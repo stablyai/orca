@@ -77,11 +77,16 @@ export function TaskPagePluginSourceItemComments({
   comments,
   loading,
   error,
+  postedWhileErrored,
   composer
 }: {
   comments: PluginTaskComment[]
   loading: boolean
   error: PluginTaskSourceLoadError | null
+  /** True once a post has succeeded while `error` was set and the retry it
+   *  triggered still failed — the post itself is not in doubt, only whether
+   *  the rest of the list can be shown. */
+  postedWhileErrored: boolean
   /** Null when the source did not declare `supports.comment`, so a source that
    *  cannot post shows neither a composer nor a reply action. */
   composer: PluginTaskSourceCommentControl | null
@@ -106,7 +111,15 @@ export function TaskPagePluginSourceItemComments({
           role="alert"
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          {error.message}
+          <p>{error.message}</p>
+          {postedWhileErrored ? (
+            <p className="mt-1 font-medium">
+              {translate(
+                'auto.components.TaskPage.pluginTaskSourceCommentPostedWhileErrored',
+                'Your comment was posted. The rest of the list is still unavailable.'
+              )}
+            </p>
+          ) : null}
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center py-6">

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { LoaderCircle, X } from 'lucide-react'
 import { VisuallyHidden } from 'radix-ui'
 
@@ -218,13 +219,31 @@ function DetailBody({
   // The row's snapshot stands in until the fetch lands, so the panel opens on
   // what the user clicked instead of an empty frame.
   const displayed: PluginTaskItem = state.detail ?? item
+  // Set when a post succeeds but the list is still failing after the retry
+  // below, so the composer's "it worked" and the list's "still broken" can
+  // both be true on screen at once.
+  const [postedWhileListErrored, setPostedWhileListErrored] = useState(false)
 
   const composer = supportsComment
     ? {
         submit: async (body: string) => {
           const result = await addComment({ itemId: item.id, body })
-          if (result.ok) {
+          if (!result.ok) {
+            return result
+          }
+          if (!state.commentsError) {
             state.appendComment(result.data)
+            return result
+          }
+          // The post landing is good evidence the source is reachable again;
+          // retry the list instead of showing one comment under a banner that
+          // says the rest of the list is unknown.
+          const retry = await state.retryComments()
+          if (retry.ok) {
+            state.appendComment(result.data)
+            setPostedWhileListErrored(false)
+          } else {
+            setPostedWhileListErrored(true)
           }
           return result
         }
@@ -251,6 +270,7 @@ function DetailBody({
             comments={state.comments}
             loading={state.commentsLoading}
             error={state.commentsError}
+            postedWhileErrored={postedWhileListErrored}
             composer={composer}
           />
         </div>

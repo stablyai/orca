@@ -3,13 +3,28 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { PluginTaskComment } from '../../../../../shared/plugins/plugin-task-source-contract'
 
+/** Caps the quoted excerpt, not the reply itself. ~400 characters is a
+ *  paragraph or two of context — enough to identify what's being replied to
+ *  without the composer becoming mostly quote. The contract's `BODY_MAX`
+ *  (128KB) is a wire limit, not a usable UI length. */
+const QUOTED_REPLY_BODY_MAX_CHARS = 400
+const QUOTE_ELISION = '…'
+
+function truncateQuotedBody(body: string): string {
+  const chars = Array.from(body)
+  if (chars.length <= QUOTED_REPLY_BODY_MAX_CHARS) {
+    return body
+  }
+  return `${chars.slice(0, QUOTED_REPLY_BODY_MAX_CHARS).join('').trimEnd()}${QUOTE_ELISION}`
+}
+
 function quoteBlock(comment: PluginTaskComment): string {
   const attribution = translate(
     'auto.components.TaskPage.pluginTaskSourceReplyAttribution',
     '{{value0}} wrote:',
     { value0: comment.author.displayName }
   )
-  return [`**${attribution}**`, '', ...comment.body.split(/\r?\n/)]
+  return [`**${attribution}**`, '', ...truncateQuotedBody(comment.body).split(/\r?\n/)]
     .map((line) => (line === '' ? '>' : `> ${line}`))
     .join('\n')
 }
