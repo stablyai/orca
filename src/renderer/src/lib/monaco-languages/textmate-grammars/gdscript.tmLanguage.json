@@ -1,0 +1,668 @@
+{
+  "fileTypes": ["gd"],
+  "scopeName": "source.gdscript",
+  "name": "GDScript",
+  "patterns": [{ "include": "#statement" }, { "include": "#expression" }],
+  "repository": {
+    "statement": {
+      "patterns": [{ "include": "#extends_statement" }]
+    },
+    "statement_keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.flow.gdscript",
+          "match": "(?x)\n  \\b(?<!\\.)(\n continue | assert | break | elif | else | if | pass | return | while )\\b\n"
+        },
+        {
+          "name": "storage.type.class.gdscript",
+          "match": "\\b(?<!\\.)(class)\\b"
+        },
+        {
+          "match": "(?x)\n  (?:^|:)\\s*(\n    case | match\n  )(?=\\s*([-+\\w\\d(\\[{'\":#]|$))\\b\n",
+          "captures": { "1": { "name": "keyword.control.flow.gdscript" } }
+        }
+      ]
+    },
+    "extends_statement": {
+      "match": "(extends)\\s+([a-zA-Z_]\\w*\\.[a-zA-Z_]\\w*)?",
+      "captures": {
+        "1": { "name": "keyword.language.gdscript" },
+        "2": { "name": "entity.other.inherited-class.gdscript" }
+      }
+    },
+    "expression": {
+      "patterns": [
+        { "include": "#getter_setter_godot4" },
+        { "include": "#base_expression" },
+        { "include": "#assignment_operator" },
+        { "include": "#annotations" },
+        { "include": "#class_name" },
+        { "include": "#builtin_classes" },
+        { "include": "#class_new" },
+        { "include": "#class_is" },
+        { "include": "#class_enum" },
+        { "include": "#any_method" },
+        { "include": "#any_variable" },
+        { "include": "#any_property" }
+      ]
+    },
+    "base_expression": {
+      "patterns": [
+        { "include": "#builtin_get_node_shorthand" },
+        { "include": "#nodepath_object" },
+        { "include": "#nodepath_function" },
+        { "include": "#strings" },
+        { "include": "#builtin_classes" },
+        { "include": "#const_vars" },
+        { "include": "#keywords" },
+        { "include": "#operators" },
+        { "include": "#lambda_declaration" },
+        { "include": "#class_declaration" },
+        { "include": "#variable_declaration" },
+        { "include": "#signal_declaration_bare" },
+        { "include": "#signal_declaration" },
+        { "include": "#function_declaration" },
+        { "include": "#statement_keyword" },
+        { "include": "#assignment_operator" },
+        { "include": "#in_keyword" },
+        { "include": "#control_flow" },
+        { "include": "#match_keyword" },
+        { "include": "#curly_braces" },
+        { "include": "#square_braces" },
+        { "include": "#round_braces" },
+        { "include": "#function_call" },
+        { "include": "#region" },
+        { "include": "#comment" },
+        { "include": "#func" },
+        { "include": "#letter" },
+        { "include": "#numbers" },
+        { "include": "#pascal_case_class" },
+        { "include": "#line_continuation" }
+      ]
+    },
+    "region": {
+      "match": "#(end)?region.*$\\n?",
+      "name": "keyword.language.region.gdscript"
+    },
+    "comment": {
+      "match": "(##|#).*$\\n?",
+      "name": "comment.line.number-sign.gdscript",
+      "captures": { "1": { "name": "punctuation.definition.comment.number-sign.gdscript" } }
+    },
+    "strings": {
+      "name": "string.quoted.gdscript",
+      "begin": "(r)?(\"\"\"|'''|\"|')",
+      "end": "\\2",
+      "beginCaptures": { "1": { "name": "constant.character.escape.gdscript" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gdscript",
+          "match": "\\\\."
+        },
+        { "include": "#string_percent_placeholders" },
+        { "include": "#string_bracket_placeholders" }
+      ]
+    },
+    "string_percent_placeholders": {
+      "name": "meta.format.percent.gdscript",
+      "match": "(?x)\n  (\n % (\\([\\w\\s]*\\))?\n [-+#0 ]*\n (\\d+|\\*)? (\\.(\\d+|\\*))?\n ([hlL])?\n [diouxXeEfFgGcrsab%]\n  )\n",
+      "captures": { "1": { "name": "constant.character.format.placeholder.other.gdscript" } }
+    },
+    "string_bracket_placeholders": {
+      "patterns": [
+        {
+          "name": "meta.format.brace.gdscript",
+          "match": "(?x)\n  (\n    {{ | }}\n    | (?:\n      {\n        \\w* (\\.[[:alpha:]_]\\w* | \\[[^\\]'\"]+\\])*\n        (![rsa])?\n        ( : \\w? [<>=^]? [-+ ]? \\#?\n          \\d* ,? (\\.\\d+)? [bcdeEfFgGnosxX%]? )?\n      })\n  )\n",
+          "captures": {
+            "1": { "name": "constant.character.format.placeholder.other.gdscript" },
+            "3": { "name": "storage.type.format.gdscript" },
+            "4": { "name": "storage.type.format.gdscript" }
+          }
+        },
+        {
+          "name": "meta.format.brace.gdscript",
+          "match": "(?x)\n  (\n    {\n      \\w* (\\.[[:alpha:]_]\\w* | \\[[^\\]'\"]+\\])*\n      (![rsa])?\n      (:)\n        [^'\"{}\\n]* (?:\n          \\{ [^'\"}\\n]*? \\} [^'\"{}\\n]*\n        )*\n    }\n  )\n",
+          "captures": {
+            "1": { "name": "constant.character.format.placeholder.other.gdscript" },
+            "3": { "name": "storage.type.format.gdscript" },
+            "4": { "name": "storage.type.format.gdscript" }
+          }
+        }
+      ]
+    },
+    "nodepath_object": {
+      "name": "meta.literal.nodepath.gdscript",
+      "begin": "(NodePath)\\s*(?:\\()",
+      "beginCaptures": { "1": { "name": "support.class.library.gdscript" } },
+      "end": "(?:\\))",
+      "patterns": [
+        {
+          "begin": "(\"|')",
+          "end": "\\1",
+          "name": "string.quoted.gdscript constant.character.escape.gdscript",
+          "patterns": [
+            {
+              "match": "%",
+              "name": "keyword.control.flow.gdscript"
+            }
+          ]
+        }
+      ]
+    },
+    "nodepath_function": {
+      "name": "meta.function.gdscript",
+      "contentName": "meta.function.parameters.gdscript",
+      "begin": "(get_node_or_null|has_node|has_node_and_resource|find_node|get_node)\\s*(\\()",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.gdscript" },
+        "2": { "name": "punctuation.definition.parameters.begin.gdscript" }
+      },
+      "end": "(\\))",
+      "endCaptures": { "1": { "name": "punctuation.definition.parameters.end.gdscript" } },
+      "patterns": [
+        {
+          "begin": "(\"|')",
+          "end": "\\1",
+          "name": "string.quoted.gdscript meta.literal.nodepath.gdscript constant.character.escape.gdscript",
+          "patterns": [
+            {
+              "match": "%",
+              "name": "keyword.control.flow.gdscript"
+            }
+          ]
+        },
+        { "include": "#expression" }
+      ]
+    },
+    "func": {
+      "match": "\\bfunc\\b",
+      "name": "keyword.language.gdscript storage.type.function.gdscript"
+    },
+    "in_keyword": {
+      "patterns": [
+        {
+          "begin": "\\b(for)\\b",
+          "end": ":",
+          "captures": { "1": { "name": "keyword.control.gdscript" } },
+          "patterns": [
+            {
+              "match": "\\bin\\b",
+              "name": "keyword.control.gdscript"
+            },
+            { "include": "#base_expression" },
+            { "include": "#any_variable" },
+            { "include": "#any_property" }
+          ]
+        },
+        {
+          "match": "\\bin\\b",
+          "name": "keyword.operator.wordlike.gdscript"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "include": "#wordlike_operator" },
+        { "include": "#boolean_operator" },
+        { "include": "#arithmetic_operator" },
+        { "include": "#bitwise_operator" },
+        { "include": "#compare_operator" }
+      ]
+    },
+    "wordlike_operator": {
+      "match": "\\b(and|or|not)\\b",
+      "name": "keyword.operator.wordlike.gdscript"
+    },
+    "boolean_operator": {
+      "match": "(&&|\\|\\|)",
+      "name": "keyword.operator.boolean.gdscript"
+    },
+    "bitwise_operator": {
+      "match": "&|\\||<<=|>>=|<<|>>|\\^|~",
+      "name": "keyword.operator.bitwise.gdscript"
+    },
+    "compare_operator": {
+      "match": "<=|>=|==|<|>|!=|!",
+      "name": "keyword.operator.comparison.gdscript"
+    },
+    "arithmetic_operator": {
+      "match": "->|\\+=|-=|\\*\\*=|\\*=|\\^=|/=|%=|&=|~=|\\|=|\\*\\*|\\*|/|%|\\+|-",
+      "name": "keyword.operator.arithmetic.gdscript"
+    },
+    "assignment_operator": {
+      "match": "=",
+      "name": "keyword.operator.assignment.gdscript"
+    },
+    "control_flow": {
+      "match": "\\b(?:if|elif|else|while|break|continue|pass|return|when|yield|await)\\b",
+      "name": "keyword.control.gdscript"
+    },
+    "match_keyword": {
+      "match": "(?:^|:)\\s*(match)\\b",
+      "captures": { "1": { "name": "keyword.control.flow.gdscript" } }
+    },
+    "keywords": {
+      "match": "\\b(?:class|class_name|is|onready|tool|static|export|as|enum|assert|breakpoint|sync|remote|master|puppet|slave|remotesync|mastersync|puppetsync|trait|namespace|super|self)\\b",
+      "name": "keyword.language.gdscript"
+    },
+    "letter": {
+      "match": "\\b(?:true|false|null)\\b",
+      "name": "constant.language.literal.gdscript"
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "0b[01_]+",
+          "name": "constant.numeric.integer.binary.gdscript"
+        },
+        {
+          "match": "0x[0-9A-Fa-f_]+",
+          "name": "constant.numeric.integer.hexadecimal.gdscript"
+        },
+        {
+          "match": "\\.[0-9][0-9_]*([eE][+-]?[0-9_]+)?",
+          "name": "constant.numeric.float.gdscript"
+        },
+        {
+          "match": "([0-9][0-9_]*)\\.[0-9_]*([eE][+-]?[0-9_]+)?",
+          "name": "constant.numeric.float.gdscript"
+        },
+        {
+          "match": "([0-9][0-9_]*)?\\.[0-9_]*([eE][+-]?[0-9_]+)",
+          "name": "constant.numeric.float.gdscript"
+        },
+        {
+          "match": "[0-9][0-9_]*[eE][+-]?[0-9_]+",
+          "name": "constant.numeric.float.gdscript"
+        },
+        {
+          "match": "[-]?[0-9][0-9_]*",
+          "name": "constant.numeric.integer.gdscript"
+        }
+      ]
+    },
+    "variable_declaration": {
+      "name": "meta.variable.declaration.gdscript",
+      "begin": "\\b(?:(var)|(const))\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.language.gdscript storage.type.var.gdscript" },
+        "2": { "name": "keyword.language.gdscript storage.type.const.gdscript" }
+      },
+      "end": "$|;",
+      "patterns": [
+        {
+          "match": "(:)?\\s*(set|get)\\s+=\\s+([a-zA-Z_]\\w*)",
+          "captures": {
+            "1": { "name": "punctuation.separator.annotation.gdscript" },
+            "2": { "name": "entity.name.function.gdscript" },
+            "3": { "name": "entity.name.function.gdscript" }
+          }
+        },
+        {
+          "match": ":=|=(?!=)",
+          "name": "keyword.operator.assignment.gdscript"
+        },
+        {
+          "match": "(:)\\s*([a-zA-Z_]\\w*)?",
+          "captures": {
+            "1": { "name": "punctuation.separator.annotation.gdscript" },
+            "2": { "name": "entity.name.type.class.gdscript" }
+          }
+        },
+        {
+          "match": "(setget)\\s+([a-zA-Z_]\\w*)(?:[,]\\s*([a-zA-Z_]\\w*))?",
+          "captures": {
+            "1": { "name": "keyword.language.gdscript" },
+            "2": { "name": "entity.name.function.gdscript" },
+            "3": { "name": "entity.name.function.gdscript" }
+          }
+        },
+        { "include": "#expression" },
+        { "include": "#letter" },
+        { "include": "#any_variable" },
+        { "include": "#any_property" },
+        { "include": "#keywords" }
+      ]
+    },
+    "getter_setter_godot4": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.getter.gdscript",
+          "match": "(get)\\s*(:)",
+          "captures": {
+            "1": { "name": "entity.name.function.gdscript" },
+            "2": { "name": "punctuation.separator.annotation.gdscript" }
+          }
+        },
+        {
+          "name": "meta.variable.declaration.setter.gdscript",
+          "match": "(set)\\s*(\\()\\s*([A-Za-z_]\\w*)\\s*(\\))\\s*(:)",
+          "captures": {
+            "1": { "name": "entity.name.function.gdscript" },
+            "2": { "name": "punctuation.definition.arguments.begin.gdscript" },
+            "3": { "name": "variable.other.gdscript" },
+            "4": { "name": "punctuation.definition.arguments.end.gdscript" },
+            "5": { "name": "punctuation.separator.annotation.gdscript" }
+          }
+        }
+      ]
+    },
+    "class_declaration": {
+      "match": "(?<=^class)\\s+([a-zA-Z_]\\w*)\\s*(?=:)",
+      "captures": {
+        "1": { "name": "entity.name.type.class.gdscript" },
+        "2": { "name": "class.other.gdscript" }
+      }
+    },
+    "class_new": {
+      "match": "\\b([a-zA-Z_]\\w*).(new)\\(",
+      "captures": {
+        "1": { "name": "entity.name.type.class.gdscript" },
+        "2": { "name": "storage.type.new.gdscript" },
+        "3": { "name": "punctuation.parenthesis.begin.gdscript" }
+      }
+    },
+    "class_is": {
+      "match": "\\s+(is)\\s+(not?)\\s+\\s+([a-zA-Z_]\\w*)",
+      "captures": {
+        "1": { "name": "storage.type.is.gdscript" },
+        "2": { "name": "storage.type.not.gdscript" },
+        "3": { "name": "entity.name.type.class.gdscript" }
+      }
+    },
+    "class_enum": {
+      "match": "\\b([A-Z][a-zA-Z_0-9]*)\\.([A-Z_0-9]+)",
+      "captures": {
+        "1": { "name": "entity.name.type.class.gdscript" },
+        "2": { "name": "variable.other.enummember.gdscript" }
+      }
+    },
+    "class_name": {
+      "match": "(?<=class_name)\\s+([a-zA-Z_]\\w*(\\.([a-zA-Z_]\\w*))?)",
+      "captures": {
+        "1": { "name": "entity.name.type.class.gdscript" },
+        "2": { "name": "class.other.gdscript" }
+      }
+    },
+    "builtin_get_node_shorthand": {
+      "patterns": [
+        { "include": "#builtin_get_node_shorthand_quoted" },
+        { "include": "#builtin_get_node_shorthand_bare" },
+        { "include": "#builtin_get_node_shorthand_bare_multi" }
+      ]
+    },
+    "builtin_get_node_shorthand_quoted": {
+      "name": "string.quoted.gdscript meta.literal.nodepath.gdscript constant.character.escape.gdscript",
+      "begin": "(?:(\\$|%)|(&|\\^|@))(\"|')",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.flow.gdscript" },
+        "2": { "name": "variable.other.enummember.gdscript" }
+      },
+      "end": "(\\3)",
+      "patterns": [
+        {
+          "match": "%",
+          "name": "keyword.control.flow"
+        }
+      ]
+    },
+    "builtin_get_node_shorthand_bare": {
+      "name": "meta.literal.nodepath.bare.gdscript",
+      "match": "(?<!/\\s*)(\\$\\s*|%|\\$%\\s*)(/\\s*)?([a-zA-Z_]\\w*)\\b(?!\\s*/)",
+      "captures": {
+        "1": { "name": "keyword.control.flow.gdscript" },
+        "2": { "name": "constant.character.escape.gdscript" },
+        "3": { "name": "constant.character.escape.gdscript" },
+        "4": { "name": "constant.character.escape.gdscript" }
+      }
+    },
+    "builtin_get_node_shorthand_bare_multi": {
+      "name": "meta.literal.nodepath.bare.gdscript",
+      "begin": "(\\$\\s*|%|\\$%\\s*)(/\\s*)?([a-zA-Z_]\\w*)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.flow.gdscript" },
+        "2": { "name": "constant.character.escape.gdscript" },
+        "3": { "name": "constant.character.escape.gdscript" }
+      },
+      "end": "(?!\\s*/\\s*%?\\s*[a-zA-Z_]\\w*)",
+      "patterns": [
+        {
+          "match": "(/)\\s*(%)?\\s*([a-zA-Z_]\\w*)\\s*",
+          "captures": {
+            "1": { "name": "constant.character.escape.gdscript" },
+            "2": { "name": "keyword.control.flow.gdscript" },
+            "3": { "name": "constant.character.escape.gdscript" }
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "match": "(@)(abstract|export|export_category|export_color_no_alpha|export_custom|export_dir|export_enum|export_exp_easing|export_file|export_file_path|export_flags|export_flags_2d_navigation|export_flags_2d_physics|export_flags_2d_render|export_flags_3d_navigation|export_flags_3d_physics|export_flags_3d_render|export_flags_avoidance|export_global_dir|export_global_file|export_group|export_multiline|export_node_path|export_placeholder|export_range|export_storage|export_subgroup|export_tool_button|icon|onready|rpc|static_unload|tool|warning_ignore|warning_ignore_restore|warning_ignore_start)\\b",
+      "captures": {
+        "1": { "name": "entity.name.function.decorator.gdscript" },
+        "2": { "name": "entity.name.function.decorator.gdscript" }
+      }
+    },
+    "builtin_classes": {
+      "match": "(?<![^.]\\.|:)\\b(Vector2|Vector2i|Vector3|Vector3i|Vector4|Vector4i|Color|Rect2|Rect2i|Array|Basis|Dictionary|Plane|Quat|RID|Rect3|Transform|Transform2D|Transform3D|AABB|String|Color|NodePath|PoolByteArray|PoolIntArray|PoolRealArray|PoolStringArray|PoolVector2Array|PoolVector3Array|PoolColorArray|bool|int|float|Signal|Callable|StringName|Quaternion|Projection|PackedByteArray|PackedInt32Array|PackedInt64Array|PackedFloat32Array|PackedFloat64Array|PackedStringArray|PackedVector2Array|PackedVector2iArray|PackedVector3Array|PackedVector3iArray|PackedVector4Array|PackedColorArray|JSON|UPNP|OS|IP|JSONRPC|XRVRS|Variant|void)\\b",
+      "name": "entity.name.type.class.builtin.gdscript"
+    },
+    "const_vars": {
+      "match": "\\b([A-Z_][A-Z_0-9]*)\\b",
+      "name": "variable.other.constant.gdscript"
+    },
+    "pascal_case_class": {
+      "match": "\\b[A-Z]+(?:[a-z]+[A-Za-z0-9_]*)+\\b",
+      "name": "entity.name.type.class.gdscript"
+    },
+    "signal_declaration_bare": {
+      "name": "meta.signal.gdscript",
+      "match": "(?x) \\s*\n (signal) \\s+\n ([a-zA-Z_]\\w*)(?=[\\n\\s])",
+      "captures": {
+        "1": { "name": "keyword.language.gdscript storage.type.function.gdscript" },
+        "2": { "name": "entity.name.function.gdscript" }
+      }
+    },
+    "signal_declaration": {
+      "name": "meta.signal.gdscript",
+      "begin": "(?x) \\s*\n (signal) \\s+\n ([a-zA-Z_]\\w*) \\s*\n (?=\\()",
+      "end": "((?=[#'\"\\n]))",
+      "beginCaptures": {
+        "1": { "name": "keyword.language.gdscript storage.type.function.gdscript" },
+        "2": { "name": "entity.name.function.gdscript" }
+      },
+      "patterns": [{ "include": "#parameters" }, { "include": "#line_continuation" }]
+    },
+    "lambda_declaration": {
+      "name": "meta.function.gdscript",
+      "begin": "(func)\\s?(?=\\()",
+      "beginCaptures": {
+        "1": { "name": "keyword.language.gdscript storage.type.function.gdscript" },
+        "2": { "name": "entity.name.function.gdscript" }
+      },
+      "end": "(:|(?=[#'\"\\n]))",
+      "end2": "(\\s*(\\-\\>)\\s*(void\\w*)|([a-zA-Z_]\\w*)\\s*\\:)",
+      "endCaptures2": {
+        "1": { "name": "punctuation.separator.annotation.result.gdscript" },
+        "2": { "name": "entity.name.type.class.builtin.gdscript" },
+        "3": { "name": "entity.name.type.class.gdscript markup.italic" }
+      },
+      "patterns": [
+        { "include": "#parameters" },
+        { "include": "#line_continuation" },
+        { "include": "#base_expression" },
+        { "include": "#any_variable" },
+        { "include": "#any_property" }
+      ]
+    },
+    "function_declaration": {
+      "name": "meta.function.gdscript",
+      "begin": "(?x) \\s*\n (func) \\s+\n ([a-zA-Z_]\\w*) \\s*\n (?=\\()",
+      "beginCaptures": {
+        "1": { "name": "keyword.language.gdscript storage.type.function.gdscript" },
+        "2": { "name": "entity.name.function.gdscript" }
+      },
+      "end": "(:)|\n",
+      "endCaptures": { "1": { "name": "punctuation.section.function.begin.gdscript" } },
+      "patterns": [
+        { "include": "#parameters" },
+        { "include": "#line_continuation" },
+        { "include": "#base_expression" }
+      ]
+    },
+    "parameters": {
+      "name": "meta.function.parameters.gdscript",
+      "begin": "(\\()",
+      "end": "(\\))",
+      "beginCaptures": { "1": { "name": "punctuation.definition.parameters.begin.gdscript" } },
+      "endCaptures": { "1": { "name": "punctuation.definition.parameters.end.gdscript" } },
+      "patterns": [
+        { "include": "#annotated_parameter" },
+        {
+          "match": "(?x)\n  ([a-zA-Z_]\\w*)\n    \\s* (?: (,) | (?=[)#\\n=]))\n",
+          "captures": {
+            "1": { "name": "variable.parameter.function.language.gdscript" },
+            "2": { "name": "punctuation.separator.parameters.gdscript" }
+          }
+        },
+        { "include": "#comment" },
+        { "include": "#loose_default" }
+      ]
+    },
+    "loose_default": {
+      "begin": "(=)",
+      "end": "(,)|(?=\\))",
+      "beginCaptures": { "1": { "name": "keyword.operator.gdscript" } },
+      "endCaptures": { "1": { "name": "punctuation.separator.parameters.gdscript" } },
+      "patterns": [{ "include": "#expression" }]
+    },
+    "annotated_parameter": {
+      "begin": "(?x)\n \\s* ([a-zA-Z_]\\w*) \\s* (:)\\s* ([a-zA-Z_]\\w*)? \n",
+      "beginCaptures": {
+        "1": { "name": "variable.parameter.function.language.gdscript" },
+        "2": { "name": "punctuation.separator.annotation.gdscript" },
+        "3": { "name": "entity.name.type.class.gdscript" }
+      },
+      "end": "(,)|(?=\\))",
+      "endCaptures": { "1": { "name": "punctuation.separator.parameters.gdscript" } },
+      "patterns": [
+        { "include": "#expression" },
+        {
+          "name": "keyword.operator.assignment.gdscript",
+          "match": "=(?!=)"
+        }
+      ]
+    },
+    "curly_braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.definition.dict.begin.gdscript" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.dict.end.gdscript" } },
+      "patterns": [{ "include": "#base_expression" }, { "include": "#any_variable" }]
+    },
+    "square_braces": {
+      "begin": "\\[",
+      "end": "\\]",
+      "beginCaptures": { "0": { "name": "punctuation.definition.list.begin.gdscript" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.list.end.gdscript" } },
+      "patterns": [{ "include": "#base_expression" }, { "include": "#any_variable" }]
+    },
+    "round_braces": {
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": { "0": { "name": "punctuation.parenthesis.begin.gdscript" } },
+      "endCaptures": { "0": { "name": "punctuation.parenthesis.end.gdscript" } },
+      "patterns": [{ "include": "#base_expression" }, { "include": "#any_variable" }]
+    },
+    "line_continuation": {
+      "patterns": [
+        {
+          "match": "(\\\\)\\s*(\\S.*$\\n?)",
+          "captures": {
+            "1": { "name": "punctuation.separator.continuation.line.gdscript" },
+            "2": { "name": "invalid.illegal.line.continuation.gdscript" }
+          }
+        },
+        {
+          "begin": "(\\\\)\\s*$\\n?",
+          "end": "(?x)\n  (?=^\\s*$)\n  |\n  (?! (\\s* [rR]? (\\'\\'\\'|\\\"\\\"\\\"|\\'|\\\"))\n      |\n      (\\G $)  (?# '\\G' is necessary for ST)\n  )\n",
+          "beginCaptures": { "1": { "name": "punctuation.separator.continuation.line.gdscript" } },
+          "patterns": [{ "include": "#base_expression" }]
+        }
+      ]
+    },
+    "any_method": {
+      "match": "\\b([A-Za-z_]\\w*)\\b(?=\\s*(?:[(]))",
+      "name": "entity.name.function.other.gdscript"
+    },
+    "any_variable": {
+      "match": "\\b(?<![@\\$#%])([A-Za-z_]\\w*)\\b(?![(])",
+      "name": "variable.other.gdscript"
+    },
+    "any_property": {
+      "match": "\\b(\\.)\\s*(?<![@\\$#%])(?:([A-Z_][A-Z_0-9]*)|([A-Za-z_]\\w*))\\b(?![(])",
+      "captures": {
+        "1": { "name": "punctuation.accessor.gdscript" },
+        "2": { "name": "constant.language.gdscript" },
+        "3": { "name": "variable.other.property.gdscript" }
+      }
+    },
+    "function_call": {
+      "name": "meta.function-call.gdscript",
+      "comment": "Regular function call of the type \"name(args)\" — allows optional whitespace between name and parens",
+      "begin": "(?=\\b[a-zA-Z_]\\w*\\b\\s*\\()",
+      "end": "(\\))",
+      "endCaptures": { "1": { "name": "punctuation.definition.arguments.end.gdscript" } },
+      "patterns": [{ "include": "#function_name" }, { "include": "#function_arguments" }]
+    },
+    "function_name": {
+      "patterns": [
+        { "include": "#builtin_classes" },
+        {
+          "match": "\\b(preload)\\b",
+          "name": "keyword.language.gdscript"
+        },
+        {
+          "comment": "Some color schemas support meta.function-call.generic scope",
+          "match": "\\b([a-zA-Z_]\\w*)\\b",
+          "name": "entity.name.function.gdscript"
+        }
+      ]
+    },
+    "function_arguments": {
+      "begin": "(\\()",
+      "beginCaptures": { "1": { "name": "punctuation.definition.arguments.begin.gdscript" } },
+      "end": "(?=\\))(?!\\)\\s*\\()",
+      "contentName": "meta.function.parameters.gdscript",
+      "patterns": [
+        {
+          "name": "punctuation.separator.arguments.gdscript",
+          "match": "(,)"
+        },
+        {
+          "match": "\\b([a-zA-Z_]\\w*)\\s*(=)(?!=)",
+          "captures": {
+            "1": { "name": "variable.parameter.function-call.gdscript" },
+            "2": { "name": "keyword.operator.assignment.gdscript" }
+          }
+        },
+        {
+          "name": "keyword.operator.assignment.gdscript",
+          "match": "=(?!=)"
+        },
+        { "include": "#base_expression" },
+        {
+          "match": "\\s*(\\))\\s*(\\()",
+          "captures": {
+            "1": { "name": "punctuation.definition.arguments.end.gdscript" },
+            "2": { "name": "punctuation.definition.arguments.begin.gdscript" }
+          }
+        },
+        { "include": "#letter" },
+        { "include": "#any_variable" },
+        { "include": "#any_property" },
+        { "include": "#keywords" }
+      ]
+    }
+  }
+}
