@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { invokeContributedTaskSource, invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
+import {
+  invokeContributedTaskSource,
+  invokePluginTaskSourceMethod
+} from './plugin-task-source-invoker'
 import { pluginTaskPageSchema } from '../../shared/plugins/plugin-task-source-contract'
+import { createPluginActivationCoalescer } from './plugin-activation-coalescer'
+import type { PluginTaskSourceProxy } from '../../shared/plugins/plugin-extension-registry'
 
 async function invoke(callWorker: () => Promise<unknown>) {
   return invokePluginTaskSourceMethod({
@@ -198,5 +203,107 @@ describe('invokeContributedTaskSource', () => {
 
     expect(result).toMatchObject({ ok: false, code: 'unavailable' })
     expect(JSON.stringify(result)).not.toContain('main.js')
+  })
+})
+
+/** An idle plugin: no proxy resolves until an activation has registered one. */
+function idlePlugin(options: { activation?: () => Promise<void> } = {}) {
+  let registered = false
+  const proxy: PluginTaskSourceProxy = {
+    sourceId: 'azure-boards',
+    call: async (method) => ({ ok: true, data: { method } })
+  }
+  const resolveProxy = vi.fn((): PluginTaskSourceProxy | null => (registered ? proxy : null))
+  const start = vi.fn(async () => {
+    await (options.activation?.() ?? new Promise((resolve) => setTimeout(resolve, 5)))
+    registered = true
+  })
+  return { resolveProxy, activate: createPluginActivationCoalescer(start).activate, start }
+}
+
+function callSource(host: ReturnType<typeof idlePlugin>, method: string) {
+  return invokeContributedTaskSource({
+    resolveProxy: host.resolveProxy,
+    activate: host.activate,
+    pluginKey: 'acme.boards',
+    sourceId: 'azure-boards',
+    method,
+    params: {}
+  })
+}
+
+describe('invokeContributedTaskSource against an idle plugin', () => {
+  it('serves two concurrent calls from one activation', async () => {
+    const host = idlePlugin()
+
+    const [scopes, items] = await Promise.all([
+      callSource(host, 'listScopes'),
+      callSource(host, 'listItems')
+    ])
+
+    expect(scopes).toMatchObject({ ok: true })
+    expect(items).toMatchObject({ ok: true })
+    expect(host.start).toHaveBeenCalledOnce()
+  })
+
+  it('serves ten concurrent calls from one activation', async () => {
+    const host = idlePlugin()
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_unused, index) =>
+        callSource(host, index % 2 === 0 ? 'listItems' : 'listScopes')
+      )
+    )
+
+    expect(results.every((result) => result.ok)).toBe(true)
+    expect(host.start).toHaveBeenCalledOnce()
+  })
+
+  it('makes a call arriving mid-activation wait for it instead of failing', async () => {
+    const host = idlePlugin()
+
+    const first = callSource(host, 'listScopes')
+    await new Promise((resolve) => setTimeout(resolve, 1))
+    const late = callSource(host, 'listItems')
+
+    expect(await first).toMatchObject({ ok: true })
+    expect(await late).toMatchObject({ ok: true })
+    expect(host.start).toHaveBeenCalledOnce()
+  })
+
+  it('reports unavailable to every waiting caller when the shared activation fails', async () => {
+    const host = idlePlugin({
+      activation: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        throw new Error('at Object.<anonymous> (/plugins/acme.boards/main.js:42:9)')
+      }
+    })
+
+    const results = await Promise.all([
+      callSource(host, 'listScopes'),
+      callSource(host, 'listItems')
+    ])
+
+    expect(results).toHaveLength(2)
+    for (const result of results) {
+      expect(result).toMatchObject({ ok: false, code: 'unavailable' })
+      expect(JSON.stringify(result)).not.toContain('main.js')
+    }
+    expect(host.start).toHaveBeenCalledOnce()
+  })
+
+  it('short-circuits an unknown method to validation without joining an activation', async () => {
+    const host = idlePlugin()
+
+    const results = await Promise.all([
+      callSource(host, 'deleteEverything'),
+      callSource(host, 'dropDatabase')
+    ])
+
+    for (const result of results) {
+      expect(result).toMatchObject({ ok: false, code: 'validation' })
+    }
+    expect(host.start).not.toHaveBeenCalled()
+    expect(host.resolveProxy).not.toHaveBeenCalled()
   })
 })

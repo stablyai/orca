@@ -26,6 +26,7 @@ import { PluginContentVerifier } from './plugin-content-integrity'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
+import { createPluginActivationCoalescer } from './plugin-activation-coalescer'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import type { PluginRunState } from './plugin-supervisor'
 import { snapshotPluginConsentLists } from './plugin-activation-policy'
@@ -272,13 +273,19 @@ export class PluginService {
     return this.registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId)
   }
 
-  /** Lazy activation for an idle plugin's first task source call: the same
-   *  ensure() path invokeCommand uses, which is what registers proxies. */
-  async activateForTaskSource(pluginKey: string): Promise<void> {
+  private readonly taskSourceActivations = createPluginActivationCoalescer(async (pluginKey) => {
     const plugin = this.workerInvocation.resolveRunnablePlugin(pluginKey)
     if (plugin) {
       await this.workerInvocation.ensureWorker(plugin)
     }
+  })
+
+  /** Lazy activation for an idle plugin's first task source call: the same
+   *  ensure() path invokeCommand uses, which is what registers proxies. The
+   *  burst of calls a task surface opens with shares one attempt, so none of
+   *  them re-resolves before that attempt has settled. */
+  activateForTaskSource(pluginKey: string): Promise<void> {
+    return this.taskSourceActivations.activate(pluginKey)
   }
 
   /** Unvalidated worker data, unscrubbed rejections. The sanctioned entry

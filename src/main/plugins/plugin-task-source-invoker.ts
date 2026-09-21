@@ -65,9 +65,12 @@ export async function invokePluginTaskSourceMethod<T extends z.ZodTypeAny>(
 export type InvokeContributedTaskSourceInput = {
   resolveProxy: (pluginKey: string, sourceId: string) => PluginTaskSourceProxy | null
   /** Starts the plugin's worker so it registers a proxy; called only when
-   *  none is resolved yet. A rejection (undeclared source, unapproved
-   *  plugin, revoked mid-activation) is swallowed here — its message can
-   *  carry a third-party plugin's text and must never reach the caller. */
+   *  none is resolved yet. MUST join an activation already in flight for the
+   *  key rather than start a second one, or concurrent first calls resolve
+   *  against each other's unsettled attempt. A rejection (undeclared source,
+   *  unapproved plugin, revoked mid-activation) is swallowed here — its
+   *  message can carry a third-party plugin's text and must never reach the
+   *  caller. */
   activate: (pluginKey: string) => Promise<void>
   pluginKey: string
   sourceId: string
@@ -86,7 +89,9 @@ export type InvokeContributedTaskSourceInput = {
  * A proxy exists only after its worker has activated, so an idle plugin
  * (the common case right after launch) resolves to nothing on the first
  * call. One activation attempt, then a second resolve, covers that case
- * without paying the activation cost on every call.
+ * without paying the activation cost on every call. A surface opening a
+ * source calls several methods at once, so `activate` must be shared across
+ * them — see its contract above.
  */
 export async function invokeContributedTaskSource(
   input: InvokeContributedTaskSourceInput
