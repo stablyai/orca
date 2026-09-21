@@ -8,6 +8,25 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
+// Why: resolveWorkerLaunchPreferences now asks the installed Claude CLI
+// (issue #10846) via this executor. Stub it so the --model test below never
+// spawns a real CLI process and stays deterministic across hosts.
+vi.mock('../../../text-generation/commit-message-text-generation', () => ({
+  discoverCommitMessageModelsLocal: vi.fn(async () => ({
+    success: true,
+    capability: {
+      id: 'claude',
+      label: 'Claude',
+      modelSource: 'dynamic',
+      models: [{ id: 'opus', label: 'opus', thinkingLevels: [{ id: 'high', label: 'High' }] }],
+      defaultModelId: 'opus'
+    },
+    models: [{ id: 'opus', label: 'opus', thinkingLevels: [{ id: 'high', label: 'High' }] }],
+    defaultModelId: 'opus',
+    catalogOrigin: 'probe'
+  }))
+}))
+
 const STRUCTURED_HANDLE = 'structworker_abc'
 const TERMINAL_HANDLE = 'term_worker'
 

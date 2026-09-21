@@ -5,6 +5,37 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
+// Why: resolveWorkerLaunchPreferences now asks the installed Claude CLI
+// (issue #10846) via this executor. Stub it so the opaque-model test below
+// never spawns a real CLI process and stays deterministic across hosts.
+vi.mock('../../../../../text-generation/commit-message-text-generation', () => ({
+  discoverCommitMessageModelsLocal: vi.fn(async () => ({
+    success: true,
+    capability: {
+      id: 'claude',
+      label: 'Claude',
+      modelSource: 'dynamic',
+      models: [
+        {
+          id: 'aws-bedrock-opus-5',
+          label: 'aws-bedrock-opus-5',
+          thinkingLevels: [{ id: 'high', label: 'High' }]
+        }
+      ],
+      defaultModelId: 'aws-bedrock-opus-5'
+    },
+    models: [
+      {
+        id: 'aws-bedrock-opus-5',
+        label: 'aws-bedrock-opus-5',
+        thinkingLevels: [{ id: 'high', label: 'High' }]
+      }
+    ],
+    defaultModelId: 'aws-bedrock-opus-5',
+    catalogOrigin: 'probe'
+  }))
+}))
+
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
   const { coordinatorPaneKey } = h
@@ -188,11 +219,15 @@ describe('orchestration RPC methods', () => {
         }
       }
 
+      // Why: 'aws-bedrock-opus-5'/'high' is stubbed as accepted by the
+      // installed CLI above, so `effective` now comes from that verification
+      // (source: 'probe'), not a silent clone of `requested` (issue #10846).
       expect(result).toMatchObject({
         state: 'ready',
         launch: {
           requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
-          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
+          source: 'probe'
         }
       })
       expect(runtime.createTerminal).toHaveBeenCalledWith(
