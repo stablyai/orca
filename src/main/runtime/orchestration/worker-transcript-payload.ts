@@ -35,6 +35,7 @@ type TranscriptBoundState = WorkerTranscriptRetentionState & {
 
 export type { WorkerTranscriptBoundOptions }
 
+/** Fresh per projection: the warning set and clip flag describe one reply. */
 function boundState(options: WorkerTranscriptBoundOptions | undefined): TranscriptBoundState {
   return { warnings: new Set<string>(), clipped: false, ...workerTranscriptRetentionState(options) }
 }
@@ -226,6 +227,8 @@ function clipMetadata(value: string, state: TranscriptBoundState): string {
   return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
 }
 
+/** Redacts first, then clips. An oversized block is retained in full under its
+ *  digest when a retention is installed, so the reader can fetch what was cut. */
 function clipText(
   value: string,
   state: TranscriptBoundState

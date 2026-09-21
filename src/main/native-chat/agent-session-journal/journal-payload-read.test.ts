@@ -84,6 +84,49 @@ async function writeToolOutput(identity: AgentSessionJournalIdentity, output: st
   return bounded
 }
 
+async function appendBody(identity: AgentSessionJournalIdentity, body: AgentJournalItemBody) {
+  const journal = await journals.open({
+    identity,
+    journalDir: journalDirectoryFor(root, {
+      workspaceId: identity.workspaceId,
+      sessionId: identity.sessionId
+    }),
+    now: tick,
+    mintEpoch: () => `epoch-${clock}`
+  })
+  const item: AgentJournalItemIdentity = {
+    provider: 'codex', threadId: `thread-${identity.sessionId}`, turnId: 'turn-1', ordinal: 0
+  }
+  await journal.appendItem(item, body, { fence: 1 })
+  await journal.close()
+}
+
+/** A tool call whose model-authored input names `digest` — the forgery the
+ *  structural check exists to refuse. */
+async function writeToolCallInput(identity: AgentSessionJournalIdentity, input: unknown) {
+  await appendBody(identity, { kind: 'tool-call', name: 'Bash', input, state: 'completed' })
+}
+
+/** A message block clipped by the legacy import path: the reference lives in
+ *  `clipped`, beside the head, which is a position Orca itself writes. */
+async function writeClippedMessageBlock(identity: AgentSessionJournalIdentity, output: string) {
+  const bounded = boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+  await appendBody(identity, {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{
+      type: 'text',
+      text: bounded.head,
+      clipped: {
+        digest: bounded.digest,
+        byteLength: bounded.byteLength,
+        retrievable: bounded.retrievable === true
+      }
+    }]
+  })
+  return bounded
+}
+
 describe('owner-checked payload read through a real journal', () => {
   it('serves the complete original to the session whose journal references it', async () => {
     const output = longOutput()
@@ -134,6 +177,41 @@ describe('owner-checked payload read through a real journal', () => {
     expect(() => readSessionPayload({ journalRoot: root, owner: recordFor(OWNER),
       digest: bounded.digest, maxLimit: 256 * 1024 }))
       .toThrow(expect.objectContaining({ code: 'payload_not_retained' }))
+  })
+
+  it('refuses a foreign digest a session merely echoed into its own tool input', async () => {
+    const bounded = await writeToolOutput(OWNER, longOutput())
+    // The stranger's row carries the owner's digest in a field the MODEL wrote.
+    await writeToolCallInput(STRANGER, { note: 'look at this', digest: bounded.digest })
+    const strangerDir = journalDirectoryFor(root, {
+      workspaceId: STRANGER.workspaceId, sessionId: STRANGER.sessionId
+    })
+    expect(journalReferencesDigest(strangerDir, STRANGER.sessionId, bounded.digest)).toBe(false)
+    expect(() => readSessionPayload({ journalRoot: root, owner: recordFor(STRANGER),
+      digest: bounded.digest, maxLimit: 256 * 1024 }))
+      .toThrow(expect.objectContaining({ code: 'payload_not_referenced' }))
+    // The same digest still reads for the session that genuinely retained it.
+    expect(readSessionPayload({ journalRoot: root, owner: recordFor(OWNER),
+      digest: bounded.digest, limit: 64, maxLimit: 256 * 1024 }).byteLength)
+      .toBe(bounded.byteLength)
+  })
+
+  it('admits a clip reference a message block carries, and refuses the same digest elsewhere', async () => {
+    const output = longOutput()
+    const bounded = await writeClippedMessageBlock(OWNER, output)
+    const ownerDir = journalDirectoryFor(root, {
+      workspaceId: OWNER.workspaceId, sessionId: OWNER.sessionId
+    })
+    expect(journalReferencesDigest(ownerDir, OWNER.sessionId, bounded.digest)).toBe(true)
+    const range = readSessionPayload({ journalRoot: root, owner: recordFor(OWNER),
+      digest: bounded.digest, limit: 256 * 1024, maxLimit: 256 * 1024 })
+    expect(range.chunk).toContain('CONSTRAINT-A at the top')
+
+    // A session that only ever saw the digest is still refused.
+    await writeToolOutput(STRANGER, 'short unrelated output')
+    expect(() => readSessionPayload({ journalRoot: root, owner: recordFor(STRANGER),
+      digest: bounded.digest, maxLimit: 256 * 1024 }))
+      .toThrow(expect.objectContaining({ code: 'payload_not_referenced' }))
   })
 
   it('keeps small payloads inline: no reference, no retrieval', async () => {

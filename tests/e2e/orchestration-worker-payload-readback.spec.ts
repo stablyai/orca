@@ -23,6 +23,8 @@ const FILLER_BYTES = 48 * 1024
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-payload-readback-'))
 const configPath = path.join(fakeCliDir, 'claude-config.json')
 
+/** A stand-in `claude` binary that reports a provider session through the hook
+ *  and then idles, so the Dispatch has a transcript without the real CLI. */
 function writeFakeClaude(): string {
   const source = `
 const { readFileSync } = require('node:fs')
@@ -73,6 +75,7 @@ setInterval(() => {}, 60_000)
   return buildFakeAgentCommandOverride(executable)
 }
 
+/** Output long enough that the sentinel lands past the transcript clip. */
 function largeToolOutput(): string {
   const lines: string[] = []
   let index = 0
@@ -148,6 +151,8 @@ type PayloadRead = {
   dispatchId: string
 }
 
+/** Creates a task and starts a supervised worker on it, returning both ids the
+ *  payload read needs. */
 async function startWorker(
   client: RuntimeClient,
   args: { run: string; coordinatorHandle: string; spec: string }

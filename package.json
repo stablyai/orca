@@ -111,6 +111,8 @@
     "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:keyboard-layout-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && node config/scripts/build-linux-local.mjs",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project=electron-headless",
+    "build:e2e-full-content-harness": "npx vite build --config tests/e2e/fixtures/full-content-harness/vite.config.ts",
+    "test:e2e:native-chat-full-content": "pnpm run ensure:electron-runtime && pnpm run build:e2e-full-content-harness && npx playwright test tests/e2e/native-chat-full-content-rendered.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:workspace-session-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-quit-relaunch-session.spec.ts tests/e2e/golden-terminal-file-link.spec.ts tests/e2e/golden-worktree-create-switch.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:multi-client-navigation": "node config/scripts/run-multi-client-navigation-e2e.mjs",
     "test:e2e:floating-mobile-emulator": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/floating-mobile-emulator-tab.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",

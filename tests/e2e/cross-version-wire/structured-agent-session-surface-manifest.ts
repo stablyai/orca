@@ -18,6 +18,8 @@ export const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 export const NOW = 1_800_000_000_000
 export const REWIND_METHOD = 'agentSession.rewind'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
+/** The digest a payload read asks for; any lowercase sha256 will do. */
+export const PAYLOAD_DIGEST = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 let operations = 0
 
@@ -138,6 +140,20 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'history',
     result: { ok: true, page: { items: [] } }
   },
+  // Additive and behind the structured capability, but an older peer that cannot
+  // serve it must still say so explicitly rather than answer with a short chunk.
+  {
+    method: 'agentSession.readPayload',
+    hostMethod: 'readPayload',
+    result: {
+      digest: PAYLOAD_DIGEST,
+      byteLength: 5,
+      chunk: 'whole',
+      chunkOffset: 0,
+      chunkByteLength: 5,
+      complete: true
+    }
+  },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
   { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
@@ -252,6 +268,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.readPayload':
+      return { sessionId: SESSION, digest: PAYLOAD_DIGEST, offset: 0, limit: 1_024 }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

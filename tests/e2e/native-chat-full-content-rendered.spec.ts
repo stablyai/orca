@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, mkdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -30,6 +31,42 @@ const PROSE_SENTINEL = 'CONSTRAINT-C (prose): the constraint that lived past the
 const TOOL_SENTINEL = 'CONSTRAINT-C (tool): the constraint that lived past the head'
 const HARNESS_DIR = path.resolve(__dirname, '../../out-harness/full-content')
 const HARNESS_MAIN = path.resolve(__dirname, 'fixtures/full-content-harness/electron-main.cjs')
+const HARNESS_CONFIG = path.resolve(__dirname, 'fixtures/full-content-harness/vite.config.ts')
+/** Named so a CI job — and this file's own failure message — can run exactly it. */
+const HARNESS_BUILD_SCRIPT = 'build:e2e-full-content-harness'
+const HARNESS_BUILD_TIMEOUT_MS = 180_000
+
+/**
+ * Builds the harness bundle this spec serves. `out-harness/` is gitignored and
+ * the ordinary e2e build produces only the app, so without this the handler
+ * 404s on index.html and the test times out on a missing element instead of
+ * saying what is missing.
+ */
+function buildHarnessBundle(): void {
+  if (process.env.SKIP_BUILD && existsSync(path.join(HARNESS_DIR, 'index.html'))) {
+    return
+  }
+  const repoRoot = path.resolve(__dirname, '../..')
+  try {
+    // The vite entry is invoked through node directly: no shell, so the path
+    // needs no quoting on any platform.
+    execFileSync(process.execPath, [
+      path.join(repoRoot, 'node_modules', 'vite', 'bin', 'vite.js'),
+      'build',
+      '--config',
+      HARNESS_CONFIG
+    ], { cwd: repoRoot, stdio: 'inherit', timeout: HARNESS_BUILD_TIMEOUT_MS })
+  } catch (error) {
+    throw new Error(
+      `The full-content harness bundle could not be built. Run \`pnpm run ${HARNESS_BUILD_SCRIPT}\` and retry. Underlying failure: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (!existsSync(path.join(HARNESS_DIR, 'index.html'))) {
+    throw new Error(
+      `The full-content harness bundle is missing at ${HARNESS_DIR}. Run \`pnpm run ${HARNESS_BUILD_SCRIPT}\` before this spec.`
+    )
+  }
+}
 
 function filler(prefix: string, bytes: number): string {
   const lines: string[] = []
@@ -52,6 +89,8 @@ async function scrollToEnd(locator: Locator): Promise<void> {
   })
 }
 
+/** Serves the built harness bundle plus a `/payload` endpoint backed by the real
+ *  owner-checked range reader, so the page fetches through production code. */
 function serveHarness(args: {
   store: JournalPayloadStore
   config: unknown
@@ -103,6 +142,11 @@ function serveHarness(args: {
   })
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)))
 }
+
+test.beforeAll(() => {
+  test.setTimeout(HARNESS_BUILD_TIMEOUT_MS + 30_000)
+  buildHarnessBundle()
+})
 
 test('rendered: clipped prose and tool output open the complete original in real Chromium', async () => {
   test.setTimeout(120_000)

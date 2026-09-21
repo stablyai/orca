@@ -32,6 +32,8 @@ export type WorkerPayloadReadResult = JournalPayloadRange & {
   server?: { environmentId: string; name: string }
 }
 
+/** A payload this host retained while reading THIS Dispatch's transcript; the
+ *  Dispatch's own read scope is the ownership proof. */
 export function readLocalDispatchPayload(input: {
   dispatchId: string
   digest: string
@@ -51,9 +53,21 @@ export function readLocalDispatchPayload(input: {
   return { ...range, dispatchId: input.dispatchId }
 }
 
-/** The remote reply is untrusted wire data: verify its shape and the digest it
- *  claims before treating the bytes as the requested payload. */
-function parseRemotePayloadReply(value: unknown): { runtimeEpoch: string; payload: JournalPayloadRange } {
+/** What the caller asked the peer for; the reply is only accepted as an answer
+ *  to exactly this. */
+export type RemotePayloadRequest = { digest: string; offset?: number }
+
+/**
+ * The remote reply is untrusted wire data. It is bound to the request before
+ * its bytes are ever presented as content: a stale or wrong reply that named a
+ * different digest, or whose offsets do not describe the bytes it carries,
+ * would otherwise be shown as the requested payload and would hand the pager a
+ * continuation offset that walks off the payload.
+ */
+export function parseRemotePayloadReply(
+  value: unknown,
+  request: RemotePayloadRequest
+): { runtimeEpoch: string; payload: JournalPayloadRange } {
   if (typeof value !== 'object' || value === null) {
     throw malformedRemoteReply()
   }
@@ -70,10 +84,21 @@ function parseRemotePayloadReply(value: unknown): { runtimeEpoch: string; payloa
   const chunkByteLength = payload['chunkByteLength']
   const complete = payload['complete']
   if (
-    typeof digest !== 'string' || !/^[0-9a-f]{64}$/.test(digest) || typeof chunk !== 'string'
-    || typeof byteLength !== 'number' || typeof chunkOffset !== 'number'
-    || typeof chunkByteLength !== 'number' || typeof complete !== 'boolean'
+    typeof digest !== 'string' || typeof chunk !== 'string' || typeof complete !== 'boolean'
+    || !isByteCount(byteLength) || !isByteCount(chunkOffset) || !isByteCount(chunkByteLength)
+  ) {
+    throw malformedRemoteReply()
+  }
+  const requestedOffset = request.offset ?? 0
+  if (
+    // The reply must answer the digest that was asked for, and nothing else.
+    digest !== request.digest
     || Buffer.byteLength(chunk, 'utf8') !== chunkByteLength
+    // The host clamps an offset past the end, so it may only ever move backwards.
+    || chunkOffset > requestedOffset
+    || chunkOffset + chunkByteLength > byteLength
+    // `complete` is what stops the pager; it must mean the payload's real end.
+    || complete !== (chunkOffset + chunkByteLength === byteLength)
   ) {
     throw malformedRemoteReply()
   }
@@ -83,11 +108,19 @@ function parseRemotePayloadReply(value: unknown): { runtimeEpoch: string; payloa
   }
 }
 
+/** A byte count on the wire: a safe non-negative integer, never a float. */
+function isByteCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+/** One code for every way a reply fails its binding: a caller cannot tell which
+ *  check tripped, and none of them means the content is trustworthy. */
 function malformedRemoteReply(): OrchestrationError {
   return new OrchestrationError('payload_integrity_failed',
     'The execution host returned a malformed payload reply; refusing to present it as content.')
 }
 
+/** Keeps the reader's specific refusal code on the wire instead of flattening it. */
 function toOrchestrationError(error: unknown): unknown {
   return error instanceof PayloadReadError
     ? new OrchestrationError(error.code, error.message)
@@ -125,6 +158,9 @@ export const ORCHESTRATION_WORKER_PAYLOAD_METHODS = [
   })
 ]
 
+/** Forwards the read to the Dispatch's pinned execution host. A host that
+ *  predates this method is remembered as unsupported so the next read says so
+ *  immediately instead of paying another round trip. */
 async function readFederatedDispatchPayload(args: {
   runtime: OrcaRuntimeService
   federated: FederatedDispatchRow
@@ -157,7 +193,8 @@ async function readFederatedDispatchPayload(args: {
         15_000,
         undefined,
         { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )
+      ),
+      { digest: args.params.digest, offset: args.params.offset }
     )
     capabilities.remember(
       args.federated.peer_fingerprint,

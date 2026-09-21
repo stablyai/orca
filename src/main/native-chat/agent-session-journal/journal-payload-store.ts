@@ -37,6 +37,12 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
+import {
+  alignUtf8End,
+  fileIdentity,
+  hashDescriptor,
+  type VerifiedFileIdentity
+} from './journal-payload-file-bytes'
 
 export type JournalPayloadRetention = {
   /** Retain the complete original text under its digest, optionally recording
@@ -103,19 +109,27 @@ export const DEFAULT_PAYLOAD_RETENTION_AGE_MS = 30 * 24 * 60 * 60 * 1000
 export const DEFAULT_PAYLOAD_RETENTION_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
 export const PAYLOAD_STORE_DIR_NAME = 'agent-session-payloads'
 
+/** Refuses anything that is not a lowercase sha256, so a digest can never be
+ *  used to reach outside the store's own directory. */
 export function assertPayloadDigest(digest: string): void {
   if (!DIGEST_PATTERN.test(digest)) {
     throw new Error(`Invalid payload digest: ${digest}`)
   }
 }
 
+/** The non-throwing form, for validating untrusted input before it is used. */
 export function isPayloadDigest(value: unknown): value is string {
   return typeof value === 'string' && DIGEST_PATTERN.test(value)
 }
 
+/** Verified identities kept per store; paging a large payload is the common
+ *  case and each page would otherwise re-hash the whole file. */
+const VERIFICATION_CACHE_LIMIT = 64
+
 export class JournalPayloadStore implements JournalPayloadRetention {
   private readonly directory: string
   private readonly maxRetainedBytes: number
+  private readonly verified = new Map<string, VerifiedFileIdentity>()
 
   constructor(options: JournalPayloadStoreOptions) {
     this.directory = options.directory
@@ -172,24 +186,39 @@ export class JournalPayloadStore implements JournalPayloadRetention {
         return false
       }
       descriptor = openSync(path, 'r')
-      const hash = createHash('sha256')
-      const buffer = Buffer.alloc(64 * 1024)
-      let position = 0
-      while (position < size) {
-        const read = readSync(descriptor, buffer, 0, buffer.length, position)
-        if (read <= 0) {
-          break
-        }
-        hash.update(buffer.subarray(0, read))
-        position += read
-      }
-      return hash.digest('hex') === digest
+      return hashDescriptor(descriptor, size) === digest
     } catch {
       return false
     } finally {
       if (descriptor !== null) {
         closeSync(descriptor)
       }
+    }
+  }
+
+  /** True when this exact file — same inode, size and mtime — already hashed to
+   *  `digest`. Any rewrite moves the mtime or the inode, so the entry lapses. */
+  private isVerified(digest: string, identity: VerifiedFileIdentity): boolean {
+    const known = this.verified.get(digest)
+    return (
+      known !== undefined &&
+      known.size === identity.size &&
+      known.mtimeMs === identity.mtimeMs &&
+      known.ino === identity.ino &&
+      known.dev === identity.dev
+    )
+  }
+
+  private rememberVerified(digest: string, identity: VerifiedFileIdentity): void {
+    this.verified.delete(digest)
+    this.verified.set(digest, identity)
+    // Insertion order is oldest-first, so the first key is the eviction victim.
+    while (this.verified.size > VERIFICATION_CACHE_LIMIT) {
+      const oldest = this.verified.keys().next()
+      if (oldest.done === true) {
+        break
+      }
+      this.verified.delete(oldest.value)
     }
   }
 
@@ -248,26 +277,22 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
       throw new Error('Payload range offset must be a non-negative integer and limit a positive integer.')
     }
-    // Verify the whole file first: a range from a tampered file must never be
-    // returned even when the requested bytes happen to be intact.
-    const size = statSync(path).size
-    const hash = createHash('sha256')
+    // Verify the whole file before serving any of it: a range from a tampered
+    // file must never be returned even when the requested bytes happen to be
+    // intact. The verification is pinned to the file's identity, so paging a
+    // large payload hashes it once instead of once per page.
+    const identity = fileIdentity(path)
+    const size = identity.size
     const descriptor = openSync(path, 'r')
     let chunk = Buffer.alloc(0)
     try {
-      const buffer = Buffer.alloc(64 * 1024)
-      let position = 0
-      while (position < size) {
-        const read = readSync(descriptor, buffer, 0, buffer.length, position)
-        if (read <= 0) {
-          break
+      if (!this.isVerified(digest, identity)) {
+        const actual = hashDescriptor(descriptor, size)
+        if (actual !== digest) {
+          this.verified.delete(digest)
+          throw new JournalPayloadIntegrityError(digest, actual)
         }
-        hash.update(buffer.subarray(0, read))
-        position += read
-      }
-      const actual = hash.digest('hex')
-      if (actual !== digest) {
-        throw new JournalPayloadIntegrityError(digest, actual)
+        this.rememberVerified(digest, identity)
       }
       const start = Math.min(offset, size)
       const end = Math.min(size, start + limit)
@@ -332,24 +357,6 @@ export class JournalPayloadStore implements JournalPayloadRetention {
     }
     return { scanned: entries.length, removed, retainedBytes }
   }
-}
-
-/** Walk back from a byte position so the chunk never ends inside a multi-byte
- *  UTF-8 sequence; the final byte of the file is always a valid end. */
-function alignUtf8End(descriptor: number, start: number, end: number, size: number): number {
-  if (end >= size || end <= start) {
-    return end
-  }
-  const probe = Buffer.alloc(1)
-  let aligned = end
-  while (aligned > start) {
-    readSync(descriptor, probe, 0, 1, aligned)
-    if ((probe[0] & 0b1100_0000) !== 0b1000_0000) {
-      break
-    }
-    aligned -= 1
-  }
-  return aligned
 }
 
 export {

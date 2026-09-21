@@ -7,6 +7,7 @@ import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { PAYLOAD_READ_ERROR_CODES } from '../../../shared/journal-payload-read-errors'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
 import {
@@ -149,7 +150,11 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
-  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES)
+  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
+  // Why: "not retained", "not yours", "tampered" and "host too old" are four
+  // different answers to "show me the full content". Flattened to runtime_error
+  // the dialog can only say the read failed.
+  ...PAYLOAD_READ_ERROR_CODES
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

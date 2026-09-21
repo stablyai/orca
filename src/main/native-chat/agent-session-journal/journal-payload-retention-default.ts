@@ -15,6 +15,8 @@ export function setDefaultJournalPayloadRetention(
   defaultRetention = retention
 }
 
+/** The process-wide retention, or null on a host that retains nothing — in which
+ *  case a clipped row's remainder was genuinely discarded. */
 export function getDefaultJournalPayloadRetention(): JournalPayloadRetention | null {
   return defaultRetention
 }

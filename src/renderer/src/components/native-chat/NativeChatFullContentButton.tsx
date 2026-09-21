@@ -19,10 +19,17 @@ type LoadState =
   | { kind: 'loaded'; text: string }
   | { kind: 'failed'; code: string }
 
+/** The host's own refusal code. `RuntimeRpcCallError` carries it beside the
+ *  prose message, so the message itself is never the code. */
 function errorCode(error: unknown): string {
+  if (error instanceof Error && 'code' in error) {
+    const code = error.code
+    if (typeof code === 'string' && /^[a-z][a-z_]*$/.test(code)) {
+      return code
+    }
+  }
   const message = error instanceof Error ? error.message : String(error)
-  const match = /^[a-z_]+$/.exec(message)
-  return match ? message : 'payload_read_failed'
+  return /^[a-z][a-z_]*$/.test(message) ? message : 'payload_read_failed'
 }
 
 /**
@@ -67,7 +74,9 @@ export function NativeChatFullContentButton({
         size="xs"
         onClick={() => {
           setOpen(true)
-          if (state.kind === 'idle') {
+          // A failed read is retried on the next open: a transient transport
+          // error must not look permanent until the row unmounts.
+          if (state.kind === 'idle' || state.kind === 'failed') {
             void load()
           }
         }}

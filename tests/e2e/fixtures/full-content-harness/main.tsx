@@ -59,6 +59,7 @@ function parsePayloadRange(value: unknown): PayloadRange {
   throw new Error('payload_read_failed')
 }
 
+/** The config is fetched over HTTP, so its shape is checked before it drives the render. */
 function isHarnessConfig(value: unknown): value is HarnessConfig {
   return (
     isRecord(value) &&
@@ -68,6 +69,8 @@ function isHarnessConfig(value: unknown): value is HarnessConfig {
   )
 }
 
+/** The harness's stand-in for the RPC reader: same paging contract over HTTP,
+ *  so the components under test see the real reader interface. */
 function readerFor(config: HarnessConfig): NativeChatPayloadReader {
   return {
     async readFullPayload(digest, expectedByteLength) {
@@ -99,6 +102,8 @@ function readerFor(config: HarnessConfig): NativeChatPayloadReader {
   }
 }
 
+/** Renders the real message rows with a payload reader in scope, which is what
+ *  the screenshot proof is taken of. */
 function Harness({ config }: { config: HarnessConfig }) {
   const reader = useMemo(() => readerFor(config), [config])
   return (

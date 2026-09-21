@@ -7,6 +7,10 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import {
+  NativeChatPayloadReaderContext,
+  useStructuredSessionPayloadReader
+} from './native-chat-payload-reader'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
@@ -57,6 +61,7 @@ export function NativeChatStructuredSession(
     () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
     [props.sessionId, props.tabId]
   )
+  const payloadReader = useStructuredSessionPayloadReader(props.target, props.sessionId)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   const paneCommands = useStructuredNativeChatPaneCommands({
@@ -221,22 +226,24 @@ export function NativeChatStructuredSession(
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
-          <NativeChatMessageList
-            session={session}
-            journalItems={controller.journalItems}
-            isVisible={props.isVisible}
-            isWorking={controller.isWorking}
-            expandSignal={false}
-            fontScale={fontScale.scale}
-            workingStartedAt={controller.workingStartedAt}
-            settledTurns={controller.settledTurns}
-            showTurnStatus
-            showLiveTurnActivity={prompt === null}
-            turnActivity={controller.turnActivity}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={onLinkClick !== undefined}
-            runtimeContext={imageRuntimeContext}
-          />
+          <NativeChatPayloadReaderContext.Provider value={payloadReader}>
+            <NativeChatMessageList
+              session={session}
+              journalItems={controller.journalItems}
+              isVisible={props.isVisible}
+              isWorking={controller.isWorking}
+              expandSignal={false}
+              fontScale={fontScale.scale}
+              workingStartedAt={controller.workingStartedAt}
+              settledTurns={controller.settledTurns}
+              showTurnStatus
+              showLiveTurnActivity={prompt === null}
+              turnActivity={controller.turnActivity}
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={onLinkClick !== undefined}
+              runtimeContext={imageRuntimeContext}
+            />
+          </NativeChatPayloadReaderContext.Provider>
         )}
       </div>
       {prompt && approval ? (

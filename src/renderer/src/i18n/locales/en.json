@@ -17520,7 +17520,8 @@
         "description": "Complete original retained by the execution host and verified against its digest.",
         "copy": "Copy full content",
         "failed": "The full content could not be retrieved; only the clipped head is available.",
-        "loading": "Retrieving…"
+        "loading": "Retrieving…",
+        "title": "Message"
       }
     },
     "tab": {

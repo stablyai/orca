@@ -110,6 +110,37 @@ describe('NativeChatFullContentButton', () => {
     expect(screen.queryByTestId('native-chat-full-content')).toBeNull()
   })
 
+  it('retries after a failed retrieval instead of freezing on the error', async () => {
+    let attempt = 0
+    const reader: NativeChatPayloadReader = {
+      readFullPayload: vi.fn(async () => {
+        attempt += 1
+        if (attempt === 1) {
+          throw Object.assign(new Error('Remote Orca runtime closed the connection.'), {
+            code: 'remote_runtime_unavailable'
+          })
+        }
+        return full
+      })
+    }
+    render(
+      <WithReader reader={reader}>
+        <NativeChatToolRun blocks={clippedBlocks(true)} expandSignal={false} expandOverride />
+      </WithReader>
+    )
+    fireEvent.click(screen.getByText('Result'))
+    const button = await screen.findByRole('button', { name: 'Show full content' })
+    fireEvent.click(button)
+    // The host's own code, not the prose message it came with.
+    expect(await screen.findByRole('alert')).toHaveTextContent('remote_runtime_unavailable')
+
+    fireEvent.click(button)
+    await waitFor(() =>
+      expect(screen.getByTestId('native-chat-full-content')).toHaveTextContent('END OF ARTIFACT')
+    )
+    expect(reader.readFullPayload).toHaveBeenCalledTimes(2)
+  })
+
   it('renders no affordance for a block the host did not retain, or outside a session pane', () => {
     const reader: NativeChatPayloadReader = { readFullPayload: vi.fn() }
     const { unmount } = render(

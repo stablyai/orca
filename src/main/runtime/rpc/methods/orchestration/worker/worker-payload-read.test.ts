@@ -8,7 +8,11 @@ import {
   JournalPayloadStore,
   setDefaultJournalPayloadRetention
 } from '../../../../../native-chat/agent-session-journal/journal-payload-store'
-import { dispatchPayloadScope, readLocalDispatchPayload } from './worker-payload-read'
+import {
+  dispatchPayloadScope,
+  parseRemotePayloadReply,
+  readLocalDispatchPayload
+} from './worker-payload-read'
 
 const CAPABILITY = `dcap_${'Q'.repeat(40)}`
 let directory: string
@@ -83,5 +87,51 @@ describe('worker readback retention and owner-checked payload read', () => {
     expect(block.clipped).toMatchObject({ retrievable: false })
     expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: block.clipped!.digest }))
       .toThrow(expect.objectContaining({ code: 'payload_not_retained' }))
+  })
+})
+
+describe('a federated payload reply is bound to the request that asked for it', () => {
+  const DIGEST = 'a'.repeat(64)
+  const OTHER = 'b'.repeat(64)
+  const reply = (payload: Record<string, unknown>): unknown => ({ runtimeEpoch: 'epoch-1', payload })
+  const good = {
+    digest: DIGEST, chunk: 'hello', byteLength: 11, chunkOffset: 0, chunkByteLength: 5,
+    complete: false
+  }
+
+  it('accepts a reply that answers the requested digest and describes its own bytes', () => {
+    const parsed = parseRemotePayloadReply(reply(good), { digest: DIGEST, offset: 0 })
+    expect(parsed.runtimeEpoch).toBe('epoch-1')
+    expect(parsed.payload).toMatchObject({ digest: DIGEST, chunkByteLength: 5, complete: false })
+    // The last page of the same payload closes it out.
+    expect(
+      parseRemotePayloadReply(
+        reply({ ...good, chunk: ' world', chunkOffset: 5, chunkByteLength: 6, complete: true }),
+        { digest: DIGEST, offset: 5 }
+      ).payload.complete
+    ).toBe(true)
+  })
+
+  it.each([
+    ['a different digest', { ...good, digest: OTHER }, 0],
+    ['a chunk length that contradicts the bytes', { ...good, chunkByteLength: 4 }, 0],
+    ['an offset past the one requested', { ...good, chunkOffset: 6 }, 0],
+    ['a fractional byte length', { ...good, byteLength: 11.5 }, 0],
+    ['a negative offset', { ...good, chunkOffset: -1 }, 0],
+    ['a chunk that runs past the payload', { ...good, byteLength: 3 }, 0],
+    ['completion claimed before the end', { ...good, complete: true }, 0],
+    ['completion withheld at the end', { ...good, byteLength: 5, complete: false }, 0]
+  ])('refuses %s', (_case, payload, offset) => {
+    expect(() => parseRemotePayloadReply(reply(payload), { digest: DIGEST, offset })).toThrow(
+      expect.objectContaining({ code: 'payload_integrity_failed' })
+    )
+  })
+
+  it('refuses a reply that is not a payload envelope at all', () => {
+    for (const value of [null, 'text', {}, { runtimeEpoch: 'e', payload: null }]) {
+      expect(() => parseRemotePayloadReply(value, { digest: DIGEST })).toThrow(
+        expect.objectContaining({ code: 'payload_integrity_failed' })
+      )
+    }
   })
 })

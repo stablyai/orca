@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { NativeChatPayloadReaderContext, useSessionPayloadReader } from './native-chat-payload-reader'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
@@ -78,7 +77,6 @@ export function NativeChatResolvedView({
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
-  const payloadReader = useSessionPayloadReader(runtimeEnvironmentId, sessionId)
   const keybindings = useAppStore((s) => s.keybindings)
   const session = useNativeChatRetainedSession({
     paneKey,
@@ -400,7 +398,6 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatPayloadReaderContext.Provider value={payloadReader}>
           <NativeChatMessageList
             session={sessionWithPending}
             isVisible={isVisible}
@@ -413,7 +410,6 @@ export function NativeChatResolvedView({
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />
-          </NativeChatPayloadReaderContext.Provider>
         )}
       </div>
       {/* Live interactive prompt (question / approval) is the bottom input region

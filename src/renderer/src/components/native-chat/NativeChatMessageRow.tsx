@@ -69,6 +69,8 @@ export const MessageRow = memo(function MessageRow({
   // A prose block the host bounded to a head; the rest is fetched on demand.
   const clippedProse = prose.find((block) => block.type === 'text' && block.clipped !== undefined)
   const clipped = clippedProse?.type === 'text' ? clippedProse.clipped : undefined
+  // `message.role` is an identifier, never display text.
+  const fullContentTitle = translate('components.native-chat.fullContent.title', 'Message')
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -137,7 +139,7 @@ export const MessageRow = memo(function MessageRow({
                 allowFileUriLinks={allowFileUriLinks}
               />
               {clipped ? (
-                <NativeChatFullContentButton clipped={clipped} title={message.role} />
+                <NativeChatFullContentButton clipped={clipped} title={fullContentTitle} />
               ) : null}
             </>
           ) : (
@@ -195,7 +197,7 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {clipped ? <NativeChatFullContentButton clipped={clipped} title={message.role} /> : null}
+      {clipped ? <NativeChatFullContentButton clipped={clipped} title={fullContentTitle} /> : null}
       {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}

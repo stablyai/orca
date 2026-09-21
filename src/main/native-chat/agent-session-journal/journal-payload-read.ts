@@ -5,6 +5,11 @@
 
 import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
+import {
+  PAYLOAD_READ_ERROR_CODES,
+  type PayloadReadErrorCode
+} from '../../../shared/journal-payload-read-errors'
+import { journalRowReferencesDigest } from '../../../shared/journal-payload-reference'
 import { journalDatabaseFile, journalDirectoryFor } from './journal-paths'
 import {
   getDefaultJournalPayloadRetention,
@@ -13,14 +18,9 @@ import {
   type JournalPayloadRetention
 } from './journal-payload-store'
 
-export const PAYLOAD_READ_ERROR_CODES = [
-  'payload_not_referenced',
-  'payload_not_retained',
-  'payload_integrity_failed',
-  'payload_read_unsupported'
-] as const
-export type PayloadReadErrorCode = (typeof PAYLOAD_READ_ERROR_CODES)[number]
+export { PAYLOAD_READ_ERROR_CODES, type PayloadReadErrorCode }
 
+/** A refusal a client can act on: it names which of the read's preconditions failed. */
 export class PayloadReadError extends Error {
   readonly code: PayloadReadErrorCode
   constructor(code: PayloadReadErrorCode, message: string) {
@@ -32,7 +32,17 @@ export class PayloadReadError extends Error {
 
 export const DEFAULT_PAYLOAD_READ_LIMIT = 64 * 1024
 
-/** True when a row of `sessionId`'s journal names `digest` as a bounded payload. */
+/**
+ * True when a row of `sessionId`'s journal references `digest` from one of the
+ * reference fields Orca itself writes.
+ *
+ * The `LIKE` is only a prefilter: a session authors its own tool-call input, so
+ * a row merely CONTAINING the digest text proves nothing. Ownership comes from
+ * parsing each candidate and finding the digest at a position
+ * `journal-payload-reference` recognises; otherwise a session could name a
+ * foreign digest and read another session's retained bytes out of the
+ * process-wide store.
+ */
 export function journalReferencesDigest(journalDir: string, sessionId: string, digest: string): boolean {
   const dbPath = journalDatabaseFile(journalDir)
   if (!existsSync(dbPath)) {
@@ -40,17 +50,43 @@ export function journalReferencesDigest(journalDir: string, sessionId: string, d
   }
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
-    const row = db
+    const rows = db
       .prepare(
-        'SELECT 1 AS hit FROM journal_rows WHERE session_id = ? AND row_json LIKE ? LIMIT 1'
+        'SELECT row_json FROM journal_rows WHERE session_id = ? AND row_json LIKE ? ORDER BY seq ASC'
       )
-      .get(sessionId, `%"digest":"${digest}"%`)
-    return row !== undefined
+      .all(sessionId, `%"${digest}"%`)
+    for (const row of rows) {
+      if (journalRowReferencesDigest(parseRowJson(row), digest)) {
+        return true
+      }
+    }
+    return false
   } finally {
     db.close()
   }
 }
 
+/** A row this build cannot parse references nothing; it never widens a read. */
+function parseRowJson(row: unknown): unknown {
+  if (typeof row !== 'object' || row === null || !('row_json' in row)) {
+    return null
+  }
+  const json = row.row_json
+  if (typeof json !== 'string') {
+    return null
+  }
+  try {
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * One byte range of a retained payload, for a caller that can prove ownership.
+ * `isReferenced` is the proof and is consulted BEFORE the store is touched, so a
+ * caller who cannot prove it learns nothing about whether the bytes exist.
+ */
 export function readOwnedPayloadRange(input: {
   retention?: JournalPayloadRetention | null
   isReferenced: () => boolean

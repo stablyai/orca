@@ -6,6 +6,14 @@ import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
+import {
+  PAYLOAD_READ_MAX_LIMIT,
+  PayloadDigest,
+  PayloadReadLimit,
+  PayloadReadOffset
+} from './rpc-param-primitives'
+
+export { PayloadDigest }
 
 export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 
@@ -272,15 +280,12 @@ export const RewindParams = z
   .strict()
 
 /** Largest chunk one `agentSession.readPayload` reply carries; callers page with `offset`. */
-export const AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT = 256 * 1024
-export const PayloadDigest = z
-  .string()
-  .regex(/^[0-9a-f]{64}$/, 'Payload digest must be a lowercase sha256 hex digest')
+export const AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT = PAYLOAD_READ_MAX_LIMIT
 export const ReadPayloadParams = z
   .object({
     sessionId: SessionId,
     digest: PayloadDigest,
-    offset: z.number().int().nonnegative().optional(),
-    limit: z.number().int().positive().max(AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT).optional()
+    offset: PayloadReadOffset,
+    limit: PayloadReadLimit
   })
   .strict()

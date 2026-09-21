@@ -170,6 +170,22 @@ describe('journal payload retention: scopes, ranges and pruning', () => {
     expect(store.retrieveRange(sha256('nothing'), 0, 5)).toBeNull()
   })
 
+  it('advances through one whole code point when the limit ends inside the first one', () => {
+    const store = new JournalPayloadStore({ directory })
+    const payload = '\u{1F9E9} then the rest of the artifact'
+    const digest = sha256(payload)
+    store.retain(digest, payload)
+    // A 1-byte limit cannot split the leading 4-byte emoji; returning `start`
+    // would hand the pager an empty, incomplete chunk and stall it forever.
+    const first = store.retrieveRange(digest, 0, 1)
+    expect(first!.chunkByteLength).toBe(4)
+    expect(first!.chunk).toBe('\u{1F9E9}')
+    expect(first!.complete).toBe(false)
+    const next = store.retrieveRange(digest, first!.chunkOffset + first!.chunkByteLength, 4_096)
+    expect(next!.complete).toBe(true)
+    expect(`${first!.chunk}${next!.chunk}`).toBe(payload)
+  })
+
   it('refuses any range from a tampered file', async () => {
     const store = new JournalPayloadStore({ directory })
     const payload = counterexample()

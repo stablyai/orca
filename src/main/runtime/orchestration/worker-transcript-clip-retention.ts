@@ -19,6 +19,8 @@ export type WorkerTranscriptRetentionState = {
   payloadScope: string | undefined
 }
 
+/** Resolves the retention and scope a transcript projection clips against;
+ *  omitting them takes the process-wide retention. */
 export function workerTranscriptRetentionState(
   options: WorkerTranscriptBoundOptions | undefined
 ): WorkerTranscriptRetentionState {

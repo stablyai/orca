@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
+import { PAYLOAD_DIGEST } from './structured-agent-session-surface-manifest'
 
 /** The host every skew installs to drive the surface: enough of the real host's
  *  shape for each handler to run, and a spy per method so "which call reached the
@@ -73,6 +74,14 @@ export function structuredHostStub(
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    readPayload: vi.fn(() => ({
+      digest: PAYLOAD_DIGEST,
+      byteLength: 5,
+      chunk: 'whole',
+      chunkOffset: 0,
+      chunkByteLength: 5,
+      complete: true
+    })),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })

@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, requiredString } from './rpc-param-primitives'
+import {
+  OptionalFiniteNumber,
+  PayloadDigest,
+  PayloadReadLimit,
+  PayloadReadOffset,
+  requiredString
+} from './rpc-param-primitives'
 import { ORCHESTRATION_WORKER_READ_SOURCES } from '../orchestration-worker-output'
 
 export const FederationDispatchParams = z.object({
@@ -22,7 +28,7 @@ export const FederationFleetSnapshotParams = z.object({
 })
 
 export const FederationPayloadReadParams = FederationDispatchParams.extend({
-  digest: z.string().regex(/^[0-9a-f]{64}$/, 'Payload digest must be a lowercase sha256 hex digest'),
-  offset: z.number().int().nonnegative().optional(),
-  limit: OptionalFiniteNumber
+  digest: PayloadDigest,
+  offset: PayloadReadOffset,
+  limit: PayloadReadLimit
 })

@@ -29,10 +29,14 @@ const MAX_PAGES = 1024
 
 export const NativeChatPayloadReaderContext = createContext<NativeChatPayloadReader | null>(null)
 
+/** The reader for the surrounding session pane, or null outside one. */
 export function useNativeChatPayloadReader(): NativeChatPayloadReader | null {
   return useContext(NativeChatPayloadReaderContext)
 }
 
+/** Pages `agentSession.readPayload` until the host reports the payload complete,
+ *  re-checking the digest and total length on every page so a payload that
+ *  changed underneath the read is refused rather than stitched together. */
 export function createSessionPayloadReader(
   target: RuntimeClientTarget,
   sessionId: string
@@ -64,19 +68,17 @@ export function createSessionPayloadReader(
   }
 }
 
-/** `environmentId` null keeps the local runtime; a session without an id has no reader. */
-export function useSessionPayloadReader(
-  environmentId: string | null | undefined,
+/**
+ * Reader for a structured agent-session pane. `sessionId` must be the structured
+ * agent-session RECORD id, which is what the host resolves the owning journal
+ * from — a provider session id looks similar and reads as `payload_not_referenced`.
+ */
+export function useStructuredSessionPayloadReader(
+  target: RuntimeClientTarget,
   sessionId: string | null | undefined
 ): NativeChatPayloadReader | null {
   return useMemo(
-    () =>
-      sessionId
-        ? createSessionPayloadReader(
-            environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
-            sessionId
-          )
-        : null,
-    [environmentId, sessionId]
+    () => (sessionId ? createSessionPayloadReader(target, sessionId) : null),
+    [target, sessionId]
   )
 }

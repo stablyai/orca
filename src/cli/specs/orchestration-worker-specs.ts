@@ -77,7 +77,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'worker-read marks a clipped block with "… (truncated) [full text N bytes, digest <sha256>]" when the execution host retained the complete text; pass that digest here.',
       'Only digests retained while reading this exact Dispatch are served; anything else is refused as payload_not_referenced, and a tampered retained file is refused as payload_integrity_failed.',
-      'The reply is one byte-aligned chunk; page with --offset until Complete is yes. An older execution host answers payload_read_unsupported: its clipped output has no full-content route.'
+      'The reply is one byte-aligned chunk; page with --offset until Complete is yes. --limit is a positive integer up to 262144. An older execution host answers payload_read_unsupported: its clipped output has no full-content route.'
     ]
   },
   {

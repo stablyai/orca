@@ -9,26 +9,33 @@ type BoundedPayload = {
   retrievable?: boolean
 }
 
+/** The text a reader shows for a bounded payload: the head, plus an explicit
+ *  size marker when it is only a head. */
 export function boundedText(
   payload: Pick<BoundedPayload, 'head' | 'truncated' | 'byteLength'>
 ): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
 }
 
-/** The structured reference a truncated payload carries beside its marker, so a
- *  renderer can offer the complete original when the host retained it. */
+/** The complete-original reference itself: the single place this shape is built,
+ *  so every producer writes exactly what a payload read recognises as a genuine
+ *  reference. `retrievable` is true only when the host stored the full bytes. */
+export function clippedPayload(
+  payload: Pick<BoundedPayload, 'digest' | 'byteLength' | 'retrievable'>
+): NativeChatClippedPayload {
+  return {
+    digest: payload.digest,
+    byteLength: payload.byteLength,
+    retrievable: payload.retrievable === true
+  }
+}
+
+/** The reference as a spreadable fragment, so a projection can add it to a block
+ *  only when the payload was actually clipped. */
 export function clippedReference(
   payload: Omit<BoundedPayload, 'head'>
 ): { clipped: NativeChatClippedPayload } | Record<string, never> {
-  return payload.truncated
-    ? {
-        clipped: {
-          digest: payload.digest,
-          byteLength: payload.byteLength,
-          retrievable: payload.retrievable === true
-        }
-      }
-    : {}
+  return payload.truncated ? { clipped: clippedPayload(payload) } : {}
 }
 
 /** The markers a clipped payload carries in its own text, anchored to the end
