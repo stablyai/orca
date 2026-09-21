@@ -125,6 +125,8 @@ vi.mock('./use-mobile-web-shell-session', () => ({
 import MobileWebPageCatchAllScreen from './catch-all-page-route'
 
 const BACK_LABEL = 'Back to workspaces'
+/** What the same control says when there is no host to go back to. */
+const ROOT_LABEL = 'Back to hosts'
 
 /**
  * Rendered with the flag read settled, which is the precondition every case here needs.
@@ -154,11 +156,11 @@ function hostNodes(tree: ReactTestRenderer, host: string): ReactTestInstance[] {
   return tree.root.findAll((node) => node.type === host)
 }
 
-function backControl(tree: ReactTestRenderer): ReactTestInstance {
+function backControl(tree: ReactTestRenderer, label: string = BACK_LABEL): ReactTestInstance {
   const found = hostNodes(tree, 'Pressable').filter(
-    (node) => node.props.accessibilityLabel === BACK_LABEL
+    (node) => node.props.accessibilityLabel === label
   )
-  expect(found.length, `one control labelled "${BACK_LABEL}"`).toBe(1)
+  expect(found.length, `one control labelled "${label}"`).toBe(1)
   return found[0]!
 }
 
@@ -215,6 +217,24 @@ describe('the screen the catch-all paints for each shell state', () => {
         hostId
       ).toBe(hostId)
     }
+  })
+
+  /**
+   * An absent host id, which `firstParam` answers as `''`.
+   *
+   * The raw call sends this control to `/h/`, which expo-router's own matcher resolves to the `h`
+   * layout with no child — a press that paints nothing and leaves the dead end in place. The app
+   * root is the screen that lists hosts, and is where `ProtocolBlockScreen` sends the same gesture.
+   */
+  it('goes to the app root when there is no host to go back to', async () => {
+    dependencies.params = { page: ['settings'] }
+    const tree = await renderRoute({ kind: 'native-route' })
+    await act(async () => {
+      backControl(tree, ROOT_LABEL).props.onPress()
+    })
+    expect(dependencies.replace).toHaveBeenCalledWith('/')
+    expect(dependencies.replace).not.toHaveBeenCalledWith('/h/')
+    expect(dependencies.push).not.toHaveBeenCalled()
   })
 
   /**
