@@ -155,7 +155,7 @@ export function ResumeOnRestartGroups({
   selected,
   onToggle
 }: {
-  candidates: ResumeCandidate[]
+  candidates: readonly ResumeCandidate[]
   listedAt: number
   busy: boolean
   selected: ReadonlySet<string>

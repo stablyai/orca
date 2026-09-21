@@ -52,7 +52,7 @@ export function ResumeCandidateRow({
           className="shrink-0"
           aria-label={translate(
             'auto.components.NativeChatResumeOnRestartModal.selectAgent',
-            'Reconnect {{value0}} chat "{{value1}}" in {{value2}}',
+            'Resume {{value0}} chat "{{value1}}" in {{value2}}',
             { value0: agentLabel, value1: title, value2: workspaceName }
           )}
         />
