@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { isClaudeRefreshingSignInEscalated } from '../../../../shared/claude-refreshing-sign-in'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
@@ -53,6 +54,13 @@ export function getUsageRosterRowState(
         'auto.components.status.bar.UsageRosterPanel.notSignedIn',
         'not signed in'
       )
+    }
+  }
+  // Why: #8974 — after the refresh window ages out, offer re-auth instead of a permanent spinner.
+  if (isClaudeRefreshingSignInEscalated(provider)) {
+    return {
+      kind: 'sign-in',
+      statusLabel: getProviderUsageStatusLabel(provider)
     }
   }
   if (provider.status === 'error') {
