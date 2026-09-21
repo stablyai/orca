@@ -57,7 +57,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   // The relaxation is only safe if the reviewed validator actually runs on
   // the NON-converged branch, in same-cap-cell mode, with the trust config
   // the validator requires, restricted to the template-and-MIG change pair or,
-  // when only the reviewed backend drain timeout is left, to that alone.
+  // when only the reviewed backend attributes are left, to those alone.
   assert.match(
     job,
     /if ! terraform -chdir=infra\/terraform show -json[\s\S]{0,220}\| length == 0' >\/dev\/null\n          then\n/
@@ -76,7 +76,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   assert.match(
     job,
-    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}" \\\n {14}\| jq -e '\.changes == 2\n {18}or \(\.changes == 0 and \.connectionDrainUpdate == true\)' >\/dev\/null/
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}" \\\n {14}\| jq -e '\.changes == 2\n {18}or \(\.changes == 0 and \(\(\.backendUpdate \/\/ \[\]\) \| length\) > 0\)' >\/dev\/null/
   )
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)

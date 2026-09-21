@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { RELAY_CELL_CONNECTION_DRAIN_SECONDS } from './validate-relay-asia-topology-plan.mjs'
+import {
+  RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+  RELAY_CELL_LOG_SAMPLE_RATE
+} from './validate-relay-asia-topology-plan.mjs'
 import {
   parseCapacityPlanArguments,
   validateCapacityPlan as validateCapacityPlanRaw
@@ -1056,7 +1059,7 @@ test('the database pool argument is accepted by same-cap-cell mode alone', () =>
   )
 })
 
-test('a same-cap roll may carry only this cell backend connection drain update', () => {
+test('a same-cap roll may carry only this cell backend drain and request logging', () => {
   const rollbackImage = `us-docker.pkg.dev/project/relay/image@sha256:${'d'.repeat(64)}`
   const image = `us-docker.pkg.dev/project/relay/image@sha256:${'e'.repeat(64)}`
   const capacityIdentity = 'orca-cloud-gha-cap@project.iam.gserviceaccount.com'
@@ -1088,19 +1091,35 @@ test('a same-cap roll may carry only this cell backend connection drain update',
       after_unknown: { version: [{ instance_template: true }] }
     }
   }
-  const backend = {
+  // The exact shape a live US cell's backend plans: 300 s drain and no log_config at all.
+  const loggingAfter = [{
+    enable: true,
+    optional_fields: null,
+    optional_mode: null,
+    sample_rate: RELAY_CELL_LOG_SAMPLE_RATE
+  }]
+  const backendChange = ({ drain = true, logging = true }) => ({
     address: 'google_compute_backend_service.relay_gce_cell["staging-gce-c3"]',
     change: {
       actions: ['update'],
-      before: { connection_draining_timeout_sec: 300, timeout_sec: 86_400, fingerprint: 'before' },
+      before: {
+        connection_draining_timeout_sec: drain ? 300 : RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+        log_config: logging ? [] : loggingAfter,
+        timeout_sec: 86_400,
+        fingerprint: 'before'
+      },
       after: {
         connection_draining_timeout_sec: RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+        log_config: loggingAfter,
         timeout_sec: 86_400,
         fingerprint: null
       },
       after_unknown: { fingerprint: true }
     }
-  }
+  })
+  const backend = backendChange({})
+  const drainOnly = backendChange({ logging: false })
+  const loggingOnly = backendChange({ drain: false })
   const sameCapConfig = {
     ...config,
     mode: 'same-cap-cell',
@@ -1111,13 +1130,27 @@ test('a same-cap roll may carry only this cell backend connection drain update',
     rehomeAudience: 'https://relay.onorca.dev/v1/admin/host-drain',
     regionalRehomeProtocol: '0'
   }
-  // The drain update rides along with the roll without inflating the template-and-MIG count
+  const refused = /only this cell backend drain and request logging/
+  // Both attributes ride along with the roll without inflating the template-and-MIG count
   // the apply's stranded branch and the resume's drift branch both read.
   assert.deepEqual(
     validateCapacityPlan({ resource_changes: [template, manager, backend] }, sameCapConfig),
-    { mode: 'same-cap-cell', changes: 2, connectionDrainUpdate: true }
+    {
+      mode: 'same-cap-cell',
+      changes: 2,
+      backendUpdate: ['connection_draining_timeout_sec', 'log_config.0']
+    }
   )
-  // Once the drain is applied the backend is simply absent from the plan.
+  // Each is independently optional: a cell that already has one plans no change for it.
+  assert.deepEqual(
+    validateCapacityPlan({ resource_changes: [template, manager, drainOnly] }, sameCapConfig),
+    { mode: 'same-cap-cell', changes: 2, backendUpdate: ['connection_draining_timeout_sec'] }
+  )
+  assert.deepEqual(
+    validateCapacityPlan({ resource_changes: [template, manager, loggingOnly] }, sameCapConfig),
+    { mode: 'same-cap-cell', changes: 2, backendUpdate: ['log_config.0'] }
+  )
+  // Once both are applied the backend is simply absent from the plan.
   assert.deepEqual(
     validateCapacityPlan({ resource_changes: [template, manager] }, sameCapConfig),
     { mode: 'same-cap-cell', changes: 2 }
@@ -1125,7 +1158,11 @@ test('a same-cap roll may carry only this cell backend connection drain update',
   // A cell whose template and MIG have converged but whose backend has not is still clean.
   assert.deepEqual(
     validateCapacityPlan({ resource_changes: [backend] }, sameCapConfig),
-    { mode: 'same-cap-cell', changes: 0, connectionDrainUpdate: true }
+    {
+      mode: 'same-cap-cell',
+      changes: 0,
+      backendUpdate: ['connection_draining_timeout_sec', 'log_config.0']
+    }
   )
   assert.deepEqual(validateCapacityPlan({ resource_changes: [] }, sameCapConfig), {
     mode: 'same-cap-cell',
@@ -1144,7 +1181,7 @@ test('a same-cap roll may carry only this cell backend connection drain update',
   otherCell.address = 'google_compute_backend_service.relay_gce_cell["production-gce-c27"]'
   assert.throws(
     () => validateCapacityPlan({ resource_changes: [template, manager, otherCell] }, sameCapConfig),
-    /only this cell backend connection draining timeout/
+    refused
   )
   const unreviewedDrain = structuredClone(backend)
   unreviewedDrain.change.after.connection_draining_timeout_sec =
@@ -1154,13 +1191,31 @@ test('a same-cap roll may carry only this cell backend connection drain update',
       { resource_changes: [template, manager, unreviewedDrain] },
       sameCapConfig
     ),
-    /only this cell backend connection draining timeout/
+    refused
+  )
+  const sampledLogging = structuredClone(backend)
+  sampledLogging.change.after.log_config[0].sample_rate = RELAY_CELL_LOG_SAMPLE_RATE / 2
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager, sampledLogging] },
+      sameCapConfig
+    ),
+    refused
+  )
+  const disabledLogging = structuredClone(backend)
+  disabledLogging.change.after.log_config[0].enable = false
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager, disabledLogging] },
+      sameCapConfig
+    ),
+    refused
   )
   const replaced = structuredClone(backend)
   replaced.change.actions = ['create', 'delete']
   assert.throws(
     () => validateCapacityPlan({ resource_changes: [template, manager, replaced] }, sameCapConfig),
-    /only this cell backend connection draining timeout/
+    refused
   )
   // Only the same-cap wave targets a backend service; every other mode still refuses one.
   assert.throws(

@@ -595,8 +595,9 @@ jobs:
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
           # The backend service is targeted too, so its reviewed drain timeout
-          # can be the only thing left here; it restarts nothing, so the
-          # validator below clears it without the template-and-MIG pair.
+          # and request logging can be the only thing left here; neither
+          # restarts an instance, so the validator below clears that on its
+          # own, without the template-and-MIG pair.
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
@@ -639,7 +640,7 @@ jobs:
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
                 "${POOL_ARGUMENTS[@]}" \
               | jq -e '.changes == 2
-                  or (.changes == 0 and .connectionDrainUpdate == true)' >/dev/null
+                  or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900

@@ -7,6 +7,9 @@ const REGION = 'asia-east2'
 // .tf source, so this pair and the topology `check` assert cannot drift apart.
 export const RELAY_CELL_BACKEND_TIMEOUT_SECONDS = 86_400
 export const RELAY_CELL_CONNECTION_DRAIN_SECONDS = 60
+// Not a topology local: the default of var.relay_gce_cell_log_sample_rate, which no
+// environment overrides. The same census test equates it with variables.tf.
+export const RELAY_CELL_LOG_SAMPLE_RATE = 1
 const CELL_SHAPES = {
   production: {
     domain: 'relay.onorca.dev',

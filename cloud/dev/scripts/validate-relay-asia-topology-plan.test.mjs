@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   RELAY_CELL_BACKEND_TIMEOUT_SECONDS,
   RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+  RELAY_CELL_LOG_SAMPLE_RATE,
   validateRelayAsiaTopologyPlan
 } from './validate-relay-asia-topology-plan.mjs'
 
@@ -253,5 +254,26 @@ test('the reviewed backend constants match the Terraform topology they validate'
   ]) {
     assert.equal(local(name), constant, `${name} local differs from the validator constant`)
     assert.equal(asserted(name), constant, `${name} check assert differs from the validator`)
+  }
+  // The sample rate is a variable, not a local, and no environment file overrides it, so the
+  // declared default is what every cell backend gets. Equate the default and that absence.
+  const variables = readFileSync(
+    new URL('../../infra/terraform/variables.tf', import.meta.url),
+    'utf8'
+  )
+  const declared =
+    /variable "relay_gce_cell_log_sample_rate" \{[\s\S]*?\n {2}default {5}= (\d+)\n/.exec(variables)
+  assert.notEqual(declared, null, 'relay_gce_cell_log_sample_rate declares no default')
+  assert.equal(Number(declared[1]), RELAY_CELL_LOG_SAMPLE_RATE)
+  assert.match(terraform, /sample_rate = var\.relay_gce_cell_log_sample_rate/)
+  for (const environment of ['production', 'staging']) {
+    assert.doesNotMatch(
+      readFileSync(
+        new URL(`../../infra/terraform/environments/${environment}.tfvars`, import.meta.url),
+        'utf8'
+      ),
+      /relay_gce_cell_log_sample_rate/,
+      `${environment} overrides the reviewed log sample rate`
+    )
   }
 })
