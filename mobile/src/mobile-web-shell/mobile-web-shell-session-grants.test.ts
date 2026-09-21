@@ -58,3 +58,65 @@ describe('falling back to the cached generation after a failed download', () => 
     expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.read'])
   })
 })
+
+/**
+ * The route/grant pairs the page is told about must survive the download path, not only the two
+ * paths that open a generation already on disk.
+ *
+ * `init.pageRouteGrants` is how the page decides an in-page hop is covered. A session that reaches
+ * `ready` without them carries the default (or the previous generation's), the page reads every
+ * target as listed-with-no-entry, and hands every hop to the shell. That is the first install and
+ * every update after it.
+ */
+describe('the route grants a downloaded generation is activated under', () => {
+  const TWO_ROUTES = [
+    { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
+    { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.clipboard.write'] }
+  ]
+  const DOWNLOADED: MobileWebShellManifestFacts = {
+    ...MANIFEST,
+    buildId: 'c'.repeat(64),
+    routes: TWO_ROUTES
+  }
+
+  function activate(session: Parameters<typeof run>[0], manifest: MobileWebShellManifestFacts) {
+    return run(
+      session,
+      { type: 'manifest-read', manifest },
+      { type: 'download-staged' },
+      {
+        type: 'activated',
+        generationDirectory: '/cache/gen',
+        sessionId: 'session-downloaded',
+        buildId: manifest.buildId,
+        totalBytes: manifest.totalBytes,
+        elapsedMs: 9
+      }
+    )
+  }
+
+  it('is the manifest it downloaded, on a cold cache', () => {
+    const step = activate(afterCacheRead(null).session, DOWNLOADED)
+    expect(step.session.state.kind).toBe('ready')
+    expect(step.session.pageRouteGrants).toEqual(TWO_ROUTES)
+  })
+
+  it('is the manifest it matched, on a cached hit', () => {
+    const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.state.kind).toBe('activating')
+    expect(step.session.pageRouteGrants).toEqual(PAGE_ROUTES)
+  })
+
+  it("replaces the previous generation's entries when the generation changes", () => {
+    // The session already holds the older bundle's pairs, so the assertion fails on a stale field
+    // rather than only on the empty default.
+    const first = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(first.session.pageRouteGrants).toEqual(PAGE_ROUTES)
+    const step = activate(
+      run(first.session, { type: 'retry-pressed' }, { type: 'cache-read', generation: CACHED })
+        .session,
+      DOWNLOADED
+    )
+    expect(step.session.pageRouteGrants).toEqual(TWO_ROUTES)
+  })
+})

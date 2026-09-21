@@ -34,6 +34,9 @@ export function createBridgeInitFrame(args: {
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
+  /** What each of those patterns declared, so the page can tell a hop it may keep from one it
+   *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */
+  pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
   /** What this session may do: the protocol's own grant plus what its route declared. */
   granted: readonly string[]
   /** The host the page is showing, minus the credential the bridge already carries for it. */
@@ -58,6 +61,16 @@ export function createBridgeInitFrame(args: {
     },
     route: args.route,
     pageRoutes: [...args.pageRoutes],
+    // Copied entry by entry for the reason the grants are: nothing the shell keeps may be
+    // reachable through a frame it hands out.
+    ...(args.pageRouteGrants === undefined
+      ? {}
+      : {
+          pageRouteGrants: args.pageRouteGrants.map((entry) => ({
+            pathname: entry.pathname,
+            grants: [...entry.grants]
+          }))
+        }),
     host: args.host,
     // Copied for the same reason the grants are: the frame is serialized straight after, and what
     // the shell holds must not be reachable through what it hands out.

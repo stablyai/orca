@@ -62,6 +62,7 @@ export function useMobileWebShellBridge(args: {
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
+  pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   /** What this route declared, which is what `init` grants and what every grant check reads. */
   routeGrants: readonly string[]
   /** Opens a screen the page does not render, over the still-mounted view. */
@@ -104,6 +105,7 @@ export function useMobileWebShellBridge(args: {
   // object in the deps would rebuild the host on every render and settle its pendings each time.
   const routeRef = useRef(args.route)
   const pageRoutesRef = useRef(args.pageRoutes)
+  const pageRouteGrantsRef = useRef(args.pageRouteGrants)
   const routeGrantsRef = useRef(args.routeGrants)
   /** The session that has completed a handshake, so a host rebuilt for it inherits that. */
   const establishedSessionRef = useRef<string | null>(null)
@@ -125,6 +127,7 @@ export function useMobileWebShellBridge(args: {
   useLayoutEffect(() => {
     routeRef.current = args.route
     pageRoutesRef.current = args.pageRoutes
+    pageRouteGrantsRef.current = args.pageRouteGrants
     routeGrantsRef.current = args.routeGrants
     navigateRef.current = args.onNavigate
     externalLinkRef.current = args.onExternalLink
@@ -150,6 +153,7 @@ export function useMobileWebShellBridge(args: {
     args.onStorageWrite,
     args.readStorage,
     args.pageRoutes,
+    args.pageRouteGrants,
     args.routeGrants,
     args.route
   ])
@@ -167,6 +171,7 @@ export function useMobileWebShellBridge(args: {
       sessionId,
       route: routeRef.current,
       pageRoutes: pageRoutesRef.current,
+      pageRouteGrants: pageRouteGrantsRef.current,
       routeGrants: routeGrantsRef.current,
       sessionEstablished: establishedSessionRef.current === sessionId,
       onPageFault: (error) => {

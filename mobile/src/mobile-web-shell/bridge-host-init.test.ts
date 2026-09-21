@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { harness, HOST, PAGE_ROUTES, ROUTE } from './bridge-host-test-harness'
+import { harness, HOST, PAGE_ROUTE_GRANTS, PAGE_ROUTES, ROUTE } from './bridge-host-test-harness'
 import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
@@ -53,9 +53,60 @@ describe('init and state', () => {
       },
       route: ROUTE,
       pageRoutes: PAGE_ROUTES,
+      pageRouteGrants: PAGE_ROUTE_GRANTS,
       host: HOST,
       storage: {}
     })
+  })
+
+  /**
+   * The page cannot decide an in-page hop without knowing what the target needs.
+   *
+   * `pageRoutes` says which patterns this shell would render; it does not say what each one
+   * declared. A page that keeps a push local on the strength of the pattern alone runs the target
+   * under the opener's grants, which is how the tasks page reached the sidebar without
+   * `native.clipboard.write`. So `init` carries the manifest's own pairs.
+   */
+  it('carries what every page route declared, not only which patterns exist', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type).toBe('init')
+    if (init.type !== 'init') {
+      throw new Error('expected an init frame')
+    }
+    // Every pattern the page is told it may keep has an entry saying what keeping it costs.
+    expect((init.pageRouteGrants ?? []).map((entry) => entry.pathname)).toEqual([...PAGE_ROUTES])
+    expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
+  })
+
+  it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {
+    // The host reads the manifest through the same grammar the desktop wrote it under, so a name
+    // the bundle could not have declared cannot reach the page through this field either.
+    const bridge = harness({
+      pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['native.clipboard'] }]
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.posted.length).toBe(0)
+    expect(bridge.routeRefusals).toHaveLength(1)
+    const [reason] = bridge.routeRefusals
+    // The prefix is the whole point: this route is well formed, so a reason that does not name the
+    // field sends whoever reads the refusal to look at a pathname that was never the problem.
+    expect(reason.startsWith('pageRouteGrants: ')).toBe(true)
+    expect(reason.slice('pageRouteGrants: '.length)).not.toBe('')
+    // The callback and the diagnostic are two readers of one verdict; they must not disagree.
+    expect(bridge.diagnostics).toEqual([{ kind: 'route-refused', issue: reason }])
+  })
+
+  it('blames the route, not the pairs, when the route is the malformed one', () => {
+    // The control for the case above. Both refusals arrive through one string, so without an
+    // opener that fails for the other reason the prefix assertion holds on any reason at all.
+    const bridge = harness({ route: { pathname: '/h/a?b' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.routeRefusals).toHaveLength(1)
+    const [reason] = bridge.routeRefusals
+    expect(reason.startsWith('pageRouteGrants: ')).toBe(false)
+    expect(reason).not.toBe('')
   })
 
   it('names the screen the page is standing in for, which its own `/` cannot tell it', () => {

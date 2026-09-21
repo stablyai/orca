@@ -41,12 +41,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // components the host layout renders above it.
   //
   // `externalLink` is transitive, not its own: a row opens the preview, and because that is a page
-  // route the handoff keeps the push inside this document. Grants are resolved once, from the route
-  // the shell opened (`grantsForRoute` on `session.routePathname`), so a preview reached that way
-  // runs under *this* route's grants for the life of the session — and a Markdown link in it would
-  // be refused by `notifyExternalLink` and do nothing at all. So a route must declare a superset of
-  // the grants of every page route its screens push to locally, which for this one means the
-  // preview's list. The census beside it pins that pair.
+  // route and this list covers what it declares, the handoff keeps that push inside this document.
+  // Grants are resolved once, from the route the shell opened (`grantsForRoute` on
+  // `session.routePathname`), so a preview reached that way runs under *this* route's grants for
+  // the life of the session. Covering the preview is therefore what buys the cheap in-document hop,
+  // not what makes it correct: a target this list did not cover would be handed to the shell and
+  // reopened under its own grants instead. The census beside it reads that relation off this list.
   //
   // Nothing the explorer itself renders opens a URL. The two openers in its own closure are the
   // shared layout's — the protocol wall, and the New Workspace source field the sidebar renders on
@@ -54,12 +54,10 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // `externalLink`. That tablet tap stays dead on all of them: a pre-existing gap this route
   // neither widens nor fixes.
   //
-  // One hop is still open and is not this series' to close: the sidebar `HostScreen` the layout
-  // renders on a wide layout pushes to `/h/<id>/tasks` through the handoff, which is local, so
-  // from any page route on a tablet the tasks page runs without `native.clipboard.write` and its
-  // copy actions refuse silently. Pre-existing on main for the worktree list and agent history
-  // since C2.1; the fix is a handoff rule — hand off to the shell when the target's grants exceed
-  // the session's — in its own PR.
+  // The sidebar `HostScreen` the layout renders on a wide layout pushes to `/h/<id>/tasks` from
+  // every page route, and no other route declares the `native.clipboard.write` that one asks for.
+  // The handoff gives that hop to the shell rather than keeping it here, which is why this list
+  // does not grow a grant it has no screen for.
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']

@@ -292,7 +292,11 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ] as const
 
+export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
+  'git.antigravity-configured-model.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',
   'runtime.environments.v1',

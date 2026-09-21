@@ -37,6 +37,7 @@ describe('the bridge port pair', () => {
       // pair names both so the session it hands back is the shape a page on a route actually holds.
       route: expect.objectContaining({ pathname: expect.any(String) }),
       pageRoutes: expect.any(Array),
+      pageRouteGrants: null,
       host: expect.objectContaining({ id: expect.any(String) }),
       storage: expect.any(Object)
     })

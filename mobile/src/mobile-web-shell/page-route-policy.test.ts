@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
-  implementedPageRoutes,
   matchesRoutePattern,
   pageRendersRoute,
   MOBILE_WEB_SHELL_GRANTS,
-  grantsForRoute
+  grantsForRoute,
+  routeViewOf
 } from './page-route-policy'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import {
@@ -13,6 +13,16 @@ import {
   BRIDGE_NATIVE_VERB_NAMES,
   BRIDGE_NATIVE_VERBS
 } from './bridge/bridge-native-verbs'
+
+/**
+ * The patterns a session would be told it may keep, read through the view the reducer builds.
+ *
+ * The pathname is arbitrary here: `pageRoutes` is the filtered list and does not depend on which
+ * route the session was opened for, which the grant cases below read separately.
+ */
+function pageRoutesOf(routes: Parameters<typeof routeViewOf>[0]): string[] {
+  return routeViewOf(routes, '/h/host-1').pageRoutes
+}
 
 describe('matching a concrete route against a pattern', () => {
   it('matches a dynamic segment against one segment and never against a path', () => {
@@ -41,19 +51,17 @@ describe('matching a concrete route against a pattern', () => {
 
 describe('the routes this shell will render from the page', () => {
   it('keeps a route whose grants it implements', () => {
-    expect(implementedPageRoutes([{ pathname: '/h/[hostId]', grants: ['navigate'] }])).toEqual([
+    expect(pageRoutesOf([{ pathname: '/h/[hostId]', grants: ['navigate'] }])).toEqual([
       '/h/[hostId]'
     ])
-    expect(implementedPageRoutes([{ pathname: '/h/[hostId]', grants: [] }])).toEqual([
-      '/h/[hostId]'
-    ])
+    expect(pageRoutesOf([{ pathname: '/h/[hostId]', grants: [] }])).toEqual(['/h/[hostId]'])
   })
 
   it('drops a route needing a grant this app has never heard of', () => {
     // The whole point of the negotiation: a newer desktop shipping a screen that needs more than
     // this app can do leaves that one route native rather than handing it a dead tap.
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { pathname: '/h/[hostId]', grants: ['navigate', 'teleport'] },
         { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
       ])
@@ -61,7 +69,7 @@ describe('the routes this shell will render from the page', () => {
   })
 
   it('answers nothing for a desktop older than the field', () => {
-    expect(implementedPageRoutes(undefined)).toEqual([])
+    expect(pageRoutesOf(undefined)).toEqual([])
     expect(pageRendersRoute(undefined, '/h/host-1')).toBe(false)
   })
 
@@ -123,7 +131,7 @@ describe('the grants this app implements', () => {
    *  contract's rule and is pinned there, beside the pattern that decides it. */
   it('serves a route that needs the screencast lane', () => {
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'screencastBinary'] }
       ])
     ).toEqual(['/h/[hostId]/session/[worktreeId]'])
@@ -142,7 +150,7 @@ describe('the grants this app implements', () => {
       { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate', 'aGrantFromTheFuture'] }
     ]
     expect(grantsForRoute(routes, '/h/host-1/session/wt-1')).toEqual(['navigate'])
-    expect(implementedPageRoutes(routes)).toEqual([])
+    expect(pageRoutesOf(routes)).toEqual([])
   })
 
   it('resolves the screencast lane for a route that declares it', () => {
@@ -176,12 +184,12 @@ describe('the native verbs this app serves', () => {
   it('names them so a route can declare one, which is what keeps that route native without it', () => {
     // A bundle listing a route that needs the clipboard, against a shell too old to serve it.
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.clipboard.write'] }
       ])
     ).toEqual(['/h/[hostId]/tasks'])
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.dictation.start'] }
       ])
     ).toEqual([])
@@ -199,7 +207,7 @@ describe('the native verbs this app serves', () => {
 describe('a grant name this build has never heard of', () => {
   it('leaves that route native rather than refusing the bundle', () => {
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { pathname: '/h/[hostId]', grants: ['navigate'] },
         { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.dictation.start'] }
       ])
@@ -228,7 +236,7 @@ describe('a grant name this build has never heard of', () => {
 /**
  * What a token on every page route costs against a shell that does not carry it.
  *
- * `implementedPageRoutes` filters on `grants.every(implementsGrant)`, so one grant this build lacks
+ * The route filter behind this view is `grants.every(implementsGrant)`, so one grant this build lacks
  * takes the whole route native rather than degrading the feature that needed it. `haptics` is
  * declared by all five page routes, which makes the whole set conditional on a shell carrying the
  * token; the route list itself is pinned in `config/scripts/mobile-web-app-haptics-seam.test.mjs`,
@@ -241,7 +249,7 @@ describe('a page route that needs the haptics token', () => {
   }
 
   it('is served by this shell, which implements the token', () => {
-    expect(implementedPageRoutes([route])).toEqual(['/h/[hostId]'])
+    expect(pageRoutesOf([route])).toEqual(['/h/[hostId]'])
   })
 
   it('renders natively against a shell whose grant list does not carry it', () => {
@@ -253,10 +261,10 @@ describe('a page route that needs the haptics token', () => {
         grant === BRIDGE_HAPTICS_GRANT ? 'hapticsUnderAnotherName' : grant
       )
     }
-    expect(implementedPageRoutes([older])).toEqual([])
+    expect(pageRoutesOf([older])).toEqual([])
     // The control, so the empty list above is the token and not the other two grants.
     expect(
-      implementedPageRoutes([
+      pageRoutesOf([
         { ...route, grants: route.grants.filter((grant) => grant !== BRIDGE_HAPTICS_GRANT) }
       ])
     ).toEqual(['/h/[hostId]'])

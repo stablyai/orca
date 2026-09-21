@@ -25,6 +25,7 @@ export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
   /** The route patterns this shell would render from the page, for the page to be told about. */
   readonly pageRoutes: readonly string[]
+  readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
   readonly retry: () => void
   /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
@@ -226,6 +227,7 @@ export function useMobileWebShellSession(args: {
   return {
     state,
     pageRoutes: sessionRef.current.pageRoutes,
+    pageRouteGrants: sessionRef.current.pageRouteGrants,
     routeGrants: sessionRef.current.routeGrants,
     retry,
     reportShellFailure,

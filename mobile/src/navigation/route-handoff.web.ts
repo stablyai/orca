@@ -136,11 +136,39 @@ export function useRouteHandoff(): RouteHandoff {
 
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()
-    /** Whether this document is the one that renders the target, which is the shell's answer. */
+    /**
+     * Whether this document both renders the target and may: pattern listed, grants covered.
+     *
+     * Covered matters because grants are resolved once, from the route the shell opened, and a push
+     * kept local runs the target under the opener's list. On a wide layout the sidebar reaches the
+     * tasks page from every `/h` route, so keeping that hop local runs tasks without
+     * `native.clipboard.write` and its copy actions refuse with nothing on screen to say why.
+     * Handing it over instead opens it as its own session, with its own grants.
+     *
+     * A shell that sent no pairs gets the old answer: `null` is "nobody told me", which is not the
+     * same as "this route needs nothing", and an older shell must keep working. A target the shell
+     * lists but names no entry for is not covered — the page cannot justify the hop, so it hands it
+     * over rather than guessing.
+     */
     const servedHere = (target: string): boolean => {
       const pathname = pathnameOf(target)
-      const pageRoutes = client.getShellSession()?.pageRoutes ?? []
-      return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
+      const session = client.getShellSession()
+      const pattern = (session?.pageRoutes ?? []).find((candidate) =>
+        matchesRoutePattern(pathname, candidate)
+      )
+      if (pattern === undefined) {
+        return false
+      }
+      const pairs = session?.pageRouteGrants ?? null
+      if (pairs === null) {
+        return true
+      }
+      const declared = pairs.find((entry) => entry.pathname === pattern)
+      if (declared === undefined) {
+        return false
+      }
+      const held = session?.grants.native ?? []
+      return declared.grants.every((grant) => held.includes(grant))
     }
     const handOff = (href: RouterHref): RouteHandoffOutcome => {
       // Resolved, not stringified: the object form is `[object Object]` under `String`, and the

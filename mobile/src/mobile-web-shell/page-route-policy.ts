@@ -59,16 +59,21 @@ export function matchesRoutePattern(pathname: string, pattern: string): boolean 
 }
 
 /**
- * The patterns this shell will render from the page: listed, and needing nothing it lacks.
+ * The routes this shell will render from the page: listed, and needing nothing it lacks.
  *
  * `every` and not `some`: one grant this build lacks takes the whole route native, so a token every
  * page route declares couples the whole set to a shell that carries it — `haptics` is the first,
  * and against a shell without it no page route is served at all.
  */
-export function implementedPageRoutes(routes: readonly MobileWebPageRoute[] | undefined): string[] {
-  return (routes ?? [])
-    .filter((route) => route.grants.every(implementsGrant))
-    .map((route) => route.pathname)
+function implementedPageRouteEntries(
+  routes: readonly MobileWebPageRoute[] | undefined
+): MobileWebPageRoute[] {
+  return (routes ?? []).filter((route) => route.grants.every(implementsGrant))
+}
+
+/** The patterns alone, for the readers in this module that only name routes. */
+function implementedPageRoutes(routes: readonly MobileWebPageRoute[] | undefined): string[] {
+  return implementedPageRouteEntries(routes).map((route) => route.pathname)
 }
 
 /**
@@ -103,4 +108,20 @@ export function grantsForRoute(
 ): string[] {
   const declared = (routes ?? []).find((route) => matchesRoutePattern(pathname, route.pathname))
   return declared === undefined ? [] : declared.grants.filter(implementsGrant)
+}
+
+/**
+ * What one bundle's route list says about one session, in the three shapes the reducer needs.
+ *
+ * Derived together because they are one reading of one list: the patterns the page may keep, what
+ * each of them declared, and what this route itself was granted. Three sites used to spell this
+ * out; a fourth spelling is how they drift.
+ */
+export function routeViewOf(routes: readonly MobileWebPageRoute[] | undefined, pathname: string) {
+  const entries = implementedPageRouteEntries(routes)
+  return {
+    pageRoutes: entries.map((route) => route.pathname),
+    pageRouteGrants: entries,
+    routeGrants: grantsForRoute(routes, pathname)
+  }
 }

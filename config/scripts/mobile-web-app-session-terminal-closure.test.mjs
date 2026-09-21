@@ -17,24 +17,38 @@ import {
  * the terminal is by far the largest thing in it. Measured here so the trade is a number rather
  * than a claim, and so that a later change cannot quietly put the engine string back.
  *
- * Re-anchored on the merge of main at 35005fb65c9 and re-measured there, because the two sides of
- * that merge do not add up: this branch reads -40 and main's own mermaid reading below reads +3,
- * and the merged total is one above their sum.
+ * Re-anchored on the merge of main at 5d13a70ea3 and re-measured there. The reading has been
+ * re-taken at each merge rather than adjusted, because the arithmetic keeps not working: main has
+ * re-pinned this count three times for modules that arrived from three other PRs, and a number
+ * carried forward would have been wrong about every one of them.
  *
- *   modules        4324 -> 4284   (-40)
- *   local modules   974 ->  934   (-40)
+ *   modules        4326 -> 4286   (-40)
+ *   local modules   976 ->  936   (-40)
  *
- * The extra module is `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which
- * `haptics.web.ts` reaches. C7.10 item E (#21864) and mermaid (#21871) were each green against a
- * main that lacked the other, so main held 4323 while measuring 4324, and #21908 re-pinned it
- * there. It is in this branch's 4284 by that same route rather than by anything this branch did:
- * `haptics.web.ts` was already in the closure and the bridge module joins it.
+ * The -40 is the only part of this that is the lane's, and it has not moved across those three
+ * re-pins. What moved is the base.
  *
- * Which is the point of re-measuring rather than summing. A merged number arrived at as
- * -40 plus +3 would have read 4283 and been wrong about a module neither side of the merge moved.
+ * The three modules the base gained, none of them this branch's and all of them in its 4286 by
+ * main's own route:
+ *
+ * - `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches. C7.10
+ *   item E (#21864) and mermaid (#21871) were each green against a main that lacked the other, so
+ *   main held 4323 while measuring 4324, and #21908 re-pinned it there.
+ * - `src/mobile-web-shell/bridge/bridge-page-route-grants.ts` and the
+ *   `mobile-web-bundle/manifest-contract.ts` whose grant grammar it imports rather than restates,
+ *   both C2.9's. They reach every page closure through `bridge-envelope.ts`, which the page reads
+ *   to parse `init`, so this count moves for any route the page serves and not for the session
+ *   alone.
+ *
+ * Which is the point of re-measuring rather than summing. The merged total was one above the sum
+ * the first time, when main had drifted the haptics module after recording its own number, and a
+ * sum would have read 4283 and been wrong about a module neither side of that merge touched.
  *
  * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and the four postinstall
- * generators run first, main's in a scratch worktree detached at the same sha.
+ * generators run first, the before side in a scratch worktree detached at the same sha, and the
+ * three modules above read out of the after side's list by name rather than inferred from the
+ * total. Measured rather than taken from main's pin because the pin covers only the module count,
+ * so the local count beside it would otherwise be a number nobody had read.
  *
  * The byte reading is not re-measured and stays anchored where it was taken, against main at
  * ec82173130: 3,768,122 -> 3,766,312 minified (-1,810). `mobileWebAppRouteClosure` reads
@@ -136,11 +150,11 @@ const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.gener
 const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
 /**
- * The module list on the merge, recorded at the base in the docstring above, which is where the
- * three things inside it are accounted for: the factory replacing the document's source modules,
- * mermaid's three, and the haptics notify module #21908 pins on main.
+ * The module list on the merge, recorded at the base in the docstring above, which is where every
+ * part of it is accounted for: the factory replacing the document's source modules, mermaid's
+ * three, and the three bridge modules #21908 and C2.9 pin on main.
  */
-const SESSION_ROUTE_MODULES = 4284
+const SESSION_ROUTE_MODULES = 4286
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))

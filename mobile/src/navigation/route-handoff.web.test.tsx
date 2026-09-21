@@ -475,3 +475,107 @@ describe('navigation options', () => {
     ])
   })
 })
+
+/**
+ * An in-page hop only to a route this session's grants already cover.
+ *
+ * Grants are resolved once, from the route the shell opened, so a push kept local runs the target
+ * under the opener's list. On a wide layout the sidebar reaches the tasks page from every `/h`
+ * route, so keeping that hop local runs tasks without `native.clipboard.write` and its copy actions
+ * refuse with nothing on screen to say why. Handing it to the shell opens it as its own session,
+ * with its own grants.
+ */
+describe('an in-page hop the session cannot cover', () => {
+  const TASKS = '/h/host-a/tasks'
+  const PAIRS = [
+    { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
+    {
+      pathname: '/h/[hostId]/tasks',
+      grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+    }
+  ]
+  const withPairs = (native: string[]) => ({
+    ...INIT,
+    grants: { ...INIT.grants, native },
+    pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks'],
+    pageRouteGrants: PAIRS
+  })
+
+  it('goes to the shell when the target needs a grant this session lacks', () => {
+    const { posted, handoff } = mount(withPairs(['navigate', 'storage', 'haptics']))
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
+    ])
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('stays in this document when the session already covers the target', () => {
+    const { posted, handoff } = mount(
+      withPairs(['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'])
+    )
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
+  })
+
+  it("hands off when the session lacks any one of the target's grants, not the clipboard alone", () => {
+    // The tasks route declares five grants and this session holds four. Without a case that
+    // withholds `externalLink` alone, a rule reading only the verb grants would pass every case.
+    const { posted, handoff } = mount(
+      withPairs(['navigate', 'storage', 'haptics', 'native.clipboard.write'])
+    )
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: TASKS }
+    ])
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('keeps a hop whose target declares a subset, which is C3.1 without its pairwise pin', () => {
+    // explorer ⊇ preview: the opener was granted more than the target asks for.
+    const { posted, handoff } = mount({
+      ...INIT,
+      grants: { ...INIT.grants, native: ['navigate', 'storage', 'externalLink', 'haptics'] },
+      pageRoutes: ['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'],
+      pageRouteGrants: [
+        { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage', 'haptics'] },
+        { pathname: '/h/[hostId]/files/preview/[worktreeId]', grants: ['navigate', 'haptics'] }
+      ]
+    })
+    handoff.push('/h/host-a/files/preview/wt-1')
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith('/h/host-a/files/preview/wt-1', undefined)
+  })
+
+  it('leaves a non-page route exactly as it was', () => {
+    const { posted, handoff } = mount(withPairs(['navigate', 'storage', 'haptics']))
+    handoff.push('/h/host-a/session/wt-1')
+    expect(navigations(posted)).toHaveLength(1)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('keeps the old rule when the shell named no grants, so an older shell is unchanged', () => {
+    // Absent, not empty: a shell that says nothing cannot be read as "this route needs nothing".
+    const { posted, handoff } = mount({
+      ...INIT,
+      grants: { ...INIT.grants, native: ['navigate', 'storage', 'haptics'] },
+      pageRoutes: ['/h/[hostId]', '/h/[hostId]/tasks']
+    })
+    handoff.push(TASKS)
+    expect(navigations(posted)).toEqual([])
+    expect(router.push).toHaveBeenCalledWith(TASKS, undefined)
+  })
+
+  it('hands off a target the shell lists with no entry of its own', () => {
+    // Listed as renderable but absent from the pairs: the page cannot show it is covered, and a
+    // hop it cannot justify goes to the shell rather than running on the opener's grants.
+    const { posted, handoff } = mount({
+      ...withPairs(['navigate', 'storage', 'haptics']),
+      pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }]
+    })
+    handoff.push(TASKS)
+    expect(navigations(posted)).toHaveLength(1)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+})

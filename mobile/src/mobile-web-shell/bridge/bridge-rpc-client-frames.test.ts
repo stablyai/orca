@@ -127,6 +127,7 @@ describe('bridge client handshake', () => {
       route: null,
       // And one that names no page routes, so the page hands every navigation back.
       pageRoutes: [],
+      pageRouteGrants: null,
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {}

@@ -170,6 +170,7 @@ export function installShellDouble({
   faultGrant,
   grants,
   pageRoutes = null,
+  pageRouteGrants = null,
   replies,
   streams = [],
   windowCaps = null
@@ -224,6 +225,9 @@ export function installShellDouble({
             native: grants ?? [faultGrant]
           },
           ...(pageRoutes === null ? {} : { pageRoutes }),
+          // Omitted when the caller names none, which is the older-shell case the page falls back
+          // on: an absent field is not an empty one, and the page reads the difference.
+          ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
           // Omitted for a shell too old to name one, which is the case the page has a panel for.
           ...(route === null ? {} : { route }),
           ...(host === null ? {} : { host }),

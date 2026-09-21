@@ -186,6 +186,9 @@ export type MobileWebShellSession = {
   /** Every route pattern this shell would render from the page, as the bundle in hand declares
    *  them. The page is told, so it keeps a navigation into one of them instead of handing it back. */
   readonly pageRoutes: readonly string[]
+  /** The same routes with what each declared, which is what lets the page tell a hop it may keep
+   *  from one that would run under the wrong grants. */
+  readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   /** What the route this mount stands for declared, narrowed to what this shell implements. It is
    *  what `init` grants, so a route that asked for less is served less. */
   readonly routeGrants: readonly string[]

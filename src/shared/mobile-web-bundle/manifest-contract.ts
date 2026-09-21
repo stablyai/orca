@@ -38,6 +38,19 @@ const ROUTE_PATHNAME_PATTERN = /^\/(?![/\\])[^?#\s]*$/
  */
 const GRANT_NAME_PATTERN = /^(?:[a-zA-Z][a-zA-Z0-9]*|native(?:\.[a-z][a-z0-9]*){2,})$/
 
+/**
+ * One grant name, as both the manifest and the bridge read it.
+ *
+ * Exported so the `init` frame's route-grant pairs are checked by the same grammar the desktop
+ * wrote the manifest under. Two spellings of one rule drift, and the half that matters is the half
+ * the page believes.
+ */
+export const MobileWebBundleGrantNameSchema = z
+  .string()
+  .min(1)
+  .max(MAX_GRANT_NAME_LENGTH)
+  .regex(GRANT_NAME_PATTERN)
+
 /** Every segment must be a name the bundle root can hold on all three desktop platforms: no
  *  traversal, and none of the Windows shapes that cannot be created or that resolve to a device.
  *  The regex already bans absolute paths, backslashes, spaces, and empty segments. */
@@ -110,9 +123,7 @@ export function computeMobileWebBundleId(assets: readonly MobileWebBundleAsset[]
 export const MobileWebBundleRouteSchema = z
   .object({
     pathname: z.string().min(1).max(MAX_ROUTE_PATHNAME_LENGTH).regex(ROUTE_PATHNAME_PATTERN),
-    grants: z
-      .array(z.string().min(1).max(MAX_GRANT_NAME_LENGTH).regex(GRANT_NAME_PATTERN))
-      .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+    grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
   })
   .strict()
 

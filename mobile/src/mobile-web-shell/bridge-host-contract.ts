@@ -85,6 +85,14 @@ export type BridgeHostOptions = {
   /** Every route pattern the shell would render from the page, so the page knows what to keep. */
   pageRoutes: readonly string[]
   /**
+   * What each of those patterns declared, from the manifest this shell already holds.
+   *
+   * The page decides an in-page hop with it: a push is kept local only when the target's grants are
+   * covered by this session's. Optional, because a shell with no manifest entry for a pattern has
+   * nothing to say about it and the page then keeps its old rule.
+   */
+  pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
+  /**
    * What the route this session was opened for declared, narrowed to what this shell implements.
    *
    * This is the session's whole capability, not the app's: `init` grants exactly these plus the

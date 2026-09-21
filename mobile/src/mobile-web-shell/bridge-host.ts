@@ -16,6 +16,7 @@ import {
   type BridgeConnectionSnapshot,
   type BridgeHostMessage
 } from './bridge/bridge-envelope'
+import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { captureBridgeError } from './bridge/bridge-error-capture'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
@@ -51,7 +52,17 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // the wire as a route no page will accept; without this the page refuses the whole `init`, asks
   // again on its backoff forever, and the shell un-hides a WebView that will never paint.
   const parsedRoute = BridgeInitRouteSchema.safeParse(options.route)
-  const route = parsedRoute.success ? parsedRoute.data : null
+  // Checked here for the reason the route is: a pair the page's reader would refuse takes the whole
+  // `init` with it, and a session that never gets one is worse than one that never starts.
+  const parsedRouteGrants =
+    options.pageRouteGrants === undefined
+      ? null
+      : BridgePageRouteGrantsSchema.safeParse(options.pageRouteGrants)
+  const routeGrantsIssue =
+    parsedRouteGrants !== null && !parsedRouteGrants.success
+      ? (parsedRouteGrants.error.issues[0]?.message ?? 'unknown')
+      : null
+  const route = parsedRoute.success && routeGrantsIssue === null ? parsedRoute.data : null
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
   // between the two the view belongs to no document, so nothing is served and nothing is posted.
@@ -154,6 +165,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         connection: snapshot(),
         route,
         pageRoutes,
+        ...(parsedRouteGrants?.success === true ? { pageRouteGrants: parsedRouteGrants.data } : {}),
         granted,
         host,
         storage: options.readStorage()
@@ -356,9 +368,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   if (route === null) {
     // At construction rather than on the first `ready`: the verdict does not depend on the page
     // behaving, and a shell that waited for a frame would hold a blank view until one arrived.
-    const issue = parsedRoute.success
-      ? 'unknown'
-      : (parsedRoute.error.issues[0]?.message ?? 'unknown')
+    const issue = routeGrantsIssue
+      ? `pageRouteGrants: ${routeGrantsIssue}`
+      : parsedRoute.success
+        ? 'unknown'
+        : (parsedRoute.error.issues[0]?.message ?? 'unknown')
     options.onDiagnostic?.({ kind: 'route-refused', issue })
     options.onRouteRefused(issue)
   }

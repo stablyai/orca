@@ -3,6 +3,7 @@ import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import {
   isPageStorageKey,
   PAGE_STORAGE_MAX_ENTRIES,
@@ -396,7 +397,20 @@ const BridgeHostMessageSchema = z.union([
     pageRoutes: z
       .array(z.string().min(1).max(BRIDGE_MAX_ROUTE_PATHNAME_CHARS))
       .max(BRIDGE_MAX_PAGE_ROUTES)
-      .optional()
+      .optional(),
+    /**
+     * What each of those patterns declared, so the page can tell a hop it may keep from one it must
+     * hand back.
+     *
+     * `pageRoutes` says which routes this shell would render; it does not say what each costs. A
+     * page keeping a push local on the pattern alone runs the target under the opener's grants,
+     * which is how the tasks page was reached from the sidebar without `native.clipboard.write`.
+     *
+     * Optional in both directions: an older shell omits it and the page falls back to today's
+     * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
+     * bundle could not have declared cannot arrive here either.
+     */
+    pageRouteGrants: BridgePageRouteGrantsSchema.optional()
   })
 ])
 

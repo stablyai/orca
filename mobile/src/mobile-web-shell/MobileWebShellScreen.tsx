@@ -152,6 +152,7 @@ export function MobileWebShellScreen({
   const {
     state,
     pageRoutes,
+    pageRouteGrants,
     routeGrants,
     retry,
     reportShellFailure,
@@ -167,6 +168,7 @@ export function MobileWebShellScreen({
     hostId,
     route,
     pageRoutes,
+    pageRouteGrants,
     routeGrants,
     session: state,
     snapshot,

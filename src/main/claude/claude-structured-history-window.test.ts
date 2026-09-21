@@ -230,6 +230,51 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
     expect(read(contents, 'anchor').boundaryConsistent).toBe(true)
   })
 
+  it('keeps the FIRST record for a repeated uuid, as the whole-file index did', () => {
+    // An append-only transcript can repeat a uuid. Preferring the later copy
+    // would silently swap one turn's evidence for another's.
+    const contents = jsonl(
+      [
+        ANCHOR,
+        prompt('u-1', 'anchor', 'first copy'),
+        prompt('u-1', 'anchor', 'second copy'),
+        prompt('u-2', 'u-1', 'next')
+      ],
+      'u-2'
+    )
+
+    expect(read(contents, 'anchor').items[0]?.payloadFingerprint).toBe(
+      sendFingerprint('first copy')
+    )
+  })
+
+  it('drops a repeated uuid whose first copy is not a prompt', () => {
+    // The de-dupe runs BEFORE the prompt filter, so a later prompt-shaped copy
+    // cannot promote a uuid the index had already resolved to a non-prompt.
+    const contents = jsonl(
+      [
+        ANCHOR,
+        prompt('u-1', 'anchor', 'injected', { isMeta: true }),
+        prompt('u-1', 'anchor', 'real prompt')
+      ],
+      'u-1'
+    )
+
+    expect(read(contents, 'anchor').items).toEqual([])
+    expect(read(contents, 'anchor').boundaryConsistent).toBe(true)
+  })
+
+  it('refuses a malformed line rather than skipping past it into the window', () => {
+    // The branch proof runs first and throws on any unparseable record; the
+    // replay that follows only tolerates them because that pass already ran.
+    const contents = jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1').replace(
+      '{"type":"last-prompt"',
+      'not json\n{"type":"last-prompt"'
+    )
+
+    expect(read(contents, 'anchor').boundaryConsistent).toBe(false)
+  })
+
   it('carries the caller-proven turn-in-flight fact through to the window', () => {
     const contents = jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1')
 
