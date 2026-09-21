@@ -5,6 +5,13 @@ import { RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT } from '../rich-markdown-editor-do
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import { escapeInjectedJavaScriptString } from '../mobile-rich-markdown-editor-script-string'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
+import {
+  bundleDigestBuiltFrom,
+  machinePathCommentsIn
+} from '../../test-support/webview-document-bundle-digest'
 
 /**
  * The bundle runs, and it is the same document.
@@ -192,6 +199,21 @@ describe('the bundled rich Markdown editor document', () => {
     document.querySelector('#editor a')!.dispatchEvent(new Event('click', { bubbles: true }))
     expect(posted).toContainEqual({ type: 'openLink', url: 'https://example.com/docs' })
   })
+
+  it('is the same bytes wherever its generator was run from', () => {
+    // The artifact is committed by a postinstall run whose working directory is whatever the
+    // installer happened to be in, and every case above compares it with a build made here. So the
+    // build has to be cwd-independent, which is what `absWorkingDir` buys: without it this digest
+    // and the one from the temp directory differ, and the artifact carries a machine path.
+    // `import.meta.dirname`, because a case in the DOM environment has no file URL to convert.
+    const generator = join(
+      import.meta.dirname,
+      '../../../scripts/build-rich-markdown-editor-script.mjs'
+    )
+    const here = createHash('sha256').update(RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT).digest('hex')
+    expect(bundleDigestBuiltFrom(tmpdir(), generator, 'richMarkdownEditorBundle')).toBe(here)
+    expect(machinePathCommentsIn(RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT)).toEqual([])
+  }, 30_000)
 
   it('carries the document and nothing else: no dependency rides into the WebView', async () => {
     // The document imports ordinary modules now, so an import added anywhere in its graph reaches

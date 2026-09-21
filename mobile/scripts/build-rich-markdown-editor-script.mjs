@@ -39,9 +39,17 @@ const GENERATED_HEADER =
   `// The source is mobile/src/components/rich-markdown/, bundled from native-document-entry.ts.\n` +
   `// Target: ${TARGET}. Regenerate via pnpm postinstall.`
 
-/** One options object, so a census of what the bundle contains measures the bundle that ships. */
+/**
+ * One options object, so a census of what the bundle contains measures the bundle that ships.
+ *
+ * `absWorkingDir` is load-bearing: esbuild writes each module's path into the bundle as a comment,
+ * relative to the working directory, so without it the artifact's bytes depend on where the
+ * generator was run from — three cwds gave three digests, and from outside the repo the comments
+ * carry an absolute path with the builder's home directory in it.
+ */
 export function richMarkdownEditorBuildOptions(extra = {}) {
   return {
+    absWorkingDir: mobileRoot,
     entryPoints: [ENTRY],
     bundle: true,
     format: 'iife',
