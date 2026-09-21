@@ -128,14 +128,6 @@ function parseAgyUsageResponse(value: unknown, now = Date.now()): ProviderRateLi
       })
     }
   }
-  if (buckets.length === 0) {
-    return emptyAntigravityResult(
-      'unavailable',
-      'Antigravity usage is not available. The agy CLI returned no quota buckets.',
-      now,
-      'usage-unavailable'
-    )
-  }
   return {
     provider: 'antigravity',
     session: null,
