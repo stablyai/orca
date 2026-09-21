@@ -1,4 +1,5 @@
 import { codeFenceFor } from './markdown-code-fence'
+import { escapeTableCell } from './markdown-table-rows'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { listMarkdown } from './html-list-markdown'
 
@@ -44,7 +45,7 @@ export function blockMarkdown(node: Node): string {
       return ''
     }
     const cellsFor = (row: Element) =>
-      Array.from(row.children).map((cell) => inlineChildren(cell).trim())
+      Array.from(row.children).map((cell) => escapeTableCell(inlineChildren(cell).trim()))
     const headers = cellsFor(rows[0]!)
     const bodyRows = rows.slice(1).map(cellsFor)
     const separator = headers.map(() => '---').join(' | ')
