@@ -52,6 +52,20 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.suppressInput = false
 }
 
+/**
+ * Takes back the pending input timer, which is the one thing the document owns that outlives it.
+ *
+ * A listener comes off with the element it was on, but a scheduled callback holds the scope and
+ * fires into a document nobody is looking at any more — posting a change to a host that has
+ * unmounted the editor, under the generation of content it has replaced. Nothing schedules the
+ * handle today; it is cancelled here because the day something does, this is where the cancel has
+ * to already be.
+ */
+export function stopEditorContent(scope: RichMarkdownEditorScope) {
+  scope.clearTimer(scope.inputTimer)
+  scope.inputTimer = null
+}
+
 export function setEditable(scope: RichMarkdownEditorScope, editable: boolean) {
   scope.editable = Boolean(editable)
   editorElement(scope).setAttribute('contenteditable', scope.editable ? 'true' : 'false')

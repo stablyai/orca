@@ -1,5 +1,5 @@
 import { createRichMarkdownEditorScope } from './document-scope'
-import { currentMarkdown, setEditable, setMarkdown } from './editor-content'
+import { currentMarkdown, setEditable, setMarkdown, stopEditorContent } from './editor-content'
 import { startEditorListeners, stopEditorListeners } from './editor-listeners'
 import { startEditorSurface } from './editor-surface'
 import { startHostBridge } from './host-bridge'
@@ -70,8 +70,12 @@ export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) 
   }
 }
 
-/** The undo, in reverse, so nothing is torn down under something still using it. */
+/**
+ * The undo, in reverse, so nothing is torn down under something still using it, with the pending
+ * timer taken back last — after the listeners that could have scheduled another one are gone.
+ */
 export function stopRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) {
   stopKeyboardInset(scope)
   stopEditorListeners(scope)
+  stopEditorContent(scope)
 }
