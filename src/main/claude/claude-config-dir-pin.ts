@@ -18,6 +18,8 @@ function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
  * the pin names the CLI's own default. Pin only a home the CLI would not find on its
  * own — the same rule the legacy PTY path applies via `ClaudeRuntimePathResolver`.
  *
+ * A project-group binding to `~/.claude` therefore emits nothing and is a no-op by design.
+ *
  * The pinned value is the account home verbatim: the CLI keys its credential lookup on
  * the literal string, so re-spelling an equivalent path (absolute vs `~`, trailing
  * separator) selects a different identity. Normalization here is for the equality test

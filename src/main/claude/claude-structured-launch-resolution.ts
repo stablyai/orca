@@ -148,7 +148,6 @@ export function createClaudeStructuredLaunchResolver(
   deps: ClaudeStructuredLaunchResolverDeps
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
   return async ({ identity }) => {
-    await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
     const record = deps.store.getRecord(identity.sessionId)
     if (!record) {
       throw new Error(`no durable agent-session record for ${identity.sessionId}`)
@@ -167,10 +166,18 @@ export function createClaudeStructuredLaunchResolver(
     if (record.accountHome.variable !== 'CLAUDE_CONFIG_DIR') {
       throw new Error(`claude sessions pin CLAUDE_CONFIG_DIR, not ${record.accountHome.variable}`)
     }
+    // A project-group binding is a custom home, not a managed one: it does not read the shared
+    // runtime auth a switch mutates, and the active managed selection does not describe it. Both
+    // the switch gate and the managed-account gate therefore have nothing to say about it.
+    const boundHome = record.accountHome.binding?.kind === 'project-group'
+    if (!boundHome) {
+      await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+    }
     // Every acquisition, not just the first: the account state can change under a live session, and
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
     // Codex has no gate here — it resolves its account on a different path.
     if (
+      !boundHome &&
       deps.readManagedAccountGate &&
       !structuredClaudeMatchesActiveManagedAccount(deps.readManagedAccountGate())
     ) {
@@ -201,7 +208,9 @@ export function createClaudeStructuredLaunchResolver(
     const overlay = await deps.resolveEnv?.()
     // A switch can begin while the policy and overlay resolve, exactly as it can
     // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
-    await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+    if (!boundHome) {
+      await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+    }
     // Under a managed account the pinned credential is the only auth this launch may
     // use, so an explicit override is refused rather than silently beating the pin.
     if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {

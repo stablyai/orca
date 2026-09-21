@@ -197,3 +197,38 @@ describe('adopted conversation ownership', () => {
     ).toThrow('agent_session_conflict')
   })
 })
+
+describe('re-attach account identity', () => {
+  /** Deliberately NOT relaxed for a bound record: a group whose binding changed between attaches
+   *  is a different account, and silently re-attaching to it is the fork this refuses. */
+  it('refuses a re-attach whose account home path changed', () => {
+    const existing: AgentSessionRecord = {
+      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-bound' })),
+      location: LOCATION,
+      provider: 'claude',
+      accountHome: {
+        variable: 'CLAUDE_CONFIG_DIR',
+        path: '/bound/group-a',
+        binding: { kind: 'project-group', groupId: 'group-a' }
+      },
+      providerHandleChain: []
+    }
+
+    expect(() =>
+      applyAgentSessionReservation(
+        storeState([existing]),
+        reserveRequest({
+          sessionId: 'session-bound',
+          provider: 'claude',
+          expectedFence: existing.lease.runtimeFence,
+          accountHome: {
+            variable: 'CLAUDE_CONFIG_DIR',
+            path: '/bound/group-b',
+            binding: { kind: 'project-group', groupId: 'group-b' }
+          }
+        }),
+        LEASE_TTL_MS
+      )
+    ).toThrow('agent_session_conflict')
+  })
+})

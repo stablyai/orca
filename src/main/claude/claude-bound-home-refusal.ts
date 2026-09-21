@@ -1,0 +1,124 @@
+import { existsSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import type { ResolvedClaudeHomeBinding } from '../../shared/claude-home-binding'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  claudeConfigDirKeychainAliases,
+  readActiveClaudeKeychainCredentialsStrict
+} from '../claude-accounts/keychain'
+
+/** Why a bound group home cannot be launched against. Never a silent fallback to the shared home:
+ *  the user asked for one identity, and quietly substituting another is the failure this prevents. */
+export type ClaudeBoundHomeRefusal =
+  | { code: 'claude_bound_home_missing'; groupId: string; configDir: string }
+  | { code: 'claude_bound_home_signed_out'; groupId: string; configDir: string }
+  | { code: 'claude_bound_home_host_unsupported'; groupId: string; configDir: string }
+  | {
+      code: 'claude_bound_home_env_conflict'
+      groupId: string
+      configDir: string
+      launchEnvDir: string
+    }
+
+function refusalMessage(refusal: ClaudeBoundHomeRefusal): string {
+  const prefix = `Project group ${refusal.groupId} binds Claude to ${refusal.configDir}`
+  switch (refusal.code) {
+    case 'claude_bound_home_host_unsupported':
+      return `${prefix}, which only a local workspace can use. Remote and WSL workspaces cannot open a chat under a bound Claude directory.`
+    case 'claude_bound_home_missing':
+      return `${prefix}, which is not an existing directory on this machine.`
+    case 'claude_bound_home_signed_out':
+      return `${prefix}, which holds no Claude credentials. Sign in to Claude under that directory first.`
+    case 'claude_bound_home_env_conflict':
+      return `${prefix}, but the launch environment sets CLAUDE_CONFIG_DIR to ${refusal.launchEnvDir}.`
+  }
+}
+
+export class ClaudeBoundHomeRefusalError extends Error {
+  readonly refusal: ClaudeBoundHomeRefusal
+
+  constructor(refusal: ClaudeBoundHomeRefusal) {
+    super(refusalMessage(refusal))
+    this.name = 'ClaudeBoundHomeRefusalError'
+    this.refusal = refusal
+  }
+}
+
+/** Test seam only: production passes nothing and reads the real platform and Keychain. */
+export type ClaudeBoundHomeProbe = {
+  platform?: NodeJS.Platform
+  readScopedKeychainCredentials?: (configDir: string) => Promise<string | null>
+}
+
+function comparablePath(value: string, platform: NodeJS.Platform): string {
+  const resolved = resolve(value.trim())
+  return platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+/**
+ * Alias-aware config-dir identity, through the same realpath expansion the Keychain lookup uses:
+ * macOS `/tmp` is `/private/tmp`, so two spellings of one directory must not read as two homes.
+ */
+function sameClaudeConfigDir(left: string, right: string, platform: NodeJS.Platform): boolean {
+  const leftAliases = new Set(
+    claudeConfigDirKeychainAliases(left.trim()).map((alias) => comparablePath(alias, platform))
+  )
+  return claudeConfigDirKeychainAliases(right.trim()).some((alias) =>
+    leftAliases.has(comparablePath(alias, platform))
+  )
+}
+
+function isAbsoluteBinding(configDir: string): boolean {
+  return isWindowsAbsolutePathLike(configDir) || configDir.startsWith('/')
+}
+
+async function hasCredentials(configDir: string, probe: ClaudeBoundHomeProbe): Promise<boolean> {
+  const platform = probe.platform ?? process.platform
+  if (platform === 'darwin') {
+    // Claude Code 2.1+ scopes the macOS Keychain item by config dir; the strict read is the only
+    // one that answers for THIS directory rather than falling back to the shared login.
+    const read = probe.readScopedKeychainCredentials ?? readActiveClaudeKeychainCredentialsStrict
+    return Boolean((await read(configDir))?.trim())
+  }
+  return existsSync(join(configDir, '.credentials.json'))
+}
+
+/**
+ * Proves a bound group home can actually serve this launch, before anything is committed.
+ * Reads only — Orca never writes into a directory a group bound.
+ */
+export async function assertClaudeBoundHomeUsable(input: {
+  binding: ResolvedClaudeHomeBinding
+  location: { executionHostId: string | null; wslDistro: string | null }
+  launchEnv: NodeJS.ProcessEnv
+  probe?: ClaudeBoundHomeProbe
+}): Promise<void> {
+  const { configDir, groupId } = input.binding
+  const probe = input.probe ?? {}
+  const platform = probe.platform ?? process.platform
+  const refuse = (refusal: ClaudeBoundHomeRefusal): never => {
+    throw new ClaudeBoundHomeRefusalError(refusal)
+  }
+  // A config dir is a path on exactly one host. Losing contact with a remote host proves nothing
+  // about it either way (docs/reference/ssh-execution-boundary.md), so this host never guesses:
+  // only a local, non-WSL workspace may read a bound directory at all.
+  if (input.location.executionHostId !== LOCAL_EXECUTION_HOST_ID || input.location.wslDistro) {
+    refuse({ code: 'claude_bound_home_host_unsupported', groupId, configDir })
+  }
+  if (
+    !isAbsoluteBinding(configDir) ||
+    !statSync(configDir, { throwIfNoEntry: false })?.isDirectory()
+  ) {
+    refuse({ code: 'claude_bound_home_missing', groupId, configDir })
+  }
+  const launchEnvDir = input.launchEnv.CLAUDE_CONFIG_DIR?.trim()
+  if (launchEnvDir && !sameClaudeConfigDir(launchEnvDir, configDir, platform)) {
+    refuse({ code: 'claude_bound_home_env_conflict', groupId, configDir, launchEnvDir })
+  }
+  if (!(await hasCredentials(configDir, probe))) {
+    refuse({ code: 'claude_bound_home_signed_out', groupId, configDir })
+  }
+}
+
+export type AssertClaudeBoundHomeUsable = typeof assertClaudeBoundHomeUsable

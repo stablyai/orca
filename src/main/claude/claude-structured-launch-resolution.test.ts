@@ -7,6 +7,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
+import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/environment'
+import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
@@ -57,7 +59,9 @@ function resolverFor(
   resolveEnv?: () => Record<string, string>,
   stripAuthEnv = false,
   // Manual by default so a test that is not about permissions is not silently about them.
-  agentDefaultArgs: Record<string, string> = { claude: '' }
+  agentDefaultArgs: Record<string, string> = { claude: '' },
+  /** Deps a single test needs; kept last so the common shape stays a one-liner. */
+  extraDeps: Partial<Parameters<typeof createClaudeStructuredLaunchResolver>[0]> = {}
 ) {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
@@ -65,7 +69,19 @@ function resolverFor(
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
     resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
-    ...(resolveEnv ? { resolveEnv } : {})
+    ...(resolveEnv ? { resolveEnv } : {}),
+    ...extraDeps
+  })
+}
+
+function boundRecord(binding: boolean): AgentSessionRecord {
+  return record({
+    providerHandleChain: RESUMABLE.providerHandleChain,
+    accountHome: {
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/bound/claude-home',
+      ...(binding ? { binding: { kind: 'project-group', groupId: 'group-1' } } : {})
+    }
   })
 }
 
@@ -409,6 +425,39 @@ describe('claude structured launch resolution', () => {
       await expect(
         resolverFor(RESUMABLE)({ identity: identityAt('leaf-current') })
       ).resolves.toMatchObject({ providerSessionId: 'provider-current' })
+    })
+
+    it('skips the gate for a project-group bound record, which is a custom home', async () => {
+      // The global selection points at the shape the gate refuses; the bound home is not it.
+      const resolve = resolverFor(boundRecord(true), undefined, false, undefined, {
+        readManagedAccountGate: () => WSL_ONLY_NORMALIZED
+      })
+
+      await expect(resolve({ identity: identityAt('leaf-current') })).resolves.toMatchObject({
+        claudeConfigDir: '/bound/claude-home'
+      })
+    })
+  })
+
+  describe('auth-switch settle assertion', () => {
+    function resolveBound(binding: boolean) {
+      return resolverFor(boundRecord(binding), undefined, false, undefined, {
+        authSwitchSettleTimeoutMs: 10
+      })
+    }
+
+    it('does not block a bound record mid switch, and still blocks an unbound one', async () => {
+      beginClaudeAuthSwitch()
+      try {
+        await expect(
+          resolveBound(true)({ identity: identityAt('leaf-current') })
+        ).resolves.toBeDefined()
+        await expect(resolveBound(false)({ identity: identityAt('leaf-current') })).rejects.toThrow(
+          CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE
+        )
+      } finally {
+        endClaudeAuthSwitch()
+      }
     })
   })
 })

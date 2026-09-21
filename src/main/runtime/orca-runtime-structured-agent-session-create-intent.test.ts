@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { AssertClaudeBoundHomeUsable } from '../claude/claude-bound-home-refusal'
 
 describe('structured agent-session create intent', () => {
   it('pins the selected Codex launch home after normal launch preparation', async () => {
@@ -171,5 +172,131 @@ describe('structured agent-session create intent', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/accounts/managed/claude-home'
     })
+  })
+})
+
+describe('project-group Claude home binding', () => {
+  const GROUP = {
+    id: 'group-1',
+    name: 'Bound',
+    parentGroupId: null,
+    claudeConfigDir: '/bound/claude-home'
+  }
+  const REPO = { id: 'repo-1', path: '/repos/repo-1', projectGroupId: 'group-1' }
+
+  function boundRuntime(
+    overrides: {
+      groups?: unknown[]
+      repos?: unknown[]
+      agentDefaultEnv?: Record<string, Record<string, string>>
+      assertBoundHomeUsable?: AssertClaudeBoundHomeUsable
+    } = {}
+  ) {
+    const store = {
+      getSettings: () => ({ agentDefaultEnv: overrides.agentDefaultEnv ?? { claude: {} } }),
+      getRepos: () => overrides.repos ?? [REPO],
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => overrides.groups ?? [GROUP]
+    }
+    const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create-intent path reads only these four store accessors.
+      store as never,
+      undefined,
+      {
+        prepareCodexStructuredLaunch: vi.fn(),
+        ...(overrides.assertBoundHomeUsable
+          ? { assertClaudeBoundHomeUsable: overrides.assertBoundHomeUsable }
+          : {})
+      }
+    )
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    // The two protected seams overridden below are the ones this suite already drives.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: protected test seam.
+    const internal = runtime as unknown as Record<string, unknown>
+    internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'repo-1::/repos/workspace-1',
+      workspaceKind: 'git-worktree' as const
+    }))
+    internal.resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { path: '/repos/workspace-1' }
+    }))
+    return runtime
+  }
+
+  const createInput = {
+    envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
+    worktree: 'id:repo-1::/repos/workspace-1',
+    agent: 'claude' as const
+  }
+
+  it('pins the bound group home and marks the record with the group', async () => {
+    const assertClaudeBoundHomeUsable = vi.fn(async () => {})
+    const intent = await boundRuntime({ assertBoundHomeUsable: assertClaudeBoundHomeUsable }) //
+      .resolveStructuredAgentSessionCreateIntent(createInput)
+
+    expect(intent.accountHome).toEqual({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/bound/claude-home',
+      binding: { kind: 'project-group', groupId: 'group-1' }
+    })
+    expect(assertClaudeBoundHomeUsable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        binding: { configDir: '/bound/claude-home', groupId: 'group-1' },
+        location: expect.objectContaining({ executionHostId: 'local', wslDistro: null })
+      })
+    )
+  })
+
+  it('hands the launch env to the usability check so a conflict can refuse', async () => {
+    await expect(
+      boundRuntime({
+        agentDefaultEnv: { claude: { CLAUDE_CONFIG_DIR: '/elsewhere/claude-home' } },
+        assertBoundHomeUsable: async ({ launchEnv }) => {
+          if (launchEnv.CLAUDE_CONFIG_DIR !== '/bound/claude-home') {
+            throw new Error('claude_bound_home_env_conflict')
+          }
+        }
+      }).resolveStructuredAgentSessionCreateIntent(createInput)
+    ).rejects.toThrow('claude_bound_home_env_conflict')
+  })
+
+  it('takes the unbound path when the workspace group binds nothing', async () => {
+    const assertClaudeBoundHomeUsable = vi.fn(async () => {})
+    const intent = await boundRuntime({
+      groups: [{ ...GROUP, claudeConfigDir: null }],
+      agentDefaultEnv: { claude: { CLAUDE_CONFIG_DIR: '/configured/claude-home' } },
+      assertBoundHomeUsable: assertClaudeBoundHomeUsable
+    }).resolveStructuredAgentSessionCreateIntent(createInput)
+
+    expect(assertClaudeBoundHomeUsable).not.toHaveBeenCalled()
+    expect(intent.accountHome).toEqual({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/configured/claude-home'
+    })
+  })
+
+  it('leaves a workspace in no group entirely unbound', async () => {
+    const intent = await boundRuntime({
+      repos: [{ ...REPO, projectGroupId: null }],
+      agentDefaultEnv: { claude: { CLAUDE_CONFIG_DIR: '/configured/claude-home' } }
+    }).resolveStructuredAgentSessionCreateIntent(createInput)
+
+    expect(intent.accountHome).toEqual({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/configured/claude-home'
+    })
+  })
+
+  it('never binds a Codex session', async () => {
+    const intent = await boundRuntime({
+      agentDefaultEnv: { codex: { CODEX_HOME: '/configured/codex-home' } }
+    }).resolveStructuredAgentSessionCreateIntent({ ...createInput, agent: 'codex' })
+
+    expect(intent.accountHome.variable).toBe('CODEX_HOME')
+    expect(intent.accountHome).not.toHaveProperty('binding')
   })
 })
