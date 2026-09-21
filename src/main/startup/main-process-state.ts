@@ -8,6 +8,7 @@ import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { AntigravityAccountService } from '../antigravity/native-account-service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
@@ -59,6 +60,8 @@ export const mainProcessState = {
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
   claudeAccounts: null as ClaudeAccountService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: startup fills this optional service before the main window is attached.
+  antigravityAccounts: null as AntigravityAccountService | null,
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,

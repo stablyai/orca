@@ -1,5 +1,6 @@
 import type {
   ClaudeAccountsApi,
+  AntigravityAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
   GrokAccountsApi,
@@ -102,6 +103,7 @@ export type PreloadApi = {
   keybindings: KeybindingsApi
   codexAccounts: CodexAccountsApi
   claudeAccounts: ClaudeAccountsApi
+  antigravityAccounts: AntigravityAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi
   agentTrust: AgentTrustApi

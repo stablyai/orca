@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { join } from 'node:path'
 import { RateLimitService } from '../rate-limits/service'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
@@ -24,6 +25,14 @@ import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
 import { isRealHomeCodexHookLaneUsable } from '../codex/codex-real-home-hook-install'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
+import {
+  AntigravityAccountService,
+  createEncryptedAntigravityAccountStore
+} from '../antigravity/native-account-service'
+import {
+  readAntigravityMacOSCredential,
+  writeAntigravityMacOSCredential
+} from '../antigravity/native-macos-credentials'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
@@ -67,6 +76,14 @@ export function initializeMainProcessAccountServices(): void {
   state.codexSessionMigration.scheduleInitialRun()
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
+  if (process.platform === 'darwin') {
+    state.antigravityAccounts = new AntigravityAccountService(
+      createEncryptedAntigravityAccountStore(
+        join(app.getPath('userData'), 'antigravity-accounts.bin')
+      ),
+      { read: readAntigravityMacOSCredential, write: writeAntigravityMacOSCredential }
+    )
+  }
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)
   )

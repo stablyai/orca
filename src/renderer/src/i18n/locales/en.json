@@ -6586,7 +6586,17 @@
           "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
           "geminiLegacy": "Gemini CLI (legacy)",
           "geminiLegacyDescription": "For new Google CLI sessions, use Antigravity (agy). These settings remain available for existing Gemini CLI accounts and do not sign you into Antigravity.",
-          "geminiLegacyCredentials": "Use Gemini CLI credentials (legacy)"
+          "geminiLegacyCredentials": "Use Gemini CLI credentials (legacy)",
+          "antigravity": "Antigravity (agy)",
+          "antigravityDescription": "Native agy accounts and the account currently used by Antigravity.",
+          "antigravityQuota": "Quota:",
+          "antigravityQuotaWindows": "{{value0}} model windows available",
+          "antigravityUnavailable": "Unavailable",
+          "antigravitySignedIn": "Signed-in Antigravity account",
+          "antigravityActive": "Active",
+          "antigravityUse": "Use",
+          "antigravityRemove": "Remove",
+          "antigravityAddCurrent": "Add current agy account"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

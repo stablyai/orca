@@ -3,6 +3,7 @@ import type { StatsSummary } from '../../../shared/process-stats-types'
 import { createWebE2EApi } from './preload-api/web-e2e-api'
 import {
   createClaudeAccountsApi,
+  createAntigravityAccountsApi,
   createCodexAccountsApi,
   createGrokAccountsApi,
   createMiniMaxCredentialsApi
@@ -109,6 +110,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createCodexAccountsApi(),
     claudeAccounts: createClaudeAccountsApi(),
+    antigravityAccounts: createAntigravityAccountsApi(),
     cli: createCliApi(),
     macosTccPrompts: createMacosTccPromptsApi(),
     codexConfigSync: {

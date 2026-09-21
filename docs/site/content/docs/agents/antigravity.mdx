@@ -92,6 +92,54 @@ does not establish availability on that host. Custom command settings are global
 launch defaults: the configured path must be valid on the execution host. A Windows
 path does not name a Linux executable inside WSL or on an SSH server.
 
+## API-key authentication in WSL
+
+A Windows environment variable is not automatically a Linux environment variable.
+Updating a system variable also does not update an already-running Orca process or
+terminal. First confirm that the selected WSL distribution receives the key; do not
+print the key itself.
+
+If you intentionally use a Gemini API key instead of Google sign-in, agy 1.2.7 also
+requires the API-key provider selection. In the **WSL user's**
+`~/.gemini/antigravity-cli/settings.json`, merge this setting into the existing JSON:
+
+```json
+{
+  "modelProvider": "gemini"
+}
+```
+
+Preserve the other settings. `_modelProvider` is not equivalent. This selects an
+authentication mode within **agy**; it does not launch the legacy Gemini CLI or
+use a Google subscription account's quota.
+
+To forward a key stored as a Windows system environment variable, run this in
+PowerShell. It refreshes this process's value and preserves other WSL forwarding
+entries:
+
+```powershell
+$env:GEMINI_API_KEY = [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'Machine')
+$agyWslEntries = @($env:WSLENV -split ':' | Where-Object { $_ -and ($_ -split '/')[0] -ne 'GEMINI_API_KEY' })
+$env:WSLENV = ($agyWslEntries + 'GEMINI_API_KEY/u') -join ':'
+```
+
+These assignments affect this PowerShell process and its future children. They do
+not refresh an Orca instance that is already running. Launch the intended process
+from that environment, or configure the key directly in the WSL environment that
+will run agy. Do not put the secret in the Command or Arguments fields.
+
+Inside the selected distribution, check presence and request a harmless reply:
+
+```sh
+if [ -n "${GEMINI_API_KEY:-}" ]; then echo 'API key present'; else echo 'API key missing'; fi
+agy --print 'Reply exactly AGY_AUTH_OK. Do not use tools.' --output-format json --print-timeout 30s
+```
+
+A key being present proves only environment forwarding. A successful reply proves
+that this CLI can authenticate and generate. With no provider selection, a fresh
+agy profile may still request Google sign-in even when the API key is present.
+Google sign-in remains the normal alternative; an API key is not required for it.
+
 ## Permissions and session state
 
 Orca's default Antigravity arguments include `--dangerously-skip-permissions`.

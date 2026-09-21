@@ -51,6 +51,18 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   }
 }
 
+export function createAntigravityAccountsApi(): PreloadApi['antigravityAccounts'] {
+  const empty = { accounts: [], activeAccountId: null }
+  const unsupported = () =>
+    Promise.reject(new Error('Antigravity account storage is only available in the desktop app.'))
+  return {
+    list: () => Promise.resolve(empty),
+    add: unsupported,
+    select: unsupported,
+    remove: unsupported
+  }
+}
+
 export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   const empty = createEmptyManagedAccountsState()
   return {

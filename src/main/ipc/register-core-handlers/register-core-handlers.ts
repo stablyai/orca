@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, ipcMain } from 'electron'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
@@ -76,6 +76,7 @@ import type { OpenCodeUsageStore } from '../../opencode-usage/store'
 import type { RateLimitService } from '../../rate-limits/service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
+import type { AntigravityAccountService } from '../../antigravity/native-account-service'
 import type { AutomationService } from '../../automations/service'
 import type { AgentAwakeService } from '../../agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
@@ -124,7 +125,8 @@ export function registerCoreHandlers(
   keybindings?: KeybindingService,
   lifecycleOptions: CoreHandlerLifecycleOptions = {},
   pluginService?: PluginService,
-  marketplaceServices?: PluginMarketplaceHandlerServices
+  marketplaceServices?: PluginMarketplaceHandlerServices,
+  antigravityAccounts?: AntigravityAccountService
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -148,6 +150,16 @@ export function registerCoreHandlers(
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
+  if (antigravityAccounts) {
+    ipcMain.handle('antigravityAccounts:list', () => antigravityAccounts.listAccounts())
+    ipcMain.handle('antigravityAccounts:add', () => antigravityAccounts.addCurrentAccount())
+    ipcMain.handle('antigravityAccounts:select', (_event, args: { accountId: string }) =>
+      antigravityAccounts.selectAccount(args.accountId)
+    )
+    ipcMain.handle('antigravityAccounts:remove', (_event, args: { accountId: string }) =>
+      antigravityAccounts.removeAccount(args.accountId)
+    )
+  }
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)

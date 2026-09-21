@@ -58,6 +58,25 @@ export type ClaudeAccountsApi = {
   }) => Promise<ClaudeRateLimitAccountsState>
 }
 
+export type AntigravityAccountState = {
+  accounts: {
+    id: string
+    email: string | null
+    subject: string | null
+    authMethod: string
+    createdAt: number
+    updatedAt: number
+  }[]
+  activeAccountId: string | null
+}
+
+export type AntigravityAccountsApi = {
+  list: () => Promise<AntigravityAccountState>
+  add: () => Promise<AntigravityAccountState>
+  select: (args: { accountId: string }) => Promise<AntigravityAccountState>
+  remove: (args: { accountId: string }) => Promise<AntigravityAccountState>
+}
+
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
 }
