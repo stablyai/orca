@@ -158,7 +158,7 @@ const ADMITTED_IMAGE_PATHS = ['/css-bg.png', '/img.png']
 /**
  * Both admitted image requests, once the rig has recorded them.
  *
- * Polled in Node rather than in the frame, because the route handler records there, and the arm
+ * Polled in Node rather than in the frame, because the asset listener records there, and the arm
  * hands its own reader in so this module keeps no arm's state. Returns rather than throws when the
  * case ends, like every wait here.
  *
@@ -205,7 +205,7 @@ async function describeAdmittedImages(page, readImageHits, describeRequests) {
     : null
   const reading = image === false ? 'the reading never answered' : image
   // What the browser said about the requests themselves, which is where a request that never
-  // reached the rig's route handler is distinguishable from one the page never made.
+  // reached the asset listener is distinguishable from one the page never made.
   const requests = (await describeRequests?.(frame)) ?? 'no request log for this arm'
   return `the arm recorded ${JSON.stringify(readImageHits())} of ${JSON.stringify(ADMITTED_IMAGE_PATHS)}; #remote ${JSON.stringify(reading)}; ${requests}`
 }
@@ -257,9 +257,10 @@ export async function settleAfterMount(page, navigations, expectNavigation, sign
 /**
  * The moment the arm's navigation exists, for an arm that expects one.
  *
- * No clock at all: the route handler above records a main-frame navigation as the browser dispatches
- * it, so the oracles are read after the thing under test rather than after a wait, and the only
- * bound is the case's own timeout through `ctx.signal`. An arm whose click missed its target prints
+ * No clock at all: the rig's `page.on('request')` subscription records a main-frame navigation as
+ * the browser dispatches it, so the oracles are read after the thing under test rather than after a
+ * wait, and the only bound is the case's own timeout through `ctx.signal`. The route beside it only
+ * refuses the navigation; it stopped counting anything when the record moved off interception. An arm whose click missed its target prints
  * what it did record and lets the case fail as the timeout it is.
  *
  * Measured, so it is not sold as more than it is: with this replaced by a no-op every arm still

@@ -11,7 +11,7 @@
  * whose own scripts are blocked.
  */
 
-/** Two seconds: long enough for a request to reach the rig's own in-process route handler. */
+/** Two seconds: long enough for a request to reach the asset listener, which is in this process. */
 const FRESH_IMAGE_MS = 2000
 
 /**
@@ -61,13 +61,17 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
         // Every subresource this document actually fetched, from the document's own side. An entry
         // here for a URL the rig never saw would mean the request left the frame and died before it.
         resources: performance.getEntriesByType('resource').map((one) => one.name),
-        // The same entry in full for the element under test. Readable only because the asset
+        // The frame's own account of the entry, and only that. Readable at all because the asset
         // listener sends `Timing-Allow-Origin`: without it every field below reads zero for a
         // cross-origin resource, which was true of this reading until it was checked and would have
         // made a healthy request look like a failed one. Even with it, `responseStatus` still read
         // zero on a request that succeeded, so the discriminators are `transferSize`,
-        // `encodedBodySize` and `nextHopProtocol`. `startTime` is what an attachment time is early
-        // or late against.
+        // `encodedBodySize` and `nextHopProtocol`.
+        //
+        // `startTime` and `duration` are NOT comparable to any attachment time here: they are
+        // relative to this document's navigation, while every `at` in the request log is Node's
+        // `performance.now()`, relative to process start. The early-or-late question is answered on
+        // the Node clock alone, by `asked` against `attached` in the request log.
         remoteTiming: performance
           .getEntriesByType('resource')
           .filter((one) => one.name === remote?.src)
