@@ -14,6 +14,9 @@
  * a wait began is the one the predicate runs in.
  */
 
+import { describePreviewFrame, untilAborted } from './mobile-web-app-preview-frame-diagnosis.mjs'
+import { pollReportsUntil } from './mobile-web-app-preview-csp-reports.mjs'
+
 const POLL_MS = 25
 const EVALUATE_MS = 1000
 
@@ -50,4 +53,73 @@ export async function pollFrameUntil(page, predicate, signal) {
     }
     await abandonAfter(POLL_MS)
   }
+}
+
+/**
+ * The mounted frame, once it holds the artifact.
+ *
+ * Found among the page's frames, never by its URL. A `srcdoc` frame reports `about:srcdoc` on both
+ * engines here and an empty URL on CI's browser, and a poll that waited for the string spent every
+ * case's whole timeout there -- seven timeouts on one engine, after the same difference had already
+ * shown up as `expected '' to be 'about:srcdoc'`.
+ *
+ * Every wait below asks in the frame's main world through `pollFrameUntil`, for the reason that
+ * module carries: a selector wait needs an isolated world the embedder cannot see fail.
+ *
+ * Three things still settle at their own moments: React commits the mount, the element's `srcdoc`
+ * commits a document, and an override arm replaces that document with a second one. So readiness is
+ * the fixture's own marker inside the frame, which exists only once the artifact has parsed there.
+ *
+ * `frameReady` is which of those an arm is waiting for, because the marker is not always the right
+ * one. `'script'` waits for what the inline script writes, on the document element rather than on a
+ * window global: the marker element exists from parse time, so an arm whose oracle is "the script
+ * ran" would otherwise read the flag before it was written. `'load'` is for the one arm whose
+ * artifact deliberately navigates the frame somewhere else, where no marker is ever coming.
+ *
+ * `reportReady` is the other kind of precondition: a refusal the policy reported to the rig's own
+ * server, which an arm about what the policy refused waits for instead of reading a list.
+ */
+export async function waitForLoadedFrame(
+  page,
+  { frameReady = 'artifact', reportReady = null, signal, browserVersion, arm, sink, nonce }
+) {
+  const reading = async (what) =>
+    `${what}: ${arm} | ${await describePreviewFrame(page, previewFrame(page), browserVersion)}`
+  await untilAborted(
+    pollFrameUntil(page, () => true, signal),
+    signal,
+    async () => await reading('no frame ever answered inside the page')
+  )
+  const frame = previewFrame(page)
+  if (!frame) {
+    return null
+  }
+  await frame.waitForLoadState('load').catch(() => {})
+  if (frameReady === 'script') {
+    await untilAborted(
+      pollFrameUntil(page, () => document.documentElement.dataset.ran === '1', signal),
+      signal,
+      async () => await reading("the artifact's script never ran inside the frame")
+    )
+  }
+  if (reportReady) {
+    // The browser's own report, not the frame's listener. An arm whose claim is "the policy refused
+    // this" waits for the refusal to have been reported, which is evidence no in-frame listener has
+    // to have been installed in time to collect -- and in a frame with no `allow-scripts` none ever
+    // is. The wait ends in the diagnosis rather than in a passing read.
+    await untilAborted(
+      pollReportsUntil(sink, nonce, reportReady, signal),
+      signal,
+      async () =>
+        await reading(`the policy reported no ${String(reportReady)} refusal for this arm`)
+    )
+  }
+  if (frameReady !== 'load') {
+    await untilAborted(
+      pollFrameUntil(page, () => document.getElementById('marker') !== null, signal),
+      signal,
+      async () => await reading('the artifact never parsed inside the frame')
+    )
+  }
+  return previewFrame(page)
 }

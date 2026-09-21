@@ -112,7 +112,12 @@ export async function describePreviewFrame(page, frame, browserVersion) {
         readyState: document.readyState,
         bodyChars: document.body?.innerHTML.length ?? null,
         marker: document.getElementById('marker') !== null,
-        ran: window.__ran ?? null,
+        ran: document.documentElement.dataset.ran ?? null,
+        // The order the collector's own reach depends on: when the page's init script ran here and
+        // when the artifact's script did. A listener installed after the parser reached the inline
+        // script can only report what came later.
+        initAt: window.__initAt ?? null,
+        artifactAt: document.documentElement.dataset.artifactAt ?? null,
         violations: window.__violations ?? 'absent'
       }))
       .catch((error) => `evaluate refused: ${String(error).split('\n')[0]}`)

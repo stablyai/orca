@@ -28,8 +28,8 @@ import { chromium, webkit } from 'playwright-core'
 import { lucideBarrelPlugin } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from './mobile-web-app-render-harness.mjs'
-import { describePreviewFrame, untilAborted } from './mobile-web-app-preview-frame-diagnosis.mjs'
-import { pollFrameUntil, previewFrame } from './mobile-web-app-preview-frame-readiness.mjs'
+import { createCspReportSink, reportedDirectives } from './mobile-web-app-preview-csp-reports.mjs'
+import { previewFrame, waitForLoadedFrame } from './mobile-web-app-preview-frame-readiness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 
@@ -137,11 +137,15 @@ let nonceCounter = 0
 
 /** The inline script every arm carries, so "it did not run" is about the fence and not the fixture. */
 const ARTIFACT_SCRIPT = `<script>
-  window.__ran = 1;
+  // On the document element, never on a window global: a page init script owns the window of every
+  // frame and runs at a moment this rig has to be able to measure rather than assume.
+  document.documentElement.dataset.ran = '1';
+  document.documentElement.dataset.artifactAt =
+    String(Math.round(performance.now())) + ' ' + document.readyState;
   document.title = 'SCRIPT_RAN';
   document.getElementById('marker').textContent = 'SCRIPT_RAN';
   fetch('${'${foreignOrigin}'}/fetched.json').catch(() => {});
-  try { window.top.location.href = '${'${foreignOrigin}'}/by-script.html' } catch (error) { window.__threw = error.name }
+  try { window.top.location.href = '${'${foreignOrigin}'}/by-script.html' } catch (error) { document.documentElement.dataset.threw = error.name }
 </script>`
 
 const bundles = mobileWebAppDependenciesPresent()
@@ -160,6 +164,8 @@ const browsers = {}
 let sealedServer = null
 let openServer = null
 const origins = {}
+/** Every refusal the sealed server's policy was told about, by the arm that caused it. */
+const cspReports = createCspReportSink()
 
 beforeAll(async () => {
   shippedCsp = await readShellCsp()
@@ -225,7 +231,12 @@ beforeAll(async () => {
       '<div id="root" style="display:flex;flex-direction:column;height:100vh"></div>' +
       '<script src="/html-preview-check.js"></script></body></html>'
   )
-  const sealed = await createBundleServer({ outDir, cspHeader: shippedCsp })
+  const sealed = await createBundleServer({
+    outDir,
+    // Per document, because each arm's policy names an endpoint carrying that arm's nonce.
+    cspHeader: (request) => cspReports.policyFor(shippedCsp, request),
+    handleRequest: (request, response, path) => cspReports.handleRequest(request, response, path)
+  })
   sealedServer = sealed.server
   origins.shipped = sealed.origin
   const bare = await createBundleServer({ outDir, cspHeader: null })
@@ -269,6 +280,7 @@ async function open(
     act,
     expectNavigation = null,
     frameReady = 'artifact',
+    reportReady = null,
     signal
   } = {}
 ) {
@@ -281,6 +293,12 @@ async function open(
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const navigations = []
   const popups = []
+  let servedCsp = null
+  page.on('response', (response) => {
+    if (response.url().startsWith(`${origin}/preview`)) {
+      servedCsp = response.headers()['content-security-policy'] ?? null
+    }
+  })
   page.on('popup', (popup) => {
     popups.push(popup.url())
     void popup.close().catch(() => {})
@@ -309,12 +327,18 @@ async function open(
   // The shell page's violations, and only those: an artifact's own listener would have to run, and
   // the fence under test is that nothing in the artifact runs.
   await page.addInitScript(() => {
+    // When this ran, in every frame it ran in. The collector below can only report what it was
+    // present for, so its own moment is a reading rather than an assumption.
+    window.__initAt = `${String(Math.round(performance.now()))} ${document.readyState}`
     window.__violations = []
     document.addEventListener('securitypolicyviolation', (event) => {
       window.__violations.push(`${event.violatedDirective} ${event.blockedURI || 'inline'}`)
     })
   })
-  await page.goto(`${origin}/preview`, { waitUntil: 'load' })
+  // The nonce in the document's own URL: the policy this response carries names a report endpoint
+  // with the same nonce, which is how a report from a `srcdoc` frame with no URL of its own is
+  // attributed to the arm that caused it.
+  await page.goto(`${origin}/preview?n=${nonce}`, { waitUntil: 'load' })
   // Registered after the page's own load, not before it: this handler aborts main-frame navigations
   // and the initial `goto` is one. `href="/"` and `href=""` inside an artifact resolve against the
   // embedder's base, so a tap on either asks to navigate the top frame to the shell's own document.
@@ -328,8 +352,18 @@ async function open(
     [artifact(extra, nonce), sandbox ?? null]
   )
   // Named in every diagnostic, because the log shows the case and not which of its arms spoke.
-  const arm = `arm csp=${csp} sandbox=${sandbox ?? 'product'} frameReady=${frameReady} nonce=${nonce}`
-  const artifactFrame = await waitForLoadedFrame(page, frameReady, signal, browserVersion, arm)
+  const arm =
+    `arm csp=${csp} sandbox=${sandbox ?? 'product'} frameReady=${frameReady} ` +
+    `reportReady=${reportReady ?? 'none'} nonce=${nonce}`
+  const artifactFrame = await waitForLoadedFrame(page, {
+    frameReady,
+    reportReady,
+    signal,
+    browserVersion,
+    arm,
+    sink: cspReports,
+    nonce
+  })
   // Sampled before the action as well as after: a case that taps a link is asking what the tap
   // produced, and by then the top frame is mid-navigation and the iframe has blanked to its own
   // background. So the precondition "there was a rendered artifact to tap" is this reading, and the
@@ -401,13 +435,23 @@ async function open(
       ?.evaluate(() => ({
         marker: document.getElementById('marker')?.textContent ?? null,
         title: document.title,
-        ran: window.__ran ?? 0,
-        threw: window.__threw ?? null,
+        ran: document.documentElement.dataset.ran === '1' ? 1 : 0,
+        threw: document.documentElement.dataset.threw ?? null,
+        // The two moments the late-listener question turns on: when the page's init script ran in
+        // this frame, and when the artifact's own script did.
+        initAt: window.__initAt ?? null,
+        artifactAt: document.documentElement.dataset.artifactAt ?? null,
         // The frame's own list, not the embedder's: `securitypolicyviolation` does not cross frames,
         // and the page's init script installs the same collector in every one.
         violations: window.__violations ?? null
       }))
       .catch(() => null) ?? Promise.resolve(null)),
+    // What this document was actually served, so "the shipped policy, plus a report endpoint and
+    // nothing else" is asserted rather than intended.
+    servedCsp,
+    // Every refusal the browser reported for this arm, which is the evidence an in-frame listener
+    // cannot be relied on to have collected.
+    reported: reportedDirectives(cspReports, nonce),
     topNavigations: navigations.filter((one) => one.main && one.foreign).length,
     ownOriginTopNavigations: navigations.filter((one) => one.main && !one.foreign).length,
     // What the frame asked for itself at the embedder's origin, which is a different escape from a
@@ -450,6 +494,12 @@ for (const engine of ['chromium', 'webkit']) {
         // page mounts rather than about a string nothing reads.
         expect(read.mountedSandbox).toBe(read.declaredSandbox)
         expect(read.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
+        // The policy this document was served is the shell's own text plus the rig's report
+        // endpoint, and nothing else: `report-uri` says where a refusal is sent and changes nothing
+        // about what is enforced, so the arms below measure the shipped policy.
+        const servedParts = (read.servedCsp ?? '').split('; report-uri ')
+        expect(servedParts[0]).toBe(shippedCsp)
+        expect(servedParts).toHaveLength(2)
         // The pixel, not a read inside the frame: the frame is an opaque origin.
         expect(read.pixel).toBe(ARTIFACT_RGB)
         // The shell page's own violations, which is all this can be: `securitypolicyviolation` does
@@ -461,7 +511,13 @@ for (const engine of ['chromium', 'webkit']) {
       }, 120_000)
 
       it('does not run the artifact, behind two fences either of which would hold', async (ctx) => {
-        const sealed = await open(browser(), { extra: { body: script() }, signal: ctx.signal })
+        const sealed = await open(browser(), {
+          extra: { body: script() },
+          signal: ctx.signal,
+          // The refusal this arm does cause, waited for so the missing one below is an absence
+          // measured beside a presence rather than a list read too early.
+          reportReady: 'img-src'
+        })
         expect(sealed.pixel).toBe(ARTIFACT_RGB)
         expect(sealed.inside?.ran).toBe(0)
         expect(sealed.inside?.title).toBe('ARTIFACT')
@@ -482,8 +538,9 @@ for (const engine of ['chromium', 'webkit']) {
         expect(loose.pixel).toBe(ARTIFACT_RGB)
         expect(loose.inside?.ran).toBe(1)
         expect(loose.inside?.title).toBe('SCRIPT_RAN')
-        // Nothing refused it, which is what "no policy" looks like from inside the frame.
-        expect(loose.inside?.violations).toEqual([])
+        // Nothing refused it, which is what "no policy" looks like: this arm's server sends no
+        // header at all, so there is no policy to report against and the script ran.
+        expect(loose.reported).toEqual([])
 
         // The second fence, measured on its own: grant `allow-scripts` and keep the shipped policy,
         // and the script still does not run, because a `srcdoc` frame inherits its embedder's
@@ -494,24 +551,25 @@ for (const engine of ['chromium', 'webkit']) {
           signal: ctx.signal,
           extra: { body: script() },
           sandbox: 'allow-scripts allow-top-navigation-by-user-activation',
-          // The refusal below is this arm's oracle, and it is queued behind the frame's load, so the
-          // arm waits for it instead of reading whatever the list happens to hold.
-          frameReady: 'refusal'
+          // The refusal below is this arm's oracle, so the arm waits for the browser to have
+          // reported it rather than reading whatever a list inside the frame happens to hold.
+          reportReady: 'script-src'
         })
         expect(inherited.pixel).toBe(ARTIFACT_RGB)
         expect(inherited.inside?.ran).toBe(0)
         expect(inherited.inside?.title).toBe('ARTIFACT')
         // This arm's own precondition, and the thing CI showed a rig can get wrong: a frame that was
-        // never really widened refuses the script too, silently and with no event, and would pass
-        // every line above under a name that says the policy held. A violation raised inside the
-        // frame can only happen if the sandbox let the script start, so this is the reading that
-        // separates the two -- and it is the frame's own list, since the embedder's never sees it.
-        // Waited for, not hoped for: `frameReady: 'refusal'` above is what makes this line arrive
-        // after the entry rather than beside the image refusal that happened to be first.
-        expect(String(inherited.inside?.violations)).toContain('script-src')
-        // The sealed arm is the contrast: no policy refused anything there, the sandbox simply never
-        // let the script begin.
-        expect(sealed.inside?.violations).toEqual([])
+        // never really widened refuses the script too, silently and with no report, and would pass
+        // every line above under a name that says the policy held. A `script-src` refusal can only
+        // be reported if the sandbox let the script start, so this is the reading that separates the
+        // two -- and it comes from the browser rather than from a listener in the frame, which on
+        // CI's Chrome intermittently missed this very entry while catching the image one beside it.
+        expect(inherited.reported.join(' ')).toContain('script-src')
+        // The sealed arm is the contrast, and it is why that line means what it says: the same
+        // artifact under the same policy was reported only for its image. Nothing refused its
+        // script, because the sandbox never let it begin.
+        expect(sealed.reported.join(' ')).toContain('img-src')
+        expect(sealed.reported.join(' ')).not.toContain('script-src')
       }, 180_000)
 
       it('fetches nothing of the artifact that leaves the origin, and would if allowed', async (ctx) => {
@@ -718,75 +776,6 @@ describe('the HTML preview needs no policy change', () => {
     expect(tokens).not.toContain('allow-same-origin')
   })
 })
-
-/**
- * The mounted frame, once it holds the artifact.
- *
- * Found among the page's frames, never by its URL. A `srcdoc` frame reports `about:srcdoc` on both
- * engines here and an empty URL on CI's browser, and a poll that waited for the string spent every
- * case's whole timeout there -- seven timeouts on one engine, after the same difference had already
- * shown up as `expected '' to be 'about:srcdoc'`.
- *
- * Every wait below asks in the frame's main world through `pollFrameUntil`, for the reason that
- * module carries: a selector wait needs an isolated world the embedder cannot see fail.
- *
- * Three things still settle at their own moments: React commits the mount, the element's `srcdoc`
- * commits a document, and an override arm replaces that document with a second one. So readiness is
- * the fixture's own marker inside the frame, which exists only once the artifact has parsed there.
- *
- * `frameReady` is which of those an arm is waiting for, because the marker is not always the right
- * one. `'script'` waits for what the inline script writes: the marker element exists from parse
- * time, so an arm whose oracle is "the script ran" would otherwise read `window.__ran` before it
- * had. `'refusal'` waits for the frame's own `script-src` violation, which is queued and can land
- * after `load`. `'load'` is for the one arm whose artifact deliberately navigates the frame
- * somewhere else, where no marker is ever coming.
- */
-async function waitForLoadedFrame(page, frameReady = 'artifact', signal, browserVersion, arm) {
-  const reading = async (what) =>
-    `${what}: ${arm} | ${await describePreviewFrame(page, previewFrame(page), browserVersion)}`
-  await untilAborted(
-    pollFrameUntil(page, () => true, signal),
-    signal,
-    async () => await reading('no frame ever answered inside the page')
-  )
-  const frame = previewFrame(page)
-  if (!frame) {
-    return null
-  }
-  await frame.waitForLoadState('load').catch(() => {})
-  if (frameReady === 'script') {
-    await untilAborted(
-      pollFrameUntil(page, () => window.__ran === 1, signal),
-      signal,
-      async () => await reading("the artifact's script never ran inside the frame")
-    )
-  }
-  if (frameReady === 'refusal') {
-    // The violation is dispatched as a queued task, so its order against the frame's `load` is not
-    // guaranteed: on the runner's Chrome the list held only the blocked background image when the
-    // reading was taken, and the arm that needs the script-src entry read it before it landed. So
-    // the arm waits for its own evidence rather than hoping to be later than a task queue. A frame
-    // that was never widened never raises it at all, which is what makes this the arm's precondition
-    // and not a convenience: the wait ends in the diagnosis below rather than in a passing read.
-    await untilAborted(
-      pollFrameUntil(
-        page,
-        () => (window.__violations ?? []).some((one) => String(one).includes('script-src')),
-        signal
-      ),
-      signal,
-      async () => await reading('the frame never reported a script-src refusal')
-    )
-  }
-  if (frameReady !== 'load') {
-    await untilAborted(
-      pollFrameUntil(page, () => document.getElementById('marker') !== null, signal),
-      signal,
-      async () => await reading('the artifact never parsed inside the frame')
-    )
-  }
-  return previewFrame(page)
-}
 
 /**
  * Where an arm's counters are read: after the thing it is about, whatever that thing is.
