@@ -6,10 +6,10 @@ import {
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdShellHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsCmdShellHookCommand } from '../agent-hooks/windows-cmd-shell-hook-command'
 
 const JUNIE_SCRIPT_BASE = 'junie-hook'
 
