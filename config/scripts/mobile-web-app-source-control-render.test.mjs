@@ -24,15 +24,20 @@ import {
  *
  * The image policy is the other thing only a browser answers: that the header the shells send is
  * the one this bundle is served under, and that neither route leaves the origin for anything while
- * it paints. `img-src` is `'self' data:` and stays that way (rulings-ota-c4.md ruling 3), which is
- * why `PRCommentCard` renders its empty-avatar `View` on web rather than letting one `<Image>` per
- * comment attempt a fetch the policy refuses.
+ * it paints.
  *
- * Read what the avatar case below is and is not. No comment card renders here — the PR chain the
- * bottom of this file names is not scripted — so it says the two routes request nothing off-origin,
- * not that a rendered card skipped its avatar. The card's own branch is
- * `mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx`, which reds on the
- * platform check being removed.
+ * **The avatar skip is not proved here, and this file must not look as though it is.** `img-src` is
+ * `'self' data:` (rulings-ota-c4.md ruling 3), which is why `PRCommentCard` renders its empty-avatar
+ * `View` on web instead of letting one `<Image>` per comment attempt a fetch the policy refuses —
+ * but no comment card renders on either of these pages, because the PR chain the bottom of this file
+ * names is not scripted. An assertion here that no avatar host was requested passed with the
+ * platform check deleted, measured: 5 passed either way. It is gone rather than dressed up, and the
+ * only proof of that branch is
+ * `mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx`, which reds when the check
+ * is removed.
+ *
+ * What survives is a property of these two closures rather than of that component: nothing either
+ * route paints reaches off-origin, and nothing it paints violates the policy.
  *
  * What this file deliberately does not claim is at the bottom.
  */
@@ -69,9 +74,6 @@ const C4_GRANTS = ['navigate', 'storage', 'externalLink', 'haptics', 'native.cli
  * be the place domain behaviour is decided rather than a transport.
  */
 const REPLIES = { 'github.repoSlug': { owner: 'orca', repo: 'orca' } }
-
-/** The host a provider avatar would be fetched from, if the card still rendered one. */
-const AVATAR_HOST = 'avatars.githubusercontent.com'
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
@@ -254,13 +256,14 @@ describeRender(
         [REVIEW_ROUTE, 'reviewed']
       ]) {
         const opened = await openRoute(route, text)
-        // Chromium reports a refused subresource as a console error naming the directive, so an
-        // `<Image>` the policy blocked would land in `errors` above as well as here.
+        // Chromium reports a refused subresource as a console error naming the directive, so
+        // anything either closure loaded that the policy blocked lands here.
         expect(opened.errors.filter((entry) => entry.includes('Content Security Policy'))).toEqual(
           []
         )
-        // And nothing was even attempted: the avatar is skipped, not blocked.
-        expect(opened.requestedHosts.filter((host) => host === AVATAR_HOST)).toEqual([])
+        // Stronger than the line above and independent of it: not one request left the origin, so
+        // there is nothing for the policy to have refused. A font, a beacon or a provider image
+        // added anywhere in either closure reds this.
         expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
         await opened.page.close()
       }
@@ -277,11 +280,11 @@ describeRender(
  * needs `worktree.show`, `repo.list` and `repo.baseRefDefault` on top of `git.status` — measured on
  * this tree by driving the page with the double. Scripting that chain would put five hand-written
  * fixtures against five Zod schemas into a transport double, which is the thing the harness's own
- * docstring says it must not become. The avatar's negative half is asserted above over the whole
- * render; its positive half is the component test named in the header; the drawer's scroll handler
- * is answered by `mobile/src/components/right-drawer-scroll-handler.test.ts`, which records the two
- * static facts that make the missing dependency array unobservable here. The behavioural scroll
- * probe belongs with the device proof, which reaches a real PR.
+ * docstring says it must not become. So neither the comment avatar nor the drawer is exercised on
+ * this page at all: the avatar's branch is the component test named in the header, and the drawer's
+ * scroll handler is answered by `mobile/src/components/right-drawer-scroll-handler.test.ts`, which
+ * records the two static facts that make the missing dependency array unobservable. The behavioural
+ * scroll probe belongs with the device proof, which reaches a real PR.
  *
  * **The seams.** The external-link, clipboard and router seams this series moved are each reached
  * from a control that only renders once the screens have provider data, for the same reason. They
