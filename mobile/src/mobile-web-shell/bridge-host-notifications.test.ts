@@ -6,6 +6,7 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
   BRIDGE_HAPTICS_GRANT,
   BRIDGE_HAPTICS_KINDS,
@@ -411,5 +412,58 @@ describe('haptics', () => {
     const init = bridge.last()
     expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_HAPTICS_GRANT)
     expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_HAPTICS_NOTIFY)
+  })
+})
+
+describe('the page erasing a one-shot route param', () => {
+  /**
+   * The reader erasing its own request (ruling 34). One page-to-shell frame, carried up to
+   * whoever holds the param; the comparison is theirs, so the host forwards both values as sent.
+   */
+  it('carries a page clear up with the param and the value it named', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({
+        type: 'notify',
+        name: BRIDGE_ROUTE_PARAM_CLEAR,
+        param: 'paneKey',
+        value: 'p-1'
+      })
+    )
+    expect(bridge.routeParamClears()).toEqual([{ param: 'paneKey', value: 'p-1' }])
+  })
+
+  it('carries no clear up from a page that has not asked for a session', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(
+      clientFrame({
+        type: 'notify',
+        name: BRIDGE_ROUTE_PARAM_CLEAR,
+        param: 'paneKey',
+        value: 'p-1'
+      })
+    )
+    expect(bridge.routeParamClears()).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_ROUTE_PARAM_CLEAR, why: 'before-ready' }
+    ])
+  })
+
+  it('refuses a clear for a param the page may not erase', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: BRIDGE_ROUTE_PARAM_CLEAR, param: 'name', value: 'x' })
+    )
+    expect(bridge.routeParamClears()).toEqual([])
+    expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
+  })
+
+  it('tells the page it takes a clear, so a page built for an older shell does not post one', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.accepts).toEqual([BRIDGE_ROUTE_PARAM_CLEAR])
   })
 })

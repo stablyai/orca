@@ -266,9 +266,10 @@ describe('NativeChatMessageList spawn-group roster', () => {
       />
     )
 
-    expect(screen.queryByRole('button', { name: /1× shell/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /pwd/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
-    expect(screen.getByRole('button', { name: /1× shell/ })).toBeInTheDocument()
+    // The run header and its single row name the same command.
+    expect(screen.getAllByRole('button', { name: /pwd/ }).length).toBeGreaterThan(0)
     // Expanding must reveal the tools beside the roster, never a second copy of it.
     expect(screen.getAllByRole('button', { name: /Ran 2 subagents/ })).toHaveLength(1)
   })

@@ -22,6 +22,7 @@ import {
 } from './bridge/bridge-envelope'
 import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+import type { PageStorageForInit } from './page-storage-keys'
 
 export const ID = bridgeId(1)
 export const OTHER = bridgeId(2)
@@ -44,6 +45,10 @@ export type Harness = {
   backPops: BridgeNavigateBackOutcome[]
   storageWrites: { key: string; value: string | null }[]
   pageReadyCount: () => number
+  /** One entry per `ready` answered, saying whether its `init` reached the page. Filled as each
+   *  post settles, so a case reads it after awaiting the turn the post resolves on. */
+  /** Every clear the page asked for, in order. */
+  routeParamClears: () => readonly { param: string; value: string }[]
   routeRefusals: string[]
   pageFaults: BridgeErrorCapture[]
   frames: () => BridgeHostMessage[]
@@ -68,7 +73,7 @@ export function harness(
     onNavigateBack?: () => BridgeNavigateBackOutcome
     storage?: Readonly<Record<string, string>>
     /** For the suites that need the map to change between two `init` answers. */
-    readStorage?: () => Readonly<Record<string, string>>
+    readStorage?: () => PageStorageForInit
     onPageFault?: (error: BridgeErrorCapture) => void
     /**
      * Whether to answer a `ready` before the case runs, which is what a real page does first: the
@@ -100,6 +105,8 @@ export function harness(
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   let pageReadies = 0
+  /** One entry per `ready` answered, saying whether an `init` actually went out for it. */
+  const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
   const pageFaults: BridgeErrorCapture[] = []
   const droppedBinaryFrames: number[] = []
@@ -117,11 +124,13 @@ export function harness(
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,
     host: HOST,
-    readStorage: options.readStorage ?? (() => options.storage ?? {}),
+    readStorage:
+      options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
     onPageReady: () => {
       pageReadies += 1
     },
+    onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onNavigate: options.onNavigate ?? ((href) => navigations.push(href)),
     onExternalLink: (url) => externalLinks.push(url),
@@ -177,6 +186,7 @@ export function harness(
     backPops,
     storageWrites,
     pageReadyCount: () => pageReadies,
+    routeParamClears: () => routeParamClears,
     routeRefusals,
     pageFaults,
     frames,

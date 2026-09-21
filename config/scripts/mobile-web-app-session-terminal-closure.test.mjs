@@ -183,8 +183,48 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  * Measured, not derived: `mobile-web-app-session-dictation-capture.test.mjs` moves the web file
  * aside and walks the closure again, which puts those eight back.
+ *
+ * C7.7 registers the route and adds one more: the walk now enters through
+ * `app/h/[hostId]/session/[worktreeId].web.tsx` rather than the native switch, and reaches
+ * `src/session/MobileSessionRouteScreen.tsx` under it — the route file is one input either way and
+ * the component is the one that is new.
+ *
+ * The number below is re-measured rather than summed, which is what the reading above kept having
+ * to do: C7.7 measured 4,328 -> 4,329 against `23207bfde2` and item D measured 4,328 -> 4,323
+ * against a different base, and neither side's arithmetic survives the other. The merge with main
+ * read 4,324 modules and 982 local — one more than the 4,323 / 981 item D pinned, and that one is
+ * C7.7's route body, read out of `ROUTE_ENTRY` below by name rather than inferred.
+ *
+ * Round 1 re-measured it at 4,326 / 984. The two were named rather than counted:
+ * `notification-pane-tab.ts`, which both siblings of the pane hook read (a `.web.ts` cannot import
+ * its native neighbour by the plain path — the bundler answers with itself), and
+ * `bridge-init-route.ts`, the route half of `init` split out of an envelope that was at its line
+ * cap. The pane hook's own web sibling replaces the native file rather than joining it, so it
+ * costs nothing.
+ *
+ * Ruling 34 measures 4,330 / 988, and the four are named the same way. `bridge-frame-fields.ts`
+ * and `bridge-notify-envelope.ts` are the two halves an envelope back at its line cap was split
+ * into; the page-to-shell union in the second names the param the page may erase, which is
+ * declared beside the route-update accept, so `bridge-route-update.ts` and the
+ * `shell-screen-route.ts` it reads a route key from now enter through the envelope as well. All
+ * four are schema and string constants: the closure grew, the download did not gain a package.
+ *
+ * Main measures 4,333 at `3cfb070294`: #21924 (`2739246058`) turned `agent-session-wire.ts`'s
+ * type-only import of `agent-session-record` into a value import, so `src/shared/agent-session-record.ts`
+ * and the two it reaches, `agent-session-conversation-name.ts` and `surrogate-safe-text-slice.ts`,
+ * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
+ * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
  */
-const SESSION_ROUTE_MODULES = 4323
+const SESSION_ROUTE_MODULES = 4333
+
+/** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
+const ROUTE_ENTRY = [
+  'app/h/[hostId]/session/[worktreeId].web.tsx',
+  'src/session/MobileSessionRouteScreen.tsx',
+  // Round 1's two, named for the reading above rather than left inside the total.
+  'src/session/notification-pane-tab.ts',
+  'src/mobile-web-shell/bridge/bridge-init-route.ts'
+]
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
@@ -220,6 +260,18 @@ describeClosure(
       // document twice, once as modules and once as a string.
       expect(documentModules).not.toContain('src/terminal/document/native-document-entry.ts')
       expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
+    }, 300_000)
+
+    it('enters through the web sibling and the route body, not the switch', async () => {
+      const { local } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      for (const entry of ROUTE_ENTRY) {
+        expect(local, `${entry} is not in the closure`).toContain(entry)
+      }
+      // The switch itself is what the shell renders natively, and it reaches
+      // `MobileWebShellScreen`, whose module calls `requireNativeViewManager` at import. A closure
+      // that carried it would be a bundle that throws when the manifest imports this route.
+      expect(local).not.toContain('app/h/[hostId]/session/[worktreeId].tsx')
+      expect(local).not.toContain('src/mobile-web-shell/MobileWebShellScreen.tsx')
     }, 300_000)
 
     it('reaches the engine as one deferred module and never as part of the download', async () => {

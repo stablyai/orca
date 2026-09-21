@@ -1,3 +1,5 @@
+import { codeFenceFor } from './markdown-code-fence'
+import { escapeTableCell } from './markdown-table-rows'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { listMarkdown } from './html-list-markdown'
 
@@ -31,7 +33,8 @@ export function blockMarkdown(node: Node): string {
   if (tag === 'pre') {
     const language = node.getAttribute('data-language') ?? ''
     const code = textContent(node.querySelector('code') ?? node).replace(/\n+$/g, '')
-    return `\`\`\`${language}\n${code}\n\`\`\``
+    const fence = codeFenceFor(code)
+    return `${fence}${language}\n${code}\n${fence}`
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)
@@ -42,7 +45,7 @@ export function blockMarkdown(node: Node): string {
       return ''
     }
     const cellsFor = (row: Element) =>
-      Array.from(row.children).map((cell) => inlineChildren(cell).trim())
+      Array.from(row.children).map((cell) => escapeTableCell(inlineChildren(cell).trim()))
     const headers = cellsFor(rows[0]!)
     const bodyRows = rows.slice(1).map(cellsFor)
     const separator = headers.map(() => '---').join(' | ')

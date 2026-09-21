@@ -78,6 +78,10 @@
       "reason": "The shell renders this page for diff review, for the same reason as the source-control hub beside it: no nested shell, and a native file that reaches requireNativeViewManager at import. Shorter than its siblings because the route body is MobileDiffReviewRouteScreen, which reads its own params — the native file had to extract that anyway so the review controller does not subscribe behind the page."
     },
     {
+      "file": "app/h/[hostId]/session/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for the session screen, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. Shorter than its siblings because the route body is MobileSessionRouteScreen, which the switch also needs as an element: useMobileSessionController opens the terminal, chat and tab subscriptions, and at the switch's top level it would open them behind the page too."
+    },
+    {
       "file": "src/browser/browser-frame-layer-paint.web.ts",
       "reason": "setNativeProps does not exist on React Native Web: an Image or View ref is the DOM node itself, so both native writes throw rather than paint and the pane never shows a frame. This file writes the same two things through the element — the frame as a background-image on the child RN Web sizes, the double buffer as one opacity write per layer — so the pane still never re-renders while it streams. It also answers whenBrowserFrameDisplayable, which is a no-op natively: a background write fires no load event, so the flip to the pending layer is armed from an image decode instead of the Image's onLoad."
     },
@@ -136,6 +140,10 @@
     {
       "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
+    },
+    {
+      "file": "src/session/use-notification-pane-navigation.web.ts",
+      "reason": "The native hook reads `paneKey` off the app's route with `useLocalSearchParams` and clears it with `setParams`. Inside the page neither exists: the document is served at `/` with one history entry, so `setParams` would rewrite the page's own URL while the app's route kept the spent tap, and the pane request never reaches the page as a param at all. It arrives as a re-sent `init` for the session this page already holds (ruling 33.1), which this sibling reads off the client's standing route-update listener; the shell clears the native param once the page has been handed one."
     }
   ]
 }

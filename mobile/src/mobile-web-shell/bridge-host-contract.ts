@@ -2,10 +2,12 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
+import type { PageStorageForInit } from './page-storage-keys'
 
 /**
  * What the shell did with a `navigate-back`. Only `popped` moved the stack, and the other two are
@@ -42,6 +44,10 @@ export type BridgeHostDiagnostic =
   /** The shell asked this host to open a screen the protocol does not allow. The host serves no
    *  session at all in that state: an `init` the page refuses is worse than no `init`. */
   | { kind: 'route-refused'; issue: string }
+  /** A rewritten route this host would not hand its page: a different screen, or a shape the
+   *  page's own reader would refuse. Local only — nothing crosses, and the tap it came from is
+   *  then the lost repeat tap it was before ruling 33.1. */
+  | { kind: 'route-update-refused'; issue: string }
   /** A page subscribed with `wantsBinary` on a session whose route was never granted the lane.
    *  Local only: the subscription proceeds and its JSON events cross, so nothing crosses back and
    *  this line is the only thing that can say why the frames never became binary. */
@@ -116,7 +122,7 @@ export type BridgeHostOptions = {
    * mount: a document that reloads inside one mount has to be primed from after its own writes.
    * Synchronous, because `init` is — see `sendInit`.
    */
-  readStorage: () => Readonly<Record<string, string>>
+  readStorage: () => PageStorageForInit
   /** One allowlisted key written, or removed when the value is null. */
   onStorageWrite: (key: string, value: string | null) => void
   /**
@@ -174,6 +180,12 @@ export type BridgeHostOptions = {
    * would leave a document that never spoke looking exactly like one still starting up.
    */
   onPageReady: () => void
+  /**
+   * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
+   * the value it applied. The holder of that param compares before it clears: a tap that has moved
+   * on since leaves a newer value here, and a clear naming the older one is not for it.
+   */
+  onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /**
    * The route this shell was built with is not one the protocol allows, so no honest `init` can be
    * sent and the page will never mount. Loud on purpose: the page's own refusal is a `console.warn`

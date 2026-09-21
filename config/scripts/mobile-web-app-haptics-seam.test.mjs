@@ -18,6 +18,10 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
+  PAGE_ROUTE_MODULES,
+  pageRouteModulesCoverTheManifest
+} from './mobile-web-app-page-route-modules.mjs'
+import {
   HAPTICS_KINDS_MODULE,
   HAPTICS_NATIVE,
   HAPTICS_SEAM,
@@ -33,16 +37,8 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const read = (file) => readFileSync(join(mobileDir, file), 'utf8')
 
-/** The route module behind each declared page route, which is what a closure is read from. */
-const ROUTE_MODULES = new Map([
-  ['/h/[hostId]', 'app/h/[hostId]/index.tsx'],
-  ['/h/[hostId]/agent-history/[worktreeId]', 'app/h/[hostId]/agent-history/[worktreeId].tsx'],
-  ['/h/[hostId]/tasks', 'app/h/[hostId]/tasks.tsx'],
-  ['/h/[hostId]/files/[worktreeId]', 'app/h/[hostId]/files/[worktreeId].tsx'],
-  ['/h/[hostId]/files/preview/[worktreeId]', 'app/h/[hostId]/files/preview/[worktreeId].tsx'],
-  ['/h/[hostId]/source-control/[worktreeId]', 'app/h/[hostId]/source-control/[worktreeId].tsx'],
-  ['/h/[hostId]/review/[worktreeId]', 'app/h/[hostId]/review/[worktreeId].tsx']
-])
+/** The route module behind each declared page route, shared with the screencast-lane census. */
+const ROUTE_MODULES = PAGE_ROUTE_MODULES
 
 const HAPTICS_GRANT = 'haptics'
 
@@ -269,10 +265,9 @@ describeClosure(
     })
 
     it('covers every declared page route, so a new one cannot be missed by this file', () => {
-      // The map above is a hand list of route modules; this is what holds it to the declarations.
-      expect([...ROUTE_MODULES.keys()].sort()).toEqual(
-        MOBILE_WEB_PAGE_ROUTES.map((route) => route.pathname).sort()
-      )
+      // The shared map is a hand list of route modules; this is what holds it to the declarations.
+      const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
+      expect(mapped).toEqual(declared)
     })
 
     /**

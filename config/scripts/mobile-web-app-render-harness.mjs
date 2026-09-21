@@ -79,13 +79,16 @@ export async function readShellDocumentHeaders() {
  * bumped `v` would otherwise reach a test as a 30s timeout naming nothing.
  */
 export async function readBridgeProtocolVersion() {
+  // The module that declares it, which is the one both halves of the envelope import: the envelope
+  // re-exports the name, so a reader keyed on the re-export would answer for whichever file the
+  // last split left it in.
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
   if (!match) {
-    throw new Error('could not read BRIDGE_PROTOCOL_VERSION')
+    throw new Error('could not read BRIDGE_PROTOCOL_VERSION from bridge-frame-fields.ts')
   }
   return Number(match[1])
 }
@@ -163,12 +166,12 @@ export async function readBrowserFrameQuality() {
 /** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
   if (!match) {
-    throw new Error('could not read BRIDGE_FAULT_GRANT')
+    throw new Error('could not read BRIDGE_FAULT_GRANT from bridge-frame-fields.ts')
   }
   return match[1]
 }

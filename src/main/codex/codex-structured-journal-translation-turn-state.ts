@@ -57,6 +57,12 @@ export class CodexJournalActiveTurns {
     return [...(this.byThread.get(threadId) ?? [])].at(-1) ?? null
   }
 
+  /** Whether this turn is still open here. A terminal row already written carries
+   *  the turn's start and duration, so a later end must not overwrite it. */
+  isActive(threadId: string, turnId: string): boolean {
+    return this.byThread.get(threadId)?.has(turnId) === true
+  }
+
   startedAt(threadId: string, turnId: string): number | undefined {
     return this.startedAtByTurn.get(this.turnKey(threadId, turnId))
   }

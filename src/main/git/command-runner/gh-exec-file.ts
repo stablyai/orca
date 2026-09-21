@@ -106,6 +106,15 @@ export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  const { stdout, stderr } = await ghExecFileWithScopeAsync(args, options)
+  return { stdout, stderr }
+}
+
+/** Includes the successful runtime's breaker scope after any host/WSL fallback. */
+export async function ghExecFileWithScopeAsync(
+  args: string[],
+  options: GhExecOptions = {}
+): Promise<{ stdout: string; stderr: string; rateLimitScope: string }> {
   // Why: retry safety must reflect the original call even when fallbacks replace the resolved command.
   const idempotent = options.idempotent ?? argsLookIdempotent(args)
   // Why: legacy github.com ownerRepos omit `host`; bound calls still need a pinned
@@ -190,7 +199,13 @@ export async function ghExecFileAsync(
         },
         resolved.termination
       )
-      return { stdout: stdout as string, stderr: stderr as string }
+      return {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Capture decodes stdout with the requested string encoding above.
+        stdout: stdout as string,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Capture decodes stderr with the requested string encoding above.
+        stderr: stderr as string,
+        rateLimitScope: ghRateLimitScope(args, options, resolved)
+      }
     } catch (err) {
       lastError = err
       if (isGhBoundAccountError(err)) {

@@ -4,10 +4,11 @@
  *
  * A census rather than a hand list, because a grant row written by hand is a row that stops
  * agreeing with the closure the moment a screen moves: the rule below reads what each registered
- * page route actually reaches and holds its `grants` to it. Vacuous today — the session route is
- * the only closure that reaches the seam and `MOBILE_WEB_PAGE_ROUTES` does not carry it yet (C7.7
- * registers it) — so the control beside it applies the same rule to the session route module and
- * shows the rule failing without the four names.
+ * page route actually reaches and holds its `grants` to it. It was vacuous when it was written —
+ * the session route is the only closure that reaches the seam and the manifest did not carry it —
+ * and C7.7 registers that route, so the rule now binds a real entry and the four names in it were
+ * taken from this census rather than copied. The control beside it stays: it is what shows the
+ * rule failing, which a green rule over a satisfied manifest cannot.
  *
  * The closure also says what the seam took out of the page. Without its web half the bundler
  * resolves the native one, and the vendored `@orca/expo-two-way-audio` web stub lands in the
@@ -141,17 +142,17 @@ describeClosure(
           reaching.push(route.pathname)
         }
       }
-      // None today: dictation lives on the session screen, and that route is not registered yet.
-      // Which is why the rule above passes without a grant row moving, and why the control below
-      // is what proves the rule can fail at all.
-      expect(reaching).toEqual([])
+      // One, now that C7.7 registers it: dictation lives on the session screen and nowhere else,
+      // so this is both the list and the reason no other route carries an audio grant. The control
+      // below is still what proves the rule can fail at all.
+      expect(reaching).toEqual([SESSION_PATHNAME])
       const session = await closureOf(SESSION)
       expect(session.local).toContain(SEAM)
     })
 
     it('reds the same rule when the session route is registered without them', async () => {
-      // The control for the rule above, which is vacuous until C7.7 registers this route: the same
-      // loop, driven over the entry C7.7 would write if it copied its neighbours' grants.
+      // The control for the rule above: the same loop, driven over the entry C7.7 would have
+      // written if it had copied its neighbours' grants instead of reading this census.
       expect(
         await grantsMissingForRoutes([
           { pathname: SESSION_PATHNAME, grants: ['navigate', 'storage'] }
@@ -212,7 +213,8 @@ describe('the census rule itself', () => {
       'app/h/[hostId]/files/[worktreeId].tsx',
       'app/h/[hostId]/files/preview/[worktreeId].tsx',
       'app/h/[hostId]/source-control/[worktreeId].tsx',
-      'app/h/[hostId]/review/[worktreeId].tsx'
+      'app/h/[hostId]/review/[worktreeId].tsx',
+      'app/h/[hostId]/session/[worktreeId].tsx'
     ])
   })
 

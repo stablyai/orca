@@ -29,6 +29,7 @@ import {
 } from './claude-turn-opening'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 
@@ -224,6 +225,15 @@ export function createClaudeJournalTranslator(
           )
         }
         publishActivity(kind, event.message)
+        // The CLI's own turn-over signal, and the only end a turn stopped by a
+        // fault with no result frame ever gets. Reopen stays allowed: output
+        // after an idle belongs to a turn, and suppressing it would read as
+        // idle while the agent works.
+        if (claudeSessionStateEndsTurn(event.message)) {
+          subagents.settleTurn(turn.groupKey)
+          // No verdict: the CLI said the turn is over, not how it ended.
+          turn.settle({ state: 'completed', completedAt: event.observedAt ?? Date.now() })
+        }
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
         publishActivity(event.kind, event.payload)

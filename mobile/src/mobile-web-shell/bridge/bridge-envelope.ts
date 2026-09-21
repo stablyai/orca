@@ -2,8 +2,19 @@ import { z } from 'zod'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
-import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
+import { BridgeNotifySchema } from './bridge-notify-envelope'
+import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
+
+export {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_FOREGROUND_NUDGE_REASONS,
+  BRIDGE_ID_PATTERN,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
+  BRIDGE_PROTOCOL_VERSION
+} from './bridge-frame-fields'
 import {
   isPageStorageKey,
   PAGE_STORAGE_MAX_ENTRIES,
@@ -11,53 +22,16 @@ import {
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
 import {
-  BRIDGE_MAX_METHOD_CHARS,
+  BRIDGE_MAX_PAGE_ACCEPT_CHARS,
+  BRIDGE_MAX_PAGE_ACCEPTS,
   BRIDGE_MAX_PAGE_ROUTES,
   BRIDGE_MAX_REPLY_PARTS,
-  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
-  BRIDGE_MAX_ROUTE_HREF_CHARS,
-  BRIDGE_MAX_ROUTE_PARAM_CHARS,
-  BRIDGE_MAX_ROUTE_PARAMS,
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
-  BRIDGE_MAX_VIEWPORT_COLS,
-  BRIDGE_MAX_VIEWPORT_ROWS,
   BRIDGE_MAX_HOST_FIELD_CHARS,
-  BRIDGE_ROUTE_HREF_PATTERN,
-  BRIDGE_ROUTE_PATHNAME_PATTERN,
-  isBridgeExternalLinkUrl,
   parseBridgeMessage,
   type BridgeDirection,
   type BridgeRead
 } from './bridge-caps'
-
-/**
- * Every message the page and the shell exchange, in both directions.
- *
- * `v` gates envelope shape and nothing else: capability is gated by `init.grants`, so a shell that
- * learns a new native grant never bumps it. Unknown keys are dropped rather than refused, because
- * the page bundle is served by a desktop that updates independently of the installed shell, and an
- * additive field must not take a working pair offline. The rule, in one line: `v` gates
- * incompatible shape; additive fields never bump `v`.
- *
- * A new member of a closed list is NOT an additive field. `end.reason`, `binary.format`,
- * `connection.state` and the foreground reasons are enumerated here, so a value outside the list
- * takes the whole frame down as `unrecognised-message` on the older side. Adding one is a
- * compatibility change: it has to be negotiated, the way a new opcode is, not shipped on the
- * strength of the reader dropping what it does not know.
- *
- * The two readers differ in more than their schema: the page's traffic is held to the document
- * caps, the shell's answers are not. `parseBridgeMessage` documents why.
- */
-export const BRIDGE_PROTOCOL_VERSION = 1
-
-/** Correlation ids are minted by whichever side opens the exchange; 22 chars is 128 bits of base64url. */
-export const BRIDGE_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/
-
-const versionSchema = z.literal(BRIDGE_PROTOCOL_VERSION)
-const idSchema = z.string().regex(BRIDGE_ID_PATTERN)
-// Length only: the desktop's mobile-scope allowlist decides which names exist, and a charset guess
-// here would refuse a method that allowlist already permits.
-const methodSchema = z.string().min(1).max(BRIDGE_MAX_METHOD_CHARS)
 
 /** Closed against `ConnectionState`; the pin lives in this module's test. */
 export const BRIDGE_CONNECTION_STATES = [
@@ -71,9 +45,6 @@ export const BRIDGE_CONNECTION_STATES = [
 
 /** Closed against `BrowserScreencastFormat`; the pin lives in this module's test. */
 export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
-
-/** Closed against `ForegroundNudgeReason`; the pin lives in this module's test. */
-export const BRIDGE_FOREGROUND_NUDGE_REASONS = ['focus', 'app-resume', 'network-change'] as const
 
 /**
  * What the page's synchronous `RpcClient` getters read. It travels whole rather than as deltas so a
@@ -102,33 +73,9 @@ export const BridgeGrantsSchema = z.object({
 
 export type BridgeGrants = z.infer<typeof BridgeGrantsSchema>
 
-/**
- * Which screen the shell opened this page for.
- *
- * Additive, and optional for that reason: a shell built before C1.2 sends no `route`, and the page
- * says so rather than painting expo-router's Unmatched screen. It has to cross, because the
- * document is served at `/` and refuses every other path, so the page's own location matches no
- * route in the tree it carries and there is nothing else to derive the screen from.
- *
- * `params` is the search half, kept out of `pathname` so neither side has to parse a URL: the page
- * builds one, once, and writes it into its history before the first render.
- */
-export const BridgeInitRouteSchema = z.object({
-  pathname: z
-    .string()
-    .min(1)
-    .max(BRIDGE_MAX_ROUTE_PATHNAME_CHARS)
-    .regex(BRIDGE_ROUTE_PATHNAME_PATTERN),
-  params: z
-    .record(
-      z.string().min(1).max(BRIDGE_MAX_ROUTE_PARAM_CHARS),
-      z.string().max(BRIDGE_MAX_ROUTE_PARAM_CHARS)
-    )
-    .refine((params) => Object.keys(params).length <= BRIDGE_MAX_ROUTE_PARAMS)
-    .optional()
-})
-
-export type BridgeInitRoute = z.infer<typeof BridgeInitRouteSchema>
+// The route half of `init`, in its own module; re-exported so the envelope stays one import for
+// everything that reads a bridge frame.
+export { BridgeInitRouteSchema, type BridgeInitRoute }
 
 /**
  * The host the shell opened this page for, minus everything secret about it.
@@ -154,36 +101,6 @@ export const BridgeInitStorageSchema = z
     z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS)
   )
   .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
-
-/**
- * The one grant negotiated for the protocol itself rather than for a screen: the shell saying it
- * will act on a `fault` report.
- *
- * It exists because `notify` is a closed list on both sides. A page served by a newer desktop into
- * an older shell that posted an unknown name would have the whole frame refused as
- * `unrecognised-message`, so the page asks first and stays quiet when the answer is no.
- */
-export const BRIDGE_FAULT_GRANT = 'fault'
-
-/**
- * The `navigate` grant's second verb, and the first notify whose name is not its grant's.
- *
- * The page is served at `/` with one history entry written by `replaceState`, so its own Back goes
- * nowhere: the only stack to pop is the native one the shell pushed the page onto. It rides
- * `navigate` rather than a name of its own because an app that can open a screen can close one, and
- * a new grant name would leave every route that declares it native on every shell already shipped.
- */
-export const BRIDGE_NAVIGATE_BACK_NOTIFY = 'navigate-back'
-
-/**
- * The grant a page needs before the shell will open anything outside it.
- *
- * Its own name rather than a verb of `navigate`, because it is a different capability: `navigate`
- * opens a screen this app carries, and this hands a URL to whatever the device opens it with. A
- * shell that implements one and not the other is a real shell, and the route policy has to be able
- * to say so.
- */
-export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
 
 /** Pinned against `SendRequestOptions` in this module's test. */
 export const BridgeSendRequestOptionsSchema = z.object({
@@ -231,7 +148,23 @@ const replyPartSchema = z.object({
 })
 
 const BridgeClientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ v: versionSchema, type: z.literal('ready') }),
+  z.object({
+    v: versionSchema,
+    type: z.literal('ready'),
+    /**
+     * What this page can be sent beyond its first `init`; the names and why live in
+     * `bridge-route-update.ts`, which is the only one there is.
+     *
+     * Optional, and safe in both directions without a version bump: a page that sends none is
+     * never sent a second `init`, and a shell that reads none never sends one. An unknown name is
+     * accepted by the schema and ignored by the shell, which is what a newer page declaring a
+     * capability this shell has never implemented has to look like.
+     */
+    accepts: z
+      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
+      .max(BRIDGE_MAX_PAGE_ACCEPTS)
+      .optional()
+  }),
   z.object({
     v: versionSchema,
     type: z.literal('request'),
@@ -262,66 +195,7 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     id: idSchema,
     seq: z.number().int().nonnegative()
   }),
-  z.discriminatedUnion('name', [
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal('foreground'),
-      reason: z.enum(BRIDGE_FOREGROUND_NUDGE_REASONS).optional()
-    }),
-    // Behind the `navigate` grant, and that is not a convention: this union is closed, so an older
-    // shell refuses the whole frame as `unrecognised-message`. The page checks `grants.native`
-    // before it posts, which is what a grant is for.
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal('navigate'),
-      href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
-    }),
-    // Behind the same `navigate` grant, and carrying no target: the shell pops what it pushed, and
-    // a page naming where to go back to would be naming a screen it cannot see.
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal(BRIDGE_NAVIGATE_BACK_NOTIFY)
-    }),
-    // Behind the `externalLink` grant. The URL is held to the same three schemes on both sides: the
-    // page refuses at the call site so a tap knows it went nowhere, and this refuses the frame so a
-    // page that did not check is still held to it.
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal(BRIDGE_EXTERNAL_LINK_GRANT),
-      url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS).refine(isBridgeExternalLinkUrl)
-    }),
-    // Behind the `storage` grant, for the same reason `navigate` is behind its own.
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal('storage'),
-      key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
-      /** Null removes it, which is what `AsyncStorage.removeItem` does. */
-      value: z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS).nullable()
-    }),
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal('terminalViewport'),
-      terminal: z.string().min(1),
-      cols: z.number().int().min(1).max(BRIDGE_MAX_VIEWPORT_COLS),
-      rows: z.number().int().min(1).max(BRIDGE_MAX_VIEWPORT_ROWS)
-    }),
-    z.object({
-      v: versionSchema,
-      type: z.literal('notify'),
-      name: z.literal(BRIDGE_FAULT_GRANT),
-      /** The capture an `error` frame already carries, so both directions share one bound and one
-       *  reader. Nothing is owed back: the page is telling the shell, not asking it. */
-      error: BridgeErrorCaptureSchema
-    }),
-    // Behind the `haptics` grant, and the fields are its own module's for the reason stated there.
-    z.object({ v: versionSchema, ...BRIDGE_HAPTICS_NOTIFY_FIELDS })
-  ]),
+  BridgeNotifySchema,
   z.object({ v: versionSchema, type: z.literal('close') })
 ])
 
@@ -392,6 +266,22 @@ const BridgeHostMessageSchema = z.union([
     route: BridgeInitRouteSchema.optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
+    /**
+     * The allowlisted keys the shell holds a value for that `storage` could not carry, because the
+     * app's value is over the page's own cap (ruling 33.6).
+     *
+     * Advisory, not the enforcement. The shell refuses a write to one of these on its own side
+     * too, because a page served from an older desktop bundle ignores this field entirely and
+     * would still replace what the device holds; this is the page's fast path, so a write it can
+     * refuse locally rejects without a round trip and reaches its caller as `too-large`.
+     *
+     * Optional and additive: an older shell sends none and an older page ignores it. Bounded by
+     * the same count as the storage record, since it names a subset of the same keys.
+     */
+    storageOversize: z
+      .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey))
+      .max(PAGE_STORAGE_MAX_ENTRIES)
+      .optional(),
     /** Every route pattern the shell would render from the page. The page keeps a navigation into
      *  one of them and hands the rest back, which is the only thing that tells it which is which. */
     pageRoutes: z
@@ -410,7 +300,19 @@ const BridgeHostMessageSchema = z.union([
      * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
      * bundle could not have declared cannot arrive here either.
      */
-    pageRouteGrants: BridgePageRouteGrantsSchema.optional()
+    pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
+    /**
+     * What this shell accepts from the page beyond the frames every shell has always taken, which
+     * today is `BRIDGE_ROUTE_PARAM_CLEAR` and nothing else.
+     *
+     * The mirror of `ready.accepts`, and optional for the same reason: a shell that sends none is
+     * never posted a clear, and a page that reads none never posts one. An unknown name is a
+     * capability this page has never heard of and is ignored.
+     */
+    accepts: z
+      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
+      .max(BRIDGE_MAX_PAGE_ACCEPTS)
+      .optional()
   })
 ])
 

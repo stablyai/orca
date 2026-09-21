@@ -6,6 +6,7 @@ import type {
 import { useHostClient } from '../transport/client-context'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
@@ -13,6 +14,7 @@ import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
+import type { PageStorageForInit } from './page-storage-keys'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -46,6 +48,11 @@ export type MobileWebShellBridgeView = {
   readonly bridgeEnabled: boolean
   readonly viewRef: (handle: OrcaMobileWebShellViewHandle | null) => void
   readonly onBridgeMessage: (event: MobileWebShellBridgeMessageEvent) => void
+  /**
+   * Hands the mounted host a rewritten route for the screen it is already serving. Dropped when
+   * there is no host yet; the route the host is built from carries it instead.
+   */
+  readonly publishRoute: (route: BridgeInitRoute) => void
 }
 
 /**
@@ -83,12 +90,14 @@ export function useMobileWebShellBridge(args: {
    */
   snapshot: PageHostSnapshot | null
   /** The allowlisted keys as the app holds them, asked for on each `init` rather than at mount. */
-  readStorage: () => Readonly<Record<string, string>>
+  readStorage: () => PageStorageForInit
   onStorageWrite: (key: string, value: string | null) => void
   /** The page could not render the generation on screen. Reported, never recovered from here. */
   onPageFault: (error: BridgeErrorCapture) => void
   /** The page asked for a session. Reported so the screen can stop waiting for it. */
   onPageReady: () => void
+  /** The page applied a one-shot route param and asks for it to be erased (ruling 34). */
+  onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /** This shell named a screen the protocol does not allow, so no session is served. */
   onRouteRefused: (issue: string) => void
   /** Every screencast frame this host has dropped, so the shell can show the running total. */
@@ -100,9 +109,15 @@ export function useMobileWebShellBridge(args: {
   const buildId = ready?.buildId ?? null
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
-  // Fixed for the life of one host: the page routes once, before its first render, so a route that
-  // changed afterwards would have nothing left to change. Held in a ref for that reason — an inline
-  // object in the deps would rebuild the host on every render and settle its pendings each time.
+  // Held in a ref rather than in the deps: an inline object there would rebuild the host on every
+  // render and settle its pendings each time. The host reads this once, when it is built.
+  //
+  // It is not the whole story any more (ruling 33.1). A same-path param change used to be
+  // unreachable — the page routes once, before its first render, so a route that changed
+  // afterwards had nothing left to change, and every switch keyed on the whole route to make one
+  // a remount. The session switch does not: a notification tap for another pane of the session on
+  // screen is a tab switch, so it keeps `paneKey` out of its key and hands the change to
+  // `publishRoute` below, which re-sends `init` to a page that said it takes one.
   const routeRef = useRef(args.route)
   const pageRoutesRef = useRef(args.pageRoutes)
   const pageRouteGrantsRef = useRef(args.pageRouteGrants)
@@ -120,6 +135,7 @@ export function useMobileWebShellBridge(args: {
   const readStorageRef = useRef(args.readStorage)
   const pageFaultRef = useRef(args.onPageFault)
   const pageReadyRef = useRef(args.onPageReady)
+  const routeParamClearRef = useRef(args.onRouteParamClear)
   const routeRefusedRef = useRef(args.onRouteRefused)
   const binaryFramesDroppedRef = useRef(args.onBinaryFramesDropped)
   // Commit-phase and declared above the host's effect, so the host is built against what this
@@ -138,6 +154,7 @@ export function useMobileWebShellBridge(args: {
     readStorageRef.current = args.readStorage
     pageFaultRef.current = args.onPageFault
     pageReadyRef.current = args.onPageReady
+    routeParamClearRef.current = args.onRouteParamClear
     routeRefusedRef.current = args.onRouteRefused
     binaryFramesDroppedRef.current = args.onBinaryFramesDropped
   }, [
@@ -149,6 +166,7 @@ export function useMobileWebShellBridge(args: {
     args.onNavigateBack,
     args.onPageFault,
     args.onPageReady,
+    args.onRouteParamClear,
     args.onRouteRefused,
     args.onStorageWrite,
     args.readStorage,
@@ -180,6 +198,9 @@ export function useMobileWebShellBridge(args: {
       onPageReady: () => {
         establishedSessionRef.current = sessionId
         pageReadyRef.current()
+      },
+      onRouteParamClear: (param, value) => {
+        routeParamClearRef.current(param, value)
       },
       onRouteRefused: (issue) => {
         routeRefusedRef.current(issue)
@@ -239,6 +260,22 @@ export function useMobileWebShellBridge(args: {
         mounted.host.receive(event.nativeEvent.json)
       },
       [sessionId]
+    ),
+    // Fenced on the session the same way inbound frames are: a host left over from a session this
+    // render has moved past must not be handed this one's route.
+    //
+    // Keyed on everything the host is built from, not on the session alone: a caller that holds a
+    // route the host was not there to take retries when this identity changes, and the host's own
+    // effect is a layout effect, so by the time a passive effect sees the new identity the host
+    // behind it exists.
+    publishRoute: useCallback(
+      (route: BridgeInitRoute) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishRoute(route)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
     )
   }
 }

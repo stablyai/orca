@@ -14,13 +14,27 @@ import {
 } from './native-chat-payload-reader'
 
 /** Test-only provider: the reader is a fixed test double, never rebuilt per render. */
-function WithReader({ reader, children }: { reader: NativeChatPayloadReader; children: ReactNode }) {
+function WithReader({
+  reader,
+  children
+}: {
+  reader: NativeChatPayloadReader
+  children: ReactNode
+}) {
   return (
-    <NativeChatPayloadReaderContext.Provider value={reader}>{children}</NativeChatPayloadReaderContext.Provider>
+    <NativeChatPayloadReaderContext.Provider value={reader}>
+      {children}
+    </NativeChatPayloadReaderContext.Provider>
   )
 }
 
 afterEach(cleanup)
+
+/** The run pairs a result into its call's line, so the row carrying the clipped
+ *  output is the call itself — there is no `Result` row of its own to open. */
+function openPairedToolLine(): void {
+  fireEvent.click(screen.getByText('Bash'))
+}
 
 const digest = 'a'.repeat(64)
 const full = `${'line\n'.repeat(400)}CONSTRAINT-C after the head\nEND OF ARTIFACT`
@@ -50,11 +64,13 @@ describe('NativeChatFullContentButton', () => {
         <NativeChatToolRun blocks={clippedBlocks(true)} expandSignal={false} expandOverride />
       </WithReader>
     )
-    fireEvent.click(screen.getByText('Result'))
+    openPairedToolLine()
     const button = await screen.findByRole('button', { name: 'Show full content' })
     fireEvent.click(button)
     await waitFor(() =>
-      expect(screen.getByTestId('native-chat-full-content')).toHaveTextContent('CONSTRAINT-C after the head')
+      expect(screen.getByTestId('native-chat-full-content')).toHaveTextContent(
+        'CONSTRAINT-C after the head'
+      )
     )
     expect(reader.readFullPayload).toHaveBeenCalledTimes(1)
   })
@@ -103,7 +119,7 @@ describe('NativeChatFullContentButton', () => {
         <NativeChatToolRun blocks={clippedBlocks(true)} expandSignal={false} expandOverride />
       </WithReader>
     )
-    fireEvent.click(screen.getByText('Result'))
+    openPairedToolLine()
     fireEvent.click(await screen.findByRole('button', { name: 'Show full content' }))
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('payload_integrity_failed')
@@ -128,7 +144,7 @@ describe('NativeChatFullContentButton', () => {
         <NativeChatToolRun blocks={clippedBlocks(true)} expandSignal={false} expandOverride />
       </WithReader>
     )
-    fireEvent.click(screen.getByText('Result'))
+    openPairedToolLine()
     const button = await screen.findByRole('button', { name: 'Show full content' })
     fireEvent.click(button)
     // The host's own code, not the prose message it came with.
@@ -148,11 +164,11 @@ describe('NativeChatFullContentButton', () => {
         <NativeChatToolRun blocks={clippedBlocks(false)} expandSignal={false} expandOverride />
       </WithReader>
     )
-    fireEvent.click(screen.getByText('Result'))
+    openPairedToolLine()
     expect(screen.queryByRole('button', { name: 'Show full content' })).toBeNull()
     unmount()
     render(<NativeChatToolRun blocks={clippedBlocks(true)} expandSignal={false} expandOverride />)
-    fireEvent.click(screen.getByText('Result'))
+    openPairedToolLine()
     expect(screen.queryByRole('button', { name: 'Show full content' })).toBeNull()
   })
 })

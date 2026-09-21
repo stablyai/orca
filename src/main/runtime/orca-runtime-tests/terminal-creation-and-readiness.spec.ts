@@ -263,11 +263,6 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-    expect(
-      runtime.getAgentStatusLaunchConfigForPaneKey(spawnEnv.ORCA_PANE_KEY, {
-        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-      })
-    ).toBeDefined()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
     ])
@@ -276,11 +271,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
-    expect(
-      runtime.getAgentStatusLaunchConfigForPaneKey(spawnEnv.ORCA_PANE_KEY, {
-        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-      })
-    ).toBeUndefined()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })
     ])

@@ -146,12 +146,13 @@ function Harness(props: {
       return 'popped'
     },
     snapshot: SNAPSHOT,
-    readStorage: () => STORAGE,
+    readStorage: () => ({ storage: STORAGE, storageOversize: [] }),
     onStorageWrite: (key, value) => props.probe.storageWrites.push({ key, value }),
     // A fresh closure every render, which is the shape a screen passes and the one a ref must
     // absorb: rebuilding the host here would settle every pending request on each render.
     onPageFault: (error) => props.faults.push(error),
     onRouteRefused: () => {},
+    onRouteParamClear: () => {},
     onBinaryFramesDropped: (total) => props.probe.droppedBinaryFrames.push(total),
     onPageReady: () => {
       props.readies.push(

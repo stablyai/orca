@@ -28,6 +28,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
+export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -225,7 +226,9 @@ export function createClaudeStructuredLaunchResolver(
             platform: process.platform
           }
         ),
-        ...(overlay ? cloneDefinedEnv(overlay) : {})
+        ...(overlay ? cloneDefinedEnv(overlay) : {}),
+        // The turn translator relies on Claude's authoritative idle frame when no result arrives.
+        [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
       }),
       { platform: process.platform }
     )

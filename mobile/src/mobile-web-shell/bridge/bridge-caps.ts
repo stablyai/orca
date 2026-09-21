@@ -137,6 +137,16 @@ export function isBridgeExternalLinkUrl(url: string): boolean {
   return readBridgeExternalLinkUrl(url) !== null
 }
 export const BRIDGE_MAX_PAGE_ROUTES = 64
+
+/**
+ * What a page may say it can be sent, bounded the way every other list on the envelope is.
+ *
+ * A frame bound and not a vocabulary: the shell acts on the names it knows and ignores the rest,
+ * which is what lets a newer page declare one an older shell has never heard of.
+ */
+export const BRIDGE_MAX_PAGE_ACCEPTS = 16
+export const BRIDGE_MAX_PAGE_ACCEPT_CHARS = 64
+
 /** A host id, its name and its endpoint. Bounded because the page renders all three. */
 export const BRIDGE_MAX_HOST_FIELD_CHARS = 1024
 

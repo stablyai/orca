@@ -1,4 +1,3 @@
-import { emitChange } from './editor-content'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
 
@@ -87,6 +86,8 @@ export function restoreSelectionOrEnd(scope: RichMarkdownEditorScope) {
  *
  * `surroundContents` refuses a range that crosses an element boundary, and the fallback extracts
  * and reinserts instead, which is the same result for every selection the toolbar can produce.
+ *
+ * Emits nothing: `runCommand` is the only caller's caller and reports the change itself.
  */
 export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   restoreSelectionOrEnd(scope)
@@ -107,5 +108,4 @@ export function wrapSelection(scope: RichMarkdownEditorScope, tagName: string) {
   }
   selection.removeAllRanges()
   selection.selectAllChildren(wrapper)
-  emitChange(scope)
 }

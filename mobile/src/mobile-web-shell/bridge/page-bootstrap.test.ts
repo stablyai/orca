@@ -153,9 +153,12 @@ describe('the page bootstrap inside the shell', () => {
       refuseUnroutedShell: () => {}
     })
 
+    // The throw does not leave the delivery (ruling 34 addendum): on iOS that would reject the
+    // host's post for an `init` the page had already taken, and the shell tracks nothing about
+    // posts, so nothing would ever send it again. The stamp is what a device log reads instead.
     expect(() => {
       channel.deliver(INIT)
-    }).toThrow('the route tree threw')
+    }).not.toThrow()
     expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBe('shell-ready')
   })
 

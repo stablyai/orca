@@ -40,3 +40,11 @@ export function readStructuredSessionPayload(
     maxLimit: params.maxLimit ?? AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT
   })
 }
+
+/** The host facade's `readPayload`, bound lazily so it reads the deps the host was
+ *  constructed with rather than pulling the payload shapes into that file. */
+export function structuredAgentSessionPayloadReader(
+  deps: () => PayloadReadDeps
+): (params: StructuredAgentSessionPayloadReadParams) => JournalPayloadRange {
+  return (params) => readStructuredSessionPayload(deps(), params)
+}

@@ -1,9 +1,5 @@
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
-import type { JournalPayloadRange } from '../agent-session-journal/journal-payload-store'
-import {
-  readStructuredSessionPayload,
-  type StructuredAgentSessionPayloadReadParams
-} from './structured-agent-session-payload-read'
+import { structuredAgentSessionPayloadReader } from './structured-agent-session-payload-read'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
@@ -40,7 +36,8 @@ import { listStructuredAgentSessionTabs } from './structured-agent-session-host-
 import {
   structuredAgentSessionMutationDelegates,
   settleStructuredAgentSessionLateDispatch,
-  type StructuredAgentSessionMutationContext
+  type StructuredAgentSessionMutationContext,
+  releaseStructuredAgentSessionUnansweredDispatches
 } from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
@@ -49,7 +46,6 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -313,8 +309,7 @@ export class StructuredAgentSessionHost {
   })
 
   /** Exact bytes of a retained bounded payload this session's own journal references. */
-  readPayload = (params: StructuredAgentSessionPayloadReadParams): JournalPayloadRange =>
-    readStructuredSessionPayload(this.deps, params)
+  readPayload = structuredAgentSessionPayloadReader(() => this.deps)
 
   async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)
@@ -337,13 +332,19 @@ export class StructuredAgentSessionHost {
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
     settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)
 
+  releaseUnansweredDispatches = (
+    input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
+  ) => releaseStructuredAgentSessionUnansweredDispatches(this.mutationContext(), input)
+
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
     this.backgroundTasks.publish(...args)
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
-  subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
-    this.clientDelivery.subscribeStatus(subscriber)
+  subscribeStatus = this.clientDelivery.subscribeStatus
+
+  /** Turns that settle from now on. Live-only: nothing missed is replayed. */
+  subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)

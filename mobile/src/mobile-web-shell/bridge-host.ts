@@ -10,19 +10,20 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
-  BridgeInitRouteSchema,
   readBridgeClientMessage,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeHostMessage
+  type BridgeInitRoute
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
-import { captureBridgeError } from './bridge/bridge-error-capture'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
-import { isPageStorageKeyForHost } from './page-storage-keys'
+import { pageMayWriteStorageKey } from './page-storage-keys'
+import { createBridgeHostFrames } from './bridge-host-frames'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { createBridgeHostRoute } from './bridge-host-route'
 import type { BridgeHostOptions } from './bridge-host-contract'
 
 // Re-exported so a caller reaches the host and what it reports through one module.
@@ -32,6 +33,19 @@ type NotifyMessage = Extract<BridgeClientMessage, { type: 'notify' }>
 
 export type BridgeHost = {
   receive: (json: string) => void
+  /**
+   * Hands this session a rewritten route: same screen, different params (ruling 33.1).
+   *
+   * The held route moves either way, so a page that reloads inside this mount is told the newest
+   * one; the frame goes out only to a page that declared `BRIDGE_ROUTE_UPDATE_ACCEPT`, because a
+   * page too old to name it reads a second `init` as a replacement. A different pathname is a
+   * different screen and is refused here — that is a remount, which is what the shell already does.
+   *
+   * Answers nothing, and nothing is tracked (ruling 34): a frame the view refused is repaired by
+   * the next `init`, and the request it carried is spent by the page, which erases the param it
+   * applied.
+   */
+  publishRoute: (next: BridgeInitRoute) => void
   dispose: () => void
 }
 
@@ -47,11 +61,6 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
   // The protocol's own grant rides with every session; the rest is what this route asked for.
   const granted: readonly string[] = [BRIDGE_FAULT_GRANT, ...options.routeGrants]
-  // Parsed here, once, against the same schema the page reads it with. The producer interpolates a
-  // host id into a pathname, so a host id carrying `?`, `#`, whitespace or a dot segment reaches
-  // the wire as a route no page will accept; without this the page refuses the whole `init`, asks
-  // again on its backoff forever, and the shell un-hides a WebView that will never paint.
-  const parsedRoute = BridgeInitRouteSchema.safeParse(options.route)
   // Checked here for the reason the route is: a pair the page's reader would refuse takes the whole
   // `init` with it, and a session that never gets one is worse than one that never starts.
   const parsedRouteGrants =
@@ -62,7 +71,14 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     parsedRouteGrants !== null && !parsedRouteGrants.success
       ? (parsedRouteGrants.error.issues[0]?.message ?? 'unknown')
       : null
-  const route = parsedRoute.success && routeGrantsIssue === null ? parsedRoute.data : null
+  const routes = createBridgeHostRoute({
+    opened: options.route,
+    refused: routeGrantsIssue !== null,
+    sendInit: () => {
+      sendInit()
+    },
+    onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue })
+  })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
   // between the two the view belongs to no document, so nothing is served and nothing is posted.
@@ -75,47 +91,14 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // Seeded from the session rather than started false: this host may be a rebuild taking over a
   // session that handshook with the one before it.
   let initSent = options.sessionEstablished
-  let postFailureReported = false
   let notifyFailureReported = false
 
-  // Once per session: a page that cannot be posted to fails every frame after the first, and a
-  // line per frame buries the one that says why.
-  function reportPostFailure(error: unknown): void {
-    if (postFailureReported) {
-      return
-    }
-    postFailureReported = true
-    options.onDiagnostic?.({ kind: 'post-failed', error })
-  }
-
-  function sendJson(json: string): void {
-    // Defensive: teardown already settles everything that could post; this fences callers added later.
-    if (closed) {
-      return
-    }
-    // Between documents the view still exists and still accepts posts, which is exactly why this is
-    // checked: a `state` frame sent now lands in the next document before it has said `ready`.
-    if (!serving) {
-      return
-    }
-    // A `post` that throws where it should reject would escape into the client's own state-change
-    // fan-out, which is what sends the `state` frame, and take the other listeners down with it.
-    try {
-      void options.post(json).catch(reportPostFailure)
-    } catch (error) {
-      reportPostFailure(error)
-    }
-  }
-
-  // Every value in a host frame has already been serialized by whoever produced it — a reply by
-  // `splitBridgeReply`, an error `code` by the capture's round trip — so this cannot throw.
-  function send(frame: BridgeHostMessage): void {
-    sendJson(JSON.stringify(frame))
-  }
-
-  function sendError(id: string, error: unknown): void {
-    send({ v: BRIDGE_PROTOCOL_VERSION, type: 'error', id, error: captureBridgeError(error) })
-  }
+  const frames = createBridgeHostFrames({
+    post: options.post,
+    isOpen: () => !closed && serving,
+    onDiagnostic: options.onDiagnostic
+  })
+  const { postJson, sendJson, send, sendError } = frames
 
   const subscriptions = new BridgeHostSubscriptions({
     client,
@@ -142,34 +125,44 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   }
 
   /**
-   * Answered every time it is asked, with the keys read every time it is answered.
+   * Posts `init`, and answers nothing (ruling 34).
    *
-   * A page that saw a `state` older than the one it holds recovers by asking again rather than by
-   * living with a cache it knows is wrong, and the same is true of its storage: a document that
-   * reloads inside one mount — which the fault path produces — would otherwise be primed from
-   * before its own writes, and `publishPageStorage` clears the page's cache to match.
+   * Sent every time it is asked for, with the keys read every time it is sent. A page that saw a
+   * `state` older than the one it holds recovers by asking again rather than by living with a
+   * cache it knows is wrong, and the same is true of its storage: a document that reloads inside
+   * one mount — which the fault path produces — would otherwise be primed from before its own
+   * writes, and `publishPageStorage` clears the page's cache to match.
    *
-   * Synchronously, because the page refuses every member until `init` lands and the golden
-   * recorder mounts its screen in the same turn it drains one; an `init` that waited on a promise
-   * would change what the first render of every replay sees. The caller keeps the map current.
+   * The frame is built synchronously, because the page refuses every member until `init` lands and
+   * the golden recorder mounts its screen in the same turn it drains one; a frame whose contents
+   * waited on a promise would change what the first render of every replay sees.
+   *
+   * A refused route sends nothing at all, and a post the view would not take is one diagnostic and
+   * no further attempt: nothing here holds a frame, and nothing retries one.
    */
   function sendInit(): void {
+    const route = routes.current()
     if (route === null) {
       return
     }
     initSent = true
-    send(
-      createBridgeInitFrame({
-        sessionId,
-        buildId,
-        connection: snapshot(),
-        route,
-        pageRoutes,
-        ...(parsedRouteGrants?.success === true ? { pageRouteGrants: parsedRouteGrants.data } : {}),
-        granted,
-        host,
-        storage: options.readStorage()
-      })
+    void postJson(
+      JSON.stringify(
+        createBridgeInitFrame({
+          sessionId,
+          buildId,
+          connection: snapshot(),
+          route,
+          pageRoutes,
+          ...(parsedRouteGrants?.success === true
+            ? { pageRouteGrants: parsedRouteGrants.data }
+            : {}),
+          granted,
+          accepts: [BRIDGE_ROUTE_PARAM_CLEAR],
+          host,
+          ...options.readStorage()
+        })
+      )
     )
   }
 
@@ -263,7 +256,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // Also local, and held to this host's own keys. The envelope allowlists the shape before
         // this runs, which lets `orca:pins:<any host>` through: a page opened for one host must
         // not rewrite another's pinned list, and the keys it was handed are the ones it may write.
-        if (!isPageStorageKeyForHost(message.key, host.id)) {
+        // Three refusals in one, decided where the keys are (ruling 33.6): the oversize half has
+        // to be enforced here because a page served from an older desktop bundle does not read
+        // `storageOversize` and would write the key whole over what the device holds.
+        const held = options.readStorage()
+        if (!pageMayWriteStorageKey(message.key, host.id, routes.current(), held)) {
           options.onDiagnostic?.({ kind: 'storage-refused', key: message.key })
           return
         }
@@ -274,6 +271,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // Local, and the only notify the shell answers with hardware. Nothing crosses back, which
         // is the whole reason this is a notify: a reply would spend an in-flight slot per row tap.
         options.onHaptic(message.kind)
+        return
+      }
+      if (message.name === BRIDGE_ROUTE_PARAM_CLEAR) {
+        // Local, and the one frame that writes to the shell's own route (ruling 34). Carried up
+        // rather than acted on here: the param lives on the native route the switch holds, and
+        // whether this still names it is that holder's comparison to make.
+        options.onRouteParamClear(message.param, message.value)
         return
       }
       client.updateTerminalSubscriptionViewport(message.terminal, {
@@ -312,9 +316,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     // re-asked `ready` from the document already being served is answered the same way.
     if (message.type === 'ready') {
       serving = true
+      routes.readReady(message)
+      // Every time it is asked, not once: the page re-asks on a backoff, and each ask is answered
+      // with the route the shell holds now. That is the whole repair path for a frame that never
+      // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
       sendInit()
-      // Every time it is asked, not once: the page re-asks on a backoff, and the shell's wait ends
-      // on the first of those that lands rather than on a particular one.
       options.onPageReady()
       return
     }
@@ -365,14 +371,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     send({ v: BRIDGE_PROTOCOL_VERSION, type: 'state', connection: snapshot(state) })
   })
 
-  if (route === null) {
+  if (routes.current() === null) {
     // At construction rather than on the first `ready`: the verdict does not depend on the page
     // behaving, and a shell that waited for a frame would hold a blank view until one arrived.
-    const issue = routeGrantsIssue
-      ? `pageRouteGrants: ${routeGrantsIssue}`
-      : parsedRoute.success
-        ? 'unknown'
-        : (parsedRoute.error.issues[0]?.message ?? 'unknown')
+    const issue = routeGrantsIssue ? `pageRouteGrants: ${routeGrantsIssue}` : routes.openIssue()
     options.onDiagnostic?.({ kind: 'route-refused', issue })
     options.onRouteRefused(issue)
   }
@@ -390,6 +392,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         return
       }
       dispatch(read.message)
+    },
+    publishRoute: (next) => {
+      routes.publish(next, serving && initSent)
     },
     dispose
   }

@@ -55,6 +55,8 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   pageFaults: BridgeErrorCapture[]
   /** How many times the page asked for a session; it re-asks on a backoff until one lands. */
   readonly pageReadyCount: () => number
+  /** Every clear the page asked the shell for, in order. */
+  readonly routeParamClears: () => readonly { param: string; value: string }[]
   /** Why the host refused to open a session at all, if it did. */
   readonly routeRefusals: string[]
   /** Runs both lanes until a full round moves nothing. */
@@ -79,6 +81,8 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   route?: BridgeInitRoute
   pageRoutes?: readonly string[]
   storage?: Readonly<Record<string, string>>
+  /** The allowlisted keys the app holds a value for that is over the page's cap (ruling 33.6). */
+  storageOversize?: readonly string[]
   /**
    * Rewrites each frame on its way to the page, for asking the page a counterfactual it cannot be
    * asked any other way: would this run have gone differently had the shell sent one more field?
@@ -193,6 +197,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
   let pageReadies = 0
+  const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
   let receiveOnPage: ((json: string) => void) | null = null
 
@@ -226,12 +231,16 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       return 'popped'
     },
     host: { id: 'host-a', name: 'Host A', endpoint: 'ws://host-a', lastConnected: 0 },
-    readStorage: () => options.storage ?? {},
+    readStorage: () => ({
+      storage: options.storage ?? {},
+      storageOversize: options.storageOversize ?? []
+    }),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
     onPageFault: (error) => pageFaults.push(error),
     onPageReady: () => {
       pageReadies += 1
     },
+    onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
   })
@@ -266,6 +275,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     storageWrites,
     pageFaults,
     pageReadyCount: () => pageReadies,
+    routeParamClears: () => routeParamClears,
     routeRefusals,
     async flush(): Promise<void> {
       for (let round = 0; round < 64; round += 1) {

@@ -287,6 +287,218 @@ describe('codex journal translation', () => {
     ).toBe('idle')
   })
 
+  describe('a terminal error ends the turn it names', () => {
+    function statusOf(rows: readonly Row[]) {
+      return projectStructuredAgentSessionStatus(
+        reduced(rows).map((row, sequence) => ({
+          itemId: row.key,
+          revision: 1,
+          sequence: sequence + 1,
+          observedAt: sequence + 1,
+          body: row.body
+        }))
+      )
+    }
+
+    function errorNotification(fields: Record<string, unknown>) {
+      return notification('error', {
+        threadId: THREAD_ID,
+        error: { message: 'Selected model is at capacity. Please try a different model.' },
+        ...fields
+      })
+    }
+
+    it('settles the turn and keeps the provider sentence as its own row', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      expect(statusOf(tap.rows)).toBe('working')
+
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: false }))
+
+      expect(statusOf(tap.rows)).toBe('idle')
+      expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
+        expect.objectContaining({
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'completed',
+          outcome: 'failure'
+        })
+      )
+      // The message the user reads is still a row of its own.
+      expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
+        expect.objectContaining({
+          kind: 'status',
+          text: 'Selected model is at capacity. Please try a different model.',
+          tone: 'error'
+        })
+      )
+    })
+
+    it('leaves the turn running for a stream error Codex is about to retry', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: true }))
+
+      expect(statusOf(tap.rows)).toBe('working')
+      expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
+    })
+
+    it('does not overwrite the terminal row of a turn that already completed', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(
+        notification('turn/completed', {
+          turn: { id: TURN_ID, status: 'failed', durationMs: 4_000 }
+        })
+      )
+      const settled = reduced(tap.rows).find((row) => row.body.kind === 'turn')?.body
+
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: false }))
+
+      // The completion carries the duration a late error could not reconstruct.
+      expect(reduced(tap.rows).find((row) => row.body.kind === 'turn')?.body).toEqual(settled)
+      expect(statusOf(tap.rows)).toBe('idle')
+    })
+
+    it('settles the running turn when the error names no turn', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ willRetry: false }))
+
+      expect(statusOf(tap.rows)).toBe('idle')
+    })
+
+    it('does not reopen a running row when the completion arrives after the error', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: false }))
+      translator.handle(notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }))
+
+      expect(statusOf(tap.rows)).toBe('idle')
+    })
+  })
+
+  describe('the thread reporting it stopped running releases unanswered sends', () => {
+    function statusChanged(type: string) {
+      return notification('thread/status/changed', { threadId: THREAD_ID, status: { type } })
+    }
+
+    function translatorReporting(stopped: string[]) {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID,
+        onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
+      })
+      return { tap, translator }
+    }
+
+    it.each(['idle', 'systemError'])('reports the thread stopped running on %s', (type) => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(statusChanged(type))
+
+      expect(stopped).toEqual([THREAD_ID])
+    })
+
+    it.each(['active', 'notLoaded'])('stays silent on %s', (type) => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(statusChanged(type))
+
+      expect(stopped).toEqual([])
+    })
+
+    it('stays silent while a turn is open, whatever the thread reports', () => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(TURN_STARTED)
+      translator.handle(statusChanged('systemError'))
+
+      expect(stopped).toEqual([])
+    })
+
+    it('releases after systemError arrives before the terminal error notification', () => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(TURN_STARTED)
+      translator.handle(statusChanged('systemError'))
+      expect(stopped).toEqual([])
+
+      translator.handle(
+        notification('error', {
+          turnId: TURN_ID,
+          willRetry: false,
+          error: { message: 'fatal' }
+        })
+      )
+
+      expect(stopped).toEqual([THREAD_ID])
+    })
+
+    it('releases after idle arrives before the terminal turn completion notification', () => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(TURN_STARTED)
+      translator.handle(statusChanged('idle'))
+      expect(stopped).toEqual([])
+
+      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+
+      expect(stopped).toEqual([THREAD_ID])
+    })
+
+    it('reports once the open turn has settled', () => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(TURN_STARTED)
+      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+      translator.handle(statusChanged('idle'))
+
+      expect(stopped).toEqual([THREAD_ID])
+    })
+
+    it('ignores a bare string status from a shape this build does not get', () => {
+      const stopped: string[] = []
+      const { translator } = translatorReporting(stopped)
+
+      translator.handle(notification('thread/status/changed', { status: 'idle' }))
+
+      expect(stopped).toEqual([])
+    })
+  })
+
   it('matches out-of-order completions to each turn identity', () => {
     const tap = recorder()
     const translator = createCodexJournalTranslator({

@@ -227,7 +227,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const sessionOptions = this.toAgentSessionOptions(opts.launchPreferences)
     const startupPlan = buildAgentStartupPlan({
       agent,
-      prompt: '',
+      prompt: opts.startupPrompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
@@ -245,6 +245,11 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
         throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
       }
       return opts
+    }
+    // A prompt this launch command cannot carry has nowhere to go from here — the create returns
+    // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
+    if (opts.startupPrompt && startupPlan.followupPrompt) {
+      throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
     }
 
     await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)

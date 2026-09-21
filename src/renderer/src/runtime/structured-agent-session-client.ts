@@ -1,7 +1,8 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   AgentSessionStatusEvent,
-  AgentSessionSubscribeEvent
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import {
@@ -115,6 +116,24 @@ export function subscribeStructuredAgentSessionStatus(
   return subscribeStructuredAgentSessionMethod(
     target,
     'agentSession.subscribeStatus',
+    {},
+    onEvent,
+    onError,
+    onClose
+  )
+}
+
+/** Turns that settle from now on. The host sends no snapshot and replays nothing, so a
+ *  subscriber that reconnects has missed whatever completed while it was away. */
+export function subscribeStructuredAgentSessionTurnCompletions(
+  target: RuntimeClientTarget,
+  onEvent: (event: AgentSessionTurnCompletionEvent) => void,
+  onError: (error: unknown) => void,
+  onClose: () => void
+): Promise<{ unsubscribe: () => void }> {
+  return subscribeStructuredAgentSessionMethod(
+    target,
+    'agentSession.subscribeTurnCompletions',
     {},
     onEvent,
     onError,

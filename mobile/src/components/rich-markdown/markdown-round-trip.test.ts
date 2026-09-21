@@ -132,4 +132,25 @@ describe('the editor document, from markdown and back', () => {
     expect(html).not.toContain('<a')
     expect(html).not.toContain('href')
   })
+
+  it('round-trips a code block that holds a fence of its own', () => {
+    // The fence has to be longer than the longest run inside it, or the block ends at its content:
+    // a three-backtick reader took the inner line for the close and the rest became paragraphs.
+    const markdown = ['````', '```', 'nested', '```', '````'].join('\n')
+    const { scope, html } = surface(markdown)
+
+    expect(html).toContain('<pre data-language=""><code>```\nnested\n```</code></pre>')
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
+
+  it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {
+    // A cell's own pipe is the row separator unless a backslash claims it, and the backslash is
+    // itself a cell character: escaping backslashes before pipes is what keeps the two apart.
+    const markdown = ['| a \\| b | c\\\\d |', '| --- | --- |', '| 1 \\| 2 | 3 |'].join('\n')
+    const { scope, html } = surface(markdown)
+
+    expect(html).toContain('<th>a | b</th><th>c\\d</th>')
+    expect(html).toContain('<td>1 | 2</td><td>3</td>')
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
 })

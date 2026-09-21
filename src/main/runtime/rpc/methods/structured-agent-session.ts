@@ -33,6 +33,7 @@ import {
   prepareStructuredAgentSessionCreateForWorktree
 } from './structured-agent-session-create'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
+import { STRUCTURED_AGENT_SESSION_OPTION_METHODS } from './structured-agent-session-options'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
@@ -44,6 +45,7 @@ import {
   structuredAgentSessionSubscriptionBase as subscriptionBaseFor,
   structuredAgentSessionSubscriptionId as subscriptionIdFor
 } from './structured-agent-session-subscription-id'
+import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-agent-session-turn-completion-stream'
 import {
   AttachParams,
   CancelParams,
@@ -58,7 +60,6 @@ import {
   RespondParams,
   RewindParams,
   SendParams,
-  SetOptionParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
@@ -235,11 +236,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       requireHost(ctx).respondToPrompt(callerFor(ctx), { ...params, kind: 'question' })
   }),
   defineMethod({
-    name: 'agentSession.setOption',
-    params: SetOptionParams,
-    handler: async (params, ctx) => requireHost(ctx).setOption(callerFor(ctx), params)
-  }),
-  defineMethod({
     name: 'agentSession.requestHandoff',
     params: HandoffParams,
     handler: async (params, ctx) => requireHost(ctx).requestHandoff(callerFor(ctx), params)
@@ -248,16 +244,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.handoffStatus',
     params: HandoffStatusParams,
     handler: async (params, ctx) => requireHost(ctx).handoffStatus(params.sessionId)
-  }),
-  defineMethod({
-    name: 'agentSession.options',
-    params: OptionsParams,
-    handler: async (params, ctx) => requireHost(ctx).readOptions(params.sessionId)
-  }),
-  defineMethod({
-    name: 'agentSession.commands',
-    params: OptionsParams,
-    handler: async (params, ctx) => requireHost(ctx).readCommands(params.sessionId)
   }),
   defineMethod({
     name: 'agentSession.readPayload',
@@ -332,7 +318,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     }
   }),
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
+  ...STRUCTURED_AGENT_SESSION_OPTION_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
-  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
+  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS
 ]
