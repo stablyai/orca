@@ -443,12 +443,44 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
+  it('keeps a queued receipt pending when only the existing turn emits output', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle } = await createAgentPromptSubmissionRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData('pty-prompt', 'output from the existing turn', Date.now())
+      }
+    }, 'codex')
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
+      Date.now()
+    )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      acceptQueued: true,
+      requestId: 'queued-output-only',
+      observationTimeoutMs: 0
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({
+      prompt: { stages: ['input_accepted'] }
+    })
+  })
+
   // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
   // the same path a headless `orca serve` host and a minimized desktop window take.
-  async function createHookOnlyPromptRuntime(hook: {
-    state: 'done' | 'working'
-    stateStartedAt: number
-  }): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
+  async function createHookOnlyPromptRuntime(
+    hook: {
+      state: 'done' | 'working'
+      stateStartedAt: number
+    },
+    launchAgent: 'kimi' | 'codex' = 'kimi'
+  ): Promise<{
+    runtime: OrcaRuntimeService
+    handle: string
+    writes: string[]
+  }> {
     let handle = ''
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
@@ -458,7 +490,7 @@ describe('agent prompt submission runtime', () => {
           terminalHandle: handle,
           state: hook.state,
           prompt: '',
-          agentType: 'kimi',
+          agentType: launchAgent,
           connectionId: null,
           // Why: every hook ping refreshes receivedAt, including same-state tool pings.
           receivedAt: Date.now(),
@@ -477,7 +509,7 @@ describe('agent prompt submission runtime', () => {
     })
     handle = (
       await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
-        launchAgent: 'kimi'
+        launchAgent
       })
     ).handle
     return { runtime, handle, writes }
@@ -526,6 +558,58 @@ describe('agent prompt submission runtime', () => {
 
     await rejected
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('reserves a hook-only turn start for the oldest queued prompt receipt', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const hook = { state: 'working' as const, stateStartedAt: 1_000 }
+    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
+
+    const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
+      acceptQueued: true,
+      requestId: 'hook-queued-first',
+      observationTimeoutMs: 0
+    })
+    await vi.runAllTimersAsync()
+    const first = await firstPromise
+    expect(first.prompt?.stages).toEqual(['input_accepted'])
+
+    const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 20_000)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (data === '\r') {
+          hook.stateStartedAt = Date.now()
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
+      acceptQueued: true,
+      requestId: 'hook-queued-second',
+      observationTimeoutMs: 500
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(firstObserved).resolves.toMatchObject({
+      stages: ['input_accepted', 'turn_started']
+    })
+    const second = await secondPromise
+    expect(second).toMatchObject({
+      prompt: { stages: ['input_accepted'] }
+    })
+
+    const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
+    hook.stateStartedAt += 1
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(secondObserved).resolves.toMatchObject({
+      stages: ['input_accepted', 'turn_started']
+    })
   })
 
   it('does not write Enter after the PTY generation changes during settlement', async () => {
@@ -677,6 +761,40 @@ describe('agent prompt submission runtime', () => {
     expect(secondPaste).toBeGreaterThan(firstEnter)
     expect(secondEnter).toBeGreaterThan(secondPaste)
     expect(enterCount).toBe(2)
+  })
+
+  it('reserves a lifecycle transition for only one queued prompt receipt', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+
+    const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
+      acceptQueued: true,
+      requestId: 'queued-first',
+      observationTimeoutMs: 0
+    })
+    await vi.runAllTimersAsync()
+    const first = await firstPromise
+    const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
+      acceptQueued: true,
+      requestId: 'queued-second',
+      observationTimeoutMs: 0
+    })
+    await vi.runAllTimersAsync()
+    const second = await secondPromise
+
+    runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07\x1b]0;Codex working\x07', Date.now())
+    const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 1_000)
+    await vi.runAllTimersAsync()
+    const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
+    await vi.runAllTimersAsync()
+
+    await expect(firstObserved).resolves.toMatchObject({
+      stages: ['input_accepted', 'turn_started']
+    })
+    await expect(secondObserved).resolves.toMatchObject({
+      stages: ['input_accepted']
+    })
   })
 
   it('does not queue a replacement generation behind an obsolete submission', async () => {

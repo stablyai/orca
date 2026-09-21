@@ -40,6 +40,7 @@ import { isCodexStateDbBackfillPending } from './codex-state-db'
 // Why: a transiently hung app-server must not block launch prep on every pane.
 // The legacy lane remains available while a short, host-scoped cooldown runs.
 export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
+const MAX_TRANSIENT_TRUST_COOLDOWNS = 256
 
 /**
  * Ops escape hatch (not a setting): forces the unchanged fallback lane for the
@@ -109,7 +110,15 @@ function fallback(
 }
 
 function startTransientCooldown(hostKey: CodexAppServerHostKey): void {
+  transientRetryAfterByHost.delete(hostKey)
   transientRetryAfterByHost.set(hostKey, Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
+  while (transientRetryAfterByHost.size > MAX_TRANSIENT_TRUST_COOLDOWNS) {
+    const oldest = transientRetryAfterByHost.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    transientRetryAfterByHost.delete(oldest)
+  }
 }
 
 type GrantAttempt = {
@@ -305,5 +314,8 @@ export const _internals = {
     diagnostics.verifyFailed = 0
     diagnostics.lastFallbackReason = null
     transientRetryAfterByHost.clear()
+  },
+  transientCooldownCountForTests(): number {
+    return transientRetryAfterByHost.size
   }
 }

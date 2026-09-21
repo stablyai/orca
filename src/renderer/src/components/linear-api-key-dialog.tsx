@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
@@ -74,6 +75,10 @@ export function LinearApiKeyDialog({
     }
   }
 
+  // Why: a stray backdrop click must not discard a typed API key. Escape / Cancel / × stay explicit.
+  const isDraftDirty = (): boolean => apiKeyDraft !== ''
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
+
   const handleConnect = async (): Promise<void> => {
     const apiKey = apiKeyDraft.trim()
     if (!apiKey || connectState === 'connecting') {
@@ -125,6 +130,8 @@ export function LinearApiKeyDialog({
       <DialogContent
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
             event.preventDefault()

@@ -51,6 +51,7 @@ import {
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
+import { createDebouncedBatch } from './filesystem-watcher-batch-control'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   reserveWatcherChild,
@@ -135,7 +136,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       return {
         subscription: { unsubscribe: vi.fn(async () => release()) },
         listeners: new Map(),
-        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+        batch: createDebouncedBatch(),
         rootPath: worktreePath
       }
     })

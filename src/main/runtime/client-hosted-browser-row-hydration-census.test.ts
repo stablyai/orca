@@ -38,7 +38,7 @@ const LIST_CALL = /\.listClientHostedBrowserRows\(/g
 describe('client-hosted row hydration caller census', () => {
   it('keeps the hydration delivery to its one runtime caller', async () => {
     expect(await countCallSites(DELIVER_CALL)).toEqual({
-      'src/main/runtime/orca-runtime.ts': 1
+      'src/main/runtime/orca-runtime-stored-mobile-snapshot-has-stale-preserved-tab.ts': 1
     })
   })
 

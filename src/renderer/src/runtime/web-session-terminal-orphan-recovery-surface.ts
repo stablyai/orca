@@ -9,6 +9,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 import {
+  hasTerminalHandleRetirementProof,
   isRemovedSnapshot,
   isValidReadySurface,
   surfaceKey,
@@ -95,15 +96,7 @@ export function hasExactTerminalRetirementProof(
   snapshot: RuntimeMobileSessionTabsResult,
   surface: RecoverySurface
 ): boolean {
-  return (
-    surface.incoming === undefined &&
-    snapshot.retiredTerminalSurfaces?.some(
-      (retired) =>
-        retired.parentTabId === surface.tabId &&
-        retired.leafId === surface.leafId &&
-        retired.terminal === surface.handle
-    ) === true
-  )
+  return surface.incoming === undefined && hasTerminalHandleRetirementProof(snapshot, surface)
 }
 
 export function prepareTerminalOrphanRecovery(
@@ -149,8 +142,7 @@ export function prepareTerminalOrphanRecovery(
           layout?.activeLeafId === leafId
       }
       if (offTree) {
-        // An off-tree binding has no trustworthy pane topology. Keep it visible
-        // as evidence, but never list/claim/retire it from this recovery pass.
+        // Off-tree bindings cannot justify liveness/adoption claims; retain them pending host evidence.
         retained.push({
           ...coordinates,
           offTree: true,

@@ -1,6 +1,6 @@
 import { isIP } from 'node:net'
 import type { Cookie, Cookies } from 'electron'
-import { parse as parseDomain } from 'psl'
+import { parse as parseDomain } from 'tldts'
 // Why: type-only, so this does not create a runtime cycle with the clear module.
 import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
@@ -41,13 +41,24 @@ export function normalizeCookieDomain(domain: string): string | null {
   }
 }
 
+// Why allowPrivateDomains: the PSL's PRIVATE section is what keeps one tenant's cookies out of
+// another's — without it `foo.github.io` and `bar.github.io` collapse to the same family, and a
+// replace-mode import for one would clear the other. tldts defaults this off; cookie scoping needs
+// it on.
+const PUBLIC_SUFFIX_OPTIONS = { allowPrivateDomains: true } as const
+
+// psl exposed a single `listed` flag; tldts splits the same question across the two list sections.
+function isListedSuffix(parsed: { isIcann: boolean | null; isPrivate: boolean | null }): boolean {
+  return parsed.isIcann === true || parsed.isPrivate === true
+}
+
 // Why (STA-4300): one definition of "family" for every consumer of the partition skip set — the
 // planner, the per-coordinate removal filter, and the path A domain comparison. Deriving it inline
 // in several places is what let the removal scope and the write set disagree (STA-4090, STA-4170).
 //
 // The IP test MUST run on normalizeCookieDomain's output, never the raw string: Chromium accepts
-// many spellings of one address and psl mangles all of them (psl.parse('2130706433').domain is
-// null, psl.parse('127.0.0.1').domain is '0.1'). normalizeCookieDomain runs the value through
+// many spellings of one address and the suffix parser mangles all of them (tldts.parse('2130706433')
+// .domain is null, tldts.parse('127.1').domain is '127.1'). normalizeCookieDomain runs the value through
 // `new URL()`, which canonicalises 127.1 / 2130706433 / 0x7f.1 / 010.0.0.1 / a trailing dot to a
 // dotted quad first, so isIP() then recognises every one of them.
 //
@@ -65,12 +76,12 @@ export function registrableFamily(domain: string): string | null {
   if (host.startsWith('[') && host.endsWith(']') && isIP(host.slice(1, -1)) === 6) {
     return host
   }
-  const parsed = parseDomain(host)
-  if ('error' in parsed) {
+  const parsed = parseDomain(host, PUBLIC_SUFFIX_OPTIONS)
+  if (parsed.hostname === null) {
     return host
   }
   if (parsed.domain === null) {
-    return parsed.listed ? null : host
+    return isListedSuffix(parsed) ? null : host
   }
   return parsed.domain
 }
@@ -80,11 +91,11 @@ export function normalizeCookieImportDomain(domain: string): string | null {
   if (!normalized) {
     return null
   }
-  const parsed = parseDomain(normalized)
-  if ('error' in parsed) {
+  const parsed = parseDomain(normalized, PUBLIC_SUFFIX_OPTIONS)
+  if (parsed.hostname === null) {
     return normalized.startsWith('[') && normalized.endsWith(']') ? normalized : null
   }
-  if (parsed.domain === null && parsed.listed) {
+  if (parsed.domain === null && isListedSuffix(parsed)) {
     return null
   }
   return normalized
@@ -129,8 +140,8 @@ function domainSuffixes(domain: string): string[] {
 }
 
 function importDomainAncestors(domain: string): string[] {
-  const parsed = parseDomain(domain)
-  const boundary = 'error' in parsed ? domain : (parsed.domain ?? domain)
+  const parsed = parseDomain(domain, PUBLIC_SUFFIX_OPTIONS)
+  const boundary = parsed.hostname === null ? domain : (parsed.domain ?? domain)
   const ancestors: string[] = []
   for (const suffix of domainSuffixes(domain)) {
     ancestors.push(suffix)

@@ -504,6 +504,7 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl: index === 0 ? 'https://example.com/favicon.ico' : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -512,6 +513,9 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })

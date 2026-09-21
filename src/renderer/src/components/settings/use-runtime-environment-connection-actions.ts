@@ -9,6 +9,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './runtime-environment-selection'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 
 type RuntimeEnvironmentConnectionActionParams = {
   allowLocalRuntime: boolean
@@ -39,14 +40,7 @@ export function useRuntimeEnvironmentConnectionActions({
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
       // Why: disconnect is non-destructive; keep the saved server but show the
       // user that this live client is no longer attached to it.
-      useAppStore.getState().setRuntimeEnvironmentStatus(
-        environment.id,
-        {
-          status: null,
-          checkedAt: Date.now()
-        },
-        { suppressDisconnectToast: true }
-      )
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -95,10 +89,7 @@ export function useRuntimeEnvironmentConnectionActions({
       const compatibility = evaluateHostDetails(runtimeStatus)
       // Why: row Connect is reachability only. The Advanced selector is the
       // explicit default-host control and should be the only active-server path.
-      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: runtimeStatus,
-        checkedAt: Date.now()
-      })
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -123,8 +114,12 @@ export function useRuntimeEnvironmentConnectionActions({
       // Why: Connect is not the Active Server selector anymore, but connected
       // hosts should still contribute their projects/workspaces to the sidebar.
       const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
-      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
-      await useAppStore.getState().fetchWorktreeLineage()
+      await refreshRuntimeProjectWorktreesAndLineage(
+        environment.id,
+        repos,
+        (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+        (options) => useAppStore.getState().fetchWorktreeLineage(options)
+      )
       if (mountedRef.current) {
         toast.success(
           translate(
@@ -138,11 +133,7 @@ export function useRuntimeEnvironmentConnectionActions({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to connect server.'
       const remoteControl = extractRuntimeTransportDiagnostics(error)
-      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: null,
-        ...(remoteControl ? { remoteControl } : {}),
-        checkedAt: Date.now()
-      })
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,

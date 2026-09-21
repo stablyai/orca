@@ -1,9 +1,11 @@
-import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
-// so each recipient gets their own read-tracking (Section 4.5).
+// so each recipient gets their own read-tracking (Section 4.5). The caller picks the
+// candidates: the sender's Run for every group but `@worktree:<id>`, which names one
+// workspace explicitly. There is no host-wide candidate set.
 
 const AGENT_NAME_GROUPS = [
   'claude',
@@ -51,14 +53,17 @@ const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
  * delivering is visible and recoverable — the sender sees no recipients; delivering to the wrong
  * agent is neither.
  */
-function terminalIsAgent(terminal: RuntimeTerminalSummary, agentName: AgentNameGroup): boolean {
+function terminalIsAgent(
+  terminal: OrchestrationAddressableAgent,
+  agentName: AgentNameGroup
+): boolean {
   return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
 }
 
 export function resolveGroupAddress(
   to: string,
   senderHandle: string,
-  terminals: RuntimeTerminalSummary[],
+  terminals: readonly OrchestrationAddressableAgent[],
   getAgentStatus: (handle: string) => string | null
 ): string[] {
   if (!isGroupAddress(to)) {
@@ -68,7 +73,7 @@ export function resolveGroupAddress(
   const group = to.toLowerCase()
 
   if (group === '@all') {
-    // Why: @all broadcasts to every terminal except the sender to avoid self-delivery loops.
+    // Why: every candidate except the sender, to avoid self-delivery loops.
     return terminals.map((t) => t.handle).filter((h) => h !== senderHandle)
   }
 

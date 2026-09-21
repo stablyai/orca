@@ -99,21 +99,13 @@ describe('ClientHostedBrowserPagePane popup notices', () => {
     expect(new Set(ids).size).toBe(1)
   })
 
-  // Why: the local pane reports all three outcomes; only "blocked" reaching this pane left a page
-  // that silently opened somewhere else looking like it did nothing.
-  it('reports where a popup Orca did open actually went', () => {
+  it('silences in-Orca opens but reports external opens', () => {
     renderPane()
 
     emitPopup({ action: 'opened-in-orca' })
+    expect(toastMocks.message).not.toHaveBeenCalled()
     emitPopup({ action: 'opened-external' })
-
-    expect(toastMocks.message).toHaveBeenNthCalledWith(
-      1,
-      'https://accounts.example.com opened a new page in Orca.',
-      { id: 'browser-popup:page-a:opened-in-orca:https://accounts.example.com' }
-    )
-    expect(toastMocks.message).toHaveBeenNthCalledWith(
-      2,
+    expect(toastMocks.message).toHaveBeenCalledExactlyOnceWith(
       'https://accounts.example.com opened a new window in your default browser.',
       { id: 'browser-popup:page-a:opened-external:https://accounts.example.com' }
     )

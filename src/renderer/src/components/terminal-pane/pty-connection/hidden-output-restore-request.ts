@@ -17,10 +17,12 @@ import {
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
+import {
+  classifyHiddenOutputSnapshotReject,
+  type HiddenOutputSnapshotResult
+} from './hidden-output-snapshot-serialize'
 
 export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): void {
   session.requestHiddenOutputRestoreIfNeeded = function (opts?: {
@@ -68,7 +70,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           // Why: resume can reveal many split panes at once; spread inactive replays across frames so xterm scrollback replay doesn't block return.
           scheduleHiddenOutputRestore(
             session.pane.terminal,
-            () => {
+            (): boolean => {
               session.hiddenOutputRestoreScheduled = false
               if (
                 session.disposed ||
@@ -80,9 +82,11 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
                   session.hiddenOutputRestorePendingChunks.length === 0) ||
                 !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
               ) {
-                return
+                // Why report false: nothing replayed here, so the scheduler can spend
+                // this frame on the next queued pane instead of on a hidden/stale one.
+                return false
               }
-              session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true })
+              return session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true }) === true
             },
             priority
           )
@@ -136,13 +140,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
             )
           })
         } catch {
-          snapshotResult =
-            !isRemoteRuntimePtyId(currentPtyId) ||
-            session.hiddenOutputRestoreLegacyPtyId === currentPtyId ||
-            typeof session.transport.serializeBufferOutcome !== 'function'
-              ? { kind: 'unavailable' }
-              : // Why 'host': the only reject here is the request timeout — the frame went out and the host stayed silent.
-                { kind: 'retry-worthy', source: 'host' }
+          snapshotResult = classifyHiddenOutputSnapshotReject(session, currentPtyId)
         }
         if (session.disposed) {
           return

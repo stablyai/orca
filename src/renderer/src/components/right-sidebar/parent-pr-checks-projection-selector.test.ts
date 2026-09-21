@@ -61,9 +61,10 @@ describe('parent PR checks projection selector', () => {
     const observedCache = new Proxy(
       {},
       {
-        get: (target, property, receiver) => {
+        get: (target, property) => {
           cacheRead(property)
-          return Reflect.get(target, property, receiver)
+          const entries: Record<string | symbol, unknown> = target
+          return entries[property]
         }
       }
     )

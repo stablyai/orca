@@ -13,8 +13,10 @@ type PromiseSettlementWaiter<T> = {
 
 export type PromiseSettlementWaitOptions<T> = {
   signal?: AbortSignal
+  /** Preserve Promise.race ordering when raw settlement and abort share a turn. */
+  abortInMicrotask?: boolean
   timeoutMs?: number
-  createAbortError?: () => Error
+  createAbortError?: () => unknown
   createTimeoutError?: () => Error
   onFulfilled?: (value: T) => void
   onAbandon?: (reason: 'abort' | 'timeout') => void
@@ -50,7 +52,7 @@ export class PromiseSettlementWaiters<T> {
     }
     return new Promise<T>((resolve, reject) => {
       let waiter!: PromiseSettlementWaiter<T>
-      const abandon = (reason: 'abort' | 'timeout', error: Error): void => {
+      const abandon = (reason: 'abort' | 'timeout', error: unknown): void => {
         if (!this.waiters.delete(waiter)) {
           return
         }
@@ -58,8 +60,14 @@ export class PromiseSettlementWaiters<T> {
         options.onAbandon?.(reason)
         reject(error)
       }
-      const onAbort = (): void =>
-        abandon('abort', options.createAbortError?.() ?? createDefaultAbortError())
+      const onAbort = (): void => {
+        const error = options.createAbortError?.() ?? createDefaultAbortError()
+        if (options.abortInMicrotask) {
+          queueMicrotask(() => abandon('abort', error))
+        } else {
+          abandon('abort', error)
+        }
+      }
       waiter = {
         resolve,
         reject,

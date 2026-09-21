@@ -1,0 +1,169 @@
+{
+  "operation": "worktree.home-catalog",
+  "family": "worktree.home-catalog",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
+  "scenarioSha256": "4749bb3b871275ba08f026f9b6bcfd383605f443e7bba70a7f89175b91db6fa5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0809e2178d5a": {
+      "name": "info",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeCount": 1,
+          "countsProvenAt": 1767225600000,
+          "hostId": "host-1",
+          "lastActiveWorktree": {
+            "displayName": "One",
+            "repo": "Repo",
+            "status": "working",
+            "worktreeId": "w-1"
+          },
+          "totalWorktrees": 2
+        }
+      }
+    },
+    "39b7354b00f4": {
+      "host-1": {
+        "activeCount": 1,
+        "countsProvenAt": 1767225600000,
+        "hostId": "host-1",
+        "lastActiveWorktree": {
+          "displayName": "One",
+          "repo": "Repo",
+          "status": "working",
+          "worktreeId": "w-1"
+        },
+        "totalWorktrees": 2
+      }
+    },
+    "3b32328e5154": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "status": "working",
+                "worktreeId": "w-1"
+              },
+              {
+                "displayName": "Two",
+                "repo": "Repo",
+                "status": "idle",
+                "worktreeId": "w-2"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "4cebf6258ec1": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "ab49c180f672": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "worktree-home-catalog",
+    "checkpoints": [
+      {
+        "id": "catalog-pending",
+        "observation": {
+          "sender": ["4cebf6258ec1"],
+          "payloads": ["ab49c180f672"],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["3b32328e5154"],
+          "payloads": ["ab49c180f672"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "39b7354b00f4",
+          "effects": ["0809e2178d5a"]
+        }
+      }
+    ]
+  }
+}

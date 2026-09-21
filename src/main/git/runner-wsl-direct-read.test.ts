@@ -17,6 +17,7 @@ vi.mock('../observability/instrumentation', () => ({
 }))
 vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
 
+import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
 import { gitExecFileAsync, gitSpawn, gitStreamStdout } from './runner'
 import {
@@ -27,6 +28,7 @@ import {
 import {
   disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
+  peekWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,
   seedWslGitReadEnvironmentForTests,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
@@ -164,6 +166,14 @@ describe('WSL direct Git reads', () => {
     } finally {
       nowSpy.mockRestore()
     }
+  })
+
+  it('bounds settled environment entries during distro churn', () => {
+    for (let index = 0; index < 132; index += 1) {
+      seedWslGitReadEnvironmentForTests(`distro-${index}`, LOGIN_ENVIRONMENT)
+    }
+    expect(peekWslGitReadEnvironment('distro-0')).toBeUndefined()
+    expect(peekWslGitReadEnvironment('distro-131')).toEqual(LOGIN_ENVIRONMENT)
   })
 
   it('runs an opted-in read directly with translated cwd and arguments', async () => {
@@ -581,6 +591,33 @@ describe('WSL direct Git reads', () => {
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
       expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
       expect(execFileMock.mock.calls[2]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
+    })
+  })
+
+  it('checks a missing branch conflict without retrying through a login shell', async () => {
+    await withPlatform('win32', async () => {
+      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+      execFileMock.mockImplementation((_command, args: string[], _options, callback) => {
+        const child = createMockChild()
+        queueMicrotask(() => {
+          const missingRef = args.join(' ').includes('rev-parse')
+          const quiet = args.includes('--quiet')
+          const code = missingRef ? (quiet ? 1 : 128) : 0
+          callback?.(
+            code ? Object.assign(new Error('missing ref'), { code }) : null,
+            '',
+            missingRef && !quiet ? 'fatal: Needed a single revision' : ''
+          )
+          child.emit('close', code, null)
+        })
+        return child
+      })
+
+      await expect(
+        getBranchConflictKind(String.raw`\\wsl.localhost\Ubuntu\repo`, 'new-feature')
+      ).resolves.toBeNull()
+      expect(execFileMock).toHaveBeenCalledTimes(2)
+      expect(execFileMock.mock.calls[0]?.[1]).toContain('--quiet')
     })
   })
 

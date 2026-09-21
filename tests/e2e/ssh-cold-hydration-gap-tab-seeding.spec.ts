@@ -128,8 +128,16 @@ function unblockRemoteWorkspaceGet(
   snapshotPath: string,
   saved: string
 ): void {
-  // Detached: a FIFO write blocks until the reader drains it, which must not stall the test.
-  spawnSync('docker', [
+  const replacementPath = `${snapshotPath}.release`
+  const releaseScript = [
+    `printf '%s' ${shellQuote(saved)} > ${shellQuote(replacementPath)}`,
+    `exec 3> ${shellQuote(snapshotPath)}`,
+    // Publish the complete file before the held reader can issue another snapshot read.
+    `mv -f ${shellQuote(replacementPath)} ${shellQuote(snapshotPath)}`,
+    `printf '%s' ${shellQuote(saved)} >&3`,
+    'exec 3>&-'
+  ].join(' && ')
+  const release = spawnSync('docker', [
     'exec',
     '-d',
     target.containerName,
@@ -137,8 +145,10 @@ function unblockRemoteWorkspaceGet(
     '--noprofile',
     '--norc',
     '-c',
-    `printf '%s' ${shellQuote(saved)} > ${snapshotPath} && rm -f ${snapshotPath} && printf '%s' ${shellQuote(saved)} > ${snapshotPath}`
+    releaseScript
   ])
+  expect(release.error, 'failed to launch the snapshot release writer').toBeUndefined()
+  expect(release.status, release.stderr?.toString()).toBe(0)
 }
 
 async function connectAndSeedTabs(

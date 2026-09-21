@@ -1,0 +1,49 @@
+{
+  "operation": "source-control.remote-prerequisite",
+  "family": "git.remote-prerequisite",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "523d1ee21e3871a4dffc32f48d2e28c31ecea48cbf3f842acffc8355be06b14b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "69f421c50546": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "ran": false
+      }
+    },
+    "cede2a5d35c8": {
+      "outcome": {
+        "ok": true,
+        "ran": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-prerequisite-skipped",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "apply": "69f421c50546"
+          },
+          "state": "cede2a5d35c8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

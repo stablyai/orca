@@ -76,7 +76,7 @@ export function rankRuntimeMobileFilePaths(
   let totalCount = 0
   for (const path of paths) {
     const lower = path.toLowerCase()
-    const basename = lower.split('/').pop() ?? lower
+    const basename = lower.slice(lower.lastIndexOf('/') + 1)
     if (lower.startsWith(normalizedQuery) || basename.startsWith(normalizedQuery)) {
       totalCount++
       if (prefix.length < limit) {

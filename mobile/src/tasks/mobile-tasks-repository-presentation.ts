@@ -2,6 +2,7 @@ import { colors } from './mobile-tasks-dependencies'
 import { taskTime } from './mobile-tasks-item-mapping'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
+import type { TaskSort } from './mobile-tasks-view-state-types'
 
 export function isFailedGitHubCheck(check: { conclusion?: string | null }): boolean {
   return ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
@@ -28,7 +29,9 @@ export function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: s
   return repo?.badgeColor || repoColor(repo?.displayName ?? fallbackName)
 }
 
-export function setupSourceLabel(source: string | null): string {
+// `undefined` as well as `null`: a checked `repo.hooks` reader does not require `source`, and the
+// recorded reply for a repo with no hooks file carries none.
+export function setupSourceLabel(source: string | null | undefined): string {
   if (source === 'orca.yaml') {
     return 'orca.yaml'
   }
@@ -64,17 +67,25 @@ export function taskRepositoryMeta(
   }
 }
 
-export function compareTasksByUpdated(a: TaskItem, b: TaskItem): number {
-  return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-}
-
-export function compareTasksByRepository(
-  a: TaskItem,
-  b: TaskItem,
+export function sortMobileTaskItems(
+  items: readonly TaskItem[],
+  sort: TaskSort,
   reposById: Map<string, RepoSummary>
-): number {
-  const aRepo = taskRepositoryMeta(a, reposById)
-  const bRepo = taskRepositoryMeta(b, reposById)
-  const repoComparison = aRepo.label.localeCompare(bRepo.label, undefined, { sensitivity: 'base' })
-  return repoComparison || compareTasksByUpdated(a, b)
+): TaskItem[] {
+  if (items.length < 2) {
+    return [...items]
+  }
+  const byRepository = sort === 'repository'
+  const collator = byRepository ? new Intl.Collator(undefined, { sensitivity: 'base' }) : null
+  return items
+    .map((item) => ({
+      item,
+      updatedAt: taskTime(item.updatedAt),
+      repositoryLabel: byRepository ? taskRepositoryMeta(item, reposById).label : ''
+    }))
+    .sort(
+      (a, b) =>
+        (collator?.compare(a.repositoryLabel, b.repositoryLabel) ?? 0) || b.updatedAt - a.updatedAt
+    )
+    .map(({ item }) => item)
 }

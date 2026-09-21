@@ -41,6 +41,7 @@ function createPreservedDaemonHandle(
   mode?: 'degraded-new-pty-fallback'
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
+    adopted: true,
     shutdown: async () => {
       await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
     }

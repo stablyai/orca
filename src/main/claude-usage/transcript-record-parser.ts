@@ -84,10 +84,30 @@ function dedupeClaudeUsageTurns(
   return deduped
 }
 
+/**
+ * Necessary condition for `JSON.parse(line).type === 'assistant'`, checked before the parse.
+ *
+ * Sound for any transcript written by a standard JSON serializer: `JSON.stringify` (which writes
+ * these files) escapes only quotes, backslashes and control characters, never ASCII letters, so
+ * the decoded value can only be `assistant` if the line spells it literally. The gate over-admits
+ * freely — the `parsed.type` check below stays authoritative.
+ *
+ * A `\u`-escape fallback was measured and rejected: it costs a second full-line scan and made
+ * transcripts whose tool results contain control characters 1.43x slower overall.
+ */
+function mayEncodeAssistantType(line: string): boolean {
+  return line.includes('assistant')
+}
+
 function parseClaudeUsageSourceRecord(
   line: string,
   fallbackSessionId: string | null = null
 ): ClaudeUsageParsedSourceTurn | null {
+  // Only assistant records carry usage, but transcripts interleave user/tool-result lines that
+  // routinely embed whole files. Reject those before paying for a full parse.
+  if (!mayEncodeAssistantType(line)) {
+    return null
+  }
   let parsed: ClaudeUsageSourceRecord
   try {
     parsed = JSON.parse(line) as ClaudeUsageSourceRecord

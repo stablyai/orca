@@ -16,6 +16,7 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -119,6 +120,16 @@ export {
 export function wrapWindowsHookCommand(
   scriptPath: string,
   env: Record<string, string> = {},
+  options: { fallbackStdout?: string } = {}
+): string {
+  return wrapWindowsPowerShellEncodedCommand(
+    buildWindowsHookPowerShellCommand(scriptPath, env, options)
+  )
+}
+
+export function buildWindowsHookPowerShellCommand(
+  scriptPath: string,
+  env: Record<string, string> = {},
   // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
   options: { fallbackStdout?: string } = {}
 ): string {
@@ -131,14 +142,16 @@ export function wrapWindowsHookCommand(
     options.fallbackStdout === undefined
       ? ''
       : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; ${fallback}exit 0`
-  return wrapWindowsPowerShellEncodedCommand(command)
+  // Why the order: answer first (a gate event reads silence as deny), then the shared
+  // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
+  // pipe, and ReadToEnd would strand the launcher there forever (#11549).
+  return `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Why: Codex/Antigravity/Devin spawn the hook as argv[0], not via cmd.exe, so it must be one spawnable token; a cmd `if exist` launcher isn't (#8430).
+  // Direct-spawn consumers need one executable token; a cmd `if exist` fragment is not one (#8430).
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 

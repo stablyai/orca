@@ -1,0 +1,119 @@
+--- a/src/main/git/command-runner/git-subprocess-admission.ts
++++ b/src/main/git/command-runner/git-subprocess-admission.ts
+@@ -17 +16,0 @@
+-import { resolveGitAdmissionTier } from './git-operation-executor'
+@@ -33,0 +33,4 @@
++
++function commandClass(args: readonly string[]): AdmissionClass {
++  return classifyGitCommand(args) === 'network' ? 'network' : 'general'
++}
+@@ -113 +116 @@
+-    const admissionClass = classifyGitCommand(request.args) === 'network' ? 'network' : 'general'
++    const admissionClass = commandClass(request.args)
+@@ -313 +316 @@
+-  return scheduler.acquire({ ...request, tier: resolveGitAdmissionTier(request.tier) })
++  return scheduler.acquire(request)
+--- a/src/main/plugins/plugin-worker-output-buffer.ts
++++ b/src/main/plugins/plugin-worker-output-buffer.ts
+@@ -1,0 +2 @@
++import { ownRetainedString } from '../../shared/own-retained-string'
+@@ -24,3 +25,5 @@
+-        truncated
+-          ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
+-          : line
++        ownRetainedString(
++          truncated
++            ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
++            : line
++        )
+@@ -52 +55 @@
+-        buffered += segment
++        buffered += newline === -1 ? ownRetainedString(segment) : segment
+--- a/src/main/providers/working-directory-validation.ts
++++ b/src/main/providers/working-directory-validation.ts
+@@ -165,12 +165 @@
+-  const shared = validation
+-  // The shared probe outlives this caller; keep it from surfacing as unhandled.
+-  void shared.catch(() => {})
+-  return new Promise<void>((resolve, reject) => {
+-    const onAbort = (): void => reject(new WorkingDirectoryValidationAbortedError(cwd))
+-    if (signal.aborted) {
+-      onAbort()
+-      return
+-    }
+-    signal.addEventListener('abort', onAbort, { once: true })
+-    shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+-  })
++  return waitForWorkingDirectoryValidation(validation, cwd, signal)
+@@ -204,0 +194,49 @@
++
++type WorkingDirectoryWaiterHolder = {
++  waiter: {
++    signal: AbortSignal
++    onAbort: () => void
++    resolve: () => void
++    reject: (error: unknown) => void
++  } | null
++}
++
++function takeWorkingDirectoryWaiter(
++  holder: WorkingDirectoryWaiterHolder
++): WorkingDirectoryWaiterHolder['waiter'] {
++  const waiter = holder.waiter
++  holder.waiter = null
++  waiter?.signal.removeEventListener('abort', waiter.onAbort)
++  return waiter
++}
++
++// Keep reaction order while an abandoned caller's signal and resolver become collectible.
++function observeWorkingDirectoryValidation(
++  promise: Promise<void>,
++  holder: WorkingDirectoryWaiterHolder
++): void {
++  void promise.then(
++    () => takeWorkingDirectoryWaiter(holder)?.resolve(),
++    (error: unknown) => takeWorkingDirectoryWaiter(holder)?.reject(error)
++  )
++}
++
++function waitForWorkingDirectoryValidation(
++  shared: Promise<void>,
++  cwd: string,
++  signal: AbortSignal
++): Promise<void> {
++  return new Promise<void>((resolve, reject) => {
++    const holder: WorkingDirectoryWaiterHolder = { waiter: null }
++    const onAbort = (): void => {
++      takeWorkingDirectoryWaiter(holder)?.reject(new WorkingDirectoryValidationAbortedError(cwd))
++    }
++    holder.waiter = { signal, onAbort, resolve, reject }
++    if (signal.aborted) {
++      onAbort()
++      return
++    }
++    signal.addEventListener('abort', onAbort, { once: true })
++    observeWorkingDirectoryValidation(shared, holder)
++  })
++}
+--- a/src/shared/promise-settlement-waiters.ts
++++ b/src/shared/promise-settlement-waiters.ts
+@@ -15,0 +16,2 @@
++  /** Preserve Promise.race ordering when raw settlement and abort share a turn. */
++  abortInMicrotask?: boolean
+@@ -17 +19 @@
+-  createAbortError?: () => Error
++  createAbortError?: () => unknown
+@@ -53 +55 @@
+-      const abandon = (reason: 'abort' | 'timeout', error: Error): void => {
++      const abandon = (reason: 'abort' | 'timeout', error: unknown): void => {
+@@ -61,2 +63,8 @@
+-      const onAbort = (): void =>
+-        abandon('abort', options.createAbortError?.() ?? createDefaultAbortError())
++      const onAbort = (): void => {
++        const error = options.createAbortError?.() ?? createDefaultAbortError()
++        if (options.abortInMicrotask) {
++          queueMicrotask(() => abandon('abort', error))
++        } else {
++          abandon('abort', error)
++        }
++      }

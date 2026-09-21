@@ -155,15 +155,56 @@ export function normalizeExecutionHostOrder(
   return normalized ?? []
 }
 
-export function getRepoExecutionHostId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): ExecutionHostId {
+// Why the loose member types: a reply reader hands these through as the strings they are on the
+// wire, and this function is already the thing that decides what an unparseable spelling means.
+export function getRepoExecutionHostId(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): ExecutionHostId {
   const executionHostId = normalizeExecutionHostId(repo.executionHostId)
   if (executionHostId) {
     return executionHostId
   }
   const connectionId = normalizeHostPart(repo.connectionId)
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
+export function getSshTargetIdForExecutionHost(
+  executionHostId: string | null | undefined
+): string | null {
+  const parsed = parseExecutionHostId(executionHostId)
+  return parsed?.kind === 'ssh' ? parsed.targetId : null
+}
+
+// Why: SSH ownership has two spellings on a repo row — the legacy `connectionId`
+// field and the unified `executionHostId`. Routing that reads the raw field answers
+// "local" for a row that only carries `ssh:<target>`, which runs a remote operation
+// on the client. Resolve the host first, then read the connection off it.
+//
+// The two hosts that are not themselves SSH are not the same case:
+//
+//   - `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row
+//     contradicting itself — the shape main's `resolveRepoOwnershipEvidence` calls
+//     `contradictory`. Answering with it hands out an SSH connection for a row that declares
+//     itself local.
+//   - `runtime:<env>` is a different machine with its own SSH targets, and a nested one appears
+//     only in this field (`repoWithFetchedOwner` spreads it through). It is not dialable on its
+//     own, but it is addressable as the pair (environmentId, targetId) — which is how the
+//     renderer reads it, recovering the environment from the worktree and looking the target up
+//     inside it (`selectRuntimeAwareSshStatus`). Dropping it makes a nested-SSH workspace read
+//     as local, which is what decides whether a transcript is read on this client.
+//
+// So this answers "which SSH target holds this row's files", not "which connection may this
+// client dial". `getSshTargetIdForExecutionHost` answers the latter; callers routing a
+// client-local PTY or Git provider want that one instead.
+export function getRepoSshConnectionId(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): string | null {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return host.targetId
+  }
+  return host?.kind === 'runtime' ? normalizeHostPart(repo.connectionId) : null
 }
 
 export function getWorktreeExecutionHostId(
@@ -188,13 +229,18 @@ export function getSettingsFocusedExecutionHostId(
     : LOCAL_EXECUTION_HOST_ID
 }
 
-export function getExecutionHostLabel(id: ExecutionHostScope): string {
+export function getExecutionHostLabel(id: ExecutionHostScope | null | undefined): string {
   if (id === ALL_EXECUTION_HOSTS_SCOPE) {
     return 'All hosts'
   }
   const parsed = parseExecutionHostId(id)
   if (!parsed) {
-    return 'All hosts'
+    // Not "All hosts": an id that names no host is one *unknown* host, and answering with the
+    // everything-scope label shows an unroutable row as though it were on every host.
+    // Plain English like every other label in this module (`Local Mac`, `This computer`,
+    // `All hosts`) — none of them resolve through the renderer's i18n catalog, so a lone
+    // translated string here would read inconsistently.
+    return 'Unknown host'
   }
   switch (parsed.kind) {
     case 'local':

@@ -17,7 +17,7 @@ import { installPreviewTerminalCompatibility } from './preview-terminal-compatib
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { translate } from '@/i18n/i18n'
+import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -26,6 +26,7 @@ import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
 import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-click-paste'
+import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
@@ -107,6 +108,7 @@ export function AgentTerminalPreview({
     let userInputDisposable: { dispose: () => void } | null = null
     let imeBridge: PreviewImeBridge | null = null
     let disposeKeyHandler: (() => void) | null = null
+    let disposeNativeCopyGutterTrim: (() => void) | null = null
     let disposeTerminalCompatibility: (() => void) | null = null
     // Why: mirrors the pane's tracker — the policy needs the flags the TUI
     // negotiated, and this preview parses the same output stream the pane does.
@@ -215,6 +217,13 @@ export function AgentTerminalPreview({
       })
     }
 
+    const installNativeCopyGutterTrim = (): void => {
+      if (!terminal) {
+        return
+      }
+      disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
+    }
+
     const installTerminalCompatibility = (): void => {
       if (!terminal) {
         return
@@ -273,6 +282,7 @@ export function AgentTerminalPreview({
         }
         terminalRef.current = terminal
         installTerminalCompatibility()
+        installNativeCopyGutterTrim()
         installInputRouting()
         installImeNativeTextBridge()
         installKeyHandler()
@@ -340,6 +350,8 @@ export function AgentTerminalPreview({
         disposeTerminalCompatibility = null
         disposeKeyHandler?.()
         disposeKeyHandler = null
+        disposeNativeCopyGutterTrim?.()
+        disposeNativeCopyGutterTrim = null
         terminal?.dispose()
         terminal = null
         terminalRef.current = null
@@ -395,6 +407,7 @@ export function AgentTerminalPreview({
       disposeImeNativeTextBridge()
       disposeTerminalCompatibility?.()
       disposeKeyHandler?.()
+      disposeNativeCopyGutterTrim?.()
       void window.api.terminalPreview.unsubscribe(ptyId)
       terminal?.dispose()
       terminalRef.current = null
@@ -430,10 +443,7 @@ export function AgentTerminalPreview({
     >
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'dashboardPopout.terminal.closed',
-            "No live terminal — this agent's pane has closed."
-          )}
+          {terminalPreviewUnavailableMessage({ ptyId })}
         </div>
       ) : null}
       <div

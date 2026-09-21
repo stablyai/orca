@@ -1,0 +1,648 @@
+{
+  "operation": "settings.home-providers",
+  "family": "settings.home-providers",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "d8d6f738ee11d84d6e9e546624f4babcb42476432f6bddbc74e8519d9ca18370",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0a5b778e224a": {
+      "name": "linear.status#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "1425cdcf73af": {
+      "name": "settings.get#3",
+      "ordinal": 18,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "1578fb797a9b": {
+      "name": "providers",
+      "ordinal": 13,
+      "value": {
+        "host-1": ["github"]
+      }
+    },
+    "1eef16c4ad65": {
+      "name": "preflight.check#2",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "235eb9cfa7e0": {
+      "name": "settings.get#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "2bb81a9fc867": {
+      "name": "providers",
+      "ordinal": 14,
+      "value": {
+        "host-1": ["github"]
+      }
+    },
+    "44136fa355b3": {},
+    "4777b5dc4e66": {
+      "name": "preflight.check#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "48ef1d658168": {
+      "name": "preflight.check#2",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
+    "4ff081739994": {
+      "name": "preflight.check#2",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "525e8231aebc": {
+      "name": "preflight.check#3",
+      "ordinal": 19,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
+    "58995bbfcb17": {
+      "name": "linear.status#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "596151a25a84": {
+      "name": "linear.status#2",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "599b30e9d8ec": {
+      "name": "linear.status#3",
+      "ordinal": 17,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "776ed8372613": {
+      "name": "preflight.check#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "glab": {
+              "installed": false
+            }
+          }
+        }
+      }
+    },
+    "79b8c1b0d1d1": {
+      "host-1": ["github"]
+    },
+    "7a145a4c7f2f": {
+      "name": "linear.status#2",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8e3ababdaa74": {
+      "name": "preflight.check#3",
+      "ordinal": 16,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.check"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8fce29bab175": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "908e43fdefae": {
+      "name": "preflight.check#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+    },
+    "93f2060336d8": {
+      "name": "linear.status#2",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
+    "975f2ff9a730": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "a7075803ae4d": {
+      "name": "linear.status#3",
+      "ordinal": 20,
+      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "aa3490f8f6f8": {
+      "name": "linear.status#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec8967c2d560": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "f6bd43dd03d3": {
+      "name": "settings.get#3",
+      "ordinal": 15,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "faeb2251338b": {
+      "name": "settings.get#2",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "ff1b4ecd513c": {
+      "name": "settings.get#2",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "settings-home-coalesced",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": ["ec8967c2d560", "4777b5dc4e66", "58995bbfcb17"],
+          "payloads": ["975f2ff9a730", "908e43fdefae", "aa3490f8f6f8"],
+          "settlements": {
+            "load": "eb79a9b3682a",
+            "overlapping-load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            "8fce29bab175",
+            "776ed8372613",
+            "0a5b778e224a",
+            "faeb2251338b",
+            "4ff081739994",
+            "7a145a4c7f2f"
+          ],
+          "payloads": [
+            "975f2ff9a730",
+            "908e43fdefae",
+            "aa3490f8f6f8",
+            "235eb9cfa7e0",
+            "48ef1d658168",
+            "596151a25a84"
+          ],
+          "settlements": {
+            "load": "eb79a9b3682a",
+            "overlapping-load": "eb79a9b3682a"
+          },
+          "state": "79b8c1b0d1d1",
+          "effects": ["1578fb797a9b"]
+        }
+      },
+      {
+        "id": "follow-up-settled",
+        "observation": {
+          "sender": [
+            "8fce29bab175",
+            "776ed8372613",
+            "0a5b778e224a",
+            "ff1b4ecd513c",
+            "1eef16c4ad65",
+            "93f2060336d8"
+          ],
+          "payloads": [
+            "975f2ff9a730",
+            "908e43fdefae",
+            "aa3490f8f6f8",
+            "235eb9cfa7e0",
+            "48ef1d658168",
+            "596151a25a84"
+          ],
+          "settlements": {
+            "load": "eb79a9b3682a",
+            "overlapping-load": "eb79a9b3682a"
+          },
+          "state": "79b8c1b0d1d1",
+          "effects": ["1578fb797a9b", "2bb81a9fc867"]
+        }
+      },
+      {
+        "id": "third-query",
+        "observation": {
+          "sender": [
+            "8fce29bab175",
+            "776ed8372613",
+            "0a5b778e224a",
+            "ff1b4ecd513c",
+            "1eef16c4ad65",
+            "93f2060336d8",
+            "f6bd43dd03d3",
+            "8e3ababdaa74",
+            "599b30e9d8ec"
+          ],
+          "payloads": [
+            "975f2ff9a730",
+            "908e43fdefae",
+            "aa3490f8f6f8",
+            "235eb9cfa7e0",
+            "48ef1d658168",
+            "596151a25a84",
+            "1425cdcf73af",
+            "525e8231aebc",
+            "a7075803ae4d"
+          ],
+          "settlements": {
+            "load": "eb79a9b3682a",
+            "overlapping-load": "eb79a9b3682a",
+            "third-load": "eb79a9b3682a"
+          },
+          "state": "79b8c1b0d1d1",
+          "effects": ["1578fb797a9b", "2bb81a9fc867"]
+        }
+      }
+    ]
+  }
+}

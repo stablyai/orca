@@ -16,6 +16,7 @@ import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 export async function installLocalWatcher(
   rootKey: string,
@@ -78,9 +79,7 @@ export async function installLocalWatcher(
     Array.from(cancelToken.listeners.entries()).filter(([, listener]) => !listener.isDestroyed())
   )
   if (cancelToken.cancelled || liveListeners.size === 0) {
-    if (root.batch.timer) {
-      clearTimeout(root.batch.timer)
-    }
+    cancelLocalBatchFlush(root)
     void trackDetachedLocalUnsubscribe(rootKey, root)
     return 'cancelled'
   }

@@ -49,13 +49,12 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'error' &&
         left.message === right.message &&
+        left.version === right.version &&
+        left.retryable === right.retryable &&
         left.userInitiated === right.userInitiated &&
         left.activeNudgeId === right.activeNudgeId &&
-        // Why: clearing recovery must reach the renderer even when the message is unchanged, or dead actions stay enabled.
-        left.recovery?.kind === right.recovery?.kind &&
-        left.recovery?.packageType === right.recovery?.packageType &&
-        left.recovery?.reason === right.recovery?.reason &&
-        left.recovery?.version === right.recovery?.version
+        // Recovery identity fences async actions, so same-valued recaptures must reach the renderer.
+        left.recovery === right.recovery
       )
   }
 }

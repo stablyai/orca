@@ -6,6 +6,8 @@ import {
   GLIBC_FLOOR,
   isBelowGlibcFloor,
   nativeSlotName,
+  parseIncompatibleArchitecture,
+  parseMissingSharedLibrary,
   parseNodeAbiMismatch,
   parseUnmetGlibcVersion
 } from './native-host-abi'
@@ -96,6 +98,37 @@ describe('loader error parsing', () => {
         'was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version of Node.js requires NODE_MODULE_VERSION 127.'
       )
     ).toEqual({ built: '115', host: '127' })
+  })
+
+  it('names both architectures on mach-o, and admits ELF names none', () => {
+    expect(
+      parseIncompatibleArchitecture(
+        "dlopen(/opt/pty.node, 0x0001): tried: '/opt/pty.node' (mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64'))"
+      )
+    ).toEqual({ built: 'arm64', host: 'x86_64' })
+    // The ELF loader refuses without saying what it found, so the verdict stands but the
+    // numbers do not exist to report.
+    expect(parseIncompatibleArchitecture('invalid ELF header')).toEqual({
+      built: null,
+      host: null
+    })
+    expect(parseIncompatibleArchitecture('wrong ELF class: ELFCLASS32')).not.toBeNull()
+    // A wrong-libc binary is not a wrong-arch binary; conflating them sends the operator
+    // to rebuild for an architecture that was never wrong.
+    expect(parseIncompatibleArchitecture("version `GLIBC_2.34' not found")).toBeNull()
+  })
+
+  it('names the shared object the loader could not open, on either loader', () => {
+    expect(
+      parseMissingSharedLibrary(
+        'libstdc++.so.6: cannot open shared object file: No such file or directory'
+      )
+    ).toBe('libstdc++.so.6')
+    expect(parseMissingSharedLibrary('Library not loaded: /usr/local/lib/libfoo.dylib')).toBe(
+      '/usr/local/lib/libfoo.dylib'
+    )
+    // A symbol version that is absent is a rebuild, not an install: must not match here.
+    expect(parseMissingSharedLibrary("/lib/libc.so.6: version `GLIBC_2.34' not found")).toBeNull()
   })
 })
 

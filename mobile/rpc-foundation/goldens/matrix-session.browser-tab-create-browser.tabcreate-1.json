@@ -1,0 +1,663 @@
+{
+  "operation": "session.content-create",
+  "family": "session.browser-tab-create",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "6c606813584d6ac89251c725a556d717603acde405a8d45ef6d844e06f2da67a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0126fcbbbea0": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "0848f676dd74": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "134e6545bfe5": {
+      "createError": "transport failure",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "1c09d93a111a": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1d5503a7e274": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Unknown method"
+      }
+    },
+    "20aae2d43214": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "4a842fa3c9c1": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "browserPageId": "page-1"
+          }
+        }
+      }
+    },
+    "4c73134e473e": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "outer refused"
+      }
+    },
+    "6248a3dd0710": {
+      "name": "fetch-session-tabs",
+      "ordinal": 3,
+      "value": {}
+    },
+    "6371ca02b18e": {
+      "createError": "outer refused",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "6e66950b7e8a": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "8c04a4093021": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9744697e6cb8": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "transport failure"
+      }
+    },
+    "b562af7f460c": {
+      "createError": "The host sent a reply this app could not read (browser.tabCreate)",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "bdb961e7dfd9": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "be54b0713eaa": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "The host sent a reply this app could not read (browser.tabCreate)"
+      }
+    },
+    "d574cdcd4bef": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "d9a882adde26": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}"
+    },
+    "dbd60af06eac": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "dfb723df461a": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 5,
+      "value": {}
+    },
+    "e6b6cf30c6ee": {
+      "createError": "Unknown method",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "eda7d625e4b6": {
+      "name": "fetch-pending-browser-tabs",
+      "ordinal": 4,
+      "value": {}
+    },
+    "f1e12d7f04c7": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": "page-1"
+    },
+    "f308f4a0d416": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": ""
+      }
+    },
+    "f8d713d84895": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fcc0356b0433": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.browser-tab-create-browser.tabcreate-1",
+    "checkpoints": [
+      {
+        "id": "session-browser-tab-created.normal:created",
+        "observation": {
+          "sender": ["4a842fa3c9c1"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "f1e12d7f04c7",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.result-absent:created",
+        "observation": {
+          "sender": ["dbd60af06eac"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "b562af7f460c",
+          "effects": ["be54b0713eaa"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.result-null:created",
+        "observation": {
+          "sender": ["fcc0356b0433"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "b562af7f460c",
+          "effects": ["be54b0713eaa"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.inner-ok-missing:created",
+        "observation": {
+          "sender": ["bdb961e7dfd9"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.inner-false-string-error:created",
+        "observation": {
+          "sender": ["0126fcbbbea0"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.inner-false-object-error:created",
+        "observation": {
+          "sender": ["20aae2d43214"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "84e5ca07cb7a"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["6248a3dd0710", "eda7d625e4b6", "dfb723df461a"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.outer-refused:created",
+        "observation": {
+          "sender": ["1c09d93a111a"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "6371ca02b18e",
+          "effects": ["4c73134e473e"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.outer-refused-no-message:created",
+        "observation": {
+          "sender": ["0848f676dd74"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["f308f4a0d416"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.method-not-found:created",
+        "observation": {
+          "sender": ["8c04a4093021"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "e6b6cf30c6ee",
+          "effects": ["1d5503a7e274"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.transport-rejection:created",
+        "observation": {
+          "sender": ["6e66950b7e8a"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "134e6545bfe5",
+          "effects": ["9744697e6cb8"]
+        }
+      },
+      {
+        "id": "session-browser-tab-created.transport-rejection-no-message:created",
+        "observation": {
+          "sender": ["f8d713d84895"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["f308f4a0d416"]
+        }
+      }
+    ]
+  }
+}

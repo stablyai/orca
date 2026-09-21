@@ -1,0 +1,638 @@
+{
+  "operation": "browser.page-commands",
+  "family": "browser.wheel",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
+  "scenarioSha256": "092777c9ce457dcae95eafbe083c70510580569ac74e31c0d4224ac94b9fad76",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02bf414951cb": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "0ea51271b822": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}"
+    },
+    "31800ab3b8b5": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "31a0357924b2": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "4ee27ce5e118": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "scrolled": true
+          }
+        }
+      }
+    },
+    "5099a516ef10": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
+    "5972986e0d80": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseMove"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "moved": true
+          }
+        }
+      }
+    },
+    "8bced63fab68": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "9c97fb5499ad": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "ac96eab81847": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "adcca864a545": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b5dad85e87e5": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "e71674365c52": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f9bc355b7dd5": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseWheel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dx": 0,
+            "dy": -120,
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-browser.wheel-browser.mousewheel-1",
+    "checkpoints": [
+      {
+        "id": "browser-wheel-scrolled.normal:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "4ee27ce5e118"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.result-absent:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "b5dad85e87e5"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.result-null:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "e71674365c52"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.inner-ok-missing:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "31a0357924b2"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.inner-false-string-error:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "31800ab3b8b5"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.inner-false-object-error:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "ac96eab81847"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.outer-refused:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "02bf414951cb"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.outer-refused-no-message:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "8bced63fab68"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.method-not-found:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "9c97fb5499ad"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.transport-rejection:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "adcca864a545"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-wheel-scrolled.transport-rejection-no-message:scrolled",
+        "observation": {
+          "sender": ["5972986e0d80", "f9bc355b7dd5"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "wheel": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

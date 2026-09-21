@@ -7,8 +7,10 @@ import {
 } from './stable-logical-rpc-client'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import {
   MobileEndpointSupervisor,
   type MobileEndpointSupervisorDependencies
@@ -81,6 +83,10 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   // Why: production-realistic constants — fictional fake values hid three
   // live defects in this subsystem (latch, churn, int32 timer overflow).
   getAttachDeadlineAt = () => Date.now() + 10_000
+  readonly dialStage = new RelayDialStageTracker()
+  getDialStage = () => this.dialStage.getDialStage()
+  onDialStageChange = (listener: (stage: RelayDialStage) => void) =>
+    this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
@@ -140,10 +146,22 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   isPairingRejected = () => this.pairingRejected
+  private relayHostReachability: RelayHostReachability = 'connecting'
+  setRelayHostReachability = vi.fn((reachability: RelayHostReachability) => {
+    if (this.relayHostReachability === reachability) {
+      return
+    }
+    this.relayHostReachability = reachability
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  getRelayHostReachability = () => this.relayHostReachability
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
+      this.relayHostReachability = 'connecting'
     }
     super.publishState(state)
   }
@@ -219,8 +237,8 @@ function dependencies(
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: (handler, ms) => setTimeout(handler, ms),
+    clearTimer: (handle) => clearTimeout(handle),
     ...overrides
   }
 }
@@ -259,7 +277,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 3 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -348,7 +367,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 2 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -377,7 +397,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 1 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()

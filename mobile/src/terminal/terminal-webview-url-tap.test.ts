@@ -1,17 +1,26 @@
 import { createContext, Script } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import type { TappedFilePath } from './terminal-path-tap'
-import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import {
+  documentDeclaredFunction,
+  generatedDocumentModule
+} from './document/generated-document-region.test-support'
 import {
   TERMINAL_HTTP_URL_MAX_LENGTH,
   TERMINAL_HTTP_URL_REGEX_SOURCE,
-  URL_TAP_WEBVIEW_JS,
   findFileUrlAtColumn,
   findUrlAtColumn,
   resolveTerminalOscFileTap,
   resolveTerminalFileUrlTap
 } from './terminal-webview-url-tap'
 import { XTERM_HTML } from './terminal-webview-html'
+
+// The three modules the document carries the URL-tap group as, in its own order.
+const urlTapGroupSource = (
+  await Promise.all(
+    ['path-tap', 'url-tap', 'osc-link-tap', 'surface-tap'].map(generatedDocumentModule)
+  )
+).join('\n')
 
 type FileTapResolverCase = {
   name: string
@@ -99,19 +108,15 @@ function createInjectedFileTapResolvers(): {
   resolveTerminalFileUrlTap: InjectedFileTapResolver
   resolveTerminalOscFileTap: InjectedFileTapResolver
 } {
-  const context = createContext({ URL })
+  const context: Record<string, unknown> = createContext({ URL })
   new Script(
-    `${TERMINAL_PATH_TAP_JS}\n${URL_TAP_WEBVIEW_JS}\n` +
+    `${urlTapGroupSource}\n` +
       'this.__resolveTerminalFileUrlTap = resolveTerminalFileUrlTap;\n' +
       'this.__resolveTerminalOscFileTap = resolveTerminalOscFileTap;'
   ).runInContext(context)
-  const injected = context as {
-    __resolveTerminalFileUrlTap: InjectedFileTapResolver
-    __resolveTerminalOscFileTap: InjectedFileTapResolver
-  }
   return {
-    resolveTerminalFileUrlTap: injected.__resolveTerminalFileUrlTap,
-    resolveTerminalOscFileTap: injected.__resolveTerminalOscFileTap
+    resolveTerminalFileUrlTap: documentDeclaredFunction(context, '__resolveTerminalFileUrlTap'),
+    resolveTerminalOscFileTap: documentDeclaredFunction(context, '__resolveTerminalOscFileTap')
   }
 }
 
@@ -204,6 +209,6 @@ describe('findUrlAtColumn', () => {
     expect(XTERM_HTML).toContain('function isLocalFileUriHostname(')
     expect(XTERM_HTML).toContain('return parsePathLineCol(value);')
     expect(XTERM_HTML).toContain('function notifyTerminalSurfaceTap(')
-    expect(XTERM_HTML).toContain("notify({ type: 'open-url', url: tappedUrl });")
+    expect(XTERM_HTML).toContain('notify({ type: "open-url", url: tappedUrl });')
   })
 })

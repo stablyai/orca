@@ -6,7 +6,7 @@ import {
   makeSnapshot,
   makeState,
   pendingSurface
-} from './web-session-terminal-orphan-recovery-regression-fixtures'
+} from './__fixtures__/web-session-terminal-orphan-recovery-regression-fixtures'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
@@ -93,7 +93,10 @@ describe('web session terminal orphan inventory retries', () => {
       }
       return {
         ok: true as const,
-        result: { adopted: true, topologyRevision: 8, snapshot: adoptedSnapshot }
+        result:
+          method === 'session.tabs.list'
+            ? adoptedSnapshot
+            : { adopted: true, topologyRevision: 8, snapshot: adoptedSnapshot }
       }
     })
 
@@ -125,7 +128,8 @@ describe('web session terminal orphan inventory retries', () => {
     expect(call.mock.calls.map(([request]) => request.method)).toEqual([
       'terminal.list',
       'terminal.list',
-      'terminal.adoptOrphans'
+      'terminal.adoptOrphans',
+      'session.tabs.list'
     ])
   })
 

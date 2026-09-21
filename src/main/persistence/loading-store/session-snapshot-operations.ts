@@ -93,7 +93,7 @@ export function getSessionSnapshotOperationsContext(owner: SessionSnapshotOperat
 }
 
 export function installSessionSnapshotOperationsContext(
-  target: object,
+  target: SessionSnapshotOperations,
   source: SessionSnapshotOperations
 ): void {
   Object.defineProperty(target, sessionSnapshotOperationsContext, {

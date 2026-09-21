@@ -4,13 +4,15 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult,
@@ -21,6 +23,7 @@ import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 
 export type WorktreeAddBaseContext = AddWorktreeResult & {
   effectiveBase: string
+  effectiveBaseOid?: string
 }
 
 export async function resolveWorktreeAddBaseContext(
@@ -29,9 +32,11 @@ export async function resolveWorktreeAddBaseContext(
   refreshLocalBaseRef: boolean,
   options: AddWorktreeOptions
 ): Promise<WorktreeAddBaseContext> {
-  const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-  )
+  let effectiveBaseOid: string | null = null
+  const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, async (qualifiedRef) => {
+    effectiveBaseOid = await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)
+    return effectiveBaseOid !== null
+  })
   const localBaseRefRefresh = refreshLocalBaseRef
     ? await refreshLocalBaseRefForWorktreeCreate(
         repoPath,
@@ -53,6 +58,10 @@ export async function resolveWorktreeAddBaseContext(
       : undefined
   return {
     effectiveBase,
+    // Refresh/suggestion work can span ref changes; only reuse the immediate resolution probe.
+    ...(!refreshLocalBaseRef && !options.suggestLocalBaseRefUpdate && effectiveBaseOid
+      ? { effectiveBaseOid }
+      : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
   }
@@ -148,15 +157,17 @@ export async function addWorktree(
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   try {
-    return await runWithGitReadCacheInvalidation(() =>
-      performAddWorktree(
-        repoPath,
-        worktreePath,
-        branch,
-        baseBranch,
-        refreshLocalBaseRef,
-        noCheckout,
-        options
+    return await withRepoRefMaintenancePaused('worktree-add', () =>
+      runWithGitReadCacheInvalidation(() =>
+        performAddWorktree(
+          repoPath,
+          worktreePath,
+          branch,
+          baseBranch,
+          refreshLocalBaseRef,
+          noCheckout,
+          options
+        )
       )
     )
   } finally {
@@ -200,11 +211,17 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, {
-    ...gitExecOptions(repoPath, options),
-    // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-    timeout: resolveWorktreeAddTimeoutMs()
-  })
+  try {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+      timeout: resolveWorktreeAddTimeoutMs()
+    })
+  } finally {
+    // Git may have written the target's `.git` marker even when it reports a late
+    // failure, so drop any pre-create route before the follow-up commands route.
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+  }
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}

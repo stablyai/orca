@@ -5,7 +5,7 @@ import type { MockSystemCommandChannel, MockSystemSshProcess } from './ssh-conne
 import type { SshResolvedConfig } from './ssh-config-parser'
 import type { SystemSshBuildArgsOptions } from './system-ssh-args'
 import type { SshTarget } from '../../shared/ssh-types'
-import { resetSsh2ClientState, ssh2Mock } from './ssh-connection-test-client'
+import { resetSsh2ClientState, ssh2Mock } from './__tests__/ssh-connection-test-client'
 export {
   clientInstances,
   connectAttempts,
@@ -17,8 +17,8 @@ export {
   resetSsh2ClientState,
   ssh2Mock,
   VALID_ED25519_HOST_KEY
-} from './ssh-connection-test-client'
-export type { MockSshClient, Ssh2ModuleMock } from './ssh-connection-test-client'
+} from './__tests__/ssh-connection-test-client'
+export type { MockSshClient, Ssh2ModuleMock } from './__tests__/ssh-connection-test-client'
 
 export type SystemSshBinaryModuleMock = { findSystemSsh: typeof findSystemSshMock }
 

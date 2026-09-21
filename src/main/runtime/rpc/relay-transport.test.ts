@@ -28,7 +28,8 @@ describe('CloudRelayTransport', () => {
   })
 
   it('authenticates one query-free host-data socket and forwards messages verbatim', async () => {
-    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()

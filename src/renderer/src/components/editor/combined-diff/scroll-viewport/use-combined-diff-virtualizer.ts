@@ -3,11 +3,7 @@ import type React from 'react'
 import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { DiffSection } from '../../diff-section-types'
-import {
-  getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff,
-  usesLargeDiffFallbackHeight
-} from '../../diff-section-layout'
+import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
 
 const COMBINED_DIFF_OVERSCAN = 5
 
@@ -15,6 +11,7 @@ export function useCombinedDiffVirtualizer({
   generation,
   programmaticScrollMarks,
   renderedIndicesRef,
+  rowKeys,
   scrollContainerRef,
   scrollOffsetRef,
   sectionHeights,
@@ -24,6 +21,7 @@ export function useCombinedDiffVirtualizer({
   generation: number
   programmaticScrollMarks: ProgrammaticScrollMarks
   renderedIndicesRef: React.RefObject<Set<number>>
+  rowKeys: readonly string[]
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.RefObject<number>
   sectionHeights: Record<number, number>
@@ -39,19 +37,7 @@ export function useCombinedDiffVirtualizer({
         return 88
       }
 
-      return getDiffSectionEstimatedHeight({
-        collapsed: section.collapsed,
-        measuredContentHeight: sectionHeights[index],
-        originalContent: section.originalContent,
-        modifiedContent: section.modifiedContent,
-        changedLineCount:
-          section.added === undefined && section.removed === undefined
-            ? undefined
-            : (section.added ?? 0) + (section.removed ?? 0),
-        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
-        isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
-        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
-      })
+      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
     },
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,
@@ -64,14 +50,9 @@ export function useCombinedDiffVirtualizer({
       }
       elementScroll(offset, options, instance)
     },
-    getItemKey: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return `${index}:${generation}`
-      }
-      // Why: contentGeneration is per-section, so a single row's reload remounts only that row.
-      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}:${section.contentGeneration ?? 0}`
-    }
+    // Why: TanStack re-runs getItemKey for every index on each measurement pass, so the key is
+    // pre-built once per section change instead of a template string per index per pass.
+    getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
 
   // Why: keep render pure (React Doctor); retrySection still needs the on-screen set without the virtualizer as a dep.

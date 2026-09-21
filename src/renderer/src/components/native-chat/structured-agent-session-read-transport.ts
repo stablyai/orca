@@ -1,7 +1,10 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from '../../../../shared/structured-agent-session-coalescer'
-import { shouldAdvanceStructuredResumeCursor } from '../../../../shared/structured-agent-session-reducer'
+import {
+  AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
+  isUnattachedAgentSessionReadRefusal
+} from '../../../../shared/structured-agent-session-read-refusal'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { subscribeStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 
@@ -33,21 +36,20 @@ export function startStructuredAgentSessionReadTransport(args: {
   applyError: (message: string) => void
   getCursor: () => AgentJournalCursor | null
   onHistoryReadInvalidated: () => void
-  refreshTail: (shouldStop: () => boolean) => Promise<void>
+  hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   target: RuntimeClientTarget
 }): {
   captureHistoryReadGuard: () => () => boolean
   dispose: () => void
-  refresh: () => void
 } {
   let stopped = false
   let connected = false
+  let unattachedSince: number | null = null
   let opening = false
   let openGeneration = 0
   let stateGeneration = 0
   let unsubscribe = (): void => {}
-  let resumeCursor = args.getCursor()
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
@@ -60,6 +62,32 @@ export function startStructuredAgentSessionReadTransport(args: {
   })
   const isCurrentOpenGeneration = (candidate: number): boolean =>
     !stopped && candidate === openGeneration
+  const clearUnattachedReadGrace = (): void => {
+    unattachedSince = null
+  }
+  /**
+   * A read failure, reported to the pane only once it is one.
+   *
+   * A refusal saying this host holds no attached session is the retry loop's own subject, not a
+   * verdict: the reconnect below re-asks, and either the hold that attaches the session or the tab
+   * retirement that ends the pane resolves it. Painting the pane red inside that window turned an
+   * ordinary chat close into a `Could not load conversation` the user could do nothing about.
+   *
+   * A window, not a mute. An unattached read still refusing past the grace is no longer
+   * transitional, so the pane is owed the failure rather than a spinner that never resolves.
+   */
+  const reportReadFailure = (error: unknown): void => {
+    if (!isUnattachedAgentSessionReadRefusal(error)) {
+      clearUnattachedReadGrace()
+      args.applyError(String(error))
+      return
+    }
+    const now = Date.now()
+    unattachedSince ??= now
+    if (now - unattachedSince >= AGENT_SESSION_UNATTACHED_READ_GRACE_MS) {
+      args.applyError(String(error))
+    }
+  }
   const captureHistoryReadGuard = (): (() => boolean) => {
     const readOpenGeneration = openGeneration
     const readStateGeneration = stateGeneration
@@ -70,6 +98,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
       return
     }
+    clearUnattachedReadGrace()
     if (event.type === 'snapshot' || event.type === 'reset') {
       coalescer.flush()
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
@@ -80,12 +109,6 @@ export function startStructuredAgentSessionReadTransport(args: {
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
         return
       }
-      resumeCursor = event.page.liveCursor ?? event.page.window.nextCursor
-    } else if (
-      event.type === 'batch' &&
-      shouldAdvanceStructuredResumeCursor(resumeCursor, event.batch.cursor)
-    ) {
-      resumeCursor = event.batch.cursor
     } else if (event.type === 'end') {
       connected = false
       reconnectScheduler.schedule()
@@ -116,9 +139,10 @@ export function startStructuredAgentSessionReadTransport(args: {
         return
       }
       let closedDuringOpen = false
+      const cursor = args.getCursor()
       const handle = await subscribeStructuredAgentSession(
         args.target,
-        { sessionId: args.sessionId, ...(resumeCursor ? { cursor: resumeCursor } : {}) },
+        { sessionId: args.sessionId, ...(cursor ? { cursor } : {}) },
         (event) => handleEvent(event, currentOpenGeneration),
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
@@ -126,7 +150,7 @@ export function startStructuredAgentSessionReadTransport(args: {
           }
           closedDuringOpen = true
           connected = false
-          args.applyError(String(error))
+          reportReadFailure(error)
           reconnectScheduler.schedule()
         },
         () => {
@@ -152,7 +176,7 @@ export function startStructuredAgentSessionReadTransport(args: {
         return
       }
       connected = false
-      args.applyError(String(error))
+      reportReadFailure(error)
       reconnectScheduler.schedule()
     } finally {
       if (currentOpenGeneration === openGeneration) {
@@ -160,41 +184,26 @@ export function startStructuredAgentSessionReadTransport(args: {
       }
     }
   }
-  const refresh = (): void => {
-    const shouldStop = captureHistoryReadGuard()
+  if (args.hydrate) {
+    const shouldStopInitialRead = captureHistoryReadGuard()
     void args
-      .refreshTail(shouldStop)
+      .hydrate(shouldStopInitialRead)
       .then(() => {
-        if (shouldStop()) {
+        if (shouldStopInitialRead()) {
           return
         }
-        resumeCursor = args.getCursor()
-        if (!connected) {
-          reconnectScheduler.schedule(0)
-        }
+        clearUnattachedReadGrace()
+        return open()
       })
       .catch((error) => {
-        if (!shouldStop()) {
-          args.applyError(String(error))
+        if (!shouldStopInitialRead()) {
+          reportReadFailure(error)
+          reconnectScheduler.schedule()
         }
       })
+  } else {
+    void open()
   }
-  const shouldStopInitialRead = captureHistoryReadGuard()
-  void args
-    .refreshTail(shouldStopInitialRead)
-    .then(() => {
-      if (shouldStopInitialRead()) {
-        return
-      }
-      resumeCursor = args.getCursor()
-      return open()
-    })
-    .catch((error) => {
-      if (!shouldStopInitialRead()) {
-        args.applyError(String(error))
-        reconnectScheduler.schedule()
-      }
-    })
   return {
     captureHistoryReadGuard,
     dispose: () => {
@@ -204,7 +213,6 @@ export function startStructuredAgentSessionReadTransport(args: {
       reconnectScheduler.dispose()
       coalescer.dispose()
       unsubscribe()
-    },
-    refresh
+    }
   }
 }

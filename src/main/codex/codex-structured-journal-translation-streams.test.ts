@@ -89,11 +89,11 @@ describe('codex journal translation', () => {
     const { translator, tap } = translatorWith()
     let rejectTerminal = true
     const appendItem = tap.sink.appendItem
-    tap.sink.tryAppendItem = (identity, body, blobs, options) => {
+    tap.sink.tryAppendItem = (identity, body, options) => {
       if (rejectTerminal && body.kind === 'tool-call' && body.state === 'failed') {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
-      appendItem(identity, body, blobs, options)
+      appendItem(identity, body, options)
       return { accepted: true as const }
     }
     for (let index = 0; index <= 256; index += 1) {
@@ -157,7 +157,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'hi' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'hi' } })
     )
 
     expect(tap.publishes()).toBe(1)
@@ -299,6 +299,31 @@ describe('codex journal translation', () => {
     })
   })
 
+  // A frame the classifier declines is intentionally unjournaled. #17720 turned that
+  // into an admission failure, which the notification retry queue escalated to a
+  // provider force-close, so no structured session could survive its first chrome frame.
+  it('admits chrome and suppressed-benign frames without journaling them', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(TURN_STARTED)
+    const before = tap.rows.length
+    for (const method of [
+      'remoteControl/status/changed',
+      'thread/status/changed',
+      'thread/tokenUsage/updated',
+      'hook/started',
+      'fs/changed',
+      'rawResponse/completed',
+      // Delta-shaped unknown methods reach the same early-out via the name heuristic.
+      'future/somethingDelta'
+    ]) {
+      expect(translator.handle(notification(method, { status: 'disabled' }))).toEqual({
+        accepted: true
+      })
+    }
+    expect(tap.rows.length).toBe(before)
+    expect(tap.publishes()).toBe(0)
+  })
+
   it('bounds generic rows per turn while keeping the suppression visible and countable', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
@@ -399,7 +424,9 @@ describe('codex journal translation', () => {
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
   })
 
-  it('bounds error-surface provider frames under the generic-row cap', () => {
+  // The cap bounds noise, never evidence. #17720 dropped this exemption (and pinned the
+  // capped behavior in a test), so a noisy turn could silently swallow provider errors.
+  it('exempts error-surface provider frames from the generic-row cap', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 3; index += 1) {
@@ -411,11 +438,15 @@ describe('codex journal translation', () => {
     const generic = tap.rows.filter(
       (row) => row.body.kind === 'status' && row.body.providerFrame !== undefined
     )
-    expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN)
+    expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN + 1)
+    expect(generic.at(-1)?.body).toMatchObject({
+      providerFrame: { kind: 'notification:future/failure' }
+    })
+    // Only the 3 capped noise frames reduce to a summary; the error is not counted there.
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
-    expect(tap.rows.at(-1)?.body).toEqual({
+    expect(tap.rows.find((row) => row.key.includes('provider-frame-suppressed'))?.body).toEqual({
       kind: 'status',
-      text: '4 more provider notifications not shown for this turn'
+      text: '3 more provider notifications not shown for this turn'
     })
   })
 
@@ -455,7 +486,8 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(tap.tombstones).toContain('legacy:codex:session-1:turn-lifecycle%3Aturn-1')
+    // Lifecycle rows are revised in place, never tombstoned.
+    expect(tap.tombstones).toEqual([])
     // The two maps share one bounded bucket budget; this assertion documents
     // the contract for future changes even though the maps are private.
     expect(MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES).toBeGreaterThanOrEqual(
@@ -489,7 +521,7 @@ describe('codex journal translation', () => {
     expect(timeline).toEqual([])
   })
 
-  it('projects only user and assistant content for a complete turn with hooks', () => {
+  it('projects assistant content without provider user echoes for a complete turn with hooks', () => {
     const { translator, tap } = translatorWith()
 
     translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
@@ -521,7 +553,6 @@ describe('codex journal translation', () => {
       }))
     )
     expect(timeline.map(({ role, blocks }) => ({ role, blocks }))).toEqual([
-      { role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       { role: 'assistant', blocks: [{ type: 'text', text: 'hello' }] }
     ])
   })
@@ -571,5 +602,70 @@ describe('codex journal translation', () => {
     window.fire()
 
     expect(tap.rows).toEqual([])
+  })
+})
+
+describe('notice journal pipeline', () => {
+  it('replaces a legacy compaction divider with its canonical item at the same journal key', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(notification('thread/compacted', { threadId: THREAD_ID, turnId: TURN_ID }))
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'compact', type: 'contextCompaction' }
+      })
+    )
+    expect(tap.rows).toHaveLength(2)
+    expect([...new Map(tap.rows.map((row) => [row.key, row.body])).values()]).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        text: 'Context compacted',
+        presentation: 'compaction'
+      })
+    ])
+    translator.dispose()
+  })
+  it('preserves every notice after generic traffic reaches its cap', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(TURN_STARTED)
+    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
+      translator.handle(notification('future/notification', { value: index }))
+    }
+    for (const method of ['warning', 'guardianWarning', 'configWarning', 'deprecationNotice']) {
+      translator.handle(notification(method, { message: method, summary: method }))
+    }
+    window.fire()
+    expect(tap.rows.slice(-4).map((row) => row.body)).toEqual([
+      expect.objectContaining({ text: 'warning', tone: 'warning' }),
+      expect.objectContaining({ text: 'guardianWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'configWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'deprecationNotice', tone: 'notice' })
+    ])
+    translator.dispose()
+  })
+  it('keeps the plan document marker during streamed updates and completion', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(
+      notification('item/started', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '' }
+      })
+    )
+    translator.handle(
+      notification('item/plan/delta', { turnId: TURN_ID, itemId: 'plan', delta: '# Plan' })
+    )
+    window.fire()
+    expect(tap.rows.at(-1)?.body).toMatchObject({ text: '# Plan', presentation: 'plan-document' })
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '# Plan\n\nComplete' }
+      })
+    )
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      text: '# Plan\n\nComplete',
+      presentation: 'plan-document'
+    })
+    translator.dispose()
   })
 })

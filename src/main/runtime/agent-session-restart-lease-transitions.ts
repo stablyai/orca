@@ -8,6 +8,7 @@
 
 import {
   adjudicateAgentSessionRestart,
+  agentSessionRestartEvictionSettlementId,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
 import type {
@@ -50,6 +51,9 @@ export function applyAgentSessionRestartAdjudication(args: {
     // Why: re-adoption is not a new generation, so the fence does not move.
     return withLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: args.now })
   }
+  if (adjudication.disposition === 'settlement-pending') {
+    return withLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: args.now })
+  }
   if (adjudication.disposition === 'free') {
     // Why: an already-free lease that reloads into `recovering` is unopenable forever; clearing
     // the stage restores it without moving the fence or touching the recorded death evidence.
@@ -74,7 +78,9 @@ export function applyAgentSessionRestartAdjudication(args: {
       unreconciled: false,
       lastRenewedAt: args.now,
       handoffOperationId: null,
-      deathEvidence: adjudication.evidence
+      deathEvidence: adjudication.evidence,
+      settlementRetryRequired: true,
+      settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
     })
   }
   const stage: AgentSessionHandoffStage =

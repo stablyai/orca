@@ -1,3 +1,4 @@
+import { sortByUpdatedAtDescending } from '../../shared/updated-at-order'
 import type { JiraIssue, JiraIssueFilter, JiraSiteSelection } from '../../shared/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
@@ -18,9 +19,7 @@ function clampLimit(limit: number | undefined, fallback = 30): number {
 }
 
 function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
-  return issues
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, limit)
+  return sortByUpdatedAtDescending(issues).slice(0, limit)
 }
 
 function filterToJql(filter: JiraIssueFilter): string {

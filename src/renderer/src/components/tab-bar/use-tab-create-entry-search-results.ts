@@ -6,16 +6,19 @@ import type { OpenTabSearchResult } from './open-tab-search'
 export function useTabCreateEntrySearchResults({
   enabled,
   query,
-  worktreeId
+  worktreeId,
+  retainedResultId
 }: {
   enabled: boolean
   query: string
   worktreeId: string
+  retainedResultId?: string | null
 }): readonly OpenTabSearchResult[] {
   const tabSearch = useOpenTabSearch({
     enabled,
     query: enabled ? query : '',
-    worktreeId
+    worktreeId,
+    retainedResultId
   })
   // Why retain instead of clearing: emptying deferred rows flashes the list on
   // every keystroke. Retention re-checks each row against the live query, so

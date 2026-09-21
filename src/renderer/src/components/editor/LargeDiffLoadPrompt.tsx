@@ -1,7 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 
-export function LargeDiffLoadPrompt({ onLoad }: { onLoad: () => void }): React.JSX.Element {
+export function LargeDiffLoadPrompt({
+  onLoad,
+  sizeUnknown = false
+}: {
+  onLoad: () => void
+  // Deferred rows split two ways: over the changed-line limit, or never counted
+  // at all. Claiming "large" for an uncounted 4 KB binary would be false.
+  sizeUnknown?: boolean
+}): React.JSX.Element {
   return (
     <div
       data-testid="large-diff-load-prompt"
@@ -9,10 +17,15 @@ export function LargeDiffLoadPrompt({ onLoad }: { onLoad: () => void }): React.J
     >
       <div className="space-y-3 text-center">
         <div className="text-sm font-medium text-foreground">
-          {translate(
-            'auto.components.editor.LargeDiffLoadPrompt.a0af0198aa',
-            'Large diffs are not rendered by default.'
-          )}
+          {sizeUnknown
+            ? translate(
+                'auto.components.editor.LargeDiffLoadPrompt.c3d9f4a712',
+                "This diff's size isn't known yet, so it loads on request."
+              )
+            : translate(
+                'auto.components.editor.LargeDiffLoadPrompt.a0af0198aa',
+                'Large diffs are not rendered by default.'
+              )}
         </div>
         <Button
           type="button"

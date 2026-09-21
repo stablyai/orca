@@ -1,0 +1,619 @@
+{
+  "operation": "session.tab-documents",
+  "family": "session.markdown-disk-fallback",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "c4b6c9c21433876e2bb3822f289627e7c5607830559289d35cae066ff895fc23",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1814b29b1212": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "232de05393a9": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "26b8fd580c90": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "411d336833d5": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "44abbe2af7aa": {
+      "name": "markdown.readTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+    },
+    "455401ec3b87": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5d8fad85cc4d": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "767ef7fdc9b3": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "877720375363": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "message": "Couldn't load markdown",
+          "status": "error"
+        }
+      }
+    },
+    "c681a5b94b73": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c6cea5310098": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Editing needs Orca desktop running.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "d4be01606497": {
+      "name": "files.read#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
+    },
+    "d59404d25d6c": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "byteLength": 6,
+            "content": "# disk",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "e258dafc91f1": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "renderer_unavailable",
+            "message": "Renderer unavailable"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e4cc82795cc4": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e6ef1892cf5d": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.markdown-disk-fallback-files.read-1",
+    "checkpoints": [
+      {
+        "id": "session-markdown-disk-read.normal:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "d59404d25d6c"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "c6cea5310098",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.result-absent:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "26b8fd580c90"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.result-null:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "232de05393a9"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-ok-missing:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "c681a5b94b73"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-false-string-error:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "e4cc82795cc4"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-false-object-error:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "411d336833d5"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.outer-refused:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "5d8fad85cc4d"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.outer-refused-no-message:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "1814b29b1212"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.method-not-found:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "767ef7fdc9b3"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.transport-rejection:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "e6ef1892cf5d"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.transport-rejection-no-message:fell-back",
+        "observation": {
+          "sender": ["e258dafc91f1", "455401ec3b87"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

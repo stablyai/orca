@@ -43,3 +43,25 @@ export function subscribeToTerminalUserInput(
     return null
   }
 }
+
+/** Preserve xterm's input provenance across deferred PTY forwarding. */
+export function subscribeToTerminalInputData(
+  terminal: Terminal,
+  listener: (data: string, wasUserInput: boolean) => void
+): { dispose: () => void } {
+  let pendingUserInput = false
+  const userInput = subscribeToTerminalUserInput(terminal, () => {
+    pendingUserInput = true
+  })
+  const dataInput = terminal.onData((data) => {
+    const wasUserInput = pendingUserInput
+    pendingUserInput = false
+    listener(data, wasUserInput)
+  })
+  return {
+    dispose: () => {
+      dataInput.dispose()
+      userInput?.dispose()
+    }
+  }
+}

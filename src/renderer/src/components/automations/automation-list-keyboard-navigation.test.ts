@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   findAutomationListSelectionIndex,
   getAutomationListArrowNavigationTarget,
+  getAutomationListEnterNavigationTarget,
   isAutomationListArrowKey,
-  shouldHandleAutomationListSearchArrowKey
+  shouldHandleAutomationListSearchArrowKey,
+  shouldHandleAutomationListSearchEnterKey
 } from './automation-list-keyboard-navigation'
 
 const items = [
@@ -146,6 +148,95 @@ describe('getAutomationListArrowNavigationTarget', () => {
         selectedId: null,
         selectedExternalKey: 'ext-1',
         key: 'ArrowDown'
+      })
+    ).toEqual(items[2])
+  })
+})
+
+describe('shouldHandleAutomationListSearchEnterKey', () => {
+  function event(
+    overrides: Partial<{
+      key: string
+      altKey: boolean
+      ctrlKey: boolean
+      metaKey: boolean
+      shiftKey: boolean
+      isComposing: boolean
+    }> = {}
+  ) {
+    return {
+      key: 'Enter',
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      nativeEvent: { isComposing: overrides.isComposing ?? false },
+      ...overrides
+    }
+  }
+
+  it('handles plain Enter', () => {
+    expect(shouldHandleAutomationListSearchEnterKey(event())).toBe(true)
+  })
+
+  it('ignores composing, modified, and non-enter keys', () => {
+    expect(shouldHandleAutomationListSearchEnterKey(event({ isComposing: true }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ metaKey: true }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ ctrlKey: true }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ altKey: true }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ shiftKey: true }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ key: 'ArrowDown' }))).toBe(false)
+    expect(shouldHandleAutomationListSearchEnterKey(event({ key: 'Escape' }))).toBe(false)
+  })
+})
+
+describe('getAutomationListEnterNavigationTarget', () => {
+  it('returns null when the list is empty', () => {
+    expect(
+      getAutomationListEnterNavigationTarget({
+        items: [],
+        selectedId: null,
+        selectedExternalKey: null
+      })
+    ).toBeNull()
+  })
+
+  it('returns the first row when nothing is selected', () => {
+    expect(
+      getAutomationListEnterNavigationTarget({
+        items,
+        selectedId: null,
+        selectedExternalKey: null
+      })
+    ).toEqual(items[0])
+  })
+
+  it('returns the first row when selection is not in visible items', () => {
+    expect(
+      getAutomationListEnterNavigationTarget({
+        items,
+        selectedId: 'missing-row',
+        selectedExternalKey: null
+      })
+    ).toEqual(items[0])
+  })
+
+  it('returns the selected local row when selected', () => {
+    expect(
+      getAutomationListEnterNavigationTarget({
+        items,
+        selectedId: 'local-2',
+        selectedExternalKey: null
+      })
+    ).toEqual(items[1])
+  })
+
+  it('returns the selected external row when selected', () => {
+    expect(
+      getAutomationListEnterNavigationTarget({
+        items,
+        selectedId: null,
+        selectedExternalKey: 'ext-1'
       })
     ).toEqual(items[2])
   })

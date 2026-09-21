@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { createInitialHostRouteActionState } from '../host-route-action-state'
@@ -12,6 +12,7 @@ import type {
   MobileViewState
 } from '../worktree/workspace-view-settings'
 import type { FilterState, Worktree } from '../worktree/workspace-list-sections'
+import type { MobileHostRepoIcon } from './host-screen-reply-schema'
 
 export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
   const [initialCache] = useState(() =>
@@ -37,9 +38,12 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     string | null
   >(null)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
-  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
+  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, MobileHostRepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
+  // An action that did not happen, said above the list rather than instead of it. Separate from
+  // `error`, which is the screen's identity and is the one thing worth taking the whole view for.
+  const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -56,6 +60,12 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   )
   // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
+  // Host-label inputs for rows: repo → host, SSH/override labels, and the host's own platform.
+  const [repoHostIdByRepoId, setRepoHostIdByRepoId] = useState<Map<string, ExecutionHostId>>(
+    new Map()
+  )
+  const [hostLabelById, setHostLabelById] = useState<Map<ExecutionHostId, string>>(new Map())
+  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
@@ -87,19 +97,23 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     collapsedGroups,
     confirmDelete,
     confirmRemoveHost,
+    actionError,
     error,
     fetchRepoMetadataInFlightRef,
     fetchRepoMetadataPendingRef,
     fetchWorktreesInFlightRef,
     filters,
     groupMode,
+    hostLabelById,
     hostName,
+    hostPlatform,
     lastKnownWorktrees,
     newWorktreeModalRef,
     newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
     repoColorsByName,
+    repoHostIdByRepoId,
     repoIconsByName,
     repoIdsByName,
     repoMetadataFetchedAtRef,
@@ -110,14 +124,18 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setCollapsedGroups,
     setConfirmDelete,
     setConfirmRemoveHost,
+    setActionError,
     setError,
     setFilters,
     setGroupMode,
+    setHostLabelById,
     setHostName,
+    setHostPlatform,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     setRepoColorsByName,
+    setRepoHostIdByRepoId,
     setRepoIconsByName,
     setRepoIdsByName,
     setRouteActionState,

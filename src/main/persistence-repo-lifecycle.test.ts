@@ -15,6 +15,7 @@ import {
   makeWorktreeLineage
 } from './persistence-test-harness'
 import {
+  _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
@@ -98,6 +99,18 @@ describe('Store', () => {
     const beforeReAdd = getLocalWorktreeScanGeneration(repoId)
     store.addRepo(makeRepo({ id: repoId, path: '/replacement' }))
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeReAdd)).toBe(false)
+  })
+
+  it('forgets scan generations when repos are removed', async () => {
+    const store = await createStore()
+    const initialCacheSize = _getLocalWorktreeScanGenerationCacheSize()
+    for (let index = 0; index < 200; index += 1) {
+      const repoId = `scan-churn-${index}`
+      store.addRepo(makeRepo({ id: repoId }))
+      store.removeProject(repoId)
+    }
+
+    expect(_getLocalWorktreeScanGenerationCacheSize()).toBe(initialCacheSize)
   })
 
   it('setResolvedRepoGitUsername persists the enriched username for hydration', async () => {
@@ -737,7 +750,10 @@ describe('Store', () => {
 
   it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
     const store = await createStore()
-    // A meta on the old SSH host with no repo row — the re-point must still be persisted, not memory-only.
+    // A meta on the old SSH host with no repo row for that host — the re-point must still be
+    // persisted, not memory-only. The repo id stays registered so the load-time orphan sweep,
+    // which only reads repo ids, leaves the row alone.
+    store.addRepo(makeRepo({ id: 'r1', path: '/r1' }))
     store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
     const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
@@ -787,6 +803,7 @@ describe('Store', () => {
 
   it('reassignSshTargetId re-keys a session partition stored under the old ssh host id', async () => {
     const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/r1' }))
     store.setWorkspaceSession(
       {
         activeRepoId: null,

@@ -1,0 +1,234 @@
+{
+  "operation": "settings.new-tab-agents",
+  "family": "settings-agent-read",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
+  "scenarioSha256": "61e36caf6b3bb01c3ad0db282b7f0fbc0f300d40184f9cf3d7e4e3a3194a4f2a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "35f85fe3b71c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "44136fa355b3": {},
+    "51d4cb56be85": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "618234017ab2": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "settings disconnected",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "7023dde78391": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "connectionId": "ssh-1",
+                "id": "repo-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a05ac6b15c2d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "c75fd40d94ca": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "agents refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "f4c218ff736f": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "settings disconnected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "probe-new-tab-rejects-sibling-refused",
+    "checkpoints": [
+      {
+        "id": "pending",
+        "observation": {
+          "sender": ["35f85fe3b71c", "51d4cb56be85"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca"],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["7023dde78391", "f4c218ff736f", "c75fd40d94ca"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "a05ac6b15c2d"],
+          "settlements": {
+            "load": "618234017ab2"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

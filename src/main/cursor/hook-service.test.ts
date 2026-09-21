@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -98,7 +99,7 @@ describe('CursorHookService', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
-    rmSync(homeDir, { recursive: true, force: true })
+    removeTreeSync(homeDir)
   })
 
   it('installs Cursor Agent hooks with the documented top-level command schema', () => {
@@ -130,6 +131,7 @@ describe('CursorHookService', () => {
       'utf8'
     )
     expect(script).toContain('/hook/cursor')
+    expect(script).toContain('GROK_HOOK_EVENT')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {
@@ -164,7 +166,7 @@ describe('CursorHookService', () => {
           expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
+        removeTreeSync(spaceHome)
       }
     }
   )

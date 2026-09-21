@@ -8,6 +8,7 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import { runProcess } from '../shared/child-process/run-process'
 
 const execFileAsync = promisify(execFile)
 
@@ -28,6 +29,7 @@ type AgentDetectionRuntime = NodeJS.Platform | 'wsl'
 type AgentDetectionCommand = {
   id: string
   cmd: string
+  reportVersion?: true
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly AgentDetectionRuntime[]
 }
@@ -54,7 +56,10 @@ export class PreflightHandler {
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
   // on the relay side. This keeps the relay bundle minimal and makes the protocol
   // self-describing — the relay doesn't need to know the agent catalog.
-  private async detectAgents(params: Record<string, unknown>): Promise<{ agents: string[] }> {
+  private async detectAgents(params: Record<string, unknown>): Promise<{
+    agents: string[]
+    versions?: Record<string, string>
+  }> {
     const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
       return { agents: [] }
@@ -70,26 +75,40 @@ export class PreflightHandler {
     const results = await Promise.all(
       probeCommands.map(async (cmd) => ({
         cmd,
-        installed: await this.isCommandOnPath(cmd)
+        executablePath: await resolveCommandPathForRelay(cmd)
       }))
     )
     const foundCommands = new Set(
-      results.filter((result) => result.installed).map(({ cmd }) => cmd)
+      results.filter((result) => result.executablePath !== null).map(({ cmd }) => cmd)
     )
+    const detectedCommands = commands.filter(
+      (command) =>
+        !isDetectionUnsupportedInRuntime(command, process.platform) &&
+        foundCommands.has(command.cmd) &&
+        (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+    )
+    const versions: Record<string, string> = {}
+    for (const command of detectedCommands) {
+      if (
+        command.id !== 'claude' ||
+        command.reportVersion !== true ||
+        versions.claude !== undefined
+      ) {
+        continue
+      }
+      const executablePath = results.find((result) => result.cmd === command.cmd)?.executablePath
+      if (!executablePath) {
+        continue
+      }
+      const version = await probeCommandVersion(executablePath)
+      if (version) {
+        versions[command.id] = version
+      }
+    }
 
     return {
-      agents: [
-        ...new Set(
-          commands
-            .filter(
-              (command) =>
-                !isDetectionUnsupportedInRuntime(command, process.platform) &&
-                foundCommands.has(command.cmd) &&
-                (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
-            )
-            .map(({ id }) => id)
-        )
-      ]
+      agents: [...new Set(detectedCommands.map(({ id }) => id))],
+      ...(Object.keys(versions).length > 0 ? { versions } : {})
     }
   }
 
@@ -119,8 +138,33 @@ export class PreflightHandler {
   // startup files sourced. Ask the user's configured shell so agent dirs added
   // by zsh/bash/fish startup hooks match the remote terminal experience.
   // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
-  private async isCommandOnPath(command: string): Promise<boolean> {
-    return isCommandOnPathForRelay(command)
+}
+
+async function probeCommandVersion(executablePath: string): Promise<string | null> {
+  try {
+    const env = buildRelayCommandEnv(process.env, process.platform)
+    const pathKey = process.platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
+    const executableDir = path.dirname(executablePath)
+    const inheritedPath = env[pathKey]
+    const result = await runProcess({
+      program: executablePath,
+      args: ['--version'],
+      env: {
+        ...env,
+        [pathKey]: inheritedPath
+          ? `${executableDir}${path.delimiter}${inheritedPath}`
+          : executableDir
+      },
+      timeoutMs: 5_000,
+      maxOutputBytes: 4_096
+    })
+    if (result.code !== 0) {
+      return null
+    }
+    const output = `${result.stdout}\n${result.stderr}`.trim()
+    return output.length > 0 ? output : null
+  } catch {
+    return null
   }
 }
 
@@ -172,6 +216,13 @@ export async function isCommandOnPathForRelay(
   command: string,
   options: RelayCommandLookupOptions = {}
 ): Promise<boolean> {
+  return (await resolveCommandPathForRelay(command, options)) !== null
+}
+
+export async function resolveCommandPathForRelay(
+  command: string,
+  options: RelayCommandLookupOptions = {}
+): Promise<string | null> {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
@@ -184,31 +235,39 @@ export async function isCommandOnPathForRelay(
         timeout: 5000,
         ...(spec.windowsHide ? { windowsHide: true } : {})
       })
-      if (hasAbsoluteCommandPath(stdout, platform)) {
-        return true
+      const resolvedPath = getAbsoluteCommandPath(stdout, platform)
+      if (resolvedPath) {
+        return resolvedPath
       }
     } catch {
       // Try the inherited-PATH fallback before reporting the agent missing.
     }
   }
 
-  return false
+  return null
 }
 
 export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
+  return getAbsoluteCommandPath(output, platform) !== null
+}
+
+function getAbsoluteCommandPath(output: string, platform: NodeJS.Platform): string | null {
   const pathOps = platform === 'win32' ? win32 : path
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => {
-      const resolvedPath =
-        platform === 'win32'
-          ? line
-          : line.startsWith(AGENT_PATH_PREFIX)
-            ? line.slice(AGENT_PATH_PREFIX.length)
-            : ''
-      return pathOps.isAbsolute(resolvedPath)
-    })
+  return (
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .map((line) => {
+        const resolvedPath =
+          platform === 'win32'
+            ? line
+            : line.startsWith(AGENT_PATH_PREFIX)
+              ? line.slice(AGENT_PATH_PREFIX.length)
+              : ''
+        return pathOps.isAbsolute(resolvedPath) ? resolvedPath : null
+      })
+      .find((resolvedPath): resolvedPath is string => resolvedPath !== null) ?? null
+  )
 }
 
 function buildPosixCommandLookupSpec(command: string, shell: string): CommandLookupSpec {

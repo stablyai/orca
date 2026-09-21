@@ -25,7 +25,8 @@ export function deriveMobileAiVaultScopePaths(
   }
 
   const paths: string[] = []
-  addScopePath(paths, activeWorktree.path)
+  const comparisonPaths = new Set<string>()
+  addScopePath(paths, comparisonPaths, activeWorktree.path)
 
   // Workspace scope = the active worktree only. Project scope additionally
   // covers same-repo sibling worktrees so the project view stays complete.
@@ -37,7 +38,7 @@ export function deriveMobileAiVaultScopePaths(
         break
       }
       if (worktree.repoId === activeWorktree.repoId) {
-        addScopePath(paths, worktree.path)
+        addScopePath(paths, comparisonPaths, worktree.path)
       }
     }
   }
@@ -45,16 +46,19 @@ export function deriveMobileAiVaultScopePaths(
   return paths
 }
 
-function addScopePath(paths: string[], pathValue: string | undefined): void {
+function addScopePath(
+  paths: string[],
+  comparisonPaths: Set<string>,
+  pathValue: string | undefined
+): void {
   const trimmedPath = pathValue?.trim()
   if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
     return
   }
   const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (
-    paths.some((existingPath) => normalizeRuntimePathForComparison(existingPath) === comparisonPath)
-  ) {
+  if (comparisonPaths.has(comparisonPath)) {
     return
   }
+  comparisonPaths.add(comparisonPath)
   paths.push(trimmedPath)
 }

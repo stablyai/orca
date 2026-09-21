@@ -11,6 +11,7 @@ import {
   getLinkedWorktreeMainRepoRoot,
   getRepoName
 } from '../../git/repo'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 
@@ -73,7 +74,11 @@ export async function addLocalRepoFromPath(
     }
   }
 
-  const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
+  const detected = await detectRepoIconAndUpstream({
+    repoPath: resolvedPath,
+    kind: repoKind,
+    executionHostId: LOCAL_EXECUTION_HOST_ID
+  })
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,

@@ -227,12 +227,15 @@ export const onboardingGhosttyDiscoveredSchema = z
 export const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
 
 // Smart-sort telemetry: measures whether the redesign concentrates users in Class 1-3, and flags Smart→Recent abandonment as a regression.
+// Why class_5: splitting the old catch-all idle class into unverifiable (4) and idle (5) moved
+// what class_4 counts, so the previously-absent bucket is the one that keeps the total honest.
 export const smartSortClassDistributionSchema = z
   .object({
     class_1: z.number().int().nonnegative(),
     class_2: z.number().int().nonnegative(),
     class_3: z.number().int().nonnegative(),
     class_4: z.number().int().nonnegative(),
+    class_5: z.number().int().nonnegative().optional(),
     total_worktrees: z.number().int().nonnegative()
   })
   .strict()

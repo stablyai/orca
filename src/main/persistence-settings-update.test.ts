@@ -708,7 +708,7 @@ describe('Store', () => {
     }
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {
         'repo1::/worktree-a': { status: 'active' },
         'repo1::/worktree-b': { status: 'active' }

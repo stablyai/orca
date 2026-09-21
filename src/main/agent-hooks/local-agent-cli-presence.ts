@@ -14,7 +14,10 @@ import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-pa
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
 export type LocalCliPresenceByAgent = Partial<
-  Record<AgentHookTarget, { state: LocalCliPresenceState }>
+  Record<
+    AgentHookTarget,
+    { state: 'found'; executablePath: string } | { state: Exclude<LocalCliPresenceState, 'found'> }
+  >
 >
 
 type FileProbe = {
@@ -113,18 +116,18 @@ async function probePathCandidate(
   platform: NodeJS.Platform,
   fileProbe: FileProbe,
   pathExt?: string
-): Promise<boolean> {
+): Promise<string | null> {
   if (!isSafeExecutableBasename(candidate)) {
-    return false
+    return null
   }
   for (const dir of dirs) {
     for (const fileName of candidateFileNames(candidate, platform, pathExt)) {
       if (await fileProbe.isExecutableFile(pathApiForPlatform(platform).join(dir, fileName))) {
-        return true
+        return pathApiForPlatform(platform).join(dir, fileName)
       }
     }
   }
-  return false
+  return null
 }
 
 function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): boolean {
@@ -171,10 +174,17 @@ export async function detectLocalManagedAgentCliPresence(
       candidates.add(override)
     }
   }
-  const found = new Set<string>()
+  const found = new Map<string, string>()
   for (const candidate of candidates) {
-    if (await probePathCandidate(candidate, dirs, platform, fileProbe, options.pathExt)) {
-      found.add(candidate)
+    const executablePath = await probePathCandidate(
+      candidate,
+      dirs,
+      platform,
+      fileProbe,
+      options.pathExt
+    )
+    if (executablePath) {
+      found.set(candidate, executablePath)
     }
   }
   const result: LocalCliPresenceByAgent = {}
@@ -187,13 +197,16 @@ export async function detectLocalManagedAgentCliPresence(
         continue
       }
       result[target.agent] = (await fileProbe.isExecutableFile(expanded))
-        ? { state: 'found' }
+        ? { state: 'found', executablePath: expanded }
         : { state: 'missing' }
       continue
     }
     const targetCandidates = [...target.executableCandidates, ...(override ? [override] : [])]
-    result[target.agent] = targetCandidates.some((candidate) => found.has(candidate))
-      ? { state: 'found' }
+    const executablePath = targetCandidates
+      .map((candidate) => found.get(candidate))
+      .find((candidate): candidate is string => candidate !== undefined)
+    result[target.agent] = executablePath
+      ? { state: 'found', executablePath }
       : { state: 'missing' }
   }
   return result

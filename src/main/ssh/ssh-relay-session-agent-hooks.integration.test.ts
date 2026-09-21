@@ -157,6 +157,7 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn(),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
@@ -411,7 +412,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(events).toHaveLength(2)
   })
 
-  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+  it('keeps stamped status unverifiable across reconnect loss and final shutdown', async () => {
     const initialRelay = createFakeRelay()
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay)
@@ -435,16 +436,13 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await session.reconnect({} as SshConnection)
     initialRelay.dispose()
 
-    expect(agentHookServer.getStatusSnapshot()).toEqual([])
-    expect(clearListener).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledWith({
-      transient: true,
-      connectionId: 'conn-clear',
-      clearedAt: expect.any(Number)
-    })
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-clear', state: 'working' })
+    ])
+    expect(clearListener).not.toHaveBeenCalled()
     session.dispose()
     session = null
-    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).not.toHaveBeenCalled()
   })
 
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {
@@ -685,6 +683,31 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
+
+  it.each([{ isReplay: 'true' }, { isReplay: null }, { launchToken: 42 }])(
+    'rejects malformed OMP authority metadata before forwarding: %j',
+    async (invalid) => {
+      relay = createFakeRelay()
+      vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      session = createSession('conn-omp-invalid')
+      await session.establish({} as SshConnection)
+      const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+      const envelope = makeEnvelope({
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { agentType: 'omp', state: 'working', prompt: 'new turn' }
+      })
+      relay.notifyAgentHook(JSON.parse(JSON.stringify({ ...envelope, ...invalid })))
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(ingestSpy).not.toHaveBeenCalled()
+      ingestSpy.mockRestore()
+    }
+  )
 
   it('preserves replay metadata from remote hook notifications', async () => {
     relay = createFakeRelay()

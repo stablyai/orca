@@ -12,6 +12,7 @@ export const GROK_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'StopCancelled', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
   {

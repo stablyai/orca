@@ -445,7 +445,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       ptyId: APP_PTY_ID,
       incarnationId,
-      mayReviveRetiredSurface: false
+      mayReviveRetiredSurface: false,
+      origin: 'relay_reattach'
     })
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!

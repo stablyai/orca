@@ -29,14 +29,20 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./build-dashboard-bucket-counts', () => ({
-  buildDashboardBucketCounts: mocks.buildDashboardBucketCounts
+  buildDashboardBucketCounts: mocks.buildDashboardBucketCounts,
+  createDashboardBucketCountsCache: () => ({
+    byWorktree: new Map(),
+    computeCount: 0,
+    lastComputedWorktreeIds: []
+  })
 }))
 
-import { useAgentBucketCounts } from './useAgentBucketCounts'
+import { resetAgentBucketCountStateForTests, useAgentBucketCounts } from './useAgentBucketCounts'
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  resetAgentBucketCountStateForTests()
   mocks.state.acknowledgedAgentsByPaneKey = {}
   mocks.state.unrelatedEpoch = 0
 })
@@ -60,7 +66,9 @@ describe('useAgentBucketCounts', () => {
         folderWorkspaces: mocks.state.folderWorkspaces,
         unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree
       }),
-      expect.any(Number)
+      expect.any(Number),
+      expect.objectContaining({ byWorktree: expect.any(Map) }),
+      expect.anything()
     )
   })
 

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
@@ -410,10 +410,11 @@ describe('settings navigation metadata', () => {
     const testDir = import.meta.dirname
     // Why: the section tables live in sibling settings-navigation-* modules, so reading only the
     // hook would scan a file that no longer holds the imports this guard exists to police.
+    // Walk recursively so a later split that nests the modules cannot shrink this guard.
     const sourceFiles = [
       'useSettingsNavigationMetadata.ts',
-      ...readdirSync(testDir).filter(
-        (name) => name.startsWith('settings-navigation-') && name.endsWith('.ts')
+      ...readdirSync(testDir, { recursive: true, encoding: 'utf8' }).filter(
+        (name) => basename(name).startsWith('settings-navigation-') && name.endsWith('.ts')
       )
     ]
     expect(sourceFiles.length).toBeGreaterThan(1)

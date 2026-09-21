@@ -37,7 +37,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
+      'opencode2',
       'pi'
     ])
   })
@@ -45,7 +47,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('uses the strongest available defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('default')
   })
 
   it('uses --prompt (not Claude --print) for Kimi non-interactive generation', () => {
@@ -570,13 +572,79 @@ describe('buildArgs (OpenCode)', () => {
   })
 })
 
+describe('buildArgs (OpenCode 2)', () => {
+  const spec = getCommitMessageAgentSpec('opencode2')!
+
+  it('runs `opencode2 run` with stdin delivery', () => {
+    const prompt = `PROMPT ${'x'.repeat(1024)}`
+    const args = spec.buildArgs({
+      prompt,
+      model: 'opencode/deepseek-v4-flash-free'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/deepseek-v4-flash-free',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain(prompt)
+    expect(args).not.toContain('')
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('inlines the thinking variant as model#variant (v1 --variant is removed in v2)', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'opencode/gpt-5.4-mini',
+      thinkingLevel: 'high'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/gpt-5.4-mini#high',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain('--variant')
+  })
+})
+
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
-  it('runs agy with --print, --sandbox, and --model flags', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args).toEqual(['--print', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'])
-    expect(spec.promptDelivery).toBe('stdin')
+  it('runs agy with the prompt attached to --print, then --sandbox and --model flags', () => {
+    const args = spec.buildArgs({
+      prompt: 'real commit prompt',
+      model: 'Gemini 3.5 Flash (Medium)'
+    })
+    expect(args).toEqual([
+      '--print=real commit prompt',
+      '--sandbox',
+      '--model',
+      'Gemini 3.5 Flash (Medium)'
+    ])
+    expect(spec.promptDelivery).toBe('argv')
+  })
+
+  it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
+    const args = spec.buildArgs({ prompt: '-fix: something', model: 'Gemini 3.5 Flash (Medium)' })
+    expect(args[0]).toBe('--print=-fix: something')
+  })
+
+  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
+  // that exactly matches a registered flag name (its own heuristic, independent of this
+  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
+  // literally a bare flag name, so this doesn't affect actual generation.
+  it('still glues a prompt that collides with a flag name onto --print', () => {
+    const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
+    expect(args[0]).toBe('--print=--sandbox')
   })
 
   it('uses dynamic model discovery via agy models', () => {
@@ -587,5 +655,25 @@ describe('buildArgs (Antigravity)', () => {
 
   it('uses Gemini 3.5 Flash (Medium) as default model', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
+  })
+})
+
+describe('Pi Source Control AI model selection', () => {
+  it('leaves provider selection to Pi for the config default', () => {
+    const args = getCommitMessageAgentSpec('pi')!.buildArgs({
+      prompt: 'Name a branch',
+      model: 'default'
+    })
+    expect(args).not.toContain('--model')
+  })
+
+  it('passes an explicit discovered Pi model through', () => {
+    const args = getCommitMessageAgentSpec('pi')!.buildArgs({
+      prompt: 'Name a branch',
+      model: 'openai-codex/gpt-5.5'
+    })
+    const modelFlagIndex = args.indexOf('--model')
+    expect(modelFlagIndex).toBeGreaterThanOrEqual(0)
+    expect(args[modelFlagIndex + 1]).toBe('openai-codex/gpt-5.5')
   })
 })

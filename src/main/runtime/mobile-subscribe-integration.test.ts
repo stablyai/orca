@@ -87,8 +87,24 @@ const store = {
   }
 }
 
+/** Reclaim clears protected retention maps that no public reader exposes. */
+class ObservableRuntime extends OrcaRuntimeService {
+  get restoreTimers(): typeof this.pendingRestoreTimers {
+    return this.pendingRestoreTimers
+  }
+  get softLeavers(): typeof this.pendingSoftLeavers {
+    return this.pendingSoftLeavers
+  }
+  get fitOverrides(): typeof this.terminalFitOverrides {
+    return this.terminalFitOverrides
+  }
+  get drivers(): typeof this.terminalDrivers {
+    return this.terminalDrivers
+  }
+}
+
 function createRuntime() {
-  const runtime = new OrcaRuntimeService(store)
+  const runtime = new ObservableRuntime(store)
   const ptySizes = new Map<string, { cols: number; rows: number }>()
   ptySizes.set('pty-1', { cols: 150, rows: 40 })
   ptySizes.set('pty-2', { cols: 120, rows: 35 })
@@ -865,9 +881,9 @@ describe('mobile subscribe integration', () => {
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
       await runtime.handleMobileSubscribe('pty-1', 'client-b', { cols: 40, rows: 18 })
 
-      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      const pendingRestore = runtime.restoreTimers
       pendingRestore.set('pty-1', { timer: setTimeout(() => {}, 60_000), clientId: 'client-b' })
-      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      const pendingSoft = runtime.softLeavers
       expect(pendingSoft.has('pty-1')).toBe(true)
       await runtime.reclaimTerminalForDesktop('pty-1')
       expect(pendingRestore.has('pty-1')).toBe(false)
@@ -878,10 +894,10 @@ describe('mobile subscribe integration', () => {
       const { runtime } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
+      runtime.fitOverrides.delete('pty-1')
 
-      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
-      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      const pendingRestore = runtime.restoreTimers
+      const pendingSoft = runtime.softLeavers
       await runtime.reclaimTerminalForDesktop('pty-1')
       expect(pendingRestore.has('pty-1')).toBe(false)
       expect(pendingSoft.has('pty-1')).toBe(false)
@@ -891,13 +907,11 @@ describe('mobile subscribe integration', () => {
       const { runtime } = createRuntime()
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
-      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
-      ;(Reflect.get(runtime, 'currentDriver') as Map<string, { kind: string }>).set('pty-1', {
-        kind: 'idle'
-      })
+      runtime.fitOverrides.delete('pty-1')
+      runtime.drivers.set('pty-1', { kind: 'idle' })
 
-      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
-      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      const pendingRestore = runtime.restoreTimers
+      const pendingSoft = runtime.softLeavers
       expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
       expect(pendingRestore.has('pty-1')).toBe(false)
       expect(pendingSoft.has('pty-1')).toBe(false)

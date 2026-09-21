@@ -44,6 +44,39 @@ describe('useIpcEvents session tab close requests', () => {
     expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'close-session-tab' })
   })
 
+  it('acknowledges an initiating command without re-prompting or removing its tab early', async () => {
+    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
+    const closeUnifiedTab = vi.fn()
+    const respondSessionTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+    await useIpcEventsForCloseRouting({
+      sessionTabCloseRequestListenerRef: listenerRef,
+      respondSessionTabClose,
+      getState: () => ({
+        closeUnifiedTab,
+        requestPinnedTabCloseConfirm,
+        browserTabsByWorktree: {},
+        openFiles: [],
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            { id: 'chat-tab', entityId: 'session-1', contentType: 'agent-session', isPinned: true }
+          ]
+        }
+      })
+    })
+    const { withLocalSessionTabCloseOwner } =
+      await import('@/runtime/local-session-tab-close-owner')
+    await withLocalSessionTabCloseOwner('wt-1', 'chat-tab', async () => {
+      listenerRef.current?.({ requestId: 'owned-close', worktreeId: 'wt-1', tabId: 'chat-tab' })
+      expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'owned-close' })
+      expect(closeUnifiedTab).not.toHaveBeenCalled()
+      expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    })
+    listenerRef.current?.({ requestId: 'independent-close', worktreeId: 'wt-1', tabId: 'chat-tab' })
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledOnce()
+    expect(respondSessionTabClose).not.toHaveBeenCalledWith({ requestId: 'independent-close' })
+  })
+
   it('rejects a pinned browser close when confirmation is canceled', async () => {
     const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
     const closeBrowserTab = vi.fn()

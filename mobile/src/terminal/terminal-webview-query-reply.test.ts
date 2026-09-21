@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import {
+  documentScopePreamble,
+  generatedDocumentModule
+} from './document/generated-document-region.test-support'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
-import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
+
+const queryReplySource = await generatedDocumentModule('query-reply')
 
 type QueryReplyGate = {
   forward: (data: string) => void
@@ -15,17 +20,18 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
   queuedBoundaries: Array<() => void>
 } {
   const queuedBoundaries: Array<() => void> = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the body's return literal names exactly the five entries below.
   const factory = new Function(
     'notify',
     'enqueueWriteBoundary',
-    `var terminalGeneration = 0;
-      ${TERMINAL_QUERY_REPLY_JS}
+    `${documentScopePreamble()}
+      ${queryReplySource}
       return {
         forward: forwardTerminalDataReply,
         queueBoundary: enqueueTerminalDataReplyBoundary,
         reset: resetTerminalDataReplyAuthority,
         resume: resumeTerminalDataReplyAuthority,
-        setGeneration: function(next) { terminalGeneration = next; }
+        setGeneration: function(next) { scope.terminalGeneration = next; }
       };`
   ) as (
     notify: (message: unknown) => void,
@@ -39,7 +45,7 @@ describe('mobile terminal query replies', () => {
   it('forwards xterm-generated data only after initial replay drains', () => {
     const listenerIndex = XTERM_WEBVIEW_SOURCE.html.indexOf('term.onData(function(data)')
     const enableIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
-      'attachTerminalQueryReplyBridge(term, gen)',
+      'attachTerminalQueryReplyBridge(scope.term, gen)',
       listenerIndex
     )
     const notifyIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
@@ -52,9 +58,9 @@ describe('mobile terminal query replies', () => {
     expect(notifyIndex).toBeGreaterThan(listenerIndex)
     expect(XTERM_WEBVIEW_SOURCE.html).toContain('disableStdin: false')
     expect(XTERM_WEBVIEW_SOURCE.html).toContain(
-      'term.attachCustomKeyEventHandler(function() { return false; })'
+      'term.attachCustomKeyEventHandler(function() {\n        return false;\n      });'
     )
-    expect(XTERM_WEBVIEW_SOURCE.html).toContain('term.textarea.readOnly = true')
+    expect(XTERM_WEBVIEW_SOURCE.html).toContain('term.textarea.readOnly = true;')
   })
 
   it('mutes a replacement terminal until its own replay drains', () => {
@@ -64,7 +70,7 @@ describe('mobile terminal query replies', () => {
       initIndex
     )
     const enableIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
-      'attachTerminalQueryReplyBridge(term, gen)',
+      'attachTerminalQueryReplyBridge(scope.term, gen)',
       disableIndex
     )
 
@@ -114,9 +120,9 @@ describe('mobile terminal query replies', () => {
     gate.forward('\x1b[3;4R')
 
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])
-    const clearStart = XTERM_WEBVIEW_SOURCE.html.indexOf("} else if (msg.type === 'clear') {")
+    const clearStart = XTERM_WEBVIEW_SOURCE.html.indexOf('} else if (msg.type === "clear") {')
     const clearEnd = XTERM_WEBVIEW_SOURCE.html.indexOf(
-      "} else if (msg.type === 'measure')",
+      '} else if (msg.type === "measure")',
       clearStart
     )
     expect(XTERM_WEBVIEW_SOURCE.html.slice(clearStart, clearEnd)).toContain(

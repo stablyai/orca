@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = readFileSync(join(__dirname, 'startup', 'main-process-automations.ts'), 'utf8')
 
 function sourceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)

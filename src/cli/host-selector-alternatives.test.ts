@@ -118,6 +118,24 @@ describe('listSshTargets', () => {
     expect(call).toHaveBeenCalledWith('ssh.listTargets')
   })
 
+  it('enriches legacy target rows from host-owned connection state', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const call = vi.fn(async (method: string) => {
+      if (method === 'ssh.listTargetSummaries') {
+        throw new RuntimeClientError('method_not_found', 'Unknown method')
+      }
+      if (method === 'ssh.getState') {
+        return { result: { state: { status: 'connected', remotePlatform: 'win32' } } }
+      }
+      return { result: { targets: SSH_TARGETS } }
+    })
+
+    await expect(listSshTargets({ call } as unknown as RuntimeClient)).resolves.toEqual([
+      { ...SSH_TARGETS[0], connected: true, connectionStatus: 'connected', remotePlatform: 'win32' }
+    ])
+    expect(call).toHaveBeenCalledWith('ssh.getState', { targetId: SSH_TARGETS[0].id })
+  })
+
   // Why: this only ever runs to enrich an error we are already reporting; a failure here must
   // not replace that error with a confusing one about SSH enumeration.
   it('returns nothing rather than masking the error it was enriching', async () => {

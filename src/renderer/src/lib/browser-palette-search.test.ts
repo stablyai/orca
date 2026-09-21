@@ -102,6 +102,26 @@ describe('browser-palette-search', () => {
     expect(result.executionHostId).toBe('ssh:box')
   })
 
+  it('carries the page favicon into palette results', () => {
+    const faviconUrl = 'https://example.com/favicon.ico'
+    const [result] = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ faviconUrl }),
+          workspace: makeWorkspace(),
+          worktree: makeWorktree(),
+          repoName: 'repo/one',
+          worktreeSortIndex: 0,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      ''
+    )
+
+    expect(result.faviconUrl).toBe(faviconUrl)
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchBrowserPages(
       [

@@ -6,7 +6,8 @@ import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
-  toggleGitHubChecksTabExpandedKey
+  toggleGitHubChecksTabExpandedKey,
+  type GitHubChecksContextOwner
 } from '@/components/github-checks-tab-state'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
@@ -94,11 +95,11 @@ export function ChecksTab({
   const nextChecksRefreshRequestIdRef = useRef(0)
   const activeChecksRefreshRequestIdRef = useRef<number | null>(null)
   const [refreshingOwner, setRefreshingOwner] = useState<{
-    contextOwner: object
+    contextOwner: GitHubChecksContextOwner
     requestId: number
   } | null>(null)
   const refreshing = refreshingOwner?.contextOwner === resolvedChecksState.contextOwner
-  const [rerunningOwner, setRerunningOwner] = useState<object | null>(null)
+  const [rerunningOwner, setRerunningOwner] = useState<GitHubChecksContextOwner | null>(null)
   const rerunning = rerunningOwner === resolvedChecksState.contextOwner
   useLayoutEffect(() => {
     committedChecksContextOwnerRef.current = resolvedChecksState.contextOwner
@@ -173,7 +174,7 @@ export function ChecksTab({
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
-    async (expectedContextOwner?: object) =>
+    async (expectedContextOwner?: GitHubChecksContextOwner) =>
       refreshPullRequestChecks({
         canUseChecksRepoContext,
         expectedContextOwner,

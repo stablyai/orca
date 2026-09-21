@@ -9,10 +9,15 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getLiveEntriesFullRebuildCountForTests } from './worktree-agent-live-index-patch'
 import {
+  EMPTY_LIVE_ENTRIES,
+  EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
+  EMPTY_RETAINED,
+  EMPTY_TERMINAL_LAYOUTS,
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
-  selectRetainedAgentEntriesForWorktree
+  selectRetainedAgentEntriesForWorktree,
+  selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
 
 const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
@@ -94,8 +99,14 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
 
 describe('selectLiveAgentStatusEntriesForWorktree', () => {
   it('reuses unaffected worktree arrays when another worktree receives a same-state ping', () => {
-    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'first' })
-    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'first' })
+    const wt1Entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      prompt: 'first'
+    })
+    const wt2Entry = makeEntry(PANE_KEY_2, 1000, {
+      state: 'working',
+      prompt: 'first'
+    })
     const state = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1')],
@@ -192,8 +203,14 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
   })
 
   it('patches instead of full-rebuilding across within-state pings, and stays correct on transitions', () => {
-    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'wt1 prompt' })
-    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'wt2 prompt' })
+    const wt1Entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      prompt: 'wt1 prompt'
+    })
+    const wt2Entry = makeEntry(PANE_KEY_2, 1000, {
+      state: 'working',
+      prompt: 'wt2 prompt'
+    })
     const baseState = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1')],
@@ -256,7 +273,10 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
   })
 
   it('falls back to a full rebuild when a within-map update changes worktree attribution', () => {
-    const entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', worktreeId: 'wt-1' })
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1'
+    })
     const state = {
       // No tab membership: bucketing comes from entry.worktreeId attribution.
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
@@ -276,7 +296,10 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
   })
 
   it('falls back to a full rebuild when a live entry completes with its tab gone', () => {
-    const entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', worktreeId: 'wt-1' })
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      worktreeId: 'wt-1'
+    })
     const state = {
       tabsByWorktree: { 'wt-1': [] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
@@ -425,5 +448,81 @@ describe('selectRetainedAgentEntriesForWorktree', () => {
     expect(secondWt1).toBe(firstWt1)
     expect(secondWt2).not.toBe(firstWt2)
     expect(secondWt2[0]?.startedAt).toBe(1100)
+  })
+})
+
+describe('selectTerminalLayoutsForWorktree', () => {
+  const layout = {
+    root: { type: 'leaf', leafId: '44444444-4444-4444-8444-444444444444' },
+    activeLeafId: '44444444-4444-4444-8444-444444444444',
+    expandedLeafId: null,
+    ptyIdsByLeafId: {}
+  } as const
+
+  // Why: every visible card re-runs this selector on every store write; a fresh
+  // record per call is an allocation per card per write.
+  it('returns one identity per store generation', () => {
+    const state = {
+      tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
+      terminalLayoutsByTabId: { 'tab-1': layout }
+    }
+
+    expect(selectTerminalLayoutsForWorktree(state, 'wt-1')).toBe(
+      selectTerminalLayoutsForWorktree(state, 'wt-1')
+    )
+  })
+
+  it('returns the shared frozen empty for a worktree with no tabs', () => {
+    const state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+
+    expect(selectTerminalLayoutsForWorktree(state, 'missing')).toBe(EMPTY_TERMINAL_LAYOUTS)
+  })
+})
+
+// Why: the inline-agents hook short-circuits on `active`; the off branch has to
+// hand back a shared identity or the gate allocates on every store write.
+describe('inactive-card empty constants', () => {
+  it('are frozen and shared', () => {
+    for (const empty of [
+      EMPTY_LIVE_ENTRIES,
+      EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
+      EMPTY_RETAINED,
+      EMPTY_TERMINAL_LAYOUTS
+    ]) {
+      expect(Object.isFrozen(empty)).toBe(true)
+    }
+    expect(
+      selectLiveAgentStatusEntriesForWorktree(
+        {
+          agentStatusByPaneKey: {},
+          migrationUnsupportedByPtyId: {},
+          retainedAgentsByPaneKey: {},
+          tabsByWorktree: {}
+        },
+        'missing'
+      )
+    ).toBe(EMPTY_LIVE_ENTRIES)
+    expect(
+      selectMigrationUnsupportedEntriesForWorktree(
+        {
+          agentStatusByPaneKey: {},
+          migrationUnsupportedByPtyId: {},
+          retainedAgentsByPaneKey: {},
+          tabsByWorktree: {}
+        },
+        'missing'
+      )
+    ).toBe(EMPTY_MIGRATION_UNSUPPORTED_ENTRIES)
+    expect(
+      selectRetainedAgentEntriesForWorktree(
+        {
+          agentStatusByPaneKey: {},
+          migrationUnsupportedByPtyId: {},
+          retainedAgentsByPaneKey: {},
+          tabsByWorktree: {}
+        },
+        'missing'
+      )
+    ).toBe(EMPTY_RETAINED)
   })
 })

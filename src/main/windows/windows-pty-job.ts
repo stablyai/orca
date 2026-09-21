@@ -1,5 +1,6 @@
 import type { IPty } from 'node-pty'
 import { createRequire } from 'node:module'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 /**
  * Job-object ownership for a ConPTY's process tree.
@@ -93,18 +94,34 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
   if (!target || !native) {
     return 'unavailable'
   }
+  let terminated: boolean
   try {
-    return native.terminateJob(target.id, target.shellPid) ? 'terminated' : 'unavailable'
+    terminated = native.terminateJob(target.id, target.shellPid)
   } catch {
     return 'unavailable'
   }
+  if (!terminated) {
+    return 'unavailable'
+  }
+  // Outside the try: that catch is the native-refusal contract, and a throw from
+  // the breadcrumb path would downgrade a real termination to `unavailable`,
+  // escalating callers to the pid-addressed taskkill this instrumentation exists
+  // to constrain.
+  recordSelfInitiatedTreeKill({
+    pid: target.shellPid,
+    site: 'windows-pty-job-teardown',
+    scope: 'win-pty-job'
+  })
+  return 'terminated'
 }
 
 /**
  * Pids still alive in a PTY's tree, or null when there is no answer.
  *
- * Measured on Windows 11: once the shell exits, node-pty drops its handle
- * record and closes the job, so a terminated tree reports **null**, not `[]`.
+ * Measured on Windows 11: once the shell exits, node-pty closes the job, so a
+ * terminated tree reports **null**, not `[]`. (Its handle record now outlives
+ * the shell until `kill()` runs — see config/patches/node-pty@1.1.0.patch — but
+ * the nulled job handle is what makes the answer null either way.)
  * Null therefore means "unverifiable" in the sense of
  * docs/reference/ssh-execution-boundary.md — this build has no job support,
  * the terminal is not a ConPTY, or it is no longer tracked. It is never

@@ -29,9 +29,11 @@ export function useCombinedDiffScrollAnchors({
   scrollAnchorRef,
   scrollContainerRef,
   scrollOffsetRef,
+  sectionIndexByKey,
   sections,
   sectionsRef,
   sideBySide,
+  structureRevision,
   totalSize,
   viewStateKey,
   virtualizer
@@ -44,9 +46,11 @@ export function useCombinedDiffScrollAnchors({
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.RefObject<number>
+  sectionIndexByKey: ReadonlyMap<string, number>
   sections: DiffSection[]
   sectionsRef: React.RefObject<DiffSection[]>
   sideBySide: boolean
+  structureRevision: number
   totalSize: number
   viewStateKey: string
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -138,13 +142,10 @@ export function useCombinedDiffScrollAnchors({
     () =>
       // Why: a single-section reload drops that row's measured height, so it shifts rows
       // below it — still a structural change even though `generation` no longer moves.
-      `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${sections
-        .map(
-          (section) =>
-            `${section.key}:${section.collapsed ? 'c' : 'e'}:${section.contentGeneration ?? 0}`
-        )
-        .join(',')}`,
-    [clampRestoreCount, generation, sections, sideBySide]
+      // structureRevision moves iff a section key/collapsed/contentGeneration moved, so this is
+      // the same signal the per-section join produced without rebuilding it once per load.
+      `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${structureRevision}`,
+    [clampRestoreCount, generation, sideBySide, structureRevision]
   )
 
   useVirtualizedScrollAnchor({
@@ -157,6 +158,7 @@ export function useCombinedDiffScrollAnchors({
     recordAnchorOnCleanup: false,
     recordAnchorOnScroll: false,
     restoreSignal: combinedDiffRestoreSignal,
+    rowIndexByKey: sectionIndexByKey,
     rows: sections,
     scrollElementRef: scrollContainerRef,
     shouldSkipRestore: hasDirectScrollInput,

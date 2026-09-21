@@ -39,7 +39,7 @@ export function getLargeDiffFallbackBodyHeight(): number {
 export function usesLargeDiffFallbackHeight(
   section: Pick<
     DiffSection,
-    'added' | 'area' | 'largeDiffRenderLimit' | 'loading' | 'loadOnDemand' | 'path' | 'removed'
+    'added' | 'largeDiffRenderLimit' | 'loading' | 'loadOnDemand' | 'path' | 'removed'
   >
 ): boolean {
   return (
@@ -93,18 +93,16 @@ export function getDiffSectionEstimatedHeight({
   changedLineCount,
   useIntrinsicImageHeight,
   lineCounts,
-  isLargeDiffLimited = false,
-  isLoadOnDemand = false
+  isLargeDiffLimited = false
 }: DiffSectionBodyHeightInput & {
   collapsed: boolean
   isLargeDiffLimited?: boolean
-  isLoadOnDemand?: boolean
 }): number {
   if (collapsed) {
     return DIFF_SECTION_HEADER_HEIGHT
   }
 
-  if (isLargeDiffLimited || isLoadOnDemand) {
+  if (isLargeDiffLimited) {
     return DIFF_SECTION_HEADER_HEIGHT + getLargeDiffFallbackBodyHeight()
   }
 
@@ -119,4 +117,40 @@ export function getDiffSectionEstimatedHeight({
       lineCounts
     }) ?? MIN_DIFF_SECTION_BODY_HEIGHT)
   )
+}
+
+/**
+ * Single virtualizer estimate for a diff row, shared by the worktree and
+ * PR-review viewers so no viewer estimates a row the row's own layout metrics
+ * (useDiffSectionLayoutMetrics) would size from the bounded fallback instead.
+ */
+export function getDiffSectionRowEstimatedHeight(
+  section: Pick<
+    DiffSection,
+    | 'added'
+    | 'collapsed'
+    | 'diffResult'
+    | 'largeDiffRenderLimit'
+    | 'loading'
+    | 'loadOnDemand'
+    | 'modifiedContent'
+    | 'originalContent'
+    | 'path'
+    | 'removed'
+  >,
+  measuredContentHeight: number | undefined
+): number {
+  return getDiffSectionEstimatedHeight({
+    collapsed: section.collapsed,
+    measuredContentHeight,
+    originalContent: section.originalContent,
+    modifiedContent: section.modifiedContent,
+    changedLineCount:
+      section.added === undefined && section.removed === undefined
+        ? undefined
+        : (section.added ?? 0) + (section.removed ?? 0),
+    useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+    isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
+    lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
+  })
 }

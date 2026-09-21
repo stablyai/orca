@@ -203,8 +203,6 @@ export function AppearanceWindowSidebarSection({
                   title={translate('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
-                  {/* Why: this setting lives with the sidebar layout controls; Settings only
-                  names that ownership so we do not create a second stateful control. */}
                   <SearchableSetting
                     title={workspaceCardLayoutEntry.title}
                     description={workspaceCardLayoutEntry.description}

@@ -72,3 +72,23 @@ export function useMobileNativeChatInputLease(args: {
     clear
   }
 }
+
+const INPUT_LOCK_SETTLE_MS = 600
+
+/** A dead PTY emits subscribed→end; settle both edges so its false lease cannot
+ *  flash the composer enabled. */
+export function useSettledMobileNativeChatInputLock(
+  reason: MobileNativeChatInputLockReason | null | undefined
+): MobileNativeChatInputLockReason | null {
+  const rawLockReason = reason ?? null
+  const rawLockHeld = rawLockReason !== null
+  const [lockHeld, setLockHeld] = useState(false)
+  useEffect(() => {
+    if (rawLockHeld === lockHeld) {
+      return
+    }
+    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [lockHeld, rawLockHeld])
+  return lockHeld ? (rawLockReason ?? 'waiting') : null
+}

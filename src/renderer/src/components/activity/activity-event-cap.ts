@@ -1,10 +1,15 @@
 import type { ActivityEvent } from './activity-thread-types'
 
 // Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
-const EVENTS_PER_PANE_CAP = 5
+// Exported so the event builder can skip building history entries the cap would drop anyway.
+export const EVENTS_PER_PANE_CAP = 5
 
 export function capActivityEvents(events: ActivityEvent[]): ActivityEvent[] {
-  const sorted = events.sort((a, b) => b.timestamp - a.timestamp)
+  // Live turns already have uncapped snapshots; they must not evict retained history.
+  const working = events.filter((event) => event.state === 'working')
+  const sorted = events
+    .filter((event) => event.state !== 'working')
+    .sort((a, b) => b.timestamp - a.timestamp)
   const perPaneCount = new Map<string, number>()
   const includedEventIds = new Set<string>()
   const capped: ActivityEvent[] = []
@@ -37,5 +42,5 @@ export function capActivityEvents(events: ActivityEvent[]): ActivityEvent[] {
     includedEventIds.add(event.id)
     capped.push(event)
   }
-  return capped.sort((a, b) => b.timestamp - a.timestamp)
+  return [...capped, ...working].sort((a, b) => b.timestamp - a.timestamp)
 }

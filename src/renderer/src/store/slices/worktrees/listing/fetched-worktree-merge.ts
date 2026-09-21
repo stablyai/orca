@@ -254,7 +254,14 @@ export function mergeFetchedWorktrees(
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
-    forgetPersistedWorktreeMetaForRemovals(args.repoId, args.hostId, authoritativelyRemovedIds)
+    // Only a real scan retires persisted metadata. `session-fallback` also reports authoritative,
+    // but it is the truncated, visibility-filtered `worktree.list` reply from a host too old for
+    // `worktree.detectedList` -- its omissions are not evidence a checkout is gone.
+    forgetPersistedWorktreeMetaForRemovals(
+      args.repoId,
+      args.hostId,
+      args.refresh.result.source === 'git' ? authoritativelyRemovedIds : []
+    )
   }
   return admitted
 }

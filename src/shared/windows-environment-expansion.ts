@@ -1,22 +1,25 @@
-function getEnvironmentVariable(
-  env: Readonly<Record<string, string | undefined>>,
-  name: string
-): string | undefined {
-  const exactValue = env[name]
-  if (typeof exactValue === 'string') {
-    return exactValue
-  }
-  const key = Object.keys(env).find((candidate) => candidate.toLowerCase() === name.toLowerCase())
-  const value = key ? env[key] : undefined
-  return typeof value === 'string' ? value : undefined
-}
-
 export function expandWindowsEnvironmentVariables(
   value: string,
   env: Readonly<Record<string, string | undefined>>
 ): string {
+  let keysByLowerName: Map<string, string> | undefined
   return value.replace(/%([^%]+)%/g, (match, name: string) => {
-    return getEnvironmentVariable(env, name) ?? match
+    const exact = env[name]
+    if (typeof exact === 'string') {
+      return exact
+    }
+    if (!keysByLowerName) {
+      keysByLowerName = new Map()
+      for (const key of Object.keys(env)) {
+        const lower = key.toLowerCase()
+        if (!keysByLowerName.has(lower)) {
+          keysByLowerName.set(lower, key)
+        }
+      }
+    }
+    const key = keysByLowerName.get(name.toLowerCase())
+    const replacement = key ? env[key] : undefined
+    return typeof replacement === 'string' ? replacement : match
   })
 }
 

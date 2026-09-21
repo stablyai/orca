@@ -1,0 +1,176 @@
+{
+  "operation": "files.terminal-path-tap",
+  "family": "files.terminal-path-tap",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
+  "scenarioSha256": "297ea4075333e178ca20247eb0abf6600efb44fe2b33f5142d1c1cabffb5a2d3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0358eb8770a0": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 10000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "exists": true,
+            "isDirectory": false,
+            "openTarget": {
+              "absolutePath": "/repo/src/app.ts",
+              "kind": "worktree-file",
+              "provider": "ssh",
+              "relativePath": "src/app.ts"
+            },
+            "relativePath": "src/app.ts"
+          }
+        }
+      }
+    },
+    "071afa86c223": {
+      "name": "files.open#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.open"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "opened": true
+          }
+        }
+      }
+    },
+    "47a3b40d1640": {
+      "name": "files.open#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    },
+    "561f3fedeb78": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
+    "7a53e88025f0": {
+      "name": "fetch-session-tabs",
+      "ordinal": 6,
+      "value": {}
+    },
+    "b765beef262e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "id": "tab-opened",
+          "relativePath": "src/app.ts"
+        }
+      ]
+    },
+    "c0978ed13409": {
+      "name": "open-feedback",
+      "ordinal": 3,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f8a009b4a36e": {
+      "activeSessionTabId": "tab-opened",
+      "failed": 0,
+      "switched": {
+        "id": "tab-opened",
+        "relativePath": "src/app.ts"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "file-tap-opens-worktree-file",
+    "checkpoints": [
+      {
+        "id": "switched",
+        "observation": {
+          "sender": ["0358eb8770a0", "071afa86c223"],
+          "payloads": ["561f3fedeb78", "47a3b40d1640"],
+          "settlements": {
+            "tap": "eb79a9b3682a",
+            "list": "b765beef262e"
+          },
+          "state": "f8a009b4a36e",
+          "effects": ["c0978ed13409", "7a53e88025f0"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["0358eb8770a0", "071afa86c223"],
+          "payloads": ["561f3fedeb78", "47a3b40d1640"],
+          "settlements": {
+            "tap": "eb79a9b3682a",
+            "list": "b765beef262e"
+          },
+          "state": "f8a009b4a36e",
+          "effects": ["c0978ed13409", "7a53e88025f0"]
+        }
+      }
+    ]
+  }
+}

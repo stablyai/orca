@@ -66,6 +66,7 @@ describe('OrcaRuntimeRpcServer', () => {
       params: {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
+        terminalKittyKeyboardProtocol: true,
         terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
         tabId: 'laptop-tab',
         leafId,
@@ -88,6 +89,7 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBeUndefined()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
+        terminalKittyKeyboardProtocol: true,
         terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
       })
     )
@@ -404,6 +406,7 @@ describe('OrcaRuntimeRpcServer', () => {
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
     const runtimeProxy = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'proxy-runtime-test',
       getStartedAt: () => 1,
       getStatus: () => ({ graphStatus: 'unavailable' }),

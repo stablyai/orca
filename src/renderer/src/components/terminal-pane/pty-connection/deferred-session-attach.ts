@@ -1,14 +1,10 @@
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { resolveSshPaneConnectGate } from '../ssh-pane-connect-gate'
 
-import {
-  isSshSessionExpiredError,
-  waitForUserInitiatedSshConnect,
-  waitForSshConnection
-} from './ssh-session-connect'
+import { waitForUserInitiatedSshConnect, waitForSshConnection } from './ssh-session-connect'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { isSshSessionGoneError } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -64,8 +60,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
     console.warn(
       `[pty-connection] SSH tab=${session.deps.tabId} connectionId=${session.connectionId} pendingSessionId=${pendingSessionId} sshConnected=${gate.sshConnected}`
     )
-    const legacyWorkerOwnsPane = session.isLegacyWorkerAutomaticResumeBlocked()
-    if (gate.enterDeferredFlow && (!legacyWorkerOwnsPane || !gate.sshConnected)) {
+    if (gate.enterDeferredFlow) {
       // Paint main's parked model while SSH recovery continues off the render path.
       session.prepaintParkedSshSnapshot(pendingSessionId)
       void (async () => {
@@ -118,13 +113,6 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
         }
         useAppStore.getState().removeDeferredSshReconnectTarget(session.connectionId)
         if (pendingSessionId) {
-          if (session.isLegacyWorkerAutomaticResumeBlocked()) {
-            if (session.attachRetainedLegacyPty(pendingSessionId)) {
-              useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
-              scheduleRuntimeGraphSync()
-            }
-            return
-          }
           console.warn(
             `[pty-connection] Attempting reattach for tab=${session.deps.tabId} sessionId=${pendingSessionId}`
           )
@@ -153,7 +141,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
           session.clearHiddenOutputRestoreState()
           const outputCallbacks = session.captureTransportOutputCallbacks(
             (message) => {
-              if (isSshSessionExpiredError(message)) {
+              if (isSshSessionGoneError(message)) {
                 expiredReattachError = true
                 return
               }
@@ -287,7 +275,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               if (session.rejectObsoleteDirectSshReattach(pendingSessionId)) {
                 return
               }
-              if (isSshSessionExpiredError(err)) {
+              if (isSshSessionGoneError(err)) {
                 useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
                 session.clearExitedPanePtyLayoutBinding(pendingSessionId)
                 session.deps.clearTabPtyId(session.deps.tabId, pendingSessionId)

@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../../runtime-client'
-import { getOptionalStringFlag } from '../../flags'
+import { readRetryRequestFlag } from '../../retry-request-flag'
 import { orchestrationMutationRecoveryError } from '../../orchestration-mutation-recovery'
 
 export function callOrchestrationMutation<TResult>(
@@ -9,7 +9,7 @@ export function callOrchestrationMutation<TResult>(
   params: unknown,
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
-  const requestId = getOptionalStringFlag(flags, 'retry-request')
+  const requestId = readRetryRequestFlag(flags)
   const result = requestId
     ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
     : options

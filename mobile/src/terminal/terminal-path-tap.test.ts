@@ -4,8 +4,10 @@ import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
 } from '../../../src/shared/terminal-file-link-conformance'
-import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { generatedDocumentModule } from './document/generated-document-region.test-support'
 import { matchFilePathAtColumn, parsePathWithOptionalLineColumn } from './terminal-path-tap'
+
+const pathTapSource = await generatedDocumentModule('path-tap')
 
 type InjectedPathMatcher = typeof matchFilePathAtColumn
 
@@ -182,7 +184,7 @@ describe('injected matchFilePathAtColumn', () => {
 function createInjectedPathMatcher(): InjectedPathMatcher {
   const context = createContext({})
   new Script(
-    `${TERMINAL_PATH_TAP_JS}\nthis.__matchFilePathAtColumn = matchFilePathAtColumn;`
+    `${pathTapSource}\nthis.__matchFilePathAtColumn = matchFilePathAtColumn;`
   ).runInContext(context)
   return (context as { __matchFilePathAtColumn: InjectedPathMatcher }).__matchFilePathAtColumn
 }

@@ -1,5 +1,5 @@
-import type { RpcClient } from './rpc-client'
-import type { RpcSuccess } from './types'
+import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
+import { hostStatusProbe, readProbedHostCapabilities } from './host-status-probe-operations'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 
 // Why: a relay→direct cutover or request timeout can reject an in-flight
@@ -9,8 +9,10 @@ const CUTOVER_RETRY_DELAY_MS = 250
 const FAILURE_RETRY_BASE_DELAY_MS = 1_000
 const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 
+// The parameter names the raw port rather than RpcClient because one of the four callers holds
+// only the sender; the request itself goes through hostStatusProbe.
 export function startRuntimeCapabilityProbe(
-  client: RpcClient,
+  client: UnvalidatedRpcRequestPort,
   onCapabilities: (capabilities: readonly string[]) => void
 ): () => void {
   let cancelled = false
@@ -18,25 +20,16 @@ export function startRuntimeCapabilityProbe(
   let failureRetries = 0
 
   function attempt(): void {
-    void client.sendRequest('status.get').then(
-      (response) => {
+    void hostStatusProbe.request(client).then(
+      (reply) => {
         if (cancelled) {
           return
         }
-        if (!response.ok) {
+        const capabilities = readProbedHostCapabilities(reply)
+        if (!capabilities) {
           scheduleRetry(false)
           return
         }
-        const result = (response as RpcSuccess).result
-        const rawCapabilities =
-          result && typeof result === 'object'
-            ? (result as { capabilities?: unknown }).capabilities
-            : null
-        const capabilities =
-          Array.isArray(rawCapabilities) &&
-          rawCapabilities.every((value) => typeof value === 'string')
-            ? rawCapabilities
-            : []
         onCapabilities(capabilities)
       },
       (error: unknown) => {

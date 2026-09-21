@@ -1,0 +1,822 @@
+{
+  "operation": "tasks.task-create-gitlab",
+  "family": "tasks.task-create-gitlab",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "217a3da50a54c4cbe19a68835ecfa038eae5b350430f0b8fd0a616bb5bdfe32d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0a0e271f6e55": {
+      "composer": true,
+      "creating": false,
+      "error": "Failed to create GitLab issue",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "0fef9dc7845d": {
+      "name": "createTitle",
+      "ordinal": 7,
+      "value": ""
+    },
+    "126e449d75ac": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "13b1e9c092d4": {
+      "name": "createBody",
+      "ordinal": 8,
+      "value": ""
+    },
+    "1d2d5aa2a25a": {
+      "name": "createBody",
+      "ordinal": 7,
+      "value": ""
+    },
+    "1d94ec84a8e0": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2452c7c34695": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2b5235cc87a9": {
+      "name": "actionItem",
+      "ordinal": 5,
+      "value": {
+        "key": "gitlab:repo-1:issue:6",
+        "provider": "gitlab",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:6",
+          "labels": [],
+          "number": 6,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "opened",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://gitlab.com/group/project/-/issues/6"
+        },
+        "status": "Open",
+        "subtitle": "Repo #6",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "449fcef41ecc": {
+      "composer": true,
+      "creating": false,
+      "error": "outer refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "51e333f53f1c": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "gitlab.createIssue",
+        "operation": "gitlab.create-issue",
+        "variant": "gitlab-created-issue"
+      }
+    },
+    "5294116e0f90": {
+      "name": "creatingTask",
+      "ordinal": 1,
+      "value": true
+    },
+    "556994c67572": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.createIssue\",\"params\":{\"repo\":\"id:repo-1\",\"title\":\"A new task\",\"body\":\"a body\"}}"
+    },
+    "580f3724d37b": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "key": "gitlab:repo-1:issue:6",
+        "provider": "gitlab",
+        "source": {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:6",
+          "labels": [],
+          "number": 6,
+          "repoId": "repo-1",
+          "repoName": "Repo",
+          "state": "opened",
+          "title": "A new task",
+          "type": "issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "https://gitlab.com/group/project/-/issues/6"
+        },
+        "status": "Open",
+        "subtitle": "Repo #6",
+        "title": "A new task",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "64dde8f4fa85": {
+      "name": "creatingTask",
+      "ordinal": 8,
+      "value": false
+    },
+    "6bb96c7332db": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "transport failure"
+    },
+    "6f8e4f1c54c8": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "713a981190a1": {
+      "composer": true,
+      "creating": false,
+      "error": "The host sent a reply this app could not read (gitlab.createIssue)",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "776607d47471": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "inner refused"
+    },
+    "7901eb820f54": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7db197060e39": {
+      "composer": true,
+      "creating": false,
+      "error": "",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "82b36eab5101": {
+      "name": "creatingTask",
+      "ordinal": 6,
+      "value": false
+    },
+    "859037c757b9": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "8b5e52fefec5": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "The host sent a reply this app could not read (gitlab.createIssue)"
+    },
+    "91259ae589b2": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "outer refused"
+    },
+    "9814325fd49a": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ac13fff3e6e2": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "number": 6,
+            "ok": true,
+            "url": "https://gitlab.com/group/project/-/issues/6"
+          }
+        }
+      }
+    },
+    "ac46e56e89fe": {
+      "name": "error",
+      "ordinal": 5,
+      "value": "Unknown method"
+    },
+    "b1504689c2b3": {
+      "name": "creatingTask",
+      "ordinal": 9,
+      "value": false
+    },
+    "c140f66eca23": {
+      "composer": true,
+      "creating": false,
+      "error": "transport failure",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "cc3c569abdd3": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "d24a112e43bf": {
+      "composer": true,
+      "creating": false,
+      "error": "Unknown method",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "d810bfa31571": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "db76a9e95cfd": {
+      "name": "showCreateTask",
+      "ordinal": 5,
+      "value": false
+    },
+    "df5721b34b16": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "e9a162defc32": {
+      "name": "creatingTask",
+      "ordinal": 7,
+      "value": false
+    },
+    "ea5b0cd18ee3": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Failed to create GitLab issue"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "f397484ff069": {
+      "name": "createTitle",
+      "ordinal": 6,
+      "value": ""
+    },
+    "f8df20507017": {
+      "name": "error",
+      "ordinal": 5,
+      "value": ""
+    },
+    "fa467ac4ab12": {
+      "name": "showCreateTask",
+      "ordinal": 6,
+      "value": false
+    },
+    "fdd487d7c0f5": {
+      "composer": true,
+      "creating": false,
+      "error": "inner refused",
+      "item": {
+        "$rpc": "null"
+      }
+    },
+    "ff2165767a41": {
+      "name": "gitlab.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a body",
+            "repo": "id:repo-1",
+            "title": "A new task"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.task-create-gitlab-gitlab.createissue-1",
+    "checkpoints": [
+      {
+        "id": "tk-create-gitlab.normal:create-settled",
+        "observation": {
+          "sender": ["ac13fff3e6e2"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "580f3724d37b",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "2b5235cc87a9",
+            "fa467ac4ab12",
+            "0fef9dc7845d",
+            "13b1e9c092d4",
+            "b1504689c2b3"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.result-absent:create-settled",
+        "observation": {
+          "sender": ["d810bfa31571"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "713a981190a1",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "8b5e52fefec5", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.result-null:create-settled",
+        "observation": {
+          "sender": ["1d94ec84a8e0"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "713a981190a1",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "8b5e52fefec5", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.inner-ok-missing:create-settled",
+        "observation": {
+          "sender": ["cc3c569abdd3"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "df5721b34b16",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "db76a9e95cfd",
+            "f397484ff069",
+            "1d2d5aa2a25a",
+            "64dde8f4fa85"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.inner-false-string-error:create-settled",
+        "observation": {
+          "sender": ["7901eb820f54"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "fdd487d7c0f5",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "776607d47471", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.inner-false-object-error:create-settled",
+        "observation": {
+          "sender": ["126e449d75ac"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "0a0e271f6e55",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "51e333f53f1c",
+            "ea5b0cd18ee3",
+            "e9a162defc32"
+          ]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.outer-refused:create-settled",
+        "observation": {
+          "sender": ["6f8e4f1c54c8"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "449fcef41ecc",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "91259ae589b2", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.outer-refused-no-message:create-settled",
+        "observation": {
+          "sender": ["2452c7c34695"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "f8df20507017", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.method-not-found:create-settled",
+        "observation": {
+          "sender": ["859037c757b9"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "d24a112e43bf",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "ac46e56e89fe", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.transport-rejection:create-settled",
+        "observation": {
+          "sender": ["9814325fd49a"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "c140f66eca23",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "6bb96c7332db", "82b36eab5101"]
+        }
+      },
+      {
+        "id": "tk-create-gitlab.transport-rejection-no-message:create-settled",
+        "observation": {
+          "sender": ["ff2165767a41"],
+          "payloads": ["556994c67572"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "7db197060e39",
+          "effects": ["5294116e0f90", "ed3a7d6bc894", "f8df20507017", "82b36eab5101"]
+        }
+      }
+    ]
+  }
+}

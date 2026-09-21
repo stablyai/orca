@@ -20,6 +20,7 @@ export type SharedControlTestServer = {
 }
 
 type ServerOptions = {
+  resultForRequest?: (method: string) => unknown
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -60,7 +61,12 @@ export async function createSharedControlTestServer(
   const delayedResponses: (() => void)[] = []
   let connectionCount = 0
   let closedAfterFirstStreamingResponse = false
-  const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const wss = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+    autoPong: options.disableAutoPong !== true
+  })
   servers.push(wss)
 
   wss.on('connection', (ws) => {
@@ -169,7 +175,7 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : { method: request.method }
+    : (options.resultForRequest?.(request.method) ?? { method: request.method })
   const sendResponse = (): void => {
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {

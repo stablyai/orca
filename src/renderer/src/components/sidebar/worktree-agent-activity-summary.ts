@@ -21,6 +21,8 @@ export type WorktreeAgentActivitySummary = {
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
+  /** Stale rows suppress generated permission labels while preserving native title fallback. */
+  stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
 }
 
 const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
@@ -32,7 +34,8 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
-  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
+  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
+  stalePaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
 
 type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
@@ -121,6 +124,10 @@ function getWorktreeAgentActivitySummaries(
       continue
     }
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      // Why: staleness ends this row's authority but not the pane's identity — see
+      // `stalePaneIdsByTabId`. Dropping both let Orca's self-authored permission title outlive
+      // the row it came from and pin the card to a question nobody was asking.
+      addStalePaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
     }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
@@ -189,7 +196,8 @@ function summariesEqual(
     agentStatusPaneIdsByTabIdEqual(
       previous.agentStatusPaneIdsByTabId,
       next.agentStatusPaneIdsByTabId
-    )
+    ) &&
+    agentStatusPaneIdsByTabIdEqual(previous.stalePaneIdsByTabId, next.stalePaneIdsByTabId)
   )
 }
 
@@ -244,15 +252,31 @@ function addAgentStatusPaneId(
   tabId: string,
   paneId: string
 ): void {
-  if (summary.agentStatusPaneIdsByTabId === EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID) {
-    summary.agentStatusPaneIdsByTabId = {}
-  }
-  let paneIds = summary.agentStatusPaneIdsByTabId[tabId] as Set<string> | undefined
+  summary.agentStatusPaneIdsByTabId = withPaneId(summary.agentStatusPaneIdsByTabId, tabId, paneId)
+}
+
+function addStalePaneId(
+  summary: WorktreeAgentActivitySummary,
+  tabId: string,
+  paneId: string
+): void {
+  summary.stalePaneIdsByTabId = withPaneId(summary.stalePaneIdsByTabId, tabId, paneId)
+}
+
+function withPaneId(
+  byTabId: Record<string, ReadonlySet<string>>,
+  tabId: string,
+  paneId: string
+): Record<string, ReadonlySet<string>> {
+  // Why: the shared empty record is the frozen default for every summary; copy on first write.
+  const next = byTabId === EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID ? {} : byTabId
+  let paneIds = next[tabId] as Set<string> | undefined
   if (!paneIds) {
     paneIds = new Set<string>()
-    summary.agentStatusPaneIdsByTabId[tabId] = paneIds
+    next[tabId] = paneIds
   }
   paneIds.add(paneId)
+  return next
 }
 
 function worktreeIdForPaneKey(

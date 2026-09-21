@@ -41,6 +41,7 @@ let runtime: OrcaRuntimeService
 let dispatcher: RpcDispatcher
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let requests = 0
+let structuredNativeChatEnabled = true
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -57,6 +58,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-hold-wire-'))
   resetHostTestOperationIds()
   requests = 0
+  structuredNativeChatEnabled = true
   closeSession = vi.fn(async () => true)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   host = new StructuredAgentSessionHost({
@@ -86,6 +88,13 @@ beforeEach(async () => {
   })
   setStructuredAgentSessionHost(host)
   runtime = new OrcaRuntimeService()
+  // The structured surface is settings-gated for every caller, in-process included.
+  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
+    () =>
+      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
+        OrcaRuntimeService['getClientSettings']
+      >
+  )
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true
@@ -121,6 +130,23 @@ describe('a client that holds a session', () => {
     expect(closeSession).toHaveBeenCalledWith(SESSION)
   })
 
+  it('releases its hold and cleanup after the setting is disabled', async () => {
+    const release = vi.spyOn(host, 'release')
+    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+    structuredNativeChatEnabled = false
+
+    expect(
+      await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
+    ).toMatchObject({ ok: true })
+    const releaseCallsAfterRpc = release.mock.calls.length
+    runtime.cleanupSubscriptionsForConnection(CONNECTION)
+
+    expect(releaseCallsAfterRpc).toBe(2)
+    expect(release).toHaveBeenCalledTimes(releaseCallsAfterRpc)
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+  })
+
   it('does not report success when no provider child can be acquired', async () => {
     const response = await call('agentSession.hold', {
       sessionId: 'session-missing',
@@ -136,6 +162,107 @@ describe('a client that holds a session', () => {
 })
 
 describe('a client that disappears without cleanup', () => {
+  it('releases a late child after its same-ID replacement refuses the stale fence', async () => {
+    await host.close(SESSION)
+    await host.restoreReadableSessions()
+    closeSession.mockClear()
+    const firstEntered = Promise.withResolvers<void>()
+    const firstGate = Promise.withResolvers<void>()
+    const replacementEntered = Promise.withResolvers<void>()
+    const replacementGate = Promise.withResolvers<void>()
+    const attach = host.attach.bind(host)
+    const attachSpy = vi
+      .spyOn(host, 'attach')
+      .mockImplementationOnce(async (...args) => {
+        firstEntered.resolve()
+        await firstGate.promise
+        return attach(...args)
+      })
+      .mockImplementationOnce(async (...args) => {
+        replacementEntered.resolve()
+        await replacementGate.promise
+        return attach(...args)
+      })
+    try {
+      const params = { sessionId: SESSION, holderId: 'same-chat' }
+      const first = call('agentSession.hold', params)
+      await firstEntered.promise
+      const replacement = call('agentSession.hold', params)
+      await replacementEntered.promise
+      firstGate.resolve()
+      expect(await first).toMatchObject({ ok: true })
+      expect(host.isHeld(SESSION)).toBe(true)
+      expect(closeSession).not.toHaveBeenCalled()
+
+      replacementGate.resolve()
+      expect(await replacement).toMatchObject({
+        ok: false,
+        error: { code: 'agent_session_checkpoint_stale' }
+      })
+      expect(host.isHeld(SESSION)).toBe(false)
+      await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+      expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
+    } finally {
+      firstGate.resolve()
+      replacementGate.resolve()
+      attachSpy.mockRestore()
+    }
+  })
+
+  it.each([false, true])(
+    'keeps replacement hold and cleanup after an old request fails (replacement finished=%s)',
+    async (replacementFinished) => {
+      await host.close(SESSION)
+      await host.restoreReadableSessions()
+      closeSession.mockClear()
+      const firstEntered = Promise.withResolvers<void>()
+      const firstGate = Promise.withResolvers<void>()
+      const replacementEntered = Promise.withResolvers<void>()
+      const replacementGate = Promise.withResolvers<void>()
+      const attach = host.attach.bind(host)
+      const attachSpy = vi
+        .spyOn(host, 'attach')
+        .mockImplementationOnce(async () => {
+          firstEntered.resolve()
+          await firstGate.promise
+          throw new Error('old acquisition failed')
+        })
+        .mockImplementationOnce(async (...args) => {
+          replacementEntered.resolve()
+          await replacementGate.promise
+          return attach(...args)
+        })
+      try {
+        const params = { sessionId: SESSION, holderId: 'same-chat' }
+        const first = call('agentSession.hold', params)
+        await firstEntered.promise
+        const replacement = call('agentSession.hold', params)
+        await replacementEntered.promise
+        if (replacementFinished) {
+          replacementGate.resolve()
+          expect(await replacement).toMatchObject({ ok: true })
+        }
+
+        firstGate.resolve()
+        expect(await first).toMatchObject({ ok: false })
+        expect(host.isHeld(SESSION)).toBe(true)
+        replacementGate.resolve()
+        expect(await replacement).toMatchObject({ ok: true })
+        await new Promise((resolve) => setTimeout(resolve, GRACE_MS * 4))
+        expect(host.hasSession(SESSION)).toBe(true)
+        expect(closeSession).not.toHaveBeenCalled()
+
+        runtime.cleanupSubscriptionsForConnection(CONNECTION)
+        await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+        expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
+      } finally {
+        firstGate.resolve()
+        replacementGate.resolve()
+        attachSpy.mockRestore()
+      }
+    }
+  )
+
   it('still releases the session when its transport closes', async () => {
     await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
 
@@ -208,6 +335,31 @@ describe('a client that disappears without cleanup', () => {
     expect(host.isHeld(SESSION)).toBe(true)
 
     transport.abort()
+
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('unsubscribes and releases stream retention after the setting is disabled', async () => {
+    await dispatcher.dispatchStreaming(
+      {
+        id: 'stream-disabled-cleanup',
+        authToken: 'token',
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
+      },
+      () => {},
+      CLIENT
+    )
+    expect(host.isHeld(SESSION)).toBe(true)
+    structuredNativeChatEnabled = false
+
+    expect(
+      await call('agentSession.unsubscribe', {
+        sessionId: SESSION,
+        subscriptionId: 'stream-disabled-cleanup'
+      })
+    ).toMatchObject({ ok: true })
 
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
     expect(closeSession).toHaveBeenCalledWith(SESSION)

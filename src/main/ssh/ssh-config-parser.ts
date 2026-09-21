@@ -145,6 +145,46 @@ function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
   }
 }
 
+/**
+ * Every `Host` pattern list in a config, plus whether any `Match` block is present.
+ *
+ * Deliberately raw where {@link parseSshConfig} is not: that one keeps only concrete aliases
+ * because it mints importable targets, so a `Host prod.*` or a `Match host prod` route is
+ * invisible to it. Answering "does anything in this file claim this alias?" needs those back.
+ */
+export type SshConfigAliasClaims = {
+  hostPatternGroups: string[][]
+  hasMatchBlock: boolean
+}
+
+export function parseSshConfigAliasClaims(content: string): SshConfigAliasClaims {
+  const hostPatternGroups: string[][] = []
+  let hasMatchBlock = false
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) {
+      continue
+    }
+    const directive = parseConfigDirective(line)
+    if (!directive) {
+      continue
+    }
+    if (directive.key === 'host') {
+      const patterns = splitHostPatterns(directive.rawValue)
+      if (patterns.length > 0) {
+        hostPatternGroups.push(patterns)
+      }
+      continue
+    }
+    if (directive.key === 'match') {
+      hasMatchBlock = true
+    }
+  }
+
+  return { hostPatternGroups, hasMatchBlock }
+}
+
 function parseConfigDirective(line: string): { key: string; rawValue: string } | null {
   const match = line.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
   if (!match) {

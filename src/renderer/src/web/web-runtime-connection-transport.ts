@@ -43,7 +43,11 @@ export class WebRuntimeConnectionTransport {
 
   constructor(
     private readonly pairing: WebPairingOffer,
-    clock: { now: () => number; isDocumentVisible: () => boolean }
+    clock: { now: () => number; isDocumentVisible: () => boolean },
+    private readonly lifecycle: {
+      onStateChanged?: (state: WebRuntimeConnectionState) => void
+      reconnect?: boolean
+    } = {}
   ) {
     this.serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
     this.connectionWaiters = new WebRuntimeConnectionWaiters({
@@ -60,7 +64,7 @@ export class WebRuntimeConnectionTransport {
     this.requestRegistry = new WebRuntimeRequestRegistry({
       deviceToken: pairing.deviceToken,
       nextId: () => this.nextId(),
-      waitForConnected: (timeoutMs) => this.connectionWaiters.wait(timeoutMs),
+      waitForConnected: (timeoutMs, signal) => this.connectionWaiters.wait(timeoutMs, signal),
       sendEncrypted: (message) => this.sendEncrypted(message)
     })
     this.heartbeat = new WebRuntimeConnectionHeartbeat({
@@ -82,7 +86,7 @@ export class WebRuntimeConnectionTransport {
   async call(
     method: string,
     params?: unknown,
-    options?: { timeoutMs?: number }
+    options?: { timeoutMs?: number; signal?: AbortSignal }
   ): Promise<RuntimeRpcResponse<unknown>> {
     return this.requestRegistry.call(method, params, options)
   }
@@ -153,6 +157,7 @@ export class WebRuntimeConnectionTransport {
     } else if (next === 'auth-failed') {
       this.connectionWaiters.rejectAll(createWebRuntimeUnauthorizedError())
     }
+    this.lifecycle.onStateChanged?.(next)
   }
 
   private openConnection(): void {
@@ -232,7 +237,7 @@ export class WebRuntimeConnectionTransport {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer || this.intentionallyClosed) {
+    if (this.reconnectTimer || this.intentionallyClosed || this.lifecycle.reconnect === false) {
       return
     }
     const delay = withReconnectJitter(

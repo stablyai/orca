@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 8 useIpcEvents specs, not shipped code, and it falls outside
+   the *.test / *.spec / tests glob set. Inlining these 10 stubs would duplicate them into all 8 specs and push the largest
+   past the max-lines ratchet. */
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { HarnessStoreState } from './ipc-events-harness-store-state'
@@ -140,6 +143,9 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy(
       {
+        runtimeEnvironments: createApiNamespaceStub({
+          getStatusSnapshots: () => Promise.resolve([])
+        }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),

@@ -1,4 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export type StructuredActivationInventory = {
   snapshot: RuntimeMobileSessionTabsResult
@@ -17,17 +19,23 @@ export async function readWorktreeStructuredActivationInventory(
   if (typeof window === 'undefined') {
     return false
   }
-  const response = await window.api.runtime.call({ method: 'session.tabs.listAll', params: {} })
+  const response = await window.api.runtime.call({
+    method: 'session.tabs.list',
+    params: { worktree: toRuntimeWorktreeSelector(worktreeId) }
+  })
   if (!response.ok) {
     throw new Error('structured session inventory unavailable')
   }
-  const result = response.result as { snapshots?: RuntimeMobileSessionTabsResult[] }
-  const snapshot = (result.snapshots ?? []).find(
-    (candidate) =>
-      candidate.worktree === worktreeId &&
-      candidate.tabs.some((tab) => tab.type === 'agent-session')
-  )
-  if (!snapshot) {
+  const snapshot = response.result as RuntimeMobileSessionTabsResult
+  if (
+    !snapshot ||
+    typeof snapshot.worktree !== 'string' ||
+    !worktreeIdsEqual(snapshot.worktree, worktreeId) ||
+    !Array.isArray(snapshot.tabs)
+  ) {
+    throw new Error('structured session inventory scope unavailable')
+  }
+  if (!snapshot.tabs.some((tab) => tab.type === 'agent-session')) {
     return false
   }
   const ownerBySessionId = new Map<

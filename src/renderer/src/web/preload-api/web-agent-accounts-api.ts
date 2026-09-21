@@ -3,12 +3,14 @@ import type { PreloadApi } from '../../../../preload/api-types'
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
 > {
-  const notConfigured = { configured: false }
+  const notConfigured = { configured: false, cookieConfigured: false, apiKeyConfigured: false }
   const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
   return {
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
-    clearCookie: () => Promise.resolve(notConfigured)
+    clearCookie: () => Promise.resolve(notConfigured),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.resolve(notConfigured)
   }
 }
 
@@ -25,16 +27,40 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
   }
 }
 
-export function createAccountsApi(): never {
-  const empty = {
+function createEmptyManagedAccountsState(): {
+  accounts: never[]
+  activeAccountId: null
+  activeAccountIdsByRuntime: { host: null; wsl: Record<string, string | null> }
+} {
+  return {
     accounts: [],
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   }
+}
+
+export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
+  const empty = createEmptyManagedAccountsState()
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
+    reauthenticate: () => Promise.resolve(empty),
+    remove: () => Promise.resolve(empty),
+    select: () => Promise.resolve(empty)
+  }
+}
+
+export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
+  const empty = createEmptyManagedAccountsState()
+  return {
+    list: () => Promise.resolve(empty),
+    add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
+    // Why: the login runs on the desktop host that owns the browser, so a web
+    // client has no link to offer and nothing to publish changes from.
+    getPendingLoginUrl: () => Promise.resolve(null),
+    onPendingLoginUrlChanged: () => () => {},
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty),
@@ -45,5 +71,5 @@ export function createAccountsApi(): never {
     // client has no recorded lane to offer and every pane falls to derivation.
     listRecordedPaneLanes: () => Promise.resolve({}),
     forgetStalePanes: () => Promise.resolve()
-  } as never
+  }
 }

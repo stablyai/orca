@@ -13,18 +13,22 @@ import { describe, expect, it } from 'vitest'
  * as a dead host); `false` puts the blocking probe back in front of the window. Deleting the
  * call entirely restores the original regression.
  *
- * Source-level because that is the property: this runs once inside `app.whenReady()` during
- * startup, so there is no seam to assert against at runtime.
+ * Source-level because that is the property: this runs once during the ready-phase foundation,
+ * so there is no seam to assert against at runtime.
  */
 describe('secret protection report deferral wiring', () => {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/startup/main-process-ready-foundation.ts'),
+    'utf8'
+  )
+  const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
   const SCHEDULE = 'scheduleSecretProtectionGapReport({'
 
   it('arms the deferred report exactly once and never calls the blocking one directly', () => {
     expect(source.split(SCHEDULE).length - 1, `${SCHEDULE} should appear exactly once`).toBe(1)
     expect(source).toContain(
-      "import { scheduleSecretProtectionGapReport } from './host/deferred-secret-protection-report'"
+      "import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'"
     )
     // Why also assert the absence: re-importing the blocking entry point reinstates the
     // pre-window probe without touching the call site the next test pins. Note the scheduling
@@ -48,26 +52,28 @@ describe('secret protection report deferral wiring', () => {
     // Why anchor the indent: `SCHEDULE` matches anywhere, including as the body of an added
     // `if (...) schedule(...)` guard, which leaves every assertion here true while the call
     // stops running unconditionally. Pinning it as a statement at whenReady's own indent is
-    // what makes "this runs on every desktop startup" the thing under test.
+    // what makes "this runs on every startup" the thing under test.
     expect(source).toContain(`\n  ${SCHEDULE}`)
 
-    expect(call).toContain('deferUntilFirstWindow: !isServeMode')
+    expect(call).toContain('deferUntilFirstWindow: !state.isServeMode')
+    expect(call).toContain('skipInDevelopment: is.dev')
     // Why assert the constants are absent too: `!isServeMode` being present does not stop a
     // later property in the same literal from overriding it.
     expect(call).not.toContain('deferUntilFirstWindow: true')
     expect(call).not.toContain('deferUntilFirstWindow: false')
   })
 
-  it('arms the report after the profile exists and inside app readiness', () => {
+  it('arms the report after the profile exists during app readiness', () => {
     // Why: the report remembers what it last said beside the profile data file, so arming it
     // before the profile is resolved would key the state off a path that does not exist yet.
     // Anchored on code, never a comment — a reworded comment silently becomes -1.
-    const ready = source.indexOf('app.whenReady().then(')
-    const profile = source.indexOf('const activeOrcaProfile = ensureActiveOrcaProfile()')
+    const ready = entrySource.indexOf('void app.whenReady().then(async () => {')
+    const profile = source.indexOf('const profile = ensureActiveOrcaProfile()')
     const schedule = source.indexOf(SCHEDULE)
 
     expect(ready).toBeGreaterThanOrEqual(0)
-    expect(profile).toBeGreaterThan(ready)
+    expect(profile).toBeGreaterThanOrEqual(0)
     expect(schedule).toBeGreaterThan(profile)
+    expect(entrySource.indexOf('initializeMainProcessReady({')).toBeGreaterThan(ready)
   })
 })

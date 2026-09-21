@@ -1,18 +1,17 @@
 import { useCallback } from 'react'
 import type { Image, View } from 'react-native'
+import { updateBrowserImageSource, updateBrowserLayerVisibility } from './browser-frame-layer-paint'
 import {
-  updateBrowserImageSource,
-  updateBrowserLayerVisibility,
-  type FrameLayer
-} from './mobile-browser-frame-state'
+  abandonBrowserFrameLayer,
+  settleBrowserFrameLayer,
+  type BrowserFrameLayerRefs
+} from './browser-frame-layer-flip'
+import type { FrameLayer } from './mobile-browser-frame-state'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 
-type BrowserLayerHandlersArgs = {
+type BrowserLayerHandlersArgs = BrowserFrameLayerRefs & {
   browserImageRefs: { current: [Image | null, Image | null] }
-  browserLayerRefs: { current: [View | null, View | null] }
   frameUriRef: { current: string | null }
-  pendingFrameLayerRef: { current: FrameLayer | null }
-  visibleFrameLayerRef: { current: FrameLayer }
 }
 
 export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
@@ -62,12 +61,10 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
 
   const handleBrowserImageLoad = useCallback(
     (layer: FrameLayer) => {
-      if (pendingFrameLayerRef.current !== layer) {
-        return
-      }
-      pendingFrameLayerRef.current = null
-      visibleFrameLayerRef.current = layer
-      updateBrowserLayerVisibility(browserLayerRefs.current, layer)
+      settleBrowserFrameLayer(
+        { browserLayerRefs, pendingFrameLayerRef, visibleFrameLayerRef },
+        layer
+      )
     },
     [browserLayerRefs, pendingFrameLayerRef, visibleFrameLayerRef]
   )
@@ -83,11 +80,12 @@ export function useMobileBrowserPaneLayers(args: BrowserLayerHandlersArgs) {
 
   const handleBrowserImageError = useCallback(
     (layer: FrameLayer) => {
-      if (pendingFrameLayerRef.current === layer) {
-        pendingFrameLayerRef.current = null
-      }
+      abandonBrowserFrameLayer(
+        { browserLayerRefs, pendingFrameLayerRef, visibleFrameLayerRef },
+        layer
+      )
     },
-    [pendingFrameLayerRef]
+    [browserLayerRefs, pendingFrameLayerRef, visibleFrameLayerRef]
   )
 
   const handleBrowserImageLayer0Error = useCallback(

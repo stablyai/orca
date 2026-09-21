@@ -7,6 +7,16 @@ import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
+import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  markStructuredAgentSessionLaunchCancelledSilently,
+  shouldRetainStructuredAgentSessionLaunchTab,
+  structuredLaunchStates
+} from '@/lib/structured-agent-session-launch-registry'
+import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
 
 export function buildWorktreePurgeState(
   s: AppState,
@@ -16,9 +26,49 @@ export function buildWorktreePurgeState(
     typeof target === 'string' ? { id: target } : target
   )
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
+  // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
+  const cancelledSessionIds = new Set<string>()
+  for (const launch of structuredLaunchStates()) {
+    const worktreeId = launch.intent.worktreeId
+    if (
+      worktreeIdSet.has(worktreeId) &&
+      shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
+    ) {
+      markStructuredAgentSessionLaunchCancelledSilently(worktreeId, launch.intent.sessionId)
+      discardStructuredAgentSessionLaunchOutbox(launch.intent.sessionId)
+      clearWebSessionFocusIntentIfMatches(
+        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+        worktreeId,
+        `agent-session:${launch.intent.sessionId}`
+      )
+      cancelledSessionIds.add(launch.intent.sessionId)
+    }
+  }
+  for (const worktreeId of worktreeIdSet) {
+    for (const tab of s.unifiedTabsByWorktree[worktreeId] ?? []) {
+      if (
+        tab.contentType === 'agent-session' &&
+        !cancelledSessionIds.has(tab.entityId) &&
+        shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
+      ) {
+        markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId)
+        discardStructuredAgentSessionLaunchOutbox(tab.entityId)
+        clearWebSessionFocusIntentIfMatches(
+          { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+          worktreeId,
+          `agent-session:${tab.entityId}`
+        )
+      }
+    }
+  }
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+  // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
+  for (const id of worktreeIdSet) {
+    forgetWorktreeSleepIntent(id)
+  }
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
+  forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
   const {
@@ -67,6 +117,7 @@ export function buildWorktreePurgeState(
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
     tabsByWorktree: omitByWorktree(s.tabsByWorktree),
     terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
+    localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
@@ -104,6 +155,8 @@ export function buildWorktreePurgeState(
       : {}),
     agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: omitByPaneKeyTabPrefix(s.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
     sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
     unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),

@@ -39,6 +39,23 @@ export function resolveDirectSshSnapshotWorktreeIds(
   return worktreeIds
 }
 
+/** Only the rows the snapshot is allowed to replace, with no host-qualified widening. */
+export function resolveExactDirectSshTargetWorktreeIds(
+  state: AppState,
+  authority: DirectSshAuthority
+): Set<string> {
+  return resolveDirectSshTargetScope({
+    targetId: authority.targetId,
+    catalogRevision: 0,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+  }).gitWorktreeIds
+}
+
 function snapshotPathsArePlaceable(
   state: AppState,
   authority: DirectSshAuthority,
@@ -85,7 +102,8 @@ export async function waitForSnapshotWorktreePlacement(
   authority: DirectSshAuthority,
   worktreePaths: readonly string[],
   isCurrent: () => boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs: number = SNAPSHOT_WORKTREE_PLACEMENT_TIMEOUT_MS
 ): Promise<boolean> {
   if (signal?.aborted || !isCurrent()) {
     return false
@@ -117,7 +135,7 @@ export async function waitForSnapshotWorktreePlacement(
     resolve(placed)
   }
   const onAbort = (): void => finish(false)
-  timer = setTimeout(() => finish(false), SNAPSHOT_WORKTREE_PLACEMENT_TIMEOUT_MS)
+  timer = setTimeout(() => finish(false), timeoutMs)
   signal?.addEventListener('abort', onAbort, { once: true })
   const subscribedUnsubscribe = store.subscribe((state) => {
     if (!isCurrent()) {

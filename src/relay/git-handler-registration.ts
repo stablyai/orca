@@ -65,6 +65,7 @@ export function registerGitHandlers(
   dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
     handlers.worktree.refreshLocalBaseRefForWorktreeCreate(p)
   )
+  dispatcher.onRequest('git.markRemoteOrcaCreated', (p) => handlers.exec.markRemoteOrcaCreated(p))
   dispatcher.onRequest('git.renameCurrentBranch', (p) => handlers.exec.renameCurrentBranch(p))
   dispatcher.onRequest('git.forceDeletePreservedBranch', (p) =>
     handlers.exec.forceDeletePreservedBranch(p)

@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 // Regression test for the child-worktrees <-> agent-list expansion coupling:
 // in a worktree card that shows BOTH inline agent rows (with orchestration
 // lineage) AND a "N children" child-worktrees chip, toggling the child-worktrees

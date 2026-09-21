@@ -84,7 +84,7 @@ describe('RuntimeClient module-graph deferral', () => {
     process.exitCode = 0
   })
 
-  // Why: the whole point of the change. These six modules load on EVERY
+  // Why: the whole point of the change. These modules load on EVERY
   // invocation, so a value-import of the barrel from any of them drags the
   // RuntimeClient graph (zod, ws, tweetnacl) back onto the --help path.
   it.each([
@@ -92,6 +92,7 @@ describe('RuntimeClient module-graph deferral', () => {
     'flags.ts',
     'dispatch.ts',
     'format.ts',
+    'cli-error.ts',
     'selectors.ts',
     'execution-host-flag.ts'
   ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
@@ -102,7 +103,10 @@ describe('RuntimeClient module-graph deferral', () => {
     for (const line of valueImports) {
       expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
     }
-    expect(source).toContain("} from './runtime/types'")
+    // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error.ts.
+    if (file !== 'format.ts') {
+      expect(source).toContain("} from './runtime/types'")
+    }
   })
 
   it('index.ts has no eager value-import of the runtime client', () => {
@@ -110,6 +114,7 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(source).toContain("import type { RuntimeClient } from './runtime-client'")
     expect(source).not.toMatch(/^import \{[^}]*RuntimeClient[^}]*\} from '\.\/runtime-client'/m)
     expect(source).toContain("await import('./runtime-client.js')")
+    expect(source).toContain("import { reportCliError } from './cli-error'")
   })
 
   it('constructs no client for --help', async () => {

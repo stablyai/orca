@@ -1,0 +1,274 @@
+{
+  "operation": "source-control.history-commit-files",
+  "family": "git.history-commit-files",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
+  "scenarioSha256": "27e71d989da152adcbe40a02186df8b8a2e19a6a0e8bfe727e2133c4360f7639",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0a26f0498c96": {
+      "name": "git.commitCompare#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.commitCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"commitId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
+    },
+    "0e92a08f8380": {
+      "name": "git.history#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "322a1b963588": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "5d7a655deafc": {
+      "name": "git.history#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8271d8fc83a6": {
+      "commitRow": "unrendered",
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "View": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "94c8fcc83e52": {
+      "name": "git.history#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": "dev",
+                "displayId": "aaaaaaa",
+                "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+                "subject": "first",
+                "timestamp": 1767222000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    "9d4d0ea6c245": {
+      "commitRow": [
+        "first",
+        "aaaaaaa",
+        " · ",
+        "dev",
+        " · ",
+        "1h",
+        "src/app.ts",
+        "+",
+        "4",
+        " ",
+        "-",
+        "1",
+        "src/other.ts",
+        "+",
+        "9",
+        " "
+      ],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "ce63cea4bc23": {
+      "name": "git.commitCompare#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "da380f404a23": {
+      "name": "git.commitCompare#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.commitCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "commitId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 4,
+                "path": "src/app.ts",
+                "removed": 1
+              },
+              {
+                "added": 9,
+                "path": "src/other.ts",
+                "removed": 0,
+                "status": "added"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-history-commit-files",
+    "checkpoints": [
+      {
+        "id": "history-pending",
+        "observation": {
+          "sender": ["5d7a655deafc"],
+          "payloads": ["0e92a08f8380"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "8271d8fc83a6",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-pending",
+        "observation": {
+          "sender": ["94c8fcc83e52", "ce63cea4bc23"],
+          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand": "eb79a9b3682a"
+          },
+          "state": "322a1b963588",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["94c8fcc83e52", "da380f404a23"],
+          "payloads": ["0e92a08f8380", "0a26f0498c96"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "expand": "eb79a9b3682a"
+          },
+          "state": "9d4d0ea6c245",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

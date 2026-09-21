@@ -1,7 +1,6 @@
 import type { Session } from 'electron'
 import { retireProxySessionApplication } from '../network/proxy-settings'
 import { clearBrowserSessionPartitionPolicies } from './browser-session-partition-policies'
-import { clearBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 
 export async function retireFailedBrowserSessionProfile(
   partition: string,
@@ -9,7 +8,6 @@ export async function retireFailedBrowserSessionProfile(
 ): Promise<void> {
   const retirement = retireProxySessionApplication(sess)
   try {
-    clearBrowserSessionUserAgentMode(sess)
     clearBrowserSessionPartitionPolicies(partition, sess)
   } catch {
     // Best-effort policy cleanup must not skip retirement.

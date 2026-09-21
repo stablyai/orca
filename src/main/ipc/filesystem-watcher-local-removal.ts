@@ -14,6 +14,7 @@ import {
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
 import { subscribeLocalWatcher } from './filesystem-watcher-local-subscription'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 export async function closeLocalWatcherForWorktreePath(
   worktreePath: string,
@@ -100,9 +101,7 @@ export async function closeLocalWatcherForWorktreePath(
   if (!root) {
     return
   }
-  if (root.batch.timer) {
-    clearTimeout(root.batch.timer)
-  }
+  cancelLocalBatchFlush(root)
   watcherLifecycleState.watchedRoots.delete(rootKey)
   // Why: the in-process Parcel fallback has no unsubscribe timeout of its own, so an unbounded await
   // here would hang delete forever and hold the removal gate. The promise stays tracked in

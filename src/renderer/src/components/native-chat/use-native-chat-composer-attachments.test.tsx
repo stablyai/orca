@@ -13,8 +13,9 @@ import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+const runtimeTarget = vi.hoisted(() => ({ remote: false }))
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false
+  isRemoteRuntimePtyId: () => runtimeTarget.remote
 }))
 
 type AttachmentApi = ReturnType<typeof useNativeChatComposerAttachments>
@@ -129,6 +130,7 @@ async function renderProbe(
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
+    runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
   })
@@ -166,6 +168,140 @@ describe('useNativeChatComposerAttachments', () => {
     })
 
     expect(probe.latest().imageAttachments).toMatchObject([{ path: '/tmp/structured-image.png' }])
+    act(() => probe.root.unmount())
+  })
+
+  it('accepts only ownership-validated paths for a remote runtime target', async () => {
+    runtimeTarget.remote = true
+    const probe = await renderProbe('remote-pty')
+
+    act(() => probe.latest().attachResolvedPaths(['/remote/untrusted.txt']))
+    expect(probe.draft()).toBe('')
+    expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
+
+    act(() =>
+      probe.latest().attachResolvedPaths(['/remote/trusted.txt'], undefined, {
+        targetOwnerIsCurrent: () => true
+      })
+    )
+    expect(probe.draft()).toBe('@/remote/trusted.txt ')
+    act(() => probe.root.unmount())
+  })
+
+  it('rejects an ownership-validated path when its owner changes before IME flush', async () => {
+    let composing = true
+    let ownerCurrent = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
+    act(() =>
+      probe.latest().attachResolvedPaths(['/remote/trusted.txt'], undefined, {
+        targetOwnerIsCurrent: () => ownerCurrent
+      })
+    )
+    ownerCurrent = false
+    composing = false
+    act(() => probe.latest().flushPendingAttachments())
+
+    expect(probe.draft()).toBe('')
+    expect(probe.notice()).toBe('Files can only be attached to their source workspace.')
+    act(() => probe.root.unmount())
+  })
+
+  // Today's only caller settles ownership synchronously before it calls, so this
+  // verdict cannot arrive false — but the hook exports this entry point. Pinned
+  // because the fallback is not a refusal: a false verdict is not "owned", so a
+  // remote target would blame client-local attachments for an ownership failure.
+  it('names the ownership failure when an immediate attach arrives already false', async () => {
+    runtimeTarget.remote = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => false })
+
+    act(() =>
+      probe.latest().attachResolvedPaths(['/remote/moved.txt'], undefined, {
+        targetOwnerIsCurrent: () => false
+      })
+    )
+
+    expect(probe.draft()).toBe('')
+    expect(probe.notice()).toBe('Files can only be attached to their source workspace.')
+    act(() => probe.root.unmount())
+  })
+
+  // Ownership is per path: the target-owned drop still lands, the client-local
+  // paste is refused, and the refusal is reported rather than hidden.
+  it('keeps the owned half of a mixed queued batch after the target becomes remote', async () => {
+    let composing = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
+    act(() => {
+      probe.latest().attachResolvedPaths(['/remote/trusted.txt'], undefined, {
+        targetOwnerIsCurrent: () => true
+      })
+      probe.latest().attachResolvedPaths(['/local/untrusted.txt'])
+    })
+    runtimeTarget.remote = true
+    composing = false
+    act(() => probe.latest().flushPendingAttachments())
+
+    expect(probe.draft()).toBe('@/remote/trusted.txt ')
+    expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
+    act(() => probe.root.unmount())
+  })
+
+  // References are inserted in the order the user made them. Splitting the queue
+  // into an owned half and a client-local half would hoist every workspace drop
+  // ahead of a paste that came first.
+  it('keeps a mixed queued batch in the order it was attached', async () => {
+    let composing = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
+    act(() => {
+      probe.latest().attachResolvedPaths(['/local/first.txt'])
+      probe.latest().attachResolvedPaths(['/remote/second.txt'], undefined, {
+        targetOwnerIsCurrent: () => true
+      })
+    })
+    composing = false
+    act(() => probe.latest().flushPendingAttachments())
+
+    expect(probe.draft()).toBe('@/local/first.txt @/remote/second.txt ')
+    act(() => probe.root.unmount())
+  })
+
+  it('refuses a wholly client-local queued batch on a remote target', async () => {
+    let composing = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
+    act(() => probe.latest().attachResolvedPaths(['/local/untrusted.txt']))
+    runtimeTarget.remote = true
+    composing = false
+    act(() => probe.latest().flushPendingAttachments())
+
+    expect(probe.draft()).toBe('')
+    expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
+    act(() => probe.root.unmount())
+  })
+
+  // An already-blocked target refuses at the drop instead of queueing. Queued
+  // paths that can never attach would still spend the pending budget, and the
+  // next legitimate drop would be turned away for being one too many.
+  it('refuses an already-blocked target at the drop without spending the queue budget', async () => {
+    runtimeTarget.remote = true
+    let composing = true
+    const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
+    const refused = Array.from(
+      { length: NATIVE_FILE_DROP_MAX_PATHS },
+      (_unused, index) => `/local/refused-${index}.txt`
+    )
+    act(() => probe.latest().attachResolvedPaths(refused))
+    expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
+
+    runtimeTarget.remote = false
+    act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
+    composing = false
+    act(() => probe.latest().flushPendingAttachments())
+
+    expect(probe.draft()).toBe('@/local/allowed.txt ')
     act(() => probe.root.unmount())
   })
 
@@ -258,6 +394,91 @@ describe('useNativeChatComposerAttachments', () => {
     expect(probe.notice()).toBe(
       'Too many attachments are waiting. Finish composing before attaching more.'
     )
+    act(() => probe.root.unmount())
+  })
+
+  it('settles a pending image attachment in place', async () => {
+    const probe = await renderProbe('pty-1')
+    let id: string | null = null
+    act(() => {
+      id = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    expect(id).toBeTruthy()
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id, path: '', previewUrl: 'blob:preview-1', pending: true }
+    ])
+
+    act(() => {
+      probe.latest().resolvePendingImageAttachment(id as string, '/tmp/resolved.png', 'conn-1')
+    })
+
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id, path: '/tmp/resolved.png', previewUrl: 'blob:preview-1', connectionId: 'conn-1' }
+    ])
+    expect(probe.latest().imageAttachments[0]?.pending).toBeUndefined()
+    act(() => probe.root.unmount())
+  })
+
+  it('drops just the targeted pending chip', async () => {
+    const probe = await renderProbe('pty-1')
+    let firstId: string | null = null
+    let secondId: string | null = null
+    act(() => {
+      firstId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    act(() => {
+      secondId = probe.latest().beginPendingImageAttachment('blob:preview-2')
+    })
+
+    act(() => {
+      probe.latest().dropPendingImageAttachment(firstId as string)
+    })
+
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id: secondId, previewUrl: 'blob:preview-2', pending: true }
+    ])
+    act(() => probe.root.unmount())
+  })
+
+  it('excludes a pending chip from the scope cache while a settled chip persists', async () => {
+    const probe = await renderProbe('pty-1')
+    let pendingId: string | null = null
+    act(() => {
+      pendingId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/tmp/settled.png'])
+    })
+
+    const cached = readNativeChatAttachmentCache('pty-1')
+    expect(cached.some((attachment) => attachment.id === pendingId)).toBe(false)
+    expect(cached).toMatchObject([{ path: '/tmp/settled.png' }])
+    expect(cached[0]?.previewUrl).toBeUndefined()
+    act(() => probe.root.unmount())
+  })
+
+  it('revokes a blob: preview URL on removal but not a data: preview URL', async () => {
+    const probe = await renderProbe('pty-1')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL')
+    let blobId: string | null = null
+    act(() => {
+      blobId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    act(() => {
+      probe.latest().beginPendingImageAttachment('data:image/png;base64,AAAA')
+    })
+
+    act(() => {
+      probe.latest().dropPendingImageAttachment(blobId as string)
+    })
+    expect(revoke).toHaveBeenCalledWith('blob:preview-1')
+
+    // Only the remaining data: chip is left to clear; revoke must not fire again.
+    revoke.mockClear()
+    act(() => {
+      probe.latest().clearImageAttachments()
+    })
+    expect(revoke).not.toHaveBeenCalled()
     act(() => probe.root.unmount())
   })
 })

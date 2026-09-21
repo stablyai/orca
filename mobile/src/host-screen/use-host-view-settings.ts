@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import { WORKSPACE_SORT_OPTIONS as SORT_OPTIONS } from '../worktree/workspace-list-picker-options'
 import {
@@ -12,6 +12,7 @@ import {
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-sections'
+import { hostViewSettingsRead, hostViewSettingsWrite } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
 export function useHostViewSettings(args: {
@@ -79,7 +80,7 @@ export function useHostViewSettings(args: {
       if (Object.keys(payload).length === 0) {
         return
       }
-      void client.sendRequest('ui.set', payload).catch(() => {
+      void hostViewSettingsWrite.request(client, payload).catch(() => {
         // Best-effort: view settings are a convenience preference.
       })
     },
@@ -94,11 +95,16 @@ export function useHostViewSettings(args: {
     const requestClient = client
     const requestHostId = hostId
     try {
-      const response = await requestClient.sendRequest('ui.get')
-      if (clientRef.current !== requestClient || hostId !== requestHostId || !response.ok) {
+      const reply = await hostViewSettingsRead.request(requestClient)
+      if (clientRef.current !== requestClient || hostId !== requestHostId) {
         return
       }
-      const ui = ((response as RpcSuccess).result as { ui?: WorkspaceViewSettings }).ui
+      const settings = hostViewSettingsRead.interpret(reply)
+      if (!settings.accepted) {
+        return
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      const ui = settings.value as WorkspaceViewSettings | undefined
       if (!ui) {
         return
       }

@@ -4,24 +4,18 @@ export function isUpdateCardVisible({
   status,
   dismissedVersion,
   cachedVersion,
-  hasStartedDownload,
   updateUserInitiatedCycle,
   autoDismissed = false,
-  errorDismissed = false,
   collapsed = false
 }: {
   status: UpdateStatus
   dismissedVersion: string | null
   cachedVersion: string | null
-  hasStartedDownload: boolean
   updateUserInitiatedCycle: boolean
   autoDismissed?: boolean
-  errorDismissed?: boolean
   collapsed?: boolean
 }): boolean {
   const isUserInitiated = 'userInitiated' in status && Boolean(status.userInitiated)
-  const shouldShowDetailedErrorCard =
-    status.state === 'error' && (hasStartedDownload || cachedVersion !== null)
 
   if (status.state === 'checking' && !isUserInitiated) {
     return false
@@ -32,13 +26,6 @@ export function isUpdateCardVisible({
   if (status.state === 'idle') {
     return false
   }
-  if (status.state === 'error' && !shouldShowDetailedErrorCard && !isUserInitiated) {
-    return false
-  }
-  if (status.state === 'error' && errorDismissed) {
-    return false
-  }
-
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return false

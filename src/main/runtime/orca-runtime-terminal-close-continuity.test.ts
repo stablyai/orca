@@ -19,7 +19,7 @@ import {
   STALE_TAB_ID,
   TAB_ID,
   WORKTREE_ID
-} from './orca-runtime-terminal-close-continuity-fixtures'
+} from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
 describe('terminal close and handle incarnation continuity', () => {
   it('delegates a stale spawn-time tab through its current PTY-backed renderer surface', async () => {

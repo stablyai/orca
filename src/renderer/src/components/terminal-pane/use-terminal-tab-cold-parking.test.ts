@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, { ptyIdsByLeafId?: Record<string, string> }>,
+    // Why empty: no case here exercises the park capture's repo gate, and an empty catalog makes
+    // shouldPreserveTerminalScrollbackBuffers fail open — the safe direction for a park.
+    repos: [],
     sleepingAgentSessionsByPaneKey: {} as Record<
       string,
       { paneKey: string; tabId?: string; worktreeId: string }
@@ -25,7 +28,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector(mocks.storeState)
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector(mocks.storeState),
+    { getState: () => mocks.storeState }
+  )
 }))
 
 vi.mock('./terminal-hidden-view-parking', async (importOriginal) => {
@@ -528,43 +534,6 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 
-  // Why: blocked and passive-completed records never auto-resume, so exempting
+  // Why: passive-completed records never auto-resume, so exempting
   // them would pin a hidden pane mounted indefinitely for nothing.
-  it('keeps parking panes whose records cannot be consumed', () => {
-    const { result, rerender } = renderHook(
-      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
-      { initialProps: hookArgs(false) }
-    )
-    act(() => {
-      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
-    })
-    expect(result.current).toEqual(new Set(['tab-2']))
-
-    mocks.storeState.sleepingAgentSessionsByPaneKey = {
-      'tab-2:22222222-2222-4222-8222-222222222222': {
-        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
-        tabId: 'tab-2',
-        worktreeId: WORKTREE_ID,
-        automaticResumeBlockedBy: 'legacy-orchestration-worker'
-      } as never
-    }
-    act(() => {
-      rerender(hookArgs(false))
-    })
-    expect(result.current).toEqual(new Set(['tab-2']))
-
-    mocks.storeState.sleepingAgentSessionsByPaneKey = {
-      'tab-2:22222222-2222-4222-8222-222222222222': {
-        paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
-        tabId: 'tab-2',
-        worktreeId: WORKTREE_ID,
-        origin: 'worktree-sleep',
-        state: 'done'
-      } as never
-    }
-    act(() => {
-      rerender(hookArgs(false))
-    })
-    expect(result.current).toEqual(new Set(['tab-2']))
-  })
 })

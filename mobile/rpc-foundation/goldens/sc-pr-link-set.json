@@ -1,0 +1,135 @@
+{
+  "operation": "source-control.pr-link",
+  "family": "worktree.review-link",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
+  "scenarioSha256": "b65bad4f8c0ae0b686f6c3db93bd43ffa072ae426f978f1a86ad8008fb24fa24",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1852c739af4f": {
+      "linkedPR": "unread",
+      "outcome": {
+        "ok": true
+      }
+    },
+    "41bdce9de379": {
+      "linkedPR": "unread",
+      "outcome": "unlinked"
+    },
+    "4b458696422e": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "f50799b307b6": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "fbc51b3438c8": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-pr-link-set",
+    "checkpoints": [
+      {
+        "id": "pending",
+        "observation": {
+          "sender": ["f50799b307b6"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "9270aeb7d9c6"
+          },
+          "state": "41bdce9de379",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["fbc51b3438c8"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

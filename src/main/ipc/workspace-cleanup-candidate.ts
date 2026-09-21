@@ -1,4 +1,3 @@
-import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
@@ -17,17 +16,18 @@ import {
   readWorkspaceCleanupGitEvidence
 } from './workspace-cleanup-git-evidence'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
   worktree: Worktree
   scannedAt: number
-  provider: IGitProvider | null
+  route: WorkspaceCleanupGitRoute
   skipGit: boolean
   forceGitCheck: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck, signal } = args
+  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
@@ -53,7 +53,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, provider, signal)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {

@@ -6,7 +6,7 @@ const REQUEST_TIMEOUT_MS = 30_000
 type WebRuntimeRequestRegistryOptions = {
   deviceToken: string
   nextId: () => string
-  waitForConnected: (timeoutMs?: number) => Promise<void>
+  waitForConnected: (timeoutMs?: number, signal?: AbortSignal) => Promise<void>
   sendEncrypted: (message: unknown) => boolean
 }
 
@@ -18,17 +18,41 @@ export class WebRuntimeRequestRegistry {
   async call(
     method: string,
     params?: unknown,
-    callOptions?: { timeoutMs?: number }
+    callOptions?: { timeoutMs?: number; signal?: AbortSignal }
   ): Promise<RuntimeRpcResponse<unknown>> {
-    await this.options.waitForConnected(callOptions?.timeoutMs)
+    const signal = callOptions?.signal
+    await this.options.waitForConnected(callOptions?.timeoutMs, signal)
+    signal?.throwIfAborted()
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
       const timeoutMs = callOptions?.timeoutMs ?? REQUEST_TIMEOUT_MS
       const timeout = window.setTimeout(() => {
         this.pending.delete(id)
+        cleanup()
         reject(new Error(`Request timed out: ${method}`))
       }, timeoutMs)
-      this.pending.set(id, { method, resolve, reject, timeout })
+      const cleanup = (): void => {
+        signal?.removeEventListener('abort', abort)
+      }
+      const abort = (): void => {
+        this.pending.delete(id)
+        window.clearTimeout(timeout)
+        cleanup()
+        reject(signal?.reason)
+      }
+      signal?.addEventListener('abort', abort, { once: true })
+      this.pending.set(id, {
+        method,
+        resolve: (value) => {
+          cleanup()
+          resolve(value)
+        },
+        reject: (error) => {
+          cleanup()
+          reject(error)
+        },
+        timeout
+      })
       if (
         !this.options.sendEncrypted({
           id,
@@ -39,6 +63,7 @@ export class WebRuntimeRequestRegistry {
       ) {
         this.pending.delete(id)
         window.clearTimeout(timeout)
+        cleanup()
         reject(new Error('Remote Orca runtime is not connected.'))
       }
     })

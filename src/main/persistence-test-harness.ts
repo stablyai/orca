@@ -6,6 +6,8 @@ import type { Repo } from '../shared/repo-types'
 import type { TerminalTab } from '../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import type { PersistedState } from '../shared/persisted-state-types'
+import { hydrateWorktreeMetaAliasProjection } from './persistence/loading-store/worktree-meta-alias-projection'
 import { Store } from './persistence/loading-store/store'
 import { initDataPath } from './persistence/loading-store/user-data-path'
 
@@ -38,8 +40,16 @@ export function writeDataFile(data: unknown): void {
   writeFileSync(dataFile(), JSON.stringify(data, null, 2), 'utf-8')
 }
 
+/**
+ * The persisted state as a reader gets it, not the raw bytes: the serializer omits any
+ * `worktreeMetaByIdentity` row the locator row regenerates, and every consumer of this file --
+ * including the Store's own load path -- rebuilds those before looking at them. Tests that need
+ * the literal bytes parse the file themselves (see `worktree-meta-alias-projection.test.ts`).
+ */
 export function readDataFile(): unknown {
-  return JSON.parse(readFileSync(dataFile(), 'utf-8'))
+  const parsed = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
+  hydrateWorktreeMetaAliasProjection(parsed)
+  return parsed
 }
 
 export function symlinkDirectorySync(target: string, linkPath: string): void {

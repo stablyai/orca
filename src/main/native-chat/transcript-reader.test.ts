@@ -67,7 +67,7 @@ describe('readNativeChatTranscript (claude)', () => {
       timestamp: '2026-06-01T10:05:00.000Z',
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }]
+        content: [{ type: 'tool_use', id: 'tool-call-1', name: 'Bash', input: { command: 'ls' } }]
       }
     })
     records.push({
@@ -98,7 +98,8 @@ describe('readNativeChatTranscript (claude)', () => {
     expect(toolCall?.blocks[0]).toEqual({
       type: 'tool-call',
       name: 'Bash',
-      input: { command: 'ls' }
+      input: { command: 'ls' },
+      callId: 'tool-call-1'
     })
 
     const toolResult = result.messages.at(-1)

@@ -29,7 +29,7 @@ const result = spawnSync(
     '--config',
     'tests/playwright.config.ts',
     '--project',
-    'electron-headless',
+    'electron-headful',
     '--workers=1',
     ...extraArgs
   ],

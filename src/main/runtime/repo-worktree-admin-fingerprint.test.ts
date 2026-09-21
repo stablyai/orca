@@ -4,7 +4,8 @@
 // Windows path resolution, CRLF in `HEAD`/`gitdir`/`commondir`, and whether `worktree move`/`lock`
 // and deleting a live checkout behave as they do on POSIX. The Linux shards cannot reach any of it.
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -43,7 +44,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(scratchDir, { recursive: true, force: true })
+  await removeTree(scratchDir)
 })
 
 describe('readRepoWorktreeAdminFingerprint', () => {
@@ -71,7 +72,7 @@ describe('readRepoWorktreeAdminFingerprint', () => {
   it('changes when a worktree directory is deleted outside Git', async () => {
     // The admin dir is untouched by `rm -rf`, but the row's `prunable` flag flips.
     const before = await fingerprint()
-    await rm(worktreePath, { recursive: true, force: true })
+    await removeTree(worktreePath)
     expect(await fingerprint()).not.toBe(before)
   })
 

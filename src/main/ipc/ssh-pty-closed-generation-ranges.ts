@@ -7,10 +7,7 @@ export class SshPtyClosedGenerationRanges {
   private readonly ranges: ClosedGenerationRange[] = []
 
   add(generation: number): void {
-    let index = 0
-    while (index < this.ranges.length && this.ranges[index]!.end + 1 < generation) {
-      index++
-    }
+    const index = this.firstRangeReachableFrom(generation)
     const current = this.ranges[index]
     if (!current || generation + 1 < current.start) {
       this.ranges.splice(index, 0, { start: generation, end: generation })
@@ -26,15 +23,27 @@ export class SshPtyClosedGenerationRanges {
   }
 
   has(generation: number): boolean {
-    for (const range of this.ranges) {
-      if (generation < range.start) {
-        return false
-      }
-      if (generation <= range.end) {
-        return true
+    const range = this.ranges[this.firstRangeReachableFrom(generation)]
+    return range !== undefined && generation >= range.start && generation <= range.end
+  }
+
+  // Why binary search rather than a scan: ranges only collapse to one while every allocated
+  // generation is eventually closed. A generation that is allocated and never closed leaves a
+  // permanent gap, and `has` is on the per-output-chunk admission path, so a linear scan turns
+  // fragmentation into a hot-path cost (measured ~1800x a plain Set at 20k ranges) and makes `add`
+  // quadratic. Log-time keeps the degraded shape no worse than the Set this replaced.
+  private firstRangeReachableFrom(generation: number): number {
+    let low = 0
+    let high = this.ranges.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (this.ranges[mid]!.end + 1 < generation) {
+        low = mid + 1
+      } else {
+        high = mid
       }
     }
-    return false
+    return low
   }
 
   get size(): number {

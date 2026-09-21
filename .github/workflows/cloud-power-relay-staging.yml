@@ -1,0 +1,101 @@
+name: Power Relay Staging
+
+on:
+  schedule:
+    # A zero-activity guard makes this a no-op when an internal test is still running.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect, wake, or sleep the staging Relay data plane
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - wake
+          - sleep
+      wake-cells:
+        description: Wake configured admission cells, or include disabled candidate cells
+        required: true
+        default: configured
+        type: choice
+        options:
+          - configured
+          - all
+      confirmation:
+        description: Enter WAKE_STAGING or SLEEP_STAGING for a manual mutation
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  power:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: staging
+    env:
+      POWER_MODE: ${{ github.event_name == 'schedule' && 'sleep' || inputs.mode }}
+      WAKE_CELLS: ${{ inputs.wake-cells || 'configured' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require explicit manual mutation confirmation
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'status' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "${POWER_MODE}" = "wake" ]]; then
+            test "${CONFIRMATION}" = "WAKE_STAGING"
+          else
+            test "${CONFIRMATION}" = "SLEEP_STAGING"
+          fi
+
+      - name: Read reviewed staging topology
+        run: |
+          node dev/scripts/infra.mjs init --env staging
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments > "${RUNNER_TEMP}/relay-gce-topology.json"
+
+      - name: Inspect or change staging power state
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/power-staging-relay.mjs \
+            --mode "${POWER_MODE}" \
+            --wake-cells "${WAKE_CELLS}" \
+            --topology-file "${RUNNER_TEMP}/relay-gce-topology.json"

@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 /**
  * The second half of the two-job design.
@@ -50,7 +51,7 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
   })
 
   afterAll(() => {
-    rmSync(dir, { recursive: true, force: true })
+    removeTreeSync(dir)
   })
 
   it('kills a pty and its detached grandchild when the host is force-killed', async () => {

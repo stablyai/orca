@@ -115,6 +115,9 @@ describe('web session pending terminal handle recovery', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         return {
           ok: true as const,
@@ -145,7 +148,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -171,7 +174,8 @@ describe('web session pending terminal handle recovery', () => {
       })
     )
     expect(call).toHaveBeenNthCalledWith(2, expect.objectContaining({ method: 'terminal.list' }))
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ method: 'terminal.adoptOrphans' })
     )
   })
@@ -279,6 +283,9 @@ describe('web session pending terminal handle recovery', () => {
     }
     let resolveAttempts = 0
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
         if (resolveAttempts === 1) {
@@ -316,7 +323,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -363,6 +370,9 @@ describe('web session pending terminal handle recovery', () => {
     }
     let resolveAttempts = 0
     const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: readySnapshot }
+      }
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
         return {
@@ -394,7 +404,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -459,7 +469,7 @@ describe('web session pending terminal handle recovery', () => {
         terminals: [],
         totalCount: 0,
         truncated: false,
-        hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
       }
     }))
 
@@ -534,7 +544,10 @@ describe('web session pending terminal handle recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? readySnapshot
+                : { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
           }
     )
 
@@ -546,7 +559,8 @@ describe('web session pending terminal handle recovery', () => {
         { call: call as never }
       )
     ).resolves.toEqual(readySnapshot)
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -564,7 +578,13 @@ describe('web session pending terminal handle recovery', () => {
     )
   })
 
-  it('quarantines a cached handle that now names a different PTY', async () => {
+  // Retargeted (#11495): this pinned the quarantine, and the quarantine was the bug. The listing
+  // ran with `requireFreshPtyLiveness: true` and came back `orphaned: true` under a replacement
+  // PTY, which is a host attestation that the handle is LIVE — a PTY id rotating across a host
+  // relaunch is the normal case, not evidence of death. The row stays bound to the handle, which is
+  // the identity the host answers on; the stale `ptyId` on the carried-over row settles on the next
+  // frame. See web-session-terminal-orphan-recovery-inventory.ts.
+  it('rebinds a cached handle the host now serves from a different PTY', async () => {
     const snapshot = pendingSnapshot()
     const call = vi.fn(async () => ({
       ok: true as const,
@@ -589,7 +609,18 @@ describe('web session pending terminal handle recovery', () => {
         ENVIRONMENT_ID,
         { call: call as never }
       )
-    ).resolves.toEqual(expect.objectContaining({ tabs: [] }))
+    ).resolves.toEqual(
+      expect.objectContaining({
+        tabs: [
+          expect.objectContaining({
+            parentTabId: HOST_TAB_ID,
+            leafId: LEAF_ID,
+            status: 'ready',
+            terminal: TERMINAL_HANDLE
+          })
+        ]
+      })
+    )
     expect(call).toHaveBeenCalledOnce()
   })
 
@@ -638,7 +669,7 @@ describe('web session pending terminal handle recovery', () => {
         terminals: [],
         totalCount: 0,
         truncated: false,
-        hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
       }
     }))
 
@@ -690,7 +721,10 @@ describe('web session pending terminal handle recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 1, snapshot: readySnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? readySnapshot
+                : { adopted: true, topologyRevision: 1, snapshot: readySnapshot }
           }
     )
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
@@ -703,7 +737,7 @@ describe('web session pending terminal handle recovery', () => {
         { expectedEnvironmentPairingRevision: 17 }
       )
     ).resolves.toEqual(readySnapshot)
-    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCall).toHaveBeenCalledTimes(3)
     expect(runtimeCall).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ expectedEnvironmentPairingRevision: 17 })
@@ -711,6 +745,13 @@ describe('web session pending terminal handle recovery', () => {
     expect(runtimeCall).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ expectedEnvironmentPairingRevision: 17 })
+    )
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        method: 'session.tabs.list',
+        expectedEnvironmentPairingRevision: 17
+      })
     )
   })
 })

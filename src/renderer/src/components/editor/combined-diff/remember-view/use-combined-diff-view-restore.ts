@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -7,7 +7,11 @@ import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-dif
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
 import { isCombinedDiffSectionViewed } from '../browse-files/combined-diff-file-tree-filter'
-import { shouldLoadCombinedDiffOnDemand } from '../../combined-diff-on-demand-load'
+import {
+  collectCountedCombinedDiffPasses,
+  getCombinedDiffCountingPassKey,
+  shouldLoadCombinedDiffOnDemand
+} from '../../combined-diff-on-demand-load'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import { clearPendingSectionReloadTimers } from '../load-sections/combined-diff-section-load-registry'
@@ -61,13 +65,16 @@ export function useCombinedDiffViewRestore({
     sectionLoadTokensRef
   } = registry
 
-  const scrollOffsetRef = useRef(combinedDiffScrollTopCache.get(viewStateKey) ?? 0)
-  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(
-    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
-  )
-  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(
-    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
-  )
+  // Why useState and not `useRef(expr)`: the latter re-reads all three caches on every render and
+  // throws the result away, and an anchor seeds legitimately to null so a nullish guard would keep
+  // re-reading. useState's initializer runs once without writing a ref during render.
+  const [restoreSeed] = useState<{ offset: number; anchor: VirtualizedScrollAnchor }>(() => ({
+    offset: combinedDiffScrollTopCache.get(viewStateKey) ?? 0,
+    anchor: combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+  }))
+  const scrollOffsetRef = useRef(restoreSeed.offset)
+  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
+  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
 
   // Why: tab/worktree switches unmount this viewer; cache by pane key so remount restores sections+scroll before repaint.
   const initializedEntryStateRef = useRef<{
@@ -134,13 +141,20 @@ export function useCombinedDiffViewRestore({
     scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? 0
     scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
     latestDomScrollAnchorRef.current = scrollAnchorRef.current
+    // Why: separates "this row is uncounted" from "this pass skipped counting",
+    // which decides whether an uncounted row is cheap. Per pass, not per view:
+    // `all` mode merges passes that fail independently, so a counted branch row
+    // must not vouch for an uncommitted pass that counted nothing.
+    const countedPasses = collectCountedCombinedDiffPasses(entries)
     setSections(
       entries.map((entry) => {
         const loadOnDemand = shouldLoadCombinedDiffOnDemand({
           added: 'added' in entry ? entry.added : undefined,
           removed: 'removed' in entry ? entry.removed : undefined,
+          path: entry.path,
           area: 'area' in entry ? entry.area : undefined,
-          path: entry.path
+          submodule: 'submodule' in entry ? entry.submodule : undefined,
+          hasCountedSiblings: countedPasses.has(getCombinedDiffCountingPassKey(entry))
         })
         return {
           key: getCombinedDiffFileTreeSectionKey(treeMode, entry),

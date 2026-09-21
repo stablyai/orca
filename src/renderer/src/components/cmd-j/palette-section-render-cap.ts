@@ -28,12 +28,27 @@ export type CappedPaletteSection<T> = {
 
 export function capPaletteSection<T>(
   items: readonly T[],
-  cap: number = PALETTE_SECTION_RENDER_CAP
+  cap: number = PALETTE_SECTION_RENDER_CAP,
+  retain?: (item: T) => boolean
 ): CappedPaletteSection<T> {
   if (!Number.isFinite(cap) || cap < 0 || items.length <= cap) {
     return { visible: items, overflowCount: 0 }
   }
-  return { visible: items.slice(0, cap), overflowCount: items.length - cap }
+  const visible = items.slice(0, cap)
+  // Keep the selected match visible after reranking without increasing the DOM row cap.
+  let retained: T | undefined
+  if (retain) {
+    for (let index = cap; index < items.length; index += 1) {
+      if (retain(items[index])) {
+        retained = items[index]
+        break
+      }
+    }
+  }
+  if (retained !== undefined && cap > 0) {
+    visible.splice(cap - 1, 1, retained)
+  }
+  return { visible, overflowCount: items.length - visible.length }
 }
 
 /**
@@ -50,9 +65,10 @@ export type SoftSplitSection<T> = {
 export function softSplitPaletteSection<T>(
   items: readonly T[],
   previewCount: number,
-  hardCap: number = PALETTE_SECTION_RENDER_CAP
+  hardCap: number = PALETTE_SECTION_RENDER_CAP,
+  retain?: (item: T) => boolean
 ): SoftSplitSection<T> {
-  const capped = capPaletteSection(items, hardCap)
+  const capped = capPaletteSection(items, hardCap, retain)
   const previewSize = Math.max(0, Math.min(previewCount, capped.visible.length))
   return {
     preview: capped.visible.slice(0, previewSize),
@@ -95,7 +111,9 @@ export function layoutMultiPrimaryPaletteSections<T>({
   trailingFloorCount = TYPED_QUERY_TRAILING_FLOOR,
   hardCap,
   leadingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
-  trailingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP
+  trailingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
+  leadingRetain,
+  trailingRetain
 }: {
   leadingItems: readonly T[]
   trailingItems: readonly T[]
@@ -104,9 +122,21 @@ export function layoutMultiPrimaryPaletteSections<T>({
   hardCap?: number
   leadingHardCap?: number
   trailingHardCap?: number
+  leadingRetain?: (item: T) => boolean
+  trailingRetain?: (item: T) => boolean
 }): MultiPrimarySectionLayout<T> {
-  const leading = softSplitPaletteSection(leadingItems, leadingPreviewCount, leadingHardCap)
-  const trailing = softSplitPaletteSection(trailingItems, trailingFloorCount, trailingHardCap)
+  const leading = softSplitPaletteSection(
+    leadingItems,
+    leadingPreviewCount,
+    leadingHardCap,
+    leadingRetain
+  )
+  const trailing = softSplitPaletteSection(
+    trailingItems,
+    trailingFloorCount,
+    trailingHardCap,
+    trailingRetain
+  )
   return {
     leadingPreview: leading.preview,
     leadingRest: leading.rest,

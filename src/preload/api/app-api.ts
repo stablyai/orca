@@ -38,6 +38,9 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Resolves when host Git can run: shell-PATH generation is published and the
+   *  managed WSL CLI registration has reconciled. Does not wait on PTY services. */
+  awaitGitEnvironmentStartupBarrier: () => Promise<void>
   /** Inventories retained PTYs and restores durable structured ownership before renderer adoption. */
   prepareTerminalStartupRestoration: () => Promise<void>
   /** Reconciles legacy worker authority around persisted terminal reconnect. */

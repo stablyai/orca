@@ -76,11 +76,11 @@ export function applyRowPatch(
   set((s) => {
     const entry = s.projectViewCache[cacheKey]
     if (!entry?.data) {
-      return {}
+      return s
     }
     const rowIndex = entry.data.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
-      return {}
+      return s
     }
     const rows = [...entry.data.rows]
     rows[rowIndex] = nextRow

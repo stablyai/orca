@@ -85,7 +85,12 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     worktreeRetentionPathComparisonKey(repo.path, platform),
     ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
   ])
-  const probeCandidates = scan.metadata.flatMap((metadata) => {
+  // Why: only rows a delete could still accept are worth a filesystem probe. This is advisory —
+  // `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks authoritatively — so it can only
+  // ever shrink the `stat` fan-out, never widen what gets removed (#17775).
+  const removableCandidates =
+    store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
+  const probeCandidates = removableCandidates.flatMap((metadata) => {
     const { worktreeId } = metadata
     const parsed = splitWorktreeId(worktreeId)
     const nativeAbsolute = parsed

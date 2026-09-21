@@ -1,15 +1,21 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
-import type {
-  RemoteWorkspaceChangedEvent,
-  RemoteWorkspaceObservedPatchResult,
-  RemoteWorkspaceSession
+import {
+  REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
+  REMOTE_WORKSPACE_STALE_NOTIFICATION,
+  type RemoteWorkspaceChangedEvent,
+  type RemoteWorkspaceObservedPatchResult,
+  type RemoteWorkspaceObservedSnapshot
 } from '../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { createRepoRowExecutionHostLookup } from '../../shared/worktree-execution-host-resolution'
+import {
+  createWorktreeOwnerResolver,
+  createWorktreeTargetResolver,
+  exportSessionForTarget,
+  persistedSessionForTarget
+} from './remote-workspace-target-session-export'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { CLIENT_ID } from './remote-workspace-client-identity'
@@ -29,6 +35,10 @@ import {
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { normalizeSnapshot } from './remote-workspace-snapshot-normalization'
+import {
+  _resetRemoteWorkspaceStaleResyncForTests,
+  resyncStaleRemoteWorkspace
+} from './remote-workspace-stale-resync'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
@@ -36,6 +46,7 @@ let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 export function _resetRemoteWorkspaceCachesForTests(): void {
   clearRemoteWorkspaceSnapshotCache()
   clearRemoteWorkspacePatchTails()
+  _resetRemoteWorkspaceStaleResyncForTests()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -95,28 +106,20 @@ function getExpectedHostObservationTokens(
   return tokens
 }
 
-function targetForWorktree(
-  store: Store,
-  worktreeId: string,
-  executionHostId?: string
-): string | null {
-  const parsedHostId = parseExecutionHostId(executionHostId)
-  if (parsedHostId?.kind === 'ssh') {
-    return parsedHostId.targetId
-  }
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId)?.connectionId ?? null
-}
-
-function exportSessionForTarget(
-  store: Store,
+function sendRemoteWorkspaceChanged(
   targetId: string,
-  session: WorkspaceSessionState
-): RemoteWorkspaceSession {
-  return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId, executionHostId) =>
-      targetForWorktree(store, worktreeId, executionHostId) === targetId
-  })
+  snapshot: RemoteWorkspaceObservedSnapshot,
+  sourceClientId: string | undefined
+): void {
+  const event: RemoteWorkspaceChangedEvent = {
+    targetId,
+    snapshot,
+    ...(sourceClientId !== undefined ? { sourceClientId } : {})
+  }
+  const win = mainWindowGetter?.()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('remoteWorkspace:changed', event)
+  }
 }
 
 export function handleRemoteWorkspaceNotification(
@@ -124,7 +127,19 @@ export function handleRemoteWorkspaceNotification(
   method: string,
   params: Record<string, unknown>
 ): void {
-  if (method !== 'workspace.changed') {
+  if (method === REMOTE_WORKSPACE_STALE_NOTIFICATION) {
+    const target = getSshConnectionStore()?.getTarget(targetId)
+    if (!target) {
+      return
+    }
+    // No sourceClientId on the resynced event: the marker names no author, and guessing one would
+    // let the renderer's own-echo filter discard another device's change.
+    void resyncStaleRemoteWorkspace(target, (snapshot) =>
+      sendRemoteWorkspaceChanged(targetId, snapshot, undefined)
+    )
+    return
+  }
+  if (method !== REMOTE_WORKSPACE_CHANGED_NOTIFICATION) {
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
@@ -139,15 +154,7 @@ export function handleRemoteWorkspaceNotification(
     sourceClientId === CLIENT_ID
       ? rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, snapshot)
       : rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  const event: RemoteWorkspaceChangedEvent = {
-    targetId,
-    snapshot: observedSnapshot,
-    sourceClientId
-  }
-  const win = mainWindowGetter?.()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('remoteWorkspace:changed', event)
-  }
+  sendRemoteWorkspaceChanged(targetId, observedSnapshot, sourceClientId)
 }
 
 export function registerRemoteWorkspaceHandlers(
@@ -211,12 +218,27 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      if (targets.length === 0) {
+        // Nothing to project onto, so skip the session and repo-catalog reads entirely.
+        return []
+      }
+
+      // One repo read, and ownership resolutions shared across targets: neither depends on the
+      // target. The publish fallback's catalog attribution reads the same lookup for the same
+      // reason — building it per target re-hydrates every repo row once per connected host.
+      const resolveWorktreeOwner = createWorktreeOwnerResolver(
+        createRepoRowExecutionHostLookup(store.getRepos())
+      )
+      const resolveWorktreeTarget = createWorktreeTargetResolver(resolveWorktreeOwner)
       const results = await Promise.all(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const session = exportSessionForTarget(
+            resolveWorktreeTarget,
+            target.id,
+            args.session ?? persistedSessionForTarget(store, target.id, resolveWorktreeOwner)
+          )
           const result = await queueRemoteWorkspacePatch(target.id, async () => {
             const current =
               getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target))

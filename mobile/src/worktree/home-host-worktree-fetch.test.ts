@@ -39,7 +39,11 @@ function fakeSession(): FakeSession {
       getLastConnectedAt: () => null,
       onStateChange: () => () => {},
       notifyForeground: () => {},
-      close: () => {}
+      close: () => {
+        for (const settle of pending.splice(0)) {
+          settle(new Error('Client closed'))
+        }
+      }
     }
   }
   return fake

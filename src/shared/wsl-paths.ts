@@ -3,8 +3,23 @@ export type WslUncPathInfo = {
   linuxPath: string
 }
 
+const SLASH_CHAR_CODE = '/'.charCodeAt(0)
+const BACKSLASH_CHAR_CODE = '\\'.charCodeAt(0)
+
+function isPathSeparatorCharCode(charCode: number): boolean {
+  return charCode === SLASH_CHAR_CODE || charCode === BACKSLASH_CHAR_CODE
+}
+
 export function parseWslUncPath(path: string): WslUncPathInfo | null {
-  const normalized = path.replace(/\\/g, '/')
+  // The match is anchored at `//` after the fold, so only two leading separators can ever reach it.
+  // Every POSIX path pays the fold + regex otherwise, and this is on the FS-event storm path.
+  if (
+    !isPathSeparatorCharCode(path.charCodeAt(0)) ||
+    !isPathSeparatorCharCode(path.charCodeAt(1))
+  ) {
+    return null
+  }
+  const normalized = path.includes('\\') ? path.replace(/\\/g, '/') : path
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
   if (!match) {
     return null
@@ -49,13 +64,7 @@ export function toLinuxPath(windowsPath: string): string {
 
 /** Convert an absolute Linux path in a known WSL distro to its Windows form. */
 export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${mntMatch[1].toUpperCase()}:${rest || '\\'}`
-  }
-
-  return toWindowsWslUncPath(linuxPath, distro)
+  return toWindowsWslDrivePath(linuxPath) ?? toWindowsWslUncPath(linuxPath, distro)
 }
 
 /** Keep a Linux path addressable through its distro, including drvfs mounts. */
@@ -132,12 +141,32 @@ export function toWslExecutionSpace(path: string): string {
   return parseWslUncPath(path)?.linuxPath ?? path
 }
 
-/** The drvfs automount is literally lowercase `/mnt/<letter>`; `/MNT` is an ordinary Linux dir. */
+/**
+ * The drvfs automount is literally lowercase `/mnt/<letter>`; `/MNT` is an ordinary Linux dir.
+ * Deliberately looser than `toWindowsWslDrivePath`'s end-anchored matcher below: this one only
+ * classifies a prefix, so do not unify them — the anchoring there is what keeps a path carrying a
+ * stray line terminator off the drive spelling.
+ */
 const DRVFS_LINUX_PATH = /^\/mnt\/[a-z](?:\/|$)/
 
 /** True for a Linux path that is really a Windows drive reached through drvfs. */
 export function isDrvfsLinuxPath(linuxPath: string): boolean {
   return DRVFS_LINUX_PATH.test(linuxPath)
+}
+
+/**
+ * The Windows drive spelling of a drvfs path, or null when the path is not one. Needs no distro:
+ * the bytes sit on the drive whichever distro mounted them.
+ */
+export function toWindowsWslDrivePath(linuxPath: string): string | null {
+  // `.` excludes every line terminator, so a drvfs prefix on a stray output line (an rg hit that
+  // still carries its CR) stays off the drive spelling.
+  const match = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
+  if (!match) {
+    return null
+  }
+  const tail = (match[2] ?? '').replace(/\//g, '\\')
+  return `${match[1].toUpperCase()}:${tail || '\\'}`
 }
 
 /**

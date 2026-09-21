@@ -204,6 +204,7 @@ export function VaultHostScopeMenu({
 }
 
 export function VaultViewMenu({
+  searching = false,
   agents,
   sort,
   group,
@@ -218,6 +219,7 @@ export function VaultViewMenu({
   onSessionLimitChange,
   onReset
 }: {
+  searching?: boolean
   agents: readonly AiVaultAgent[]
   sort: AiVaultSort
   group: AiVaultGroup
@@ -313,62 +315,66 @@ export function VaultViewMenu({
             {agentLabel(agent)}
           </DropdownMenuCheckboxItem>
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>
-          {translate('auto.components.right.sidebar.AiVaultPanelControls.sort', 'Sort')}
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={sort}
-          onValueChange={(value) => onSortChange(value as AiVaultSort)}
-        >
-          <DropdownMenuRadioItem value="updated">
-            <Clock3 className="size-3.5" />
-            {translate(
-              'auto.components.right.sidebar.AiVaultPanelControls.lastUpdated',
-              'Last updated'
-            )}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="created">
-            <Calendar className="size-3.5" />
-            {translate('auto.components.right.sidebar.AiVaultPanelControls.created', 'Created')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>
-          {translate('auto.components.right.sidebar.AiVaultPanelControls.group', 'Group')}
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={group}
-          onValueChange={(value) => onGroupChange(value as AiVaultGroup)}
-        >
-          <DropdownMenuRadioItem value="project">
-            <PanelsTopLeft className="size-3.5" />
-            {translate('auto.components.right.sidebar.AiVaultPanelControls.project', 'Project')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="folder">
-            <FolderOpen className="size-3.5" />
-            {translate('auto.components.right.sidebar.AiVaultPanelControls.folder', 'Folder')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="agent">
-            <ArchiveRestore className="size-3.5" />
-            {translate('auto.components.right.sidebar.AiVaultPanelControls.agent', 'Agent')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem
-          checked={hideEmptySessions}
-          onCheckedChange={(checked) => onHideEmptySessionsChange(checked === true)}
-          onSelect={(event) => event.preventDefault()}
-        >
-          {translate(
-            'auto.components.right.sidebar.AiVaultPanelControls.hideEmptySessions',
-            'Hide empty sessions'
-          )}
-        </DropdownMenuCheckboxItem>
-        <AiVaultSessionLimitMenu
-          sessionLimit={sessionLimit}
-          onSessionLimitChange={onSessionLimitChange}
-        />
+        {!searching && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>
+              {translate('auto.components.right.sidebar.AiVaultPanelControls.sort', 'Sort')}
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={sort}
+              onValueChange={(value) => onSortChange(value as AiVaultSort)}
+            >
+              <DropdownMenuRadioItem value="updated">
+                <Clock3 className="size-3.5" />
+                {translate(
+                  'auto.components.right.sidebar.AiVaultPanelControls.lastUpdated',
+                  'Last updated'
+                )}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="created">
+                <Calendar className="size-3.5" />
+                {translate('auto.components.right.sidebar.AiVaultPanelControls.created', 'Created')}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>
+              {translate('auto.components.right.sidebar.AiVaultPanelControls.group', 'Group')}
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={group}
+              onValueChange={(value) => onGroupChange(value as AiVaultGroup)}
+            >
+              <DropdownMenuRadioItem value="project">
+                <PanelsTopLeft className="size-3.5" />
+                {translate('auto.components.right.sidebar.AiVaultPanelControls.project', 'Project')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="folder">
+                <FolderOpen className="size-3.5" />
+                {translate('auto.components.right.sidebar.AiVaultPanelControls.folder', 'Folder')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="agent">
+                <ArchiveRestore className="size-3.5" />
+                {translate('auto.components.right.sidebar.AiVaultPanelControls.agent', 'Agent')}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={hideEmptySessions}
+              onCheckedChange={(checked) => onHideEmptySessionsChange(checked === true)}
+              onSelect={(event) => event.preventDefault()}
+            >
+              {translate(
+                'auto.components.right.sidebar.AiVaultPanelControls.hideEmptySessions',
+                'Hide empty sessions'
+              )}
+            </DropdownMenuCheckboxItem>
+            <AiVaultSessionLimitMenu
+              sessionLimit={sessionLimit}
+              onSessionLimitChange={onSessionLimitChange}
+            />
+          </>
+        )}
         {adjustmentCount > 0 ? (
           <>
             <DropdownMenuSeparator />

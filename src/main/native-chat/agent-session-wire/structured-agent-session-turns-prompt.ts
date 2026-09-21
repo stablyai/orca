@@ -1,22 +1,17 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalResolution
-} from '../../../shared/agent-session-journal-types'
+import {
+  decodeAgentSessionQuestionAnswers,
+  isValidAgentSessionQuestionAnswers
+} from '../../../shared/agent-session-question-answer'
+import type { AgentJournalResolution } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
 import { decodeCodexQuestionOptionId } from '../../codex/codex-structured-prompt-replies'
+import { AgentSessionPromptUnavailableError } from './structured-agent-session-adapter'
+import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 function invalid(message: string): TurnOutcome<never> {
   return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
-}
-
-function promptBodyOf(body: AgentJournalItemBody): {
-  options: readonly { id: string }[]
-  freeTextQuestionId?: string
-  resolution: AgentJournalResolution
-} | null {
-  return body.kind === 'approval' || body.kind === 'question' ? body : null
 }
 
 export async function performPrompt(
@@ -28,43 +23,27 @@ export async function performPrompt(
     kind: 'approval' | 'question'
   }
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
-  if (!item) {
-    return invalid(`No item ${input.itemId} in session ${ctx.sessionId}.`)
+  const validated = validatePendingPrompt(ctx, input)
+  if (!validated.ok) {
+    return validated
   }
-  const prompt = promptBodyOf(item.body)
-  if (!prompt || item.body.kind !== input.kind) {
-    return invalid(`Item ${input.itemId} is not a pending ${input.kind}.`)
-  }
-  if (item.revision !== input.expectedRevision) {
-    return {
-      ok: false,
-      refusal: {
-        code: 'agent_session_item_revision_stale',
-        message: `Item ${input.itemId} has moved on.`,
-        currentRevision: item.revision,
-        resolution: prompt.resolution
-      }
-    }
-  }
-  if (prompt.resolution.state !== 'pending') {
-    return {
-      ok: false,
-      refusal: {
-        code: 'agent_session_already_resolved',
-        message: `Item ${input.itemId} was already ${prompt.resolution.state}.`,
-        currentRevision: item.revision,
-        resolution: prompt.resolution
-      }
-    }
-  }
+  const { prompt } = validated
+  const question = prompt.kind === 'question' ? prompt : null
   const freeText = decodeCodexQuestionOptionId(input.optionId)
   const acceptsFreeText =
-    item.body.kind === 'question' &&
-    prompt.freeTextQuestionId !== undefined &&
-    freeText?.questionId === prompt.freeTextQuestionId &&
+    question?.freeTextQuestionId !== undefined &&
+    freeText?.questionId === question.freeTextQuestionId &&
     freeText.answer.trim().length > 0
-  if (!acceptsFreeText && !prompt.options.some((option) => option.id === input.optionId)) {
+  const grouped = question?.questions ? decodeAgentSessionQuestionAnswers(input.optionId) : null
+  const acceptsGrouped =
+    grouped !== null &&
+    question?.questions !== undefined &&
+    isValidAgentSessionQuestionAnswers(question.questions, grouped)
+  if (
+    !acceptsFreeText &&
+    !acceptsGrouped &&
+    !prompt.options.some((option) => option.id === input.optionId)
+  ) {
     return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
   }
   const identity = parseAgentJournalItemKey(input.itemId)
@@ -78,24 +57,32 @@ export async function performPrompt(
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
   }
-  const appended = await ctx.journal.appendItem(
-    identity,
-    { ...item.body, resolution },
-    {
-      fence: ctx.fence
-    }
-  )
-  ctx.publish()
-
+  const committed: { item?: Awaited<ReturnType<typeof ctx.journal.appendItem>> } = {}
   try {
     await ctx.adapter.answerPrompt({
       sessionId: ctx.sessionId,
       itemId: input.itemId,
       kind: input.kind,
       optionId: input.optionId,
-      fence: ctx.fence
+      fence: ctx.fence,
+      commit: async () => {
+        committed.item = await ctx.journal.appendItem(
+          identity,
+          { ...prompt, resolution },
+          {
+            fence: ctx.fence
+          }
+        )
+        ctx.publish()
+      }
     })
   } catch (error) {
+    if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
+      return invalid(error.message)
+    }
+    if (!committed.item) {
+      throw error
+    }
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
       {
@@ -107,6 +94,10 @@ export async function performPrompt(
       { fence: ctx.fence }
     )
     ctx.publish()
+  }
+  const appended = committed.item
+  if (!appended) {
+    throw new Error(`Provider adapter did not commit prompt ${input.itemId}.`)
   }
   return {
     ok: true,

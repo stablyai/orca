@@ -51,10 +51,6 @@ export function useVirtualRowMeasurementSync(args: {
   const { virtualizer, isCurrentVirtualRowElement } = virtualization
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
-  const renderRowKeySignature = useMemo(
-    () => renderRows.map(getRenderRowKey).join('\n'),
-    [renderRows]
-  )
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
@@ -100,14 +96,7 @@ export function useVirtualRowMeasurementSync(args: {
     measureMountedRows()
     const frameId = window.requestAnimationFrame(measureMountedRows)
     return () => window.cancelAnimationFrame(frameId)
-  }, [
-    activeRenderRowKeys,
-    prCacheLen,
-    issueCacheLen,
-    measureMountedRows,
-    renderRowKeySignature,
-    virtualizer
-  ])
+  }, [activeRenderRowKeys, prCacheLen, issueCacheLen, measureMountedRows, virtualizer])
 
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,

@@ -3,7 +3,7 @@ import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeModelDiscoveryOutput,
@@ -206,7 +206,7 @@ export async function discoverModelsRemote(input: {
     console.error('[commit-message] Remote model discovery request failed:', error)
     return {
       success: false,
-      error: isSshMuxRequestTimeoutError(error)
+      error: isSshRequestOutcomeUnverifiable(error)
         ? `${spec.label} model discovery took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
         : `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
     }

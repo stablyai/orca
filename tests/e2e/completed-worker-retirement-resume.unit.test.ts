@@ -434,17 +434,11 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(retiredRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
 
-    // Case 4: legacy rollback preserves a fenced record; exited resolution clears it.
+    // Case 4: legacy rollback preserves the settled worker's record as an ordinary sleeping
+    // record; with its tab gone it is passive completed evidence that wake clears, and an exited
+    // resolution clears it too. No fence: a finished worker follows the same rule as any agent pane.
     seedWorkspace()
-    const legacyRecord = recordCompletedWorker()
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        [ORIGINAL_PANE_KEY]: {
-          ...legacyRecord,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        }
-      }
-    })
+    recordCompletedWorker()
     const legacyAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'rolled_back',
@@ -456,17 +450,19 @@ describe('completed background-worker retirement resume matrix', () => {
         rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), legacyAction.detail)
       ).toBe('removed')
     }
-    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
     expect(
       useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]
-        ?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
+    ).not.toHaveProperty('automaticResumeBlockedBy')
+    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     const exitedAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'exited'
     })
     expect(exitedAction).toEqual({ kind: 'clear-sleeping', paneKey: ORIGINAL_PANE_KEY })
-    useAppStore.getState().clearSleepingAgentSession(ORIGINAL_PANE_KEY)
 
     // Case 5: coordinator manual close is the same safe exact-tab retirement boundary.
     seedWorkspace()

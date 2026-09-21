@@ -212,6 +212,68 @@ describe('initial host-mirror attach against a surface published as pending-hand
     expect(transport.getRecoveryState?.().phase).toBe('recovering')
   })
 
+  it('never reads an empty tab inventory as a closed remote terminal', async () => {
+    let hostRepublished = false
+    runtimeCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
+        return Promise.resolve({
+          ok: true,
+          result: hostSessionSnapshot(hostRepublished ? 'ready' : 'absent')
+        })
+      }
+      return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-1'
+    })
+
+    const connect = transport.connect({ url: '', callbacks: { onError } })
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    // A snapshot with no surface for the tab is a client-side view of a host that may still be
+    // republishing — unknown liveness, so no terminal-closed verdict may be surfaced.
+    expect(onError).not.toHaveBeenCalled()
+
+    hostRepublished = true
+    await vi.advanceTimersByTimeAsync(HOST_SURFACE_ATTACH_WINDOW_MS)
+    await expect(connect).resolves.toMatchObject({ id: 'remote:env-1@@terminal-1' })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(subscribedTerminalHandles()).toContain('terminal-1')
+  })
+
+  it('keeps a pane whose tab inventory stayed empty revivable instead of latching an error', async () => {
+    runtimeCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
+        return Promise.resolve({ ok: true, result: hostSessionSnapshot('absent') })
+      }
+      return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } =
+      await import('./remote-runtime-pty-recovery-state')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-1'
+    })
+
+    const connect = transport.connect({ url: '', callbacks: { onError } })
+    await vi.advanceTimersByTimeAsync(
+      HOST_SURFACE_ATTACH_WINDOW_MS + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
+    )
+    await expect(connect).resolves.toBeUndefined()
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+    expect(transport.retryRecovery?.()).toBe(true)
+  })
+
   it('stops re-activating once an activation outcome is unobservable', async () => {
     let activations = 0
     runtimeCall.mockImplementation((args: { method: string }) => {

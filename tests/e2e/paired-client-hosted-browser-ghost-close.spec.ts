@@ -12,13 +12,15 @@ import {
   findMirroredBrowserPage,
   openClientHostedFixturePage,
   readClientBrowserRows,
-  refreshAuthorityRuntimeId,
   selectPairedWorktreeGroup,
   startClientHostedMarkerFixture,
   waitForPairedWorktreeId,
-  waitForRelaunchedRuntime,
   waitForRenderedClientWebview
 } from './helpers/client-hosted-browser-fixture'
+import {
+  refreshAuthorityRuntimeId,
+  waitForRelaunchedRuntime
+} from './helpers/client-hosted-runtime-relaunch'
 
 const CLIENT_NAME = 'STA-4150 client-hosted ghost close'
 

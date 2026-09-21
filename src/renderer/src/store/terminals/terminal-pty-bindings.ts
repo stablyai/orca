@@ -9,6 +9,8 @@ import {
   isRemoteRuntimePtyId
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
 
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,
@@ -140,6 +142,12 @@ export function createTerminalPtyBindingActions(
         const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
           ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
           : s.unverifiedPtyLossTabIds
+        // Why: a redeployed relay renumbers from pty-1, so a recorded disownership must not outlive
+        // the id it described once a live PTY answers to that id again.
+        const nextDisownedPtyIds = omitDisownedPtyIds(
+          s.disownedPtyIds,
+          replacementPtyId ? [ptyId, replacementPtyId] : [ptyId]
+        )
         const hasReplacementPendingRestart = replacementPtyId
           ? replacementPtyId in s.pendingCodexPaneRestartIds
           : false
@@ -253,6 +261,9 @@ export function createTerminalPtyBindingActions(
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
             ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
             : {}),
+          ...(nextDisownedPtyIds !== s.disownedPtyIds
+            ? { disownedPtyIds: nextDisownedPtyIds }
+            : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
@@ -265,6 +276,8 @@ export function createTerminalPtyBindingActions(
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
+      // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
+      clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
       if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)

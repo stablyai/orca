@@ -1,50 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { parseStrictProcessTableRows } from '../../shared/process-table-snapshot'
 import {
   buildProcessTableIndex,
-  parseStrictProcessTableRows,
-  ProcessTableCaptureError,
   type ProcessTableIndexStats
-} from '../../shared/process-table-snapshot'
+} from '../../shared/process-table-index'
 import {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex
-} from './agent-foreground-process'
-
-describe('strict process-table evidence parser', () => {
-  it('extracts pgid/tpgid while retaining command spacing', () => {
-    expect(
-      parseStrictProcessTableRows(
-        ' PID PPID PGID TPGID STAT COMMAND\r\n 100 1 100 101 Ss /bin/zsh -l\r\n 101 100 101 101 S+ node /opt/codex --flag  value\r\n'
-      )
-    ).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 101, stat: 'Ss', command: '/bin/zsh -l' },
-      {
-        pid: 101,
-        ppid: 100,
-        pgid: 101,
-        tpgid: 101,
-        stat: 'S+',
-        command: 'node /opt/codex --flag  value'
-      }
-    ])
-  })
-
-  it.each(['101 100 101 S+ node /opt/codex', '101 100 -2 101 S+ node /opt/codex'])(
-    'rejects malformed/truncated captures (%s)',
-    (capture) => {
-      expect(() => parseStrictProcessTableRows(capture)).toThrow(ProcessTableCaptureError)
-    }
-  )
-
-  it('accepts no-controlling-tty sentinels for later unverifiable classification', () => {
-    expect(parseStrictProcessTableRows('100 1 100 0 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: 0, stat: 'Ss', command: '/bin/zsh' }
-    ])
-    expect(parseStrictProcessTableRows('100 1 100 -1 Ss /bin/zsh')).toEqual([
-      { pid: 100, ppid: 1, pgid: 100, tpgid: -1, stat: 'Ss', command: '/bin/zsh' }
-    ])
-  })
-})
+} from './agent-foreground-process-batch'
 
 describe('batched foreground process correlation', () => {
   it('uses tpgid/pgid association instead of stat alone', () => {
@@ -59,7 +22,28 @@ describe('batched foreground process correlation', () => {
       resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
         { rootPid: 100, fallbackProcess: 'zsh' }
       ])
-    ).toEqual([{ available: true, processName: 'codex' }])
+    ).toEqual([{ available: true, processName: 'codex', shellOwnsEveryTtyProcessGroup: false }])
+  })
+
+  it('reports whether the shell itself owns the terminal, named process or not', () => {
+    // The only host-observable "nothing is running here". pid 200's own pgid owns the terminal;
+    // pid 300 has an unrecognized command in the foreground, which nothing else here can see.
+    const rows = parseStrictProcessTableRows(
+      [
+        '200 1 200 200 Ss /bin/zsh',
+        '300 1 300 301 Ss /bin/zsh',
+        '301 300 301 301 S+ vim notes.md'
+      ].join('\n')
+    )
+    expect(
+      resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
+        { rootPid: 200, fallbackProcess: 'zsh' },
+        { rootPid: 300, fallbackProcess: 'zsh' }
+      ])
+    ).toEqual([
+      { available: true, processName: null, shellOwnsEveryTtyProcessGroup: true },
+      { available: true, processName: null, shellOwnsEveryTtyProcessGroup: false }
+    ])
   })
 
   it('returns unverifiable for a missing root or no controlling tty', () => {

@@ -55,7 +55,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       if (session.directSshPaneRetrySettlementCancelled) {
         return
       }
-      session.settleDirectSshPaneRetryAttempt(attempt, 'timed-out')
+      session.settlePaneAttachAttempt(attempt, 'timed-out')
     }, DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS)
     session.directSshPaneRetrySettlementTimers.add(timer)
     void promise
@@ -276,6 +276,10 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   }
   session.markInteractiveRedrawInput = (): void => {
     session.lastInteractiveRedrawInputAt = performance.now()
+    if (session.synchronizedForegroundOutputActive) {
+      session.synchronizedForegroundFrameInteractive = true
+      session.synchronizedForegroundInteractivePresentPending = true
+    }
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(session.pane.terminal)
   }

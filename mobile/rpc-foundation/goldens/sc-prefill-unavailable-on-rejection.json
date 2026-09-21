@@ -1,0 +1,116 @@
+{
+  "operation": "source-control.hosted-review-eligibility",
+  "family": "hostedReview.eligibility",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
+  "scenarioSha256": "adbdfcc3895cc04d830900de518e689c9e63f6f75569127e1fde24488658e8a0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "478df34536dc": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "base": "main",
+        "blockedReason": {
+          "$rpc": "null"
+        },
+        "body": "",
+        "nextAction": {
+          "$rpc": "null"
+        },
+        "provider": "github",
+        "reviewLookupOutcome": "unavailable",
+        "title": "Recorded title"
+      }
+    },
+    "8bbf03da5e8d": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    },
+    "a0eed8835645": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": {
+              "$rpc": "null"
+            },
+            "branch": "feature",
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ac13623773fe": {
+      "eligibility": "unfetched",
+      "prefill": {
+        "base": "main",
+        "blockedReason": {
+          "$rpc": "null"
+        },
+        "body": "",
+        "nextAction": {
+          "$rpc": "null"
+        },
+        "provider": "github",
+        "reviewLookupOutcome": "unavailable",
+        "title": "Recorded title"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-prefill-unavailable-on-rejection",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a0eed8835645"],
+          "payloads": ["8bbf03da5e8d"],
+          "settlements": {
+            "prefill": "478df34536dc"
+          },
+          "state": "ac13623773fe",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

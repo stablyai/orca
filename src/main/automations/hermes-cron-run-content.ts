@@ -1,3 +1,4 @@
+import { HermesSessionRunIndex } from '../../shared/hermes-session-run-index'
 import { open, readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -152,59 +153,21 @@ function mergeOutputAndSessionContent(
   return `${outputContent}\n\n---\n\n${FULL_SESSION_LOG_HEADING}\n\n${sessionContent}`
 }
 
-function findMatchingSessionRunIndex(
-  outputRun: unknown,
-  sessionRuns: unknown[],
-  usedSessionRunIndexes: Set<number>
-): number | null {
-  const outputRunKey = getRunKey(outputRun)
-  const exactMatchIndex = sessionRuns.findIndex(
-    (sessionRun, index) =>
-      !usedSessionRunIndexes.has(index) && getRunKey(sessionRun) === outputRunKey
-  )
-  if (exactMatchIndex !== -1) {
-    return exactMatchIndex
-  }
-
-  const outputTime = sortableTimeFromRunKey(outputRunKey)
-  if (!Number.isFinite(outputTime)) {
-    return null
-  }
-
-  let bestIndex: number | null = null
-  let bestGap = Number.POSITIVE_INFINITY
-  for (let index = 0; index < sessionRuns.length; index += 1) {
-    if (usedSessionRunIndexes.has(index)) {
-      continue
-    }
-    const sessionTime = sortableTimeFromRunKey(getRunKey(sessionRuns[index]))
-    if (!Number.isFinite(sessionTime)) {
-      continue
-    }
-    const gap = outputTime - sessionTime
-    if (gap < 0 || gap > MAX_SESSION_OUTPUT_GAP_MS || gap >= bestGap) {
-      continue
-    }
-    bestIndex = index
-    bestGap = gap
-  }
-  return bestIndex
-}
-
 export function mergeHermesOutputAndSessionRuns(
   outputRuns: unknown[],
   sessionRuns: unknown[]
 ): unknown[] {
-  const usedSessionRunIndexes = new Set<number>()
+  const sessionIndex = new HermesSessionRunIndex(
+    outputRuns.length > 0 ? sessionRuns.map(getRunKey) : [],
+    sortableTimeFromRunKey,
+    MAX_SESSION_OUTPUT_GAP_MS
+  )
+  const usedSessionRunIndexes = sessionIndex.used
   const mergedOutputRuns = outputRuns.map((outputRun) => {
     if (!isRecord(outputRun)) {
       return outputRun
     }
-    const sessionRunIndex = findMatchingSessionRunIndex(
-      outputRun,
-      sessionRuns,
-      usedSessionRunIndexes
-    )
+    const sessionRunIndex = sessionIndex.find(getRunKey(outputRun))
     if (sessionRunIndex === null) {
       return outputRun
     }
@@ -212,7 +175,7 @@ export function mergeHermesOutputAndSessionRuns(
     if (!isRecord(sessionRun)) {
       return outputRun
     }
-    usedSessionRunIndexes.add(sessionRunIndex)
+    sessionIndex.use(sessionRunIndex)
     // Hermes writes the markdown output at completion, while state.db keeps
     // the actual turn-by-turn transcript under the cron session start time.
     return {
@@ -234,16 +197,17 @@ export function mergeHermesOutputAndSessionRunRefs(
   outputRefs: HermesOutputRunRef[],
   sessionRefs: HermesSessionRunRef[]
 ): HermesMergedRunRef[] {
-  const usedSessionRunIndexes = new Set<number>()
+  const sessionIndex = new HermesSessionRunIndex(
+    outputRefs.length > 0 ? sessionRefs.map(getRunKey) : [],
+    sortableTimeFromRunKey,
+    MAX_SESSION_OUTPUT_GAP_MS
+  )
+  const usedSessionRunIndexes = sessionIndex.used
   const mergedOutputRefs = outputRefs.map((outputRef) => {
-    const sessionRunIndex = findMatchingSessionRunIndex(
-      outputRef,
-      sessionRefs,
-      usedSessionRunIndexes
-    )
+    const sessionRunIndex = sessionIndex.find(getRunKey(outputRef))
     const sessionRef = sessionRunIndex === null ? null : sessionRefs[sessionRunIndex]
     if (sessionRunIndex !== null) {
-      usedSessionRunIndexes.add(sessionRunIndex)
+      sessionIndex.use(sessionRunIndex)
     }
     return {
       id: outputRef.id,

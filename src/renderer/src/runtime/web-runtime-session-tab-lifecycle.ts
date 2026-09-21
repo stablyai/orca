@@ -6,11 +6,16 @@ import type {
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
+import {
+  clearWebSessionCloseIntent,
+  makeWebSessionCloseIntentDurable,
+  recordWebSessionCloseIntent
+} from './web-session-close-intent'
 import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent
 } from './web-session-focus-intent'
+import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 import { toHostSessionTabId } from './web-terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
@@ -134,7 +139,7 @@ async function callWebRuntimeSessionTabMethod(
             ? { reason: args.reason }
             : {})
       },
-      timeoutMs: 15_000
+      timeoutMs: WEB_SESSION_TAB_RPC_TIMEOUT_MS
     })
     const result = unwrapRuntimeRpcResult(
       response as RuntimeRpcResponse<RuntimeMobileSessionTabCloseResult | undefined>
@@ -157,8 +162,21 @@ async function callWebRuntimeSessionTabMethod(
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
     }
+    // Why the split: 'tab_not_found' and 'terminal_tab_not_found' prove definitive surface absence.
+    // Restoring the mirror on it hands the user back a pane the host cannot close and whose handle is already gone (#9194, #21189),
+    // so keep the suppression and drop its TTL instead.
+    // 'selector_not_found' is a transient worktree resolver state (e.g. during scans or cache warm-up,
+    // per remote-browser-stream-errors.ts) and must not become a durable close tombstone.
+    // Every other failure is a "not now".
+    const hostHasNoSuchTab =
+      hasRuntimeRpcErrorCode(error, 'tab_not_found') ||
+      hasRuntimeRpcErrorCode(error, 'terminal_tab_not_found')
     for (const hostTabId of closeIntentTabIds) {
-      clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+      if (hostHasNoSuchTab) {
+        makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId)
+      } else {
+        clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+      }
     }
     if (isLifecycleClose) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
@@ -171,6 +189,6 @@ async function callWebRuntimeSessionTabMethod(
       `[web-runtime-session] failed to ${isClose ? 'close' : 'activate'} tab:`,
       error instanceof Error ? error.message : String(error)
     )
-    return hasRuntimeRpcErrorCode(error, 'tab_not_found') ? 'unknown-tab' : 'failed'
+    return hostHasNoSuchTab ? 'unknown-tab' : 'failed'
   }
 }

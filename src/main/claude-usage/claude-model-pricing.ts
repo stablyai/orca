@@ -88,13 +88,7 @@ const MODEL_ALIASES: Record<string, string> = {
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
 }
 
-function hasClaudeModelVersion(model: string, family: string, version: string): boolean {
-  const normalized = model.replace(/\./g, '-')
-  return new RegExp(`${family}-${version}(?:$|[^0-9])`).test(normalized)
-}
-
-function isLegacyBaseOpus4Model(model: string): boolean {
-  const normalized = model.replace(/\./g, '-')
+function isLegacyBaseOpus4Model(normalized: string): boolean {
   return /opus-4(?:$|-thinking$|-20\d{6}(?:-thinking)?$|@20\d{6}$)/.test(normalized)
 }
 
@@ -110,28 +104,29 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (alias) {
     return alias
   }
-  if (hasClaudeModelVersion(lower, 'fable', '5')) {
+  const normalized = lower.replace(/\./g, '-')
+  if (/fable-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-fable-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '5')) {
+  if (/opus-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
+  if (/opus-4-8(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-8'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-7')) {
+  if (/opus-4-7(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-7'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-6')) {
+  if (/opus-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-6'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-5')) {
+  if (/opus-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-1')) {
+  if (/opus-4-1(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-1'
   }
-  if (isLegacyBaseOpus4Model(lower)) {
+  if (isLegacyBaseOpus4Model(normalized)) {
     return 'claude-opus-4'
   }
   if (lower.includes('opus-4')) {
@@ -139,13 +134,13 @@ function normalizeModelForPricing(model: string | null): string | null {
     // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
     return 'claude-opus-4-8'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '5')) {
+  if (/sonnet-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-5'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '4-6')) {
+  if (/sonnet-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-6'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '4-5')) {
+  if (/sonnet-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-5'
   }
   if (lower.includes('sonnet-4')) {

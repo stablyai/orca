@@ -2,7 +2,14 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  createMockTransport,
+  createPane,
+  createManager,
+  LEAF_2,
+  type ConnectCallbacks,
+  type MockTransport
+} from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps, buildDirectSshSplitRetryCommit } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -10,7 +17,6 @@ import {
   pendingSpawnByPaneKey,
   pendingSpawnGenerationByPaneKey
 } from './pty-connection/pty-connect-limits'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -663,6 +669,88 @@ describe('connectPanePty', () => {
 
     delayedSpawn.resolve(stalePtyId)
     await flushAsyncTicks(12)
+  })
+
+  it('rejects an owner-unverified reattach after direct SSH authority rotates', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-live')
+    const delayedReattach = createDeferred<void>()
+    const capturedCallbacks: { current: ConnectCallbacks | null } = { current: null }
+    const transport = createMockTransport(restoredPtyId)
+    transport.detach = vi.fn()
+    transport.connect.mockImplementation(({ callbacks }) => {
+      capturedCallbacks.current = callbacks ?? null
+      return delayedReattach.promise
+    })
+    transportFactoryQueue.push(transport)
+    const liveRetry = {
+      attemptId: 'attempt-live-owner-unverified',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-old',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      ptyId: restoredPtyId
+    }
+    const settleDirectSshPaneRetry = vi.fn()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }] },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_2 },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_2]: restoredPtyId }
+        }
+      },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-old',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: {},
+      directSshLivePtyBindingByTabId: { 'tab-1': liveRetry },
+      settleDirectSshPaneRetry
+    }
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: restoredPtyId }
+    })
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks()
+    mockStoreState.sshConnectionStates = new Map([
+      [
+        'target-a',
+        {
+          targetId: 'target-a',
+          status: 'connected',
+          providerEpoch: 'epoch-new',
+          connectionGeneration: 4
+        }
+      ]
+    ])
+
+    capturedCallbacks.current?.onError?.('terminal_pane_owner_unverified')
+    delayedReattach.resolve()
+    await flushAsyncTicks(12)
+
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(transport.detach).toHaveBeenCalledExactlyOnceWith({ preserveExitObserver: false })
+    expect(settleDirectSshPaneRetry).not.toHaveBeenCalled()
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_2]: restoredPtyId
+    })
   })
 
   it('starts a new spawn and rejects a late callback after direct SSH authority rotates', async () => {

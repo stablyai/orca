@@ -12,7 +12,13 @@ export type PendingBrowserCookieImport =
 // Why: no userAgent fields — the session UA is always derived from the running
 // engine at startup (clean or native), never persisted. Imports before Aug 2026
 // stored a synthesized source-browser UA here; persistMeta drops those legacy
-// keys on the next write because this loader no longer carries them.
+// TOP-LEVEL keys on the next write because this loader no longer carries them.
+//
+// This does not extend to the retired per-profile `userAgentMode`: it lives inside each
+// BrowserSessionProfile in `profiles`, which is carried through untouched, so those bytes
+// survive every write. That retention is deliberate — it is what makes rollback and
+// data-loss machinery unnecessary — and the startup notice keys on it, so nothing may
+// start stripping it. See inspectRetiredBrowserSessionProfileUserAgentModes.
 export type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
   pendingCookieDbPath: string | null

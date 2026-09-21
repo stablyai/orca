@@ -17,6 +17,14 @@ type RowRemovalFrame = {
   targetExists: boolean
 }
 
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Frame sampling started in the page and awaited once the removal animation settles.
+    __activeDeleteRowRemovalFrames?: Promise<RowRemovalFrame[]>
+  }
+}
+
 async function pauseForVisualProof(page: Page): Promise<void> {
   if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
     await page.waitForTimeout(VISUAL_PROOF_PAUSE_MS)
@@ -215,7 +223,7 @@ async function startRowRemovalSampling(
 
 async function finishRowRemovalSampling(page: Page): Promise<RowRemovalFrame[]> {
   return page.evaluate(async () => {
-    const pending = Reflect.get(window, '__activeDeleteRowRemovalFrames')
+    const pending = window.__activeDeleteRowRemovalFrames
     if (!(pending instanceof Promise)) {
       throw new Error('Row removal sampling was not started')
     }
@@ -237,24 +245,10 @@ test('deleting the active scrolled worktree preserves position and closes the ro
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(belowId)}]`
   )
   await pauseForVisualProof(orcaPage)
-  await target.evaluate((element) => {
-    const scope = element.querySelector<HTMLElement>(
-      '[data-worktree-context-menu-scope="worktree"]'
-    )
-    if (!scope) {
-      throw new Error('Worktree context-menu scope is unavailable')
-    }
-    scope.dispatchEvent(
-      new MouseEvent('contextmenu', {
-        bubbles: true,
-        button: 2,
-        cancelable: true,
-        clientX: scope.getBoundingClientRect().left + 10,
-        clientY: scope.getBoundingClientRect().top + 10
-      })
-    )
-  })
-  const deleteItem = orcaPage.getByRole('menuitem', { name: 'Delete', exact: true })
+  const contextMenuScope = target.locator('[data-worktree-context-menu-scope="worktree"]')
+  await expect(contextMenuScope).toBeVisible()
+  await contextMenuScope.click({ button: 'right' })
+  const deleteItem = orcaPage.getByRole('menuitem', { name: /^Delete(?:\s|$)/ })
   await expect(deleteItem).toBeVisible()
   await expect(deleteItem).toBeInViewport()
   await pauseForVisualProof(orcaPage)

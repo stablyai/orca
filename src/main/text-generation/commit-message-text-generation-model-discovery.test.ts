@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
+import {
+  createSshDisposalError,
+  SSH_MUX_REQUEST_TIMEOUT_CODE
+} from '../ssh/ssh-channel-multiplexer'
 import {
   discoverCommitMessageModelsLocal,
   discoverCommitMessageModelsRemote
@@ -235,7 +238,11 @@ describe('discoverCommitMessageModelsLocal', () => {
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          cwd: undefined,
+          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
+          // asserted below), so the Windows-side cwd never decides where discovery runs.
+          cwd: expect.any(String),
           windowsHide: true
         })
       )
@@ -266,8 +273,32 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     await expect(pending).resolves.toMatchObject({
       success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
-      models: [{ id: 'github-copilot/gpt-5.4-mini' }]
+      defaultModelId: 'default',
+      models: [{ id: 'default' }]
+    })
+  })
+
+  it('falls back to the first discovered non-Pi model when its static default is unavailable', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+
+    listeners.get('stdout:data')?.(Buffer.from('gpt-5.2 - GPT-5.2\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      defaultModelId: 'gpt-5.2',
+      models: [{ id: 'gpt-5.2' }]
     })
   })
 
@@ -298,7 +329,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     await expect(pending).resolves.toMatchObject({
       success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
+      defaultModelId: 'default',
       models: [{ id: 'github-copilot/gpt-5.4-mini' }, { id: 'openai-codex/gpt-5.5' }]
     })
   })
@@ -318,7 +349,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       await vi.advanceTimersByTimeAsync(60_000)
 
       await assertion
-      expectChildTerminated(child)
+      await expectChildTerminated(child)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -345,7 +376,7 @@ describe('discoverCommitMessageModelsLocal', () => {
         success: false,
         error: 'Codex model discovery timed out after 60s.'
       })
-      expectChildTerminated(firstChild)
+      await expectChildTerminated(firstChild)
       expect(spawnMock).toHaveBeenCalledTimes(1)
 
       firstChild.emit('close', null)
@@ -406,7 +437,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: false,
       error: 'Cursor returned too much model data.'
     })
-    expectChildTerminated(child)
+    await expectChildTerminated(child)
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
@@ -460,6 +491,26 @@ describe('generateCommitMessageFromContext', () => {
       '/remote/repo',
       async () => {
         throw transportTimeout
+      },
+      'npx cursor-agent'
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
+    })
+  })
+
+  it('keeps the unverifiable wording when the link is declared lost instead of timing out', async () => {
+    // Same regression as the exec leg: a wedged link now disposes the mux before the response
+    // deadline, so this branch sees CONNECTION_LOST. Reporting "could not be reached" for it
+    // asserts absence the client never observed (docs/reference/ssh-execution-boundary.md).
+    const result = await discoverCommitMessageModelsRemote(
+      'cursor',
+      '/remote/repo',
+      async () => {
+        throw createSshDisposalError('connection_lost')
       },
       'npx cursor-agent'
     )

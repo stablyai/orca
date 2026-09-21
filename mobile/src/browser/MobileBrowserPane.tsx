@@ -21,11 +21,19 @@ import {
   type PinchGesture
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
+import {
+  browserGoBack,
+  browserGoForward,
+  browserNavigate,
+  browserReload
+} from './mobile-browser-command-operations'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserPaneLayers } from './use-mobile-browser-pane-layers'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
+import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -55,11 +63,6 @@ type PanGesture = {
   y: number
   offsetX: number
   offsetY: number
-}
-
-type BrowserDialogState = {
-  dialogType: string
-  message: string
 }
 
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
@@ -196,8 +199,11 @@ export function MobileBrowserPane({
     setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
   }, [tab.browserPageId, tab.url, worktreeId])
 
+  const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
+
   const { frameGeometry, pageParams, sendBrowserRequest } = useMobileBrowserStream({
     appActive,
+    binaryScreencastGranted,
     browserImageRefs,
     browserLayerRefs,
     browserViewMode,
@@ -237,14 +243,14 @@ export function MobileBrowserPane({
       setError('Enter a valid URL.')
       return
     }
-    const result = (await sendBrowserRequest(
-      'browser.goto',
-      { url },
+    const settled = await sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
       { showBusy: true, timeoutMs: 30_000 }
-    )) as { url?: string } | null
-    if (typeof result?.url === 'string') {
-      setAddressValue(displayBrowserUrl(result.url))
-      lastZoomResetUrlRef.current = result.url
+    )
+    if (settled?.url !== undefined) {
+      setAddressValue(displayBrowserUrl(settled.url))
+      lastZoomResetUrlRef.current = settled.url
       resetBrowserZoomState()
     }
   }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
@@ -294,19 +300,31 @@ export function MobileBrowserPane({
     if (controlsDisabled || !tab.canGoBack) {
       return
     }
-    void sendBrowserRequest('browser.back', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserGoBack.interpret(await browserGoBack.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest, tab.canGoBack])
   const goForward = useCallback(() => {
     if (controlsDisabled || !tab.canGoForward) {
       return
     }
-    void sendBrowserRequest('browser.forward', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserGoForward.interpret(await browserGoForward.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest, tab.canGoForward])
   const reloadPage = useCallback(() => {
     if (controlsDisabled) {
       return
     }
-    void sendBrowserRequest('browser.reload', {}, { suppressError: true })
+    void sendBrowserRequest(
+      async (rpc, page, options) =>
+        browserReload.interpret(await browserReload.request(rpc, page, options)),
+      { suppressError: true }
+    )
   }, [controlsDisabled, sendBrowserRequest])
 
   const selectBrowserViewMode = useCallback(

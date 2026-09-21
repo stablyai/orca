@@ -28,7 +28,12 @@ export function getProvider(connectionId: string | null | undefined): IPtyProvid
   }
   const provider = sshProviders.get(connectionId)
   if (!provider) {
-    throw new Error(`No PTY provider for connection "${connectionId}"`)
+    // Why the suffix: this surfaces verbatim in `terminal create` on a reconnecting SSH host; the
+    // bare id told the caller nothing about what to do. Keep the prefix — the renderer matches it.
+    throw new Error(
+      `No PTY provider for connection "${connectionId}": the SSH relay for this host is not attached ` +
+        '(reconnecting or disconnected). Wait for the host to reconnect, or use Reconnect on the SSH target.'
+    )
   }
   return provider
 }
