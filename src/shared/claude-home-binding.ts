@@ -1,9 +1,15 @@
-import { win32 } from 'node:path'
+import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import {
+  getProjectGroupExecutionHostId,
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
+import { getExecutionHostIdFromWorktreeHostIdentity } from './worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from './worktree/id'
-import { parseWorkspaceKey } from './workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId, parseWorkspaceKey } from './workspace-scope'
 
 export type ResolvedClaudeHomeBinding = {
   configDir: string
@@ -12,32 +18,71 @@ export type ResolvedClaudeHomeBinding = {
 }
 
 /**
- * A persisted binding, kept only when absolute. Why `win32.isAbsolute` for every platform:
- * groups sync between clients and remote hosts, so a macOS client must keep a Windows host's
- * `C:\…` or `\\server\share` binding intact — and `win32.isAbsolute` already accepts POSIX roots.
+ * A persisted binding, kept only when it names one fixed directory on some host.
+ *
+ * Syntax decides it, never the running platform: groups sync between clients and remote hosts, so
+ * a macOS client must keep a Windows host's `C:\…` or `\\server\share` binding intact. Rejected
+ * along with plain relative paths are the drive-relative spellings `\Users\alice` and `C:alice`,
+ * which resolve against the *process's* current drive on Windows and are ordinary relative
+ * filenames on POSIX — one binding would then mean a different home per session.
  */
 export function normalizeClaudeConfigDir(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
   const trimmed = value.trim()
-  return trimmed && win32.isAbsolute(trimmed) ? trimmed : null
+  if (!trimmed) {
+    return null
+  }
+  return isWindowsAbsolutePathLike(trimmed) || trimmed.startsWith('/') ? trimmed : null
+}
+
+/**
+ * Why host-scoped: `groups` and `repos` are host-qualified catalogs that hold rows from every
+ * execution host at once, so the same id can appear twice. A config dir is a filesystem path on
+ * exactly one host (`docs/reference/ssh-execution-boundary.md`), so the row stamped for the
+ * workspace's host wins. An unmatched host falls back to the first row by id rather than to
+ * "unbound", so an unstamped legacy catalog keeps resolving exactly as before.
+ */
+function findRowForHost<T>(
+  rows: readonly T[],
+  matchesId: (row: T) => boolean,
+  hostOf: (row: T) => ExecutionHostId,
+  hostId: ExecutionHostId | null | undefined
+): T | undefined {
+  let fallback: T | undefined
+  for (const row of rows) {
+    if (!matchesId(row)) {
+      continue
+    }
+    if (hostId && hostOf(row) === hostId) {
+      return row
+    }
+    fallback ??= row
+  }
+  return fallback
 }
 
 /** Nearest binding walking up `parentGroupId`. Bounded so a cycle that survived normalization ends. */
 export function resolveClaudeHomeBindingForGroup(
   groups: readonly ProjectGroup[],
-  groupId: string | null | undefined
+  groupId: string | null | undefined,
+  executionHostId?: ExecutionHostId | null
 ): ResolvedClaudeHomeBinding | null {
   if (!groupId) {
     return null
   }
-  const groupsById = new Map(groups.map((group) => [group.id, group]))
   const visited = new Set<string>()
   let currentId: string | null | undefined = groupId
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId)
-    const group: ProjectGroup | undefined = groupsById.get(currentId)
+    const current = currentId
+    const group: ProjectGroup | undefined = findRowForHost(
+      groups,
+      (candidate) => candidate.id === current,
+      getProjectGroupExecutionHostId,
+      executionHostId
+    )
     if (!group) {
       return null
     }
@@ -45,34 +90,68 @@ export function resolveClaudeHomeBindingForGroup(
     if (configDir) {
       return { configDir, groupId: group.id }
     }
+    // A group tree lives on one host, so every hop stays scoped to the host the walk started on.
     currentId = group.parentGroupId
   }
   return null
 }
 
-export function resolveProjectGroupIdForWorkspace(input: {
+type WorkspaceGroupLookup = {
   repos: readonly Repo[]
   folderWorkspaces: readonly FolderWorkspace[]
   workspaceId: string
-}): string | null {
-  const scope = parseWorkspaceKey(input.workspaceId)
-  const folderWorkspaceId = scope?.type === 'folder' ? scope.folderWorkspaceId : input.workspaceId
-  const folderWorkspace = input.folderWorkspaces.find(
-    (workspace) => workspace.id === folderWorkspaceId
-  )
-  if (folderWorkspace) {
-    return folderWorkspace.projectGroupId || null
-  }
-  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : input.workspaceId
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return input.repos.find((repo) => repo.id === repoId)?.projectGroupId ?? null
+  /** Disambiguates a workspace id that exists on more than one host; else read off the id itself. */
+  executionHostId?: ExecutionHostId | null
 }
 
-export function resolveClaudeHomeBindingForWorkspace(input: {
-  groups: readonly ProjectGroup[]
-  repos: readonly Repo[]
-  folderWorkspaces: readonly FolderWorkspace[]
-  workspaceId: string
-}): ResolvedClaudeHomeBinding | null {
-  return resolveClaudeHomeBindingForGroup(input.groups, resolveProjectGroupIdForWorkspace(input))
+type WorkspaceGroupRef = { groupId: string; executionHostId: ExecutionHostId | null }
+
+function resolveWorkspaceGroupRef(input: WorkspaceGroupLookup): WorkspaceGroupRef | null {
+  // Why the canonical unwrapper: a workspace id reaches here as a WorkspaceKey, a host-qualified
+  // identity (`ssh:target|repo::path`) or a bare id, and a missed shape reads as "unbound" —
+  // indistinguishable from "no binding configured", which is the silent-wrong-account failure.
+  const hostId =
+    input.executionHostId ?? getExecutionHostIdFromWorktreeHostIdentity(input.workspaceId) ?? null
+  const workspaceId = normalizeWorkspaceSessionKeyToWorkspaceId(input.workspaceId)
+  const scope = parseWorkspaceKey(workspaceId)
+  const folderWorkspaceId = scope?.type === 'folder' ? scope.folderWorkspaceId : workspaceId
+  const folderWorkspace = findRowForHost(
+    input.folderWorkspaces,
+    (workspace) => workspace.id === folderWorkspaceId,
+    getRepoExecutionHostId,
+    hostId
+  )
+  if (folderWorkspace) {
+    return folderWorkspace.projectGroupId
+      ? {
+          groupId: folderWorkspace.projectGroupId,
+          executionHostId: hostId ?? getRepoExecutionHostId(folderWorkspace)
+        }
+      : null
+  }
+  const repoId = getRepoIdFromWorktreeId(
+    scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+  )
+  const repo = findRowForHost(
+    input.repos,
+    (candidate) => candidate.id === repoId,
+    getRepoExecutionHostId,
+    hostId
+  )
+  return repo?.projectGroupId
+    ? { groupId: repo.projectGroupId, executionHostId: hostId ?? getRepoExecutionHostId(repo) }
+    : null
+}
+
+export function resolveProjectGroupIdForWorkspace(input: WorkspaceGroupLookup): string | null {
+  return resolveWorkspaceGroupRef(input)?.groupId ?? null
+}
+
+export function resolveClaudeHomeBindingForWorkspace(
+  input: WorkspaceGroupLookup & { groups: readonly ProjectGroup[] }
+): ResolvedClaudeHomeBinding | null {
+  const ref = resolveWorkspaceGroupRef(input)
+  return ref
+    ? resolveClaudeHomeBindingForGroup(input.groups, ref.groupId, ref.executionHostId)
+    : null
 }

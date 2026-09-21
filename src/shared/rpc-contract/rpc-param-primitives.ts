@@ -54,6 +54,24 @@ export const TriStateLinkedIssue = z
   .pipe(z.union([z.number(), z.null(), z.undefined()]))
   .optional()
 
+// Why: an emptied text field must clear, not vanish. `OptionalString` folds `''` into
+// `undefined` ("no update"), which turns a clear into a silent no-op on any handler guarding on
+// `!== undefined` — while an Electron IPC schema that passes `''` through clears. Blank means
+// null here, so both hops agree on what an emptied field did.
+export const ClearableString = z
+  .unknown()
+  .transform((value) => {
+    if (value === null) {
+      return null
+    }
+    if (typeof value !== 'string') {
+      return undefined
+    }
+    return value.trim().length > 0 ? value : null
+  })
+  .pipe(z.union([z.string(), z.null(), z.undefined()]))
+  .optional()
+
 // Why: the legacy extractBrowserTarget treated worktree as a plain-string
 // passthrough (empty string preserved) but `page` as non-empty-string. The
 // browser bridge uses worktree-as-empty-string to mean "any worktree", so

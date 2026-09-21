@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import {
+  ClearableString,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
 
@@ -55,8 +60,8 @@ export const ProjectGroupUpdate = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
     color: OptionalString.nullable().optional(),
-    // Additive optional field (remote-wire Rule 1); null clears the binding.
-    claudeConfigDir: OptionalString.nullable().optional()
+    // Additive optional field (remote-wire Rule 1); null or '' clears the binding.
+    claudeConfigDir: ClearableString
   })
 })
 

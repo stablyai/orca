@@ -92,7 +92,16 @@ describe('project-groups', () => {
       { id: 'relative', name: 'Relative', tabOrder: 4, claudeConfigDir: 'homes/work' },
       { id: 'blank', name: 'Blank', tabOrder: 5, claudeConfigDir: '   ' },
       { id: 'non-string', name: 'NonString', tabOrder: 6, claudeConfigDir: 42 },
-      { id: 'unbound', name: 'Unbound', tabOrder: 7 }
+      { id: 'unbound', name: 'Unbound', tabOrder: 7 },
+      // Drive-relative on Windows (resolves against the process's current drive), and a single
+      // backslash-laden relative filename on POSIX. Neither names one fixed directory.
+      {
+        id: 'drive-relative',
+        name: 'DriveRelative',
+        tabOrder: 8,
+        claudeConfigDir: '\\Users\\alice'
+      },
+      { id: 'drive-no-slash', name: 'DriveNoSlash', tabOrder: 9, claudeConfigDir: 'C:homes' }
     ])
     const configDirById = new Map(groups.map((group) => [group.id, group.claudeConfigDir]))
 
@@ -103,6 +112,8 @@ describe('project-groups', () => {
     expect(configDirById.get('blank')).toBeNull()
     expect(configDirById.get('non-string')).toBeNull()
     expect(configDirById.get('unbound')).toBeNull()
+    expect(configDirById.get('drive-relative')).toBeNull()
+    expect(configDirById.get('drive-no-slash')).toBeNull()
   })
 
   it('leaves a newly created group unbound', () => {
