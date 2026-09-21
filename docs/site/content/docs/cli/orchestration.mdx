@@ -74,6 +74,7 @@ Inspect / recover:
 ```bash
 orca orchestration worker-show --dispatch <dispatchId> --json
 orca orchestration worker-read --dispatch <dispatchId> --limit 50 --json
+orca orchestration worker-payload --dispatch <dispatchId> --digest <sha256> --json
 orca orchestration worker-stop --dispatch <dispatchId> --json
 # After an accepted worker_done: reuse the same terminal for a follow-up Dispatch, or release it
 # (archives inspectable output, then closes only that coordinator-owned agent terminal):
@@ -84,7 +85,7 @@ orca orchestration worker-retain --dispatch <dispatchId> --json
 orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex --json
 ```
 
-Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
+Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. When `worker-read` clips a block it prints `… (truncated) [full text N bytes, digest <sha256>]` if the host retained the original; `worker-payload --dispatch <id> --digest <sha256>` returns the exact bytes in pages (`--offset`), only for digests clipped while reading that Dispatch. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
 
 ## Federated workers (optional)
 

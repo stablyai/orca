@@ -1,6 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import {
+  getOptionalNonNegativeIntegerFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -10,7 +11,12 @@ import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
 } from '../../../shared/orchestration-worker-output'
-import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
+import {
+  formatWorkerPayload,
+  formatWorkerRead,
+  type LegacyWorkerReadResult,
+  type WorkerPayloadReadResult
+} from './worker-output'
 
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-show': async ({ flags, client, json }) => {
@@ -47,6 +53,23 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       }
       return lines.join('\n')
     })
+  },
+
+  'orchestration worker-payload': async ({ flags, client, json }) => {
+    const digest = getRequiredStringFlag(flags, 'digest')
+    if (!/^[0-9a-f]{64}$/.test(digest)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--digest must be the lowercase sha256 hex digest printed with the clipped block'
+      )
+    }
+    const result = await client.call<WorkerPayloadReadResult>('orchestration.workerPayloadRead', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      digest,
+      offset: getOptionalNonNegativeIntegerFlag(flags, 'offset'),
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+    })
+    printResult(result, json, formatWorkerPayload)
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {

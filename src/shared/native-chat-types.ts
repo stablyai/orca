@@ -32,10 +32,22 @@ export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
 export const NATIVE_CHAT_ROLES = ['user', 'assistant', 'tool', 'reasoning', 'system'] as const
 export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
+/** Reference to the complete original of a clipped block, retained by the
+ *  execution host under its sha256 digest. `retrievable` is true only when the
+ *  host stored the full bytes; a reader must treat a clipped block without it
+ *  as incomplete, never as the whole content. */
+export type NativeChatClippedPayload = {
+  digest: string
+  byteLength: number
+  retrievable: boolean
+}
+
 /** Plain prose / markdown. The assistant body, a user prompt, reasoning text. */
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Present when `text` is a bounded head of a longer original. */
+  clipped?: NativeChatClippedPayload
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string
   tone?: string
@@ -88,6 +100,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** Present when `output` is a bounded head of a longer original. */
+  clipped?: NativeChatClippedPayload
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
 }

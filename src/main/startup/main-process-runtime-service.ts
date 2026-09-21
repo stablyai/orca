@@ -12,6 +12,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { ensureJournalPayloadRetention } from '../native-chat/agent-session-journal/journal-payload-retention-install'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -73,6 +74,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
   // `orca serve`, which never opens one, and the fleet path runs there too.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+  // Why before the runtime: terminal-mode worker reads clip transcripts without
+  // ever opening a structured session, and what they clip must be retrievable
+  // from the first read, not from the first chat.
+  ensureJournalPayloadRetention({
+    stateDirectory: getProfileUserDataPath(),
+    onError: ({ scope, error }) => console.error(`[${scope}]`, error)
+  })
   const runtime = new OrcaRuntimeService(store, stats, {
     prepareClaudeAuth: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     agentSessionClaimSigner: loadAgentSessionClaimSigner(

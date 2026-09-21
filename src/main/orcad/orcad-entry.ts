@@ -13,6 +13,8 @@
  */
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { ensureJournalPayloadRetention } from '../native-chat/agent-session-journal/journal-payload-retention-install'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
@@ -208,6 +210,13 @@ async function startOrcadRuntime(
   // adapter as THE local provider, and the registry's contract is that it lands before
   // registerPtyHandlers so the IPC layer routes through the daemon from the first call.
   await startOrcadDaemon()
+
+  // Why before the runtime: see main-process-runtime-service; the daemon serves
+  // terminal-mode worker reads too and must retain what it clips from the start.
+  ensureJournalPayloadRetention({
+    stateDirectory: getProfileUserDataPath(),
+    onError: ({ scope, error }) => console.error(`[${scope}]`, error)
+  })
 
   // Why a holder and not a direct reference: the index is installed after the runtime is
   // constructed, and the deps hook is only ever called later, from an RPC.

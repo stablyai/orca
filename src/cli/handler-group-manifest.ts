@@ -118,6 +118,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-start',
       'orchestration worker-show',
       'orchestration worker-read',
+      'orchestration worker-payload',
       'orchestration worker-stop',
       'orchestration worker-abandon',
       'orchestration worker-release',

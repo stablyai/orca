@@ -48,6 +48,8 @@ export async function readWorkerTranscript(args: {
   expectedBoundaryCheckpoint?: string
   /** Remote execution-host provider. When present no local filesystem lookup occurs. */
   filesystemProvider?: IFilesystemProvider
+  /** Scope recorded for retained full payloads of clipped blocks (for example `dispatch:<id>`). */
+  payloadScope?: string
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
@@ -108,7 +110,9 @@ export async function readWorkerTranscript(args: {
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
-    const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const bounded = boundWorkerTranscriptMessages(page.messages, filePath, {
+      payloadScope: args.payloadScope
+    })
     return {
       ok: true,
       filePath,

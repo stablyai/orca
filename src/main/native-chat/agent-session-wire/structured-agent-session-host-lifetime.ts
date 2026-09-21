@@ -22,6 +22,7 @@ import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-ses
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import { DISPATCH_DOUBT_PROVIDER_CLOSED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
@@ -98,7 +99,7 @@ export async function evictHeldStructuredAgentSession(
         sessionId,
         fence: session.fence,
         settlementId: `expected-close:${sessionId}:${session.fence}:${session.acquisitionGeneration ?? 'unknown'}`,
-        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+        pendingSubmissionReason: DISPATCH_DOUBT_PROVIDER_CLOSED,
         verdict: { state: 'interrupted', completedAt: context.now() },
         showUnexpectedExitOutcome: false,
         onError: (id, error) => {

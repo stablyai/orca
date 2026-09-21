@@ -38,6 +38,10 @@ import {
 } from '../native-chat/claude-structured-managed-account-support'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { agentSessionStorePath } from './agent-session-record-store-file'
+import {
+  clearJournalPayloadRetention,
+  ensureJournalPayloadRetention
+} from '../native-chat/agent-session-journal/journal-payload-retention-install'
 import { stopOrphanAgentSessionChildren } from './agent-session-orphan-child-reaper'
 import {
   createStructuredAgentSessionOwnerProbe,
@@ -151,6 +155,7 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
+  clearJournalPayloadRetention()
   agentSessionPtyWriteGate.detachRecordLookup()
   const outstanding = [...pendingTeardown]
   pendingTeardown.clear()
@@ -194,6 +199,10 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     hostId: deps.hostId
   })
   agentSessionPtyWriteGate.attachRecordLookup((sessionId) => store.getRecord(sessionId))
+  // Why again here: the runtime installs retention at construction, but a host
+  // handed a different state root (tests, embedded hosts) must retain beside
+  // the journals it actually writes. Same root is a no-op.
+  ensureJournalPayloadRetention({ stateDirectory: deps.stateDirectory, onError: deps.onError })
   // Why: only the durable store can identify a provider child lost before record publication.
   void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {
     try {

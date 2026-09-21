@@ -112,6 +112,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
   }
+  if (command === 'orchestration worker-payload' && flag === 'digest') {
+    return '--digest <sha256>      Digest printed with the clipped block by worker-read'
+  }
+  if (command === 'orchestration worker-payload' && flag === 'offset') {
+    return '--offset <n>           Byte offset to continue from; omit to start at 0'
+  }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }

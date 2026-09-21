@@ -1,4 +1,9 @@
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
+import type { JournalPayloadRange } from '../agent-session-journal/journal-payload-store'
+import {
+  readStructuredSessionPayload,
+  type StructuredAgentSessionPayloadReadParams
+} from './structured-agent-session-payload-read'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
@@ -306,6 +311,10 @@ export class StructuredAgentSessionHost {
   readCommands = (sessionId: string): SessionWire.AgentSessionCommandsResult => ({
     commands: this.deps.adapter.readCommands?.(sessionId)
   })
+
+  /** Exact bytes of a retained bounded payload this session's own journal references. */
+  readPayload = (params: StructuredAgentSessionPayloadReadParams): JournalPayloadRange =>
+    readStructuredSessionPayload(this.deps, params)
 
   async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)

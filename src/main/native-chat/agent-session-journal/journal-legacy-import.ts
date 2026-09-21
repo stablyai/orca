@@ -14,11 +14,16 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
+  AgentJournalBoundedPayload,
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatClippedPayload,
+  NativeChatMessage
+} from '../../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
@@ -268,10 +273,14 @@ function legacyItemBody(
  *  source transcript remains the full copy. */
 function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
   if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
+    const { text, bounded } = boundInlineText(block.text, limits)
+    return bounded.truncated ? { ...block, text, clipped: clippedReference(bounded) } : block
   }
   if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
+    const { text, bounded } = boundInlineText(block.output, limits)
+    return bounded.truncated
+      ? { ...block, output: text, clipped: clippedReference(bounded) }
+      : block
   }
   if (block.type === 'tool-call') {
     return { ...block, input: boundToolInput(block.input, limits) }
@@ -289,4 +298,15 @@ function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): Nativ
     }
   }
   return block
+}
+
+/** The reference a reader needs to fetch the complete original: present only
+ *  when the head replaced a longer text, and retrievable only when the host
+ *  retained the full bytes under the digest. */
+function clippedReference(bounded: AgentJournalBoundedPayload): NativeChatClippedPayload {
+  return {
+    digest: bounded.digest,
+    byteLength: bounded.byteLength,
+    retrievable: bounded.retrievable === true
+  }
 }

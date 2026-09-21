@@ -17,6 +17,12 @@ import {
   importLegacyTranscriptIntoJournal
 } from './journal-legacy-import'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import {
+  JournalPayloadStore,
+  PAYLOAD_STORE_DIR_NAME,
+  journalPayloadDigest,
+  setDefaultJournalPayloadRetention
+} from './journal-payload-store'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
 
@@ -431,6 +437,60 @@ describe('payload bounds on import', () => {
     expect(body.output.truncated).toBe(true)
     expect(body.output.byteLength).toBe(64 * 1024)
     expect(body.output.head).toHaveLength(1_024)
+  })
+
+  it('keeps a retrievable reference on clipped blocks of a multi-block message', async () => {
+    // A Claude terminal transcript decodes narration and a tool result into one
+    // message, so the sole-block path never sees them. The head must still
+    // carry the digest the UI needs to fetch the complete original.
+    const store = new JournalPayloadStore({ directory: join(root, PAYLOAD_STORE_DIR_NAME) })
+    setDefaultJournalPayloadRetention(store)
+    try {
+      const prose = 'p'.repeat(48 * 1024)
+      const output = 'o'.repeat(64 * 1024)
+      const journal = await open('claude', CLAUDE_SESSION)
+      await appendLegacyTranscriptMessages({
+        journal,
+        agent: 'claude',
+        sessionId: CLAUDE_SESSION,
+        fence: 1,
+        messages: [
+          {
+            id: 'legacy-mixed',
+            role: 'assistant',
+            timestamp: null,
+            source: 'transcript',
+            blocks: [
+              { type: 'text', text: prose },
+              { type: 'tool-result', output }
+            ]
+          }
+        ]
+      })
+
+      const body = journal.snapshot().items[0]?.body
+      if (body?.kind !== 'message') {
+        throw new Error('expected a message body')
+      }
+      const [text, result] = body.blocks
+      if (text?.type !== 'text' || result?.type !== 'tool-result') {
+        throw new Error('expected text and tool-result blocks')
+      }
+      expect(text.clipped).toEqual({
+        digest: journalPayloadDigest(prose),
+        byteLength: prose.length,
+        retrievable: true
+      })
+      expect(result.clipped).toEqual({
+        digest: journalPayloadDigest(output),
+        byteLength: output.length,
+        retrievable: true
+      })
+      expect(result.output.length).toBeLessThan(output.length)
+      expect(store.retrieve(journalPayloadDigest(output))).toBe(output)
+    } finally {
+      setDefaultJournalPayloadRetention(null)
+    }
   })
 
   it('bounds an imported subagent roster by entry count, label and id', async () => {

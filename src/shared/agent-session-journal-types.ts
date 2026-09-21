@@ -77,10 +77,16 @@ export type AgentJournalBoundedPayload = {
   head: string
   /** Byte length of the ORIGINAL payload, not of `head`. */
   byteLength: number
-  /** sha256 of the original payload — identification only; nothing stores or
-   *  retrieves the discarded remainder by it. */
+  /** sha256 of the original payload. It identifies the original and, when
+   *  `retrievable` is true, keys the retained complete bytes in the journal
+   *  payload store (verified against this digest on retrieval). */
   digest: string
   truncated: boolean
+  /** Present on truncated rows: true when the complete original was retained
+   *  and can be retrieved by `digest`; false or absent when the remainder was
+   *  discarded. A reader must treat a truncated row without `retrievable`
+   *  as incomplete, never as the full content. */
+  retrievable?: boolean
 }
 
 // ─── Render-model items ─────────────────────────────────────────────────────

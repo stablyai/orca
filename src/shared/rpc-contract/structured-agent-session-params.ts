@@ -270,3 +270,17 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
+
+/** Largest chunk one `agentSession.readPayload` reply carries; callers page with `offset`. */
+export const AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT = 256 * 1024
+export const PayloadDigest = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, 'Payload digest must be a lowercase sha256 hex digest')
+export const ReadPayloadParams = z
+  .object({
+    sessionId: SessionId,
+    digest: PayloadDigest,
+    offset: z.number().int().nonnegative().optional(),
+    limit: z.number().int().positive().max(AGENT_SESSION_PAYLOAD_READ_MAX_LIMIT).optional()
+  })
+  .strict()

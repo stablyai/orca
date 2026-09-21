@@ -17,6 +17,9 @@ export const DISPATCH_DOUBT_HOST_RESTARTED = 'host_restarted_before_acknowledgem
 /** The child that would have acknowledged the message exited first. */
 export const DISPATCH_DOUBT_PROVIDER_EXITED = 'provider_exited_before_acknowledgement'
 
+/** The host closed the child before it acknowledged the message. */
+export const DISPATCH_DOUBT_PROVIDER_CLOSED = 'provider_closed_before_acknowledgement'
+
 /** The adapter took the message and only the journal write failed after it. */
 export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_failed'
 

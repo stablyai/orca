@@ -1,0 +1,360 @@
+// Content-addressed retention for bounded journal and transcript payloads.
+//
+// A bounded payload keeps only a head on the row (see journal-payload-bounds).
+// Discarding the remainder is safe for replay cost but unsafe for meaning: a
+// reader that only sees the head can be led to act on an incomplete
+// instruction, constraint, or result. This store retains the complete original
+// bytes keyed by the payload digest already carried on every bounded row, so
+// the full content can be retrieved later and verified against that digest.
+//
+// Properties:
+// - content-addressed: the file name is the sha256 of the original text;
+//   retaining the same content twice is idempotent;
+// - verified on read: a stored file whose bytes no longer hash to the digest
+//   is refused rather than returned as if complete;
+// - bounded: retention above `maxRetainedBytes` is refused explicitly and the
+//   row stays `retrievable: false`, never silently mis-labelled;
+// - scoped: a producer may record the scope (session or dispatch) that
+//   references a digest; readers that cannot prove a reference through their
+//   own data (transcripts have no journal) check that index instead;
+// - private: directory 0700, files 0600;
+// - pruned: files older than the retention age or beyond the total byte cap
+//   are removed oldest-first, never on a live read path.
+
+import { createHash } from 'node:crypto'
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { join } from 'node:path'
+
+export type JournalPayloadRetention = {
+  /** Retain the complete original text under its digest, optionally recording
+   *  the scope that references it. Returns true only when the bytes are durably
+   *  stored and re-hash to `digest`. */
+  retain(digest: string, payload: string, scope?: string): boolean
+  /** Return the exact original text for `digest`, or null when nothing is
+   *  retained. Throws `JournalPayloadIntegrityError` on a digest mismatch. */
+  retrieve(digest: string): string | null
+  /** Return an exact byte range of the retained original after verifying the
+   *  whole file against `digest`; null when nothing is retained. */
+  retrieveRange(digest: string, offset: number, limit: number): JournalPayloadRange | null
+  /** True when `scope` was recorded as referencing `digest`. */
+  isReferencedBy(digest: string, scope: string): boolean
+}
+
+export type JournalPayloadRange = {
+  digest: string
+  byteLength: number
+  chunk: string
+  chunkOffset: number
+  chunkByteLength: number
+  complete: boolean
+}
+
+export class JournalPayloadIntegrityError extends Error {
+  readonly digest: string
+  readonly actualDigest: string
+  constructor(digest: string, actualDigest: string) {
+    super(`Retained payload for digest ${digest.slice(0, 12)} hashes to ${actualDigest.slice(0, 12)}; refusing to return mismatched content.`)
+    this.name = 'JournalPayloadIntegrityError'
+    this.digest = digest
+    this.actualDigest = actualDigest
+  }
+}
+
+const DIGEST_PATTERN = /^[0-9a-f]{64}$/
+const SCOPE_PATTERN = /^[a-z]+:[A-Za-z0-9._:-]{1,200}$/
+const PAYLOAD_SUFFIX = '.payload'
+const SCOPES_SUFFIX = '.scopes'
+
+export type JournalPayloadStoreOptions = {
+  directory: string
+  /** Largest original payload retained in full; larger payloads keep only the row head. */
+  maxRetainedBytes?: number
+}
+
+export type JournalPayloadPruneOptions = {
+  /** Files last modified earlier than this are removed. */
+  maxAgeMs: number
+  /** Total retained bytes kept; the oldest files beyond it are removed. */
+  maxTotalBytes: number
+  now?: number
+}
+
+export type JournalPayloadPruneReport = {
+  scanned: number
+  removed: number
+  retainedBytes: number
+}
+
+export const DEFAULT_MAX_RETAINED_PAYLOAD_BYTES = 64 * 1024 * 1024
+export const DEFAULT_PAYLOAD_RETENTION_AGE_MS = 30 * 24 * 60 * 60 * 1000
+export const DEFAULT_PAYLOAD_RETENTION_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
+export const PAYLOAD_STORE_DIR_NAME = 'agent-session-payloads'
+
+export function assertPayloadDigest(digest: string): void {
+  if (!DIGEST_PATTERN.test(digest)) {
+    throw new Error(`Invalid payload digest: ${digest}`)
+  }
+}
+
+export function isPayloadDigest(value: unknown): value is string {
+  return typeof value === 'string' && DIGEST_PATTERN.test(value)
+}
+
+export class JournalPayloadStore implements JournalPayloadRetention {
+  private readonly directory: string
+  private readonly maxRetainedBytes: number
+
+  constructor(options: JournalPayloadStoreOptions) {
+    this.directory = options.directory
+    this.maxRetainedBytes = options.maxRetainedBytes ?? DEFAULT_MAX_RETAINED_PAYLOAD_BYTES
+    mkdirSync(this.directory, { recursive: true, mode: 0o700 })
+  }
+
+  private pathFor(digest: string, suffix = PAYLOAD_SUFFIX): string {
+    assertPayloadDigest(digest)
+    return join(this.directory, `${digest}${suffix}`)
+  }
+
+  retain(digest: string, payload: string, scope?: string): boolean {
+    const bytes = Buffer.from(payload, 'utf8')
+    if (bytes.byteLength > this.maxRetainedBytes) {
+      return false
+    }
+    const actual = createHash('sha256').update(bytes).digest('hex')
+    if (actual !== digest) {
+      return false
+    }
+    const path = this.pathFor(digest)
+    // An existing file is trusted only after it re-hashes to the digest; an
+    // equal size is not identity. A mismatch is replaced atomically, since the
+    // caller holds the bytes that do hash to it.
+    let stored = existsSync(path) && this.fileHashes(path, digest)
+    if (!stored) {
+      const temporary = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+      try {
+        writeFileSync(temporary, bytes, { mode: 0o600, flag: 'wx' })
+        renameSync(temporary, path)
+        stored = true
+      } catch {
+        stored = false
+        try {
+          rmSync(temporary, { force: true })
+        } catch {
+          // The temporary is already gone or unreachable; the prune sweep also drops *.tmp.
+        }
+      }
+    }
+    if (stored && scope !== undefined) {
+      this.recordScope(digest, scope)
+    }
+    return stored
+  }
+
+  /** Streams the file so a large retained payload never lands in memory twice. */
+  private fileHashes(path: string, digest: string): boolean {
+    let descriptor: number | null = null
+    try {
+      const size = statSync(path).size
+      if (size > this.maxRetainedBytes) {
+        return false
+      }
+      descriptor = openSync(path, 'r')
+      const hash = createHash('sha256')
+      const buffer = Buffer.alloc(64 * 1024)
+      let position = 0
+      while (position < size) {
+        const read = readSync(descriptor, buffer, 0, buffer.length, position)
+        if (read <= 0) {
+          break
+        }
+        hash.update(buffer.subarray(0, read))
+        position += read
+      }
+      return hash.digest('hex') === digest
+    } catch {
+      return false
+    } finally {
+      if (descriptor !== null) {
+        closeSync(descriptor)
+      }
+    }
+  }
+
+  private recordScope(digest: string, scope: string): void {
+    if (!SCOPE_PATTERN.test(scope)) {
+      return
+    }
+    const path = this.pathFor(digest, SCOPES_SUFFIX)
+    try {
+      if (this.isReferencedBy(digest, scope)) {
+        return
+      }
+      appendFileSync(path, `${scope}\n`, { mode: 0o600 })
+    } catch {
+      // A missing scope record only narrows later retrieval; it never widens it.
+    }
+  }
+
+  isReferencedBy(digest: string, scope: string): boolean {
+    if (!SCOPE_PATTERN.test(scope)) {
+      return false
+    }
+    const path = this.pathFor(digest, SCOPES_SUFFIX)
+    if (!existsSync(path)) {
+      return false
+    }
+    try {
+      return readFileSync(path, 'utf8').split('\n').includes(scope)
+    } catch {
+      return false
+    }
+  }
+
+  retrieve(digest: string): string | null {
+    const path = this.pathFor(digest)
+    if (!existsSync(path)) {
+      return null
+    }
+    // Bound the whole-file read the same way retention is bounded.
+    if (statSync(path).size > this.maxRetainedBytes) {
+      throw new JournalPayloadIntegrityError(digest, 'oversized')
+    }
+    const bytes = readFileSync(path)
+    const actual = createHash('sha256').update(bytes).digest('hex')
+    if (actual !== digest) {
+      throw new JournalPayloadIntegrityError(digest, actual)
+    }
+    return bytes.toString('utf8')
+  }
+
+  retrieveRange(digest: string, offset: number, limit: number): JournalPayloadRange | null {
+    const path = this.pathFor(digest)
+    if (!existsSync(path)) {
+      return null
+    }
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
+      throw new Error('Payload range offset must be a non-negative integer and limit a positive integer.')
+    }
+    // Verify the whole file first: a range from a tampered file must never be
+    // returned even when the requested bytes happen to be intact.
+    const size = statSync(path).size
+    const hash = createHash('sha256')
+    const descriptor = openSync(path, 'r')
+    let chunk = Buffer.alloc(0)
+    try {
+      const buffer = Buffer.alloc(64 * 1024)
+      let position = 0
+      while (position < size) {
+        const read = readSync(descriptor, buffer, 0, buffer.length, position)
+        if (read <= 0) {
+          break
+        }
+        hash.update(buffer.subarray(0, read))
+        position += read
+      }
+      const actual = hash.digest('hex')
+      if (actual !== digest) {
+        throw new JournalPayloadIntegrityError(digest, actual)
+      }
+      const start = Math.min(offset, size)
+      const end = Math.min(size, start + limit)
+      const alignedEnd = alignUtf8End(descriptor, start, end, size)
+      chunk = Buffer.alloc(alignedEnd - start)
+      if (chunk.byteLength > 0) {
+        readSync(descriptor, chunk, 0, chunk.byteLength, start)
+      }
+      return {
+        digest,
+        byteLength: size,
+        chunk: chunk.toString('utf8'),
+        chunkOffset: start,
+        chunkByteLength: chunk.byteLength,
+        complete: alignedEnd >= size
+      }
+    } finally {
+      closeSync(descriptor)
+    }
+  }
+
+  prune(options: JournalPayloadPruneOptions): JournalPayloadPruneReport {
+    const now = options.now ?? Date.now()
+    const entries: { digest: string; mtimeMs: number; size: number }[] = []
+    for (const name of readdirSync(this.directory)) {
+      if (name.endsWith('.tmp')) {
+        // A temporary left by a crashed writer is never valid content.
+        rmSync(join(this.directory, name), { force: true })
+        continue
+      }
+      if (!name.endsWith(PAYLOAD_SUFFIX)) {
+        continue
+      }
+      const digest = name.slice(0, -PAYLOAD_SUFFIX.length)
+      if (!DIGEST_PATTERN.test(digest)) {
+        continue
+      }
+      try {
+        const info = statSync(join(this.directory, name))
+        entries.push({ digest, mtimeMs: info.mtimeMs, size: info.size })
+      } catch {
+        // Removed concurrently; nothing to prune.
+      }
+    }
+    entries.sort((left, right) => left.mtimeMs - right.mtimeMs)
+    let retainedBytes = entries.reduce((total, entry) => total + entry.size, 0)
+    let removed = 0
+    for (const entry of entries) {
+      const expired = now - entry.mtimeMs > options.maxAgeMs
+      const overCap = retainedBytes > options.maxTotalBytes
+      if (!expired && !overCap) {
+        continue
+      }
+      try {
+        rmSync(join(this.directory, `${entry.digest}${PAYLOAD_SUFFIX}`), { force: true })
+        rmSync(join(this.directory, `${entry.digest}${SCOPES_SUFFIX}`), { force: true })
+        retainedBytes -= entry.size
+        removed += 1
+      } catch {
+        // Leave it for the next sweep.
+      }
+    }
+    return { scanned: entries.length, removed, retainedBytes }
+  }
+}
+
+/** Walk back from a byte position so the chunk never ends inside a multi-byte
+ *  UTF-8 sequence; the final byte of the file is always a valid end. */
+function alignUtf8End(descriptor: number, start: number, end: number, size: number): number {
+  if (end >= size || end <= start) {
+    return end
+  }
+  const probe = Buffer.alloc(1)
+  let aligned = end
+  while (aligned > start) {
+    readSync(descriptor, probe, 0, 1, aligned)
+    if ((probe[0] & 0b1100_0000) !== 0b1000_0000) {
+      break
+    }
+    aligned -= 1
+  }
+  return aligned
+}
+
+export {
+  getDefaultJournalPayloadRetention,
+  journalPayloadDigest,
+  retrieveJournalPayload,
+  setDefaultJournalPayloadRetention
+} from './journal-payload-retention-default'

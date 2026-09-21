@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatFullContentButton } from './NativeChatFullContentButton'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -65,6 +66,9 @@ export const MessageRow = memo(function MessageRow({
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
   const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
+  // A prose block the host bounded to a head; the rest is fetched on demand.
+  const clippedProse = prose.find((block) => block.type === 'text' && block.clipped !== undefined)
+  const clipped = clippedProse?.type === 'text' ? clippedProse.clipped : undefined
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -132,6 +136,9 @@ export const MessageRow = memo(function MessageRow({
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
+              {clipped ? (
+                <NativeChatFullContentButton clipped={clipped} title={message.role} />
+              ) : null}
             </>
           ) : (
             <NativeChatImageAttachments
@@ -188,6 +195,7 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
+      {clipped ? <NativeChatFullContentButton clipped={clipped} title={message.role} /> : null}
       {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}

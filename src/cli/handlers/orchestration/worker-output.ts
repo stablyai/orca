@@ -133,3 +133,30 @@ export function formatWorkerRelease(value: WorkerReleaseReceipt): string {
   }
   return lines.join('\n')
 }
+
+export type WorkerPayloadReadResult = {
+  dispatchId: string
+  digest: string
+  byteLength: number
+  chunk: string
+  chunkOffset: number
+  chunkByteLength: number
+  complete: boolean
+  server?: { environmentId: string; name: string }
+}
+
+/** Text form prints the exact chunk after a header; `--json` carries the same
+ *  fields so a caller can page with `offset` until `complete` is true. */
+export function formatWorkerPayload(value: WorkerPayloadReadResult): string {
+  const lines = [
+    `Dispatch: ${value.dispatchId}`,
+    `Digest: ${value.digest}`,
+    `Bytes: ${value.byteLength}`,
+    `Chunk: offset ${value.chunkOffset}, ${value.chunkByteLength} bytes`,
+    `Complete: ${value.complete ? 'yes' : `no (continue with --offset ${value.chunkOffset + value.chunkByteLength})`}`
+  ]
+  if (value.server) {
+    lines.push(`Server: ${value.server.name} (${value.server.environmentId})`)
+  }
+  return `${lines.join('\n')}\n---\n${value.chunk}`
+}

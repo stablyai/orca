@@ -14,6 +14,7 @@ import {
 } from './NativeChatToolAnnotations'
 import { NativeChatToolIcon } from './NativeChatToolIcon'
 import { NativeChatDiffView } from './NativeChatDiffView'
+import { NativeChatFullContentButton } from './NativeChatFullContentButton'
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { createToolInputDisplay, truncateToolDetail } from './native-chat-tool-summary'
@@ -119,14 +120,19 @@ export function NativeChatToolLine({
           ) : null}
           {diff ? <NativeChatDiffView lines={diff} /> : null}
           {!diff && body ? (
-            <pre
-              className={cn(
-                'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
-                body.isError ? 'text-destructive' : 'text-foreground/80'
-              )}
-            >
-              {truncateToolDetail(body.output)}
-            </pre>
+            <>
+              <pre
+                className={cn(
+                  'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
+                  body.isError ? 'text-destructive' : 'text-foreground/80'
+                )}
+              >
+                {truncateToolDetail(body.output)}
+              </pre>
+              {block.type === 'tool-result' ? (
+                <NativeChatFullContentButton clipped={block.clipped} title={name} />
+              ) : null}
+            </>
           ) : null}
           {!diff && !body && detail ? (
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">

@@ -67,7 +67,8 @@ export async function readExactWorkerOutput(args: {
     expectedBoundaryCheckpoint:
       cursor?.source === 'transcript' ? (cursor.boundaryCheckpoint ?? undefined) : undefined,
     limit: args.limit,
-    filesystemProvider: remoteFilesystemProvider
+    filesystemProvider: remoteFilesystemProvider,
+    payloadScope: `dispatch:${args.dispatchId}`
   })
   if (!transcript.ok) {
     if (transcript.reason === 'source_changed') {

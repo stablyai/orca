@@ -215,6 +215,11 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
 export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
   'agent-session.opencode2-resume.v1' as const
+/** `agentSession.readPayload` and `orchestration.workerPayloadRead`: exact bytes of a
+ *  retained bounded payload by digest, owner-checked. Absent on older hosts, where a
+ *  truncated body has no full-content route and readers must treat it as lossy. */
+export const AGENT_SESSION_PAYLOAD_READ_RUNTIME_CAPABILITY =
+  'agent-session.payload-read.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -344,6 +349,7 @@ export const RUNTIME_CAPABILITIES = [
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PAYLOAD_READ_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,

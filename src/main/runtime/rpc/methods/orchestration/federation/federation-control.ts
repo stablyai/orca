@@ -3,6 +3,8 @@ import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/type
 import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { readExactWorkerOutput } from '../worker/worker-output'
+import { readLocalDispatchPayload } from '../worker/worker-payload-read'
+import { PayloadReadError } from '../../../../../native-chat/agent-session-journal/journal-payload-read'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { inspectRemoteAttachment, requireHomeAttachment } from './federation-attachment-observation'
 import {
@@ -13,6 +15,7 @@ import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
+  FederationPayloadReadParams,
   FederationReadParams
 } from '../../../../../../shared/rpc-contract/orchestration-federation-control-params'
 
@@ -98,6 +101,31 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           cursor: params.cursor,
           limit: params.limit
         })
+      }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.federationReadPayload',
+    params: FederationPayloadReadParams,
+    handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
+      const attachment = requireHomeAttachment(
+        runtime,
+        params.dispatchId,
+        authenticatedCallerFingerprint
+      )
+      try {
+        const payload = readLocalDispatchPayload({
+          dispatchId: attachment.dispatch_id,
+          digest: params.digest,
+          offset: params.offset,
+          limit: params.limit
+        })
+        return { runtimeEpoch: runtime.getRuntimeId(), payload }
+      } catch (error) {
+        if (error instanceof PayloadReadError) {
+          throw new OrchestrationError(error.code, error.message)
+        }
+        throw error
       }
     }
   }),

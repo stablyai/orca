@@ -54,6 +54,7 @@ import {
   HandoffParams,
   HandoffStatusParams,
   OptionsParams,
+  ReadPayloadParams,
   RespondParams,
   RewindParams,
   SendParams,
@@ -257,6 +258,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.commands',
     params: OptionsParams,
     handler: async (params, ctx) => requireHost(ctx).readCommands(params.sessionId)
+  }),
+  defineMethod({
+    name: 'agentSession.readPayload',
+    params: ReadPayloadParams,
+    handler: async (params, ctx) => requireHost(ctx).readPayload(params)
   }),
   defineMethod({
     name: 'agentSession.history',

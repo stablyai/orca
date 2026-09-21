@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatClippedPayload,
+  NativeChatMessage
+} from '../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
+import {
+  retainClippedTranscriptText,
+  workerTranscriptRetentionState,
+  type WorkerTranscriptBoundOptions,
+  type WorkerTranscriptRetentionState
+} from './worker-transcript-clip-retention'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
@@ -18,9 +28,15 @@ const TRUNCATION_MARKER = '\n… (truncated)'
 const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
 const DISPATCH_CAPABILITY_REDACTION = '[dispatch capability redacted]'
 
-type TranscriptBoundState = {
+type TranscriptBoundState = WorkerTranscriptRetentionState & {
   warnings: Set<string>
   clipped: boolean
+}
+
+export type { WorkerTranscriptBoundOptions }
+
+function boundState(options: WorkerTranscriptBoundOptions | undefined): TranscriptBoundState {
+  return { warnings: new Set<string>(), clipped: false, ...workerTranscriptRetentionState(options) }
 }
 
 export function clampWorkerTranscriptLimit(limit: number | undefined): number {
@@ -48,13 +64,14 @@ export function redactWorkerTerminalLines(lines: readonly string[]): {
 
 export function boundWorkerTranscriptMessages(
   messages: readonly NativeChatMessage[],
-  transcriptPath?: string
+  transcriptPath?: string,
+  options?: WorkerTranscriptBoundOptions
 ): {
   messages: NativeChatMessage[]
   limited: boolean
   warnings: string[]
 } {
-  const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
+  const state = boundState(options)
   const bounded: NativeChatMessage[] = []
   let bytes = 2
   for (const message of messages) {
@@ -79,9 +96,10 @@ export function boundWorkerTranscriptMessages(
  */
 export function boundWorkerTranscriptTail(
   messages: readonly NativeChatMessage[],
-  maxBytes: number
+  maxBytes: number,
+  options?: WorkerTranscriptBoundOptions
 ): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
-  const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
+  const state = boundState(options)
   const keptReversed: NativeChatMessage[] = []
   let bytes = 2
   let limited = false
@@ -118,10 +136,20 @@ function boundMessage(
 
 function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): NativeChatBlock {
   if (block.type === 'text') {
-    return { ...block, text: clipText(block.text, state) }
+    const clipped = clipText(block.text, state)
+    return {
+      ...block,
+      text: clipped.text,
+      ...(clipped.clipped ? { clipped: clipped.clipped } : {})
+    }
   }
   if (block.type === 'tool-result') {
-    return { ...block, output: clipText(block.output, state) }
+    const clipped = clipText(block.output, state)
+    return {
+      ...block,
+      output: clipped.text,
+      ...(clipped.clipped ? { clipped: clipped.clipped } : {})
+    }
   }
   if (block.type === 'tool-call') {
     const budget = {
@@ -137,7 +165,7 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
   if (block.type === 'subagent-group' || block.type === 'background-task') {
     return boundWorkerTranscriptActivityBlock(block, {
       clipMetadata: (value) => clipMetadata(value, state),
-      clipText: (value) => clipText(value, state),
+      clipText: (value) => clipText(value, state).text,
       boundEntryId: (value) => boundEntryId(value, state),
       markClipped: (warning) => markClipped(state, warning)
     })
@@ -146,13 +174,13 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
     markClipped(state, 'Local image paths were omitted from transcript output.')
     return {
       type: 'image-ref',
-      ...(block.alt ? { alt: clipText(block.alt, state) } : {})
+      ...(block.alt ? { alt: clipText(block.alt, state).text } : {})
     }
   }
   return {
     ...block,
     ...(block.url ? { url: clipMetadata(block.url, state) } : {}),
-    ...(block.alt ? { alt: clipText(block.alt, state) } : {})
+    ...(block.alt ? { alt: clipText(block.alt, state).text } : {})
   }
 }
 
@@ -198,13 +226,17 @@ function clipMetadata(value: string, state: TranscriptBoundState): string {
   return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
 }
 
-function clipText(value: string, state: TranscriptBoundState): string {
+function clipText(
+  value: string,
+  state: TranscriptBoundState
+): { text: string; clipped?: NativeChatClippedPayload } {
   const redacted = redactSensitiveText(value, state.warnings)
   if (redacted.length <= MAX_WORKER_TRANSCRIPT_BLOCK_CHARS) {
-    return redacted
+    return { text: redacted }
   }
   markClipped(state, 'Oversized transcript text was clipped.')
-  return `${redacted.slice(0, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
+  const head = `${redacted.slice(0, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
+  return retainClippedTranscriptText(state, redacted, head)
 }
 
 function boundToolInput(

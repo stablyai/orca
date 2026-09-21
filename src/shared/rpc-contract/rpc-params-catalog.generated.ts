@@ -355,6 +355,7 @@ import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
   FederationOutputReadParams,
+  FederationPayloadReadParams,
   FederationReadParams
 } from './orchestration-federation-control-params'
 import {
@@ -389,7 +390,11 @@ import {
   RunShowParams,
   RunUseParams
 } from './orchestration-runs-params'
-import { WorkerDispatchParams, WorkerReadParams } from './orchestration-worker-control-params'
+import {
+  WorkerDispatchParams,
+  WorkerPayloadReadParams,
+  WorkerReadParams
+} from './orchestration-worker-control-params'
 import { OrchestrationWorkerTerminalUserInputParams } from './orchestration-worker-release-params'
 import {
   WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
@@ -473,6 +478,7 @@ import {
   HistoryParams,
   HoldParams,
   OptionsParams,
+  ReadPayloadParams,
   RespondParams,
   RestartResumableParams,
   RestartResumeParams,
@@ -574,6 +580,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.options': OptionsParams,
+  'agentSession.readPayload': ReadPayloadParams,
   'agentSession.release': HoldParams,
   'agentSession.requestHandoff': HandoffParams,
   'agentSession.respondToApproval': RespondParams,
@@ -984,6 +991,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.federationPull': FederationPullParams,
   'orchestration.federationRead': FederationReadParams,
   'orchestration.federationReadOutput': FederationOutputReadParams,
+  'orchestration.federationReadPayload': FederationPayloadReadParams,
   'orchestration.federationRelease': FederationDispatchParams,
   'orchestration.federationShow': FederationDispatchParams,
   'orchestration.federationStop': FederationDispatchParams,
@@ -1005,6 +1013,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskList': TaskListParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerList': WorkerListParams,
+  'orchestration.workerPayloadRead': WorkerPayloadReadParams,
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   'orchestration.workerRetain': WorkerRetainParams,

@@ -16,6 +16,7 @@ export {
   JournalCursor,
   MutationEnvelope,
   OptionsParams,
+  ReadPayloadParams,
   RespondParams,
   RestartResumableParams,
   RestartResumeParams,

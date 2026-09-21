@@ -233,7 +233,8 @@ export async function startLocalWorker(args: {
     await tearDownFailedWorkerStart({
       runtime,
       structuredSession: placed?.structuredSession ?? null,
-      dispatchId: started.dispatch.id
+      dispatchId: started.dispatch.id,
+      error
     })
     return failWorkerStartWithReceipt({
       db,

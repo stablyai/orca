@@ -107,6 +107,81 @@ describe('lifecycle reconciliation', () => {
     expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('succeeded')
   })
 
+  // The structured-startup repair leans on this exact sequence. An unknown start leaves the
+  // Dispatch OPEN precisely so the worker that was never acknowledged can still settle it later —
+  // which is only reachable if its session outlived the failed start. Tearing the session down
+  // there left the Dispatch open with nobody alive to settle it.
+  it('refuses release for an uncertain start, then releases once its own late worker_done settles it', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    const paneKey = `tab_worker:${LEAF_B}`
+    const capability = db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey,
+      processIncarnation: 'worker:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    db.markWorkerStartUnknown(started.dispatch.id, 'dispatch_input', 'preamble not acknowledged')
+
+    // Unsettled means uncleanable: release is refused outright, which is what stops a coordinator
+    // from closing a worker that may still be running.
+    expect(() => db.requestWorkerTerminalRelease(started.dispatch.id)).toThrowError(
+      /only a settled worker can release/
+    )
+    // `pending`, exactly as CX1's own dispatch-show reported it: started, not settled, still open.
+    expect(db.getDispatchContextById(started.dispatch.id)?.status).toBe('pending')
+    expect(db.getActiveDispatchForIdentity('term_worker', paneKey)?.id).toBe(started.dispatch.id)
+    expect(
+      db.verifyDispatchCapability({
+        dispatchId: started.dispatch.id,
+        capability,
+        paneKey,
+        processIncarnation: 'worker:1'
+      })
+    ).toEqual({ valid: true })
+
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done, late',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: started.dispatch.id,
+        outcome: 'succeeded'
+      }),
+      senderPaneKey: paneKey
+    })
+
+    // The late report settles the SAME Dispatch. Nothing was re-delivered and no second Dispatch
+    // was created to carry it.
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'completed',
+      taskId: task.id,
+      dispatchId: started.dispatch.id
+    })
+    expect(db.getLatestDispatchForTerminal('term_worker')?.id).toBe(started.dispatch.id)
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('succeeded')
+
+    // Only now is the owned terminal releasable, and the release names that exact resource.
+    expect(db.requestWorkerTerminalRelease(started.dispatch.id)).toMatchObject({
+      disposition: 'requested',
+      resource: { terminal_handle: 'term_worker' }
+    })
+  })
+
   it('fails both the dispatch and task from an authenticated failed worker report', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })

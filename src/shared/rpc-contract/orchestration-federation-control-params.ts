@@ -20,3 +20,9 @@ export const FederationOutputReadParams = FederationDispatchParams.extend({
 export const FederationFleetSnapshotParams = z.object({
   dispatchIds: z.array(requiredString('Missing Dispatch ID')).min(1).max(100)
 })
+
+export const FederationPayloadReadParams = FederationDispatchParams.extend({
+  digest: z.string().regex(/^[0-9a-f]{64}$/, 'Payload digest must be a lowercase sha256 hex digest'),
+  offset: z.number().int().nonnegative().optional(),
+  limit: OptionalFiniteNumber
+})

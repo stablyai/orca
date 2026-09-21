@@ -62,6 +62,16 @@ Absence never authorizes stop, abandon, retry, or release: keep waiting, or
 inspect until you hold one of the positive signals above. A `nextAction` that
 names an inspecting command is asking for evidence, not for cleanup.
 
+A clipped block in `worker-read` output ends with `… (truncated)`. When the
+execution host retained the complete text it appends
+`[full text <N> bytes, digest <sha256>]`; read the whole original with
+`ORCA orchestration worker-payload --dispatch <dispatch_id> --digest <sha256> --json`
+and page with `--offset` until `complete` is true. Only digests clipped while
+reading that exact Dispatch are served; `payload_not_referenced`,
+`payload_integrity_failed` and `payload_read_unsupported` (older execution host)
+are refusals, not retries. A clipped block with no digest reference has no
+full-content route: treat it as incomplete and never act on the head alone.
+
 `worker-read --source auto` uses a proven provider transcript when available and
 otherwise returns bounded terminal output with a typed `fallbackReason`.
 Continue with its top-level cursor, which is pinned to that source. If Orca

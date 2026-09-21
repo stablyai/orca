@@ -17514,7 +17514,14 @@
         "title": "Drop to attach to this chat",
         "subtitle": "Files are added to your message as paths the agent can read."
       },
-      "copyCode": "Copy code"
+      "copyCode": "Copy code",
+      "fullContent": {
+        "show": "Show full content",
+        "description": "Complete original retained by the execution host and verified against its digest.",
+        "copy": "Copy full content",
+        "failed": "The full content could not be retrieved; only the clipped head is available.",
+        "loading": "Retrieving…"
+      }
     },
     "tab": {
       "bar": {

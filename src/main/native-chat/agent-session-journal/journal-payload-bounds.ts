@@ -7,6 +7,10 @@
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
+import {
+  getDefaultJournalPayloadRetention,
+  type JournalPayloadRetention
+} from './journal-payload-store'
 
 export type JournalPayloadLimits = {
   /** Bytes of the payload kept inline on the row. */
@@ -28,22 +32,36 @@ export function digestPayload(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }
 
-/** Clip `payload` to the inline head. `truncated` means the remainder was
- *  discarded; `digest` and `byteLength` describe the original. */
+/** Clip `payload` to the inline head. `truncated` means the row carries only
+ *  the head; `digest` and `byteLength` describe the original. When a
+ *  retention store is available (explicit `retention` or the installed
+ *  default), the complete original is retained under `digest` and the row says
+ *  so with `retrievable: true`; otherwise `retrievable: false` records that
+ *  the remainder was discarded. Neither case is ever silent. */
 export function boundPayload(
   payload: string,
-  limits: JournalPayloadLimits
+  limits: JournalPayloadLimits,
+  retention: JournalPayloadRetention | null = getDefaultJournalPayloadRetention()
 ): AgentJournalBoundedPayload {
   const buffer = Buffer.from(payload, 'utf8')
   const digest = digestPayload(payload)
   if (buffer.byteLength <= limits.inlineHeadBytes) {
     return { head: payload, byteLength: buffer.byteLength, digest, truncated: false }
   }
+  let retrievable = false
+  if (retention !== null) {
+    try {
+      retrievable = retention.retain(digest, payload) === true
+    } catch {
+      retrievable = false
+    }
+  }
   return {
     head: clipUtf8(buffer, limits.inlineHeadBytes),
     byteLength: buffer.byteLength,
     digest,
-    truncated: true
+    truncated: true,
+    retrievable
   }
 }
 
@@ -51,9 +69,10 @@ export function boundPayload(
  *  keeping the explicit marker inline. */
 export function boundInlineText(
   payload: string,
-  limits: JournalPayloadLimits
+  limits: JournalPayloadLimits,
+  retention: JournalPayloadRetention | null = getDefaultJournalPayloadRetention()
 ): { text: string; bounded: AgentJournalBoundedPayload } {
-  const bounded = boundPayload(payload, limits)
+  const bounded = boundPayload(payload, limits, retention)
   if (!bounded.truncated) {
     return { text: payload, bounded }
   }
@@ -82,7 +101,8 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
         truncated: true,
         byteLength: bounded.byteLength,
         digest: bounded.digest,
-        head: bounded.head
+        head: bounded.head,
+        retrievable: bounded.retrievable === true
       }
     : input
 }

@@ -8,7 +8,11 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import {
+  boundJournalStatusText,
+  cancelledJournalPromptBody
+} from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { sanitizeCrashReportString } from '../../shared/crash-report-redaction'
 import {
   codexJournalItem,
   codexStreamingJournalItem,
@@ -39,6 +43,9 @@ export type CodexPendingJournalPrompt = {
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
+
+/** Matches the host's unexpected-exit reason cap so both boundaries truncate identically. */
+const MAX_CODEX_EXIT_DIAGNOSTIC_CHARS = 512
 
 export function settleCodexJournalSession(input: {
   event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>
@@ -87,11 +94,19 @@ export function settleCodexJournalSession(input: {
       turnOrdinalsToForget.push({ threadId, turnId })
     }
   }
-  const admission = appendCodexLifecycleMutations(
-    input.sink,
-    exitSettlementId(input.event),
-    mutations
-  )
+  const settlementId = exitSettlementId(input.event)
+  // The exit reason is the only thing separating an auth failure from an OOM kill, and for a
+  // requested close this is the last boundary that still holds it. Recorded only when a turn was
+  // cut short, and bounded/redacted because a provider may hand back a whole stderr dump.
+  const exitDiagnostic = codexExitDiagnostic(input.event)
+  if (exitDiagnostic && turnOrdinalsToForget.length > 0) {
+    mutations.push({
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: `${settlementId}:exit-diagnostic` },
+      body: { kind: 'status', text: exitDiagnostic }
+    })
+  }
+  const admission = appendCodexLifecycleMutations(input.sink, settlementId, mutations)
   if (!admission.accepted) {
     return admission
   }
@@ -259,6 +274,27 @@ function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBod
   return body.kind === 'diff'
     ? { kind: 'status', text: 'File changes were interrupted before completion.' }
     : body
+}
+
+/**
+ * Bounded, redacted copy of the provider's own exit text, for the close NOBODY ELSE records.
+ *
+ * An unexpected exit already has an owner: the host settles it and renders the reason itself. A
+ * REQUESTED close does not — the host's unexpected-exit seam returns early on that cause — so a
+ * close that lands on a running turn otherwise loses the one field that says why.
+ */
+function codexExitDiagnostic(
+  event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>
+): string | null {
+  if (('cause' in event ? event.cause : null) !== 'requested-close') {
+    return null
+  }
+  const reason = 'reason' in event ? event.reason : null
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    return null
+  }
+  const detail = sanitizeCrashReportString(reason, MAX_CODEX_EXIT_DIAGNOSTIC_CHARS).trim()
+  return detail === '' ? null : boundJournalStatusText(`The provider stopped: ${detail}`)
 }
 
 function exitSettlementId(event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>): string {

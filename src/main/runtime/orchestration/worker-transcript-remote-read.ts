@@ -31,6 +31,7 @@ type RemoteReadArgs = {
   agent: string
   sessionId: string
   transcriptPath?: string
+  payloadScope?: string
   offset?: number
   limit?: number
   expectedBoundaryCheckpoint?: string
@@ -212,7 +213,9 @@ function parseTranscriptWindow(
   return finish(nextOffset)
 
   function finish(cursor: number): RemoteReadResult {
-    const bounded = boundWorkerTranscriptMessages(messages, filePath)
+    const bounded = boundWorkerTranscriptMessages(messages, filePath, {
+      payloadScope: args.payloadScope
+    })
     const scanLimited = window.startOffset > 0 || window.scanEnd < window.fileSize
     const initialTailClipped = initialRead && window.startOffset > 0
     const pageLimited = initialRead

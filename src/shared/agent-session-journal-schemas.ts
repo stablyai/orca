@@ -25,7 +25,14 @@ const BoundedPayload = z.object({
   head: z.string(),
   byteLength: z.number(),
   digest: z.string(),
-  truncated: z.boolean()
+  truncated: z.boolean(),
+  retrievable: z.boolean().optional()
+})
+
+const ClippedPayload = z.object({
+  digest: z.string(),
+  byteLength: z.number(),
+  retrievable: z.boolean()
 })
 
 const ProviderFrame = z.object({
@@ -76,7 +83,8 @@ const Block = z.union([
       text: z.string(),
       presentation: z.string().optional(),
       tone: z.string().optional(),
-      providerFrame: ProviderFrame.optional()
+      providerFrame: ProviderFrame.optional(),
+      clipped: ClippedPayload.optional()
     }),
     // `input: undefined` loses its key under JSON.stringify, so a persisted
     // canonical tool call may lack it entirely.
@@ -90,7 +98,8 @@ const Block = z.union([
     z.object({
       type: z.literal('tool-result'),
       output: z.string(),
-      isError: z.boolean().optional()
+      isError: z.boolean().optional(),
+      clipped: ClippedPayload.optional()
     }),
     z.object({
       type: z.literal('image-ref'),
