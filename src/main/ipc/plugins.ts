@@ -197,6 +197,7 @@ export function registerPluginHandlers(
     const parsed = invokeTaskSourceArgsSchema.parse(args)
     return invokeContributedTaskSource({
       resolveProxy: (pluginKey, sourceId) => pluginService.resolveTaskSourceProxy(pluginKey, sourceId),
+      activate: (pluginKey) => pluginService.activateForTaskSource(pluginKey),
       pluginKey: parsed.pluginKey,
       sourceId: parsed.sourceId,
       method: parsed.method,

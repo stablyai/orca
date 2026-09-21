@@ -17,6 +17,7 @@ import {
 } from './plugin-worker-controller'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
 import { PluginLogBuffer } from './plugin-log-buffer'
+import { invokeContributedTaskSource } from './plugin-task-source-invoker'
 
 const roots: string[] = []
 
@@ -351,6 +352,91 @@ describe('PluginWorkerController task source extension point', () => {
       ok: true,
       data: { items: [], nextCursor: null }
     })
+    await subject.dispose()
+  })
+
+  it('activates an idle plugin worker on the first task source call and returns its data', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const registry = createPluginExtensionRegistry()
+    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards']))
+    const subject = controller({
+      factory,
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource: vi.fn(async () => ({ ok: true, data: { items: [], nextCursor: null } }))
+    })
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy: (pluginKey, sourceId) =>
+        registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId),
+      activate: () => subject.ensure(subjectPlugin).then(() => undefined),
+      pluginKey: subjectPlugin.pluginKey,
+      sourceId: 'boards',
+      method: 'listItems',
+      params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+    })
+
+    expect(factory).toHaveBeenCalledOnce()
+    expect(result).toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    await subject.dispose()
+  })
+
+  it('does not re-activate a plugin whose worker is already active', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const registry = createPluginExtensionRegistry()
+    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run'], ['boards']))
+    const subject = controller({
+      factory,
+      verify: async () => undefined,
+      isApproved: () => true,
+      registry,
+      invokeTaskSource: vi.fn(async () => ({ ok: true, data: { items: [], nextCursor: null } }))
+    })
+    await subject.ensure(subjectPlugin)
+    const activate = vi.fn(() => subject.ensure(subjectPlugin).then(() => undefined))
+
+    await invokeContributedTaskSource({
+      resolveProxy: (pluginKey, sourceId) =>
+        registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId),
+      activate,
+      pluginKey: subjectPlugin.pluginKey,
+      sourceId: 'boards',
+      method: 'listItems',
+      params: {}
+    })
+
+    expect(activate).not.toHaveBeenCalled()
+    expect(factory).toHaveBeenCalledOnce()
+    await subject.dispose()
+  })
+
+  it('maps a failed activation (plugin no longer approved) to unavailable without rejecting or leaking it', async () => {
+    const subjectPlugin = await plugin(['boards'])
+    const registry = createPluginExtensionRegistry()
+    const subject = controller({
+      factory: vi.fn<PluginWorkerFactory>(),
+      verify: async () => undefined,
+      isApproved: () => false,
+      registry
+    })
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy: (pluginKey, sourceId) =>
+        registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId),
+      activate: () => subject.ensure(subjectPlugin).then(() => undefined),
+      pluginKey: subjectPlugin.pluginKey,
+      sourceId: 'boards',
+      method: 'listItems',
+      params: {}
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unavailable',
+      message: 'task source boards is not registered'
+    })
+    expect(JSON.stringify(result)).not.toContain('no longer approved')
     await subject.dispose()
   })
 

@@ -272,6 +272,15 @@ export class PluginService {
     return this.registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId)
   }
 
+  /** Lazy activation for an idle plugin's first task source call: the same
+   *  ensure() path invokeCommand uses, which is what registers proxies. */
+  async activateForTaskSource(pluginKey: string): Promise<void> {
+    const plugin = this.workerInvocation.resolveRunnablePlugin(pluginKey)
+    if (plugin) {
+      await this.workerInvocation.ensureWorker(plugin)
+    }
+  }
+
   /** Unvalidated worker data, unscrubbed rejections. The sanctioned entry
    *  point is the PLUGIN_TASK_SOURCE_EXTENSION_POINT proxy, not this. */
   invokeTaskSource(

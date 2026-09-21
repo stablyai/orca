@@ -151,6 +151,7 @@ export const PLUGIN_METHODS = [
       await service.whenReady()
       return invokeContributedTaskSource({
         resolveProxy: (pluginKey, sourceId) => service.resolveTaskSourceProxy(pluginKey, sourceId),
+        activate: (pluginKey) => service.activateForTaskSource(pluginKey),
         pluginKey: params.pluginKey,
         sourceId: params.sourceId,
         method: params.method,

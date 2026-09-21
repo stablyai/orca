@@ -64,6 +64,11 @@ export async function invokePluginTaskSourceMethod<T extends z.ZodTypeAny>(
 
 export type InvokeContributedTaskSourceInput = {
   resolveProxy: (pluginKey: string, sourceId: string) => PluginTaskSourceProxy | null
+  /** Starts the plugin's worker so it registers a proxy; called only when
+   *  none is resolved yet. A rejection (undeclared source, unapproved
+   *  plugin, revoked mid-activation) is swallowed here — its message can
+   *  carry a third-party plugin's text and must never reach the caller. */
+  activate: (pluginKey: string) => Promise<void>
   pluginKey: string
   sourceId: string
   method: string
@@ -77,6 +82,11 @@ export type InvokeContributedTaskSourceInput = {
  * `undefined` for it and throws. Resolves through the extension-point
  * registry only — never `PluginService.invokeTaskSource`, which skips the
  * proxy's validation and error scrubbing.
+ *
+ * A proxy exists only after its worker has activated, so an idle plugin
+ * (the common case right after launch) resolves to nothing on the first
+ * call. One activation attempt, then a second resolve, covers that case
+ * without paying the activation cost on every call.
  */
 export async function invokeContributedTaskSource(
   input: InvokeContributedTaskSourceInput
@@ -84,7 +94,11 @@ export async function invokeContributedTaskSource(
   if (!isPluginTaskSourceMethod(input.method)) {
     return { ok: false, code: 'validation', message: `unknown task source method ${input.method}` }
   }
-  const proxy = input.resolveProxy(input.pluginKey, input.sourceId)
+  let proxy = input.resolveProxy(input.pluginKey, input.sourceId)
+  if (!proxy) {
+    await input.activate(input.pluginKey).catch(() => undefined)
+    proxy = input.resolveProxy(input.pluginKey, input.sourceId)
+  }
   if (!proxy) {
     return unavailable(input.sourceId, 'is not registered')
   }

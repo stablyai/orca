@@ -174,9 +174,11 @@ describe('plugins:invokeTaskSource IPC', () => {
 
   it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
     const resolveTaskSourceProxy = vi.fn()
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
     const service = {
       whenReady: vi.fn().mockResolvedValue(undefined),
-      resolveTaskSourceProxy
+      resolveTaskSourceProxy,
+      activateForTaskSource
     } as unknown as PluginService
     const handler = registerAndFindHandler(service)
 
@@ -184,13 +186,16 @@ describe('plugins:invokeTaskSource IPC', () => {
       handler({ pluginKey: 'acme.boards', sourceId: 'azure-boards', method: 'deleteEverything' })
     ).resolves.toMatchObject({ ok: false, code: 'validation' })
     expect(resolveTaskSourceProxy).not.toHaveBeenCalled()
+    expect(activateForTaskSource).not.toHaveBeenCalled()
   })
 
-  it('returns the extension-point proxy envelope unchanged for a valid call', async () => {
+  it('returns the extension-point proxy envelope unchanged for a valid call without activating', async () => {
     const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
     const service = {
       whenReady: vi.fn().mockResolvedValue(undefined),
-      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call })
+      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call }),
+      activateForTaskSource
     } as unknown as PluginService
     const handler = registerAndFindHandler(service)
 
@@ -202,17 +207,23 @@ describe('plugins:invokeTaskSource IPC', () => {
         params: { scopeIds: [], search: null, cursor: null, limit: 50 }
       })
     ).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    expect(activateForTaskSource).not.toHaveBeenCalled()
   })
 
-  it('reports unavailable, not a throw, for an unresolvable plugin/source pair', async () => {
+  it('activates an idle plugin once and reports unavailable when the source still has no proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn().mockReturnValue(null)
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
     const service = {
       whenReady: vi.fn().mockResolvedValue(undefined),
-      resolveTaskSourceProxy: vi.fn().mockReturnValue(null)
+      resolveTaskSourceProxy,
+      activateForTaskSource
     } as unknown as PluginService
     const handler = registerAndFindHandler(service)
 
     await expect(
       handler({ pluginKey: 'acme.boards', sourceId: 'missing-source', method: 'status' })
     ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    expect(activateForTaskSource).toHaveBeenCalledWith('acme.boards')
+    expect(resolveTaskSourceProxy).toHaveBeenCalledTimes(2)
   })
 })
