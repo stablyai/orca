@@ -21,6 +21,8 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   const loadFilters = useAppStore((state) => state.loadPluginTaskSourceFilters)
   const loadScopes = useAppStore((state) => state.loadPluginTaskSourceScopes)
   const loadItems = useAppStore((state) => state.loadPluginTaskSourceItems)
+  const refreshing = useAppStore((state) => state.pluginTaskSourceRefreshing)
+  const refresh = useAppStore((state) => state.refreshPluginTaskSource)
 
   useEffect(() => {
     void loadFilters()
@@ -63,6 +65,8 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
       onQueryChange={setQuery}
       scopeFilter={scopeFilter}
       onUseItem={onUseItem}
+      refreshing={refreshing}
+      onRefresh={() => void refresh()}
     />
   )
 }

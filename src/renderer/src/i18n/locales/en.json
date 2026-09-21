@@ -2337,6 +2337,7 @@
         "pluginTaskSourceEmptyHint": "This source returned no items.",
         "pluginTaskSourceUnassigned": "Unassigned",
         "pluginTaskSourceOpen": "Open {{value0}}",
+        "pluginTaskSourceRefresh": "Refresh",
         "pluginTaskSourceFilters": "Filters",
         "pluginTaskSourceSearch": "Search tasks...",
         "pluginTaskSourceScopes": "Projects",

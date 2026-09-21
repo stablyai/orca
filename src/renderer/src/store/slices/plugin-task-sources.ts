@@ -174,6 +174,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceScopesLoading: false,
   pluginTaskSourceScopesError: null,
   selectedPluginTaskSourceScopeIds: ALL_SCOPES,
+  pluginTaskSourceRefreshing: false,
 
   setPluginTaskSources: (sources) => {
     set({ pluginTaskSources: sources })
@@ -190,7 +191,8 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceScopes: [],
       pluginTaskSourceScopesLoading: false,
       pluginTaskSourceScopesError: null,
-      selectedPluginTaskSourceScopeIds: ALL_SCOPES
+      selectedPluginTaskSourceScopeIds: ALL_SCOPES,
+      pluginTaskSourceRefreshing: false
     })
   },
 
@@ -269,6 +271,22 @@ export const createPluginTaskSourcesSlice: StateCreator<
         pluginTaskSourceError: { code: result.code, message: result.message },
         pluginTaskSourceLoading: false
       })
+    }
+  },
+
+  refreshPluginTaskSource: async () => {
+    if (get().pluginTaskSourceRefreshing) {
+      return
+    }
+    set({ pluginTaskSourceRefreshing: true })
+    try {
+      // Both calls read the query/scopeIds/selection already in the store, so
+      // the refresh carries the user's current filter, search and projects
+      // rather than resetting to defaults. Each keeps its own stale-response
+      // guard, so a selection change or a newer edit mid-refresh still wins.
+      await Promise.all([get().loadPluginTaskSourceItems(), get().loadPluginTaskSourceScopes()])
+    } finally {
+      set({ pluginTaskSourceRefreshing: false })
     }
   }
 })

@@ -60,6 +60,9 @@ export type PluginTaskSourcesSlice = {
   /** Empty means every scope, which is also what the wire contract means by an
    *  empty `scopeIds`. */
   selectedPluginTaskSourceScopeIds: string[]
+  /** Guards the refresh button, not the individual loads: it stays true across
+   *  both the item and scope reload so a second click cannot start a duplicate. */
+  pluginTaskSourceRefreshing: boolean
 
   setPluginTaskSources: (sources: ContributedPluginTaskSource[]) => void
   selectPluginTaskSource: (selection: SelectedPluginTaskSource | null) => void
@@ -68,6 +71,9 @@ export type PluginTaskSourcesSlice = {
   loadPluginTaskSourceFilters: () => Promise<void>
   loadPluginTaskSourceScopes: () => Promise<void>
   loadPluginTaskSourceItems: () => Promise<void>
+  /** Re-runs `listItems` and `listScopes` with the selection already in the
+   *  store, so a chip, a search, or a picked project survives the refresh. */
+  refreshPluginTaskSource: () => Promise<void>
 }
 
 type PluginTaskSourcesStateCreator = StateCreator<AppState, [], [], PluginTaskSourcesSlice>

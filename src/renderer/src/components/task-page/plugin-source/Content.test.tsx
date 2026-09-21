@@ -165,6 +165,44 @@ describe('TaskPage contributed source content', () => {
     expect(screen.queryByRole('combobox', { name: 'Projects' })).not.toBeInTheDocument()
   })
 
+  it('refreshes items and scopes with the current selection when the refresh button is clicked', async () => {
+    const user = userEvent.setup()
+    const invoke = stubSource({ items: [ITEM] }, STATUS, [
+      { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' }
+    ])
+    selectBoards()
+
+    renderContent()
+
+    await user.click(await screen.findByRole('combobox', { name: 'Projects' }))
+    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'listItems',
+          params: expect.objectContaining({ scopeIds: ['NssfDevOps/dashboards'] })
+        })
+      )
+    })
+    invoke.mockClear()
+
+    await user.click(await screen.findByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith({
+        ...BOARDS,
+        method: 'listItems',
+        params: {
+          scopeIds: ['NssfDevOps/dashboards'],
+          search: null,
+          cursor: null,
+          limit: 50
+        }
+      })
+      expect(invoke).toHaveBeenCalledWith({ ...BOARDS, method: 'listScopes' })
+    })
+  })
+
   it('surfaces a load failure instead of an empty board', async () => {
     const invoke = vi.fn().mockResolvedValue({
       ok: false,

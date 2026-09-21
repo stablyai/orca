@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, LoaderCircle, RefreshCw } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PluginTaskItem } from '../../../../../shared/plugins/plugin-task-source-contract'
@@ -147,7 +149,9 @@ export function TaskPagePluginSourceList({
   query,
   onQueryChange,
   scopeFilter,
-  onUseItem
+  onUseItem,
+  refreshing,
+  onRefresh
 }: {
   title: string
   items: PluginTaskItem[]
@@ -158,15 +162,40 @@ export function TaskPagePluginSourceList({
   onQueryChange: (query: PluginTaskSourceQuery) => void
   scopeFilter: PluginTaskSourceScopeFilter
   onUseItem: (item: PluginTaskItem) => void
+  refreshing: boolean
+  onRefresh: () => void
 }): React.JSX.Element {
+  const refreshLabel = translate('auto.components.TaskPage.pluginTaskSourceRefresh', 'Refresh')
   return (
     <div className="mt-2 flex max-h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
       <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
         <div className="min-w-0 truncate text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
           {title}
         </div>
-        <div className="shrink-0 text-[11px] text-muted-foreground">
-          {items.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">
+            {items.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label={refreshLabel}
+              >
+                {refreshing ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {refreshLabel}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

@@ -51,6 +51,8 @@ function renderList(
     onQueryChange?: (query: PluginTaskSourceQuery) => void
     scopeFilter?: PluginTaskSourceScopeFilter
     onUseItem?: (item: PluginTaskItem) => void
+    refreshing?: boolean
+    onRefresh?: () => void
   } = {}
 ): ReturnType<typeof render> {
   return render(
@@ -65,6 +67,8 @@ function renderList(
         onQueryChange={props.onQueryChange ?? vi.fn()}
         scopeFilter={props.scopeFilter ?? NO_SCOPES}
         onUseItem={props.onUseItem ?? vi.fn()}
+        refreshing={props.refreshing ?? false}
+        onRefresh={props.onRefresh ?? vi.fn()}
       />
     </TooltipProvider>
   )
@@ -173,5 +177,22 @@ describe('TaskPage contributed source table', () => {
 
     await user.click(screen.getByRole('button', { name: 'BOARD-9 Ship the source bar' }))
     expect(onUseItem).toHaveBeenCalledWith(item)
+  })
+
+  it('invokes the refresh callback when the refresh button is clicked', async () => {
+    const user = userEvent.setup()
+    const onRefresh = vi.fn()
+    renderList({ items: [taskItem()], onRefresh })
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the refresh button and spins its icon while refreshing', () => {
+    const { container } = renderList({ items: [taskItem()], refreshing: true })
+
+    const button = screen.getByRole('button', { name: 'Refresh' })
+    expect(button).toBeDisabled()
+    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
   })
 })

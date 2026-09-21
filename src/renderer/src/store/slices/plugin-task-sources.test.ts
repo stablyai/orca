@@ -357,6 +357,101 @@ describe('createPluginTaskSourcesSlice', () => {
 
     expect(store.getState().pluginTaskSourceLoading).toBe(false)
   })
+
+  describe('refreshPluginTaskSource', () => {
+    it('re-issues listItems carrying the current filter, scopes and search', async () => {
+      const store = createTestStore()
+      const invokeTaskSource = vi
+        .fn()
+        .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+      store.getState().setPluginTaskSourceQuery({ search: 'bar', filterId: 'open' })
+      store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+      invokeTaskSource.mockClear()
+
+      await store.getState().refreshPluginTaskSource()
+
+      expect(invokeTaskSource).toHaveBeenCalledWith({
+        ...BOARDS_SOURCE,
+        method: 'listItems',
+        params: {
+          scopeIds: ['NssfDevOps/dashboards'],
+          search: 'bar',
+          cursor: null,
+          limit: 50,
+          filterId: 'open'
+        }
+      })
+    })
+
+    it('re-issues listScopes', async () => {
+      const store = createTestStore()
+      const invokeTaskSource = vi
+        .fn()
+        .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+      invokeTaskSource.mockClear()
+
+      await store.getState().refreshPluginTaskSource()
+
+      expect(invokeTaskSource).toHaveBeenCalledWith({ ...BOARDS_SOURCE, method: 'listScopes' })
+    })
+
+    it('ignores a second refresh while one is already in flight', async () => {
+      const store = createTestStore()
+      let resolveItems!: (value: unknown) => void
+      const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'listItems') {
+          return new Promise((resolve) => {
+            resolveItems = resolve
+          })
+        }
+        return { ok: true, data: [] }
+      })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+      invokeTaskSource.mockClear()
+
+      const first = store.getState().refreshPluginTaskSource()
+      const second = store.getState().refreshPluginTaskSource()
+      const listItemsCalls = () =>
+        invokeTaskSource.mock.calls.filter(([args]) => args.method === 'listItems').length
+      expect(listItemsCalls()).toBe(1)
+
+      resolveItems({ ok: true, data: { items: [], nextCursor: null } })
+      await Promise.all([first, second])
+
+      expect(listItemsCalls()).toBe(1)
+      expect(store.getState().pluginTaskSourceRefreshing).toBe(false)
+    })
+
+    it('surfaces a refresh failure the same way a normal load failure is surfaced', async () => {
+      const store = createTestStore()
+      const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'listItems') {
+          return { ok: false, code: 'unavailable', message: 'worker died' }
+        }
+        return { ok: true, data: [] }
+      })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+      store.setState({ pluginTaskSourceItems: [taskItem('stale-but-shown')] })
+
+      await store.getState().refreshPluginTaskSource()
+
+      expect(store.getState().pluginTaskSourceError).toEqual({
+        code: 'unavailable',
+        message: 'worker died'
+      })
+      expect(store.getState().pluginTaskSourceRefreshing).toBe(false)
+    })
+  })
 })
 
 describe('deriveContributedPluginTaskSources', () => {
