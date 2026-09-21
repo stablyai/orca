@@ -45,7 +45,8 @@ const doubles = vi.hoisted((): Doubles => {
     totalBytes: 2048,
     assets: [
       { path: 'index.html', sha256: 'c'.repeat(64), byteLength: 2048, contentType: 'text/html' }
-    ]
+    ],
+    routes: [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
   }
   return {
     connection: { client: {}, state: 'connected' },
@@ -89,6 +90,8 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
     })
 }))
 
+import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
+import { PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 const HOST_ID = 'host-1'
@@ -161,24 +164,71 @@ function createFakeStore(): {
   }
 }
 
+/** Armed timers, never real ones: the deadline is ten seconds and a suite that waited for it would
+ *  be a suite nobody runs. Each entry keeps its delay so the test can pin what was asked for. */
+type ArmedTimer = { delayMs: number; run: () => void; cancelled: boolean }
+
+function createTimerSeam() {
+  const armed: ArmedTimer[] = []
+  return {
+    armed,
+    setTimer: (run: () => void, delayMs: number): (() => void) => {
+      const timer: ArmedTimer = { delayMs, run, cancelled: false }
+      armed.push(timer)
+      return () => {
+        timer.cancelled = true
+      }
+    },
+    /** Fires every timer still armed, in the order it was armed. */
+    fire: (): void => {
+      // A snapshot: firing one may arm another, and the new one is not part of this round.
+      const round = armed.slice()
+      for (const timer of round) {
+        if (!timer.cancelled) {
+          timer.run()
+        }
+      }
+    }
+  }
+}
+
 type Mounted = {
   tree: ReactTestRenderer
   retry: () => void
   rerender: () => void
   states: () => readonly MobileWebShellSessionState[]
+  documentLoaded: () => void
+  pageReady: () => void
+  timers: ReturnType<typeof createTimerSeam>
 }
 
 async function mount(store: GenerationStore): Promise<Mounted> {
-  const handle: { retry: () => void; states: MobileWebShellSessionState[] } = {
+  const timers = createTimerSeam()
+  const handle: {
+    retry: () => void
+    documentLoaded: () => void
+    pageReady: () => void
+    states: MobileWebShellSessionState[]
+  } = {
     retry: () => {},
+    documentLoaded: () => {},
+    pageReady: () => {},
     states: []
   }
   function Probe() {
     const session = useMobileWebShellSession({
       hostId: HOST_ID,
-      runtime: { createStore: () => store, mintSessionId: () => 'session-id', now: () => 0 }
+      routePathname: '/h/host-1',
+      runtime: {
+        createStore: () => store,
+        mintSessionId: () => 'session-id',
+        now: () => 0,
+        setTimer: timers.setTimer
+      }
     })
     handle.retry = session.retry
+    handle.documentLoaded = session.reportDocumentLoaded
+    handle.pageReady = session.reportPageReady
     handle.states.push(session.state)
     return null
   }
@@ -194,7 +244,10 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     tree,
     retry: () => handle.retry(),
     rerender: () => tree.update(createElement(Probe)),
-    states: () => handle.states
+    states: () => handle.states,
+    documentLoaded: () => handle.documentLoaded(),
+    pageReady: () => handle.pageReady(),
+    timers
   }
 }
 
@@ -342,5 +395,148 @@ describe('the hybrid shell runner', () => {
     await act(async () => {
       mounted.tree.unmount()
     })
+  })
+})
+
+/**
+ * The gap a blank page lives in.
+ *
+ * A route module that throws while the bundle is being evaluated takes the entry down with it: the
+ * document still commits, the WebView still reports it loaded, and nothing downstream of that
+ * import runs — so no boundary mounts, no fault is posted, and no frame is ever sent. Without a
+ * clock the session sits in `ready` behind a WebView showing nothing, forever.
+ */
+describe('the wait for the page to speak', () => {
+  beforeEach(() => {
+    doubles.manifestReads = 0
+    doubles.manifestClients.length = 0
+    doubles.manifestRejection = null
+    doubles.fetches.length = 0
+    doubles.connection = { client: {}, state: 'connected' }
+    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
+  })
+
+  async function ready(): Promise<Mounted> {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
+    return mounted
+  }
+
+  it(`waits out several of the page's own asks before it gives up on one`, () => {
+    // The number the deadline is for: a page whose backoff has widened to the ceiling still gets
+    // several asks inside the wait, so a slow device is never mistaken for a page that never ran.
+    expect(PAGE_READY_DEADLINE_MS / BRIDGE_READY_RETRY_MAX_MS).toBe(5)
+  })
+
+  it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.documentLoaded()
+    })
+    expect(mounted.timers.armed.map((timer) => timer.delayMs)).toEqual([PAGE_READY_DEADLINE_MS])
+    await act(async () => {
+      mounted.timers.fire()
+    })
+    // Not the failure screen: `document-load-failed` on a session that has not retried deletes the
+    // host's cache and runs the flow once more, which is the recovery a republished bundle needs.
+    expect(mounted.states().at(-1)?.kind).toBe('checking')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  it('stops the clock when the page speaks inside it, whichever of the two lands first', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.documentLoaded()
+      mounted.pageReady()
+    })
+    await act(async () => {
+      mounted.timers.fire()
+    })
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  it('arms nothing when the page spoke before the document was reported finished', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.pageReady()
+      mounted.documentLoaded()
+    })
+    // The race is real on a device: the page's first frame crosses the bridge while the WebView's
+    // own load callback is still in the native queue.
+    expect(mounted.timers.armed).toHaveLength(0)
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  it('re-arms a session the route rebuilt, with the host and its gates unchanged', async () => {
+    // The route is the other half of the session identity: changing it throws the old session away,
+    // and a session nobody told the gates about never leaves `checking`.
+    const fake = createFakeStore()
+    const route = { pathname: '/h/host-1' }
+    const seen: MobileWebShellSessionState[] = []
+    function Probe() {
+      const session = useMobileWebShellSession({
+        hostId: HOST_ID,
+        routePathname: route.pathname,
+        runtime: {
+          createStore: () => fake.store,
+          mintSessionId: () => 'session-id',
+          now: () => 0,
+          setTimer: createTimerSeam().setTimer
+        }
+      })
+      seen.push(session.state)
+      return null
+    }
+    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+    await act(async () => {
+      rendered.tree = create(createElement(Probe))
+    })
+    const tree = rendered.tree
+    if (tree === null) {
+      throw new Error('the hook did not mount')
+    }
+    await act(async () => {
+      fake.settleCacheRead(null)
+    })
+    route.pathname = '/h/host-1/tasks'
+    seen.length = 0
+    await act(async () => {
+      tree.update(createElement(Probe))
+    })
+    // The rebuilt session must open the cache of its own accord; settling a read it never asked
+    // for leaves it in `checking`, which is exactly what an un-armed session looks like.
+    await act(async () => {
+      fake.settleCacheRead(null)
+    })
+    await flush()
+    // Pinned, not merely "moved on": `/h/host-1/tasks` is not the route the bundle lists, so a
+    // re-armed session settles on the native screen. A failure would also leave `checking`.
+    expect(seen.at(-1)?.kind).toBe('native-route')
+    await act(async () => {
+      tree.unmount()
+    })
+  })
+
+  it('cancels the armed deadline when the session it belongs to is torn down', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.documentLoaded()
+    })
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+    // A real `setTimeout` outlives the screen; the epoch check makes it inert, and this makes it
+    // not fire at all.
+    expect(mounted.timers.armed.every((timer) => timer.cancelled)).toBe(true)
   })
 })

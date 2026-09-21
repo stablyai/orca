@@ -7,6 +7,7 @@ import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
+  MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
   type MobileWebBundleAsset
@@ -43,6 +44,7 @@ function manifestOf(
     entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
     totalBytes: sorted.reduce((sum, entry) => sum + entry.byteLength, 0),
     assets: sorted,
+    routes: [],
     ...overrides
   }
 }
@@ -98,6 +100,90 @@ describe('MobileWebBundleManifestSchema', () => {
     expect(
       MobileWebBundleManifestSchema.safeParse(manifestOf([ENTRY], { schemaVersion: 2 })).success
     ).toBe(false)
+  })
+})
+
+describe('the page routes a manifest declares', () => {
+  function withRoutes(routes: unknown): boolean {
+    return MobileWebBundleManifestSchema.safeParse(manifestOf([ENTRY], { routes })).success
+  }
+
+  it('accepts a route pattern with its grants, and one with none', () => {
+    expect(withRoutes([{ pathname: '/h/[hostId]', grants: ['navigate'] }])).toBe(true)
+    expect(withRoutes([{ pathname: '/h/[hostId]/tasks', grants: [] }])).toBe(true)
+  })
+
+  it('refuses a pathname a phone could not write into its own history', () => {
+    // Each of these reaches `history.replaceState` on the phone, where `//host` throws a
+    // cross-origin SecurityError and a query or a fragment is a second field pasted into the first.
+    for (const pathname of [
+      'h/[hostId]',
+      '//evil.example/h',
+      '/\\evil.example',
+      '/h?x=1',
+      '/h#t'
+    ]) {
+      expect(withRoutes([{ pathname, grants: [] }]), pathname).toBe(false)
+    }
+  })
+
+  it('refuses a grant name that is not one', () => {
+    // One segment under `native` is not a verb: the namespace is `native.<domain>.<action>`, and
+    // anything shorter is a plain name wearing a dot.
+    expect(withRoutes([{ pathname: '/h', grants: ['native.navigate'] }])).toBe(false)
+    expect(withRoutes([{ pathname: '/h', grants: [''] }])).toBe(false)
+    for (const grant of ['navigate.', '.native', 'native..read', 'Native.Clipboard.Read', 'a.b']) {
+      expect(withRoutes([{ pathname: '/h', grants: [grant] }]), grant).toBe(false)
+    }
+  })
+
+  it('takes a native verb, which a route must be able to declare to ever be granted one', () => {
+    // Without this no manifest can name a verb, and with per-route grants that leaves every native
+    // verb unreachable for every route.
+    for (const grant of [
+      'native.clipboard.write',
+      'native.clipboard.read',
+      'native.file.pick',
+      'native.a.b.c'
+    ]) {
+      expect(withRoutes([{ pathname: '/h', grants: [grant] }]), grant).toBe(true)
+    }
+  })
+
+  /** The first plain grant added since this pattern was written, and the reason its name has no
+   *  dot: one segment under `native` is refused as a malformed verb, so a capability that is not a
+   *  verb has to be a single token. */
+  it('takes the binary screencast lane, and refuses the spelling that looks like a verb', () => {
+    expect(withRoutes([{ pathname: '/h', grants: ['screencastBinary'] }])).toBe(true)
+    expect(withRoutes([{ pathname: '/h', grants: ['native.screencast'] }])).toBe(false)
+    expect(withRoutes([{ pathname: '/h', grants: ['browser.screencast'] }])).toBe(false)
+  })
+
+  it('refuses a route carrying a field the contract does not declare', () => {
+    expect(withRoutes([{ pathname: '/h', grants: [], screen: 'x' }])).toBe(false)
+  })
+
+  it('requires the field, so a bundle cannot leave the shell guessing', () => {
+    const manifest = manifestOf([ENTRY])
+    Reflect.deleteProperty(manifest, 'routes')
+    expect(MobileWebBundleManifestSchema.safeParse(manifest).success).toBe(false)
+  })
+
+  it('leaves the build id alone, because the assets already decide the routes', () => {
+    const withoutRoutes = MobileWebBundleManifestSchema.parse(manifestOf([ENTRY]))
+    const withOne = MobileWebBundleManifestSchema.parse(
+      manifestOf([ENTRY], { routes: [{ pathname: '/h/[hostId]', grants: ['navigate'] }] })
+    )
+    expect(withOne.buildId).toBe(withoutRoutes.buildId)
+  })
+
+  it('accepts the route ceiling and refuses one past it', () => {
+    const routes = Array.from({ length: MOBILE_WEB_BUNDLE_MAX_ROUTES }, (_value, index) => ({
+      pathname: `/h/${String(index)}`,
+      grants: []
+    }))
+    expect(withRoutes(routes)).toBe(true)
+    expect(withRoutes([...routes, { pathname: '/h/extra', grants: [] }])).toBe(false)
   })
 })
 

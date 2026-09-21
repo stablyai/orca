@@ -8,8 +8,8 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { ChevronLeft, X } from 'lucide-react-native'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
@@ -41,7 +41,7 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
-  const router = useRouter()
+  const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
   const scopeRef = useRef('')
@@ -302,6 +302,7 @@ export function MobileFileExplorerPanel(props: {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => router.back()}
           hitSlop={8}
+          accessibilityRole="button"
           accessibilityLabel="Back to session"
         >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />

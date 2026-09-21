@@ -305,7 +305,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
-      forcePaste: promptDelivery === 'submit-after-ready',
+      forcePaste: true,
       onTimeout: timeoutNotice.onTimeout
     }).then((delivered) => {
       if (delivered) {

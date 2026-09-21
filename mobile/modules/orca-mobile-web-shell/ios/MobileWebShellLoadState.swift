@@ -29,6 +29,27 @@ final class MobileWebShellLoadStateMachine {
   /// for a load the caller has already been told is `loading`.
   private(set) var hasCommittedDocument = false
 
+  /// Whether the navigation in flight is the one the shell asked for.
+  ///
+  /// Kept here rather than beside the `load` call because every way a document can end already runs
+  /// through this type: a commit, a failure, a renderer that died, a prop update that never loaded.
+  /// A flag in the view had to remember each of those separately, and missed two.
+  private(set) var isShellLoad = false
+
+  /// The view is about to load the document itself. The only thing that raises the flag.
+  func shellLoadStarted() {
+    isShellLoad = true
+  }
+
+  /// The one navigation the flag was raised for has been allowed, so the flag is spent.
+  ///
+  /// Spent at the decision and not at the commit: WebKit can decide a second main-frame action
+  /// before the first one starts, and a flag still raised then would have allowed that one to
+  /// replace the document.
+  func shellLoadConsumed() {
+    isShellLoad = false
+  }
+
   /// A new prop pair. Nothing else reopens a terminal state: a retry is a remount.
   func reset() {
     isTerminal = false
@@ -37,6 +58,7 @@ final class MobileWebShellLoadStateMachine {
   }
 
   func committed() {
+    isShellLoad = false
     guard !isTerminal else { return }
     hasCommittedDocument = true
   }
@@ -44,14 +66,21 @@ final class MobileWebShellLoadStateMachine {
   /// The committed document is gone: a new load, a failure, or a renderer that died.
   func documentEnded() {
     hasCommittedDocument = false
+    isShellLoad = false
   }
 
   func started() -> MobileWebShellLoadEmission? {
     emit(MobileWebShellLoadEmission(state: "loading", reason: nil))
   }
 
+  /// A load that never committed did not finish.
+  ///
+  /// This is the whole guard, and it is deliberately not the document's URL: the page rewrites its
+  /// own path with `history.replaceState` before its first render, so the document that committed
+  /// at "/" reports finishing at "/h/<hostId>". Reading the path here withheld `ready` forever.
   func finished() -> MobileWebShellLoadEmission? {
-    emit(MobileWebShellLoadEmission(state: "ready", reason: nil))
+    guard hasCommittedDocument else { return nil }
+    return emit(MobileWebShellLoadEmission(state: "ready", reason: nil))
   }
 
   func failed(_ reason: MobileWebShellFailureReason) -> MobileWebShellLoadEmission? {

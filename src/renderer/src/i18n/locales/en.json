@@ -608,7 +608,8 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
-          "3dc60c7687": "OpenZoo"
+          "3dc60c7687": "OpenZoo",
+          "opencode2_label": "OpenCode 2"
         },
         "skill": {
           "cli": {
@@ -1682,13 +1683,14 @@
         "326a578923": "orca.yaml + local",
         "2132b670da": "both",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "Name or 'Create From'",
+        "ac3748dcda": "Create From",
         "f660aa1454": "Connecting",
         "7711ad5122": "Local setup command",
         "e5db1b0419": "Combined setup command",
         "runOn": "Run on",
         "addProjectBeforeWorkspace": "Add a project before creating a workspace.",
         "connectProjectFirst": "Connect this project first",
+        "defaultBranchUpdateFailed": "Could not update the project default branch. Try again.",
         "connectSourceLookup": "Connect",
         "reconnectSourceLookup": "Reconnect",
         "setupHostExistingFolderTitle": "Set up {{value0}}",
@@ -3146,6 +3148,7 @@
         },
         "pane": {
           "CloseTerminalDialog": {
+            "automatic_resume_warning": "This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.",
             "ebd2fa844d": "Close",
             "1d1a7a9c1f": "Cancel",
             "6b9a6975f8": "The terminal still has a running process. If you close the terminal, the process will be killed.",
@@ -6121,7 +6124,8 @@
           "setParentFor": "Set parent for"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "Branch"
+          "branchIdentity": "Branch",
+          "sleeping": "Sleeping"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
@@ -6449,7 +6453,11 @@
           "922b51e02d": "Fe26.2**…",
           "0023cc336e": "Paste either the raw token value (e.g.",
           "a7e38affcd": "Fe26.2**… token or auth=Fe26.2**… header",
+          "d5267cce63": "). The auth cookie still covers workspace discovery; auth alone is not enough for usage. OpenCode Go auth is web-based and shared across Windows and WSL terminals.",
+          "62ab430f94": "Paste the full Cookie header from your browser's DevTools → Network → any opencode.ai request, including __Host-console_session (e.g.",
+          "37b4b4a3f7": "auth=…; __Host-console_session=…",
           "67e3c33670": "OpenCode Go session cookie",
+          "0335bd31d5": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
           "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
           "36223200ac": "OpenCode Go Session Cookie",
           "ea631977b5": "Configure OpenCode Go provider settings.",
@@ -7201,7 +7209,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "Editor Word Wrap",
-          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+          "collapseUnchangedTitle": "Collapse Unchanged Regions",
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7218,6 +7228,8 @@
           "configureProxy": "Configure proxy"
         },
         "GeneralPane": {
+          "confirm_running_terminal_close": "Confirm before closing running terminals",
+          "confirm_running_terminal_close_description": "Ask before stopping a running agent or command when closing a terminal.",
           "d58fccfd84": "Navigation",
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
@@ -8920,6 +8932,8 @@
             "4ee2029e9c": "OpenCode Go Workspace ID",
             "9c4e40cf6b": "session",
             "61f7d1fcbe": "cookie",
+            "37020a02c2": "console",
+            "25591bf95b": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
             "d1d2ae383c": "Paste your opencode.ai session cookie for rate limit fetching.",
             "6ed1401020": "OpenCode Go Session Cookie",
             "b7c2cee442": "experimental",
@@ -9740,6 +9754,11 @@
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "collapseUnchanged": "Collapse Unchanged Regions",
+            "collapseUnchangedDesc": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
+            "collapseUnchangedKw": "collapse",
+            "hideUnchangedKw": "hide unchanged",
+            "foldKw": "fold",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
             "editorFontKw": "font",
@@ -9758,7 +9777,14 @@
             "sidebar": "sidebar",
             "867dddea41": "pinned",
             "5250cf0e48": "pin",
-            "afa37a34e1": "close"
+            "afa37a34e1": "close",
+            "running_terminal": "running",
+            "terminal": "terminal",
+            "agent": "agent",
+            "command": "command",
+            "confirm": "confirm",
+            "close": "close",
+            "omp": "OMP"
           }
         },
         "git": {
@@ -10256,6 +10282,12 @@
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "githubAccount": "GitHub Account",
+            "githubAccountDescription": "Bind a keyring gh login for this project’s GitHub API calls.",
+            "githubAccountKeyword": "github account",
+            "ghAccount": "gh account",
+            "login": "login",
+            "token": "token",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project.",
             "waitForSetupBeforeAgent": "wait for setup before starting agent",
@@ -11330,8 +11362,18 @@
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "BrowserTerminalLinkActionsSetting": {
-          "title": "Show link actions",
-          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal."
+          "title": "Terminal URL clicks",
+          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.",
+          "descriptionV2": "Control clicks on detected URLs printed in terminal panes and chat transcripts.",
+          "plainClickLabel": "Plain click",
+          "plainClickDescription": "Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.",
+          "plainClickAriaLabel": "Plain click URL behavior",
+          "middleClickLabel": "Middle click",
+          "middleClickDescription": "Choose what a mouse-wheel click does on a detected terminal URL.",
+          "middleClickAriaLabel": "Middle click",
+          "actionsLabel": "Actions",
+          "openUrlLabel": "Open URL",
+          "leaveToTerminalLabel": "Leave to terminal"
         },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
@@ -11828,6 +11870,25 @@
           "auto": "Agent",
           "off": "Off"
         },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "This runtime’s GitHub CLI is too old for account binding (needs gh ≥ 2.40).",
+          "capabilityUnknown": "Could not determine whether this runtime’s GitHub CLI supports account binding. Retry.",
+          "envToken": "Environment-token accounts cannot be bound. Use a keyring login.",
+          "invalidBinding": "That GitHub account binding is invalid.",
+          "unavailable": "That GitHub account is unavailable on this runtime.",
+          "saveFailed": "Could not save the GitHub account binding.",
+          "title": "GitHub Account",
+          "description": "Use a specific gh login for this project’s GitHub issue and pull request calls.",
+          "longDescription": "Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.",
+          "retry": "Retry",
+          "selectLabel": "Account",
+          "ambient": "Default (ambient gh login)",
+          "unavailableOption": "{{user}} @ {{host}} (unavailable)",
+          "capabilityBlocked": "Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).",
+          "capabilityUnknownHint": "Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.",
+          "notEnforced": "Saved, but not enforced by this runtime (mixed-version host).",
+          "refreshAccounts": "Refresh GitHub accounts"
+        },
         "shareSkills": {
           "title": "Share Skills",
           "description": "Share your skills with an unlisted link. Anyone who has it can install them.",
@@ -11954,6 +12015,10 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "TerminalRenderingSection": {
+          "6d4c55bacc": "Inline Images",
+          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
         }
       },
       "right": {
@@ -17958,7 +18023,6 @@
       "truncated": "Some results or matching text were limited. Narrow your search for more precise results.",
       "enableFailed": "Could not enable search. Try again.",
       "enable": "Enable",
-      "notNow": "Not now",
       "retry": "Try again",
       "scopeUnknown": "This computer does not have this workspace or project. Switch the scope to All to search everything on it."
     }

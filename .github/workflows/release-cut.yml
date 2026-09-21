@@ -107,6 +107,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Why: version math recovers unpublished tags; checkout's default
+          # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
+          # `git push` overwrites the existing tag.
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -805,6 +809,16 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      - name: Restore draft-release scripts from the workflow ref
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            config/scripts/create-draft-release.mjs \
+            config/scripts/assert-github-release-is-draft.mjs
+
       - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -846,7 +860,8 @@ jobs:
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
             tests/e2e/golden-source-control-open-diff.spec.ts \
-            tests/e2e/golden-terminal-file-link.spec.ts
+            tests/e2e/golden-terminal-file-link.spec.ts \
+            tests/e2e/golden-worktree-create-switch.spec.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -1176,14 +1191,14 @@ jobs:
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux-x64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
           - os: ubuntu-24.04-arm
             platform: linux-arm64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-arm64-unpacked
             eb_cache_path: |
               ~/.cache/electron
@@ -1221,6 +1236,18 @@ jobs:
       # actions directory from the commit this workflow file itself came from.
       # Not Windows-only: every platform now consumes install-mobile-dependencies, so
       # any of them can be the one whose cut ref predates the action.
+      - name: Restore draft-publish scripts from the workflow ref
+        # Why: this job checks out the release tag, so a cut from an older SHA
+        # still has electron-builder releaseType:release and no re-draft helper.
+        # The workflow YAML is from main; restore the scripts it invokes.
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+
       - name: Restore composite actions from the workflow ref
         shell: bash
         env:
@@ -2193,36 +2220,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify release remains draft after artifact upload
-        # Why: the build matrix must never be the actor that exposes a partial
-        # release. If an uploader or GitHub transition flips draft early, fail
-        # this platform leg and leave the diagnostic monitor artifact behind.
+        # Why: electron-builder `--publish always` can create a public release
+        # as soon as this platform uploads. Re-draft immediately, then fail, so
+        # /releases/latest never keeps serving a missing Windows exe.
+        # Why bash: the Windows matrix defaults to pwsh, which does not expand
+        # "$TAG" into argv.
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: |
-          set -euo pipefail
-          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
-          # Why: release upload must validate the draft before it is publicly visible.
-          draft="$(jq -e -r --arg tag "$TAG" '
-            map(select(.tag_name == $tag))
-            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
-          ' <<<"$releases_json")" || {
-            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
-            exit 1
-          }
-          if [[ "$draft" != "true" ]]; then
-            echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
-            exit 1
-          fi
+        run: node config/scripts/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
 
-      # Why post-publish for Linux: electron-builder packs and uploads in a
-      # single `--publish always` invocation, so there is no cheap insertion
-      # point between pack and upload without splitting those steps. Running
-      # verify last still blocks the bad release: the binary is uploaded to the
-      # draft, but a failed matrix job blocks `publish-release` from flipping
-      # the release from draft → published, so users never see it. A human then
-      # deletes the draft and re-cuts.
+      # Why post-pack for Linux: electron-builder packs and uploads in one
+      # `--publish always` invocation. The previous step re-drafts if that
+      # upload flipped the GitHub release public; this telemetry check still
+      # blocks `publish-release` from undrafting a bad binary.
       #
       # Why this guards against: a misconfigured CI run where
       # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify

@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { cn } from '@/lib/utils'
+import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
 import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { toHttpsRecoveryUrl } from '../../../../../shared/browser-url'
@@ -85,17 +85,7 @@ export function BrowserPageViewportOverlays({
         browserOverlayViewport={browserOverlayViewport}
         worktreeId={worktreeId}
       />
-      <div
-        role="status"
-        aria-live="polite"
-        aria-hidden={browserZoomIndicatorState.ariaHidden}
-        className={cn(
-          'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
-          browserZoomIndicatorState.opacityClassName
-        )}
-      >
-        {browserZoomPercent}%
-      </div>
+      <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
       <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserLoadFailureOverlay

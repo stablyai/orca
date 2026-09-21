@@ -46,6 +46,14 @@ const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }
 const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
   ({ scrollTop, clientHeight }) as HTMLElement
 
+const eligibleRemeasurement = {
+  itemStart: 0,
+  itemEnd: 100,
+  scrollOffset: 500,
+  isFirstMeasurement: false,
+  scrollDirection: 'forward' as const
+}
+
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('counts record keys once per object reference', () => {
     const keysSpy = vi.spyOn(Object, 'keys')
@@ -65,6 +73,7 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: true,
         now: 1_000,
         suppressUntil: 0
@@ -72,9 +81,10 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
     ).toBe(false)
   })
 
-  it('suppresses measured-row scroll correction during direct scroll input grace period', () => {
+  it('suppresses measured-row scroll correction even for eligible geometry during direct scroll input grace period', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: false,
         now: 1_000,
         suppressUntil: 1_250
@@ -85,11 +95,93 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('allows measured-row scroll correction after direct scrolling settles', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
         isScrolling: false,
         now: 1_500,
         suppressUntil: 1_250
       })
     ).toBe(true)
+  })
+
+  it('rejects measured-row scroll correction for a row below the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 600,
+        itemEnd: 700,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('rejects measured-row scroll correction for a row spanning the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 450,
+        itemEnd: 550,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('allows remeasurement for a row ending at the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 400,
+        itemEnd: 500,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(true)
+  })
+
+  it('allows a first estimate measurement whose top is above the scroll anchor even when its end crosses it', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 450,
+        itemEnd: 550,
+        isFirstMeasurement: true,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a first measurement beginning exactly at the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 500,
+        itemEnd: 550,
+        isFirstMeasurement: true,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
+  })
+
+  it('rejects backward remeasurement even when the row is fully above the scroll anchor', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...eligibleRemeasurement,
+        itemStart: 400,
+        itemEnd: 450,
+        scrollDirection: 'backward',
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 1_250
+      })
+    ).toBe(false)
   })
 
   it('keeps pending reveal requests when the worktree still exists but the row is unresolved', () => {

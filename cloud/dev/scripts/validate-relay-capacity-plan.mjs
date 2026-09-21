@@ -1,5 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import {
+  RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+  RELAY_CELL_LOG_SAMPLE_RATE
+} from './validate-relay-asia-topology-plan.mjs'
+
+const CELL_BACKEND_RESOURCE = 'google_compute_backend_service.relay_gce_cell'
+const CONNECTION_DRAIN_PATH = 'connection_draining_timeout_sec'
+// A backend with no logging has `log_config: []`, so gaining the block moves this one path.
+const CELL_LOG_CONFIG_PATH = 'log_config.0'
 
 const SERVICE_ACCOUNT_EMAIL =
   /^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9-]+\.iam\.gserviceaccount\.com$/
@@ -292,6 +301,56 @@ function requireDesiredStartupScript(script, config) {
   }
 }
 
+// The same-cap job targets this cell's backend service so the two declared-but-unapplied
+// settings land one cell at a time: an unindexed root plan pulls the whole MIG and template
+// resources in as dependencies, which standing image drift turns into a 29-cell roll. Each
+// attribute is optional because a cell that already has it plans no change for it.
+// Splitting the backend out here keeps `changes` the template-and-MIG count both callers read.
+function takeCellBackendUpdate(changes, config) {
+  const backends = changes.filter(
+    ({ address }) => typeof address === 'string' && address.startsWith(`${CELL_BACKEND_RESOURCE}[`)
+  )
+  if (config.mode !== 'same-cap-cell' || backends.length === 0) {
+    return { rest: changes, backendUpdate: [] }
+  }
+  const [backend] = backends
+  if (
+    backends.length !== 1 ||
+    backend.address !== `${CELL_BACKEND_RESOURCE}[${JSON.stringify(config.cellId)}]` ||
+    backend.deposed !== undefined ||
+    !sameActions(backend, ['update'])
+  ) {
+    throw new Error('cell plan may change only this cell backend drain and request logging')
+  }
+  const after = backend.change?.after
+  const moved = changedPaths(backend.change?.before, after)
+  const logging = after?.log_config?.[0]
+  const accepted = [CONNECTION_DRAIN_PATH, CELL_LOG_CONFIG_PATH].filter((path) =>
+    moved.includes(path))
+  if (
+    accepted.length === 0 ||
+    (moved.includes(CONNECTION_DRAIN_PATH) &&
+      after?.[CONNECTION_DRAIN_PATH] !== RELAY_CELL_CONNECTION_DRAIN_SECONDS) ||
+    (moved.includes(CELL_LOG_CONFIG_PATH) &&
+      (after?.log_config?.length !== 1 ||
+        logging?.enable !== true ||
+        logging?.sample_rate !== RELAY_CELL_LOG_SAMPLE_RATE))
+  ) {
+    throw new Error('cell plan may change only this cell backend drain and request logging')
+  }
+  const backendComputed = new Set(['fingerprint', 'generated_id'])
+  requireOnlyPaths(
+    backend,
+    new Set([
+      ...accepted,
+      ...unknownPaths(backend.change.after_unknown).filter((path) => backendComputed.has(path))
+    ]),
+    accepted,
+    backendComputed
+  )
+  return { rest: changes.filter((change) => change !== backend), backendUpdate: accepted }
+}
+
 function plannedResources(module) {
   if (!module) return []
   return [
@@ -530,11 +589,13 @@ export function validateCapacityPlan(plan, config) {
     config.mode === 'same-cap-image' &&
     !/^.+@sha256:[a-f0-9]{64}$/.test(config.rollbackImage ?? '')
   ) throw new Error('same-cap image Terraform plan has an invalid rollback image')
-  const changes = mutations(plan)
+  const { rest: changes, backendUpdate } = takeCellBackendUpdate(mutations(plan), config)
+  const backend = backendUpdate.length > 0 ? { backendUpdate } : {}
   if (changes.length === 0) {
     return {
       mode: config.mode,
       changes: 0,
+      ...backend,
       ...(config.mode === 'same-cap-image' ? { changeKind: 'none' } : {})
     }
   }
@@ -555,6 +616,7 @@ export function validateCapacityPlan(plan, config) {
   return {
     mode: config.mode,
     changes: changes.length,
+    ...backend,
     ...(config.mode === 'same-cap-image'
       ? {
           changeKind: replacement

@@ -566,6 +566,20 @@ describe('LocalPtyProvider', () => {
       expect(list).toHaveLength(0)
     })
 
+    it('force-kills an OMP PTY root during app quit', async () => {
+      const killSpy = vi.fn()
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: killSpy
+      })
+
+      await provider.spawn({ cols: 80, rows: 24, launchAgent: 'omp' })
+
+      provider.killAll()
+
+      expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+    })
+
     it('does not destroy after intentional Windows orphan kills', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const destroySpy = vi.fn()

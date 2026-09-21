@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
   discoverNativeChatCatalogModels: vi.fn()
 }))
 
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: { agentStatusByPaneKey: Record<string, never> }) => unknown) =>
+    selector({ agentStatusByPaneKey: {} })
+}))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))

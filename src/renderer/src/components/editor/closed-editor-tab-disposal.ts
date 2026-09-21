@@ -8,77 +8,116 @@ import {
 import {
   disposeUnattachedMonacoModelsByPathPrefixes,
   getDiffViewerMonacoModelPathPrefixes,
-  type MonacoModelRegistry
+  type MonacoModelRegistry,
+  type DisposableMonacoModel
 } from './diff-monaco-model-disposal'
 import {
   deletePaneScopedCacheEntries,
   sweepClosedPdfViewPositions
 } from './closed-editor-tab-cache-sweep'
+import { toEditorModelUri } from './editor-model-uri'
 
-/**
- * Releases the Monaco models and view-state cache entries owned by a batch of closed tabs.
- *
- * Why the batch shape: every prefix sweep here is a full scan of a shared registry or cache, so
- * doing one per closed tab makes "close all"/worktree-switch quadratic in retained models. Takes
- * the monaco namespace as an argument so it stays testable without importing `monaco-editor`.
- */
-export function disposeClosedEditorTabs(
+export type ClosedEditorTab = Pick<OpenFile, 'id' | 'mode' | 'filePath'>
+
+// One registry sweep avoids quadratic close-all work.
+export function disposeClosedEditorModels(
   monacoRegistry: MonacoModelRegistry,
-  closedFiles: readonly OpenFile[]
+  closedFiles: readonly ClosedEditorTab[],
+  onAttachedModel?: (model: DisposableMonacoModel, file: ClosedEditorTab) => void,
+  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
 ): void {
   if (closedFiles.length === 0) {
     return
   }
 
-  const diffModelPathPrefixes: string[] = []
+  const diffFilesByPrefix = new Map<string, ClosedEditorTab>()
+  for (const closedFile of closedFiles) {
+    if (!isStillClosed(closedFile)) {
+      continue
+    }
+    if (closedFile.mode === 'edit') {
+      const model = monacoRegistry.editor.getModel(
+        monacoRegistry.Uri.parse(toEditorModelUri(closedFile.filePath))
+      )
+      if (model?.isAttachedToEditor()) {
+        onAttachedModel?.(model, closedFile)
+      } else {
+        model?.dispose()
+      }
+    } else if (closedFile.mode === 'diff') {
+      const { originalModelPathPrefix, modifiedModelPathPrefix } =
+        getDiffViewerMonacoModelPathPrefixes(closedFile.id)
+      diffFilesByPrefix.set(originalModelPathPrefix, closedFile)
+      diffFilesByPrefix.set(modifiedModelPathPrefix, closedFile)
+    }
+  }
+
+  disposeUnattachedMonacoModelsByPathPrefixes(
+    monacoRegistry,
+    [...diffFilesByPrefix.keys()],
+    (model, prefix) => {
+      const file = diffFilesByPrefix.get(prefix)
+      if (file) {
+        onAttachedModel?.(model, file)
+      }
+    },
+    (prefix) => {
+      const file = diffFilesByPrefix.get(prefix)
+      return file !== undefined && isStillClosed(file)
+    }
+  )
+}
+
+export function disposeClosedEditorTabs(
+  monacoRegistry: MonacoModelRegistry,
+  closedFiles: readonly ClosedEditorTab[],
+  onAttachedModel?: (model: DisposableMonacoModel, file: ClosedEditorTab) => void,
+  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
+): void {
+  disposeClosedEditorModels(monacoRegistry, closedFiles, onAttachedModel, isStillClosed)
+  disposeClosedEditorTabCaches(closedFiles, isStillClosed)
+}
+
+export function disposeClosedEditorTabCaches(
+  closedFiles: readonly ClosedEditorTab[],
+  isStillClosed: (file: ClosedEditorTab) => boolean = () => true
+): void {
   const scrollTopOwners: string[] = []
   const editorSelectionOwners: string[] = []
   const diffViewStateOwners: string[] = []
   const closedPdfFilePaths: string[] = []
 
   for (const closedFile of closedFiles) {
+    if (!isStillClosed(closedFile)) {
+      continue
+    }
     switch (closedFile.mode) {
       case 'edit':
-        // Why: the edit model URI is constructed via monaco.Uri.parse(filePath)
-        // to match @monaco-editor/react's `path` prop convention.
-        monacoRegistry.editor.getModel(monacoRegistry.Uri.parse(closedFile.filePath))?.dispose()
         scrollTopCache.delete(closedFile.filePath)
-        // Why: markdown and mermaid surfaces keep mode-scoped scroll positions.
         scrollTopCache.delete(`${closedFile.filePath}:rich`)
         scrollTopCache.delete(`${closedFile.filePath}:preview`)
         scrollTopCache.delete(`${closedFile.filePath}:mermaid-diagram`)
         editorSelectionCache.delete(closedFile.filePath)
         scrollTopOwners.push(closedFile.filePath)
         editorSelectionOwners.push(closedFile.filePath)
-        // Why: only 'edit' tabs ever get a PDF scroll key (see EditorContent).
         closedPdfFilePaths.push(closedFile.filePath)
         break
       case 'markdown-preview':
-        // Why: preview tabs own pane-scoped preview scroll cache entries even
-        // though they do not retain Monaco models.
         scrollTopCache.delete(`${closedFile.id}:preview`)
         scrollTopOwners.push(closedFile.id)
         break
-      case 'diff': {
-        // Why: kept diff models are keyed by tab id, and fallback recovery can
-        // append generation suffixes; closing the tab owns that whole namespace.
-        const { originalModelPathPrefix, modifiedModelPathPrefix } =
-          getDiffViewerMonacoModelPathPrefixes(closedFile.id)
-        diffModelPathPrefixes.push(originalModelPathPrefix, modifiedModelPathPrefix)
+      case 'diff':
         diffViewStateCache.delete(closedFile.id)
         diffViewStateOwners.push(closedFile.id)
         scrollTopCache.delete(`${closedFile.id}:preview`)
         scrollTopOwners.push(closedFile.id)
         break
-      }
       case 'conflict-review':
         break
       case 'check-details':
         break
     }
   }
-
-  disposeUnattachedMonacoModelsByPathPrefixes(monacoRegistry, diffModelPathPrefixes)
   deletePaneScopedCacheEntries(scrollTopCache, scrollTopOwners)
   deletePaneScopedCacheEntries(editorSelectionCache, editorSelectionOwners)
   deletePaneScopedCacheEntries(diffViewStateCache, diffViewStateOwners)

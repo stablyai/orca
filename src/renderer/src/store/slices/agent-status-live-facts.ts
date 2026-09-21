@@ -87,6 +87,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.stateStartedAt !== existing.stateStartedAt ||
       entry.agentType !== existing.agentType ||
       entry.model !== existing.model ||
+      entry.modelSwitchCommand !== existing.modelSwitchCommand ||
       entry.terminalTitle !== existing.terminalTitle ||
       entry.toolName !== existing.toolName ||
       entry.toolInput !== existing.toolInput ||

@@ -33,7 +33,10 @@ export function decodeBridgeScreencastFrame(
     seq: event.frameSeq,
     format: event.format,
     metadata: event.metadata,
-    image
+    image,
+    // Kept rather than dropped: the page's data URI wants base64 and this is the base64 it wants,
+    // so the web frame path spends nothing re-encoding what arrived already encoded.
+    b64: event.b64
   }
 }
 

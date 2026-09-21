@@ -52,6 +52,7 @@ class MobileWebShellLoadStateTest {
   fun `reports a load in progress and then a load that finished`() {
     val machine = MobileWebShellLoadStateMachine()
     assertEquals(MobileWebShellLoadEmission("loading", null), machine.started())
+    machine.committed()
     assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
   }
 
@@ -60,7 +61,28 @@ class MobileWebShellLoadStateTest {
     val machine = MobileWebShellLoadStateMachine()
     assertNotNull(machine.started())
     assertNull(machine.started())
+    machine.committed()
     assertNotNull(machine.finished())
+    assertNull(machine.finished())
+  }
+
+  // The page rewrites its own path with history.replaceState before its first render, so
+  // onPageFinished arrives at a URL the navigation policy would refuse. The path is deliberately
+  // not an input: what is asked is whether this load committed.
+  @Test
+  fun `a load that finished without committing reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.started()
+    assertNull(machine.finished())
+    machine.committed()
+    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
+  }
+
+  @Test
+  fun `a load whose document was replaced mid-flight reports nothing`() {
+    val machine = MobileWebShellLoadStateMachine()
+    machine.committed()
+    machine.documentEnded()
     assertNull(machine.finished())
   }
 
@@ -99,6 +121,7 @@ class MobileWebShellLoadStateTest {
     val epoch = machine.epoch
     machine.reset()
     assertNull(machine.failedDuring(epoch, MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED))
+    machine.committed()
     assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
   }
 

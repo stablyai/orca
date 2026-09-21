@@ -21,6 +21,13 @@ const BROWSER_GUEST_SESSION_PATH =
   'src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts'
 
 describe('renderer startup runtime routing', () => {
+  it('owns closed editor cleanup in the persistent app shell', () => {
+    expect(readSource(SHELL_SERVICES_PATH)).toContain('useClosedEditorTabCleanup()')
+    expect(readSource('src/renderer/src/components/editor/EditorPanel.tsx')).not.toContain(
+      'useClosedEditorTabCleanup'
+    )
+  })
+
   it('routes packaged terminal restore through the daemon adoption gate', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),

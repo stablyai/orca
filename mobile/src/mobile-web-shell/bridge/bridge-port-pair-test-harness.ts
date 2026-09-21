@@ -1,12 +1,18 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
+import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import type { BridgeHapticsKind } from './bridge-haptics-notify'
+import type { BridgeNativeVerb } from './bridge-native-verbs'
+import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import {
   readBridgeClientMessage,
   readBridgeHostMessage,
   type BridgeClientMessage,
-  type BridgeHostMessage
+  type BridgeHostMessage,
+  type BridgeInitRoute
 } from './bridge-envelope'
+import type { BridgeErrorCapture } from './bridge-error-capture'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
@@ -35,6 +41,22 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   toPage: string[]
   diagnostics: BridgeRpcClientDiagnostic[]
   hostDiagnostics: BridgeHostDiagnostic[]
+  /** Every screen the page asked the shell to open, in order. */
+  navigations: string[]
+  /** Every URL the page asked the shell to open outside the app, in order. */
+  externalLinks: string[]
+  /** Every haptic the page asked the shell to play, in order. */
+  haptics: BridgeHapticsKind[]
+  /** One entry per stack pop the page asked for, with what the shell did about it. */
+  backPops: BridgeNavigateBackOutcome[]
+  /** Every allowlisted key the page wrote through the shell, in order. */
+  storageWrites: { key: string; value: string | null }[]
+  /** Every fault the page reported, in order, as the shell received it. */
+  pageFaults: BridgeErrorCapture[]
+  /** How many times the page asked for a session; it re-asks on a backoff until one lands. */
+  readonly pageReadyCount: () => number
+  /** Why the host refused to open a session at all, if it did. */
+  readonly routeRefusals: string[]
   /** Runs both lanes until a full round moves nothing. */
   flush: () => Promise<void>
   /**
@@ -54,6 +76,9 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   rpc: TRpc
   sessionId?: string
   buildId?: string
+  route?: BridgeInitRoute
+  pageRoutes?: readonly string[]
+  storage?: Readonly<Record<string, string>>
   /**
    * Rewrites each frame on its way to the page, for asking the page a counterfactual it cannot be
    * asked any other way: would this run have gone differently had the shell sent one more field?
@@ -61,6 +86,12 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
    * the payload itself does. Nothing in the product rewrites a frame in flight.
    */
   rewriteToPage?: (json: string) => string
+  /** What the mounted route declared; everything this shell implements unless a case narrows it. */
+  routeGrants?: readonly string[]
+  /** Stands for a host rebuilt under a page whose session already handshook. */
+  sessionEstablished?: boolean
+  /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
+  serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
 }
 
 type Lane = {
@@ -124,12 +155,45 @@ function readAll<TMessage>(
   })
 }
 
+/** One answer per row of the verb table. Adding a verb without a row here is a refusal a case
+ *  would have to read as a result shape the shell does not declare. */
+function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
+  switch (verb) {
+    case 'native.clipboard.write':
+      return { written: true }
+    case 'native.clipboard.read':
+      return { value: 'pasteboard' }
+    case 'native.media.pick':
+      return { items: [] }
+    case 'native.media.read':
+      return { base64: '', eof: true }
+    case 'native.media.release':
+      return { released: false }
+    case 'native.audio.start':
+      return { started: true, sampleRate: 16_000, permission: 'granted' }
+    case 'native.audio.read':
+      return { base64: '', droppedBytes: 0, recording: true, interruption: null }
+    case 'native.audio.stop':
+      return { stopped: true }
+    case 'native.wakelock.set':
+      return { active: true }
+  }
+}
+
 export function createBridgePortPair<TRpc extends RpcClient>(
   options: BridgePortPairOptions<TRpc>
 ): BridgePortPair<TRpc> {
   const rpc = options.rpc
   const diagnostics: BridgeRpcClientDiagnostic[] = []
   const hostDiagnostics: BridgeHostDiagnostic[] = []
+  const navigations: string[] = []
+  const externalLinks: string[] = []
+  const haptics: BridgeHapticsKind[] = []
+  const backPops: BridgeNavigateBackOutcome[] = []
+  const storageWrites: { key: string; value: string | null }[] = []
+  const pageFaults: BridgeErrorCapture[] = []
+  let pageReadies = 0
+  const routeRefusals: string[] = []
   let receiveOnPage: ((json: string) => void) | null = null
 
   const rewrite = options.rewriteToPage ?? ((json: string) => json)
@@ -144,6 +208,31 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     },
     buildId: options.buildId ?? 'build-a',
     sessionId: options.sessionId ?? 'session-a',
+    route: options.route ?? { pathname: '/h/host-a' },
+    pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
+    routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
+    sessionEstablished: options.sessionEstablished ?? false,
+    onNavigate: (href) => navigations.push(href),
+    onExternalLink: (url) => externalLinks.push(url),
+    onHaptic: (kind) => haptics.push(kind),
+    // The pair has no device: what a test reads here is that the host answered without forwarding.
+    // Each verb gets a shape its own row declares, so a case that calls one it did not configure
+    // reads an answer rather than `native_verb_result`, which is a shell bug's code.
+    serveNativeVerb: (verb, params) =>
+      options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb)),
+    onNavigateBack: () => {
+      // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
+      backPops.push('popped')
+      return 'popped'
+    },
+    host: { id: 'host-a', name: 'Host A', endpoint: 'ws://host-a', lastConnected: 0 },
+    readStorage: () => options.storage ?? {},
+    onStorageWrite: (key, value) => storageWrites.push({ key, value }),
+    onPageFault: (error) => pageFaults.push(error),
+    onPageReady: () => {
+      pageReadies += 1
+    },
+    onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
   })
   const toShell = createLane((json) => {
@@ -170,6 +259,14 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     toPage: toPage.sent,
     diagnostics,
     hostDiagnostics,
+    navigations,
+    externalLinks,
+    haptics,
+    backPops,
+    storageWrites,
+    pageFaults,
+    pageReadyCount: () => pageReadies,
+    routeRefusals,
     async flush(): Promise<void> {
       for (let round = 0; round < 64; round += 1) {
         const moved = toShell.sent.length + toPage.sent.length

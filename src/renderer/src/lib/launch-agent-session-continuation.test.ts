@@ -72,7 +72,7 @@ describe('launchAgentSessionContinuation', () => {
         worktreeId: 'wt-1',
         groupId: 'group-1',
         initialCwd: '/repo/worktree/packages/app',
-        promptDelivery: 'submit-after-ready'
+        promptDelivery: 'draft'
       })
     )
   })
@@ -129,6 +129,9 @@ describe('launchAgentSessionContinuation', () => {
       launchSource: 'sidebar'
     })
 
+    expect(launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', promptDelivery: 'submit-after-ready' })
+    )
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
         'The new Codex session started, but its context could not be sent.'

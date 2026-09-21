@@ -3,11 +3,11 @@
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "f24f38bd4105753adb0d8e24132c2fc57f80f5c6",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "88da63e9f56e02dbe8404471e23251f9b13fd00b1ab10c19aa15b3a73128a53e",
+  "scenarioSha256": "165402f60bc723edb2a867f09573fdae11a7c2ee4ef2be891916cfeb8aab21a0",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -17,6 +17,49 @@
       "name": "terminal.send#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "0f4e2985db74": {
+      "name": "terminal.send#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ "
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
     },
     "15c4b592d435": {
       "name": "terminal.send#1",
@@ -53,49 +96,6 @@
         "value": {
           "id": "frame-1",
           "ok": true
-        }
-      }
-    },
-    "1846c2972b5d": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~ "
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
         }
       }
     },
@@ -231,6 +231,11 @@
           "ok": false
         }
       }
+    },
+    "5ccdcd32156d": {
+      "name": "terminal.send#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "7260887188d6": {
       "name": "terminal.send#1",
@@ -409,11 +414,6 @@
         }
       }
     },
-    "a02ea7e47c8e": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "a32415cc51eb": {
       "failure": "",
       "pasted": "unpasted"
@@ -578,8 +578,8 @@
       {
         "id": "native-chat-image-paste-single.normal:pasted",
         "observation": {
-          "sender": ["7e7356ce5972", "1846c2972b5d"],
-          "payloads": ["098c51e345e3", "a02ea7e47c8e"],
+          "sender": ["7e7356ce5972", "0f4e2985db74"],
+          "payloads": ["098c51e345e3", "5ccdcd32156d"],
           "settlements": {
             "one": "84e5ca07cb7a"
           },

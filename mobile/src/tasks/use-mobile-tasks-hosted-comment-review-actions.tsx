@@ -1,6 +1,6 @@
+import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
 import {
-  Clipboard,
   buildGitHubCheckSummary,
   scheduleMobileTaskCopyFeedbackReset,
   useCallback
@@ -22,6 +22,10 @@ import {
 } from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is, so that path would work on
+  // one platform and silently not on the other.
+  const clipboard = useClipboardWriter()
   const {
     client,
     copiedLinkResetTimerRef,
@@ -119,25 +123,31 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
     [client, itemCommentDraft, mutatingStatus]
   )
 
-  const copyTaskLink = useCallback(async (key: string, url: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(url)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy link')
-    }
-  }, [])
+  const copyTaskLink = useCallback(
+    async (key: string, url: string): Promise<void> => {
+      try {
+        await clipboard.writeText(url)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy link')
+      }
+    },
+    [clipboard]
+  )
 
-  const copyTextToClipboard = useCallback(async (key: string, value: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(value)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy text')
-    }
-  }, [])
+  const copyTextToClipboard = useCallback(
+    async (key: string, value: string): Promise<void> => {
+      try {
+        await clipboard.writeText(value)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy text')
+      }
+    },
+    [clipboard]
+  )
 
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {

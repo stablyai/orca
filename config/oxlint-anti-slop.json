@@ -82,7 +82,18 @@
       }
     },
     {
-      "files": ["**/browser-pane/annotate/**"],
+      "files": [
+        "**/browser-pane/annotate/**",
+        "**/browser-pane/ClientHostedBrowserPagePane.markup.test.tsx"
+      ],
+      "rules": {
+        "anti-slop/no-shape-in-symbol-names": "off"
+      }
+    },
+    // The markup tests outside annotate/ drive its API, whose payload key is `shapes`
+    // (`MarkupOverlay.onComplete({ imageElement, shapes })`): the domain term, not a structure.
+    {
+      "files": ["**/browser-pane/*.markup.test.tsx"],
       "rules": {
         "anti-slop/no-shape-in-symbol-names": "off"
       }

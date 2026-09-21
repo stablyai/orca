@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
+import { OptionalTuiAgent } from './worktree-params'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -183,6 +184,7 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
+  defaultTuiAgent: OptionalTuiAgent.nullable(),
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 

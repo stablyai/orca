@@ -1,3 +1,4 @@
+import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
 import { settingsRead } from '../transport/settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
@@ -263,13 +264,15 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)
-        const name = result.worktree.displayName ?? item.title
-        const queryParams = new URLSearchParams({ name, created: '1' })
-        if (result.warning) {
-          queryParams.set('warning', result.warning)
-        }
+        // The shared builder, not a template: it encodes the host id, which this did not, and a
+        // host id carrying `/`, `#` or whitespace reaches the wire as an href the bridge refuses.
         router.push(
-          `/h/${hostId}/session/${encodeURIComponent(result.worktree.id)}?${queryParams.toString()}`
+          hostNewWorktreeSessionRoute(
+            hostId,
+            result.worktree.id,
+            result.worktree.displayName ?? item.title,
+            result.warning
+          )
         )
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create workspace')

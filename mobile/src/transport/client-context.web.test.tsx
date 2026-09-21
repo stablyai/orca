@@ -1,7 +1,9 @@
-import { createElement, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
+import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
+import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
 // The web file re-exports the screen hooks, and reaching the real ones imports the Expo runtime
@@ -44,29 +46,39 @@ function Screen(): null {
   return null
 }
 
-function render(): ReactElement {
-  return createElement(RpcClientProvider, null, createElement(Screen))
+function render(client: BridgeRpcClient): ReactElement {
+  return (
+    <RpcClientProvider client={client}>
+      <Screen />
+    </RpcClientProvider>
+  )
 }
 
 /** The channel the shell's document-start script installs, as a double. */
-function installChannel(): { posted: string[]; deliver: (frame: unknown) => void } {
-  const posted: string[] = []
+function installChannel(): { deliver: (frame: unknown) => void } {
   const channel: {
     postMessage: (json: string) => void
     onmessage: ((e: { data: string }) => void) | null
   } = {
-    postMessage: (json) => {
-      posted.push(json)
-    },
+    postMessage: () => {},
     onmessage: null
   }
   Object.defineProperty(globalThis, 'orcaBridge', { value: channel, configurable: true })
   return {
-    posted,
     deliver: (frame) => {
       channel.onmessage?.({ data: JSON.stringify(frame) })
     }
   }
+}
+
+/** What the entry hands the provider: one client, already holding a session. */
+function createReadyClient(deliver: (frame: unknown) => void): BridgeRpcClient {
+  const client = createShellPageClient()
+  if (client === null) {
+    throw new Error('no channel installed')
+  }
+  deliver(INIT)
+  return client
 }
 
 function readContext(): RpcClientContextValue {
@@ -88,47 +100,48 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, 'orcaBridge')
 })
 
-describe('the page provider inside the shell', () => {
-  it('mounts nothing until the shell answers with a session', () => {
-    const channel = installChannel()
-    act(() => {
-      create(render())
-    })
-    expect(screen.mounts).toBe(0)
-    expect(channel.posted.map((json: string) => JSON.parse(json).type)).toEqual(['ready'])
-    act(() => {
-      channel.deliver(INIT)
-    })
-    expect(screen.mounts).toBe(1)
-  })
-
+describe('the page provider', () => {
   it('answers every screen with the one client the page has', () => {
     const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render())
+      create(render(client))
     })
-    act(() => {
-      channel.deliver(INIT)
-    })
+
+    expect(screen.mounts).toBe(1)
     const context = readContext()
-    const client = context.acquire('host-a', {})
-    expect(client).not.toBeNull()
+    expect(context.acquire('host-a', {})).toBe(client)
+    // No host is named anywhere in the protocol, so a second route's host gets the same client.
+    expect(context.acquire('host-b', {})).toBe(client)
+    expect(context.getAllClients()).toEqual([
+      { hostId: 'host-a', client },
+      { hostId: 'host-b', client }
+    ])
+  })
+
+  it('reads the connection the shell primed rather than a state of its own', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      create(render(client))
+    })
+
+    const context = readContext()
     expect(context.getState('host-a')).toBe('connected')
+    expect(context.getKnownState('host-a')).toBe('connected')
     expect(context.getReconnectAttempt('host-a')).toBe(2)
     expect(context.getLastConnectedAt('host-a')).toBe(1700)
-    expect(context.getAllClients()).toEqual([{ hostId: 'host-a', client }])
   })
 
   it('carries a state change from the shell to the screens watching it', () => {
     const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render())
-    })
-    act(() => {
-      channel.deliver(INIT)
+      create(render(client))
     })
     const listener = vi.fn()
     readContext().subscribeHostState('host-a', listener)
+
     act(() => {
       channel.deliver({
         v: BRIDGE_PROTOCOL_VERSION,
@@ -136,26 +149,70 @@ describe('the page provider inside the shell', () => {
         connection: { ...INIT.connection, state: 'reconnecting' }
       })
     })
+
     expect(listener).toHaveBeenCalledWith('reconnecting')
     expect(readContext().getState('host-a')).toBe('reconnecting')
   })
-})
 
-describe('the page provider outside the shell', () => {
-  it('mounts the route tree at once, because no session is ever coming', () => {
+  it('wakes a screen watching every host on the same change', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render())
+      create(render(client))
     })
-    expect(screen.mounts).toBe(1)
-    expect(readContext().getState('host-a')).toBe('disconnected')
+    const listener = vi.fn()
+    readContext().subscribeAllHosts(listener)
+
+    act(() => {
+      channel.deliver({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'state',
+        connection: { ...INIT.connection, state: 'reconnecting' }
+      })
+    })
+
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 
-  it('hands out a client that reaches nothing rather than none at all', async () => {
+  it('stops listening when the screen that asked goes away', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render())
+      create(render(client))
     })
-    const client = readContext().acquire('host-a', {})
-    expect(client).not.toBeNull()
-    await expect(client?.sendRequest('worktree.ps')).rejects.toThrow('bridge transport unavailable')
+    const listener = vi.fn()
+    const unsubscribe = readContext().subscribeHostState('host-a', listener)
+    unsubscribe()
+
+    act(() => {
+      channel.deliver({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'state',
+        connection: { ...INIT.connection, state: 'reconnecting' }
+      })
+    })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('never closes, drops or re-dials the connection the shell owns', async () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    const close = vi.spyOn(client, 'close')
+    act(() => {
+      create(render(client))
+    })
+
+    const context = readContext()
+    context.release('host-a', {})
+    context.releaseAndCloseIfUnused('host-a', {})
+    context.closeIfUnused('host-a')
+    context.disconnectHostClient('host-a')
+    context.forgetHostClient('host-a')
+    context.refreshHostClient('host-a')
+    await context.forceReconnect('host-a')
+
+    expect(close).not.toHaveBeenCalled()
+    expect(context.acquire('host-a', {})).toBe(client)
   })
 })

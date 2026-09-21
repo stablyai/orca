@@ -1,3 +1,4 @@
+import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -150,6 +151,7 @@ export function createRemoteRuntimePtyTransport(
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
+    terminalKittyKeyboardProtocol,
     agentPrompt,
     agentPromptDelivery,
     agentArgsOverride,
@@ -405,6 +407,7 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
+  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -603,22 +606,24 @@ export function createRemoteRuntimePtyTransport(
   async function waitForHostSessionHandle(
     hostTabId: string,
     isCurrent: () => boolean
-  ): Promise<string | null | undefined | false> {
+  ): Promise<string | undefined | false> {
     if (!worktreeId) {
       return undefined
     }
     const worktree = toRuntimeWorktreeSelector(worktreeId)
-    let activated: RuntimeMobileSessionTabsResult
+    let activated: RuntimeMobileSessionTabsResult | undefined
     try {
       // Why: this runs when the pane itself is opened/attached — the user's wake gesture.
       activated = await activateHostSessionSurface(hostTabId, worktree, 'user')
     } catch (error) {
-      if (isMissingHostSessionSurfaceError(error)) {
-        return null
+      // Why: activation answers absence from the host's own in-flight bookkeeping — a worktree snapshot
+      // it has not hydrated yet answers the same way as one it really dropped (#21852). Only the
+      // inventory below carries removal evidence, so fall through and let it adjudicate.
+      if (!isMissingHostSessionSurfaceError(error)) {
+        throw error
       }
-      throw error
     }
-    const immediate = findReadyHostSessionHandle(activated, hostTabId)
+    const immediate = activated ? findReadyHostSessionHandle(activated, hostTabId) : undefined
     if (immediate) {
       return immediate
     }
@@ -729,7 +734,7 @@ export function createRemoteRuntimePtyTransport(
   async function waitForHostSessionHandleWithRecovery(
     hostTabId: string,
     isCurrent: () => boolean
-  ): Promise<string | null | undefined | false> {
+  ): Promise<string | undefined | false> {
     let recoveryEpoch = recovery.isActive ? recovery.currentEpoch : undefined
     while (isCurrent()) {
       try {
@@ -2230,6 +2235,9 @@ export function createRemoteRuntimePtyTransport(
           ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
           ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+          ...(terminalKittyKeyboardProtocol === true
+            ? { terminalKittyKeyboardProtocol: true }
+            : {}),
           tabId,
           leafId,
           focus: false,
@@ -2253,8 +2261,9 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
-        const hostAuthorityCreate = () =>
-          createWithUnknownOutcomeRecovery(
+        const hostAuthorityCreate = async () => {
+          const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+          return createWithUnknownOutcomeRecovery(
             'agent-session',
             (timeoutMs) =>
               resumeProviderSessionToSend
@@ -2263,6 +2272,7 @@ export function createRemoteRuntimePtyTransport(
                     'terminal.ensureAgentSession',
                     {
                       kind: 'explicit',
+                      ...keyboardOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       providerSession: resumeProviderSessionToSend,
@@ -2283,6 +2293,7 @@ export function createRemoteRuntimePtyTransport(
                     'terminal.createAgentSession',
                     withAgentSessionCreateOperationId(
                       {
+                        ...keyboardOptions,
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
                         ...(agentPrompt ? { prompt: agentPrompt } : {}),
@@ -2303,6 +2314,7 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
+        }
         const resumeHostAuthorityCapability = resumeProviderSessionToSend
           ? agentResumeHostAuthorityCapability(launchAgentToSend)
           : undefined

@@ -55,15 +55,13 @@ function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): strin
 export function AiVaultPanelSearch({
   search,
   noAgents,
-  onDismiss,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
-  onDismiss: () => void
   children: ReactNode
 }) {
-  const { localConsent, response, error, loading, retry: onRetry } = search
+  const { needsLocalConsent, response, error, loading, retry: onRetry } = search
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
   async function enable() {
@@ -81,9 +79,13 @@ export function AiVaultPanelSearch({
       setSaving(false)
     }
   }
+  // The consent card is an offer above the legacy title filter's own results, not a wall.
+  if (!search.hasQuery) {
+    return children
+  }
   const unavailable = response?.kind === 'unavailable' ? response.reason : null
   let message: string | null = null
-  if (localConsent) {
+  if (needsLocalConsent) {
     message = translate(
       'sessionSearch.panel.consent',
       'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
@@ -135,9 +137,6 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (!search.searching) {
-    return children
-  }
   if (response?.kind === 'results' && search.hits.length === 0) {
     message = translate(
       'sessionSearch.panel.noMatches',
@@ -155,7 +154,7 @@ export function AiVaultPanelSearch({
         >
           {message && <p>{message}</p>}
           {skippedHosts && <p>{skippedHosts}</p>}
-          {localConsent ? (
+          {needsLocalConsent ? (
             <>
               {saveError && (
                 <p className="text-destructive">
@@ -165,14 +164,9 @@ export function AiVaultPanelSearch({
                   )}
                 </p>
               )}
-              <div className="flex gap-2">
-                <Button size="xs" disabled={saving} onClick={() => void enable()}>
-                  {translate('sessionSearch.panel.enable', 'Enable')}
-                </Button>
-                <Button size="xs" variant="ghost" disabled={saving} onClick={onDismiss}>
-                  {translate('sessionSearch.panel.notNow', 'Not now')}
-                </Button>
-              </div>
+              <Button size="xs" disabled={saving} onClick={() => void enable()}>
+                {translate('sessionSearch.panel.enable', 'Enable')}
+              </Button>
             </>
           ) : !noAgents &&
             (error ||

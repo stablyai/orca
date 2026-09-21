@@ -171,9 +171,11 @@ describe('constrained idle regional assignment transaction', () => {
     )
     const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
     expect(candidates).toHaveLength(capacity === 11 ? 1 : 0)
-    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({
-      outcome: capacity === 11 ? 'committed' : 'deferred'
-    })
+    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual(
+      capacity === 11
+        ? { outcome: 'committed' }
+        : { outcome: 'deferred', reason: 'candidate-ineligible' }
+    )
     const [target] = await database.query("SELECT reserved_requests FROM relay_cells WHERE cell_id = 'target'")
     expect(Number(target!.reserved_requests)).toBe(capacity === 11 ? 11 : 7)
     expect(await store.resolve(identity)).toMatchObject({
@@ -292,7 +294,7 @@ describe('constrained idle regional assignment transaction', () => {
       } finally {
         held.release()
       }
-      expect(await commit).toEqual({ outcome: 'deferred' })
+      expect(await commit).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
       expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
       expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
     }
@@ -368,7 +370,7 @@ describe('constrained idle regional assignment transaction', () => {
     const { store, safety, request } = await setup()
     expect(
       await store.commitIdleRegionalRehome({ ...request, targetCellId: 'missing' }, safety)
-    ).toEqual({ outcome: 'deferred' })
+    ).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
     await store.activateControl(identity, {
       cellId: 'source',
       assignmentEpoch: 1,
@@ -382,9 +384,13 @@ describe('constrained idle regional assignment transaction', () => {
 
   it('does not commit without process safety or cohort authorization', async () => {
     const { store, safety, request, database } = await setup()
-    expect(await store.commitIdleRegionalRehome(request)).toEqual({ outcome: 'deferred' })
+    expect(await store.commitIdleRegionalRehome(request)).toEqual({
+      outcome: 'deferred',
+      reason: 'director-safety-stale'
+    })
     expect(await store.commitIdleRegionalRehome(request, safety, 0)).toEqual({
-      outcome: 'deferred'
+      outcome: 'deferred',
+      reason: 'cohort-closed'
     })
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })

@@ -59,10 +59,14 @@ describe('buildMobileWebBundle', () => {
         'runtimeProtocolVersion',
         'entrypoint',
         'totalBytes',
-        'assets'
+        'assets',
+        'routes'
       ])
       expect(manifest.schemaVersion).toBe(1)
       expect(manifest.entrypoint).toBe('index.html')
+      // The bootstrap bundle carries no route tree, so a shell reading this one finds no screen
+      // listed and renders every route natively.
+      expect(manifest.routes).toEqual([])
       const packageJson = JSON.parse(
         await readFile(new URL('../../package.json', import.meta.url), 'utf8')
       )

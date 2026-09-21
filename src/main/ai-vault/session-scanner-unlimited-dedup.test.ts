@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type * as CodexDedup from './codex-session-root-dedup'
+import type * as SessionDedup from './session-root-dedup'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 
 const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } => ({
@@ -36,20 +36,20 @@ vi.mock('./remote-session-parse-cache', () => ({
   parseRemoteSessionFileCached: async ({ candidate }: { candidate: { session: AiVaultSession } }) =>
     candidate.session
 }))
-vi.mock('./codex-session-root-dedup', async (original) => {
-  const actual = await original<typeof CodexDedup>()
+vi.mock('./session-root-dedup', async (original) => {
+  const actual = await original<typeof SessionDedup>()
   return {
     ...actual,
-    dedupeCodexSessionsBySessionId: (sessions: AiVaultSession[]) => {
+    dedupeScannedSessions: (sessions: AiVaultSession[]) => {
       fixture.visits += sessions.length
-      return actual.dedupeCodexSessionsBySessionId(sessions)
+      return actual.dedupeScannedSessions(sessions)
     }
   }
 })
 
 import { scanAiVaultSessions } from './session-scanner'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
-import { CodexSessionCollection, dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
+import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
 
 function candidates() {
   return fixture.sessions.map((session) => ({
@@ -120,7 +120,7 @@ for (const host of ['local', 'remote'] as const) {
       filePath: '/custom/rollout-0.jsonl'
     }
     fixture.sessions.push(session(0))
-    const expected = dedupeCodexSessionsBySessionId(fixture.sessions)
+    const expected = dedupeScannedSessions(fixture.sessions)
     fixture.visits = 0
     const started = performance.now()
     const result = await scan(true)
@@ -149,7 +149,7 @@ for (const host of ['local', 'remote'] as const) {
 }
 
 it('incremental canonical selection preserves winner occurrence order, ties and repeated references', () => {
-  const collection = new CodexSessionCollection()
+  const collection = new ScannedSessionCollection()
   const same = session(0)
   const rows: AiVaultSession[] = []
   const variants: AiVaultSession[] = [
@@ -169,12 +169,12 @@ it('incremental canonical selection preserves winner occurrence order, ties and 
     const row = variants[seed % variants.length]!
     rows.push(row)
     collection.add(row)
-    expect([...collection.values()]).toEqual(dedupeCodexSessionsBySessionId(rows))
+    expect([...collection.values()]).toEqual(dedupeScannedSessions(rows))
   }
 })
 
 it('retains only canonical rows during duplicate-heavy load-all scans', () => {
-  const collection = new CodexSessionCollection()
+  const collection = new ScannedSessionCollection()
   for (let index = 0; index < 10000; index++) {
     const row = session(index % 100)
     collection.add({
@@ -194,7 +194,7 @@ it('retains only canonical rows during duplicate-heavy load-all scans', () => {
 it('admits rows sharing one session id across rollout names without rescanning', () => {
   const count = 4000
   let pathReads = 0
-  const collection = new CodexSessionCollection()
+  const collection = new ScannedSessionCollection()
   for (let index = 0; index < count; index++) {
     const row = { ...session(index), sessionId: 'shared' }
     collection.add({
@@ -230,9 +230,9 @@ it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', (
         }
       : session(index)
   )
-  const expected = dedupeCodexSessionsBySessionId(corpus)
+  const expected = dedupeScannedSessions(corpus)
   const before = heapUsed()
-  const collection = new CodexSessionCollection()
+  const collection = new ScannedSessionCollection()
   for (const row of corpus) {
     collection.add(row)
   }

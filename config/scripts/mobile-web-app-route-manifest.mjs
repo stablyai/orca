@@ -54,6 +54,25 @@ export async function collectMobileWebAppRoutes(appDir, routeRoot = MOBILE_WEB_A
   return routes.sort((left, right) => (left.key < right.key ? -1 : 1))
 }
 
+/**
+ * The URL pattern expo-router gives a route key, or null for a file that is not a screen.
+ *
+ * Dynamic segments are kept as written (`[hostId]`), because what this feeds is a pattern the shell
+ * matches a concrete route against, not a URL anyone visits. `index` names its own directory, and a
+ * file whose name starts with `_` is a layout rather than a screen.
+ */
+export function routePathnameFromKey(key) {
+  const segments = key.replace(/^\.\//, '').replace(ROUTE_FILE, '').split('/')
+  const last = segments.at(-1)
+  if (last === undefined || last.startsWith('_')) {
+    return null
+  }
+  if (last === 'index') {
+    segments.pop()
+  }
+  return `/${segments.join('/')}`
+}
+
 /** The require.context keys alone, for callers that only need the route names. */
 export async function collectMobileWebAppRouteKeys(appDir, routeRoot = MOBILE_WEB_APP_ROUTE_ROOT) {
   return (await collectMobileWebAppRoutes(appDir, routeRoot)).map((route) => route.key)

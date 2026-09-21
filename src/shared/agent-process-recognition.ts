@@ -5,6 +5,7 @@ import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { lacksWrapperSubcommand } from './agent-wrapper-subcommand'
 import { getFirstCommandToken } from './command-token-scanner'
+import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -288,6 +289,9 @@ export function recognizeAgentProcessFromCommandLine(
 ): RecognizedAgentProcess | null {
   if (!commandLine) {
     return null
+  }
+  if (isFreshOmpLaunchCommand(commandLine)) {
+    return recognizedAgentForProcess('omp')
   }
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)

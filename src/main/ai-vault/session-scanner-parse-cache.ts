@@ -79,6 +79,7 @@ function resumableStateFactoryFor(
     case 'cline':
     case 'kimi':
     case 'opencode':
+    case 'opencode2':
     case 'rovo':
       return null
   }
@@ -89,7 +90,13 @@ export type SessionParseStats = TranscriptReadStats & {
 }
 
 export function createSessionParseStats(): SessionParseStats {
-  return { reused: 0, incremental: 0, fullParses: 0, earlyStopped: 0, bytesRead: 0 }
+  return {
+    reused: 0,
+    incremental: 0,
+    fullParses: 0,
+    earlyStopped: 0,
+    bytesRead: 0
+  }
 }
 
 /**
@@ -209,17 +216,22 @@ async function parseCachedInLane(
   }
 
   const session = await readWholeTranscript({ candidate, platform, stats })
+  // Whole-file agents merge the sibling here just like the resumable branch
+  // does post-read; the raw fold stays in foldSession so a sibling-only change
+  // re-merges without re-reading the transcript.
+  const enriched = await enrichSessionFromSidecar(candidate, session, platform)
   storeSessionParseCacheEntry(file.path, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform,
-    session,
-    // A whole-file parse reads the sibling itself, so a change to it re-parses.
-    sidecar: file.sidecar,
+    session: enriched.session,
+    // A refused sibling keeps the transcript's own result cached; only the
+    // sibling is recorded as unknown, so the next scan re-merges.
+    sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
     resume: null
   })
-  return session
+  return enriched.session
 }
 
 async function reuseCachedSession(

@@ -9,6 +9,19 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(0)
   })
 
+  // Why: the main-process capture provider is @ts-nocheck and scans a snapshot
+  // field older providers omit, so a nullish chunk must stay a no-op.
+  it('treats a nullish chunk as a no-op', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan('\x1b[>5u')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reproduces the unchecked call site that passes an absent field.
+    const absent = undefined as unknown as string
+    expect(() => tracker.scan(absent)).not.toThrow()
+    expect(() => tracker.scanReplay(absent)).not.toThrow()
+    expect(tracker.flags).toBe(5)
+    expect(tracker.snapshotFlags).toBe(5)
+  })
+
   it('does not treat CSI u (restore cursor) or the CSI ? u query as kitty state', () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
     tracker.scan('\x1b[u\x1b[?u')
@@ -80,6 +93,14 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(0)
     tracker.scan('\x9b>7u')
     expect(tracker.flags).toBe(7)
+  })
+
+  it('leaves negotiated state unchanged for plain output chunks', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    tracker.scan('\x1b[>1u')
+    tracker.scan('shell output '.repeat(100))
+    expect(tracker.flags).toBe(1)
+    expect(tracker.snapshotFlags).toBe(1)
   })
 
   it('caps the mirrored stack without losing the current flags', () => {

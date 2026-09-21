@@ -6,6 +6,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
+  getConfiguredWorktreeSharedDirectoriesCacheSizeForTests,
+  MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES,
   getWorktreeSharedLinkPaths,
   resolveWorktreeSharedDirectories
 } from './worktree-shared-directories'
@@ -175,6 +177,15 @@ describe('resolveWorktreeSharedDirectories', () => {
 })
 
 describe('getConfiguredWorktreeSharedDirectories', () => {
+  it('bounds cache growth when repository paths churn', () => {
+    for (let index = 0; index < MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES + 4; index += 1) {
+      getConfiguredWorktreeSharedDirectories(`/repo-${index}`)
+    }
+
+    expect(getConfiguredWorktreeSharedDirectoriesCacheSizeForTests()).toBe(
+      MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES
+    )
+  })
   let repo: string
 
   beforeEach(() => {

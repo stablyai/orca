@@ -80,18 +80,45 @@ const hash = (parts: string[] | string): string =>
 // The pullfrog pass on the same round moved both once more, again by comment text alone: the
 // GitHub search `SAFETY:` line now separates the two members the schema requires (`items`,
 // `labels`) from the eight it only types. No statement, type or call changed; counts hold.
-const SCREEN_RPC_SCREEN_HOOKS = 'be9bb8e21c3a8c0912e8b9256a7c8e5c9ca08ebb776d57cf4fff1101fb060095'
+// C2.1 swaps the workspace-creation push onto `hostNewWorktreeSessionRoute`, which already built
+// this href with both segments encoded. Three of the family move and nothing else does: the hook
+// list, because the handler's statements changed shape; the statement hash, for the same reason;
+// and `semantics`, which is a pure deletion of two lines — the `URLSearchParams` construction and
+// the raw `/h/${hostId}/session/...` template it fed. No RPC call, method literal or JSX host
+// signature changed, and the render and style hashes did not move.
+
+// C2.1 swaps the two clipboard writes onto the platform seam, so the comment-review hook gains one
+// hook call and one statement. Two of the family move: the hook list and the statement hash, each
+// by one entry. `semantics` does not — no RPC call, method literal or JSX host signature changed —
+// and the render and style hashes hold.
+
+// C2.8 names the status bar's Back control for the shell, which has no native chrome behind it to
+// announce one. `accessibilityRole="button"` and `accessibilityLabel="Back"` on that one Pressable
+// move the two hashes a JSX prop must move, and only those two. `semantics` 3,272 -> 3,274: the
+// element's host signature widens (`jsx:Pressable:style,onPress` -> the same plus the two props)
+// and the two new runtime strings `"button"` and `"Back"` arrive. The render-token stream gains
+// the eight tokens those two attributes are, 35,195 -> 35,203. No RPC call signature and no method
+// literal moves, and the hook, statement, declaration and style hashes do not move at all, which
+// is the evidence that nothing executable changed.
+//
+// The same commit gives that control the `hitSlop={8}` its four siblings carry, so its touch
+// target is no longer the glyph alone. One more line of `semantics` changes and no line is added
+// or removed — the host signature gains `hitSlop` — so the count holds at 3,274 and only the hash
+// moves. The render-token stream gains the four tokens that one attribute is, 35,203 -> 35,207.
+// Nothing else in the family moves.
+
+const SCREEN_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = '5fb5ffb187b4b62bdd84e4ad49aaf0d481d943e09e8c4f37433a9eb2ca40c533'
+const SCREEN_RPC_STATEMENTS = 'dd8f33cb3cf96f5c39abac397cb77e35f59079291033a1866ead462b041ab979'
 const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
-const SCREEN_RPC_SEMANTICS = '763f4ffc60b8b335eaab4a51820dc782be430ada879564888a5d28929c9e938b'
+const SCREEN_RPC_SEMANTICS = 'e07a63387d57106483ee703ec6c19dea593e0eca5c651758f42bcb36254850b7'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const SCREEN_RPC_RENDER_TREE = '46d5a3ce9d71a8281a1e7b17411fb1dd963a4f392a5d095bc126b6a7cff4b92d'
+const SCREEN_RPC_RENDER_TREE = '086742f95f1e87fb89d8c67ffd9f7a229799ae05115f9f4bcc1a925e56dcc8bb'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(350)
+    expect(screenHooks).toHaveLength(351)
     expect(hash(screenHooks)).toBe(SCREEN_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
@@ -101,7 +128,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(417)
+    expect(statements).toHaveLength(418)
     expect(hash(statements)).toBe(SCREEN_RPC_STATEMENTS)
   })
 
@@ -119,7 +146,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_195)
+    expect(tokens).toHaveLength(35_207)
     expect(hash(tokens)).toBe(SCREEN_RPC_RENDER_TREE)
   })
 

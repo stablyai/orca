@@ -23,6 +23,7 @@ export type ExternalAutomationManagerCacheEntry = {
 
 const DEFAULT_CACHE_TTL_MS = 30_000
 const MAX_CACHED_ERROR_LENGTH = 300
+export const MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES = 512
 
 /**
  * Bounded, provider-agnostic failure text. Provider payloads can carry prompts,
@@ -133,7 +134,16 @@ export class ExternalAutomationManagerCache {
     entry: ExternalAutomationManagerCacheEntry
   ): ExternalAutomationManagerCacheEntry {
     this.pruneExpired()
-    this.entries.set(externalAutomationManagerCacheKey(key), entry)
+    const cacheKey = externalAutomationManagerCacheKey(key)
+    this.entries.delete(cacheKey)
+    this.entries.set(cacheKey, entry)
+    while (this.entries.size > MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next()
+      if (oldest.done || oldest.value === cacheKey) {
+        break
+      }
+      this.entries.delete(oldest.value)
+    }
     return entry
   }
 

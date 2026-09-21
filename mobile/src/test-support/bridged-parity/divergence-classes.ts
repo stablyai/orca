@@ -7,8 +7,18 @@
  * one level up in `test-support`.
  */
 
-/** Named once so the suite, its pin and the CI job cannot drift apart. */
+/**
+ * The switch that turns the bridged replay off, named once so the suite and its pin cannot drift.
+ *
+ * It used to be what turned the replay *on*, and CI set it. That made the gate opt-in, which is the
+ * one thing a gate must not be: a branch that widened the bridge's divergence and left the variable
+ * alone would have been measured by nobody. The replay is the default now and `=0` is for a local
+ * run that does not want the three minutes. CI sets nothing.
+ */
 export const BRIDGED_PARITY_FLAG = 'RPC_FOUNDATION_BRIDGE'
+
+/** The one value of it that skips the suite; anything else, unset included, runs it. */
+export const BRIDGED_PARITY_OFF = '0'
 
 export type BridgedParityClass =
   | 'reply-meta-required'
@@ -157,17 +167,16 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 /**
  * What this tree measures, per class, over all 787 goldens.
  *
- * A ratchet, not a description: the flagged run fails when a class grows past its number here, when
- * anything lands in `unclassified`, or when fewer goldens replay byte-identically than this says.
- * Each class is an upper bound and `identical` a lower one, and this module's test pins the sum of
- * every number below to the size of the corpus — which is what stops one class being loosened on
- * its own, since a class that grows has to be paid for out of another.
+ * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
+ * in both directions, and this module's test pins their sum to the size of the corpus. A class that
+ * grew, a class that shrank, and a golden that moved out of a class into `identical` are each a red
+ * run whose answer is an edit here.
  *
- * `identical` only moves up and a class only moves down, with one exception that is not a
- * regression. Two excluded classes can trade members when a fix changes which difference a run
- * meets first, and then both numbers move here at once, in opposite directions, leaving the sum
- * alone. That trade cannot hide a golden that stopped replaying byte-identically, because such a
- * golden takes `identical` down with it and the run refuses that outright.
+ * Exact rather than a bound because a bound cannot see the up direction at all: a golden reported
+ * `identical` instead of the excluded class it belongs to still leaves nothing unclassified and
+ * nothing diverging outside an excluded class, which is everything else the suite asks. Two
+ * excluded classes trading members when a fix changes which difference a run meets first is the
+ * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 396,
@@ -188,6 +197,32 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   unclassified: 0
 }
 
+/** What one run of the suite counted: the byte-identical goldens, and the diverging ones by class. */
+export type BridgedParityTally = {
+  identical: number
+  counts: Readonly<Record<BridgedParityClass, number>>
+}
+
+/**
+ * Every number a run reported that `BRIDGED_PARITY_BASELINE` does not, said in one line each.
+ *
+ * Both directions, and `identical` on the same footing as a class, because that is the direction
+ * nothing else in the suite sees. A golden reported `identical` instead of the excluded class it
+ * belongs to leaves `unclassified` empty, leaves every diverging golden inside a class the
+ * exclusions name, and leaves the corpus its size: this is the only number that moves.
+ */
+export function bridgedParityTallyDrift(tally: BridgedParityTally): readonly string[] {
+  const ran: Readonly<Record<string, number>> = { ...tally.counts, identical: tally.identical }
+  const drift: string[] = []
+  for (const [name, pinned] of Object.entries(BRIDGED_PARITY_BASELINE)) {
+    const count = ran[name] ?? 0
+    if (count !== pinned) {
+      drift.push(`${name}: pinned ${pinned}, ran ${count}`)
+    }
+  }
+  return drift
+}
+
 /** A class this small is named golden by golden in the run's output rather than counted. */
 export const BRIDGED_PARITY_NAMEABLE = 8
 
@@ -198,7 +233,7 @@ export const BRIDGED_PARITY_NAMEABLE = 8
  * refused frame — `scriptsAbsentResultReply` asks whether the scenario scripts the injected shape
  * anywhere, not whether the frame the page refused was one — so a real refusal inside a stream
  * golden is named an excluded class. One golden leaving that class as the real refusal puts another
- * in moves no number here, and the sum and the `identical` floor both still hold. The ids are what
+ * in moves no number here, and the sum and the `identical` pin both still hold. The ids are what
  * notices. Where a class is too large to list, its predicate stands on its own and the count is all
  * the pin has; that is why the classes here are the small ones and why the test above requires
  * every class of `BRIDGED_PARITY_NAMEABLE` or fewer to appear.

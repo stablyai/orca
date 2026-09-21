@@ -4,6 +4,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_APP_ROOT_RESET,
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
   buildMobileWebAppBundle,
@@ -254,7 +255,12 @@ describeBundling('the app bundle', () => {
         // The whole point: the manifest the phone compares is the same document.
         const buildIdFrom = async ({ appDir }) =>
           withScratch(async (out) => {
-            const { manifest } = await buildMobileWebAppBundle({ appDir, outDir: join(out, 'x') })
+            const { manifest } = await buildMobileWebAppBundle({
+              appDir,
+              outDir: join(out, 'x'),
+              // A synthetic tree: the real declarations name screens it does not have.
+              pageRoutes: []
+            })
             return manifest.buildId
           })
         expect(await buildIdFrom(far)).toBe(await buildIdFrom(near))
@@ -300,8 +306,8 @@ describeBundling('the app bundle', () => {
 
   it('fails the named shim, not the whole build, when its option goes missing', async () => {
     const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // Each shim reads a different option, so removing one leaves the other five true. Without
-    // that, the list could name a shim the build stopped applying.
+    // Each shim reads an option of its own (two read `banner.js`), so stripping every option
+    // leaves none applying. Without that, the list could name a shim the build stopped applying.
     const stripped = {
       ...options,
       alias: {},
@@ -324,6 +330,21 @@ describeBundling('the app bundle', () => {
     expect(shipped).not.toContain('react-native-web')
     expect(shipped).not.toContain('lucide')
   })
+
+  it('ships no haptic that reaches for the DOM', async () => {
+    // expo-haptics' web build fakes an iOS haptic by appending a hidden
+    // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
+    // once per call. The file explorer calls triggerSelection on every row tap, and C1.9 already
+    // traced a swallowed long press on the worktree list to that stray click. `haptics.web.ts` is
+    // what keeps the whole shim out of the bundle, so this reads the bytes rather than the import.
+    for (const source of allScriptSource(await bundleMobileWebApp())) {
+      // The shim's own fingerprint, not `navigator.vibrate`: react-native-web's Vibration export
+      // calls that too, and it touches no DOM until something invokes it.
+      expect(source).not.toContain('ariaHidden')
+      expect(source).not.toContain('pointer: coarse')
+      expect(source).not.toContain('setAttribute("switch"')
+    }
+  }, 120_000)
 
   it('embeds no absolute path from this checkout', async () => {
     // Every chunk, not only the entry: the route manifest names each route by absolute path, and
@@ -352,6 +373,32 @@ describeBundling('the app bundle', () => {
       expect(html).toContain('<script type="module" src="/assets/')
       const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
       expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
+    })
+  }, 120_000)
+
+  it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'root-reset')
+      await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+      // Literals rather than substrings taken off the constant, which would read it back against
+      // itself and follow any rule dropped from it. Every rule, because the chain is only as
+      // definite as its weakest link: a height on #root alone resolves against a body that has
+      // none, and percent of auto is auto. Named one by one so a failure says which rule went.
+      for (const rule of [
+        'html,body{height:100%}',
+        'body{overflow:hidden}',
+        '#root{display:flex;height:100%;flex:1}'
+      ]) {
+        expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
+      }
+      // The id travels with the rules: it is what marks this block as the template's reset rather
+      // than something the page grew its own copy of.
+      expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
+      // In the document itself, not a linked asset: the CSP that allows it is the one already
+      // relaxed for react-native-web's runtime sheet.
+      expect(html).not.toContain('<link rel="stylesheet"')
     })
   }, 120_000)
 
@@ -415,15 +462,17 @@ describe('the Phase C budget', () => {
   })
 
   it('derives the chunk ceiling from the route count, not from a measured number', async () => {
-    // A chunk is emitted per distinct set of importers, so the count is combinatorial rather than
-    // one per route. Measured while building this: 8 routes emit 23 chunks, 10 emit 40, 12 emit
-    // 47, 14 emit 53 -- about 3 more per route at the top. The ceiling allows 4 and starts 16
-    // above zero, so the next few routes land under it instead of failing on a pinned number.
+    // A chunk is emitted per distinct set of importers, so the count is not a function of the
+    // route count alone. Re-measured on this head, by copying the route tree and dropping routes
+    // from the end of the sorted key list -- both siblings of each, because deleting a .web.tsx
+    // alone leaves the native file for the builder to resolve and measures a different closure.
+    // The 14-route reading is the real tree and includes the one script the deferred mermaid
+    // artifact costs.
     for (const [routes, measured] of [
-      [8, 23],
-      [10, 40],
-      [12, 47],
-      [14, 53]
+      [8, 32],
+      [10, 43],
+      [12, 61],
+      [14, 69]
     ]) {
       expect(mobileWebAppBundleMaxChunks(routes), `${String(routes)} routes`).toBeGreaterThan(
         measured
@@ -431,6 +480,29 @@ describe('the Phase C budget', () => {
     }
     expect(mobileWebAppBundleMaxChunks(14)).toBe(72)
     expect(mobileWebAppBundleMaxChunks(15) - mobileWebAppBundleMaxChunks(14)).toBe(4)
+    // Between four and nine more per route above, so the ceiling is a bound and not a fit -- and
+    // at 14 routes it is a close one. 69 measured against 72, with the last two routes having cost
+    // the 8 the ceiling grants for two: the next route that shares less than its neighbours fails
+    // here, which is what this is for.
+    expect(mobileWebAppBundleMaxChunks(14) - mobileWebAppBundleMaxChunks(12)).toBe(8)
+  })
+
+  it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
+    // The two builds this ceiling has to tell apart, both measured at 14 routes.
+    //
+    // The page reaches mermaid through one pre-bundled artifact and the bundle emits 69 scripts
+    // (68 of them the page's own split, one the deferred engine). Importing the package instead
+    // emitted 172: mermaid lazily imports each of its own diagram types and esbuild splits along
+    // those boundaries, all of it inside the generation the phone has already downloaded. The
+    // route term is the only term precisely so that the second of those fails here -- a ceiling
+    // raised to admit 172 would have admitted any split at all.
+    const ROUTES = 14
+    const WITH_ONE_ARTIFACT = 69
+    const CHUNKED_ALONG_THE_ENGINE = 172
+    expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
+    expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
+    // And the assets that came with it: 215 against 112, of the 256 the shell will load.
+    expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
   it('derives the asset ceiling so the chunk ceiling is always the one that trips first', () => {
@@ -471,7 +543,8 @@ describe('the Phase C budget', () => {
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
     // that ships a green build no device can open. At the 42 images the tree carries, 4r + 16 +
-    // 42 + 1 crosses 256 at 50 routes, which Phase C reaches.
+    // 42 + 1 crosses 256 at 50 routes, which Phase C reaches. A deferred engine kept to one
+    // artifact leaves that where it is; the 103-script version of it moved the crossing to 24.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
     expect(assertAssetCeilingFitsShell(49, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(255)
     expect(() => assertAssetCeilingFitsShell(50, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(

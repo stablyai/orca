@@ -1,4 +1,5 @@
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
+import type { MobileWebPageRoute } from './page-route-policy'
 import type {
   MobileWebBundleCompatManifest,
   MobileWebBundleCompatVerdict,
@@ -34,6 +35,8 @@ export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly buildId: string
   readonly totalBytes: number
   readonly totalAssets: number
+  /** Undefined for a desktop older than the field, which is every route staying native. */
+  readonly routes: readonly MobileWebPageRoute[] | undefined
 }
 
 /** What `readActiveGeneration` found, reduced to what a transition reads. */
@@ -41,6 +44,8 @@ export type CachedGeneration = {
   readonly buildId: string
   readonly directory: string
   readonly totalBytes: number
+  /** The routes the cached bundle declared, which is what an unreachable host is judged by. */
+  readonly routes: readonly MobileWebPageRoute[] | undefined
 }
 
 export type MobileWebShellBlockedVerdict = Extract<
@@ -79,6 +84,14 @@ export type MobileWebShellSessionState =
       readonly totalBytes: number
       readonly elapsedMs: number
     }
+  /**
+   * This route is the native screen's, and the caller renders it.
+   *
+   * Either the bundle does not list the route, or it lists it needing a grant this shell does not
+   * implement, or the desktop ships no bundle at all. Not a failure and not a wall: every route
+   * starts native, and the negotiation saying no leaves it where it was.
+   */
+  | { readonly kind: 'native-route' }
   | { readonly kind: 'wall'; readonly verdict: MobileWebShellBlockedVerdict }
   | {
       readonly kind: 'failed'
@@ -104,6 +117,10 @@ export type MobileWebShellSessionEffect =
   | { readonly kind: 'delete-cache' }
   /** Mint a new session id for the generation already on screen, which is what remounts the view. */
   | { readonly kind: 'remount' }
+  /** Start the clock on the page's first word. Expiry arrives as `page-ready-deadline` for the flow
+   *  it was armed in, and nothing cancels it: a `ready` that lands first makes the expiry a no-op,
+   *  so the runner owns a timer and none of the decision. */
+  | { readonly kind: 'await-page-ready' }
 
 /**
  * Events, in two kinds.
@@ -153,14 +170,34 @@ export type MobileWebShellSessionEvent =
     }
   | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
   | { readonly type: 'retry-pressed' }
+  /** The native view finished a document. Unstamped, like the view's failure and for the same
+   *  reason: the view exists only under the generation on screen. */
+  | { readonly type: 'document-loaded' }
+  /** The page said `ready` over the bridge, which is the only proof its code ran at all. */
+  | { readonly type: 'page-ready' }
+  | { readonly type: 'page-ready-deadline'; readonly flow: number }
 
 /** Latches live beside the state because both outlive the state they were set in: `retriedOnce`
  *  spans the delete-and-refetch that puts the state back to `checking`, and `remountedOnce` spans a
  *  `ready` that is replaced by a `ready` under a new session id. */
 export type MobileWebShellSession = {
+  /** The concrete route this session was opened for, matched against what the bundle lists. */
+  readonly routePathname: string
+  /** Every route pattern this shell would render from the page, as the bundle in hand declares
+   *  them. The page is told, so it keeps a navigation into one of them instead of handing it back. */
+  readonly pageRoutes: readonly string[]
+  /** The same routes with what each declared, which is what lets the page tell a hop it may keep
+   *  from one that would run under the wrong grants. */
+  readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
+  /** What the route this mount stands for declared, narrowed to what this shell implements. It is
+   *  what `init` grants, so a route that asked for less is served less. */
+  readonly routeGrants: readonly string[]
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
   readonly remountedOnce: boolean
+  /** Whether the document on screen has spoken over the bridge. Cleared by every new document,
+   *  because each one has to prove itself: the last one's word says nothing about this one. */
+  readonly pageReady: boolean
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null

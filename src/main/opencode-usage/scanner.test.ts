@@ -43,6 +43,7 @@ function createSessionTotalsSchema(db: Database.Database): void {
       tokens_output INTEGER,
       tokens_reasoning INTEGER,
       tokens_cache_read INTEGER,
+      tokens_cache_write INTEGER,
       time_created INTEGER,
       time_updated INTEGER
     );
@@ -57,9 +58,9 @@ function insertSessionTotalsRow(
   db.prepare(
     `INSERT INTO session (
       id, directory, title, model, cost,
-      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
       time_created, time_updated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     sessionId,
     `${WORKTREE}/packages/app`,
@@ -68,6 +69,7 @@ function insertSessionTotalsRow(
     0.01,
     inputTokens,
     100,
+    0,
     0,
     0,
     1_777_777_700_000,
@@ -235,6 +237,7 @@ describe('parseOpenCodeUsageDatabase', () => {
         tokens_output INTEGER,
         tokens_reasoning INTEGER,
         tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER,
         time_created INTEGER,
         time_updated INTEGER
       );
@@ -243,9 +246,9 @@ describe('parseOpenCodeUsageDatabase', () => {
     db.prepare(
       `INSERT INTO session (
         id, project_id, directory, title, model, cost,
-        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
         time_created, time_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       'session-1',
       'project-1',
@@ -257,6 +260,7 @@ describe('parseOpenCodeUsageDatabase', () => {
       500,
       100,
       250,
+      75,
       1_777_777_700_000,
       1_777_777_800_000
     )
@@ -274,7 +278,7 @@ describe('parseOpenCodeUsageDatabase', () => {
       totalCachedInputTokens: 250,
       totalOutputTokens: 500,
       totalReasoningOutputTokens: 100,
-      totalTokens: 1850,
+      totalTokens: 1925,
       estimatedCostUsd: 0.06
     })
     expect(parsed.dailyAggregates).toEqual([
@@ -284,7 +288,7 @@ describe('parseOpenCodeUsageDatabase', () => {
         cachedInputTokens: 250,
         outputTokens: 500,
         reasoningOutputTokens: 100,
-        totalTokens: 1850,
+        totalTokens: 1925,
         estimatedCostUsd: 0.06
       })
     ])

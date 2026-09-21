@@ -2,6 +2,10 @@ import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 
 /**
  * Per-pane park for the frame between a host's tab rows and its PTY handles.
@@ -20,7 +24,10 @@ import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
  *    is not coming on this connection, so the pane is released to ordinary
  *    recovery: a resume after a bounded wait is defensible, an indefinite hold
  *    is the latch-that-never-releases defect. A reconnect bumps the connection
- *    generation and arms a fresh wait.
+ *    generation and arms a fresh wait. A deadline that fires while contact is
+ *    lost, or after contact was lost and regained mid-budget, releases WITHOUT a
+ *    verdict: it measured the outage, not the host, and the re-park arms a
+ *    fresh wait the same way.
  *
  * Sustained reconnect churn can therefore hold a pane parked indefinitely: each reconnect voids the
  * in-flight verdict and grants a fresh full budget. That is CORRECT, not the defect above. Under
@@ -35,6 +42,11 @@ type HandleGapWaiter = {
   tabId: string
   /** Connection generation the wait was armed on; its verdict is void on any other. */
   generation: number
+  /**
+   * `hostContactEpoch` at park time. The generation holds across a same-runtime outage by design
+   * (#19647), so this is what tells a wait that contact was lost and regained underneath it.
+   */
+  contactEpoch: number
   /** Which PANE this wait is about, captured at park time; see ExpiredHandleGapVerdict. */
   paneBinding: string
   deadline: ReturnType<typeof setTimeout>
@@ -77,14 +89,15 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
  * about its predecessor. Pinned as class D in host-mirror-handle-gap-verdict-union.test.ts; do not
  * delete that case.
  *
- * KNOWN LEAK, deliberately not drained: a verdict whose row the host retracts for good on an
- * environment that stays paired and never records again. The generation has not moved, teardown
- * never fires, the retracted row can never publish a handle, and the tab-death rule only runs from
- * inside a later recording. That entry outlives the session, and because
- * `stopStoreSubscriptionIfIdle` counts verdicts, so does the store subscription — a no-op rescan on
- * every write to the two `HandleGapStoreState` slices above. It cannot answer: the STORED binding is
- * non-empty, so the `''` early return below does not catch it; what does is the compare against a
- * fresh `paneBindingFor`, which reads '' for a row that is gone. So it costs work, not correctness.
+ * BOUNDED RETENTION BACKSTOP: a verdict whose row the host retracts for good on an environment
+ * that stays paired and never records again. The generation has not moved, teardown never fires,
+ * the retracted row can never publish a handle, and the tab-death rule only runs from inside a
+ * later recording. While retained, `stopStoreSubscriptionIfIdle` keeps the subscription alive and
+ * causes a no-op rescan on writes to the two `HandleGapStoreState` slices above. The 512-entry cap
+ * eventually evicts it under cross-pane churn; the entry still costs work while retained, not
+ * correctness. It cannot answer: the STORED binding is non-empty, so the `''` early return below
+ * does not catch it; what does is the compare against a fresh `paneBindingFor`, which reads '' for
+ * a row that is gone.
  * The obvious drain — drop a verdict whose binding no longer matches — is NOT safe: it would break
  * the genuine reattach, where
  * the binding goes away and comes back and the verdict must still answer
@@ -106,6 +119,7 @@ type ExpiredHandleGapVerdict = {
   /** Sorted environment-minted PTY ids the tab's leaves held AT PARK TIME; '' when none. */
   paneBinding: string
 }
+const MAX_EXPIRED_HANDLE_GAP_VERDICTS = 512
 const expiredGenerationByPane = new Map<string, ExpiredHandleGapVerdict>()
 let unsubscribeStore: (() => void) | null = null
 
@@ -162,6 +176,37 @@ function liveTabIds(): Set<string> {
   return tabIds
 }
 
+/**
+ * True only when the client positively knows it is out of contact — the link dropped, or its
+ * replacement is still being established.
+ *
+ * Why not `isConnectedRuntimeHostState`: that reads a host nobody has probed yet as not
+ * connected, and a never-probed host is not the outage this guards. Narrowing to the two states
+ * an outage actually produces keeps the guard to the case where silence provably means "we could
+ * not ask" rather than "the host had nothing to say".
+ *
+ * Why this and not the connection generation: a plain disconnect leaves the generation where it
+ * was — runtime-status.ts advances it on the *reconnect*, under a new runtime id — so a wait that
+ * expires mid-outage is indistinguishable, to the generation guard, from one that expired on a
+ * healthy connection.
+ */
+function environmentContactIsLost(environmentId: string): boolean {
+  const connectionState = runtimeHostConnectionStateForEntry(
+    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+  )
+  return isDisconnectedRuntimeHostState(connectionState) || connectionState === 'reconnecting'
+}
+
+/**
+ * Edge count of "the host answered again after we lost contact" (runtime-status.ts). A wait that
+ * sees it move had an outage inside its budget, even if the deadline fires after contact is back.
+ */
+function hostContactEpochFor(environmentId: string): number {
+  return (
+    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0
+  )
+}
+
 function recordExpiredWait(environmentId: string, key: string): void {
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   // TWO rules with DIFFERENT scopes, deliberately. Flattening them to one scope is wrong either
@@ -199,6 +244,16 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // gate stops recording anything at all rather than admitting ''. It pins a different property
   // (reconnect-void, host-mirror-handle-gap-resume.test.ts). Both are load-bearing, for different
   // reasons — do not collapse them as redundant.
+  // Eviction is conservative: a missing verdict makes the pane wait once more, never resume early.
+  if (!expiredGenerationByPane.has(key)) {
+    while (expiredGenerationByPane.size >= MAX_EXPIRED_HANDLE_GAP_VERDICTS) {
+      const oldest = expiredGenerationByPane.keys().next()
+      if (oldest.done) {
+        break
+      }
+      expiredGenerationByPane.delete(oldest.value)
+    }
+  }
   expiredGenerationByPane.set(key, {
     generation,
     paneBinding: waitersByPane.get(key)?.paneBinding ?? ''
@@ -348,9 +403,22 @@ export function parkUntilHostMirrorHandleLands(
     // milliseconds before the reconnect authorize a resume on the new one — the #19735
     // fork with an extra step. Release without a verdict instead; the replay re-parks
     // and the new connection gets its own full budget.
+    //
+    // Why contact is checked too: an environment that dropped mid-park publishes nothing,
+    // so the deadline measures the outage rather than the host. Loss of contact is never
+    // evidence about a process (docs/reference/ssh-execution-boundary.md), and a verdict
+    // recorded here authorizes the resume that forks the agent the host is still running.
+    // The generation cannot stand in for it — a plain disconnect never advances it.
+    //
+    // Why the contact epoch as well: the check above is a snapshot of NOW. An outage that
+    // began and ended inside this budget leaves contact restored at the deadline and the
+    // generation untouched (same runtime), yet the pane may have had milliseconds of contact
+    // in which to publish. The epoch is the record that an outage happened in between.
+    const waiter = waitersByPane.get(key)
     if (
-      waitersByPane.get(key)?.generation ===
-      getRuntimeEnvironmentConnectionGeneration(environmentId)
+      !environmentContactIsLost(environmentId) &&
+      waiter?.generation === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+      waiter.contactEpoch === hostContactEpochFor(environmentId)
     ) {
       recordExpiredWait(environmentId, key)
     }
@@ -360,6 +428,7 @@ export function parkUntilHostMirrorHandleLands(
     worktreeId,
     tabId,
     generation,
+    contactEpoch: hostContactEpochFor(environmentId),
     paneBinding: paneBindingFor(tabId, environmentId),
     deadline,
     run

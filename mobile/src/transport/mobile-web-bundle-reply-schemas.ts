@@ -4,6 +4,8 @@ import {
   MobileWebBundleAssetPathSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
+  MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
+  MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
@@ -22,6 +24,15 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/
 /** Base64 of one chunk, bounded by the same arithmetic as `skill-upload-session-contract.ts`, so a
  *  host that overshoots is refused at the boundary instead of at reassembly. */
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
+
+/** A screen the desktop asks this shell to render from the bundle. Optional, because a desktop
+ *  older than the field sends none and every route then stays native, which is where they all
+ *  start. Loose for the same reason the manifest is: a grant name this build does not know is not a
+ *  reason to refuse a bundle, it is a reason to leave that one route native. */
+const pageRouteSchema = z.looseObject({
+  pathname: z.string().min(1).max(255),
+  grants: z.array(z.string().min(1).max(64)).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+})
 
 const assetSchema = z.looseObject({
   path: MobileWebBundleAssetPathSchema,
@@ -50,7 +61,8 @@ export const MobileWebBundleManifestReadSchema = z
     runtimeProtocolVersion: z.number().int().nonnegative(),
     entrypoint: MobileWebBundleAssetPathSchema,
     totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
-    assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS)
+    assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
+    routes: z.array(pageRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES).optional()
   })
   // The allocation bound, and the reason it is the sum rather than `totalBytes`: the fetch
   // allocates one buffer per asset from `byteLength` and holds them all, so a manifest declaring

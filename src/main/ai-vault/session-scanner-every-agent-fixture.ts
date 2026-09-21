@@ -1,4 +1,4 @@
-import { isolatedScanRoots } from './session-scanner-test-fixtures'
+import { isolatedScanRoots, writeOpenCode2SqliteFixture } from './session-scanner-test-fixtures'
 import { writeDocumentAgentFixtures } from './session-scanner-document-agent-fixtures'
 import { writeLogAgentFixtures } from './session-scanner-log-agent-fixtures'
 
@@ -28,5 +28,6 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   const antigravitySessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
+  roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
   return { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile }
 }

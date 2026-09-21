@@ -90,7 +90,7 @@ export async function launchAgentSessionContinuation({
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: 'submit-after-ready',
+    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDelivered: () =>

@@ -3,11 +3,11 @@
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "f24f38bd4105753adb0d8e24132c2fc57f80f5c6",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "ebf9397271bfd5462403e60748f5bd505d554eba5f74ce79a8c40550e9719dcc",
+  "scenarioSha256": "43575aede8307947e027239b4e582df281f6424c9216135ae20d150234f247f6",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -23,49 +23,6 @@
         "$rpc": "null"
       },
       "pasted": true
-    },
-    "621466fd4dc8": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
-      }
     },
     "7e7356ce5972": {
       "name": "terminal.send#1",
@@ -116,10 +73,53 @@
       "settledAt": 0,
       "value": true
     },
-    "f5002f9f5616": {
+    "8b35db3a1207": {
+      "name": "terminal.send#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "9bb75628a561": {
       "name": "terminal.send#2",
       "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -128,8 +128,8 @@
       {
         "id": "pasted",
         "observation": {
-          "sender": ["7e7356ce5972", "621466fd4dc8"],
-          "payloads": ["098c51e345e3", "f5002f9f5616"],
+          "sender": ["7e7356ce5972", "8b35db3a1207"],
+          "payloads": ["098c51e345e3", "9bb75628a561"],
           "settlements": {
             "trailing": "84e5ca07cb7a"
           },

@@ -62,10 +62,15 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '1b436d21f48e4d7b316178ba9eb7d8f0d3801ffd4e42b6b8987adb1cfcbac570'
-const HEAD_HOOK_BINDING_SHA256 = '5b324d661574950c24c47ad9675afc40f34bf3d6dc0ea7b81a469cf708803dc8'
+// Refreshed by C7.2: five clipboard hooks joined the expanded route, which is the whole of the +5 —
+// a writer in the diff-note, Markdown and selection actions, a reader in the selection actions and
+// the attachment probe. The screen's other four clipboard sites (the terminal's paste, the sheets,
+// the quick-command row, the diff-review send) sit outside the walk from `SessionScreen` and so do
+// not move this pin. The copy-path sheet also gained the failure toast the other two copies had.
+const HEAD_MAIN_HOOK_SHA256 = '6d309ebdf13ecf21e4b42fb29de9db586a3c9835ead43015a5261b67bf18b8f6'
+const HEAD_HOOK_BINDING_SHA256 = '9041e8a74efdacc6099933bac11fb624aff46c99648746cf5504bf320ec431c5'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
+  'ed45268b61372abcfeb29e9ce91822f1fb5214542b78356c7cef869824a09d37'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -78,12 +83,19 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // byteLength }` cast: the preview reader checks the content and salvages the flag, so `readMarkdownTab`
 // reads `fallback.value` directly. The dictation-mode refresh is main's own body again — it forwards
 // whatever mode the reply carried, so an absent one leaves the mic as inert as main left it.
-const HEAD_CALLBACK_BODY_SHA256 = 'ceba525103ccac47df766063d58593ba083d59785f86257d849e355669ed47ae'
+// Refreshed on the merge of C7.2 and C7.3, which moved this pin from both sides: the terminal
+// subscribe now carries the snapshot byte budget its transport imposes, nothing on a phone and the
+// frame cap inside the shell's page, and the Markdown copy action gained the failure branch that
+// answers a refused write. Re-recorded against the merged tree, since neither side's hash covers
+// the other's body. The hook and string counts are C7.2's and stand.
+const HEAD_CALLBACK_BODY_SHA256 = '5845c3b85217a3af9d3d2bfafe564a2b29a1b2c6776b5c2c9ec5afbf365a5157'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
-// refusal the timer site passed when it had no reply at all.
-const HEAD_EFFECT_SHA256 = '812aaa9f5abf25dd5229f65231900825b2fd38d5d238b511f3fc2edf4ae31a47'
+// refusal the timer site passed when it had no reply at all. Refreshed once more for the
+// last-visited-worktree effect, whose bare store write became the one writer of that key, so the
+// hybrid shell's page mirror sees it as it is written rather than one `init` later.
+const HEAD_EFFECT_SHA256 = 'dfce9d5cb921c734bd44801283aa579ee61ab69acbbf69ac1e769de24fd829ce'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
@@ -104,11 +116,14 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
 // first, then `worktree.activate` twice, `session.tabs.createTerminal` and
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
-// spelled at the call site.
+// spelled at the call site. Two literals more across C7.2, both of them the toast a refused write
+// now shows: "Couldn't copy path" when the sheets moved onto the clipboard seam, taking the count
+// from 532 to 533, and "Couldn't copy" when the Markdown copy action gained the failure branch the
+// other copy paths already had, taking it to 534.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a5496f14589916b027334a236630720b39eb0360d91538d212b408c1f61bb523'
+  'ce4c68956cec3b49aaf785e99bc2d7efd3eafeb4fdac6ce116cd854546c045f4'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -499,7 +514,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(270)
+    expect(main.hooks).toHaveLength(275)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)
@@ -544,7 +559,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(534)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

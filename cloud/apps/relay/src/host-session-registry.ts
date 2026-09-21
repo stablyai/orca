@@ -18,6 +18,9 @@ import {
   RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS,
   RELAY_CLOSE_CODE,
+  type IdleRegionalRehomeCommit,
+  type IdleRegionalRehomeDeferReason,
+  type IdleRegionalRehomeResult,
   type RelayHostCloseReason,
   type RelayRegion
 } from '@orca-cloud/relay-contract'
@@ -191,7 +194,7 @@ export class HostSessionRegistry {
     {
       attemptId: string
       authorityKey: string
-      promise: Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>
+      promise: Promise<IdleRegionalRehomeResult>
     }
   >()
 
@@ -205,9 +208,9 @@ export class HostSessionRegistry {
       sourceCellIncarnation: string
       targetCellId: string
     },
-    commit: () => Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>,
+    commit: () => Promise<IdleRegionalRehomeCommit>,
     reconcile: () => Promise<'committed' | 'not-committed' | 'stale'>
-  ): Promise<{ outcome: 'busy' | 'committed' | 'deferred' | 'stale' }> {
+  ): Promise<IdleRegionalRehomeResult> {
     const authorityKey = JSON.stringify([
       input.userId,
       input.sourceAssignmentEpoch,
@@ -236,7 +239,7 @@ export class HostSessionRegistry {
       !session.socket ||
       !this.hostCapabilities.get(session.socket)?.has(RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME)
     )
-      return { outcome: 'deferred' }
+      return { outcome: 'deferred', reason: 'host-unsupported' }
     if (
       (this.idleWork.get(input.relayHostId) ?? 0) !== 0 ||
       session.activeConnIds.size !== 0 ||
@@ -246,12 +249,18 @@ export class HostSessionRegistry {
       return { outcome: 'busy' }
     const revision = session.authorityRevision
     const promise = Promise.resolve().then(async () => {
-      let outcome: 'committed' | 'deferred' | 'stale'
+      let outcome: IdleRegionalRehomeCommit['outcome']
+      // The commit's reason survives only while the outcome stays deferred;
+      // a reconcile that finds a durable outcome answers with that instead.
+      let reason: IdleRegionalRehomeDeferReason | undefined
       try {
-        outcome = (await commit()).outcome
+        const commitResult = await commit()
+        outcome = commitResult.outcome
+        reason = commitResult.reason
         if (outcome === 'deferred') {
           const durable = await reconcile()
           outcome = durable === 'not-committed' ? 'deferred' : durable
+          if (outcome !== 'deferred') reason = undefined
         }
       } catch {
         let delay = 100
@@ -259,6 +268,7 @@ export class HostSessionRegistry {
           try {
             const durable = await reconcile()
             outcome = durable === 'not-committed' ? 'deferred' : durable
+            reason = undefined
             break
           } catch {
             await new Promise<void>((resolve) => {
@@ -276,7 +286,7 @@ export class HostSessionRegistry {
       }
       if (this.idleAttempts.get(input.relayHostId)?.promise === promise)
         this.idleAttempts.delete(input.relayHostId)
-      return { outcome }
+      return reason === undefined ? { outcome } : { outcome, reason }
     })
     this.idleAttempts.set(input.relayHostId, { attemptId: input.attemptId, authorityKey, promise })
     return promise

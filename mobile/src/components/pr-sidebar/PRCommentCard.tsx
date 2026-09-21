@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
-import { Image, Linking, Pressable, Text, View } from 'react-native'
+import { Image, Platform, Pressable, Text, View } from 'react-native'
+import { openExternalLink } from '../../platform/external-link'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type {
   GitHubReaction,
@@ -115,7 +116,10 @@ export const PRCommentCard = memo(function PRCommentCard({
   return (
     <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
       <View style={styles.header}>
-        {comment.authorAvatarUrl ? (
+        {/* Skipped inside the shell's page: img-src is 'self' data:, so a provider avatar is one
+            refused request and one console violation per card, and the blank circle is what the
+            user would see either way. */}
+        {comment.authorAvatarUrl && Platform.OS !== 'web' ? (
           <Image source={{ uri: comment.authorAvatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatar} />
@@ -140,7 +144,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         {comment.url ? (
           <Pressable
             style={styles.openButton}
-            onPress={() => void Linking.openURL(comment.url).catch(() => {})}
+            onPress={() => openExternalLink(comment.url)}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Open comment on GitHub"

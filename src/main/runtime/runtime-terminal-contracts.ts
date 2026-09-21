@@ -41,6 +41,7 @@ export type TerminalCreateOptions = {
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -185,6 +186,8 @@ export type RuntimeProviderSnapshotReadOptions = {
 
 /** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */
 export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
+  /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
+  promptForSchedule?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
   acceptQueued?: boolean
   observationTimeoutMs?: number

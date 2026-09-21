@@ -175,6 +175,7 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
 final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
+  let onExternalNavigation = EventDispatcher()
 
   private let schemeHandler = MobileWebShellSchemeHandler()
   private let bridgeReceiver = MobileWebShellBridgeReceiver()
@@ -200,6 +201,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     // claim here rests on them being absent.
     configuration.websiteDataStore = .nonPersistent()
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+    // WebKit's text interaction assistant wins the hold and raises its selection loupe, so the page
+    // never sees a long press and every long-press action in it is dead (lane C1.7, measured).
+    // Unguarded: the API is iOS 14.5+ and this target's floor is 15.1, so `#available` would be
+    // dead code the compiler warns on.
+    configuration.preferences.isTextInteractionEnabled = false
     configuration.setURLSchemeHandler(schemeHandler, forURLScheme: MobileWebShellOrigin.scheme)
     configuration.userContentController.addUserScript(Self.makeBlockerScript())
     bridgeReceiver.view = self
@@ -416,6 +422,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private func loadWhenIsolated() {
     guard isolationReady, let url = pendingDocumentUrl else { return }
     pendingDocumentUrl = nil
+    // The only thing that tells the load the shell asked for from one a document asked for. The
+    // state machine drops it again on every way a document can end.
+    loadState.shellLoadStarted()
     webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
   }
 
@@ -452,13 +461,31 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
-    if #available(iOS 14.5, *), navigationAction.shouldPerformDownload {
-      decisionHandler(.cancel)
-      return
+    var isDownload = false
+    if #available(iOS 14.5, *) {
+      isDownload = navigationAction.shouldPerformDownload
     }
-    let allowed = navigationAction.targetFrame?.isMainFrame == true &&
-      isDocumentUrl(navigationAction.request.url)
-    decisionHandler(allowed ? .allow : .cancel)
+    // `.linkActivated` is WebKit's own answer to "did a human start this". It decides only what may
+    // be offered to the opener; nothing is allowed on the strength of it, because a subframe can
+    // navigate the top frame with no gesture reported at all.
+    let verdict = MobileWebShellNavigationPolicy.verdict(
+      url: navigationAction.request.url?.absoluteString,
+      isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+      isFromSubframe: !navigationAction.sourceFrame.isMainFrame,
+      isDocumentUrl: isDocumentUrl(navigationAction.request.url),
+      isShellLoad: loadState.isShellLoad,
+      hasGesture: navigationAction.navigationType == .linkActivated,
+      isDownload: isDownload
+    )
+    if case let .cancelAndOffer(url) = verdict {
+      onExternalNavigation(["url": url])
+    }
+    if verdict == .allow {
+      // Spent here, before the decision is handed back: the next main-frame action gets no allow on
+      // the strength of a load that has already been given one.
+      loadState.shellLoadConsumed()
+    }
+    decisionHandler(verdict == .allow ? .allow : .cancel)
   }
 
   func webView(
@@ -495,8 +522,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     loadState.committed()
   }
 
+  /// No URL check: the page rewrites its own path before its first render, so the document that
+  /// committed at "/" finishes at the route it opened. `finished()` holds the rule that is left.
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    guard isDocumentUrl(webView.url) else { return }
     emit(loadState.finished())
   }
 

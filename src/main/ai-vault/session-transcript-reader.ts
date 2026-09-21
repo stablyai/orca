@@ -8,6 +8,7 @@ import {
   type SessionParseResumePoint
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
+import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
 
 const NEWLINE_BYTE = 0x0a
 
@@ -135,7 +136,13 @@ export async function readResumableTranscript(args: {
         byteOffset: readResult.consumedThrough,
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes,
-        channel
+        channel,
+        // An append carries the earlier read's drops forward; a whole-file
+        // re-read starts from nothing, because it re-visits those records.
+        skippedRecords: mergeSkippedTranscriptRecords(
+          canResume ? resume.skippedRecords : [],
+          readResult.skippedRecords
+        )
       }
     }
   } catch (error) {

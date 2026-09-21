@@ -29,7 +29,9 @@
  *   React commits: retained panes                  1          1
  *   sleeping-agent records read               19,711          0
  *   agent-status rows read                         0          0
- *   workspace tab buckets read                 1,394      1,394
+ *   workspace tab buckets read                 1,394      2,081
+ *
+ * The current count also includes the later per-workspace sleep-state reader.
  *
  * So notification work is O(mounted workspaces) and this fix does not change
  * that — one shared store means every subscriber is visited. What changes is
@@ -392,9 +394,9 @@ describe('one pane title update: fanout at live-capture scale', () => {
     // the 5,500 subscribers, not only the three instrumented modules.
     expect(reads.sleepingRecords).toBe(0)
     expect(reads.agentStatusRows).toBe(0)
-    // One bucket lookup per workspace consumer is a keyed read; a full-inventory
-    // walk would be that many times 870.
-    expect(reads.workspaceTabBuckets).toBeLessThan(WORKSPACE_COUNT * 2)
+    // Activity status, card inputs, and sleep state each read their own bucket;
+    // a global inventory scan per consumer would multiply this by 870.
+    expect(reads.workspaceTabBuckets).toBeLessThan(WORKSPACE_COUNT * 3)
 
     // Only the workspace that owns the changed pane commits — the other 869
     // sidebar rows hold their identities and bail out.

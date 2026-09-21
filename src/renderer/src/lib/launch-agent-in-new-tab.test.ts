@@ -647,7 +647,7 @@ describe('launchAgentInNewTab', () => {
         content: prompt,
         agent: 'claude',
         submit: false,
-        forcePaste: false
+        forcePaste: true
       })
     )
   })

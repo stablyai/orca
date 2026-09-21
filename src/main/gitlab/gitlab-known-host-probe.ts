@@ -12,6 +12,7 @@ export type LocalGitExecOptions = {
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
+export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
 const knownHostsCacheByExecutionContext = new Map<
   string,
   { key: string; hosts: readonly string[] }
@@ -53,6 +54,21 @@ export function _resetKnownHostsCache(): void {
 /** @internal - exposed for tests only */
 export function _resetGlabUnauthenticatedHosts(): void {
   unauthenticatedHostExpiries.clear()
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _getKnownHostsCacheSize(): number {
+  return knownHostsCacheByExecutionContext.size
+}
+
+function trimKnownHostsCache(): void {
+  while (knownHostsCacheByExecutionContext.size > KNOWN_HOSTS_CACHE_MAX_ENTRIES) {
+    const oldest = knownHostsCacheByExecutionContext.keys().next()
+    if (oldest.done) {
+      break
+    }
+    knownHostsCacheByExecutionContext.delete(oldest.value)
+  }
 }
 
 function unauthenticatedHostKey(
@@ -138,6 +154,7 @@ export function rememberGlabKnownHosts(
     return
   }
   knownHostsCacheByExecutionContext.set(cacheKey, { key, hosts: [...cached, ...additions] })
+  trimKnownHostsCache()
 }
 
 export async function getGlabKnownHosts(
@@ -147,6 +164,11 @@ export async function getGlabKnownHosts(
   const { key, cacheKey } = knownHostsCacheContext(connectionId, localGitOptions)
   const cached = knownHostsCacheByExecutionContext.get(cacheKey)?.hosts
   if (cached) {
+    const entry = knownHostsCacheByExecutionContext.get(cacheKey)
+    if (entry) {
+      knownHostsCacheByExecutionContext.delete(cacheKey)
+      knownHostsCacheByExecutionContext.set(cacheKey, entry)
+    }
     return cached
   }
   // Why: only join a probe still young enough to answer, so a wedged one cannot
@@ -183,6 +205,7 @@ async function probeGlabKnownHosts(
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     if (ownsKey() && knownHostsExecutionKey(connectionId, localGitOptions) === key) {
       knownHostsCacheByExecutionContext.set(cacheKey, { key, hosts: merged })
+      trimKnownHostsCache()
     }
     return merged
   } catch {

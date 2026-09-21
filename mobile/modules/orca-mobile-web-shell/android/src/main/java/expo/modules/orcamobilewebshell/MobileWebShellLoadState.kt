@@ -65,7 +65,18 @@ internal class MobileWebShellLoadStateMachine {
 
   fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
 
-  fun finished(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("ready", null))
+  /**
+   * A load that never committed did not finish.
+   *
+   * This is the whole guard, and it is deliberately not the document's URL: the page rewrites its
+   * own path with `history.replaceState` before its first render, so the document that committed at
+   * "/" reports finishing at "/h/<hostId>". Reading the path here withheld `ready` forever and left
+   * the WebView hidden behind it.
+   */
+  fun finished(): MobileWebShellLoadEmission? {
+    if (!hasCommittedDocument) return null
+    return emit(MobileWebShellLoadEmission("ready", null))
+  }
 
   fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
     val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))

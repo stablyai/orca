@@ -42,7 +42,8 @@ const VALID_MANIFEST = {
   runtimeProtocolVersion: 3,
   entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
   totalBytes: ENTRY_ASSET.byteLength,
-  assets: [ENTRY_ASSET]
+  assets: [ENTRY_ASSET],
+  routes: []
 }
 
 function chunkResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {

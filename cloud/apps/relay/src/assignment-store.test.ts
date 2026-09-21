@@ -1556,6 +1556,11 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('keeps migration-only cells pinned inside the stranded window', async () => {
+    // Why: migration-only is an admission class, not a drain signal. Evacuation
+    // targets, an Asia `--mode rollback` and a failed wave's re-isolate all park
+    // loaded cells there durably, and moving those hosts would undo the
+    // evacuation or scatter the region. Only the same-cap roll's isolate stamp
+    // releases the pin, and nothing here sets it.
     let now = 100
     const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -1885,6 +1890,11 @@ describe('RelayAssignmentStore', () => {
         identity.relayHostId,
         'control:cell-b:3'
       ]
+    )
+    // The store reserves a unit per control lease, so a hand-written pair has to
+    // carry its own reservation or the fixture starts out of balance.
+    await database!.query(
+      `UPDATE relay_cells SET reserved_requests = reserved_requests + 2 WHERE cell_id = 'cell-b'`
     )
     const latest = await store.activateControl(identity, {
       cellId: 'cell-b',

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "f24f38bd4105753adb0d8e24132c2fc57f80f5c6",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
   "scenarios": [
     {
       "id": "b1",
@@ -15948,7 +15948,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16102,7 +16102,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
             "enter": false
           },
           "reply": {
@@ -16155,7 +16155,7 @@
           "complete": "terminal.send#2",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~ ",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16212,7 +16212,7 @@
           "complete": "terminal.send#2",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16232,7 +16232,7 @@
           "complete": "terminal.send#3",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/b.png\u001b[201~ ",
+            "text": "\u001b[200~@/tmp/b.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16289,7 +16289,7 @@
           "complete": "terminal.send#2",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16346,7 +16346,7 @@
           "complete": "terminal.send#2",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~",
             "enter": false,
             "client": {
               "id": "device-token-1",

@@ -30,6 +30,12 @@ function plainEvent(): MouseEvent {
   } as unknown as MouseEvent
 }
 
+function middleEvent(): MouseEvent {
+  const event = plainEvent()
+  Object.defineProperty(event, 'button', { value: 1 })
+  return event
+}
+
 function actionContext(request = vi.fn()): TerminalLinkActionContext {
   return {
     paneId: 7,
@@ -83,6 +89,52 @@ describe('terminal link action routing', () => {
     expect(claimPtyMouse.mock.invocationCallOrder[0]).toBeLessThan(
       request.mock.invocationCallOrder[0]
     )
+  })
+
+  it('opens the primary destination directly when plain-click mode is enabled', () => {
+    const request = vi.fn()
+    const run = vi.fn()
+    const context = actionContext(request)
+    context.plainClickBehavior = 'open'
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('opens a URL on middle click when configured', () => {
+    const run = vi.fn()
+    const context = actionContext()
+    context.middleClickBehavior = 'open'
+    expect(
+      requestTerminalLinkAction(middleEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it('keeps middle click available when plain clicks stay with the terminal', () => {
+    const run = vi.fn()
+    const context = actionContext()
+    context.plainClickBehavior = 'none'
+    context.middleClickBehavior = 'open'
+    expect(
+      requestTerminalLinkAction(middleEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(true)
+    expect(run).toHaveBeenCalledOnce()
   })
 
   it('leaves PTY mouse ownership with an ineligible pointer gesture', () => {

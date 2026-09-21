@@ -1,4 +1,5 @@
 import type { IRange } from 'monaco-editor'
+import { getSelectionEndLine } from '../diff-comments/diff-comment-line-range'
 
 const FALLBACK_LINE_HEIGHT_PX = 19
 
@@ -28,13 +29,6 @@ function isEmptySelection(selection: IRange): boolean {
   )
 }
 
-function getSelectionTextEndLine(selection: IRange): number {
-  if (selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber) {
-    return selection.endLineNumber - 1
-  }
-  return selection.endLineNumber
-}
-
 export function getMonacoMarkdownSelectionAnnotationTarget(
   editorInstance: MonacoMarkdownSelectionEditor,
   selection: IRange | null,
@@ -51,7 +45,7 @@ export function getMonacoMarkdownSelectionAnnotationTarget(
   if (!selectedText) {
     return null
   }
-  const textEndLine = getSelectionTextEndLine(selection)
+  const textEndLine = getSelectionEndLine(selection)
   const startLine = Math.min(selection.startLineNumber, textEndLine)
   const lineNumber = Math.max(selection.startLineNumber, textEndLine)
   if (startLine < 1 || lineNumber > model.getLineCount()) {

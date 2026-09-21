@@ -1,3 +1,7 @@
+import {
+  OPENCODE_CAPTURE_RECORD_LIMIT,
+  OPENCODE_CAPTURE_TEXT_LIMIT
+} from './opencode-transcript-capture-limits'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { timestampIso } from './session-scanner-accumulator'
 import { asRecord } from './session-scanner-record-value'
@@ -15,31 +19,6 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 /** The part types that carry something a person would search for. */
 const OPENCODE_CAPTURE_PART_TYPES = "('text','reasoning','tool')"
-
-/**
- * How many parts one session may hold before this read gives up.
- *
- * A safety valve on memory, not a policy: the rows are materialized and then
- * posted across the worker boundary, so an unbounded session would be held
- * twice. Exceeding it throws rather than returning a prefix, because a prefix
- * committed under a complete-read cursor would leave the tail unsearchable with
- * nothing on the row to say so. A failed read is retried and surfaces; a silent
- * truncation does neither. Measured against a real 21 GB database: the busiest
- * session there holds 1,427 of these parts.
- */
-const OPENCODE_CAPTURE_PART_LIMIT = 20_000
-
-/**
- * How much decoded text one session may carry, for the same reason.
- *
- * Not a truncation policy and not a second cap on tool rows -- the index writer
- * owns that, at 3 KB a row. This is the bound a non-streaming source needs and
- * a streaming one does not: a JSONL provider publishes each message as it reads
- * it, while this one holds the whole session before posting it. Measured on the
- * same database, the largest session's parts total 9.5 MB, so this is ~7x the
- * worst real one.
- */
-const OPENCODE_CAPTURE_TEXT_LIMIT = 64 * 1024 * 1024
 
 type CaptureRow = {
   messageId: string
@@ -180,10 +159,10 @@ export function readOpenCodeSessionMessages(
       `OpenCode session ${sessionId} uses an unreadable message-part schema; its transcript was not read.`
     )
   }
-  const rows = db.prepare(buildCaptureQuery()).all(sessionId, OPENCODE_CAPTURE_PART_LIMIT + 1)
-  if (rows.length > OPENCODE_CAPTURE_PART_LIMIT) {
+  const rows = db.prepare(buildCaptureQuery()).all(sessionId, OPENCODE_CAPTURE_RECORD_LIMIT + 1)
+  if (rows.length > OPENCODE_CAPTURE_RECORD_LIMIT) {
     throw new Error(
-      `OpenCode session ${sessionId} holds more than ${OPENCODE_CAPTURE_PART_LIMIT} text parts; its transcript was not read.`
+      `OpenCode session ${sessionId} holds more than ${OPENCODE_CAPTURE_RECORD_LIMIT} text parts; its transcript was not read.`
     )
   }
 

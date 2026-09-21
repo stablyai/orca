@@ -107,6 +107,21 @@ export function normalizeMobileFilePreviewRouteParams(
   }
 }
 
+/**
+ * The params the shell hands the page, which are this route's own minus the two it spells as path
+ * segments. Every value is a `string`, because that is what `BridgeInitRoute.params` carries and
+ * what `URLSearchParams` will encode it back out of; an absent one is left out rather than sent
+ * empty, so the page's `useLocalSearchParams` reads exactly what the native screen read.
+ */
+export function mobileFilePreviewShellParams(
+  params: MobileFilePreviewRouteParams
+): Record<string, string> {
+  const { hostId: _hostId, worktreeId: _worktreeId, ...rest } = params
+  return Object.fromEntries(
+    Object.entries(rest).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+  )
+}
+
 export function createMobileFilePreviewHref(
   params: MobileFilePreviewRouteParams
 ): MobileFilePreviewHref {

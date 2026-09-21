@@ -34,12 +34,14 @@ import {
 /** Legacy pane id shape: not a stable pane UUID, so it never reaches the published leaf set. */
 const LEGACY_LEAF_ID = 'pane:9'
 
-/**
- * Shrinks both the cold-park delay and the hot-retain window. Set at module scope because the
- * `orcaPage` fixture launches the app before any test body runs.
- */
+/** Shrinks both the cold-park delay and the hot-retain window. */
 const PARK_DELAY_MS = 2_000
-process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS ??= String(PARK_DELAY_MS)
+const PARK_DELAY_ENV = { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) }
+
+// Why a fixture option and not `process.env`: a Playwright worker runs many spec files in one
+// process, so a module-scope env write outlives this file and shrinks parking for every spec
+// that follows it in the same worker.
+test.use({ orcaAppExtraEnv: PARK_DELAY_ENV })
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
   if (!node) {
@@ -174,7 +176,11 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
     )
 
     const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-    client = await launchPairedElectronClient(offer, testInfo, 'legacy-leaf-orientation-observer')
+    // The observer inherited the same override back when it came from `process.env`; keep it so
+    // scoping the write to this file does not also change what the client does.
+    client = await launchPairedElectronClient(offer, testInfo, 'legacy-leaf-orientation-observer', {
+      extraEnv: PARK_DELAY_ENV
+    })
     await waitForPairedClientWorktree(client.page, worktreeId)
 
     await expect

@@ -1,0 +1,239 @@
+{
+  "permanentAndCompatibilityTests": {
+    "passed": 89,
+    "files": 12,
+    "permanent": 17,
+    "compatibility": 72,
+    "exitCode": 0
+  },
+  "baselineRegression": {
+    "intendedRetentionFailures": 6,
+    "passed": 0,
+    "exitCode": 1,
+    "setupOrSourceFenceFailures": 0
+  },
+  "nodeTypecheck": {
+    "exitCode": 0
+  },
+  "portableComparison": {
+    "casesPerVariant": 4,
+    "variants": ["before", "fixed"],
+    "runtimes": {
+      "node": {
+        "node": "24.20.0",
+        "electron": null,
+        "v8": "13.6.233.17-node.53",
+        "platform": "darwin",
+        "arch": "arm64"
+      },
+      "electron": {
+        "node": "24.21.0",
+        "electron": "43.7.0",
+        "v8": "15.0.245.31-electron.0",
+        "platform": "darwin",
+        "arch": "arm64"
+      }
+    },
+    "totalCases": 16,
+    "allExitCodes": 0,
+    "evaluatedGraphs": {
+      "before-node": {
+        "evaluatedRepositoryPaths": 246,
+        "allHashesMatch": true
+      },
+      "fixed-node": {
+        "evaluatedRepositoryPaths": 247,
+        "allHashesMatch": true
+      },
+      "before-electron": {
+        "evaluatedRepositoryPaths": 246,
+        "allHashesMatch": true
+      },
+      "fixed-electron": {
+        "evaluatedRepositoryPaths": 247,
+        "allHashesMatch": true
+      }
+    }
+  },
+  "sourceScope": {
+    "namedMain": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "namedReportedVersion": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+    "originalProductBaselinesEqualBothRefs": 8,
+    "newExtractedProductModule": 1,
+    "suppliedRepositoryPathsBefore": 249,
+    "suppliedRepositoryPathsFixed": 250,
+    "currentDependencyContextPaths": [
+      "src/main/git/command-runner/git-subprocess-admission.ts",
+      "src/main/plugins/plugin-worker-output-buffer.ts",
+      "src/main/providers/working-directory-validation.ts",
+      "src/shared/promise-settlement-waiters.ts"
+    ],
+    "packageManifests": 6,
+    "wholeHistoricalGraphReplay": false
+  },
+  "loaderControls": {
+    "crlfParity": true,
+    "simulatedMainPublicationParity": true,
+    "sourceDriftRejected": true
+  },
+  "quality": {
+    "ordinary": {
+      "exitCode": 0,
+      "files": 23
+    },
+    "casting": {
+      "exitCode": 1,
+      "files": 23
+    },
+    "type-aware": {
+      "exitCode": 0,
+      "files": 23
+    },
+    "react": {
+      "exitCode": 0,
+      "files": 23
+    },
+    "design": {
+      "exitCode": 0,
+      "files": 23
+    },
+    "anti-slop": {
+      "exitCode": 0,
+      "files": 23
+    }
+  },
+  "inheritedCastingFindings": [
+    {
+      "path": "src/main/plugins/plugin-install.ts",
+      "unchangedAssertionLines": [
+        "if ((error as NodeJS.ErrnoException).code === 'ENOENT') {",
+        "if ((error as NodeJS.ErrnoException).code === 'ENOENT') {"
+      ],
+      "mainSourceSha256": "6e5ee2cad8c875d6417b7276f89891fbc271a50e1935c625cee21eff1e53452f"
+    },
+    {
+      "path": "src/main/plugins/plugin-panel-controller.ts",
+      "unchangedAssertionLines": [
+        "const token = (call as { sessionToken?: unknown }).sessionToken"
+      ],
+      "mainSourceSha256": "193fac71a44f031fda7766365566a23a1f7f8618a0576d751a30ee937600cfd7"
+    },
+    {
+      "path": "src/main/plugins/plugin-worker-controller.test.ts",
+      "unchangedAssertionLines": [
+        "contentVerifier: { verify: options.verify } as unknown as PluginContentVerifier,"
+      ],
+      "mainSourceSha256": "eae5278ff56d79b203db1dadd2bce148fbcb22773f3d43060a350a6bad7515c5"
+    }
+  ],
+  "changedCodeQuality": {
+    "exitCode": 0,
+    "newFindings": 0,
+    "comparedSince": "2fccacadbe23"
+  },
+  "independentReview": {
+    "productAndPermanentFixtureStaticReview": "coverage_progress: no blocker",
+    "queueExtraction": "root authored and independently ran 26 focused tests; author final 89-test batch passed"
+  },
+  "priorProposalEvidence": {
+    "manifestSha256": "91d816c691aa2086694a8c29d5bdc4434051be421980e98dba72ac5b2def873f",
+    "controls": 18,
+    "scope": "Prior eight-product proposal before the final behavior-preserving installation-state extraction; final-source validation is separately recorded above."
+  },
+  "artifactHashes": {
+    "README.md": "fd58803f58d2a945c458acac1b63e2b982e5f50ea34110830cbc881ea65cafa2",
+    "before-electron-results.json": "12de47b6ea9bf743b317ed789343b795f505ff4b0d293d721c4eca634757537c",
+    "before-node-results.json": "50a54828741e13facd26abe112af8b98e53a5620944da65cf436f5720cf2b0cb",
+    "before.config.mjs": "9108bd4454f572fbe8db118a9a8eb8d0c8ec76449af7f6c50a22ced7fd119f47",
+    "dependency-context.patch": "1b2886e2bc2817bc0a10eab93911984edc0366b170208bf4e8a3d1b3044c6b62",
+    "fix.patch": "ed09db9f0284470378f7f82eacb31c7ab91a9c72a99559e6a15af6cf20c9be61",
+    "fixed-electron-results.json": "11efcc7c32dd89ac8ba31ab03a5830d4520bf6a568aa8a17aa09f16548c77615",
+    "fixed-node-results.json": "179040d4efe8eba223b9b6d12f5101efc69a99e5d7a56fbcaf91abc8621b090e",
+    "loader-controls.cjs": "57e88aa1584ac3d333218bf9df02752cd98f7d37169a1b9b42248be17922b575",
+    "loader-results.json": "8df4b2035c0df273823815416733cd2b9405fd09c83b93eeeeb5b8ce282e07bc",
+    "phase.config.mjs": "eceb5c74c19fed28cfa9b0341e571369dca1f4e7f2f5486b549cb179fbae6fa9",
+    "scenario.test.mjs": "836c185a99997942b5d0461dab5b1f08efac12da68e04f7891ddfda2dd09a7be",
+    "source-versions.json": "3440c92fda22e09b82cbc6818ce51f99359ad5e66326a4bb64d092a428489cfd",
+    "sources.cjs": "a04aa4c72c9eeaf2a1814e5f0919bc0128f8c7a605a43ab9e5c6ddaf2ece2f38"
+  },
+  "artifactQuality": {
+    "ordinary": {
+      "exitCode": 0,
+      "files": 5
+    },
+    "casting": {
+      "exitCode": 0,
+      "files": 5
+    },
+    "type-aware": {
+      "exitCode": 0,
+      "files": 5
+    },
+    "react": {
+      "exitCode": 0,
+      "files": 5
+    },
+    "design": {
+      "exitCode": 0,
+      "files": 5
+    },
+    "anti-slop": {
+      "exitCode": 0,
+      "files": 5
+    }
+  },
+  "fullFileWhitespace": {
+    "files": 33,
+    "diagnostics": 0
+  },
+  "formatting": {
+    "sourceFiles": 18,
+    "artifactFiles": 13,
+    "allIdempotent": true
+  },
+  "nativeWorkerSupervisionAdapter": {
+    "typechecked": true,
+    "nativeIntegrationSuiteRun": false
+  },
+  "fixtureAccess": {
+    "module": "src/main/plugins/__mocks__/plugin-uninstall-log-test-fixture.ts",
+    "checkedPropertyAccess": true,
+    "refreshHeldWithReceiverBoundSpy": true,
+    "reflectGetApplyUsed": false,
+    "existingModuleMockPolicy": "**/__mocks__/**",
+    "explicitAntiSlopPublicationFiles": 23,
+    "exitCode": 0,
+    "childProcessTestPolicy": "Existing isTestFile test-fixture filename exemption; original typed fork mock preserved; no allowlist/pin change."
+  },
+  "reviewCorrection20260917": {
+    "publishedHead": "f1e7e62d3cf59cb6667e330f9a3f930d57490f4a",
+    "failure": "New test support filename counted as production child_process importer",
+    "fix": "Rename fixture to plugin-uninstall-log-test-fixture.ts and update three tests plus comparative scenario/source fences",
+    "focusedChecks": {
+      "passed": 23,
+      "files": 5,
+      "includes": "17 uninstall cases, 4 import-boundary checks, 2 native worker supervision cases",
+      "platform": "darwin arm64"
+    },
+    "nodeTypecheckExitCode": 0,
+    "ordinaryLintExitCode": 0,
+    "antiSlopExitCode": 0,
+    "portableCasesReexecuted": 16,
+    "portableExitCodes": 0,
+    "loaderControlsExitCode": 0,
+    "userVisiblePolicy": "Successful uninstall discards old 200-row history; same-key reinstall starts fresh. Installed/crashed/failed-removal history remains."
+  },
+  "reviewCorrection20260918": {
+    "fix": "Recheck installation approval after awaiting stale-revision deactivation, before log capture and worker start",
+    "focusedTests": {
+      "passed": 35,
+      "files": 5
+    },
+    "ordinaryLintExitCode": 0,
+    "portableCasesReexecuted": 16,
+    "portableExitCodes": 0,
+    "loaderControlsExitCode": 0,
+    "loaderCorrection": "Accept dependencies already at named main when simulating publication",
+    "nodeTypecheckExitCode": 0
+  }
+}

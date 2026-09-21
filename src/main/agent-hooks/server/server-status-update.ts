@@ -10,8 +10,6 @@ import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -24,12 +22,13 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    payload: AgentHookEventPayload,
+    incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
+    const { authorityRestartId, ...payload } = incoming
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
@@ -241,76 +240,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.scheduleStatusPersist()
     }
     this.notifyStatusChangeListeners()
-    this.emitEnrichedStatus(enriched)
-    return enriched
-  }
-
-  protected refreshTerminalStatusEvidence(
-    previous: EnrichedAgentHookEventPayload,
-    mutationBefore?: EnrichedAgentHookEventPayload,
-    emitEnrichedStatus = false
-  ): void {
-    if (!this.canWriteLegacyStatusRow(previous)) {
-      return
-    }
-    const connectionClearWatermark = previous.connectionId
-      ? this.connectionTimestampWatermarkById.get(previous.connectionId)
-      : undefined
-    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
-    if (previous.connectionId) {
-      this.connectionTimestampWatermarkById.set(previous.connectionId, now)
-    }
-    const {
-      receivedAt: _receivedAt,
-      evidenceObservedAt: _evidenceObservedAt,
-      stateStartedAt,
-      observation: _observation,
-      restoredUnconfirmed: _restoredUnconfirmed,
-      isReplay: _isReplay,
-      ...payload
-    } = previous
-    const refreshed: EnrichedAgentHookEventPayload = {
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }
-    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
-    this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
-    if (!this.writeLegacyStatusRow(refreshed)) {
-      return
-    }
-    this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
-    this.scheduleStatusPersist()
-    // A dismissed row may retain only provider resume identity. Its preserved payload can still
-    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
-    // mobile freshness leases.
-    if (refreshed.providerSessionOnly === true) {
-      return
-    }
-    if (firstRuntimeObservation) {
-      this.notifyStatusChangeListeners()
-    }
-    this.emitStatusFreshnessObservation({
-      paneKey: refreshed.paneKey,
-      state: refreshed.payload.state,
-      receivedAt: refreshed.receivedAt,
-      observedInCurrentRuntime: true,
-      ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
-      ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
-    })
-    if (emitEnrichedStatus) {
-      this.emitEnrichedStatus(refreshed)
-    }
-  }
-
-  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): boolean {
-    return admitLegacyAgentStatus(
-      this.state,
-      'main-status-update',
-      entry,
-      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    this.emitEnrichedStatus(
+      authorityRestartId && payload.isReplay !== true
+        ? { ...enriched, authorityRestartId }
+        : enriched
     )
+    return enriched
   }
 }

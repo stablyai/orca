@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
@@ -247,4 +248,13 @@ describe('resume sleeping agent provider claims', () => {
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })
+})
+
+it('keeps the same OMP provider claim when a later hook supplies its transcript path', () => {
+  const record = makeRecord(makePaneKey('tab-1', LEAF_ID))
+  const enriched = {
+    ...record,
+    providerSession: { ...record.providerSession, transcriptPath: '/custom/session.jsonl' }
+  }
+  expect(getProviderSessionClaimKey(enriched)).toBe(getProviderSessionClaimKey(record))
 })

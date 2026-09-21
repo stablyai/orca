@@ -373,7 +373,7 @@ describe('registerPtyHandlers', () => {
     // reattach call — the manager owns the hooks/platform gating this spy stands in for.
     const ensureForDistro = vi
       .spyOn(wslHookRelayManager, 'ensureForDistro')
-      .mockImplementation(() => {})
+      .mockImplementation(async () => {})
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
       write: vi.fn(),

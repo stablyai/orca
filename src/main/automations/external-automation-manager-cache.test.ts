@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   ExternalAutomationManagerCache,
-  describeExternalManagerFailure
+  describeExternalManagerFailure,
+  MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES
 } from './external-automation-manager-cache'
 import { ExternalAutomationProbeCancelledError } from './external-automation-probe-scheduler'
 import type { ExternalAutomationManager } from '../../shared/automations-types'
@@ -24,6 +25,16 @@ const selfOwner = 'owner:desktop:self'
 const sshOwner = 'owner:desktop:ssh:target-a:3'
 
 describe('ExternalAutomationManagerCache', () => {
+  it('bounds distinct scope churn', () => {
+    const cache = new ExternalAutomationManagerCache()
+
+    for (let index = 0; index < MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES + 4; index += 1) {
+      cache.write({ ownerKey: `owner-${index}`, provider: 'hermes' }, null)
+    }
+
+    expect(cache.size).toBe(MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES)
+  })
+
   it('keys entries per owner and per provider', () => {
     const cache = new ExternalAutomationManagerCache()
 

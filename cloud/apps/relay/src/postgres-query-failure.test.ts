@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const fakes = vi.hoisted(() => ({
   connectError: undefined as unknown,
   query: vi.fn(async (_sql: string, _params?: unknown[]) => ({ rows: [], rowCount: 0 })),
-  release: vi.fn()
+  release: vi.fn(),
+  // A real pooled client is an EventEmitter, and the acquire path attaches an
+  // `error` listener to it before handing it to the caller.
+  client: () => ({
+    query: fakes.query,
+    release: fakes.release,
+    on: vi.fn(),
+    removeListener: vi.fn()
+  })
 }))
 
 vi.mock('pg', () => ({
@@ -15,7 +23,7 @@ vi.mock('pg', () => ({
       on = vi.fn()
       async connect() {
         if (fakes.connectError) throw fakes.connectError
-        return { query: fakes.query, release: fakes.release }
+        return fakes.client()
       }
       async end() {}
     }

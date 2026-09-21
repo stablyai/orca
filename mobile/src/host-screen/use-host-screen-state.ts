@@ -41,6 +41,9 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, MobileHostRepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
+  // An action that did not happen, said above the list rather than instead of it. Separate from
+  // `error`, which is the screen's identity and is the one thing worth taking the whole view for.
+  const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -94,6 +97,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     collapsedGroups,
     confirmDelete,
     confirmRemoveHost,
+    actionError,
     error,
     fetchRepoMetadataInFlightRef,
     fetchRepoMetadataPendingRef,
@@ -120,6 +124,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setCollapsedGroups,
     setConfirmDelete,
     setConfirmRemoveHost,
+    setActionError,
     setError,
     setFilters,
     setGroupMode,

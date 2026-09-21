@@ -30,7 +30,6 @@ vi.mock('../window/dashboard-popout-window', () => ({
 }))
 vi.mock('./synthetic-title-runtime', () => ({
   driveSyntheticTitleFromHook: vi.fn(),
-  shouldSuppressCodexAutoApprovalSyntheticTitleFromHook: () => false,
   stopAllSyntheticTitleSpinners: vi.fn()
 }))
 
@@ -87,4 +86,11 @@ describe('the main-window agent-status listener', () => {
       'agentStatus:set:hook-pane'
     ])
   })
+})
+
+it('forwards retirement acknowledgement only on live status delivery', () => {
+  hooks.listener!(statusPayload({ authorityRestartId: 'retirement-id' }))
+  hooks.listener!(statusPayload({ authorityRestartId: 'retirement-id', isReplay: true }))
+  expect(sent[0].event).toHaveProperty('authorityRestartId', 'retirement-id')
+  expect(sent[1].event).not.toHaveProperty('authorityRestartId')
 })

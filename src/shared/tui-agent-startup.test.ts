@@ -685,9 +685,7 @@ describe('tui agent startup plans', () => {
     expect(plan).not.toBeNull()
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
-    expect(plan?.launchCommand).toBe(
-      `omp; command test -n "$fish_pid" && set --erase -g ORCA_OMP_PREFILL; command test -z "$fish_pid" && unset ORCA_OMP_PREFILL; true`
-    )
+    expect(plan?.launchConfig.agentCommand).toBe('omp')
   })
 
   it('returns null for oversized Windows flag drafts so callers paste after ready', () => {
@@ -722,12 +720,12 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
       expectedProcess: 'devin',
       followupPrompt: 'fix the tests',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
-        agentArgs: '--permission-mode bypass',
+        agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+        agentArgs: '--permission-mode bypass --respect-workspace-trust false',
         agentEnv: {}
       }
     })
@@ -751,6 +749,8 @@ describe('tui agent startup plans', () => {
   })
 
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
-    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
+    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe(
+      '--permission-mode bypass --respect-workspace-trust false'
+    )
   })
 })

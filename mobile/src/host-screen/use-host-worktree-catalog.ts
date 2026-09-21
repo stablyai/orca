@@ -37,6 +37,7 @@ export function useHostWorktreeCatalog(args: {
     clientRef,
     fetchWorktreesInFlightRef,
     newWorktreeModalVisibleRef,
+    setActionError,
     setCatalogError,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
@@ -85,6 +86,9 @@ export function useHostWorktreeCatalog(args: {
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
           setCatalogError(null)
+          // A confirmed list is the host answering, which is the evidence a transient action
+          // failure was about a moment that has passed.
+          setActionError('')
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed

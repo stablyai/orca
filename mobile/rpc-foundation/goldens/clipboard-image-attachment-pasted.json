@@ -3,24 +3,17 @@
   "family": "clipboard.image-attachment",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "f24f38bd4105753adb0d8e24132c2fc57f80f5c6",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "60273f74d8fe869723cbbd1a459d7d789a92e07a0f1e9444b42e2d7767e5bec1",
+  "scenarioSha256": "d6db064741cd68d6ad8a3e490a774d8145adb4a5b7cca8218f5c972b1a31f93b",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "08a3a6323626": {
-      "name": "before-terminal-send",
-      "ordinal": 8,
-      "value": {
-        "terminal": "terminal-1"
-      }
-    },
-    "349431e2edcd": {
+    "080f28c67e30": {
       "name": "terminal.send#1",
       "ordinal": 9,
       "args": [
@@ -37,7 +30,7 @@
             },
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/img.png\u001b[201~ "
+            "text": "\u001b[200~@/tmp/img.png\u001b[201~ "
           }
         },
         {
@@ -62,10 +55,12 @@
         }
       }
     },
-    "5af5db426de7": {
-      "name": "terminal.send#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    "08a3a6323626": {
+      "name": "before-terminal-send",
+      "ordinal": 8,
+      "value": {
+        "terminal": "terminal-1"
+      }
     },
     "6696a47819e1": {
       "name": "clipboard.startImageUpload#1",
@@ -166,6 +161,11 @@
         "$rpc": "null"
       }
     },
+    "e61d3d3476df": {
+      "name": "terminal.send#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
     "f05e4695ffa3": {
       "name": "clipboard.appendImageUploadChunk#1",
       "ordinal": 4,
@@ -209,8 +209,8 @@
       {
         "id": "attached",
         "observation": {
-          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "349431e2edcd"],
-          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "5af5db426de7"],
+          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "080f28c67e30"],
+          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "e61d3d3476df"],
           "settlements": {
             "normal": "84e5ca07cb7a"
           },

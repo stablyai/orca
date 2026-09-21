@@ -39,7 +39,7 @@ export function tasksRouteScreenMountAdapters(
         getActivePath: () => 'lan',
         getPendingPath: () => null,
         isPairingRejected: () => false,
-        isHostSignedOut: () => false
+        getRelayHostReachability: () => 'connecting'
       })
       // A holder rather than a binding: Harness is a component, so it cannot assign an outer name.
       const observed: { model?: ReturnType<typeof useRoute> } = {}

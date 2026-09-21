@@ -111,7 +111,9 @@ describe('the three mobile web bundle serializers', () => {
       runtimeProtocolVersion: 2,
       entrypoint: 'index.html',
       totalBytes: ASSETS.reduce((total, asset) => total + asset.byteLength, 0),
-      assets: [...ASSETS]
+      assets: [...ASSETS],
+      // Outside the hash on purpose, which the assertion below is what says.
+      routes: [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
     }
 
     expect(MobileWebBundleManifestSchema.parse(manifest).buildId).toBe(buildId)

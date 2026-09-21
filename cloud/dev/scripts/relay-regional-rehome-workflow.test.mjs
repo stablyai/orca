@@ -56,7 +56,9 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   // The relaxation is only safe if the reviewed validator actually runs on
   // the NON-converged branch, in same-cap-cell mode, with the trust config
-  // the validator requires, restricted to the template-and-MIG change pair.
+  // the validator requires, restricted to the template-and-MIG change pair or,
+  // when only the reviewed backend attributes are left, to those alone — and
+  // that last case then has to be applied, not waved through as converged.
   assert.match(
     job,
     /if ! terraform -chdir=infra\/terraform show -json[\s\S]{0,220}\| length == 0' >\/dev\/null\n          then\n/
@@ -75,8 +77,20 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   assert.match(
     job,
-    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}" \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}"\)"\n {12}echo "\$\{RESUME_REVIEW\}"\n {12}jq -e '\.changes == 2\n {16}or \(\.changes == 0 and \(\(\.backendUpdate \/\/ \[\]\) \| length\) > 0\)' \\\n {14}<<< "\$\{RESUME_REVIEW\}" >\/dev\/null/
   )
+  // A resume whose only unapplied change is the reviewed backend update must apply it. Leaving
+  // it is how a cell keeps the 300-second drain and no request logging behind a green resume.
+  assert.match(
+    job,
+    /if test "\$\(jq -er '\.changes' <<< "\$\{RESUME_REVIEW\}"\)" = 0; then\n {14}terraform -chdir=infra\/terraform apply -auto-approve \\\n {16}"\$\{RUNNER_TEMP\}\/relay-same-cap-resume\.tfplan"\n {12}fi\n/
+  )
+  // Template-and-MIG drift still applies nothing on resume, which is what a resume means.
+  const resumeStep = job.slice(
+    job.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
+    job.indexOf('- name: Apply only the selected same-cap template and MIG')
+  )
+  assert.equal(resumeStep.split('terraform -chdir=infra/terraform apply').length, 2)
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)
   assert.match(job, /\(.regionalRehomeProtocol \/\/ 0\) == \$protocol/)
@@ -139,9 +153,10 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   // The wrapper validates the override before anything runs, passes it to every
   // cell, seals it into the canary artifact, and prints it in the run summary.
   assert.match(wrapper, /--gate-override-reason "\$\{GATE_OVERRIDE_REASON\}" \\\n {12}--gate-override-confirmation "\$\{GATE_OVERRIDE_CONFIRMATION\}"\)/)
+  // One per cell job in the serial cell_1..cell_10 chain.
   assert.equal(
     wrapper.match(/gate-override-confirmation: \$\{\{ inputs\.gate-override-confirmation \}\}/g).length,
-    4
+    10
   )
   assert.match(wrapper, /Aggregate monitor gate overridden \(break-glass\)/)
   assert.match(wrapper, /ACTOR: \$\{\{ github\.actor \}\}/)
@@ -163,12 +178,12 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   ]) {
     const body = readFileSync(fileURLToPath(new URL(source, import.meta.url)), 'utf8')
     assert.match(body, /WAVE_PREDECESSOR_TIMEOUT_MS = 75 \* 60_000/)
-    assert.match(body, /\^\[0-3\]\$/)
+    assert.match(body, /\^\[0-9\]\$/)
   }
   // Aged-evidence replay via job re-runs is fenced: mutations are
   // single-dispatch, so a failed cell needs a fresh gate and monitor run.
   assert.match(job, /test "\$\{GITHUB_RUN_ATTEMPT\}" = 1/)
-  for (const index of [0, 1, 2, 3]) {
+  for (const index of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     assert.match(wrapper, new RegExp(`wave-index: '${index}'`))
   }
   assert.doesNotMatch(job, /EFFECTIVE_SELECTOR_GENERATION \+ 1\)/)

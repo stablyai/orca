@@ -485,6 +485,52 @@ describe('web runtime session tab actions', () => {
     )
   })
 
+  it('reports a republished stale-terminal refusal to the caller exactly like a real close', async () => {
+    const callFor = (result: unknown) => {
+      const runtimeCall = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'close', ok: true, result })
+        .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+      return closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'pty-exit',
+        publicationEpoch: 'epoch-1',
+        terminalHandle: 'term-1'
+      })
+    }
+
+    const committed = await callFor({ closed: true })
+    const refused = await callFor({
+      closed: true,
+      refused: true,
+      refusalReason: 'stale-terminal',
+      snapshotRepublished: true
+    })
+
+    // Why: this is the whole user-visible bug. The host kept the tab and said so,
+    // but the refusal is dropped here — the caller gets the same 'applied' it gets
+    // for a real close, so the tab vanishes and silently reappears with no error,
+    // no toast and no retry. Any fix must make these two outcomes distinguishable.
+    expect(refused).toBe('applied')
+    expect(refused).toBe(committed)
+
+    // The un-hide that makes the tab come back.
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now()
+      )
+    ).toBe(false)
+  })
+
   it('keeps the close intent when a refused lifecycle close was not republished', async () => {
     const runtimeCall = vi
       .fn()

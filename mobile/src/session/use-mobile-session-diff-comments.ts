@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardWriter } from '../platform/clipboard'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
 import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
@@ -27,6 +27,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     setPendingDiffNotesDelivery,
     showToast
   } = scope
+  const clipboard = useClipboardWriter()
   const loadDiffComments = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !worktreeId || isFloatingWorkspaceRoute) {
       setDiffComments([])
@@ -131,14 +132,14 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       return
     }
     try {
-      await Clipboard.setStringAsync(formatDiffComments(comments))
+      await clipboard.writeText(formatDiffComments(comments))
       triggerSuccess()
       showToast('Notes copied')
     } catch {
       triggerError()
       showToast("Couldn't copy notes", 1600)
     }
-  }, [showToast])
+  }, [clipboard, showToast])
 
   const sendDiffCommentsToAgent = useCallback((): void => {
     const comments = diffCommentsRef.current.filter((comment) => !comment.sentAt)

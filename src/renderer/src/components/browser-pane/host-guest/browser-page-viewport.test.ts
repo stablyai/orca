@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyBrowserPageViewportLayout,
   BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME,
+  _getRememberedBrowserPageInsetCountForTests,
   ensureBrowserPageViewport,
   getBrowserPageViewportScrollState,
   getBrowserOverlaySlotViewport,
@@ -243,6 +244,14 @@ describe('ensureBrowserPageViewport', () => {
 })
 
 describe('syncBrowserPageChromeInset', () => {
+  it('bounds remembered insets across page churn', () => {
+    for (let index = 0; index < 600; index += 1) {
+      syncBrowserPageChromeInset(`retired-page-${index}`, 40)
+    }
+
+    expect(_getRememberedBrowserPageInsetCountForTests()).toBeLessThanOrEqual(512)
+  })
+
   it('reserves space above the webview container for the React chrome header', () => {
     mountSlotViewport('workspace-1')
     ensureBrowserPageViewport('page-1', 'workspace-1')

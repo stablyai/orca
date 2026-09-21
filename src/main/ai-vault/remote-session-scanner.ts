@@ -10,11 +10,10 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
-  CodexSessionCollection,
   codexRolloutHardlinkIdentity,
-  dedupeCodexRolloutFileAliases,
-  dedupeCodexSessionsBySessionId
+  dedupeCodexRolloutFileAliases
 } from './codex-session-root-dedup'
+import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
 import {
   parseRemoteSessionFileCached,
   remoteSessionParseHostKey
@@ -107,7 +106,7 @@ export async function scanRemoteAiVaultSessions(args: {
     issues,
     limit
   })
-  const parsedSessions = dedupeCodexSessionsBySessionId(parsed.sessions)
+  const parsedSessions = dedupeScannedSessions(parsed.sessions)
   const cappedSessions = parsedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
@@ -123,10 +122,7 @@ export async function scanRemoteAiVaultSessions(args: {
     limit,
     alreadyParsedFilePaths: parsed.parsedFilePaths
   })
-  const scopeSessions = dedupeCodexSessionsBySessionId([
-    ...parsedScopeSessions,
-    ...extraScopeSessions
-  ])
+  const scopeSessions = dedupeScannedSessions([...parsedScopeSessions, ...extraScopeSessions])
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
 
@@ -143,7 +139,7 @@ async function parseRemoteSessionCandidates(args: {
   issues: AiVaultScanIssue[]
   limit: number
 }): Promise<{ sessions: AiVaultSession[]; parsedFilePaths: Set<string> }> {
-  const sessions = new CodexSessionCollection()
+  const sessions = new ScannedSessionCollection()
   const parsedFilePaths = new Set<string>()
   let index = 0
 

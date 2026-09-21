@@ -126,6 +126,8 @@ const GOLDEN_LOCK_TAKING: SchemaLockTarget[] = [
   { kind: 'column', table: 'relay_region_rehome_control', name: 'host_cooldown_ms', skipWhen: 'present' },
   { kind: 'column', table: 'relay_control_capabilities', name: 'idle_regional_rehome', skipWhen: 'present' },
   { kind: 'column', table: 'relay_region_rehome_attempts', name: 'source_generation', skipWhen: 'present' },
+  { kind: 'column', table: 'relay_region_rehome_attempts', name: 'abort_reason', skipWhen: 'present' },
+  { kind: 'column', table: 'relay_cell_admission', name: 'roll_isolated_at', skipWhen: 'present' },
   { kind: 'index-by-name', name: 'relay_assignment_activity_expiry', skipWhen: 'absent' },
   {
     kind: 'reloption',

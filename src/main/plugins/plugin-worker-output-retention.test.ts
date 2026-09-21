@@ -1,7 +1,7 @@
 import { once } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { PluginLogBuffer } from './plugin-log-buffer'
+import { PLUGIN_LOG_KEY_LIMIT, PluginLogBuffer } from './plugin-log-buffer'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
 
 async function heapAfterGc(): Promise<number> {
@@ -35,6 +35,17 @@ function writeLine(stream: PassThrough, index: number, truncated: boolean): void
 }
 
 describe('plugin worker retained output', () => {
+  it('bounds retained plugin keys while keeping the newest history', () => {
+    const logs = new PluginLogBuffer()
+    for (let index = 0; index < PLUGIN_LOG_KEY_LIMIT + 4; index += 1) {
+      logs.append(`plugin-${index}`, 'info', `line-${index}`)
+    }
+
+    expect(logs.size).toBe(PLUGIN_LOG_KEY_LIMIT)
+    expect(logs.get('plugin-0')).toEqual([])
+    expect(logs.get(`plugin-${PLUGIN_LOG_KEY_LIMIT + 3}`)).toHaveLength(1)
+  })
+
   it('keeps unfinished output after consuming a large chunk without retaining the parent', async () => {
     const lines: string[] = []
     const before = await heapAfterGc()

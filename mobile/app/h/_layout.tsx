@@ -11,7 +11,7 @@ import {
   saveHostSidebarWidth
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
-import { HostScreen } from './[hostId]/index'
+import { HostScreen } from '../../src/host-screen/HostScreen'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -56,6 +56,10 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
       <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
       {/* Dev-flag only: redirects to the host screen unless the hybrid shell flag is on. */}
       <Stack.Screen name="[hostId]/web" options={{ title: 'Workspace' }} />
+      {/* Last, and matched last: every pathname above has a file of its own, so this takes only
+          what expo-router would otherwise send to Unmatched. Declared for the title alone — an
+          undeclared child still renders, appended after these with this group's screenOptions. */}
+      <Stack.Screen name="[hostId]/[...page]" options={{ title: 'Workspace' }} />
     </Stack>
   )
 }

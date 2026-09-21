@@ -36,6 +36,7 @@ import {
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import { usePendingStartupParkPresence } from './terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
+import { captureNewlyParkedTerminalTabs } from './parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from './terminal-tab-park-candidates'
 import {
@@ -135,6 +136,7 @@ export function useTerminalTabColdParking(args: {
   const measureParkCooldownUntilRef = useRef<number | null>(null)
   const terminalTabParkingTimersRef = useRef<TerminalTabColdParkRecheckTimers>(new Map())
   const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
+  const parkedTabCaptureDoneRef = useRef(new Set<string>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -217,6 +219,8 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
+    // Why before the commit: the panes are still mounted in this flush — the last moment the only client-side copy of a remote tab's scrollback can be serialized.
+    captureNewlyParkedTerminalTabs(worktreeId, parkedTabIds, parkedTabCaptureDoneRef.current)
     // Why the ref and not the updater form: returning `current` still dispatches,
     // and React only bails eagerly while the fiber has no pending lanes. This
     // effect re-runs on every tab-model write (runtime titles, unread bumps),

@@ -9,9 +9,10 @@ import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/exe
 import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
+const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
 vi.mock('@/store', () => ({
-  useAppStore: (select: (state: { settings: undefined }) => unknown) =>
-    select({ settings: undefined })
+  useAppStore: (select: (state: { settings: typeof mockSettings }) => unknown) =>
+    select({ settings: mockSettings })
 }))
 
 const ALL_AGENTS = ['codex' as const]
@@ -35,6 +36,7 @@ beforeEach(() => {
     value: { aiVault: { searchSessions } }
   })
   searchSessions.mockReset().mockResolvedValue(empty)
+  delete mockSettings.aiVaultSearch
 })
 afterEach(() => vi.useRealTimers())
 async function debounce() {
@@ -265,5 +267,46 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
   expect(searchSessions.mock.calls[1]).toEqual([{ ...ALL_REQUEST, cursor: 'merged' }, 'all'])
   expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all'])
   expect(result.current.sessions.map((session) => session.executionHostId)).toEqual(['local'])
+  unmount()
+})
+
+it('leaves the box as the legacy title filter while local indexing consent is pending', async () => {
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local')
+  )
+  await debounce()
+  expect(searchSessions).not.toHaveBeenCalled()
+  expect(result.current.searching).toBe(false)
+  expect(result.current.hasQuery).toBe(true)
+  expect(result.current.needsLocalConsent).toBe(true)
+  expect(result.current.loading).toBe(false)
+  expect(result.current.sessions).toEqual([])
+  unmount()
+})
+
+it('searches the local index with the same query once consent is on', async () => {
+  mockSettings.aiVaultSearch = { enabled: true }
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local')
+  )
+  await debounce()
+  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
+    { ...ALL_REQUEST, cursor: undefined },
+    'local'
+  )
+  expect(result.current.searching).toBe(true)
+  expect(result.current.hasQuery).toBe(true)
+  expect(result.current.needsLocalConsent).toBe(false)
+  unmount()
+})
+
+it('is neither searching nor holding a query for a blank box', async () => {
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('   ', ALL_AGENTS, undefined, 'local')
+  )
+  await debounce()
+  expect(searchSessions).not.toHaveBeenCalled()
+  expect(result.current.searching).toBe(false)
+  expect(result.current.hasQuery).toBe(false)
   unmount()
 })

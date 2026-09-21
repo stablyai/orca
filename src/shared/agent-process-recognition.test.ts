@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { withFreshOmpLaunch } from './omp-fresh-launch'
+import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { detectExplicitPiAgentKindFromCommand } from './pi-agent-kind'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -14,6 +17,42 @@ describe('agent process recognition', () => {
       processName: 'codex-aarch64-ap'
     })
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
+  })
+
+  it.each(['posix', 'powershell', 'cmd'] as const)(
+    'recognizes fresh OMP commands and drafts in %s',
+    (shell) => {
+      for (const command of ['omp', 'omp launch', 'omp --model example']) {
+        const generated = withFreshOmpLaunch(command, shell)
+        expect(recognizeAgentProcessFromCommandLine(generated)).toEqual({
+          agent: 'omp',
+          processName: 'omp'
+        })
+        expect(detectExplicitPiAgentKindFromCommand(generated)).toBe('omp')
+      }
+      const draft = buildAgentDraftLaunchPlan({
+        agent: 'omp',
+        draft: 'task',
+        cmdOverrides: {},
+        platform: 'linux',
+        shell
+      })
+      expect(recognizeAgentProcessFromCommandLine(draft?.launchCommand)).toEqual({
+        agent: 'omp',
+        processName: 'omp'
+      })
+      expect(detectExplicitPiAgentKindFromCommand(draft?.launchCommand)).toBe('omp')
+    }
+  )
+
+  it('does not classify embedded fresh-launch text as an agent command', () => {
+    for (const command of [
+      `echo 'omp --config "$ORCA_OMP_FRESH_CONFIG"'`,
+      `echo '${withFreshOmpLaunch('omp', 'posix')}'`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+      expect(detectExplicitPiAgentKindFromCommand(command)).toBeNull()
+    }
   })
 
   it('recognizes the OpenClaude foreground process', () => {

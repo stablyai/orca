@@ -80,6 +80,7 @@ const result = spawnSync(
     'tests/e2e/ssh-skill-installation.spec.ts',
     'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts',
     'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts',
+    'tests/e2e/terminal-inline-images-ssh.spec.ts',
     '--config',
     'tests/playwright.config.ts',
     '--project',

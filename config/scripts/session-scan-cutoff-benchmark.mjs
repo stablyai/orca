@@ -35,11 +35,11 @@ const [baselineModule, currentModule] = await Promise.all([
   load(`import { sessionSortTime } from './session-scanner-accumulator';
 export ${baselineFunction.getText(baselineSource)}`),
   load(`export { canStopParsingSessions } from './session-scan-cutoff';
-export { CodexSessionCollection } from './codex-session-root-dedup';`)
+export { ScannedSessionCollection } from './session-root-dedup';`)
 ])
 const baseline = baselineModule.canStopParsingSessions
 const current = currentModule.canStopParsingSessions
-const { CodexSessionCollection } = currentModule
+const { ScannedSessionCollection } = currentModule
 
 let randomState = 91114
 function random(bound) {
@@ -59,7 +59,7 @@ function session(index, overrides = {}) {
   })
 }
 function collection(rows) {
-  const result = new CodexSessionCollection()
+  const result = new ScannedSessionCollection()
   for (const row of rows) {
     result.add(row)
   }
@@ -85,7 +85,7 @@ const limits = [0, -1, -3, 0.5, 1.5, Number.NaN, Infinity, -Infinity]
 const nextTimes = [undefined, Number.NaN, Infinity, -Infinity, 0, 1, 2, 2000]
 let comparisons = 0
 for (let trial = 0; trial < 4_000; trial += 1) {
-  const sessions = new CodexSessionCollection()
+  const sessions = new ScannedSessionCollection()
   const admitted = []
   for (let batch = 0; batch < 10; batch += 1) {
     const count = random(8)
@@ -180,7 +180,7 @@ results.push(
   measure(
     '2000-candidate scan cutoff + admission / limit1000',
     (cutoff) => {
-      const sessions = new CodexSessionCollection()
+      const sessions = new ScannedSessionCollection()
       let index = 0
       while (index < rows.length && !cutoff(sessions, 1_000, 10_000)) {
         const end = Math.min(rows.length, index + Math.min(8, Math.max(1, 1_000 - sessions.size)))

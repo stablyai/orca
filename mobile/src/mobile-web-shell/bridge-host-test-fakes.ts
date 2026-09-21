@@ -1,4 +1,5 @@
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
+import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge/bridge-envelope'
 
@@ -14,6 +15,8 @@ export type OpenStream = {
   method: string
   params: unknown
   emit: (payload: unknown) => void
+  /** Null when the host did not ask for binary, which is what says `wantsBinary` reached the client. */
+  emitBinary: ((frame: BrowserScreencastFrame) => void) | null
   unsubscribes: number
 }
 
@@ -45,8 +48,14 @@ export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient 
       new Promise<RpcResponse>((resolve, reject) => {
         requests.push({ method: args[0], args, resolve, reject })
       }),
-    subscribe: (method, params, onData) => {
-      const stream: OpenStream = { method, params, emit: onData, unsubscribes: 0 }
+    subscribe: (method, params, onData, options) => {
+      const stream: OpenStream = {
+        method,
+        params,
+        emit: onData,
+        emitBinary: options?.onBinaryFrame ?? null,
+        unsubscribes: 0
+      }
       streams.push(stream)
       return () => {
         stream.unsubscribes += 1

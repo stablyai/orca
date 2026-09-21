@@ -61,10 +61,9 @@ describe('browser settings search copy', () => {
     expect(linkRoutingEntry?.keywords).not.toContain('cmd')
 
     const terminalActionsEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
-      (entry) => entry.title === 'Show link actions'
+      (entry) => entry.title === 'Terminal URL clicks'
     )
-    expect(terminalActionsEntry?.description).toContain('Ctrl-click')
-    expect(terminalActionsEntry?.description).not.toContain('Cmd/Ctrl')
+    expect(terminalActionsEntry?.description).toContain('detected URLs')
     expect(terminalActionsEntry?.keywords).toEqual(
       getTerminalLinkActionSearchKeywords({ isMac: false })
     )
@@ -102,7 +101,7 @@ describe('browser link routing modifier copy', () => {
       'Default Zoom',
       'Link Routing',
       'Hold Shift to open in Orca',
-      'Show link actions',
+      'Terminal URL clicks',
       'Localhost Worktree Labels',
       'Session & Cookies',
       'Remote server workspaces',

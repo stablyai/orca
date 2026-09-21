@@ -7,7 +7,7 @@
     "start": "node scripts/start-expo.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "postinstall": "node scripts/build-terminal-webview-engine.mjs && node scripts/build-mermaid-webview-engine.mjs",
+    "postinstall": "node scripts/build-terminal-webview-engine.mjs && node scripts/build-mermaid-webview-engine.mjs && node scripts/build-mermaid-page-engine.mjs && node scripts/build-terminal-document-script.mjs && node scripts/build-rich-markdown-editor-script.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",

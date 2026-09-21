@@ -243,7 +243,13 @@ export function killAllLocalPtys(): void {
     disposePtyExitListener(id)
     if (!(process.platform === 'win32' && ptyTerminationMode.has(id))) {
       try {
-        proc.kill()
+        if (ptyAgentSessionIds.has(id) && process.platform !== 'win32') {
+          // App quit is synchronous, so sweep attached agent process groups before
+          // releasing node-pty; otherwise OMP workers can outlive the foreground PTY.
+          forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
+        } else {
+          proc.kill()
+        }
       } catch {
         /* Process may already be dead. */
       }

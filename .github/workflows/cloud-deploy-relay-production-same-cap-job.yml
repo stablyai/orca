@@ -78,7 +78,8 @@ jobs:
           [[ "${ROLLBACK_REHOME_PROTOCOL}" =~ ^(0|1|3)$ ]]
           [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
-          [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
+          # cell_1..cell_10 in the calling wave; the chain is static, so this range is too.
+          [[ "${WAVE_INDEX}" =~ ^[0-9]$ ]]
           # The caller validated this too; re-check here so a malformed override
           # can never reach a mutation through this reusable workflow.
           if test -n "${GATE_OVERRIDE_REASON}${GATE_OVERRIDE_CONFIRMATION}"; then
@@ -537,9 +538,12 @@ jobs:
 
       - name: Reversibly isolate and drain only the selected cell
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        id: drain
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
         run: |
+          # Opens the window the report-only shadow health gate below judges this cell over.
+          echo "drain-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
           # A cell isolated by a failed canary is already migration-only, so
           # isolate is a no-op there that does not advance the selector; the
@@ -553,6 +557,10 @@ jobs:
           if test "${ENTRY_ADMISSION}" = migration-only; then
             jq -e '.changed == false' <<< "${ISOLATE_RESULT}" >/dev/null
           fi
+          # The director re-places hosts off a cell only when the isolate stamped it, so a
+          # script too old to ask for the stamp produces today's behaviour and the canary
+          # reads as "the fix did nothing" with nothing to tell that from a wrong premise.
+          jq -e '.rollIsolated == true' <<< "${ISOLATE_RESULT}" >/dev/null
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
@@ -590,11 +598,16 @@ jobs:
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
+          # The backend service is targeted too, so its reviewed drain timeout
+          # and request logging can be the only thing left here; neither
+          # restarts an instance, so the validator below clears that on its
+          # own, without the template-and-MIG pair.
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
           if ! terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
@@ -617,7 +630,7 @@ jobs:
                     | select(.change.actions | any(. != "no-op" and . != "read"))
                     | .address] | join(","))'
             echo 'requiring reviewed rollback-image drift'
-            terraform -chdir=infra/terraform show -json \
+            RESUME_REVIEW="$(terraform -chdir=infra/terraform show -json \
               "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
               | node dev/scripts/validate-relay-capacity-plan.mjs \
                 --mode same-cap-cell --cell-id "${TARGET_CELL_ID}" \
@@ -629,14 +642,30 @@ jobs:
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
-                "${POOL_ARGUMENTS[@]}" \
-              | jq -e '.changes == 2' >/dev/null
+                "${POOL_ARGUMENTS[@]}")"
+            echo "${RESUME_REVIEW}"
+            jq -e '.changes == 2
+                or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' \
+              <<< "${RESUME_REVIEW}" >/dev/null
+            # changes == 0 here means the template and MIG are converged and this cell's
+            # reviewed backend update is the only thing left, so the resume is not complete:
+            # apply it, or the cell silently keeps the 300-second drain and no request
+            # logging and the operator reads that as a finished roll. The plan holds nothing
+            # else (the validator bounded it to this cell's backend, and the template and MIG
+            # are no-ops in it), and neither attribute restarts an instance, so the
+            # incarnation check downstream stays honest. Template-and-MIG drift still applies
+            # nothing, which is what a resume means.
+            if test "$(jq -er '.changes' <<< "${RESUME_REVIEW}")" = 0; then
+              terraform -chdir=infra/terraform apply -auto-approve \
+                "${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
+            fi
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
 
       - name: Apply only the selected same-cap template and MIG
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
+        id: apply
         shell: bash
         env:
           CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
@@ -652,6 +681,7 @@ jobs:
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
           PLAN_REVIEW="$(terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap.tfplan" \
@@ -666,6 +696,10 @@ jobs:
               --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
               "${POOL_ARGUMENTS[@]}")"
           echo "${PLAN_REVIEW}"
+          # Stamped before the apply, not after it: the new container announces its listener while
+          # the MIG is still converging, so a bound taken at the end of this step is already past
+          # the announcement the shadow gate looks for.
+          echo "apply-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -684,6 +718,9 @@ jobs:
             gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
               --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
           fi
+          # Recorded for the operator comparing verdicts; the gate's boot search opens at the
+          # apply-started-at stamp above, not here.
+          echo "apply-completed-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: post-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -697,6 +734,7 @@ jobs:
 
       - name: Verify new incarnation, exact image, protocol, and durable safety
         if: ${{ inputs.mode != 'verify' }}
+        id: verify-target
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |
@@ -748,6 +786,7 @@ jobs:
             --expected-general-cells "${ISOLATED_GENERAL_CELLS}" \
             --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
             | jq -e '.control.enabled == false' >/dev/null
+          echo "verify-ended-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - name: Prove exact per-host trust and idempotent no-neighbor behavior
         if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol != '0') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol != '0')) }}
@@ -794,6 +833,63 @@ jobs:
             --expected-control-generation "${EXPECTED_REHOME_GENERATION}" \
             | jq -e '.control.enabled == false' >/dev/null
 
+      # Report only: this evaluates the oracles an operator reads by hand after a cell and records
+      # what it would have called, so its verdicts can be compared with the operator's over a full
+      # roll before it is ever allowed to block. Two independent guarantees keep it inert: the
+      # script exits 0 on every verdict, and continue-on-error keeps even a crash off the job's
+      # outcome. The failsafe below therefore cannot fire on anything this step observes.
+      #
+      # It runs after the restore, not before it, for two reasons: the cell goes back into
+      # admission on exactly today's schedule rather than waiting out a minute of log reads, and
+      # the window it judges has closed by then, so Cloud Logging's ingestion lag is behind it.
+      # These are fleet oracles anyway; when this does gate, what it gates is the next cell.
+      - name: Shadow health gate (report only)
+        id: shadow-gate
+        if: ${{ inputs.mode != 'verify' }}
+        continue-on-error: true
+        # continue-on-error bounds this step's contribution to the job outcome, not its clock,
+        # and its reads are serialised. A timed-out step is a failed step, which continue-on-error
+        # absorbs; without this bound a Logging 429 storm or an expired credential makes every
+        # read cost its full retry budget and can push the job past timeout-minutes, and a
+        # cancelled job takes the whole wave with it. A healthy gate is already minutes of
+        # serial reads, so both bounds sit above that: the script settles at seven minutes and
+        # reaching this eight is the pathological case. Eight on top of a ~14-minute cell still
+        # leaves the job's 75 minutes intact.
+        timeout-minutes: 8
+        env:
+          DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}
+          APPLY_STARTED_AT: ${{ steps.apply.outputs.apply-started-at }}
+          APPLY_COMPLETED_AT: ${{ steps.apply.outputs.apply-completed-at }}
+          VERIFY_ENDED_AT: ${{ steps.verify-target.outputs.verify-ended-at }}
+          SHADOW_GATE_DIRECTORY: ${{ runner.temp }}/relay-same-cap-shadow-gate
+          SHADOW_GATE_NAME: relay-same-cap-shadow-gate-${{ inputs.target-cell-id }}-${{ github.run_id }}.json
+        run: |
+          mkdir -p "${SHADOW_GATE_DIRECTORY}"
+          node dev/scripts/relay-same-cap-shadow-gate.mjs \
+            --cell-id "${TARGET_CELL_ID}" \
+            --cell-host "${TARGET_HOSTNAME}.relay.onorca.dev" \
+            --project-id "${GCP_PROJECT_ID}" \
+            --director-service orca-cloud-relay \
+            --drain-started-at "${DRAIN_STARTED_AT}" \
+            --apply-started-at "${APPLY_STARTED_AT}" \
+            --apply-completed-at "${APPLY_COMPLETED_AT}" \
+            --verify-ended-at "${VERIFY_ENDED_AT}" \
+            --summary-file "${GITHUB_STEP_SUMMARY}" \
+            --output-file "${SHADOW_GATE_DIRECTORY}/${SHADOW_GATE_NAME}"
+
+      - name: Publish the shadow health gate verdict
+        if: ${{ inputs.mode != 'verify' }}
+        continue-on-error: true
+        # One small JSON file; a retrying upload must not spend the wave's remaining minutes either.
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-same-cap-shadow-gate-${{ inputs.target-cell-id }}-${{ github.run_id }}.json
+          path: ${{ runner.temp }}/relay-same-cap-shadow-gate
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
+
       - id: cleanup-auth
         if: ${{ failure() && inputs.mode != 'verify' }}
         uses: google-github-actions/auth@v2
@@ -815,6 +911,9 @@ jobs:
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
+          # Same reason as the isolate step above: a failed wave leaves this cell isolated
+          # deliberately, and the stamp is what lets its hosts leave.
+          jq -e '.rollIsolated == true' <<< "${ISOLATE_RESULT}" >/dev/null
           # The isolate result carries the authoritative post-isolate generation;
           # fixed offsets are wrong whenever an earlier isolate was a no-op.
           FAILSAFE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"

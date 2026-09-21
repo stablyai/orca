@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, type ReactNode } from 'react'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   OrcaMobileWebShellView,
@@ -7,22 +8,24 @@ import {
 } from '../../modules/orca-mobile-web-shell/src'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type {
   MobileWebShellFailureCause,
   MobileWebShellSessionState
 } from './mobile-web-shell-session-contract'
-import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import {
-  useMobileWebShellSession,
-  type MobileWebShellRuntime
-} from './use-mobile-web-shell-session'
-
-// Same guard as the Troubleshoot developer row: `__DEV__` is undefined outside the React Native
-// runtime, and the facts below are for whoever is bringing the shell up, not for a user.
-const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__
-
-/** Enough of a build id to tell two generations apart in a screenshot, and not enough to be one. */
-const BUILD_ID_PREFIX_LENGTH = 12
+  formatMobileWebShellDevFacts,
+  isDevelopmentBuild,
+  useMobileWebShellDroppedFrames
+} from './mobile-web-shell-dev-facts'
+import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
+import { playPageHaptic } from './page-haptics'
+import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
+import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
+import { useShellStackPop } from './use-shell-stack-pop'
+import { useMobileWebShellSession } from './use-mobile-web-shell-session'
+import { usePageHostSnapshot } from './use-page-host-snapshot'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -93,17 +96,25 @@ function Failed({
   )
 }
 
-/** Never the generation directory, never the whole build id, never the host id: this renders on a
- *  device someone may be screen-sharing, and none of those three tell them anything a prefix does
- *  not. */
-function DevFacts({ state }: { state: Extract<MobileWebShellSessionState, { kind: 'ready' }> }) {
-  if (!isDevelopmentBuild) {
+function DevFacts({
+  state,
+  droppedBinaryFrames
+}: {
+  state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
+  droppedBinaryFrames: number
+}) {
+  if (!isDevelopmentBuild()) {
     return null
   }
   return (
     <View style={styles.devFacts} pointerEvents="none">
       <Text style={styles.devFactsText} testID="mobile-web-shell-dev-facts">
-        {`${state.buildId.slice(0, BUILD_ID_PREFIX_LENGTH)} · ${state.totalBytes} B · ${state.elapsedMs} ms`}
+        {formatMobileWebShellDevFacts({
+          buildId: state.buildId,
+          totalBytes: state.totalBytes,
+          elapsedMs: state.elapsedMs,
+          droppedBinaryFrames
+        })}
       </Text>
     </View>
   )
@@ -111,6 +122,14 @@ function DevFacts({ state }: { state: Extract<MobileWebShellSessionState, { kind
 
 export type MobileWebShellScreenProps = {
   hostId: string
+  /** The screen this shell stands in for, which the page cannot derive from a document served at `/`. */
+  route: BridgeInitRoute
+  /**
+   * What to render when the bundle does not list this route, or lists it needing a grant this app
+   * does not implement. Required, because every caller has a native screen behind it: that is what
+   * the negotiation falls back to, and a shell with nothing behind it would paint a blank instead.
+   */
+  fallback: ReactNode
   runtime?: MobileWebShellRuntime
 }
 
@@ -121,11 +140,120 @@ export type MobileWebShellScreenProps = {
  * The native view is keyed on the session id, so a remount the reducer asks for is a new key and a
  * rebuilt WebView with every fence reinstalled — the view has no reload of its own by design.
  */
-export function MobileWebShellScreen({ hostId, runtime }: MobileWebShellScreenProps) {
+export function MobileWebShellScreen({
+  hostId,
+  route,
+  fallback,
+  runtime
+}: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
-  const { state, retry, reportShellFailure } = useMobileWebShellSession({ hostId, runtime })
-  const bridge = useMobileWebShellBridge({ hostId, session: state })
+  const router = useRouter()
+  const popShellStack = useShellStackPop()
+  const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
+  const {
+    state,
+    pageRoutes,
+    pageRouteGrants,
+    routeGrants,
+    retry,
+    reportShellFailure,
+    reportDocumentLoaded,
+    reportPageReady
+  } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
+  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } =
+    usePageHostSnapshot(hostId)
+  // Declared before the bridge so the handler it is handed already belongs to this session: the
+  // media verbs hold staged files, and a registry born after the host would outlive the page.
+  const serveNativeVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
+  // Straight to the system handler, and the one opener the shell has: the page's `externalLink`
+  // notify and a cancelled top-frame navigation both arrive here already filtered. The only failure
+  // left is a device with nothing registered for the scheme -- a `mailto:` on a phone with no mail
+  // account. Reported rather than swallowed, because nothing crosses back for either path, and not
+  // rethrown, because both run on a native frame handler.
+  const openUrlForPage = (url: string) => {
+    void Linking.openURL(url).catch((error: unknown) => {
+      console.warn('[web-shell] could not open a URL for the page', { url, error })
+    })
+  }
 
+  const bridge = useMobileWebShellBridge({
+    hostId,
+    route,
+    pageRoutes,
+    pageRouteGrants,
+    routeGrants,
+    session: state,
+    snapshot,
+    readStorage,
+    onStorageWrite: writeStorage,
+    // Reported as the document failing to load, which is what it is: the document loaded and never
+    // produced a tree. That reason drops this generation and downloads once, so a page broken by
+    // bytes this host has since replaced recovers, and a page broken by its own code stops at the
+    // failure screen instead of a blank one.
+    // Must not throw: it runs inside the page's own error boundary on one side and the native frame
+    // handler on the other, and neither has anywhere to put a throw.
+    onPageFault: (error) => {
+      console.warn('[web-shell] the page faulted', error)
+      reportShellFailure('document-load-failed')
+    },
+    // The `init` this ready is answered with is already built from the app's writes, which reach
+    // the map as they are made. This re-seats that map on the store afterwards, for the key whose
+    // write never persisted, and it runs on every ask because a document that reloads inside this
+    // mount asks again.
+    onPageReady: () => {
+      reportPageReady()
+      void refreshStorage()
+    },
+    // `document-load-failed` because that is what happens: the document loads and the page refuses
+    // the session, so no tree is ever built. The refetch it costs is wasted on a route this shell
+    // produced, and the second report is terminal, which is the failure screen this deserves.
+    onRouteRefused: (issue) => {
+      console.warn('[web-shell] refused to open this screen', issue)
+      reportShellFailure('document-load-failed')
+    },
+    // Pushed, never replaced: the page stays mounted underneath, so Back reveals it with no
+    // download and no second `init`.
+    onNavigate: (href: string) => {
+      router.push(href)
+    },
+    // Answered on this device and never forwarded; the host holds it to the verb table first.
+    serveNativeVerb,
+    // Straight to the system handler. The envelope allowlisted the scheme before this ran, so the
+    // only failure left is a device with nothing registered for it — a `mailto:` on a phone with no
+    // mail account. Reported rather than swallowed: nothing crosses back for a notify, so this is
+    // the one dead tap the verb does not rule out, and silence is what would hide it. Still not
+    // rethrown, because this runs on the native frame handler.
+    // The same opener a cancelled top-frame navigation takes, hoisted above this call so both
+    // paths are one function: its body is the `Linking.openURL` and the warning this handler
+    // carried inline.
+    onExternalLink: openUrlForPage,
+    // The app's own haptics, reached through one mapping rather than a second copy of the
+    // `Platform.OS` split. Nothing crosses back and nothing can fail: each function already
+    // swallows its own rejection on the device.
+    onHaptic: playPageHaptic,
+    // The page's own Back goes nowhere: it holds the one history entry the entry wrote, so the only
+    // stack to pop is this one.
+    onNavigateBack: popShellStack,
+    // A dropped screencast frame leaves no other trace on a device: the stream stays up by design
+    // and the diagnostic beside it prints once per host.
+    onBinaryFramesDropped: reportDroppedBinaryFrames
+  })
+
+  // A profile read that rejected never becomes a host, so the session would otherwise sit in
+  // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
+  // `document-load-failed` because that is the outcome: the document loads and no session opens.
+  // The refetch it costs is wasted on a device-local read, and the second report is terminal, which
+  // is the failure screen with a Try again this deserves.
+  useEffect(() => {
+    if (unreadable) {
+      console.warn('[web-shell] this host could not be read from the app store')
+      reportShellFailure('document-load-failed')
+    }
+  }, [reportShellFailure, unreadable])
+
+  if (state.kind === 'native-route') {
+    return fallback
+  }
   if (state.kind === 'wall') {
     return <ProtocolBlockScreen verdict={state.verdict} />
   }
@@ -160,14 +288,31 @@ export function MobileWebShellScreen({ hostId, runtime }: MobileWebShellScreenPr
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
         onBridgeMessage={bridge.onBridgeMessage}
+        onExternalNavigation={(event) => {
+          const target = cancelledShellNavigationTarget(event.nativeEvent.url)
+          if (target === null) {
+            // Cancelled and not openable. Nothing naming the shell's own document reaches here:
+            // the shell refuses that without offering it, whatever asked. What lands here and is
+            // dropped is a URL outside the three allowed schemes. Silent, as every cancelled
+            // navigation was before this event existed.
+            return
+          }
+          openUrlForPage(target)
+        }}
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {
             reportShellFailure(parsed.reason)
+            return
+          }
+          // A finished document is not a working one. The WebView says the response committed; only
+          // the page's own first frame says its code ran, so this is where the wait for it starts.
+          if (parsed?.state === 'ready') {
+            reportDocumentLoaded()
           }
         }}
       />
-      <DevFacts state={state} />
+      <DevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
 }

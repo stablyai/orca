@@ -7,19 +7,31 @@ import { afterEach, expect, it, vi } from 'vitest'
 // in-process readers, which the worker entry calls on the other side.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
   const list = await import('./session-scanner-opencode-sqlite-list')
+  const list2 = await import('./session-scanner-opencode2-sqlite-list')
   const parse = await import('./session-scanner-opencode-sqlite')
+  const parse2 = await import('./session-scanner-opencode2-sqlite')
   const capture = await import('./session-scanner-opencode-sqlite-capture')
+  const capture2 = await import('./session-scanner-opencode2-sqlite')
   return {
     resolveOpenCodeSqliteWorkerEntryPath: () => null,
     listOpenCodeSqliteSessionsViaWorker: (
       args: Parameters<typeof list.listOpenCodeSqliteSessions>[0]
     ) => list.listOpenCodeSqliteSessions(args),
+    listOpenCode2SqliteSessionsViaWorker: (
+      args: Parameters<typeof list2.listOpenCode2SqliteSessions>[0]
+    ) => list2.listOpenCode2SqliteSessions(args),
     parseOpenCodeSqliteSessionViaWorker: (
       args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
     ) => parse.parseOpenCodeSqliteSession(args),
+    parseOpenCode2SqliteSessionViaWorker: (
+      args: Parameters<typeof parse2.parseOpenCode2SqliteSession>[0]
+    ) => parse2.parseOpenCode2SqliteSession(args),
     captureOpenCodeSqliteSessionViaWorker: (
       args: Parameters<typeof capture.captureOpenCodeSqliteSession>[0]
-    ) => capture.captureOpenCodeSqliteSession(args)
+    ) => capture.captureOpenCodeSqliteSession(args),
+    captureOpenCode2SqliteSessionViaWorker: (
+      args: Parameters<typeof capture2.captureOpenCode2SqliteSession>[0]
+    ) => capture2.captureOpenCode2SqliteSession(args)
   }
 })
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
@@ -100,7 +112,7 @@ async function readEveryAgentVault(): Promise<CapturedRead[]> {
   })
   const result = await scanAiVaultSessions({
     ...roots,
-    opencodeDbPaths: [dbPath],
+    opencodeDbPaths: [...(roots.opencodeDbPaths ?? []), dbPath],
     platform: 'darwin',
     limit: 40
   })

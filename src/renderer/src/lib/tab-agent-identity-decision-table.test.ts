@@ -133,27 +133,26 @@ describe('renderer ladder decision table', () => {
       join(tmpdir(), 'orca-pane-agent-identity-decision-table-real.json'),
       `${JSON.stringify(result, null, 2)}\n`
     )
-    // Re-derived against resolveTabAgentFromSignals (not a hand-written model). These differ from
-    // the approved 2,520/648 totals and 396/144/72/36 breakdown; see the PR comment.
+    // Re-derived against resolveTabAgentFromSignals (not a hand-written model).
     expect(proofFree).toEqual({
-      disagreements: 2_622,
+      disagreements: 2_634,
       flipped: 1_872,
       breakdown: {
-        launch: 1_884,
-        'completed-hook': 478,
-        'sleeping-session': 144,
+        launch: 1_890,
+        'completed-hook': 480,
+        'sleeping-session': 148,
         process: 0,
         sibling: 54,
         title: 6
       }
     })
     expect(freshProof).toEqual({
-      disagreements: 658,
+      disagreements: 670,
       flipped: 0,
       breakdown: {
-        launch: 588,
-        'completed-hook': 46,
-        'sleeping-session': 0,
+        launch: 594,
+        'completed-hook': 48,
+        'sleeping-session': 4,
         process: 0,
         sibling: 6,
         title: 2

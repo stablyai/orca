@@ -134,13 +134,14 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
       'OpenCode Go Session Cookie'
     ),
     description: translate(
-      'auto.components.settings.accounts.search.d1d2ae383c',
-      'Paste your opencode.ai session cookie for rate limit fetching.'
+      'auto.components.settings.accounts.search.25591bf95b',
+      'Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.37020a02c2', 'console'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'

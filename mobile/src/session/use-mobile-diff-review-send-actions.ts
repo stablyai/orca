@@ -1,8 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import * as Clipboard from 'expo-clipboard'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { useClipboardWriter } from '../platform/clipboard'
 import { triggerSuccess } from '../platform/haptics'
 import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
@@ -29,6 +29,9 @@ type SendActionsInput = {
 }
 
 export function useMobileDiffReviewSendActions(input: SendActionsInput) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is.
+  const clipboard = useClipboardWriter()
   const {
     client,
     connState,
@@ -43,10 +46,17 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
       return
     }
-    await Clipboard.setStringAsync(formatDiffComments(screenState.comments))
+    // Caught here because the only caller is `void controller.copyNotes()`: the seam rejects when
+    // the pasteboard refused, and an uncaught rejection would leave "copied" as the last word.
+    try {
+      await clipboard.writeText(formatDiffComments(screenState.comments))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to copy the review notes')
+      return
+    }
     triggerSuccess()
     setActionError('Review notes copied')
-  }, [screenState, setActionError])
+  }, [clipboard, screenState, setActionError])
 
   const clearSentNotes = useCallback(async () => {
     if (screenState.kind !== 'ready') {

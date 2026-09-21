@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 
 const SOURCE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const TIMER_GLOBALS = new Set(['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'])
@@ -28,9 +30,9 @@ const PARKING_OPERATORS = new Set([
 type Census = { parked: string[]; shared: string[] }
 
 function productFiles(): string[] {
-  return readdirSync(SOURCE_ROOT, { recursive: true, encoding: 'utf8' })
-    .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$|\.generated\.ts$/.test(entry))
-    .map((entry) => entry.replaceAll('\\', '/'))
+  return censusSourceFiles(SOURCE_ROOT)
+    .map((path) => relative(SOURCE_ROOT, path).replaceAll('\\', '/'))
+    .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
 }
 
 function timerName(node: ts.Node): string | null {

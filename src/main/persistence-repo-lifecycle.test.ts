@@ -15,6 +15,7 @@ import {
   makeWorktreeLineage
 } from './persistence-test-harness'
 import {
+  _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
@@ -98,6 +99,18 @@ describe('Store', () => {
     const beforeReAdd = getLocalWorktreeScanGeneration(repoId)
     store.addRepo(makeRepo({ id: repoId, path: '/replacement' }))
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeReAdd)).toBe(false)
+  })
+
+  it('forgets scan generations when repos are removed', async () => {
+    const store = await createStore()
+    const initialCacheSize = _getLocalWorktreeScanGenerationCacheSize()
+    for (let index = 0; index < 200; index += 1) {
+      const repoId = `scan-churn-${index}`
+      store.addRepo(makeRepo({ id: repoId }))
+      store.removeProject(repoId)
+    }
+
+    expect(_getLocalWorktreeScanGenerationCacheSize()).toBe(initialCacheSize)
   })
 
   it('setResolvedRepoGitUsername persists the enriched username for hydration', async () => {

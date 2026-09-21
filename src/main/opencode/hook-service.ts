@@ -21,6 +21,7 @@ import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
 import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
+import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -31,6 +32,13 @@ const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
 type OpenCodeOverlayManifest = {
   topLevelEntries: string[]
   pluginEntries: string[]
+}
+
+type OpenCodeHookVariant = {
+  pluginFileName: string
+  legacyHooksDir: string
+  overlayDir: string
+  pluginSource: () => string
 }
 
 // Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
@@ -47,9 +55,16 @@ export function getOpenCodePluginSource(): string {
   return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
+export function getOpenCode2PluginSource(): string {
+  return getOpenCodeFamilyPluginSource('/hook/opencode2', {
+    emitSessionStart: true,
+    emitNextEvents: true
+  })
+}
+
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
-  options: { emitSessionStart: boolean }
+  options: { emitSessionStart: boolean; emitNextEvents?: boolean }
 ): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
@@ -65,8 +80,34 @@ export function getOpenCodeFamilyPluginSource(
   ].join('\n')
 }
 
-// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
+// Why: installs the plugin into OpenCode's config discovery path so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini.
 export class OpenCodeHookService {
+  private readonly pluginSource: () => string
+  private readonly pluginFileName: string
+  private readonly legacyHooksDir: string
+  private readonly overlayDir: string
+
+  constructor(variant?: OpenCodeHookVariant | (() => string)) {
+    const config: OpenCodeHookVariant =
+      typeof variant === 'function'
+        ? {
+            pluginFileName: ORCA_OPENCODE_PLUGIN_FILE,
+            legacyHooksDir: OPENCODE_LEGACY_HOOKS_DIR,
+            overlayDir: OPENCODE_OVERLAY_DIR,
+            pluginSource: variant
+          }
+        : (variant ?? {
+            pluginFileName: ORCA_OPENCODE_PLUGIN_FILE,
+            legacyHooksDir: OPENCODE_LEGACY_HOOKS_DIR,
+            overlayDir: OPENCODE_OVERLAY_DIR,
+            pluginSource: getOpenCodePluginSource
+          })
+    this.pluginSource = config.pluginSource
+    this.pluginFileName = config.pluginFileName
+    this.legacyHooksDir = config.legacyHooksDir
+    this.overlayDir = config.overlayDir
+  }
+
   clearPty(_ptyId: string): void {
     // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
@@ -77,36 +118,31 @@ export class OpenCodeHookService {
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
-    if (!existingConfigDir) {
-      // Why: share one config root so OpenCode's plugin deps don't churn node_modules per terminal.
-      const configDir = this.writeSharedPluginConfig()
-      if (!configDir) {
+    const managedConfigDir = this.getSharedConfigDir()
+    if (!existingConfigDir || existingConfigDir === managedConfigDir) {
+      try {
+        this.writePluginToConfigDir(resolveOpenCodeConfigDirectory())
+        return {}
+      } catch {
         return {}
       }
-      return { OPENCODE_CONFIG_DIR: configDir }
     }
-
-    // Why: don't mkdir the user's (possibly typoed) path — that's the config-replacement failure mode in docs/opencode-config-dir-collision.md; let OpenCode surface it.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
-
     const overlayDir = this.getSourceOverlayDir(existingConfigDir)
-
     try {
       mkdirSync(overlayDir, { recursive: true })
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
+      return { OPENCODE_CONFIG_DIR: overlayDir }
     } catch {
-      // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
-
-    return { OPENCODE_CONFIG_DIR: overlayDir }
   }
 
   private getOverlayRoot(): string {
-    return join(getAppEnvironment().getPath('userData'), OPENCODE_OVERLAY_DIR)
+    return join(getAppEnvironment().getPath('userData'), this.overlayDir)
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
@@ -116,7 +152,7 @@ export class OpenCodeHookService {
   private getSharedConfigDir(): string {
     return join(
       getAppEnvironment().getPath('userData'),
-      OPENCODE_LEGACY_HOOKS_DIR,
+      this.legacyHooksDir,
       OPENCODE_SHARED_CONFIG_DIR
     )
   }
@@ -149,7 +185,7 @@ export class OpenCodeHookService {
 
     const overlayPluginsDir = join(overlayDir, 'plugins')
     for (const entryName of manifest.pluginEntries) {
-      if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
+      if (entryName === this.pluginFileName) {
         continue
       }
       safeRemoveTree(join(overlayPluginsDir, entryName))
@@ -187,7 +223,7 @@ export class OpenCodeHookService {
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
             // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
-            if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
+            if (pluginEntry.name === this.pluginFileName) {
               continue
             }
             mirrorEntry(
@@ -211,32 +247,32 @@ export class OpenCodeHookService {
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
-    const pluginPath = join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE)
+    const pluginPath = join(pluginsDir, this.pluginFileName)
     try {
       unlinkSync(pluginPath)
     } catch {
       // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
     }
-    writeFileSync(pluginPath, getOpenCodePluginSource())
+    writeFileSync(pluginPath, this.pluginSource())
   }
 
-  private writeSharedPluginConfig(): string | null {
-    const configDir = this.getSharedConfigDir()
+  private writePluginToConfigDir(configDir: string): void {
     const pluginsDir = join(configDir, 'plugins')
-    try {
-      mkdirSync(pluginsDir, { recursive: true })
-      writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
-    } catch {
-      // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
-      return null
-    }
-    return configDir
+    mkdirSync(pluginsDir, { recursive: true })
+    writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
   }
 }
 
 export const openCodeHookService = new OpenCodeHookService()
+export const openCode2HookService = new OpenCodeHookService({
+  pluginFileName: 'orca-opencode2-status.js',
+  legacyHooksDir: 'opencode2-hooks',
+  overlayDir: 'opencode2-config-overlays',
+  pluginSource: getOpenCode2PluginSource
+})
 export const _internals = {
   getOpenCodePluginSource,
+  getOpenCode2PluginSource,
   isUsableId,
   toSafeDirName
 }
