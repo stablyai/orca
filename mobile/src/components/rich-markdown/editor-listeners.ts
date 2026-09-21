@@ -23,7 +23,11 @@ function mirrorCheckedState(input: HTMLInputElement) {
   }
 }
 
-function handleInput(scope: RichMarkdownEditorScope) {
+function handleInput(scope: RichMarkdownEditorScope, event: Event) {
+  // Why: one checkbox tap raises click, input and change, and `change` is the one that records it.
+  if (checkboxAt(event.target)) {
+    return
+  }
   scope.selectionDroppedOnBlur = false
   if (scope.editable) {
     emitChange(scope)
@@ -51,8 +55,7 @@ function handleClick(scope: RichMarkdownEditorScope, event: MouseEvent) {
     post(scope, { type: 'openLink', url: link.getAttribute('href') ?? '' })
     return
   }
-  const input = checkboxAt(event.target)
-  if (!input) {
+  if (!checkboxAt(event.target)) {
     if (!scope.editable) {
       return
     }
@@ -73,12 +76,11 @@ function handleClick(scope: RichMarkdownEditorScope, event: MouseEvent) {
     }
     return
   }
+  // The tick and the change both come from `change`, which this same tap raises; a read-only
+  // document refuses the toggle here, which is the only thing left for a click to decide.
   if (!scope.editable) {
     event.preventDefault()
-    return
   }
-  mirrorCheckedState(input)
-  emitChange(scope)
 }
 
 function handleKeydown(scope: RichMarkdownEditorScope, event: KeyboardEvent) {
@@ -92,7 +94,7 @@ function handleKeydown(scope: RichMarkdownEditorScope, event: KeyboardEvent) {
 /** The four listeners the surface carries, installed per document and taken off by `stop`. */
 export function startEditorListeners(scope: RichMarkdownEditorScope) {
   const editor = editorElement(scope)
-  const onInput = () => handleInput(scope)
+  const onInput = (event: Event) => handleInput(scope, event)
   const onChange = (event: Event) => handleChange(scope, event)
   const onClick = (event: MouseEvent) => handleClick(scope, event)
   const onKeydown = (event: KeyboardEvent) => handleKeydown(scope, event)

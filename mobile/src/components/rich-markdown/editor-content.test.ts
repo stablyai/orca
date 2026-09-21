@@ -117,4 +117,19 @@ describe('the editor document content', () => {
     expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
     expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
   })
+
+  it('reports one change for a checkbox tap, not one per event the tap raises', () => {
+    // One tap raises click, input and change, and all three bubble to `#editor`: the recorded
+    // sequence is the precondition, so a count of one cannot pass by the events going missing.
+    const editor = editorDocument()
+    editor.handle.setMarkdown('- [ ] Open', 1)
+    const reached: string[] = []
+    for (const name of ['click', 'input', 'change']) {
+      editor.editor.addEventListener(name, (event) => reached.push(event.type))
+    }
+    editor.editor.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(reached).toEqual(['click', 'input', 'change'])
+    expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
+  })
 })
