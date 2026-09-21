@@ -115,9 +115,9 @@ async function openHostRoute({
     pageRouteGrants
   })
   const errors = []
-  const scripts = []
-  // Every script answer, not only the ones that arrived: a chunk the navigation waits on can fail
-  // with a status the 200-only list cannot show.
+  // Every script answer with its status, not only the ones that arrived. A 200-only list cannot
+  // show a chunk the navigation asked for and did not get, and the absence assertions below would
+  // read that failed request as a fetch that never happened.
   const jsResponses = []
   page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
   page.on('console', (message) => {
@@ -131,9 +131,6 @@ async function openHostRoute({
       return
     }
     jsResponses.push({ status: response.status(), path })
-    if (response.status() === 200) {
-      scripts.push(path)
-    }
   })
   await page.goto(`${origin}/`, { waitUntil: 'load' })
   await page.waitForFunction(() => document.documentElement.dataset.orcaWebEntry === 'mounted', {
@@ -144,7 +141,7 @@ async function openHostRoute({
     timeout: 30_000,
     polling: 250
   })
-  return { page, errors, scripts, jsResponses }
+  return { page, errors, jsResponses }
 }
 
 /** Every `navigate` notify the page posted, in order. */
@@ -191,7 +188,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       viewport: WIDE,
       grants: [faultGrant, 'navigate', 'storage', 'haptics']
     })
-    const { page, errors, scripts } = opened
+    const { page, errors, jsResponses } = opened
     // The header's own control, by the name a user reads; it is the sidebar's on a wide layout.
     await page.getByLabel('Tasks').first().click()
     await page.waitForTimeout(1_500)
@@ -199,12 +196,12 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
     // Handed over, not taken: the document stayed on the worktree list, and the tasks route's own
-    // chunk was never fetched — which is what says the page did not quietly render it under these
-    // grants. That chunk by name, not "no chunk arrived after the click": the opener's own chunk
-    // can still be in flight when the click lands, and counting it as new reds a case whose rule
-    // held.
+    // chunk was never requested — which is what says the page did not quietly render it under
+    // these grants. That chunk by name, not "no chunk arrived after the click": the opener's own
+    // chunk can still be in flight when the click lands, and counting it as new reds a case whose
+    // rule held. At any status, because a request answered 404 is still a page that asked.
     expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
-    expect(scripts.filter((path) => path.endsWith(tasksChunk))).toEqual([])
+    expect(jsResponses.filter(({ path }) => path.endsWith(tasksChunk))).toEqual([])
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
@@ -241,7 +238,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       viewport: NARROW,
       grants: [faultGrant, 'navigate', 'storage', 'haptics']
     })
-    const { page, errors, scripts } = opened
+    const { page, errors, jsResponses } = opened
     const tasks = page.getByLabel('Tasks')
     // Exactly one: the narrow layout renders one toolbar, so this is the control, not a pick
     // among siblings that could have hidden a wide header rendering here.
@@ -252,7 +249,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
     expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
-    expect(scripts.filter((path) => path.endsWith(tasksChunk))).toEqual([])
+    expect(jsResponses.filter(({ path }) => path.endsWith(tasksChunk))).toEqual([])
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
@@ -285,14 +282,14 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       route: FILES_ROUTE,
       awaitText: SHELL_HOST.name
     })
-    const { page, errors, scripts } = opened
+    const { page, errors, jsResponses } = opened
     await page.getByLabel('Tasks').first().click()
     await page.waitForTimeout(1_500)
     expect(await navigates(page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
     expect(await page.evaluate(() => location.pathname)).toBe(FILES_ROUTE)
-    expect(scripts.filter((path) => path.endsWith(tasksChunk))).toEqual([])
+    expect(jsResponses.filter(({ path }) => path.endsWith(tasksChunk))).toEqual([])
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)
