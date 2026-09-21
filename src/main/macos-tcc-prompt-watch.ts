@@ -1,21 +1,20 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
+import { getMacBundleIdentifier } from './macos-bundle-identifier'
 
 /** Stdin EOF tells the wrapper that Orca died. */
 export type LogStreamChild = ChildProcessByStdio<Writable, Readable, Readable>
 
 // AUTHREQ_PROMPTING identifies actual dialogs, including access attributed to Orca’s terminal children (#9756).
 
-// TCC can attribute terminal access to the detached helper independently of the main app.
-const ORCA_RESPONSIBLE_IDENTIFIERS = new Set([
-  'com.stablyai.orca',
-  'com.stablyai.orca.helper',
-  'com.stablyai.orca.dev',
-  'com.stablyai.orca.dev.helper',
-  'com.stablyai.orca.local',
-  'com.stablyai.orca.local.helper'
-])
+// Derived from the running bundle so each channel or renamed build matches itself; TCC attributes the detached helper separately.
+function isOwnResponsibleIdentifier(identifier: string, ownIdentifier: string | null): boolean {
+  return (
+    ownIdentifier !== null &&
+    (identifier === ownIdentifier || identifier === `${ownIdentifier}.helper`)
+  )
+}
 
 const WATCHED_SERVICES = new Set([
   'kTCCServiceSystemPolicyAppData',
@@ -56,9 +55,12 @@ export function parseTccPromptEvent(line: string): TccPromptEvent | null {
   }
 }
 
-export function isOrcaAttributedPrompt(event: TccPromptEvent): boolean {
+export function isOwnAttributedPrompt(
+  event: TccPromptEvent,
+  ownIdentifier: string | null = getMacBundleIdentifier()
+): boolean {
   return (
-    ORCA_RESPONSIBLE_IDENTIFIERS.has(event.responsibleIdentifier) &&
+    isOwnResponsibleIdentifier(event.responsibleIdentifier, ownIdentifier) &&
     WATCHED_SERVICES.has(event.service)
   )
 }
@@ -67,6 +69,8 @@ export type TccPromptWatchOptions = {
   onPrompt: (event: TccPromptEvent) => void
   spawnLogStream?: () => LogStreamChild
   restartDelayMs?: number
+  /** Injected in tests; production reads the running bundle's own identifier. */
+  ownIdentifier?: string | null
 }
 
 // log stream ignores parent death; stdin EOF makes the wrapper terminate it.
@@ -144,7 +148,8 @@ export class MacosTccPromptWatch {
 
   private handleLine(line: string): void {
     const event = parseTccPromptEvent(line)
-    if (!event || !isOrcaAttributedPrompt(event)) {
+    const own = this.options.ownIdentifier ?? getMacBundleIdentifier()
+    if (!event || !isOwnAttributedPrompt(event, own)) {
       return
     }
     this.options.onPrompt(event)
