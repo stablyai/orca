@@ -1,17 +1,24 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
-import { getConnectionId } from '@/lib/connection-context'
+import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+  buildWorkspaceFileContext,
+  canClientOsOpenWorkspaceFile
+} from '@/lib/workspace-file-host-routing'
+import { statRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -29,8 +36,9 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   const store = useAppStore.getState()
   if (worktreeId) {
     // Why: following an HTML file link changes which worktree is foregrounded,
-    // so it must record a history visit before opening the browser tab.
-    activateAndRevealWorktree(worktreeId)
+    // so it must record a history visit before opening the browser tab — but the
+    // browser tab is the surface, so an emptied workspace must not gain a shell.
+    activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   }
   const fileUrl = absolutePathToFileUri(filePath)
   const title = filePath.split(/[/\\]/).pop() ?? filePath
@@ -42,13 +50,7 @@ export function getTerminalFileContext(
   worktreePath: string,
   runtimeEnvironmentId?: string | null
 ): RuntimeFileOperationArgs {
-  const settings = useAppStore.getState().settings
-  return {
-    settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
-    worktreeId: worktreeId || null,
-    worktreePath,
-    connectionId: getConnectionId(worktreeId || null) ?? undefined
-  }
+  return buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
 }
 
 // Why: a WSL-runtime pane prints POSIX paths even when the worktree lives on a
@@ -58,16 +60,22 @@ export function mapTerminalFilePath(
   worktreePath: string,
   wslDistro?: string | null
 ): string {
-  const distro = wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
-  if (!distro || !filePath.startsWith('/') || filePath.startsWith('//')) {
+  const distro =
+    wslDistro === null ? null : wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
+  if (!distro || !filePath.startsWith('/')) {
+    return filePath
+  }
+  // Why: only a proven local WSL pane may reinterpret this POSIX-looking path; SSH/runtime paths stay literal.
+  const alreadyUnc = parseWslUncPath(filePath)
+  if (alreadyUnc) {
+    return toWindowsWslPath(alreadyUnc.linuxPath, alreadyUnc.distro)
+  }
+  if (filePath.startsWith('//')) {
     return filePath
   }
   // Why: /mnt/<drive> is a Windows drive mounted into WSL — reach it directly
   // instead of routing a native file back through the 9P share.
-  if (/^\/mnt\/[a-z](\/|$)/.test(filePath)) {
-    return toWindowsWslPath(filePath, distro)
-  }
-  return `//wsl.localhost/${distro}${filePath}`
+  return toWindowsWslPath(filePath, distro)
 }
 
 // Why: remote-runtime panes print the remote host's POSIX paths; the local WSL
@@ -75,15 +83,15 @@ export function mapTerminalFilePath(
 export function terminalLinkWslDistro(
   wslDistro: string | null | undefined,
   runtimeEnvironmentId: string | null | undefined
-): string | null {
-  return runtimeEnvironmentId ? null : (wslDistro ?? null)
+): string | null | undefined {
+  return runtimeEnvironmentId ? null : wslDistro
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(
   fileContext: RuntimeFileOperationArgs,
   filePath: string
 ): boolean {
-  return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
+  return canClientOsOpenWorkspaceFile(fileContext, filePath)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -182,30 +190,66 @@ export function openDetectedFilePath(
       return
     }
 
-    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
-    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
-    if (
-      isHtmlFilePath(mappedFilePath) &&
-      shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)
-    ) {
-      openHtmlFileInBrowser(mappedFilePath, worktreeId)
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+      // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
+      // cannot launch a remote path, so the direct gesture must reach the same download.
+      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
       return
     }
 
+    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
+    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
+    if (isHtmlFilePath(mappedFilePath)) {
+      if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
+        openHtmlFileInBrowser(mappedFilePath, worktreeId)
+        return
+      }
+      // Why: the same gesture renders remote HTML too, through the doc preview; only an
+      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
+      const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
+      if (plan.status === 'doc-preview') {
+        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        return
+      }
+    }
+
+    const store = useAppStore.getState()
+    let targetWorktreeId = worktreeId
+    let targetExecutionHostId: ExecutionHostId | undefined
     let relativePath = mappedFilePath
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
       if (maybeRelative !== null && maybeRelative.length > 0) {
         relativePath = maybeRelative
       }
+    } else if (
+      store.openFiles.some(
+        (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
+      )
+    ) {
+      // Why: early resolution is only needed to avoid an existing sibling-tab collision.
+      const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
+      const executionHostId = runtimeOwnerId
+        ? toRuntimeExecutionHostId(runtimeOwnerId)
+        : fileContext.connectionId
+          ? toSshExecutionHostId(fileContext.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+      const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
+      if (siblingRoute) {
+        targetWorktreeId = siblingRoute.worktreeId
+        targetExecutionHostId = siblingRoute.executionHostId
+        relativePath = siblingRoute.relativePath
+      }
     }
 
-    const store = useAppStore.getState()
-    if (worktreeId) {
-      // Why: terminal file links can jump across worktrees. Reusing the shared
-      // activation path keeps those jumps in the same history stack as sidebar
-      // and palette navigation before the editor opens the destination file.
-      activateAndRevealWorktree(worktreeId)
+    if (targetWorktreeId) {
+      // Why: the route may name a folder-workspace key, and the same worktree id can exist
+      // on several hosts — dispatch by workspace shape and keep the resolved host.
+      activateAndRevealWorkspace(targetWorktreeId, {
+        providesInitialSurface: true,
+        ...(targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {})
+      })
     }
 
     const language = detectLanguage(mappedFilePath)
@@ -213,7 +257,7 @@ export function openDetectedFilePath(
       {
         filePath: mappedFilePath,
         relativePath,
-        worktreeId: worktreeId || '',
+        worktreeId: targetWorktreeId || '',
         language,
         mode: 'edit',
         runtimeEnvironmentId,
@@ -232,7 +276,7 @@ export function openDetectedFilePath(
       const openedStore = useAppStore.getState()
       // Why: scope the reveal to the opened editor tab id so owner-qualified tabs
       // across local/SSH/runtime contexts get it instead of an ambiguous path key.
-      const fileId = openedStore.activeFileIdByWorktree[worktreeId] ?? mappedFilePath
+      const fileId = openedStore.activeFileIdByWorktree[targetWorktreeId] ?? mappedFilePath
       if (language === 'markdown') {
         // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
         openedStore.setMarkdownViewMode(fileId, 'source')

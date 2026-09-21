@@ -1,15 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import { useRouter } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { triggerSelection } from '../platform/haptics'
-import type { RpcClient } from '../transport/rpc-client'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
-  client: Pick<RpcClient, 'sendRequest'> | null
+  client: RpcOperationSender | null
   hostId: string
   worktreeId: string
   worktreeName?: string
+  nativeChatSessionId: string | null
   activeHandleRef: MutableRefObject<string | null>
   terminalCwdRef: MutableRefObject<Map<string, string>>
   openBrowser: (url: string) => void
@@ -48,6 +49,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
+    nativeChatSessionId,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -56,7 +58,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     worktreeId,
     worktreeName
   } = options
-  const router = useRouter()
+  const router = useRouteHandoff()
   const routerRef = useRef(router)
   const optionsRef = useRef(options)
   const activationSeqRef = useRef(0)
@@ -71,6 +73,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getActiveSessionTabType,
       getSessionTabs,
       hostId,
+      nativeChatSessionId,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -87,6 +90,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
+    nativeChatSessionId,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -137,10 +141,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
-    // The chat overlay rides on its backing terminal tab; that handle anchors
-    // the activation gate even though resolution ignores the terminal's cwd.
     const sourceTerminalHandle = current.activeHandleRef.current
-    if (!current.client || !sourceTerminalHandle) {
+    const nativeChatSessionId = current.nativeChatSessionId
+    const nativeChatTabId = current.getActiveSessionTabId()
+    if (!current.client || (!sourceTerminalHandle && !(nativeChatSessionId && nativeChatTabId))) {
       return
     }
     const activationSeq = ++activationSeqRef.current
@@ -150,6 +154,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       worktreeId: current.worktreeId,
       worktreeName: current.worktreeName,
       pathText,
+      nativeChatContext:
+        nativeChatSessionId && nativeChatTabId
+          ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }
+          : null,
       pushPreviewRoute: (href) => routerRef.current.push(href),
       openBrowser: current.openBrowser,
       triggerOpenFeedback: triggerSelection,
@@ -162,6 +170,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         latestActivationSeq: activationSeqRef.current,
         sourceTerminalHandle,
         activeTerminalHandle: current.activeHandleRef.current,
+        sourceSessionTabId: nativeChatTabId,
+        activeSessionTabId: current.getActiveSessionTabId(),
         activeTabType: current.getActiveSessionTabType()
       }),
       switchSessionTab: current.switchSessionTab,

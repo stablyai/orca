@@ -27,7 +27,10 @@ function normalizeDecorativeAgentTitleText(title: string): string {
   let pendingWhitespace = false
   for (let index = 0; index < title.length; index += 1) {
     const code = title.charCodeAt(index)
-    if (normalized.length === 0 && (isDecorativeTitleWhitespace(code) || isBrailleSpinner(code))) {
+    if (
+      normalized.length === 0 &&
+      (isDecorativeTitleWhitespace(code) || isSpinnerFrameGlyph(code))
+    ) {
       continue
     }
     if (isDecorativeTitleWhitespace(code)) {
@@ -43,8 +46,9 @@ function normalizeDecorativeAgentTitleText(title: string): string {
   return normalized
 }
 
-function isBrailleSpinner(code: number): boolean {
-  return code >= 0x2800 && code <= 0x28ff
+// Why: braille (most agents) plus quarter circles (Claude Code 2.1.228+, #13889).
+function isSpinnerFrameGlyph(code: number): boolean {
+  return (code >= 0x2800 && code <= 0x28ff) || (code >= 0x25d0 && code <= 0x25d3)
 }
 
 function isDecorativeTitleWhitespace(code: number): boolean {

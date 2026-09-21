@@ -10,6 +10,8 @@ export type MobileFilePreviewRouteParams = {
   terminal?: string
   pathText?: string
   cwd?: string
+  nativeChatTab?: string
+  nativeChatSession?: string
   line?: string
   column?: string
   name?: string
@@ -35,6 +37,8 @@ type RawPreviewRouteParams = {
   terminal?: MobileFilePreviewParamValue
   pathText?: MobileFilePreviewParamValue
   cwd?: MobileFilePreviewParamValue
+  nativeChatTab?: MobileFilePreviewParamValue
+  nativeChatSession?: MobileFilePreviewParamValue
   line?: MobileFilePreviewParamValue
   column?: MobileFilePreviewParamValue
   name?: MobileFilePreviewParamValue
@@ -76,6 +80,8 @@ export function normalizeMobileFilePreviewRouteParams(
         terminal: optionalSingleParam(params.terminal),
         pathText: optionalSingleParam(params.pathText),
         cwd: optionalSingleParam(params.cwd),
+        nativeChatTab: optionalSingleParam(params.nativeChatTab),
+        nativeChatSession: optionalSingleParam(params.nativeChatSession),
         line: optionalSingleParam(params.line),
         column: optionalSingleParam(params.column),
         name: optionalSingleParam(params.name),
@@ -99,6 +105,21 @@ export function normalizeMobileFilePreviewRouteParams(
       worktreeName: optionalSingleParam(params.worktreeName)
     }
   }
+}
+
+/**
+ * The params the shell hands the page, which are this route's own minus the two it spells as path
+ * segments. Every value is a `string`, because that is what `BridgeInitRoute.params` carries and
+ * what `URLSearchParams` will encode it back out of; an absent one is left out rather than sent
+ * empty, so the page's `useLocalSearchParams` reads exactly what the native screen read.
+ */
+export function mobileFilePreviewShellParams(
+  params: MobileFilePreviewRouteParams
+): Record<string, string> {
+  const { hostId: _hostId, worktreeId: _worktreeId, ...rest } = params
+  return Object.fromEntries(
+    Object.entries(rest).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+  )
 }
 
 export function createMobileFilePreviewHref(

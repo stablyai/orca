@@ -3,15 +3,15 @@
 //     resolve host" partially overlaps "could not resolve to a"),
 // (b) repo slug validation must accept names with leading underscore
 //     (GitHub allows them, e.g. `_internal`),
-// (c) owner slug validation must reject `.`/`_` (GitHub disallows them in
-//     usernames/orgs),
+// (c) owner slug validation must reject `.` and a leading `_`/`-`, but accept
+//     the `_<shortcode>` suffix GitHub appends to Enterprise Managed User logins,
 // (d) parseProjectPaste shorthand owner-only alphabet matches the renderer,
 // (e) project owner/capability caches stay bounded in long sessions.
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   GITHUB_PROJECT_REF_INPUT_MAX_BYTES,
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
-} from '../../shared/github-project-ref-input'
+} from '../../shared/github/project-ref-input'
 import {
   PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES,
   _getProjectViewCacheSizesForTests,
@@ -90,12 +90,13 @@ describe('isValidOwnerSlug', () => {
     expect(isValidOwnerSlug('user1')).toBe(true)
   })
 
-  it('rejects underscore (GitHub disallows it in usernames/orgs)', () => {
-    expect(isValidOwnerSlug('_acme')).toBe(false)
-    expect(isValidOwnerSlug('acme_co')).toBe(false)
+  it('accepts Enterprise Managed User logins (GitHub appends `_<shortcode>`)', () => {
+    expect(isValidOwnerSlug('octocat_acme')).toBe(true)
+    expect(isValidOwnerSlug('acme_co')).toBe(true)
   })
 
-  it('rejects leading hyphen and dot', () => {
+  it('rejects leading underscore, hyphen and dot', () => {
+    expect(isValidOwnerSlug('_acme')).toBe(false)
     expect(isValidOwnerSlug('-acme')).toBe(false)
     expect(isValidOwnerSlug('.acme')).toBe(false)
   })
@@ -138,10 +139,25 @@ describe('parseProjectPaste', () => {
     expect(parseProjectPaste('acme/42')).toEqual({ kind: 'bare', owner: 'acme', number: 42 })
   })
 
-  it('rejects shorthand with underscore in owner (renderer parity)', () => {
-    // Why: the renderer's parser uses `[A-Za-z0-9][A-Za-z0-9-]*` for owner
-    // (matches OWNER_SLUG_RE). Both sides must reject the same inputs.
-    expect(parseProjectPaste('co_op/45')).toBeNull()
+  it('accepts shorthand with an Enterprise Managed User owner (renderer parity)', () => {
+    // Why: the renderer's parser uses `[A-Za-z0-9][A-Za-z0-9_-]*` for owner
+    // (matches OWNER_SLUG_RE). Both sides must accept and reject the same inputs.
+    expect(parseProjectPaste('octocat_acme/1')).toEqual({
+      kind: 'bare',
+      owner: 'octocat_acme',
+      number: 1
+    })
+    expect(parseProjectPaste('_acme/45')).toBeNull()
+  })
+
+  it('parses a user URL with an Enterprise Managed User owner', () => {
+    expect(parseProjectPaste('https://github.com/users/octocat_acme/projects/1/views/1')).toEqual({
+      kind: 'user',
+      owner: 'octocat_acme',
+      number: 1,
+      host: 'github.com',
+      viewNumber: 1
+    })
   })
 
   it('parses org URL with view number', () => {
@@ -164,7 +180,8 @@ describe('parseProjectPaste', () => {
   })
 
   it('rejects URLs whose owner has invalid characters', () => {
-    expect(parseProjectPaste('https://github.com/orgs/co_op/projects/1')).toBeNull()
+    expect(parseProjectPaste('https://github.com/orgs/_acme/projects/1')).toBeNull()
+    expect(parseProjectPaste('https://github.com/orgs/.acme/projects/1')).toBeNull()
   })
 
   it('accepts enterprise-host URLs only when that host is provided (GHES)', () => {

@@ -141,6 +141,7 @@ function performSafeFit(pane: ManagedPane): boolean {
     if (shouldRestoreScroll) {
       try {
         if (resumePendingFitScrollRestoreAfterFit(pane.terminal)) {
+          // Resume consumed the pending restore; the fallbacks below must not also run.
         } else if (pinnedScrollState) {
           const state: ScrollState = pinnedScrollState
           pinnedScrollState = null

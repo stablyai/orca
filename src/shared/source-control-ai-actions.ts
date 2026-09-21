@@ -1,6 +1,6 @@
 import { isCustomAgentId, type CustomAgentId } from './commit-message-agent-spec'
 import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 // Why: the variable registry lives in `./source-control-ai-action-variables` for max-lines
 // headroom. It is deliberately not re-exported here — one import path per symbol keeps a
@@ -195,7 +195,7 @@ export function renderSourceControlActionCommandTemplate(
       // Why: placeholder names may start with letters or underscores.
       // Why: only own keys are real variables; inherited Object.prototype names
       // (e.g. `constructor`) must stay visible instead of rendering their value.
-      if (!Object.prototype.hasOwnProperty.call(variables, name)) {
+      if (!Object.hasOwn(variables, name)) {
         return match
       }
       const value = variables[name]

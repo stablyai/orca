@@ -1,4 +1,4 @@
-import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {

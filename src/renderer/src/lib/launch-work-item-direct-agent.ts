@@ -1,16 +1,15 @@
 import { toast } from 'sonner'
-import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -161,35 +160,16 @@ export function buildDirectWorkItemStartupOpts(
   }
 }
 
-export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
-  primaryTabId: string
-  startupPlan: AgentStartupPlan
-  content: string
-  submit?: boolean
-  forcePaste?: boolean
-}): Promise<void> {
-  const { primaryTabId, startupPlan, content, submit = false, forcePaste = false } = args
-  await deliverLaunchPromptToAgentTab({
-    tabId: primaryTabId,
-    content,
-    agent: startupPlan.agent,
-    submit,
-    forcePaste,
-    onTimeout: () => {
-      const label = submit ? 'prompt' : 'work item context'
-      toast.message(
-        translate(
-          'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-          'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-          { value0: label }
-        )
-      )
-      // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
-      // on the dashboard is the trigger to add one.
-      track('agent_error', {
-        error_class: 'unknown',
-        agent_kind: tuiAgentToAgentKind(startupPlan.agent)
-      })
-    }
-  })
+/** Timeout notice for the post-launch paste; the workspace itself is ready. */
+export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: boolean): void {
+  toast.message(
+    translate(
+      'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
+      'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
+      { value0: submit ? 'prompt' : 'work item context' }
+    )
+  )
+  // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
+  // on the dashboard is the trigger to add one.
+  track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }

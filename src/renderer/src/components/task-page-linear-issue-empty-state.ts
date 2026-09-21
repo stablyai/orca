@@ -1,7 +1,7 @@
 import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 
 export type LinearIssueEmptyKind =
   | 'context'

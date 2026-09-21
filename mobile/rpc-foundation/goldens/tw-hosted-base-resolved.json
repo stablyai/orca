@@ -1,0 +1,163 @@
+{
+  "operation": "tasks.composer-hosted-base",
+  "family": "worktree.hosted-base",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "b3734c24f8a083d3efcdd995ea6a57e608d3d3ae3bbbd514db19dcf69448fa48",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1788fb968913": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolvePrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headRefName": "feature",
+            "prNumber": 12,
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "baseBranch": "main",
+            "compareBaseRef": "origin/main"
+          }
+        }
+      }
+    },
+    "236529aa012d": {
+      "mrBase": "unresolved",
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
+    "3cca8119f144": {
+      "mrBase": {
+        "baseBranch": "develop"
+      },
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
+    "5428de0f5130": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
+    "92df85b51d0c": {
+      "name": "worktree.resolveMrBase#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
+    },
+    "aafcb4cd89c9": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
+    },
+    "d29aaf6d46d3": {
+      "name": "worktree.resolveMrBase#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolveMrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mrIid": 7,
+            "repo": "id:repo-1",
+            "sourceBranch": "feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "baseBranch": "develop"
+          }
+        }
+      }
+    },
+    "fd552ecb03da": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "baseBranch": "develop"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-hosted-base-resolved",
+    "checkpoints": [
+      {
+        "id": "pr-base-resolved",
+        "observation": {
+          "sender": ["1788fb968913"],
+          "payloads": ["aafcb4cd89c9"],
+          "settlements": {
+            "pr": "5428de0f5130"
+          },
+          "state": "236529aa012d",
+          "effects": []
+        }
+      },
+      {
+        "id": "mr-base-resolved",
+        "observation": {
+          "sender": ["1788fb968913", "d29aaf6d46d3"],
+          "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
+          "settlements": {
+            "pr": "5428de0f5130",
+            "mr": "fd552ecb03da"
+          },
+          "state": "3cca8119f144",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

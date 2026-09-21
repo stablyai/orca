@@ -48,7 +48,9 @@ function codexUnwrappedResponseItem(
     return codexResponseItem(record, id, timestamp)
   }
   const role = record.role === 'assistant' ? 'assistant' : record.role === 'user' ? 'user' : null
-  const blocks = codexTurnItemBlocks(record.content)
+  const decodedBlocks = codexTurnItemBlocks(record.content)
+  const blocks =
+    role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
   return role && blocks.length > 0 ? { id, role, blocks, timestamp, source: 'transcript' } : null
 }
 
@@ -63,7 +65,9 @@ function codexResponseItem(
     if (!role) {
       return null
     }
-    const blocks = claudeContentBlocks(payload.content)
+    const decodedBlocks = claudeContentBlocks(payload.content)
+    const blocks =
+      role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
     if (blocks.length === 0) {
       return null
     }
@@ -88,10 +92,13 @@ function codexResponseItem(
     payload.type === 'custom_tool_call'
   ) {
     const name = extractString(payload.name) ?? 'tool'
+    const callId = extractString(payload.call_id)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: codexCallInput(payload) }],
+      blocks: [
+        { type: 'tool-call', name, input: codexCallInput(payload), ...(callId ? { callId } : {}) }
+      ],
       timestamp,
       source: 'transcript'
     }
@@ -106,6 +113,11 @@ function codexResponseItem(
     }
   }
   return null
+}
+
+// Explicit skill expansions are model context, not the user's recorded prompt.
+function isSkillContext(block: NativeChatBlock): boolean {
+  return block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
 }
 
 function codexEventMessage(
@@ -202,6 +214,10 @@ function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
+/** The argument payload is passed through exactly as it arrived. Decoding it
+ *  here would change the shape every `.input` consumer sees — including the ask
+ *  surface, which reads a question shape out of any tool's input — so the one
+ *  consumer that needs structure decodes it for itself. */
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
     return payload.arguments

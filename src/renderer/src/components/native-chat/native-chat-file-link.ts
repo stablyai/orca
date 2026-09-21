@@ -1,11 +1,12 @@
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget
 } from '@/lib/explicit-file-link-target'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type NativeChatFileLinkContext = {
   worktreeId: string
@@ -28,7 +29,9 @@ type NativeChatFileLinkState = Pick<
   | 'settings'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
->
+> & {
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+}
 
 export function findTerminalTabWorktreeId(
   tabsByWorktree: NativeChatFileLinkState['tabsByWorktree'],
@@ -38,6 +41,18 @@ export function findTerminalTabWorktreeId(
     // Why: tabsByWorktree stores TerminalTab records; unified tabs carry
     // entityId, but the terminal owner lookup must use the backing tab id.
     if (tabs.some((tab) => tab.id === terminalTabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
+function findStructuredTabWorktreeId(
+  unifiedTabsByWorktree: NativeChatFileLinkState['unifiedTabsByWorktree'],
+  tabId: string
+): string | null {
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    if (tabs.some((tab) => tab.id === tabId && tab.contentType === 'agent-session')) {
       return worktreeId
     }
   }
@@ -61,7 +76,9 @@ export function resolveNativeChatFileLinkContext(
   state: NativeChatFileLinkState,
   terminalTabId: string
 ): NativeChatFileLinkContext | null {
-  const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+  const worktreeId =
+    findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId) ??
+    findStructuredTabWorktreeId(state.unifiedTabsByWorktree, terminalTabId)
   if (!worktreeId) {
     return null
   }
@@ -70,13 +87,21 @@ export function resolveNativeChatFileLinkContext(
   const worktree = knownWorktree?.path
     ? knownWorktree
     : findWorktreeFallback(state.worktreesByRepo, worktreeId)
-  if (!worktree?.path) {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const worktreePath =
+    worktree?.path ??
+    (workspaceScope?.type === 'folder'
+      ? (state.folderWorkspaces.find(
+          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+        )?.folderPath ?? null)
+      : null)
+  if (!worktreePath) {
     return null
   }
 
   return {
     worktreeId,
-    worktreePath: worktree.path,
+    worktreePath,
     runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   }
 }

@@ -37,6 +37,9 @@ function stripSuffix(command: string, suffix: string): string | null {
  * Remove the resume argv `buildAgentResumeStartupPlan` appended, leaving the plain
  * agent launch. Main uses this when it cannot verify which account owns the session,
  * so the pane starts fresh instead of resuming under whichever account is selected.
+ * Codex-only in practice: claude resume commands may carry the selector before a
+ * `--` terminator (agent-resume-launch-command.ts), which this trailing-suffix
+ * strip would report as `unrecognized`.
  */
 export function dropAgentResumeArgvFromCommand(args: {
   command: string

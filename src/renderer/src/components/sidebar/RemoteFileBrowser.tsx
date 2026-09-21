@@ -1,26 +1,16 @@
-/* eslint-disable max-lines -- Why: the remote file browser centralizes filter state, path-mode preview state, cache, debounce, request gen, and click/keyboard handling in one component so picker navigation stays coherent. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Folder, ArrowUp, LoaderCircle, Home, Search } from 'lucide-react'
+import type React from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { LoaderCircle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
-import {
-  decideEnterAction,
-  decideEscAction,
-  filterEntries,
-  isRemoteFileBrowserPathResolveTextTooLarge,
-  isPathMode,
-  joinPath,
-  parentPath,
-  parsePathInput,
-  resolveSegmentStep,
-  shouldDeferRemoteFileBrowserPasteResolve,
-  type DirEntry
-} from './remote-file-browser-helpers'
-import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
-import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { filterEntries, joinPath, parentPath, type DirEntry } from './remote-file-browser-helpers'
+import { RemoteFileBrowserBreadcrumbs } from './RemoteFileBrowserBreadcrumbs'
+import { RemoteFileBrowserEntryList } from './RemoteFileBrowserEntryList'
+import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
+import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
+import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
 import { translate } from '@/i18n/i18n'
-import type { FilesystemPathFlavor } from '../../../../shared/types'
+import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
 type RemoteFileBrowserProps = (
   | { targetId: string; runtimeEnvironmentId?: never }
@@ -33,21 +23,6 @@ type RemoteFileBrowserProps = (
 
 const FILE_HINT_MS = 2000
 const FILE_HINT_TEXT = "Files can't be opened as a project"
-const PATH_DEBOUNCE_MS = 300
-
-type BrowseResult = {
-  resolvedPath: string
-  entries: DirEntry[]
-  pathFlavor: FilesystemPathFlavor
-}
-
-type PreviewState = {
-  resolvedPath: string
-  entries: DirEntry[]
-  filter: string
-  error: string | null
-  loading: boolean
-}
 
 export function RemoteFileBrowser({
   targetId,
@@ -63,22 +38,12 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
-  // Drives the list during path mode; separate from committed state so typing doesn't move the Select target before commit.
-  const [preview, setPreview] = useState<PreviewState | null>(null)
   const genRef = useRef(0)
-  const previewGenRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Why: paste resolution runs next tick; closing the picker before then must cancel stale preview work.
-  const pasteResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Per-picker listing cache keyed by resolved path, so typing issues at most one remote call per committed segment.
-  const listingCacheRef = useRef<Map<string, BrowseResult>>(new Map())
-  // Resolved remote home, cached after the first browseDir('~'); anchors `~`/`~/...` without hardcoding a home dir.
-  const homePathRef = useRef<string | null>(null)
-  // Committed-path portion (through the final `/`) the preview reflects; if unchanged next keystroke, skip re-resolving.
-  const lastCommittedPrefixRef = useRef<string>('')
+
+  const { fetchListing, homePathRef } = useRemoteFileBrowserListing(targetId, runtimeEnvironmentId)
 
   const clearFileHint = useCallback(() => {
     if (fileHintTimerRef.current) {
@@ -88,9 +53,25 @@ export function RemoteFileBrowser({
     setFileHint(false)
   }, [])
 
+  const {
+    preview,
+    handleInputChange,
+    handleInputPaste,
+    discardPreview,
+    resetPreviewForNavigation,
+    cancelPreviewWork
+  } = useRemoteFileBrowserPathPreview({
+    resolvedPath,
+    pathFlavor,
+    fetchListing,
+    homePathRef,
+    inputRef,
+    clearFileHint,
+    setFilter
+  })
+
   const invalidateBrowseRequests = useCallback(() => {
     genRef.current++
-    previewGenRef.current++
   }, [])
 
   const setBrowserRootRef = useCallback(
@@ -100,41 +81,15 @@ export function RemoteFileBrowser({
       }
       // Why: browse generations and timers are scoped to this picker owner; clear them when it detaches.
       invalidateBrowseRequests()
-      for (const timerRef of [
-        fileHintTimerRef,
-        debounceTimerRef,
-        pasteResolveTimerRef,
-        clickTimerRef
-      ]) {
+      cancelPreviewWork()
+      for (const timerRef of [fileHintTimerRef, clickTimerRef]) {
         if (timerRef.current) {
           clearTimeout(timerRef.current)
           timerRef.current = null
         }
       }
     },
-    [invalidateBrowseRequests]
-  )
-
-  const fetchListing = useCallback(
-    async (dirPath: string): Promise<BrowseResult> => {
-      const cached = listingCacheRef.current.get(dirPath)
-      if (cached) {
-        return cached
-      }
-      const result = targetId
-        ? await window.api.ssh.browseDir({ targetId, dirPath })
-        : await browseRuntimeServerDirectory(
-            requireRuntimeEnvironmentId(runtimeEnvironmentId),
-            dirPath
-          )
-      listingCacheRef.current.set(result.resolvedPath, result)
-      // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
-      if (dirPath !== result.resolvedPath) {
-        listingCacheRef.current.set(dirPath, result)
-      }
-      return result
-    },
-    [runtimeEnvironmentId, targetId]
+    [invalidateBrowseRequests, cancelPreviewWork]
   )
 
   const loadDir = useCallback(
@@ -166,24 +121,18 @@ export function RemoteFileBrowser({
         }
       }
     },
-    [fetchListing]
+    [fetchListing, homePathRef]
   )
 
   // Central nav clears filter/preview/hint and bumps previewGenRef so a stale in-flight preview won't clobber committed state.
   const navigate = useCallback(
     (dirPath: string) => {
       setFilter('')
-      setPreview(null)
-      previewGenRef.current++
-      lastCommittedPrefixRef.current = ''
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-        debounceTimerRef.current = null
-      }
+      resetPreviewForNavigation()
       clearFileHint()
       loadDir(dirPath)
     },
-    [loadDir, clearFileHint]
+    [loadDir, clearFileHint, resetPreviewForNavigation]
   )
 
   useEffect(() => {
@@ -206,11 +155,6 @@ export function RemoteFileBrowser({
 
   const filteredEntries = useMemo(() => filterEntries(entries, filter), [entries, filter])
 
-  const previewFilteredEntries = useMemo(
-    () => (preview ? filterEntries(preview.entries, preview.filter) : []),
-    [preview]
-  )
-
   const triggerFileHint = useCallback(() => {
     if (fileHintTimerRef.current) {
       clearTimeout(fileHintTimerRef.current)
@@ -221,216 +165,6 @@ export function RemoteFileBrowser({
       fileHintTimerRef.current = null
     }, FILE_HINT_MS)
   }, [])
-
-  // Resolve a path-mode input into preview state; stable callback so paste and the debounce tick share one instance.
-  const resolvePathInput = useCallback(
-    async (raw: string) => {
-      const parsed = parsePathInput(raw, pathFlavor)
-      if (parsed.mode !== 'path') {
-        return
-      }
-      const gen = ++previewGenRef.current
-
-      if (parsed.invalid) {
-        setPreview({
-          resolvedPath: resolvedPath,
-          entries: [],
-          filter: '',
-          error: parsed.invalid,
-          loading: false
-        })
-        return
-      }
-
-      // Pick the base path; `~` needs the resolved home, so fetch and cache it once before resolving.
-      let basePath: string
-      if (parsed.base === 'root') {
-        basePath = '/'
-      } else if (parsed.base === 'drive') {
-        basePath = parsed.driveRoot ?? '/'
-      } else if (parsed.base === 'home') {
-        if (!homePathRef.current) {
-          setPreview({
-            resolvedPath: resolvedPath,
-            entries: [],
-            filter: '',
-            error: null,
-            loading: true
-          })
-          try {
-            const home = await fetchListing('~')
-            if (gen !== previewGenRef.current) {
-              return
-            }
-            homePathRef.current = home.resolvedPath
-          } catch (err) {
-            if (gen !== previewGenRef.current) {
-              return
-            }
-            setPreview({
-              resolvedPath,
-              entries: [],
-              filter: '',
-              error: err instanceof Error ? err.message : String(err),
-              loading: false
-            })
-            return
-          }
-        }
-        basePath = homePathRef.current!
-      } else {
-        basePath = resolvedPath
-      }
-
-      setPreview((prev) => ({
-        resolvedPath: prev?.resolvedPath ?? basePath,
-        entries: prev?.entries ?? [],
-        filter: prev?.filter ?? '',
-        error: null,
-        loading: true
-      }))
-
-      let currentPath = basePath
-      try {
-        for (const segment of parsed.committedSegments) {
-          const listing = await fetchListing(currentPath)
-          if (gen !== previewGenRef.current) {
-            return
-          }
-          const outcome = resolveSegmentStep(segment, currentPath, listing.entries)
-          if (outcome.type === 'error') {
-            setPreview({
-              resolvedPath: currentPath,
-              entries: listing.entries,
-              filter: '',
-              error: outcome.message,
-              loading: false
-            })
-            return
-          }
-          if (outcome.type === 'stay') {
-            if (segment === '..') {
-              currentPath = parentPath(currentPath, listing.pathFlavor)
-            }
-            continue
-          }
-          currentPath = joinPath(currentPath, outcome.name, listing.pathFlavor)
-        }
-
-        const finalListing = await fetchListing(currentPath)
-        if (gen !== previewGenRef.current) {
-          return
-        }
-        lastCommittedPrefixRef.current = committedPrefix(raw)
-        setPreview({
-          resolvedPath: finalListing.resolvedPath,
-          entries: finalListing.entries,
-          filter: parsed.trailingFilter,
-          error: null,
-          loading: false
-        })
-      } catch (err) {
-        if (gen !== previewGenRef.current) {
-          return
-        }
-        setPreview({
-          resolvedPath: currentPath,
-          entries: [],
-          filter: '',
-          error: err instanceof Error ? err.message : String(err),
-          loading: false
-        })
-      }
-    },
-    [resolvedPath, fetchListing, pathFlavor]
-  )
-
-  // Filter-mode edits stay local; path-mode edits trigger a debounced resolve, but trailing-filter-only edits stay local too.
-  const handleInputChange = useCallback(
-    (raw: string) => {
-      clearFileHint()
-      setFilter(raw)
-
-      if (isRemoteFileBrowserPathResolveTextTooLarge(raw)) {
-        if (preview) {
-          setPreview(null)
-          previewGenRef.current++
-        }
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current)
-          debounceTimerRef.current = null
-        }
-        if (pasteResolveTimerRef.current) {
-          clearTimeout(pasteResolveTimerRef.current)
-          pasteResolveTimerRef.current = null
-        }
-        return
-      }
-
-      if (!isPathMode(raw, pathFlavor)) {
-        // Leaving path mode: drop preview immediately so the committed directory reappears without a flicker.
-        if (preview) {
-          setPreview(null)
-          previewGenRef.current++
-        }
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current)
-          debounceTimerRef.current = null
-        }
-        return
-      }
-
-      const parsed = parsePathInput(raw, pathFlavor)
-      // Fast path: unchanged committed prefix updates only the local filter, so intra-segment typing issues no browseDir call.
-      if (
-        parsed.mode === 'path' &&
-        preview &&
-        !preview.error &&
-        !parsed.invalid &&
-        committedPrefix(raw) === lastCommittedPrefixRef.current
-      ) {
-        // Runs even while preview.loading: unchanged prefix hits the same listing, so blocking keystrokes would only feel laggy.
-        setPreview({ ...preview, filter: parsed.trailingFilter })
-        return
-      }
-
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-      debounceTimerRef.current = setTimeout(() => {
-        debounceTimerRef.current = null
-        resolvePathInput(raw)
-      }, PATH_DEBOUNCE_MS)
-    },
-    [clearFileHint, preview, resolvePathInput, pathFlavor]
-  )
-
-  const handleInputPaste = useCallback(
-    (e: React.ClipboardEvent<HTMLInputElement>) => {
-      if (e.defaultPrevented) {
-        return
-      }
-      if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
-        return
-      }
-      // Paste resolves immediately (no debounce), but defer a tick so onChange has applied the pasted value to filter.
-      if (pasteResolveTimerRef.current) {
-        clearTimeout(pasteResolveTimerRef.current)
-      }
-      pasteResolveTimerRef.current = setTimeout(() => {
-        pasteResolveTimerRef.current = null
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current)
-          debounceTimerRef.current = null
-        }
-        const value = inputRef.current?.value ?? ''
-        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value, pathFlavor)) {
-          resolvePathInput(value)
-        }
-      }, 0)
-    },
-    [resolvePathInput, pathFlavor]
-  )
 
   // Select always returns the committed directory; disabled during a path preview to avoid a mismatched selection.
   const handleSelect = useCallback(() => {
@@ -476,180 +210,37 @@ export function RemoteFileBrowser({
     [listParentPath, onSelect, preview?.loading, pathFlavor]
   )
 
-  const handleFilterKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        if (preview) {
-          // Path mode Enter.
-          if (preview.error || preview.loading) {
-            e.preventDefault()
-            return
-          }
-          const parsed = parsePathInput(filter, pathFlavor)
-          // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
-          if (parsed.mode === 'path' && parsed.trailingFilter === '') {
-            e.preventDefault()
-            navigate(preview.resolvedPath)
-            return
-          }
-          // Trailing filter: resolve to a single folder match in the preview listing, mirroring filter-mode Enter.
-          const filtered = filterEntries(preview.entries, preview.filter)
-          const action = decideEnterAction(filtered)
-          if (action.type === 'navigate') {
-            e.preventDefault()
-            navigate(joinPath(preview.resolvedPath, action.name, pathFlavor))
-          } else if (action.type === 'fileHint') {
-            e.preventDefault()
-            triggerFileHint()
-          } else {
-            e.preventDefault()
-          }
-          return
-        }
-        const action = decideEnterAction(filteredEntries)
-        if (action.type === 'navigate') {
-          e.preventDefault()
-          navigateInto(action.name)
-        } else if (action.type === 'fileHint') {
-          e.preventDefault()
-          triggerFileHint()
-        }
-        return
-      }
-      if (e.key === 'Escape') {
-        const action = decideEscAction(filter)
-        if (action.type === 'clearFilter') {
-          e.stopPropagation()
-          e.preventDefault()
-          setFilter('')
-          setPreview(null)
-          previewGenRef.current++
-          // Cancel any pending debounced resolve so it can't fire after Escape dismisses the preview.
-          if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current)
-            debounceTimerRef.current = null
-          }
-          clearFileHint()
-        } else {
-          onCancel()
-        }
-      }
-      if (e.key === 'Backspace' && filter === '' && !preview) {
-        // Backspace in an empty input climbs to the parent; in-word backspaces are untouched.
-        if (resolvedPath !== '/') {
-          e.preventDefault()
-          navigateUp()
-        }
-      }
-    },
-    [
-      filter,
-      filteredEntries,
-      preview,
-      navigate,
-      navigateInto,
-      navigateUp,
-      resolvedPath,
-      triggerFileHint,
-      clearFileHint,
-      onCancel,
-      pathFlavor
-    ]
-  )
+  const handleFilterKeyDown = useRemoteFileBrowserFilterKeyCommands({
+    filter,
+    setFilter,
+    filteredEntries,
+    preview,
+    discardPreview,
+    resolvedPath,
+    pathFlavor,
+    navigate,
+    navigateInto,
+    navigateUp,
+    triggerFileHint,
+    clearFileHint,
+    onCancel
+  })
 
-  // Preserve the separator shape when rebuilding drive breadcrumbs.
-  const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
-  const pathSegments = browseParts.segments
-  const breadcrumbPathTo = useCallback(
-    (segmentIndex: number): string =>
-      browseParts.kind === 'drive'
-        ? driveBreadcrumbPath(browseParts.driveRoot, browseParts.segments, segmentIndex)
-        : `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`,
-    [browseParts]
-  )
-
-  // Render the preview listing (own filter/error) during path mode, the committed listing otherwise.
   const isPreviewActive = preview !== null
   const showPreviewLoading = isPreviewActive && preview!.loading
-  const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
-  const displayEmptyDirCopy = isPreviewActive
-    ? `${preview!.resolvedPath} is empty`
-    : 'Empty directory'
-  const noMatchesFilter = isPreviewActive ? preview!.filter : filter
-  const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
-    ? translate(
-        'auto.components.sidebar.RemoteFileBrowser.largeInputNoMatches',
-        'No matches for this long input'
-      )
-    : translate(
-        'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
-        "No matches for '{{value0}}'",
-        { value0: noMatchesFilter }
-      )
 
   // Disable Select during a non-empty path preview so the committed dir isn't silently selected under a different-looking list.
   const selectDisabled = loading || (isPreviewActive && filter !== '')
 
   return (
     <div ref={setBrowserRootRef} className="flex flex-col gap-2 min-w-0 w-full">
-      {/* Breadcrumb bar */}
-      <div className="flex items-center gap-0.5 min-h-[28px] overflow-x-auto scrollbar-none">
-        <button
-          type="button"
-          onClick={navigateUp}
-          disabled={resolvedPath === '/' || loading}
-          className="shrink-0 p-1 rounded hover:bg-accent disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
-        >
-          <ArrowUp className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('~')}
-          disabled={loading}
-          className="shrink-0 p-1 rounded hover:bg-accent transition-colors cursor-pointer"
-        >
-          <Home className="size-3.5" />
-        </button>
-        <div className="flex items-center gap-0 text-[11px] text-muted-foreground ml-1 min-w-0">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="shrink-0 hover:text-foreground transition-colors cursor-pointer px-0.5"
-          >
-            /
-          </button>
-          {browseParts.kind === 'drive' && (
-            <>
-              <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
-              <button
-                type="button"
-                onClick={() => navigate(browseParts.driveRoot)}
-                className={cn(
-                  'truncate max-w-[120px] hover:text-foreground transition-colors cursor-pointer px-0.5',
-                  pathSegments.length === 0 && 'text-foreground font-medium'
-                )}
-              >
-                {browseParts.driveRoot.slice(0, 2)}
-              </button>
-            </>
-          )}
-          {pathSegments.map((segment, i) => (
-            <React.Fragment key={breadcrumbPathTo(i)}>
-              <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
-              <button
-                type="button"
-                onClick={() => navigate(breadcrumbPathTo(i))}
-                className={cn(
-                  'truncate max-w-[120px] hover:text-foreground transition-colors cursor-pointer px-0.5',
-                  i === pathSegments.length - 1 && 'text-foreground font-medium'
-                )}
-              >
-                {segment}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
+      <RemoteFileBrowserBreadcrumbs
+        resolvedPath={resolvedPath}
+        pathFlavor={pathFlavor}
+        loading={loading}
+        navigate={navigate}
+        navigateUp={navigateUp}
+      />
 
       {/* Filter input */}
       <div className="relative">
@@ -689,72 +280,18 @@ export function RemoteFileBrowser({
         </p>
       )}
 
-      {/* File listing */}
-      <div className="border border-border rounded-md overflow-hidden bg-background">
-        <div className="h-[240px] overflow-y-auto scrollbar-sleek">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-full px-4">
-              <p className="text-xs text-destructive text-center">{error}</p>
-            </div>
-          ) : isPreviewActive &&
-            preview!.entries.length === 0 &&
-            !preview!.error &&
-            !preview!.loading ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{displayEmptyDirCopy}</p>
-            </div>
-          ) : !isPreviewActive && entries.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.RemoteFileBrowser.51001182e3',
-                  'Empty directory'
-                )}
-              </p>
-            </div>
-          ) : displayEntries.length === 0 && !preview?.error ? (
-            // Directory has contents but the filter hides them all — distinct from an empty directory so copy stays accurate.
-            <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
-              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
-            </div>
-          ) : (
-            displayEntries.map((entry) => {
-              const FileIcon = getFileTypeIcon(entry.name)
-              return (
-                <button
-                  key={entry.name}
-                  type="button"
-                  onClick={() => handleRowClick(entry)}
-                  onDoubleClick={() => handleRowDoubleClick(entry)}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    inputRef.current?.focus()
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
-                    'hover:bg-accent/60'
-                  )}
-                >
-                  {entry.isDirectory ? (
-                    <Folder className="size-3.5 text-muted-foreground shrink-0" />
-                  ) : (
-                    <FileIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
-                  )}
-                  <span className="truncate flex-1 min-w-0">{entry.name}</span>
-                  {entry.isDirectory && (
-                    <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
-                  )}
-                </button>
-              )
-            })
-          )}
-        </div>
-      </div>
+      <RemoteFileBrowserEntryList
+        loading={loading}
+        error={error}
+        entries={entries}
+        filteredEntries={filteredEntries}
+        filter={filter}
+        preview={preview}
+        isPreviewActive={isPreviewActive}
+        inputRef={inputRef}
+        handleRowClick={handleRowClick}
+        handleRowDoubleClick={handleRowDoubleClick}
+      />
 
       {/* Footer */}
       <p
@@ -785,17 +322,4 @@ export function RemoteFileBrowser({
       </div>
     </div>
   )
-}
-
-// Portion before the final separator; distinguishes filter-only edits from committed-path changes.
-function committedPrefix(raw: string): string {
-  const i = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'))
-  return i === -1 ? '' : raw.slice(0, i + 1)
-}
-
-function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): string {
-  if (!runtimeEnvironmentId) {
-    throw new Error('Runtime environment is required')
-  }
-  return runtimeEnvironmentId
 }

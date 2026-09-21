@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { withFreshOmpLaunch } from './omp-fresh-launch'
+import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { detectExplicitPiAgentKindFromCommand } from './pi-agent-kind'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -14,6 +17,42 @@ describe('agent process recognition', () => {
       processName: 'codex-aarch64-ap'
     })
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
+  })
+
+  it.each(['posix', 'powershell', 'cmd'] as const)(
+    'recognizes fresh OMP commands and drafts in %s',
+    (shell) => {
+      for (const command of ['omp', 'omp launch', 'omp --model example']) {
+        const generated = withFreshOmpLaunch(command, shell)
+        expect(recognizeAgentProcessFromCommandLine(generated)).toEqual({
+          agent: 'omp',
+          processName: 'omp'
+        })
+        expect(detectExplicitPiAgentKindFromCommand(generated)).toBe('omp')
+      }
+      const draft = buildAgentDraftLaunchPlan({
+        agent: 'omp',
+        draft: 'task',
+        cmdOverrides: {},
+        platform: 'linux',
+        shell
+      })
+      expect(recognizeAgentProcessFromCommandLine(draft?.launchCommand)).toEqual({
+        agent: 'omp',
+        processName: 'omp'
+      })
+      expect(detectExplicitPiAgentKindFromCommand(draft?.launchCommand)).toBe('omp')
+    }
+  )
+
+  it('does not classify embedded fresh-launch text as an agent command', () => {
+    for (const command of [
+      `echo 'omp --config "$ORCA_OMP_FRESH_CONFIG"'`,
+      `echo '${withFreshOmpLaunch('omp', 'posix')}'`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+      expect(detectExplicitPiAgentKindFromCommand(command)).toBeNull()
+    }
   })
 
   it('recognizes the OpenClaude foreground process', () => {
@@ -176,6 +215,19 @@ describe('agent process recognition', () => {
       processName: 'mistral-vibe'
     })
     expect(isRecognizedAgentType('vibe')).toBe(true)
+  })
+
+  it('recognizes Kimi Code by the kimi-code process its launcher becomes', () => {
+    expect(recognizeAgentProcess('/home/dev/.kimi-code/bin/kimi')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi'
+    })
+    expect(recognizeAgentProcess('kimi-code')).toEqual({
+      agent: 'kimi',
+      processName: 'kimi-code'
+    })
+    expect(isExpectedAgentProcess('/home/dev/.kimi-code/bin/kimi', 'kimi')).toBe(true)
+    expect(isRecognizedAgentType('kimi-code')).toBe(true)
   })
 
   it('recognizes Qwen Code by its installed qwen executable', () => {
@@ -358,6 +410,22 @@ describe('agent process recognition', () => {
     expect(isAgentForegroundWrapperProcess('python3.12.exe')).toBe(true)
     expect(isAgentForegroundWrapperProcess('bash')).toBe(false)
     expect(isAgentForegroundWrapperProcess('vim.exe')).toBe(false)
+  })
+
+  it('recognizes the Antigravity CLI from bare, POSIX and Windows command lines', () => {
+    const agy = { agent: 'antigravity', processName: 'agy' }
+
+    expect(recognizeAgentProcess('agy')).toEqual(agy)
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/agy')).toEqual(agy)
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Local\agy\bin\agy.exe`)).toEqual(
+      agy
+    )
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`"C:\Users\dev\AppData\Local\agy\bin\agy.exe" --dangerously-skip-permissions`
+      )
+    ).toEqual(agy)
+    expect(recognizeAgentProcessFromCommandLine('agy --dangerously-skip-permissions')).toEqual(agy)
   })
 
   it('recognizes versioned Grok process names observed from the installed CLI', () => {

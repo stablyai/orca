@@ -58,6 +58,14 @@ export function resolveNativeChatAttachmentOwner(
   if (!worktreeId) {
     return { kind: 'not-ready' }
   }
+  return resolveNativeChatAttachmentOwnerForWorktree(state, worktreeId, terminalTabId)
+}
+
+export function resolveNativeChatAttachmentOwnerForWorktree(
+  state: NativeChatAttachmentOwnerState,
+  worktreeId: string,
+  terminalTabId?: string
+): NativeChatAttachmentOwner {
   if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
     return { kind: 'runtime' }
   }
@@ -68,15 +76,23 @@ export function resolveNativeChatAttachmentOwner(
   if (connectionId === null) {
     return { kind: 'local' }
   }
-  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
+  const worktreePath = terminalTabId
+    ? resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
+    : state.getKnownWorktreeById(worktreeId)?.path
   if (!worktreePath) {
     return { kind: 'not-ready' }
   }
-  return {
-    kind: 'ssh',
-    connectionId,
-    worktreePath,
-    ...captureDirectSshMutationExpectation(state, connectionId)
+  try {
+    return {
+      kind: 'ssh',
+      connectionId,
+      worktreePath,
+      ...captureDirectSshMutationExpectation(state, connectionId)
+    }
+  } catch {
+    // The connection's generation is gone (disconnect mid-attach). That is an
+    // unknown owner, not a reason to throw out of the drop/IME handler.
+    return { kind: 'not-ready' }
   }
 }
 
@@ -84,6 +100,27 @@ export function nativeChatWorktreeNotReadyNotice(): string {
   return translate(
     'components.native-chat.composer.worktreeNotReady',
     'Worktree not ready — try again in a moment.'
+  )
+}
+
+export function nativeChatAttachmentOwnerChangedNotice(): string {
+  return translate(
+    'components.native-chat.composer.attachmentOwnerChanged',
+    'This workspace changed hosts while attaching — drop the files again.'
+  )
+}
+
+export function nativeChatAttachmentUnreadableNotice(): string {
+  return translate(
+    'components.native-chat.composer.attachmentUnreadable',
+    "Couldn't read the dropped files."
+  )
+}
+
+export function nativeChatLocalAttachmentUnsupportedNotice(): string {
+  return translate(
+    'components.native-chat.composer.localAttachmentUnsupported',
+    'Local attachments are not available for remote sessions.'
   )
 }
 

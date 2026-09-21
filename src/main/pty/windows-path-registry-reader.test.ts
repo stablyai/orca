@@ -45,10 +45,22 @@ describe('readWindowsPathRegistry', () => {
     ])
   })
 
-  it('treats a missing PATH value as a failed query', () => {
+  it('treats a missing PATH value in a readable hive as empty', () => {
     __setWindowsPathRegistryLoaderForTests(() => ({
       HK: { LM: 1, CU: 2 },
       getRegistryKey: vi.fn(() => ({}))
+    }))
+
+    expect(readWindowsPathRegistry()).toEqual([
+      { failed: false, value: '' },
+      { failed: false, value: '' }
+    ])
+  })
+
+  it('treats a present but unreadable PATH entry as a failed read', () => {
+    __setWindowsPathRegistryLoaderForTests(() => ({
+      HK: { LM: 1, CU: 2 },
+      getRegistryKey: vi.fn(() => ({ Path: undefined }))
     }))
 
     expect(readWindowsPathRegistry()).toEqual([

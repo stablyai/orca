@@ -3,7 +3,7 @@ import {
   getOpenableAnnotationLine,
   resolveAnnotationPathInsideWorktree
 } from './check-annotation-path'
-import type { PRCheckAnnotation } from '../../../../shared/types'
+import type { PRCheckAnnotation } from '../../../../shared/github/check-types'
 
 function annotation(path: string | null, startLine = 1): PRCheckAnnotation {
   return {

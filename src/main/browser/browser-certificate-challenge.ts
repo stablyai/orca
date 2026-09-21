@@ -1,4 +1,4 @@
-import type { BrowserCertificateFailure } from '../../shared/types'
+import type { BrowserCertificateFailure } from '../../shared/browser-workspace-types'
 import { SUPPORTED_CERTIFICATE_ERROR_CODE } from './browser-certificate-identity'
 
 export const CERTIFICATE_CHALLENGE_TTL_MS = 5 * 60_000

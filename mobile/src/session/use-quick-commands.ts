@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import {
+  interpretOrThrowRefusalMessage,
+  refusedRpcMessageOrFallback
+} from '../transport/rpc-refusal-message'
+import type { RpcResponse } from '../transport/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import { quickCommandsRead } from './mobile-session-read-operations'
+import { quickCommandsWrite } from './mobile-session-write-operations'
 import {
   applyTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,
@@ -39,11 +45,6 @@ type MutationContext = {
   nextMutationId: number
 }
 
-function readQuickCommands(result: unknown): TerminalQuickCommand[] | null {
-  const list = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
-  return parseNormalizedTerminalQuickCommands(list)
-}
-
 const LOAD_CUTOVER_MAX_RETRIES = 5
 
 // Why: opening the sheet right after connecting over relay races the relay→direct
@@ -55,7 +56,7 @@ async function loadQuickCommandsWithCutoverRetry(
 ): Promise<RpcResponse> {
   for (let migrationRetry = 0; ; migrationRetry += 1) {
     try {
-      return await client.sendRequest('settings.getTerminalQuickCommands')
+      return await quickCommandsRead.request(client)
     } catch (error) {
       if (
         cancelled() ||
@@ -129,11 +130,13 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         ) {
           return
         }
-        if (!response.ok) {
-          setError((response as RpcFailure).error.message || 'Failed to load quick commands')
+        let next
+        try {
+          next = parseNormalizedTerminalQuickCommands(quickCommandsRead.interpret(response))
+        } catch (err) {
+          setError(refusedRpcMessageOrFallback(err, 'Failed to load quick commands'))
           return
         }
-        const next = readQuickCommands((response as RpcSuccess).result)
         if (!next) {
           setError('Failed to load quick commands')
           return
@@ -189,15 +192,14 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         let succeeded = false
         let failureMessage: string | null = null
         try {
-          const response = await client.sendRequest('settings.updateTerminalQuickCommands', {
+          const response = await quickCommandsWrite.request(client, {
             mutation: commandMutation
           })
-          if (!response.ok) {
-            throw new Error(
-              (response as RpcFailure).error.message || 'Failed to save quick command'
-            )
-          }
-          const confirmed = readQuickCommands((response as RpcSuccess).result)
+          let confirmed
+          confirmed = interpretOrThrowRefusalMessage(
+            () => parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response)),
+            'Failed to save quick command'
+          )
           if (!confirmed) {
             // Why: treating an invalid success payload as [] would let the next
             // full-list mutation erase commands that still exist on the host.

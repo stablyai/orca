@@ -51,7 +51,7 @@ function createWriter(
         sink.drainWaiters.push(callback)
         return () => {
           const index = sink.drainWaiters.indexOf(callback)
-          if (index >= 0) {
+          if (index !== -1) {
             sink.drainWaiters.splice(index, 1)
           }
         }

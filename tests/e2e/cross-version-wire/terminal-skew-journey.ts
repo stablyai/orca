@@ -63,14 +63,20 @@ function nameOpcode(build: TerminalWireBuild, opcode: number): string {
   return typeof name === 'string' ? name : `Opcode${opcode}`
 }
 
-async function barrier(label: string, predicate: () => boolean): Promise<void> {
-  try {
-    await vi.waitFor(() => expect(predicate()).toBe(true), {
-      timeout: BARRIER_TIMEOUT_MS,
-      interval: 5
-    })
-  } catch {
-    throw new Error(`Cross-version journey stalled at barrier: ${label}`)
+/**
+ * A pairing that never advanced. Carries the partial record so a caller can read
+ * what the wire actually did — which frames the receiving decoder refused, and
+ * which steps completed before the stall.
+ */
+export class CrossVersionJourneyStall extends Error {
+  readonly step: JourneyStep
+  readonly record: JourneyRecord
+
+  constructor(step: JourneyStep, detail: string, record: JourneyRecord) {
+    super(`Cross-version journey stalled at ${step}: ${detail}`)
+    this.name = 'CrossVersionJourneyStall'
+    this.step = step
+    this.record = record
   }
 }
 
@@ -86,8 +92,11 @@ async function barrier(label: string, predicate: () => boolean): Promise<void> {
 export async function runTerminalSkewJourney(args: {
   hostBuild: TerminalWireBuild
   clientBuild: TerminalWireBuild
+  /** Only lower this for a pairing whose stall is the expected outcome. */
+  barrierTimeoutMs?: number
 }): Promise<JourneyRecord> {
   const { hostBuild, clientBuild } = args
+  const barrierTimeoutMs = args.barrierTimeoutMs ?? BARRIER_TIMEOUT_MS
   const hostStub: HostTerminalRuntimeStub = createHostTerminalRuntimeStub({
     terminalHandle: TERMINAL_HANDLE,
     initialBuffer: INITIAL_BUFFER
@@ -112,6 +121,21 @@ export async function runTerminalSkewJourney(args: {
     frameSequence: [],
     rejected: link.rejected,
     missingRuntimeMethods: hostStub.missingRuntimeMethods
+  }
+
+  const barrier = async (
+    step: JourneyStep,
+    detail: string,
+    predicate: () => boolean
+  ): Promise<void> => {
+    try {
+      await vi.waitFor(() => expect(predicate()).toBe(true), {
+        timeout: barrierTimeoutMs,
+        interval: 5
+      })
+    } catch {
+      throw new CrossVersionJourneyStall(step, detail, record)
+    }
   }
 
   // Name opcodes with whichever build knows more of them, so an unknown opcode in
@@ -168,26 +192,27 @@ export async function runTerminalSkewJourney(args: {
 
   try {
     let terminal = await subscribe()
-    await barrier('subscribe: client never saw a `subscribed` event', () => subscribedCount >= 1)
+    await barrier('subscribe', 'client never saw a `subscribed` event', () => subscribedCount >= 1)
     record.subscribedEvents = link.connections.flatMap((connection) =>
       connection.events.filter((event) => event.type === 'subscribed')
     )
     record.completed.push('subscribe')
 
     await barrier(
-      'first-snapshot: client never rendered the initial buffer snapshot',
+      'first-snapshot',
+      'client never rendered the initial buffer snapshot',
       () => record.snapshotsRendered.length >= 1
     )
     record.completed.push('first-snapshot')
 
     terminal.sendInput(FIRST_INPUT)
-    await barrier('input-reaches-process: host never wrote the client input to the PTY', () =>
+    await barrier('input-reaches-process', 'host never wrote the client input to the PTY', () =>
       hostStub.writtenInput.includes(FIRST_INPUT)
     )
     record.completed.push('input-reaches-process')
 
     hostStub.emitOutput(LIVE_OUTPUT)
-    await barrier('live-output: client never rendered host output', () =>
+    await barrier('live-output', 'client never rendered host output', () =>
       record.dataRendered.join('').includes(LIVE_OUTPUT.trim())
     )
     record.completed.push('live-output')
@@ -203,7 +228,8 @@ export async function runTerminalSkewJourney(args: {
     const closesBeforeDrop = record.transportCloses
     link.disconnect()
     await barrier(
-      'transport-drop: client never observed the transport close',
+      'transport-drop',
+      'client never observed the transport close',
       () => record.transportCloses > closesBeforeDrop
     )
     record.completed.push('transport-drop')
@@ -211,7 +237,8 @@ export async function runTerminalSkewJourney(args: {
     const subscribedBeforeReconnect = subscribedCount
     terminal = await subscribe()
     await barrier(
-      'resubscribe: client never re-established the stream after reconnect',
+      'resubscribe',
+      'client never re-established the stream after reconnect',
       () => subscribedCount > subscribedBeforeReconnect
     )
     record.subscribedEvents = link.connections.flatMap((connection) =>
@@ -220,7 +247,7 @@ export async function runTerminalSkewJourney(args: {
     record.completed.push('resubscribe')
 
     terminal.sendInput(SECOND_INPUT)
-    await barrier('input-after-reconnect: host never wrote post-reconnect input to the PTY', () =>
+    await barrier('input-after-reconnect', 'host never wrote post-reconnect input to the PTY', () =>
       hostStub.writtenInput.includes(SECOND_INPUT)
     )
     record.completed.push('input-after-reconnect')

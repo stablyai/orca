@@ -20,7 +20,6 @@ export type DiscoveredSkill = {
   directoryPath: string
   skillFilePath: string
   installed: boolean
-  fileCount: number
   updatedAt: number | null
 }
 
@@ -33,7 +32,8 @@ export type SkillDiscoverySource = {
   /** Agent that owns this root; null is the explicit shared-skills scope. */
   owner: AgentType | null
   exists: boolean
-  skippedReason?: 'missing' | 'remote-repo'
+  /** `unavailable`: the root did not answer in time, so its skills are unknown rather than absent. */
+  skippedReason?: 'missing' | 'remote-repo' | 'unavailable'
 }
 
 export type SkillDiscoveryResult = {
@@ -51,6 +51,12 @@ export type SkillDiscoveryTarget = {
    *  when the caller (e.g. a remote client) cannot supply `projectRuntime`. */
   worktreeId?: string | null
   projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Bypass the host's shared scans because the caller knows disk just changed.
+   *  Optional so an older host simply ignores it and scans as it always did. */
+  refresh?: boolean
+  /** Optional inventory filter for callers that only need known installed skills. */
+  names?: string[]
+  sourceKinds?: SkillSourceKind[]
 }
 
 const ResolvedProjectRuntimeSchema = z.object({
@@ -100,6 +106,12 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
   worktreeId: z.string().nullable().optional(),
   projectRuntime: z
     .discriminatedUnion('status', [ResolvedProjectRuntimeSchema, RepairProjectRuntimeSchema])
+    .optional(),
+  refresh: z.boolean().optional(),
+  names: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  sourceKinds: z
+    .array(z.enum(['home', 'repo', 'bundled', 'plugin']))
+    .max(4)
     .optional()
 })
 

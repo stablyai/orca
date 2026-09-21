@@ -1,0 +1,411 @@
+name: Recover Relay Staging C4 Image
+
+on:
+  workflow_run:
+    workflows: [Prove Relay Staging Capacity]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Enter RECOVER_STAGING_ASIA_C4_IMAGE
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  gate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion != 'success')) }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    outputs:
+      recover: ${{ steps.trigger.outputs.recover }}
+    steps:
+      - name: Bind recovery to the exact failed C4 job
+        working-directory: .
+        id: trigger
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_EVENT: ${{ github.event.workflow_run.event }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "${GITHUB_EVENT_NAME}" = workflow_dispatch; then
+            test "${CONFIRMATION}" = RECOVER_STAGING_ASIA_C4_IMAGE
+            echo "recover=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          test "${SOURCE_RUN_EVENT}" = workflow_dispatch
+          [[ "${SOURCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          jobs="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?filter=latest")"
+          count="$(jq -s '[.[].jobs[] | select(.name == "refresh-asia-c4-image" and
+            (.conclusion == "failure" or .conclusion == "cancelled" or
+             .conclusion == "timed_out"))] | length' <<< "${jobs}")"
+          if test "${count}" = 0; then
+            echo "recover=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          test "${count}" = 1
+          echo "recover=true" >> "${GITHUB_OUTPUT}"
+
+  recover:
+    needs: gate
+    if: ${{ needs.gate.outputs.recover == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 90
+    environment: staging
+    concurrency:
+      group: relay-staging-mutation
+      cancel-in-progress: false
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      CELL_ORIGIN: https://c4.relay-staging.onorca.dev
+      TARGET_CELL_ID: staging-gce-c4
+      TARGET_ZONE: asia-east2-a
+      MIG_NAME: orca-cloud-staging-relay-gce-c4
+      PREDECESSOR_IMAGE_DIGEST: sha256:ce16d13ce6b633c6fbb1a2afdd6cdb8369645a329d42a8355efa7ad1e60a44f7
+      TARGET_IMAGE_DIGEST: sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Initialize the exact staging backend
+        run: node dev/scripts/infra.mjs init --env staging
+
+      - id: preflight-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Inspect the exact C4 recovery state
+        id: preflight
+        timeout-minutes: 3
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.preflight-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          inspect="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging --mode inspect --cell-ids "${TARGET_CELL_ID}" \
+            --expected-generation '' --expected-membership-sha256 '' --attempt-id '' \
+            --image-digest "${PREDECESSOR_IMAGE_DIGEST}")"
+          generation="$(jq -er '.generation' <<< "${inspect}")"
+          [[ "${generation}" =~ ^(0|[1-9][0-9]*)$ ]]
+          test "$(jq -r --arg cell "${TARGET_CELL_ID}" '.states[$cell]' <<< "${inspect}")" = \
+            migration-only
+          echo "selector_generation=${generation}" >> "${GITHUB_OUTPUT}"
+          if runtime="$(curl --silent --show-error --fail-with-body --max-time 30 --request POST \
+              "${CELL_ORIGIN}/v1/admin/runtime-status" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' --data '{"v":1}')"; then
+            current_digest="$(jq -er '.imageDigest' <<< "${runtime}")"
+            [[ "${current_digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            status="$(curl --fail-with-body --max-time 30 --request POST \
+              "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+            jq -e '.draining | type == "boolean"' <<< "${runtime}" >/dev/null
+            {
+              echo "runtime_available=true"
+              echo "current_digest=${current_digest}"
+              echo "draining=$(jq -r '.draining' <<< "${runtime}")"
+              echo "ready=$(jq -r '.status.runtime.ready == true' <<< "${status}")"
+            } >> "${GITHUB_OUTPUT}"
+          else
+            echo "runtime_available=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Classify both exact recovery end states
+        id: recovery-plan
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_repository="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay"
+          predecessor_image="${image_repository}@${PREDECESSOR_IMAGE_DIGEST}"
+          target_image="${image_repository}@${TARGET_IMAGE_DIGEST}"
+          served_digest="$(gcloud artifacts docker images describe "${predecessor_image}" \
+            --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
+          test "${served_digest}" = "${PREDECESSOR_IMAGE_DIGEST}"
+          cells="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode(var.relay_gce_cells)' | jq -er '.')"
+          test "$(jq -r --arg cell "${TARGET_CELL_ID}" '.[$cell].image' <<< "${cells}")" = \
+            "${target_image}"
+          target_plan="${RUNNER_TEMP}/relay-c4-image-target.tfplan"
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars -lock-timeout=5m \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c4"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c4"]' \
+            -out="${target_plan}"
+          target_result="$(terraform -chdir=infra/terraform show -json "${target_plan}" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-image --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 \
+              --unobserved-bound 60 --image "${target_image}" \
+              --rollback-image "${predecessor_image}")"
+          target_state="$(jq -r '[.changes,.changeKind] | join(":")' <<< "${target_result}")"
+          case "${target_state}" in
+            0:none|2:replacement|*:obsolete-template-delete|*:manager-convergence|*:replacement-with-obsolete-template) ;;
+            *) exit 1 ;;
+          esac
+          recovery_cells="$(jq -ce --arg cell "${TARGET_CELL_ID}" \
+            --arg image "${predecessor_image}" '.[$cell].image = $image' <<< "${cells}")"
+          jq -n --argjson cells "${recovery_cells}" \
+            '{relay_gce_cells:$cells}' > "${RUNNER_TEMP}/relay-c4-recovery.tfvars.json"
+          plan="${RUNNER_TEMP}/relay-c4-image-recovery.tfplan"
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-c4-recovery.tfvars.json" \
+            -lock-timeout=5m \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c4"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c4"]' \
+            -out="${plan}"
+          result="$(terraform -chdir=infra/terraform show -json "${plan}" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-image --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 \
+              --unobserved-bound 60 --image "${predecessor_image}" \
+              --rollback-image "${target_image}")"
+          changes="$(jq -r '.changes' <<< "${result}")"
+          change_kind="$(jq -r '.changeKind' <<< "${result}")"
+          case "${changes}:${change_kind}" in
+            0:none|2:replacement|*:obsolete-template-delete|*:manager-convergence|*:replacement-with-obsolete-template) ;;
+            *) exit 1 ;;
+          esac
+          mig="$(gcloud compute instance-groups managed describe "${MIG_NAME}" \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --format=json)"
+          mig_stable="$(jq -r '.status.isStable == true and .status.versionTarget.isReached == true' \
+            <<< "${mig}")"
+          instances="$(gcloud compute instance-groups managed list-instances "${MIG_NAME}" \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --format=json)"
+          instance_stable="$(jq -r 'length == 1 and .[0].instanceStatus == "RUNNING" and
+            .[0].currentAction == "NONE"' <<< "${instances}")"
+          action=rollback-predecessor
+          recovery_digest="${PREDECESSOR_IMAGE_DIGEST}"
+          if test "${{ steps.preflight.outputs.runtime_available }}" = true && \
+            test "${{ steps.preflight.outputs.ready }}" = true && \
+            test "${{ steps.preflight.outputs.draining }}" = false && \
+            test "${mig_stable}" = true && test "${instance_stable}" = true; then
+            if test "${{ steps.preflight.outputs.current_digest }}" = "${TARGET_IMAGE_DIGEST}" && \
+              test "${target_state}" = 0:none; then
+              action=verify-target
+              recovery_digest="${TARGET_IMAGE_DIGEST}"
+            elif test "${{ steps.preflight.outputs.current_digest }}" = \
+                "${PREDECESSOR_IMAGE_DIGEST}" && test "${changes}:${change_kind}" = 0:none; then
+              action=verify-predecessor
+            fi
+          fi
+          {
+            echo "changes=${changes}"
+            echo "change_kind=${change_kind}"
+            echo "action=${action}"
+            echo "recovery_digest=${recovery_digest}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - id: fence-auth
+        if: ${{ steps.recovery-plan.outputs.action == 'rollback-predecessor' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Fence C4 before predecessor recovery
+        if: ${{ steps.recovery-plan.outputs.action == 'rollback-predecessor' }}
+        timeout-minutes: 6
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.fence-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_digests="${PREDECESSOR_IMAGE_DIGEST},${TARGET_IMAGE_DIGEST}"
+          current_digest="${{ steps.preflight.outputs.current_digest }}"
+          if test -n "${current_digest}" && [[ ",${expected_digests}," != *",${current_digest},"* ]]; then
+            expected_digests="${expected_digests},${current_digest}"
+          fi
+          if curl --silent --show-error --fail-with-body --max-time 30 --request POST \
+              "${CELL_ORIGIN}/v1/admin/drain" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' --data '{"v":1,"graceMs":0}' \
+              >/dev/null; then
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 --unobserved-bound 60 \
+              --heartbeat fresh --admission migration-only --draining required \
+              --activity quiescent \
+              --expected-image-digests "${expected_digests}" \
+              --timeout-ms 240000
+          else
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" --runtime unavailable --heartbeat stale \
+              --admission migration-only --draining either --activity restart-safe \
+              --timeout-ms 240000
+          fi
+
+      - name: Apply and stabilize the saved predecessor plan
+        id: apply
+        if: ${{ steps.recovery-plan.outputs.action == 'rollback-predecessor' }}
+        timeout-minutes: 20
+        env:
+          CHANGES: ${{ steps.recovery-plan.outputs.changes }}
+          CHANGE_KIND: ${{ steps.recovery-plan.outputs.change_kind }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="${RUNNER_TEMP}/relay-c4-image-recovery.tfplan"
+          if test "${CHANGES}" != 0; then
+            terraform -chdir=infra/terraform apply -auto-approve "${plan}"
+          fi
+          gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          echo "stable_at_ms=$(date -u +%s%3N)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restart only when the plan did not replace C4
+        id: restore
+        if: ${{ steps.recovery-plan.outputs.action == 'rollback-predecessor' }}
+        timeout-minutes: 20
+        env:
+          APPLY_STABLE_AT_MS: ${{ steps.apply.outputs.stable_at_ms }}
+          CHANGE_KIND: ${{ steps.recovery-plan.outputs.change_kind }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${CHANGE_KIND}" =~ ^(replacement|replacement-with-obsolete-template|manager-convergence)$ ]]; then
+            echo "stable_at_ms=${APPLY_STABLE_AT_MS}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          instance="$(gcloud compute instance-groups managed list-instances "${MIG_NAME}" \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --format=json \
+            | jq -er 'if length == 1 and .[0].instanceStatus == "RUNNING" and
+              .[0].currentAction == "NONE" then .[0].instance | split("/") | last
+              else error("C4 is not one stable running instance") end')"
+          gcloud compute instance-groups managed recreate-instances "${MIG_NAME}" \
+            --instances "${instance}" --project "${GCP_PROJECT_ID}" \
+            --zone "${TARGET_ZONE}" --quiet
+          gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
+            --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
+          echo "stable_at_ms=$(date -u +%s%3N)" >> "${GITHUB_OUTPUT}"
+
+      - name: Require an empty selected-image recovery readback
+        timeout-minutes: 8
+        env:
+          RECOVERY_DIGEST: ${{ steps.recovery-plan.outputs.recovery_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_repository="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay"
+          recovery_image="${image_repository}@${RECOVERY_DIGEST}"
+          other_image="${image_repository}@${TARGET_IMAGE_DIGEST}"
+          if test "${RECOVERY_DIGEST}" = "${TARGET_IMAGE_DIGEST}"; then
+            other_image="${image_repository}@${PREDECESSOR_IMAGE_DIGEST}"
+          fi
+          cells="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode(var.relay_gce_cells)' | jq -er '.')"
+          recovery_cells="$(jq -ce --arg cell "${TARGET_CELL_ID}" --arg image "${recovery_image}" \
+            '.[$cell].image = $image' <<< "${cells}")"
+          jq -n --argjson cells "${recovery_cells}" \
+            '{relay_gce_cells:$cells}' > "${RUNNER_TEMP}/relay-c4-readback.tfvars.json"
+          readback="${RUNNER_TEMP}/relay-c4-image-recovery-readback.tfplan"
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/staging.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-c4-readback.tfvars.json" \
+            -lock-timeout=5m \
+            '-target=google_compute_instance_template.relay_gce_cell["staging-gce-c4"]' \
+            '-target=google_compute_instance_group_manager.relay_gce_cell["staging-gce-c4"]' \
+            -out="${readback}"
+          readback_result="$(terraform -chdir=infra/terraform show -json "${readback}" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+              --mode same-cap-image --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 \
+              --unobserved-bound 60 --image "${recovery_image}" \
+              --rollback-image "${other_image}")"
+          test "$(jq -r '.changes' <<< "${readback_result}")" = 0
+
+      - id: verify-auth
+        if: ${{ always() }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Verify the recovered image and unchanged isolation
+        if: ${{ always() && steps.verify-auth.outcome == 'success' }}
+        timeout-minutes: 8
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.verify-auth.outputs.id_token }}
+          SELECTOR_GENERATION: ${{ steps.preflight.outputs.selector_generation }}
+          STABLE_AT_MS: ${{ steps.restore.outputs.stable_at_ms }}
+          RECOVERY_DIGEST: ${{ steps.recovery-plan.outputs.recovery_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --hard-cap 3000 --unobserved-bound 60 \
+            --heartbeat fresh --admission migration-only --draining forbidden \
+            --activity quiescent --expected-image-digests "${RECOVERY_DIGEST}" \
+            --timeout-ms 240000
+          stable_at_ms="${STABLE_AT_MS:-0}"
+          for _ in $(seq 1 36); do
+            status="$(curl --fail-with-body --max-time 30 --request POST \
+              "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+            if test "$(jq -r '.status.runtime.ready' <<< "${status}")" = true && \
+              test "$(jq -r '.status.runtime.lastHeartbeatAt' <<< "${status}")" \
+                -ge "${stable_at_ms}"; then break; fi
+            sleep 5
+          done
+          test "$(jq -r '.status.runtime.ready' <<< "${status}")" = true
+          test "$(jq -r '.status.runtime.lastHeartbeatAt' <<< "${status}")" \
+            -ge "${stable_at_ms}"
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment staging --mode verify --cell-ids "${TARGET_CELL_ID}" \
+            --expected-generation "${SELECTOR_GENERATION}" \
+            --expected-membership-sha256 '' --attempt-id '' \
+            --image-digest "${RECOVERY_DIGEST}")"
+          test "$(jq -r --arg cell "${TARGET_CELL_ID}" '.states[$cell]' <<< "${result}")" = \
+            migration-only

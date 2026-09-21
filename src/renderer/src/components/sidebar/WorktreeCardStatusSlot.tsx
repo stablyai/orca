@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, GitBranch } from 'lucide-react'
+import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -7,6 +7,7 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 
@@ -31,10 +32,16 @@ const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'do
 function getDefaultBranchIdentityLabel(): string {
   return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
+function getSleepingStatusLabel(): string {
+  return translate('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Sleeping')
+}
 // Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
 // the centered activity dots in the shared status column.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+// Why no faint tint here: the sleeping row is dimmed as a whole, so the glyph
+// keeps full muted-foreground and dims with everything around it.
+const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
 // Why: a left-edge badge overlays unread on the status glyph without widening
 // the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
 const newCardUnreadAlertClassName =
@@ -63,7 +70,7 @@ function overlayNewCardUnreadStatus(
   )
 }
 
-function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
+function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
   if (review.state === 'merged') {
     return `${label}: Merged`
@@ -101,74 +108,75 @@ export function WorktreeCardStatusSlot({
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
+  const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
+  // Why: sleep must stay distinct from awake completion; a sleeping workspace
+  // never collapses into branch/PR, even when retained done rows keep its
+  // status at 'done'. Attention states keep their own glyphs by construction.
+  const canShowSleepingStatus =
+    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     prDisplay !== null &&
+    !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
     showStatus &&
     hasBranchIdentity &&
     prDisplay === null &&
+    !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  const passiveStatusLabel =
-    canShowReviewStatus && prDisplay
-      ? getReviewStatusTooltip(prDisplay)
+  const passiveStatusLabel = canShowSleepingStatus
+    ? getSleepingStatusLabel()
+    : canShowReviewStatus && prDisplay
+      ? getReviewStatusLabel(prDisplay)
       : canShowBranchStatus
         ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
         : statusLabel
-  const passiveStatusTooltip =
+  const passiveStatusAnnouncement =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
   // Why: working and permission already own the new-card status lane, but
-  // unread state should still surface in tooltip/sr-only copy and reappear afterward.
+  // unread state should still surface to assistive technology and reappear afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
-  const passiveStatus =
-    canShowReviewStatus && prDisplay ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-            <ReviewIcon
-              review={prDisplay}
-              className={reviewStatusIconClassName}
-              variant="generic"
-            />
-            <span className="sr-only">{passiveStatusTooltip}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          <span>{passiveStatusTooltip}</span>
-        </TooltipContent>
-      </Tooltip>
-    ) : canShowBranchStatus ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-            {branchStatusIcon}
-            <span className="sr-only">{passiveStatusTooltip}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          <span>{passiveStatusTooltip}</span>
-        </TooltipContent>
-      </Tooltip>
-    ) : newCardStyle && showStatus ? (
-      <>
-        <span className={cn('inline-flex size-5 items-center justify-center', className)}>
-          <StatusIndicator status={status} aria-hidden="true" />
-        </span>
-        <span className="sr-only">{passiveStatusTooltip}</span>
-      </>
-    ) : (
-      <>
-        <StatusIndicator status={status} aria-hidden="true" className={className} />
-        <span className="sr-only">{statusLabel}</span>
-      </>
-    )
+  const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
+  const passiveStatus = canShowSleepingStatus ? (
+    <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
+      {sleepingStatusIcon}
+      <span className="sr-only">{passiveStatusAnnouncement}</span>
+    </span>
+  ) : canShowReviewStatus && prDisplay ? (
+    <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
+      <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} variant="generic" />
+      <span className="sr-only">{passiveStatusAnnouncement}</span>
+    </span>
+  ) : canShowBranchStatus ? (
+    <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
+      {branchStatusIcon}
+      <span className="sr-only">{passiveStatusAnnouncement}</span>
+    </span>
+  ) : newCardStyle && showStatus ? (
+    <>
+      <span className={cn('inline-flex size-5 items-center justify-center', className)}>
+        <StatusIndicator status={status} aria-hidden="true" tooltipSide="right" />
+      </span>
+      <span className="sr-only">{passiveStatusAnnouncement}</span>
+    </>
+  ) : (
+    <>
+      <StatusIndicator
+        status={status}
+        aria-hidden="true"
+        className={className}
+        tooltipSide="right"
+      />
+      <span className="sr-only">{statusLabel}</span>
+    </>
+  )
 
   const unreadActionEnabled = showUnreadAction && !newCardStyle
 
@@ -216,7 +224,7 @@ export function WorktreeCardStatusSlot({
                   {branchStatusIcon}
                 </span>
               ) : showStatus ? (
-                <StatusIndicator status={status} aria-hidden="true" />
+                <StatusIndicator status={status} aria-hidden="true" showTooltip={false} />
               ) : (
                 <span className="sr-only">{actionLabel}</span>
               )
@@ -227,6 +235,7 @@ export function WorktreeCardStatusSlot({
                 <StatusIndicator
                   status={status}
                   aria-hidden="true"
+                  showTooltip={false}
                   className="transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"
                 />
                 <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />

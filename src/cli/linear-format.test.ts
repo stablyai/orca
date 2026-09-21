@@ -5,10 +5,11 @@ import type {
   LinearMcpIssueListResult,
   LinearProjectListResult,
   LinearSearchResult
-} from '../shared/linear-agent-access'
+} from '../shared/linear/agent-access'
 import {
   formatLinearCreate,
   formatLinearIssue,
+  formatLinearMcpIssueList,
   formatLinearProjectList,
   printLinearMcpIssueListWarnings,
   printLinearSearchWarnings
@@ -41,6 +42,7 @@ describe('linear-format', () => {
   it('binds a list continuation hint to its Linear workspace', () => {
     printLinearMcpIssueListWarnings({
       issues: [],
+      truncated: true,
       meta: {
         limit: 20,
         returned: 20,
@@ -56,6 +58,66 @@ describe('linear-format', () => {
     expect(console.error).toHaveBeenCalledWith(
       'warning: more results available; next cursor: next-page; continue with --workspace workspace-1'
     )
+  })
+
+  it('prints a stdout truncation marker when a list-issues page is partial', () => {
+    const output = formatLinearMcpIssueList({
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          state: { name: 'In Progress' },
+          assignee: { displayName: 'Ada' },
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      truncated: true,
+      meta: {
+        limit: 1,
+        returned: 1,
+        hasMore: true,
+        nextCursor: 'next-page',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    })
+
+    expect(output).toContain('ENG-1')
+    expect(output).toContain('truncated: showing 1')
+    expect(output).not.toContain(' of ')
+  })
+
+  it('omits the stdout truncation marker when the page is complete', () => {
+    const output = formatLinearMcpIssueList({
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      truncated: false,
+      meta: {
+        limit: 50,
+        returned: 1,
+        hasMore: false,
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    })
+
+    expect(output).toContain('ENG-1')
+    expect(output).not.toContain('truncated:')
   })
 
   it('includes task fields in issue readback text', () => {

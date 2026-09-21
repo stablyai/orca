@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
 import {
   forgetCodexPaneAccount,
-  getCodexPaneAccount,
+  listRecordedCodexPaneAccounts,
   type CodexPaneHomeRoute
 } from './codex-pane-account-registry'
 
@@ -23,8 +23,9 @@ export function listStaleCodexPanes(args: {
   activeHostHomeRoute?: CodexPaneHomeRoute
 }): StaleCodexPane[] {
   const stalePanes: StaleCodexPane[] = []
+  const records = listRecordedCodexPaneAccounts(args.ptyIds)
   for (const ptyId of args.ptyIds) {
-    const record = getCodexPaneAccount(ptyId)
+    const record = records.get(ptyId)
     if (!record) {
       continue
     }

@@ -1,4 +1,5 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
@@ -14,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   canJumpToAiVaultSessionWorktree,
+  resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 
@@ -82,6 +84,32 @@ export function resolveAiVaultSessionResumeState(args: {
     worktreeId: null,
     usesSessionWorktree: false
   }
+}
+
+export function resolveAiVaultHistorySessionResumeState(
+  args: Omit<
+    Parameters<typeof resolveAiVaultSessionResumeState>[0],
+    'sessionFilePath' | 'sessionExecutionHostId'
+  > & {
+    session: AiVaultSession
+  }
+): AiVaultSessionResumeState {
+  const child = Boolean(args.session.subagent)
+  return resolveAiVaultSessionResumeState({
+    ...args,
+    sessionFilePath: args.session.filePath,
+    sessionExecutionHostId: args.session.executionHostId,
+    worktreeInfo: child
+      ? resolveAiVaultSessionWorktreeInfo({
+          session: args.session,
+          worktrees: args.worktrees,
+          repos: args.repos,
+          activeWorktreeId: args.activeWorktreeId
+        })
+      : args.worktreeInfo,
+    // Lazy children are absent from the panel map; never resume them in an unrelated active workspace.
+    activeWorktreeId: child ? null : args.activeWorktreeId
+  })
 }
 
 export function resolveAiVaultSessionResumeActions(args: {
@@ -203,17 +231,16 @@ function resolveAiVaultResumeTargetState(args: {
 }
 
 // Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Workspace-target blocking only disables in-app resume;
-// copying the command stays available for blocked-but-real sessions, so the copy
-// affordance is gated on content alone.
+// into an empty session. Copy stays available for blocked CLI sessions, while a
+// structured owner reopens natively and must never expose a legacy command.
 export function aiVaultSessionRowResumeGating(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null
 ): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   return {
     resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
-    canCopyResumeCommand: hasResumableContent
+    canCopyResumeCommand: hasResumableContent && !session.structuredSession
   }
 }
 

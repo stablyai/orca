@@ -10,7 +10,7 @@ import {
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
 import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
-import { isENOENT } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 
 // Trashes a validated session's paths, companions first so a part-way failure
 // leaves the row on screen to retry from instead of stranding the rest on disk.

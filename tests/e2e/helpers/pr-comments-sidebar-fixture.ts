@@ -1,5 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { PRComment, PRInfo } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 
 export type PRCommentsSidebarSeed = {
   worktreeId: string

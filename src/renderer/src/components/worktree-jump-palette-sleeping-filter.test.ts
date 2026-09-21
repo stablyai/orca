@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isSleepingSweepExemptWorkspace } from './sidebar/visible-worktrees'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
-const source = readFileSync(join(__dirname, 'WorktreeJumpPalette.tsx'), 'utf8')
+const worktreeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-worktrees.ts')
+const storeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-store-state.ts')
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -35,10 +35,10 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
   // call the shared predicate. A behavioral copy here would not catch a
   // hand-rolled duplicate creeping back in.
   it('routes the sleeping sweep through the shared exemption predicate', () => {
-    const start = source.indexOf('const emptyQueryVisibleWorktrees = useMemo(')
+    const start = worktreeSource.indexOf('const emptyQueryVisibleWorktrees = useMemo(')
     expect(start).toBeGreaterThanOrEqual(0)
-    const end = source.indexOf('const { visibleWorktreesForState', start)
-    const filterPass = source.slice(start, end)
+    const end = worktreeSource.indexOf('const { visibleWorktreesForState', start)
+    const filterPass = worktreeSource.slice(start, end)
 
     expect(filterPass).toContain(
       '!isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace)'
@@ -47,8 +47,8 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
   })
 
   it('reads the flag from the same store field the sidebar uses', () => {
-    expect(source).toContain(
-      'const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)'
+    expect(storeSource).toMatch(
+      /const alwaysShowDefaultBranchWorkspace = useAppStore\(\s*\(state\) => state\.alwaysShowDefaultBranchWorkspace\s*\)/
     )
   })
 

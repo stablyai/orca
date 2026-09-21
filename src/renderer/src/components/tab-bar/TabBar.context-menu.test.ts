@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { expandNode } from './tab-bar-dropdown-menu-item-probe'
+import { stubHeadlessReact, stubShallowSelector } from './tab-bar-windows-shell-launch-render-stubs'
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -49,25 +51,8 @@ const useAppStoreMock = vi.fn(
     })
 )
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  return {
-    ...actual,
-    memo: <T>(component: T) => component,
-    useEffect: () => {},
-    useLayoutEffect: () => {},
-    useCallback: <T>(callback: T) => callback,
-    useMemo: <T>(factory: () => T) => factory(),
-    useRef: <T>(current: T) => ({ current }),
-    useState: <T>(initial: T) => [initial, vi.fn()] as const
-  }
-})
-
-// The headless React mock above stubs hooks, so zustand's useShallow (which
-// calls useRef) has no dispatcher; make it a pass-through like the store mock.
-vi.mock('zustand/react/shallow', () => ({
-  useShallow: (selector: unknown) => selector
-}))
+vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('zustand/react/shallow', () => stubShallowSelector())
 
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
@@ -191,6 +176,12 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: 'Tooltip',
+  TooltipContent: 'TooltipContent',
+  TooltipTrigger: 'TooltipTrigger'
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
@@ -217,6 +208,11 @@ function findChildrenByType(node: unknown, typeName: string): ReactElementLike[]
     const matchedName = typeof type === 'string' ? type : type?.name
     if (matchedName === typeName) {
       results.push(el)
+    }
+    if (matchedName === 'TabBarStaticCreateMenu' && typeof el.type === 'function') {
+      // Expand the deferred pure menu component in this shallow renderer.
+      visit(el.type(el.props))
+      return
     }
     if (el.props && 'children' in el.props) {
       visit(el.props.children)
@@ -246,22 +242,24 @@ async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
     | ((props: Record<string, unknown>) => unknown)
     | { type: (props: Record<string, unknown>) => unknown }
   const TabBar = typeof candidate === 'function' ? candidate : candidate.type
-  return TabBar({
-    activeTabId: null,
-    worktreeId: 'wt-1',
-    expandedPaneByTabId: {},
-    onActivate: () => {},
-    onClose: () => {},
-    onCloseOthers: () => {},
-    onCloseToRight: () => {},
-    onCloseToLeft: () => {},
-    onNewTerminalTab: () => {},
-    onNewBrowserTab: () => {},
-    onSetCustomTitle: () => {},
-    onSetTabColor: () => {},
-    onTogglePaneExpand: () => {},
-    ...props
-  })
+  return expandNode(
+    TabBar({
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onCloseToLeft: () => {},
+      onNewTerminalTab: () => {},
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {},
+      ...props
+    })
+  )
 }
 
 const TERMINAL_TAB = {
@@ -495,6 +493,26 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      onNewSimulatorTab: () => {}
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels.some((label) => label.includes('New Terminal'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('New Markdown'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Open Markdown...'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Browser'))).toBe(false)
+    expect(menuLabels.some((label) => label.includes('Mobile Emulator'))).toBe(false)
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {

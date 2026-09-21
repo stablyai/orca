@@ -1,0 +1,5 @@
+{
+  "github": {
+    "enabled": false
+  }
+}

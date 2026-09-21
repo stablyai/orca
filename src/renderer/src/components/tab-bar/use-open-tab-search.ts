@@ -6,9 +6,15 @@ import { useAppStore } from '@/store'
 import {
   buildOpenTabSearchEntries,
   selectOpenTabSearchAgentState,
-  selectOpenTabSearchEntryState
+  selectOpenTabSearchEntryState,
+  type OpenTabSearchEntries
 } from './open-tab-search-entries'
-import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
+import {
+  capOpenTabSearchCandidates,
+  searchOpenTabCandidates,
+  type OpenTabSearchResult
+} from './open-tab-search'
+import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -16,18 +22,23 @@ export type UseOpenTabSearchOptions = {
   enabled: boolean
   query: string
   worktreeId: string
+  /** Keyboard-selected result's `id`; keep it inside the display cap while it still matches. */
+  retainedResultId?: string | null
 }
 
 export type OpenTabSearchSnapshot = {
   /** The query `results` describe; lags the requested query while deferred. */
   query: string
   results: OpenTabSearchResult[]
+  /** What `results` were searched from, so a caller can re-check a newer query. */
+  entries: OpenTabSearchEntries | null
 }
 
 export function useOpenTabSearch({
   enabled,
   query,
-  worktreeId
+  worktreeId,
+  retainedResultId
 }: UseOpenTabSearchOptions): OpenTabSearchSnapshot {
   // Why null while disabled: a closed menu stays stable across store churn.
   const state = useAppStore(
@@ -45,12 +56,29 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
+  const evaluationSnapshot = useMemo(
+    () => ({ deferredQuery, enabled, entries }),
+    [deferredQuery, enabled, entries]
+  )
+  const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
+  const candidates = useMemo(
+    () =>
+      entries
+        ? searchOpenTabCandidates({
+            ...entries,
+            query: deferredQuery,
+            context
+          })
+        : EMPTY_RESULTS,
+    [context, deferredQuery, entries]
+  )
 
   return useMemo(
     () => ({
       query: deferredQuery,
-      results: entries ? searchOpenTabs({ ...entries, query: deferredQuery }) : EMPTY_RESULTS
+      entries,
+      results: capOpenTabSearchCandidates(candidates, retainedResultId)
     }),
-    [deferredQuery, entries]
+    [candidates, deferredQuery, entries, retainedResultId]
   )
 }

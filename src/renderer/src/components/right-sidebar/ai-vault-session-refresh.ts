@@ -4,10 +4,16 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  requestedExecutionHostScope,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import { applyPublishedAiVaultList, EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
@@ -22,6 +28,7 @@ let lastForcedRescanAt = 0
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
   lastForcedRescanAt = 0
+  agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
   resetAiVaultSessionResultCacheForTest()
 }
 
@@ -30,6 +37,42 @@ export function resetAiVaultForcedRescanThrottleForTest(): void {
 export const isAiVaultScanCancellation = isAiVaultScanCancelledError
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
+
+// Shares main's request resolver, so this is exactly the scope that fans out on
+// the desktop IPC path. Deliberately over-inclusive: the paired web transport
+// drops the scope and serves one host, so 'all' there costs a redundant
+// reconcile. Erring the other way would re-enable the stamp fast-path on a real
+// merge, which is the bug this guard exists to prevent.
+function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
+  return requestedExecutionHostScope(scope) === ALL_EXECUTION_HOSTS_SCOPE
+}
+
+// Why: this selector runs on every store write; index each immutable status snapshot once.
+// Why resettable: every production writer replaces the map, but test fixtures commonly
+// mutate `mockStoreState.agentStatusByPaneKey[key]` in place, which would keep serving the
+// key cached for the identity they mutated.
+let agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
+
+function getAgentSessionIdsKey(
+  agentStatusByPaneKey: Record<string, { providerSession?: { id?: string } | null }> | undefined
+): string {
+  if (!agentStatusByPaneKey) {
+    return ''
+  }
+  const cached = agentSessionIdsKeyBySnapshot.get(agentStatusByPaneKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const ids: string[] = []
+  for (const entry of Object.values(agentStatusByPaneKey)) {
+    if (entry.providerSession?.id) {
+      ids.push(entry.providerSession.id)
+    }
+  }
+  const key = ids.sort().join('\n')
+  agentSessionIdsKeyBySnapshot.set(agentStatusByPaneKey, key)
+  return key
+}
 
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
@@ -40,13 +83,14 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
-  sessions: AiVaultSession[]
+  sessions: readonly AiVaultSession[]
 } {
-  const [sessions, setSessions] = useState<AiVaultSession[]>([])
   const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
+  const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const requestTokenRef = useRef(crypto.randomUUID())
+  const requestTokenRef = useRef<string>(undefined!)
+  requestTokenRef.current ??= crypto.randomUUID()
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
@@ -54,7 +98,8 @@ export function useAiVaultSessionRefresh(
   const pendingBackgroundRef = useRef(true)
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
-  const publicationGateRef = useRef(new AiVaultSessionPublicationGate())
+  const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
+  publicationGateRef.current ??= new AiVaultSessionPublicationGate()
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
@@ -92,8 +137,7 @@ export function useAiVaultSessionRefresh(
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
         setError(null)
         publicationGateRef.current.publish(cachedResult, (published) => {
-          setScanResult(published)
-          setSessions(published.sessions)
+          applyPublishedAiVaultList(published, setScanResult)
         })
         setLoading(false)
         return
@@ -145,7 +189,13 @@ export function useAiVaultSessionRefresh(
         }
         // A cache hit returns the snapshot already on screen; skip the state
         // updates so refocus flips don't force pointless re-renders.
+        // Single-host results carry one scanner's stamp minted when that scan
+        // finished, so an equal stamp does mean equal content. An 'all' result
+        // is a merge of legs on independent clocks stamped with the newest leg,
+        // so a lagging host's leg can change while the merged stamp stands
+        // still — there, only the structural reconcile below may decide.
         if (
+          !isMergedAiVaultHostScope(hostScope) &&
           lastAppliedScanRef.current?.scopeKey === scanKey &&
           lastAppliedScanRef.current.scannedAt === result.scannedAt
         ) {
@@ -161,8 +211,7 @@ export function useAiVaultSessionRefresh(
         })
         publicationGateRef.current.publish(result, (published) => {
           if (mountedRef.current && scanKey === currentScanScopeKey()) {
-            setScanResult(published)
-            setSessions(published.sessions)
+            applyPublishedAiVaultList(published, setScanResult)
           }
         })
       } catch (err) {
@@ -175,7 +224,7 @@ export function useAiVaultSessionRefresh(
           refreshIdRef.current === refreshId &&
           scanKey === currentScanScopeKey()
         ) {
-          setError(err instanceof Error ? err.message : String(err))
+          setError(describeAiVaultScanError(err instanceof Error ? err.message : String(err)))
         }
       } finally {
         refreshInFlightRef.current = false
@@ -249,6 +298,27 @@ export function useAiVaultSessionRefresh(
     void refresh({ force: false, reuseLoadedDepth: true })
   }, [executionHostScope, refresh, scanScopeKey])
 
+  // Why: this panel can query the relay before it is ready — at startup, and again for the window
+  // in which a reconnect leaves the session not-ready — and the query throws 'SSH relay is not
+  // ready'. Nothing else here retries: the remaining triggers are mount, window refocus and a new
+  // agent session id, so a user whose workspace is otherwise working sits on that error
+  // indefinitely. The file explorer already recovers this way for the same reason
+  // (use-file-explorer-tree-load-effects.ts); this panel simply never did.
+  //
+  // Gated on a prior error so a local workspace, or one that already listed fine, does not rescan
+  // every time some other host connects.
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const sshGenerationRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration <= sshGenerationRef.current) {
+      return
+    }
+    sshGenerationRef.current = sshConnectedGeneration
+    if (error !== null) {
+      void refresh({ background: true, force: false })
+    }
+  }, [sshConnectedGeneration, error, refresh])
+
   // Refocus checks the shared host cache without forcing another transcript scan.
   useEffect(() => {
     const onRefocus = (): void => {
@@ -269,15 +339,7 @@ export function useAiVaultSessionRefresh(
   // can't surface them. Agent hooks already report provider sessions; re-scan
   // only when a session id we haven't seen appears — state transitions are
   // deliberately ignored, they fire constantly while agents work.
-  const agentSessionIdsKey = useAppStore((s) => {
-    const ids: string[] = []
-    for (const entry of Object.values(s.agentStatusByPaneKey)) {
-      if (entry.providerSession?.id) {
-        ids.push(entry.providerSession.id)
-      }
-    }
-    return ids.sort().join('\n')
-  })
+  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')

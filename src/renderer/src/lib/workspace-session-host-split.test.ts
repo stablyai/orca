@@ -6,13 +6,11 @@ import {
 } from './workspace-session-host-split'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type {
-  BrowserPage,
-  Tab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  WorkspaceSessionState
-} from '../../../shared/types'
+import { HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
+import type { BrowserPage } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 const RUNTIME_A: ExecutionHostId = 'runtime:env-a'
 const RUNTIME_B: ExecutionHostId = 'runtime:env-b'
@@ -99,6 +97,46 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(slices[RUNTIME_A]).toBeUndefined()
   })
 
+  it('never replicates a local-owned global onto a non-local slice', () => {
+    // The regression this pins: one template handed to every host put a byte-identical copy of
+    // local's browserUrlHistory in each runtime partition, undoing #18161's load-time drop on the
+    // very next full snapshot write. 66 KB per host at 200 entries, growing with host count.
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      browserUrlHistory: [
+        { url: 'u', normalizedUrl: 'u', title: 't', lastVisitedAt: 1, visitCount: 1 }
+      ],
+      workspaceDocHistory: [
+        {
+          docLocation: { kind: 'workspace-doc', worktreeId: 'local-wt', filePath: 'a.md' },
+          title: 'a.md',
+          lastVisitedAt: 2,
+          visitCount: 1
+        }
+      ],
+      tabsByWorktree: {
+        'local-wt': [makeTab('t-local', 'local-wt')],
+        'a-wt': [makeTab('t-a', 'a-wt')],
+        'b-wt': [makeTab('t-b', 'b-wt')]
+      }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    expect(Object.keys(slices).sort()).toEqual([LOCAL_EXECUTION_HOST_ID, RUNTIME_A, RUNTIME_B])
+    for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
+      expect(slices[LOCAL_EXECUTION_HOST_ID]?.[field]).toEqual(state[field])
+      expect(Object.hasOwn(slices[RUNTIME_A] ?? {}, field)).toBe(false)
+      expect(Object.hasOwn(slices[RUNTIME_B] ?? {}, field)).toBe(false)
+    }
+    // The read path is unaffected: local always carries them, so the merge never reaches its
+    // fallback to another slice.
+    const merged = mergeWorkspaceSessionsFromHosts(slices)
+    for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
+      expect(merged[field]).toEqual(state[field])
+    }
+  })
+
   it('routes worktree-keyed maps to their owner host', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
@@ -114,6 +152,33 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(Object.keys(slices[LOCAL_EXECUTION_HOST_ID]?.tabsByWorktree ?? {})).toEqual(['local-wt'])
     expect(Object.keys(slices[RUNTIME_A]?.tabsByWorktree ?? {})).toEqual(['a-wt'])
     expect(Object.keys(slices[RUNTIME_B]?.tabsByWorktree ?? {})).toEqual(['b-wt'])
+  })
+
+  it('routes host-qualified visit recency to the partition the key names', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: {
+        'local-wt': 1,
+        'a-wt': 2,
+        'ssh:builder|ssh-wt': 3,
+        'runtime:env-a|a-wt': 4
+      }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    // Why the key's own host and not 'local': the recency row has to land in the same partition as
+    // the workspace it describes, or a read that adopts one without the other reports a visit for
+    // a workspace it has no tabs for (#12721).
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({ 'local-wt': 1 })
+    expect(slices[RUNTIME_A]?.lastVisitedAtByWorktreeId).toEqual({
+      'a-wt': 2,
+      'runtime:env-a|a-wt': 4
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal is a well-formed ssh: host id; ExecutionHostId is a template-literal type a plain string cannot satisfy.
+    expect(slices['ssh:builder' as ExecutionHostId]?.lastVisitedAtByWorktreeId).toEqual({
+      'ssh:builder|ssh-wt': 3
+    })
   })
 
   it('routes tab-keyed maps via the owning tab worktree (legacy + unified)', () => {
@@ -141,6 +206,37 @@ describe('splitWorkspaceSessionByHost', () => {
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toHaveProperty('orphan')
+    expect(slices[RUNTIME_A]).toBeUndefined()
+  })
+
+  it('routes tab-keyed rows through a caller-supplied tab index when the payload has no tab rows', () => {
+    // A debounced patch that changed only layouts (a park capture) or only PTY bindings carries
+    // no tabsByWorktree; the index stands in for the rows the payload never mentioned.
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { 't-a': makeLayout() },
+      remoteSessionIdsByTabId: { 't-a': 'sess-a' },
+      terminalPtyIncarnationsByPaneKey: { 't-a:leaf-1': 'inc-3' }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
+    expect(slices[RUNTIME_A]?.terminalLayoutsByTabId).toHaveProperty('t-a')
+    expect(slices[RUNTIME_A]?.remoteSessionIdsByTabId).toEqual({ 't-a': 'sess-a' })
+    expect(slices[RUNTIME_A]?.terminalPtyIncarnationsByPaneKey).toEqual({ 't-a:leaf-1': 'inc-3' })
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toEqual({})
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.remoteSessionIdsByTabId).toEqual({})
+  })
+
+  it('keeps a tab the supplied index does not name in the local slice', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { orphan: makeLayout() }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
     expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toHaveProperty('orphan')
     expect(slices[RUNTIME_A]).toBeUndefined()
   })
@@ -367,5 +463,48 @@ describe('split → merge round trip', () => {
       terminalLayoutsByTabId: { 't-a': makeLayout() }
     }
     expect(roundTrip(state)).toEqual(state)
+  })
+})
+
+/**
+ * The main-process load path drops a global field from a non-local partition when the local slice
+ * already has it, on the strength of exactly these two rules. If either moves, that prune starts
+ * discarding a value the renderer would otherwise have read.
+ */
+describe('mergeWorkspaceSessionsFromHosts global-field precedence', () => {
+  const localEntry = {
+    url: 'local',
+    normalizedUrl: 'local',
+    title: 'l',
+    lastVisitedAt: 2,
+    visitCount: 1
+  }
+  const hostEntry = {
+    url: 'host',
+    normalizedUrl: 'host',
+    title: 'h',
+    lastVisitedAt: 1,
+    visitCount: 1
+  }
+
+  it("takes a global field from 'local' whenever local has one, ignoring every other slice", () => {
+    const merged = mergeWorkspaceSessionsFromHosts({
+      [LOCAL_EXECUTION_HOST_ID]: {
+        ...getDefaultWorkspaceSession(),
+        browserUrlHistory: [localEntry]
+      },
+      [RUNTIME_A]: { ...getDefaultWorkspaceSession(), browserUrlHistory: [hostEntry] }
+    })
+    expect(merged.browserUrlHistory).toEqual([localEntry])
+  })
+
+  it('falls back to another slice only when local does not have the field', () => {
+    const local = getDefaultWorkspaceSession()
+    delete local.browserUrlHistory
+    const merged = mergeWorkspaceSessionsFromHosts({
+      [LOCAL_EXECUTION_HOST_ID]: local,
+      [RUNTIME_A]: { ...getDefaultWorkspaceSession(), browserUrlHistory: [hostEntry] }
+    })
+    expect(merged.browserUrlHistory).toEqual([hostEntry])
   })
 })

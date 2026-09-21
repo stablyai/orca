@@ -12,7 +12,7 @@ import {
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {
@@ -207,6 +207,19 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
   description: string
   title: string
 } {
+  if (data.reason === 'unresolved-paths') {
+    return {
+      description: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPathsDescription',
+        'Save them to disk first, then drop the saved files.'
+      ),
+      title: translate(
+        'auto.hooks.useGlobalFileDrop.nativeDropUnresolvedPaths',
+        "Orca couldn't read a path for the dropped files."
+      )
+    }
+  }
+
   if (data.reason === 'too-many-paths') {
     return {
       description: translate(

@@ -3,20 +3,20 @@
  * Field breadcrumbs prove render-cadence flips, but not which eligibility input
  * oscillates; burst damping keeps the pane mounted before React reaches #185.
  *
- * Scope: flips are counted on the rendered verdict, but the pin can only
- * subtract from the cold-park candidate set. Churn driven by the other parked
- * inputs (forced parking, portal ownership, deferred activation mounts) is
- * observed and breadcrumbed, not damped — read a repeating `burst` crumb for
- * one tab as "damping did not reach the oscillating input".
+ * Scope: flips are counted on the rendered verdict and the pin subtracts from
+ * that same verdict (selectParkVerdictPinnedTabIds), so churn driven by any
+ * parked input — worktree-level park, portal ownership, deferred activation
+ * mounts — is damped, not only the cold-park candidate set. A repeating `burst`
+ * crumb for one tab therefore means the driver keeps re-proposing the park once
+ * each pin lapses, not that damping never reached it.
  */
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/react-update-depth-attribution'
 
 export const TERMINAL_TAB_PARK_FLIP_WINDOW_MS = 60_000
 /** Flips per window that no sane park policy should reach. Breadcrumb only. */
 export const TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT = 12
 
-/** react-dom 19.2.x nested commit limit. */
-const REACT_NESTED_UPDATE_LIMIT = 50
 /** Measured upper bound after the passive-effect pin engages. */
 const PARK_PIN_SETTLE_COMMITS = 6
 /** Worst-case commits from pane, watcher, and store work per verdict flip. */
@@ -169,4 +169,42 @@ export function recordParkVerdictFlips(args: {
       })
     }
   }
+}
+
+export type ParkVerdictPinSelection = {
+  pinnedTabIds: Set<string>
+  /** Earliest live pin deadline, so a caller can wake exactly when damping lapses. */
+  earliestPinExpiryMs: number | null
+}
+
+/**
+ * Tab ids a flip burst pinned unparked, expiring lapsed pins in place.
+ *
+ * Why every live tab and not only cold-park candidates: flips are counted on
+ * the rendered verdict, so the oscillating input can be one the cold-park
+ * selector never sees (worktree-level park, activation-deferred mounts). A pin
+ * consulted only through the cold set then damps nothing and never lapses —
+ * it just silences its own breadcrumb for the window and re-arms forever.
+ */
+export function selectParkVerdictPinnedTabIds(args: {
+  records: Map<string, ParkVerdictFlipRecord>
+  tabIds: Iterable<string>
+  nowMs: number
+}): ParkVerdictPinSelection {
+  const pinnedTabIds = new Set<string>()
+  let earliestPinExpiryMs: number | null = null
+  for (const tabId of args.tabIds) {
+    const pinnedUntilMs = getParkVerdictUnparkPinUntilMs({
+      records: args.records,
+      tabId,
+      nowMs: args.nowMs
+    })
+    if (pinnedUntilMs === null) {
+      continue
+    }
+    pinnedTabIds.add(tabId)
+    earliestPinExpiryMs =
+      earliestPinExpiryMs === null ? pinnedUntilMs : Math.min(earliestPinExpiryMs, pinnedUntilMs)
+  }
+  return { pinnedTabIds, earliestPinExpiryMs }
 }

@@ -59,6 +59,7 @@ export type TeamPane = {
   // respawn can recreate it in the same slot while preserving its fake pane id.
   splitFromPane?: string
   splitDirection?: 'horizontal' | 'vertical'
+  respawnBlockedReason?: string
 }
 
 export type AgentTeam = {

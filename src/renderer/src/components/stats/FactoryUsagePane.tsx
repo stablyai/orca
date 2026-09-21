@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { CalendarClock, ExternalLink, RefreshCw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
@@ -81,10 +82,25 @@ export function FactoryUsagePane(): React.JSX.Element {
     factory?.monthly && typeof factory.monthly.usedPercent === 'number'
       ? Math.round(factory.monthly.usedPercent)
       : null
-  const nearestReset = [factory?.session, factory?.weekly, factory?.monthly]
-    .filter((w): w is NonNullable<typeof w> => w !== null)
-    .map((w) => w.resetDescription)
-    .find((d) => d !== null)
+  const nearestReset =
+    [factory?.session, factory?.weekly, factory?.monthly].reduce<RateLimitWindow | null>(
+      (nearest, window) => {
+        if (window === null || window === undefined || window.resetDescription === null) {
+          return nearest
+        }
+        if (nearest === null) {
+          return window
+        }
+        if (window.resetsAt === null) {
+          return nearest
+        }
+        if (nearest.resetsAt === null || window.resetsAt < nearest.resetsAt) {
+          return window
+        }
+        return nearest
+      },
+      null
+    )?.resetDescription ?? null
   const isFetching = isRefreshing || factory?.status === 'fetching'
 
   return (
@@ -99,8 +115,8 @@ export function FactoryUsagePane(): React.JSX.Element {
             {formatUpdatedAt(factory?.updatedAt ?? null)}
             {factory?.error
               ? translate('auto.components.stats.FactoryUsagePane.h9i0j1k2l3', ' • {{value0}}', {
-                  value0: factory.error
-                })
+                value0: factory.error
+              })
               : ''}
           </p>
         </div>
@@ -149,8 +165,8 @@ export function FactoryUsagePane(): React.JSX.Element {
       <p className="px-1 text-xs text-muted-foreground">
         {nearestReset
           ? translate('auto.components.stats.FactoryUsagePane.b7c8d9e0f1', 'Next reset {{when}}', {
-              when: nearestReset
-            })
+            when: nearestReset
+          })
           : ''}
       </p>
 

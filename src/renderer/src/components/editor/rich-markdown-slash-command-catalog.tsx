@@ -1,4 +1,3 @@
-import type {} from '@tiptap/extension-mathematics'
 import {
   ChevronRight,
   ImageIcon,

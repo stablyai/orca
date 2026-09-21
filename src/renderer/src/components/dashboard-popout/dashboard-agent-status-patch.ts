@@ -6,6 +6,7 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
+import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -22,7 +23,7 @@ function patchedSubagents(
   return event.subagents.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
-    dotState: subagent.state
+    dotState: dashboardCardDotState(subagent.state)
   }))
 }
 
@@ -35,7 +36,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     return { matched: true, snapshot }
   }
   const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
-  if (index < 0) {
+  if (index === -1) {
     return { matched: false, snapshot }
   }
   const card = snapshot.cards[index]
@@ -49,7 +50,11 @@ export function patchDashboardSnapshotFromAgentStatus(
   const stateChanged = event.stateStartedAt > card.stateChangedAt
   const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
   const dotState = event.state
-  const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
+  const workingMode =
+    event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
+  const bucket = dashboardBucketForDotState(
+    dashboardCardDisplayState({ dotState, workingMode, unseen })
+  )
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
@@ -62,6 +67,7 @@ export function patchDashboardSnapshotFromAgentStatus(
       : {}),
     bucket,
     dotState,
+    workingMode,
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,

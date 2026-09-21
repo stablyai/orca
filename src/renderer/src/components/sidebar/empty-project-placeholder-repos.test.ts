@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 
 const repo: Repo = {

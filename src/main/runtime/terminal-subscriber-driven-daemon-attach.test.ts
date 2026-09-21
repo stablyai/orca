@@ -37,8 +37,10 @@ type RuntimeInternals = {
   ) => unknown
   issuePtyHandle: (pty: unknown) => string
   headlessTerminals: Map<string, unknown>
-  subscriberDrivenProviderAttachesByPtyId: Map<string, Promise<boolean>>
-  subscriberDrivenProviderAttachInventoryWaiters: Set<string>
+  terminalViewSubscribers: {
+    hasPendingProviderAttach: (ptyId: string) => boolean
+    attachInventoryWaiterIds: () => string[]
+  }
   refreshPtyWorktreeRecordsWithControllerInventory: (
     worktrees: [],
     targetWorktreeId: string | null
@@ -420,7 +422,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     sendSubscribe(harness, 1, handle)
     await waitForSubscribed(harness, 1)
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    expect(internals(runtime).subscriberDrivenProviderAttachesByPtyId.has(PTY_ID)).toBe(true)
+    expect(internals(runtime).terminalViewSubscribers.hasPendingProviderAttach(PTY_ID)).toBe(true)
     expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(true)
     expect(model.emitData(PTY_ID, 'before inventory\r\n')).toBe(false)
 
@@ -428,13 +430,13 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     expect(model.attachCalls).toEqual([PTY_ID])
-    expect([...internals(runtime).subscriberDrivenProviderAttachInventoryWaiters]).toEqual([PTY_ID])
+    expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).toEqual([PTY_ID])
     refuseFirstAttach()
 
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     await vi.waitFor(() =>
-      expect(internals(runtime).subscriberDrivenProviderAttachInventoryWaiters.has(PTY_ID)).toBe(
-        false
+      expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).not.toContain(
+        PTY_ID
       )
     )
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)

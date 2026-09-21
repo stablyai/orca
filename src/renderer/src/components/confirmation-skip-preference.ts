@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 
 /** Persists the preference and keeps its reversal one click away. */
 export function persistConfirmationSkipPreference({

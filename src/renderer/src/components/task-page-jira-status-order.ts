@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
 import { jiraGetProjectStatusOrder, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'
 

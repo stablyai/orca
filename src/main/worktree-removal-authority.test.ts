@@ -4,7 +4,7 @@ import {
   isWorktreePathMissing,
   stripOrcaProvenanceMetaUpdates
 } from './worktree-removal-safety'
-import type { WorktreeMeta } from '../shared/types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
 
 describe('isWorktreePathMissing', () => {
   it('recognizes missing-path errors from local and remote stat providers', async () => {

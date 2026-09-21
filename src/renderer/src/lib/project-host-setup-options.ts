@@ -6,12 +6,14 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
-import type { ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 export type ProjectHostSetupOption =
   | {
@@ -35,6 +37,9 @@ export type ProjectHostSetupOption =
       // Why: only a genuine connection error warrants an alarm glyph; a dormant
       // disconnected host is merely not-yet-connected, not broken.
       attention: boolean
+      // Why: available hosts without a path can be set up in place; connecting or
+      // in-progress/unsupported hosts need a different next step.
+      canSetLocation: boolean
       connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
 
@@ -186,6 +191,7 @@ function buildNeedsSetupOptions({
           : availability.detail,
         isAvailable: availability.isAvailable,
         attention: host.health === 'error',
+        canSetLocation: canSetProjectLocation(projectId, availability.isAvailable, pendingSetup),
         ...(connectAction ? { connectAction } : {})
       }
     })
@@ -260,6 +266,23 @@ function getHostHealthUnavailableDetail(
     case 'local':
       return null
   }
+}
+
+function canSetProjectLocation(
+  projectId: string,
+  isAvailable: boolean,
+  pendingSetup: ProjectHostSetup | undefined
+): boolean {
+  // Why: setting up on another host links by project identity, and a host-local
+  // `repo:<id>` project has none to match against — the call always fails, so offer
+  // the plain status line rather than a button that only ever toasts an error.
+  if (!isAvailable || isHostLocalProjectId(projectId)) {
+    return false
+  }
+  if (!pendingSetup) {
+    return true
+  }
+  return pendingSetup.setupState === 'not-set-up' || pendingSetup.setupState === 'error'
 }
 
 function getHostConnectAction(

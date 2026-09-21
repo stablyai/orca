@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { agentKindToTuiAgent, tuiAgentToAgentKind } from './agent-kind'
 import { AGENT_KIND_VALUES, agentKindSchema } from './telemetry-events'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 describe('tuiAgentToAgentKind', () => {
   it('maps every shipped TuiAgent to a concrete telemetry kind', () => {

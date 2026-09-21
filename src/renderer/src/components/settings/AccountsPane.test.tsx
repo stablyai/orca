@@ -2,7 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
@@ -166,5 +166,14 @@ describe('AccountsPane', () => {
     expect(
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
+  })
+
+  it('tells users to paste the OpenCode console session cookie, not auth alone', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('__Host-console_session')
+    expect(markup).toContain('auth=…; __Host-console_session=…')
+    expect(markup).toContain('auth cookie still covers workspace discovery')
+    expect(markup).not.toContain('Fe26.2**… token or auth=Fe26.2**… header')
   })
 })

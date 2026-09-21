@@ -6,7 +6,7 @@ import {
   resolveSourceControlActionRecipe,
   resolveSourceControlAiForOperation
 } from './source-control-ai'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
@@ -427,7 +427,7 @@ describe('source-control AI action recipes', () => {
     ).toEqual({
       ok: false,
       error:
-        'Agent "aider" does not support Source Control AI commit messages. Supported agents: Claude, Codex, OpenCode, Pi, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
+        'Agent "aider" does not support Source Control AI commit messages. Supported agents: OMP, Claude, Codex, OpenCode, OpenCode 2, Pi, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
     })
   })
 })

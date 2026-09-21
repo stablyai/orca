@@ -3,6 +3,8 @@
 // viewer). We deliberately favor precision over recall: a missed path is a minor
 // annoyance, but a false positive on prose or a version number is a broken tap.
 
+import { parseFileLinkLocation } from '../../../src/shared/file-link-location'
+
 export type FilePathSegment =
   | { type: 'text'; value: string }
   | { type: 'file'; value: string; path: string }
@@ -101,8 +103,6 @@ function hasMidTokenAt(candidate: string): boolean {
   return /[^\\/]@/.test(candidate)
 }
 
-const LINE_SUFFIX_PATTERN = /^(.+?):([1-9]\d*)(?::([1-9]\d*))?$/
-
 /**
  * Split an agent-style `path:line(:col)` citation into its parts. Windows drive
  * colons are safe: only a trailing all-digit suffix is treated as a line ref.
@@ -112,14 +112,14 @@ export function splitFilePathLineSuffix(pathText: string): {
   line: number | null
   column: number | null
 } {
-  const match = LINE_SUFFIX_PATTERN.exec(pathText)
-  if (!match) {
+  const parsed = parseFileLinkLocation(pathText)
+  if (!parsed || (parsed.line === null && parsed.column === null)) {
     return { path: pathText, line: null, column: null }
   }
   return {
-    path: match[1]!,
-    line: Number.parseInt(match[2]!, 10),
-    column: match[3] ? Number.parseInt(match[3], 10) : null
+    path: parsed.pathText,
+    line: parsed.line,
+    column: parsed.column
   }
 }
 

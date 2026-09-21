@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 const batchMocks = vi.hoisted(() => ({
   release: vi.fn(),
@@ -108,6 +109,7 @@ describe('buildDashboardSnapshot orchestration routing', () => {
         if (typeof key === 'string' && Object.hasOwn(target, key)) {
           runtimeValueReads += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, key, receiver)
       }
     })

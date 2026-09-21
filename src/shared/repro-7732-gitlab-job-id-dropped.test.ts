@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { gitLabPipelineJobsToPRChecks } from './gitlab-pipeline-checks'
-import type { GitLabPipelineJob } from './types'
+import type { GitLabPipelineJob } from './gitlab-types'
 
 // Repro for #7732: the Checks side panel can only ask for a GitLab job trace if the mapped
 // check row still carries the numeric GitLab job id (gitlab:jobTrace takes { jobId }).
-function numericHandles(value: object): number[] {
+function numericHandles(value: Record<string, unknown>): number[] {
   return Object.values(value).filter((v): v is number => typeof v === 'number')
 }
 

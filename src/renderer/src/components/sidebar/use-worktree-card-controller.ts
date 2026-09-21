@@ -74,6 +74,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     isActive: props.isActive,
     activationRowKey: props.activationRowKey,
     onActivate: props.onActivate,
+    onWorktreeCardClick: props.onWorktreeCardClick,
     onImmediateActivate: props.onImmediateActivate,
     isDeleting: linked.isDeleting,
     isSshDisconnected: foundation.isSshDisconnected,
@@ -135,7 +136,8 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,
     workspacePorts: foundation.workspacePorts,
     openTaskPage: foundation.openTaskPage,
-    updateWorktreeMeta: foundation.updateWorktreeMeta
+    updateWorktreeMeta: foundation.updateWorktreeMeta,
+    settings: foundation.settings
   })
 
   return {

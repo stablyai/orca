@@ -151,7 +151,7 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         undefined,
-        () => kittyActive,
+        () => (kittyActive ? 1 : 0),
         undefined,
         getWindowsShiftEnterEncoding,
         () => false
@@ -172,7 +172,7 @@ describe('resolveTerminalShortcutAction', () => {
           false,
           undefined,
           undefined,
-          () => kittyActive,
+          () => (kittyActive ? 1 : 0),
           undefined,
           encoding
         )
@@ -183,7 +183,7 @@ describe('resolveTerminalShortcutAction', () => {
 
   it('keeps host and agent lookups off unrelated keystrokes', () => {
     const isLocalWindowsConptyPane = vi.fn(() => true)
-    const isKittyKeyboardActivePane = vi.fn(() => true)
+    const getKittyKeyboardFlagsActivePane = vi.fn(() => 1)
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
     const isWindowsTerminalHost = vi.fn(() => true)
 
@@ -196,7 +196,7 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
-        isKittyKeyboardActivePane,
+        getKittyKeyboardFlagsActivePane,
         undefined,
         getWindowsShiftEnterEncoding,
         isWindowsTerminalHost
@@ -205,7 +205,7 @@ describe('resolveTerminalShortcutAction', () => {
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
     expect(isWindowsTerminalHost).not.toHaveBeenCalled()
-    expect(isKittyKeyboardActivePane).not.toHaveBeenCalled()
+    expect(getKittyKeyboardFlagsActivePane).not.toHaveBeenCalled()
 
     expect(
       resolveTerminalShortcutAction(
@@ -216,7 +216,7 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
-        isKittyKeyboardActivePane,
+        getKittyKeyboardFlagsActivePane,
         undefined,
         getWindowsShiftEnterEncoding,
         isWindowsTerminalHost
@@ -225,7 +225,7 @@ describe('resolveTerminalShortcutAction', () => {
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
     expect(isWindowsTerminalHost).toHaveBeenCalledTimes(1)
-    expect(isKittyKeyboardActivePane).not.toHaveBeenCalled()
+    expect(getKittyKeyboardFlagsActivePane).not.toHaveBeenCalled()
 
     isWindowsTerminalHost.mockReturnValue(false)
     expect(
@@ -237,7 +237,7 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
-        isKittyKeyboardActivePane,
+        getKittyKeyboardFlagsActivePane,
         undefined,
         getWindowsShiftEnterEncoding,
         isWindowsTerminalHost
@@ -246,7 +246,7 @@ describe('resolveTerminalShortcutAction', () => {
     expect(isLocalWindowsConptyPane).not.toHaveBeenCalled()
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(1)
     expect(isWindowsTerminalHost).toHaveBeenCalledTimes(2)
-    expect(isKittyKeyboardActivePane).toHaveBeenCalledTimes(1)
+    expect(getKittyKeyboardFlagsActivePane).toHaveBeenCalledTimes(1)
   })
 
   it('honors Kitty negotiation for a Windows PTY reached from macOS', () => {
@@ -260,7 +260,7 @@ describe('resolveTerminalShortcutAction', () => {
         false,
         undefined,
         undefined,
-        () => kittyActive,
+        () => (kittyActive ? 1 : 0),
         undefined,
         getWindowsShiftEnterEncoding,
         () => true
@@ -273,7 +273,7 @@ describe('resolveTerminalShortcutAction', () => {
   it('protects local ConPTY shells without regressing query-only Ctrl+Enter consumers', () => {
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
     const isLocalWindowsConptyPane = vi.fn(() => true)
-    const isKittyKeyboardActivePane = vi.fn(() => false)
+    const getKittyKeyboardFlagsActivePane = vi.fn(() => 0)
     const hasCtrlEnterCsiUAuthority = vi.fn(() => false)
     const csiU = { type: 'sendInput', data: '\x1b[13;5u' }
     const legacyCr = { type: 'sendInput', data: '\r' }
@@ -283,7 +283,7 @@ describe('resolveTerminalShortcutAction', () => {
       trustedConsumer: boolean
     ) => {
       isLocalWindowsConptyPane.mockReturnValue(localConpty)
-      isKittyKeyboardActivePane.mockReturnValue(kittyActive)
+      getKittyKeyboardFlagsActivePane.mockReturnValue(kittyActive ? 1 : 0)
       hasCtrlEnterCsiUAuthority.mockReturnValue(trustedConsumer)
       return resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
@@ -293,7 +293,7 @@ describe('resolveTerminalShortcutAction', () => {
         true,
         undefined,
         isLocalWindowsConptyPane,
-        isKittyKeyboardActivePane,
+        getKittyKeyboardFlagsActivePane,
         undefined,
         getWindowsShiftEnterEncoding,
         () => true,
@@ -609,7 +609,7 @@ describe('resolveTerminalShortcutAction', () => {
   })
 
   it('sends Esc+letter for any Option+letter when left Option acts as alt', () => {
-    // Left Option (optionKeyLocation=1) in 'left' mode: full Meta for any letter key
+    // Left Option (optionKeyLocations=1) in 'left' mode: full Meta for any letter key
     expect(
       resolveTerminalShortcutAction(
         event({ key: '¬', code: 'KeyL', altKey: true }),
@@ -627,7 +627,7 @@ describe('resolveTerminalShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1bt' })
 
-    // Right Option (optionKeyLocation=2) in 'left' mode: compose side, only B/F/D patched
+    // Right Option (optionKeyLocations=2) in 'left' mode: compose side, only B/F/D patched
     expect(
       resolveTerminalShortcutAction(
         event({ key: '∫', code: 'KeyB', altKey: true }),
@@ -647,8 +647,8 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
-  it('sends Esc+letter for any Option+letter when right Option acts as alt', () => {
-    // Right Option (optionKeyLocation=2) in 'right' mode: full Meta, including punctuation
+  it('handles side-specific Alt and leaves global legacy Alt with the terminal engine', () => {
+    // Right Option (optionKeyLocations=2) in 'right' mode: full Meta, including punctuation
     expect(
       resolveTerminalShortcutAction(
         event({ key: '≥', code: 'Period', altKey: true }),
@@ -667,7 +667,7 @@ describe('resolveTerminalShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1bl' })
 
-    // Left Option (optionKeyLocation=1) in 'right' mode: compose side, only B/F/D patched
+    // Left Option (optionKeyLocations=1) in 'right' mode: compose side, only B/F/D patched
     expect(
       resolveTerminalShortcutAction(
         event({ key: '¬', code: 'KeyL', altKey: true }),
@@ -676,11 +676,6 @@ describe('resolveTerminalShortcutAction', () => {
         1
       )
     ).toBeNull()
-  })
-
-  it('does not intercept Option+letter in true mode (xterm handles it)', () => {
-    // In 'true' mode, macOptionIsMeta is enabled in xterm, so no compensation needed
-    // Our handler still fires but is gated by macOptionAsAlt !== 'true'
     expect(
       resolveTerminalShortcutAction(event({ key: 'b', code: 'KeyB', altKey: true }), true, 'true')
     ).toBeNull()
@@ -744,63 +739,62 @@ describe('resolveTerminalShortcutAction', () => {
 })
 
 describe('kitty keyboard protocol panes', () => {
-  const kittyActive = (): boolean => true
-  const kittyInactive = (): boolean => false
+  const kittyActive = (): number => 1
+  const kittyInactive = (): number => 0
 
   const resolveKitty = (
     input: TerminalShortcutEvent,
     macOptionAsAlt: 'true' | 'false' | 'left' | 'right' = 'false',
-    optionKeyLocation = 0,
-    active: () => boolean = kittyActive
+    optionKeyLocations: 0 | 1 | 2 | 3 = 0,
+    active: () => number = kittyActive
   ) =>
     resolveTerminalShortcutAction(
       input,
       true,
       macOptionAsAlt,
-      optionKeyLocation,
+      optionKeyLocations,
       false,
       undefined,
       undefined,
       active
     )
 
-  it('encodes Option+letter as kitty CSI-u with the physical base key in compose mode', () => {
-    // macOS composition reports key='π' for Option+P on ABC/compose layouts;
-    // OMP binds alt+p (temporary model) and alt+m (model selector).
+  it('types Option-composed letters on a compose side instead of chords (#20171)', () => {
+    // Compose layouts need their letters; TUI hotkeys remain available on configured Alt sides.
     expect(resolveKitty(event({ key: 'π', code: 'KeyP', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[112;3u'
+      data: 'π'
     })
     expect(resolveKitty(event({ key: 'µ', code: 'KeyM', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[109;3u'
+      data: 'µ'
     })
   })
 
-  it('includes shift in the kitty modifier field', () => {
+  it('types shifted compositions on a compose side instead of chords', () => {
     expect(resolveKitty(event({ key: '∏', code: 'KeyP', altKey: true, shiftKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[112;4u'
+      data: '∏'
     })
   })
 
-  it('encodes Option+digit and mapped Option+punctuation', () => {
+  it('types composed digits and punctuation; configured Alt keeps chords', () => {
     expect(resolveKitty(event({ key: '¡', code: 'Digit1', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[49;3u'
+      data: '¡'
     })
     expect(resolveKitty(event({ key: '≥', code: 'Period', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[46;3u'
+      data: '≥'
+    })
+    expect(resolveKitty(event({ key: 'p', code: 'KeyP', altKey: true }), 'true')).toEqual({
+      type: 'sendInput',
+      data: '\x1b[112;3u'
     })
   })
 
   it('exempts dead keys so Option composition still starts', () => {
     expect(resolveKitty(event({ key: 'Dead', code: 'KeyE', altKey: true }))).toBeNull()
-  })
-
-  it('defers to xterm in macOptionAsAlt=true mode (native kitty encoding is correct there)', () => {
-    expect(resolveKitty(event({ key: 'p', code: 'KeyP', altKey: true }), 'true')).toBeNull()
   })
 
   it('keeps shift+Option composition untouched in non-kitty panes', () => {
@@ -833,12 +827,11 @@ describe('kitty keyboard protocol panes', () => {
     ).toEqual({ type: 'sendInput', data: '\x1bb' })
   })
 
-  it('encodes the compose-side Option key as kitty CSI-u in left/right modes', () => {
-    // In 'left' mode the right Option normally composes; a kitty pane asked
-    // for modifier-accurate keys, so it gets alt-encoded too.
+  it('types on the compose-side Option; the Alt side keeps CSI-u in left/right modes', () => {
+    // In 'left' mode the right Option composes and now types its text (#20171).
     expect(resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'left', 2)).toEqual({
       type: 'sendInput',
-      data: '\x1b[108;3u'
+      data: '¬'
     })
     // The designated meta side upgrades from legacy Esc+letter to CSI-u.
     expect(resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'left', 1)).toEqual({
@@ -877,7 +870,7 @@ describe('kitty keyboard protocol panes', () => {
   it('resolves the kitty base key through the active layout map when provided', () => {
     const resolveWithLayout = (
       input: TerminalShortcutEvent,
-      layoutBaseCharacterForCode: (code: string) => string | undefined
+      layoutCharacterForCode: (code: string, shifted: boolean) => string | undefined
     ) =>
       resolveTerminalShortcutAction(
         input,
@@ -888,26 +881,26 @@ describe('kitty keyboard protocol panes', () => {
         undefined,
         undefined,
         kittyActive,
-        layoutBaseCharacterForCode
+        layoutCharacterForCode
       )
 
-    // AZERTY types M at the physical Semicolon position; the layout map must
-    // win over the US punctuation table so the chord reports alt+m, not alt+;.
+    // AZERTY types M at the physical Semicolon position; the layout map must win over the US
+    // punctuation table so an uncomposed press still reports alt+m, not alt+;.
     const azerty = (code: string): string | undefined => (code === 'Semicolon' ? 'm' : undefined)
-    expect(resolveWithLayout(event({ key: 'µ', code: 'Semicolon', altKey: true }), azerty)).toEqual(
+    expect(resolveWithLayout(event({ key: 'm', code: 'Semicolon', altKey: true }), azerty)).toEqual(
       { type: 'sendInput', data: '\x1b[109;3u' }
     )
 
     // Colemak types P at the physical KeyR position.
     const colemak = (code: string): string | undefined => (code === 'KeyR' ? 'p' : undefined)
-    expect(resolveWithLayout(event({ key: 'π', code: 'KeyR', altKey: true }), colemak)).toEqual({
+    expect(resolveWithLayout(event({ key: 'p', code: 'KeyR', altKey: true }), colemak)).toEqual({
       type: 'sendInput',
       data: '\x1b[112;3u'
     })
 
     // Falls back to the US table when the layout map has no entry.
     const empty = (): string | undefined => undefined
-    expect(resolveWithLayout(event({ key: 'π', code: 'KeyP', altKey: true }), empty)).toEqual({
+    expect(resolveWithLayout(event({ key: 'p', code: 'KeyP', altKey: true }), empty)).toEqual({
       type: 'sendInput',
       data: '\x1b[112;3u'
     })

@@ -60,7 +60,7 @@ export function nextDailyBuildNumber(baseVersion, releaseNames = []) {
 }
 
 /**
- * `1.4.163 • 01 • Aug 9, 6:15AM • e698241` — the human-facing release title,
+ * `1.4.163 • 01 • Aug 9, 10:15AM • e698241` — the human-facing release title,
  * shown verbatim in both the GitHub releases list and the in-app build picker.
  */
 export function formatDailyReleaseName(version, buildNumber, commit, date) {

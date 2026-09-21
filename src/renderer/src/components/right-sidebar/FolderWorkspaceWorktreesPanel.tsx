@@ -1,17 +1,14 @@
 import WorktreeCard from '@/components/sidebar/WorktreeCard'
+import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
   getLineageChildrenInlineStyle,
   getLineageNestedRowGeometry
-} from '@/components/sidebar/worktree-list-indentation'
+} from '@/components/sidebar/worktree-list/rows/indentation'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
-
-function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>): void {
-  event.stopPropagation()
-}
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)

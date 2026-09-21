@@ -1,6 +1,6 @@
 import type { Stats } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathSeparators,
@@ -26,7 +26,7 @@ function isFileStat(value: GitDirectoryStat): boolean {
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')
   const index = normalized.lastIndexOf('/')
-  if (index < 0) {
+  if (index === -1) {
     return '.'
   }
   if (index === 0) {

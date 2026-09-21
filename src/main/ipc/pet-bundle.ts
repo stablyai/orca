@@ -1,4 +1,4 @@
-import type { SpriteAnimation } from '../../shared/types'
+import type { SpriteAnimation } from '../../shared/pet-types'
 import {
   CODEX_PET_ANIMATIONS,
   CODEX_PET_DEFAULT_ANIMATION,

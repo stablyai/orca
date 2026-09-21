@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostLineageSnapshot } from '../../../shared/host-lineage-contract'
 import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-contract'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
 import { createDirectSshHostHydration } from './direct-ssh-host-hydration'
@@ -38,6 +39,34 @@ function state(overrides: Record<string, unknown> = {}): AppState {
     workspaceLineageByChildKey: {},
     ...overrides
   } as unknown as AppState
+}
+
+function productionLineage(worktreeId: string, parentWorktreeId: string): WorktreeLineage {
+  return {
+    worktreeId,
+    worktreeInstanceId: `${worktreeId}-instance`,
+    parentWorktreeId,
+    parentWorktreeInstanceId: `${parentWorktreeId}-instance`,
+    origin: 'orchestration',
+    capture: { source: 'orchestration-context', confidence: 'explicit' },
+    taskId: 'task-1',
+    coordinatorHandle: 'coord-1',
+    createdAt: 1
+  }
+}
+
+function productionWorkspaceLineage(childId: string, parentId: string): WorkspaceLineage {
+  return {
+    childWorkspaceKey: worktreeWorkspaceKey(childId),
+    childInstanceId: `${childId}-instance`,
+    parentWorkspaceKey: worktreeWorkspaceKey(parentId),
+    parentInstanceId: `${parentId}-instance`,
+    origin: 'orchestration',
+    capture: { source: 'orchestration-context', confidence: 'explicit' },
+    taskId: 'task-1',
+    coordinatorHandle: 'coord-1',
+    createdAt: 1
+  }
 }
 
 function hostSnapshot(
@@ -82,6 +111,59 @@ describe('createDirectSshHostHydration', () => {
       repo('shared', 'target-b'),
       repo('shared', 'target-a')
     ])
+  })
+
+  it('keeps the manual cross-host order when the host catalog is republished', async () => {
+    const owner = authority('box')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
+        manualRepoOrder: [
+          { hostId: 'ssh:box', repoId: 'bravo' },
+          { hostId: 'local', repoId: 'alpha' },
+          { hostId: 'ssh:box', repoId: 'delta' }
+        ]
+      })
+    )
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(async () =>
+        hostSnapshot(owner, [repo('bravo', 'box'), repo('delta', 'box')])
+      ),
+      listLineage: vi.fn(),
+      isCurrentAuthority: () => true
+    })
+
+    await hydration.capturePreparationInput(owner, 'reconnect')
+
+    expect(store.getState().repos.map((entry) => entry.id)).toEqual(['bravo', 'alpha', 'delta'])
+  })
+
+  // A repo added after the last drag has no overlay entry. Ranked rows must keep their order and
+  // the newcomer sinks to the tail, rather than the overlay being discarded for being incomplete.
+  it('keeps ranked rows in order and appends unranked ones when the overlay is partial', async () => {
+    const owner = authority('box')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
+        manualRepoOrder: [
+          { hostId: 'ssh:box', repoId: 'delta' },
+          { hostId: 'local', repoId: 'alpha' }
+        ]
+      })
+    )
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(async () =>
+        hostSnapshot(owner, [repo('bravo', 'box'), repo('delta', 'box')])
+      ),
+      listLineage: vi.fn(),
+      isCurrentAuthority: () => true
+    })
+
+    await hydration.capturePreparationInput(owner, 'reconnect')
+
+    expect(store.getState().repos.map((entry) => entry.id)).toEqual(['delta', 'alpha', 'bravo'])
   })
 
   it('rejects a mismatched host response without publishing', async () => {
@@ -339,6 +421,79 @@ describe('createDirectSshHostHydration', () => {
       [worktreeWorkspaceKey('a::/work')]: { parentWorkspaceKey: 'fresh-a-workspace' },
       [folderWorkspaceKey('folder-a')]: { parentWorkspaceKey: 'fresh-folder' }
     })
+  })
+
+  it('keeps lineage map identity for a cloned no-op host snapshot', async () => {
+    const owner = authority()
+    const hostLineage = productionLineage('a::/work', 'a::/parent')
+    const foreignLineage = productionLineage('b::/work', 'b::/parent')
+    const hostWorkspace = productionWorkspaceLineage('a::/work', 'a::/parent')
+    const foreignWorkspace = productionWorkspaceLineage('b::/work', 'b::/parent')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('a', 'target-a'), repo('b', 'target-b')],
+        worktreesByRepo: {
+          a: [{ id: 'a::/work', repoId: 'a', hostId: 'ssh:target-a' }],
+          b: [{ id: 'b::/work', repoId: 'b', hostId: 'ssh:target-b' }]
+        },
+        worktreeLineageById: {
+          'a::/work': hostLineage,
+          'b::/work': foreignLineage
+        },
+        workspaceLineageByChildKey: {
+          [worktreeWorkspaceKey('a::/work')]: hostWorkspace,
+          [worktreeWorkspaceKey('b::/work')]: foreignWorkspace
+        }
+      })
+    )
+    const snapshot: HostLineageSnapshot = {
+      authoritative: true,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:target-a',
+        ...owner
+      },
+      worktreeLineageById: {
+        'a::/work': hostLineage
+      },
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey('a::/work')]: hostWorkspace
+      }
+    }
+    let publications = 0
+    store.subscribe(() => {
+      publications += 1
+    })
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(),
+      listLineage: vi.fn(async () => structuredClone(snapshot)),
+      isCurrentAuthority: () => true
+    })
+    const beforeLineage = store.getState().worktreeLineageById
+    const beforeWorkspace = store.getState().workspaceLineageByChildKey
+
+    await expect(
+      hydration.readHostScopedLineage({
+        ...owner,
+        catalogRevision: 0,
+        repoRefs: [{ repoId: 'a', executionHostId: 'ssh:target-a' }],
+        authorityRequirement: 'required',
+        reason: 'reconnect'
+      })
+    ).resolves.toBe('complete')
+
+    expect(store.getState().worktreeLineageById).toBe(beforeLineage)
+    expect(store.getState().workspaceLineageByChildKey).toBe(beforeWorkspace)
+    expect(store.getState().worktreeLineageById['a::/work']).toBe(hostLineage)
+    expect(store.getState().worktreeLineageById['b::/work']).toBe(foreignLineage)
+    expect(store.getState().workspaceLineageByChildKey[worktreeWorkspaceKey('a::/work')]).toBe(
+      hostWorkspace
+    )
+    expect(store.getState().workspaceLineageByChildKey[worktreeWorkspaceKey('b::/work')]).toBe(
+      foreignWorkspace
+    )
+    expect(publications).toBe(0)
   })
 
   it('rejects lineage captured before a newer same-authority catalog revision', async () => {

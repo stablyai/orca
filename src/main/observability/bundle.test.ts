@@ -35,7 +35,7 @@ function makeSpan(overrides: Record<string, unknown> = {}): Record<string, unkno
     kind: 'internal',
     startTimeUnixNano: String(now - 1_000_000_000n),
     endTimeUnixNano: String(now),
-    durationMs: 1.0,
+    durationMs: 1,
     attributes: {},
     events: [],
     exit: { _tag: 'Success' },
@@ -58,6 +58,25 @@ describe('bundle — submission ID', () => {
 })
 
 describe('bundle — collection', () => {
+  it.each([
+    { kind: 'empty', names: [] },
+    { kind: 'ASCII', names: ['plain'] },
+    { kind: 'Unicode', names: ['漢字🙂', '\ud800'] },
+    { kind: 'capped', names: Array.from({ length: 600 }, () => '漢字🙂'.repeat(1000)) }
+  ])('reports the exact UTF-8 payload size for $kind records', ({ names }) => {
+    writeFileSync(traceFile, makeNDJSON(names.map((name) => makeSpan({ name }))))
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 1,
+      appVersion: '1',
+      platform: 'win32',
+      arch: 'x64',
+      osRelease: 'test',
+      orcaChannel: 'dev'
+    })
+    expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
+  })
+
   it('emits a header line with bundle_submission_id, app_version, platform', () => {
     writeFileSync(traceFile, makeNDJSON([makeSpan()]))
     const bundle = collectBundle({

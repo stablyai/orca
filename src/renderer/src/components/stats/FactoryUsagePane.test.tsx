@@ -15,7 +15,10 @@ const storeMocks = vi.hoisted(() => ({
   recordFeatureInteraction: vi.fn()
 }))
 
-const mockStoreState = {
+const mockStoreState: Pick<
+  AppState,
+  'rateLimits' | 'refreshRateLimits' | 'openSettingsPage' | 'openSettingsTarget' | 'recordFeatureInteraction'
+> = {
   rateLimits: {
     claude: null,
     codex: null,
@@ -61,7 +64,7 @@ const mockStoreState = {
   openSettingsPage: storeMocks.openSettingsPage,
   openSettingsTarget: storeMocks.openSettingsTarget,
   recordFeatureInteraction: storeMocks.recordFeatureInteraction
-} satisfies Partial<AppState>
+}
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -83,9 +86,9 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     values
       ? Object.entries(values).reduce(
-          (text, [token, value]) => text.replace(`{{${token}}}`, value),
-          fallback
-        )
+        (text, [token, value]) => text.replace(`{{${token}}}`, value),
+        fallback
+      )
       : fallback
 }))
 
@@ -111,6 +114,51 @@ describe('FactoryUsagePane', () => {
     expect(screen.getByText(/Next reset/)).toBeInTheDocument()
   })
 
+  it('handles an absent monthly quota window', () => {
+    const original = mockStoreState.rateLimits
+    const withoutMonthly = {
+      ...original,
+      factory: original.factory ? { ...original.factory, monthly: undefined } : null
+    } satisfies AppState['rateLimits']
+    mockStoreState.rateLimits = withoutMonthly
+    try {
+      render(<FactoryUsagePane />)
+
+      expect(screen.getByText('13%')).toBeInTheDocument()
+      expect(screen.getByText('40%')).toBeInTheDocument()
+      expect(screen.getByText('—')).toBeInTheDocument()
+    } finally {
+      mockStoreState.rateLimits = original
+      cleanup()
+    }
+  })
+
+  it('shows the earliest Factory reset', () => {
+    const original = mockStoreState.rateLimits
+    const factory = original.factory
+    if (!factory?.session || !factory.weekly || !factory.monthly) {
+      throw new Error('Factory fixture requires all quota windows')
+    }
+    const withDistinctResets = {
+      ...original,
+      factory: {
+        ...factory,
+        session: { ...factory.session, resetsAt: 300, resetDescription: '5 hours' },
+        weekly: { ...factory.weekly, resetsAt: 100, resetDescription: 'Weekly first' },
+        monthly: { ...factory.monthly, resetsAt: 200, resetDescription: 'Monthly second' }
+      }
+    } satisfies AppState['rateLimits']
+    mockStoreState.rateLimits = withDistinctResets
+    try {
+      render(<FactoryUsagePane />)
+
+      expect(screen.getByText('Next reset Weekly first')).toBeInTheDocument()
+    } finally {
+      mockStoreState.rateLimits = original
+      cleanup()
+    }
+  })
+
   it('refreshes usage only from the explicit refresh button', async () => {
     const user = userEvent.setup()
     render(<FactoryUsagePane />)
@@ -122,13 +170,12 @@ describe('FactoryUsagePane', () => {
 
   it('shows the setup CTA when no Factory key is configured', () => {
     const original = mockStoreState.rateLimits
-    // Why: test-local override; cast documents the exact pane-read fields.
-    const unconfigured: Partial<AppState>['rateLimits'] = {
+    const unconfigured = {
       ...original,
       factoryApiKeyConfigured: false,
       factory: null
-    }
-    mockStoreState.rateLimits = unconfigured as typeof original
+    } satisfies AppState['rateLimits']
+    mockStoreState.rateLimits = unconfigured
     try {
       render(<FactoryUsagePane />)
       expect(screen.getByText('Set up in Accounts')).toBeInTheDocument()

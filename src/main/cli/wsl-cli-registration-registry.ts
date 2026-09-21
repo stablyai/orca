@@ -138,7 +138,7 @@ async function readState(userDataPath: string): Promise<WslCliRegistrationRegist
 function upsertDistro(distros: string[], distro: string): string[] {
   const key = normalizeWslDistroKey(distro)
   const existingIndex = distros.findIndex((entry) => normalizeWslDistroKey(entry) === key)
-  if (existingIndex < 0) {
+  if (existingIndex === -1) {
     return [...distros, distro.trim()]
   }
   return distros.map((entry, index) => (index === existingIndex ? distro.trim() : entry))

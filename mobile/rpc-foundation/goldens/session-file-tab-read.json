@@ -1,0 +1,96 @@
+{
+  "operation": "session.tab-documents",
+  "family": "session.tab-documents",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "82c1d8e87e0a87c1c1a6dba7bd4f61e08f77fe0ae1b3758d1b5543bd9719a53f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "023c5158861a": {
+      "name": "files.read#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "byteLength": 2,
+            "content": "a\n",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "5ea03f95e781": {
+      "file": {
+        "tab-file": {
+          "byteLength": 2,
+          "content": "a\n",
+          "kind": "file",
+          "status": "ready",
+          "truncated": false
+        }
+      },
+      "markdown": {}
+    },
+    "c59b180ead68": {
+      "name": "files.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-file-tab-read",
+    "checkpoints": [
+      {
+        "id": "read",
+        "observation": {
+          "sender": ["023c5158861a"],
+          "payloads": ["c59b180ead68"],
+          "settlements": {
+            "file": "eb79a9b3682a"
+          },
+          "state": "5ea03f95e781",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

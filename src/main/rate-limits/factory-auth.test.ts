@@ -71,6 +71,15 @@ describe('resolveFactoryApiKey', () => {
     expect(result).toEqual({ status: 'ok', apiKey: 'dotenv-key', source: 'dotenv' })
   })
 
+  it('treats empty quoted dotenv values as missing', () => {
+    fsState.files.set(
+      ENV_FILE,
+      ['FACTORY_API_KEY=""', "export FACTORY_API_KEY='   '"].join('\n')
+    )
+
+    expect(resolveFactoryApiKey()).toEqual({ status: 'missing' })
+  })
+
   it('surfaces store decrypt errors', () => {
     storeState.key = null
     vi.doMock('../factory/factory-api-key-store', () => ({

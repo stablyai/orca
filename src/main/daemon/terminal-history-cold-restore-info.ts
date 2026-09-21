@@ -1,6 +1,7 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { SessionMeta } from './terminal-history-metadata'
 import type { TerminalModes } from './types'
+import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type ColdRestoreInfo = {
   snapshotAnsi: string
@@ -10,9 +11,12 @@ export type ColdRestoreInfo = {
   cwd: string
   cols: number
   rows: number
+  scrollbackLines?: number
+  pendingOutputSeq?: number
   modes: TerminalModes
   pendingEscapeTailAnsi?: string
   lastTitle?: string
+  terminalOwner?: TerminalOwner
 }
 
 type RestoredSnapshot = {
@@ -22,9 +26,12 @@ type RestoredSnapshot = {
   rehydrateSequences: string
   cols: number
   rows: number
+  scrollbackLines?: number
+  pendingOutputSeq?: number
   modes: TerminalModes
   pendingEscapeTailAnsi?: string
   lastTitle?: string
+  terminalOwner?: TerminalOwner
 }
 
 export function coldRestoreInfoFromSnapshot(
@@ -43,10 +50,13 @@ export function coldRestoreInfoFromSnapshot(
     cwd: cwd ?? meta.cwd,
     cols: snapshot.cols,
     rows: snapshot.rows,
+    scrollbackLines: snapshot.scrollbackLines,
+    pendingOutputSeq: snapshot.pendingOutputSeq,
     modes: snapshot.modes,
     ...(snapshot.pendingEscapeTailAnsi
       ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
       : {}),
-    ...(snapshot.lastTitle ? { lastTitle: snapshot.lastTitle } : {})
+    ...(snapshot.lastTitle ? { lastTitle: snapshot.lastTitle } : {}),
+    ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {})
   }
 }

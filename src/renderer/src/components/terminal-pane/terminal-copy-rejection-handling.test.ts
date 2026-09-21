@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runTerminalCopy, runCopyPaneId } from './terminal-copy-rejection-guards'
+import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 
 // Why this file exists: web-preload-api's writeClipboardText used to resolve
 // unconditionally, so the terminal copy surfaces call it without a rejection
@@ -42,15 +42,15 @@ describe('runTerminalCopy', () => {
   })
 })
 
-describe('runCopyPaneId', () => {
+describe('runTerminalIdentityCopy', () => {
   it('reports failure instead of claiming success when the write rejects', async () => {
     const onSuccess = vi.fn()
     const onError = vi.fn()
     const focus = vi.fn()
 
     await expect(
-      runCopyPaneId({
-        paneKey: 'tab:leaf',
+      runTerminalIdentityCopy({
+        text: 'tab:leaf',
         writeClipboardText: vi.fn().mockRejectedValue(REJECTION),
         onSuccess,
         onError,
@@ -68,8 +68,8 @@ describe('runCopyPaneId', () => {
     const onError = vi.fn()
     const focus = vi.fn()
 
-    await runCopyPaneId({
-      paneKey: 'tab:leaf',
+    await runTerminalIdentityCopy({
+      text: 'tab:leaf',
       writeClipboardText: vi.fn().mockResolvedValue(undefined),
       onSuccess,
       onError,

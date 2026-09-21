@@ -11,7 +11,6 @@ import {
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -24,7 +23,10 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
@@ -45,6 +47,8 @@ type SourceControlAgentActionDialogFormProps = {
   detecting: boolean
   statusCopy: string | null
   agentArgs: string
+  /** False when the launch would be structured native chat; the field is then absent, not disabled. */
+  agentArgsApply: boolean
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -90,6 +94,7 @@ export function SourceControlAgentActionDialogForm({
   detecting,
   statusCopy,
   agentArgs,
+  agentArgsApply,
   commandTemplate,
   savedCommandInputTemplate,
   saveLaunchRecipe,
@@ -194,25 +199,11 @@ export function SourceControlAgentActionDialogForm({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="source-control-agent-cli-args" className="text-xs">
-            {translate(
-              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.bc8dc39f4b',
-              'CLI arguments'
-            )}
-          </Label>
-          <Input
-            id="source-control-agent-cli-args"
-            value={agentArgs}
-            spellCheck={false}
-            placeholder={translate(
-              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb',
-              '--model sonnet'
-            )}
-            onChange={(event) => onAgentArgsChange(event.target.value)}
-            className="h-8 font-mono text-xs"
-          />
-        </div>
+        <SourceControlAgentCliArgsField
+          applies={agentArgsApply}
+          value={agentArgs}
+          onChange={onAgentArgsChange}
+        />
 
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">

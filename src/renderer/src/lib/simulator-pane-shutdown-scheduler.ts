@@ -9,7 +9,7 @@ type SimulatorTabReference = {
 
 type SimulatorPaneShutdownOptions = {
   getTabsForWorktree?: (worktreeId: string) => SimulatorTabReference[]
-  shutdownManagedSimulator?: (worktreeId: string) => Promise<unknown> | unknown
+  shutdownManagedSimulator?: (worktreeId: string) => unknown
 }
 
 type ScheduleSimulatorPaneShutdownOptions = SimulatorPaneShutdownOptions & {

@@ -28,7 +28,7 @@ vi.mock('@/components/quick-open-file-list', async () => {
           unsubscribe()
         }
       }, [])
-      return { files: [], loading: false, loadError: null }
+      return { files: [], loading: false, loadError: null, truncated: false }
     }
   }
 })

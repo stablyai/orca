@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { syncDocLinkMenu, type DocLinkMenuState } from './rich-markdown-commands'
 import { normalizeEmptyListItems } from './rich-markdown-normalize'

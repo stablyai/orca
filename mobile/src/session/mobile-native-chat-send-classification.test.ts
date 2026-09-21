@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 
 describe('classifyMobileNativeChatSend', () => {
+  it('recognizes OMP selectors and context commands without claiming generic help', () => {
+    expect(classifyMobileNativeChatSend('omp', '/switch')).toBe('command')
+    expect(classifyMobileNativeChatSend('omp', '/compact focus on tests')).toBe('command')
+    expect(classifyMobileNativeChatSend('omp', '/help')).toBe('unknown-token')
+    expect(classifyMobileNativeChatSend('omp', '/smol')).toBe('unknown-token')
+  })
+
   it('classifies catalog commands per agent', () => {
     expect(classifyMobileNativeChatSend('claude', '/clear')).toBe('command')
     expect(classifyMobileNativeChatSend('claude', '/compact')).toBe('command')

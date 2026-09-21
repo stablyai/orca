@@ -15,7 +15,8 @@
 // process (`repoSlug` reads `.git/config`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo, GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   deleteRepoSlugCacheKey,
@@ -29,11 +30,12 @@ import {
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
 const slugResolutionInFlight = new Map<string, Promise<string | null>>()
+const MAX_SLUG_RESOLUTION_GENERATIONS = 1024
 
 // Why: an invalidation (repo removed, remote changed) can land while a
 // resolution is in-flight — before it ever wrote to `slugByRepoId`. Deleting
@@ -42,10 +44,23 @@ const slugResolutionInFlight = new Map<string, Promise<string | null>>()
 // generation on every invalidation and commit a result only if the generation
 // it started with is still current.
 const slugResolutionGeneration = new Map<string, number>()
+let slugResolutionGenerationSequence = 0
+let evictedSlugResolutionGeneration = 0
 
 function invalidateSlugResolution(cacheKey: string): void {
   slugResolutionInFlight.delete(cacheKey)
-  slugResolutionGeneration.set(cacheKey, (slugResolutionGeneration.get(cacheKey) ?? 0) + 1)
+  slugResolutionGeneration.set(cacheKey, ++slugResolutionGenerationSequence)
+  while (slugResolutionGeneration.size > MAX_SLUG_RESOLUTION_GENERATIONS) {
+    const oldest = slugResolutionGeneration.keys().next()
+    if (oldest.done) {
+      return
+    }
+    evictedSlugResolutionGeneration = Math.max(
+      evictedSlugResolutionGeneration,
+      slugResolutionGeneration.get(oldest.value) ?? 0
+    )
+    slugResolutionGeneration.delete(oldest.value)
+  }
 }
 
 // Why: clear after remove/remote-change so the next index build re-resolves.
@@ -83,12 +98,15 @@ async function resolveRepoSlug(
   if (inFlight) {
     return inFlight
   }
-  const generation = slugResolutionGeneration.get(cacheKey) ?? 0
+  const generation = slugResolutionGeneration.get(cacheKey) ?? evictedSlugResolutionGeneration
   const resolution = (async () => {
     // Why: only write the resolved value if this key wasn't invalidated
     // mid-flight; otherwise a stale slug would repopulate the cache.
     const commit = (value: string | null): string | null => {
-      if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
+      if (
+        slugResolutionInFlight.get(cacheKey) === resolution &&
+        (slugResolutionGeneration.get(cacheKey) ?? evictedSlugResolutionGeneration) === generation
+      ) {
         rememberRepoSlug(cacheKey, value)
       }
       return value

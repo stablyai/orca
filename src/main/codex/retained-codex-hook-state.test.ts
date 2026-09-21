@@ -13,11 +13,11 @@ function status(state: 'installed' | 'not_installed' | 'error'): AgentHookInstal
 }
 
 describe('retained Codex hook state', () => {
-  it('repairs Orca hooks before a retained shell can launch Codex', () => {
+  it('repairs Orca hooks before a retained shell can launch Codex', async () => {
     const install = vi.fn(() => status('installed'))
     const refreshRuntimeUserHooks = vi.fn(() => status('not_installed'))
 
-    reconcileRetainedCodexHookHomes({
+    await reconcileRetainedCodexHookHomes({
       hookService: { install, refreshRuntimeUserHooks },
       hooksEnabled: true,
       runtimeHomePaths: ['/orca/shared-home', '/orca/account-home']
@@ -29,11 +29,11 @@ describe('retained Codex hook state', () => {
     expect(refreshRuntimeUserHooks).not.toHaveBeenCalled()
   })
 
-  it('removes only Orca hooks from retained homes when hooks are disabled', () => {
+  it('removes only Orca hooks from retained homes when hooks are disabled', async () => {
     const install = vi.fn(() => status('installed'))
     const refreshRuntimeUserHooks = vi.fn(() => status('not_installed'))
 
-    reconcileRetainedCodexHookHomes({
+    await reconcileRetainedCodexHookHomes({
       hookService: { install, refreshRuntimeUserHooks },
       hooksEnabled: false,
       runtimeHomePaths: ['/orca/shared-home']

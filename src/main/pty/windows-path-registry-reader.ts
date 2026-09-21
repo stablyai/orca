@@ -26,13 +26,15 @@ function readRegistryPath(
     if (!values || typeof values !== 'object') {
       return { failed: true, value: null }
     }
-    const entry = Object.entries(values).find(
+    const matchingEntry = Object.entries(values).find(
       ([name]) => name.toLowerCase() === PATH_VALUE.toLowerCase()
-    )?.[1]
-    if (!entry) {
-      return { failed: true, value: null }
+    )
+    if (!matchingEntry) {
+      return { failed: false, value: '' }
     }
+    const entry = matchingEntry[1]
     if (
+      !entry ||
       (entry.type !== WINDOWS_REG_SZ && entry.type !== WINDOWS_REG_EXPAND_SZ) ||
       typeof entry.value !== 'string'
     ) {

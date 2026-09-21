@@ -282,6 +282,7 @@ export function BrowserUseSetup({
             skillError={activeSkillRuntime.installDisabledReason ?? skillError}
             disabled={step2Blocked}
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+            terminalRuntime={activeSkillRuntime.agentRuntime}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             getPrerequisiteStatus={() =>
               activeSkillRuntime.agentRuntime?.runtime === 'wsl'

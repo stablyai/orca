@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import {
   findActivityTerminalPortal,
@@ -100,11 +101,24 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
+  const activeTerminalTabId = useMemo(() => {
+    if (!activeGroupId) {
+      return null
+    }
+    for (const [terminalTabId, assignment] of assignments) {
+      if (assignment.groupId === activeGroupId && assignment.isActiveInGroup) {
+        return terminalTabId
+      }
+    }
+    return null
+  }, [activeGroupId, assignments])
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId,
     terminalTabs,
     assignments,
     isWorktreeActive,
+    activeTerminalTabId,
     coldParkTerminalPanes,
     isForceParked,
     shouldMeasureHiddenWorktree,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { gitLabPipelineJobsToPRChecks } from './gitlab-pipeline-checks'
-import type { GitLabPipelineJob } from './types'
+import type { GitLabPipelineJob } from './gitlab-types'
 
 describe('gitLabPipelineJobsToPRChecks', () => {
   it('maps GitLab pipeline jobs into right-panel check rows', () => {

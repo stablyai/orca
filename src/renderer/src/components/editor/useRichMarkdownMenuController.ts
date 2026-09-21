@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type React from 'react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { getMarkdownDocCompletionDocuments } from './markdown-doc-completions'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
 import { filterRichMarkdownSlashCommands } from './rich-markdown-slash-command-filter'

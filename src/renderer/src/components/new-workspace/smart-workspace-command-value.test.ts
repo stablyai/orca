@@ -31,6 +31,17 @@ describe('resolveSmartWorkspaceCommandValue', () => {
     ).toBe('use-name')
   })
 
+  it('keeps arbitrary text armed when Linear search results are present', () => {
+    expect(
+      resolveSmartWorkspaceCommandValue({
+        currentValue: '',
+        rows: [row('use-name', 'use-name'), row('linear', 'linear-STA-4084')],
+        isQueryStale: false,
+        sourceIntent: null
+      })
+    ).toBe('use-name')
+  })
+
   it('keeps typed text armed while the query is ahead of debounced search', () => {
     expect(
       resolveSmartWorkspaceCommandValue({

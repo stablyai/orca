@@ -122,7 +122,9 @@ describe('registerTerminalPreviewHandlers', () => {
 
     await expect(resultPromise).resolves.toEqual({
       snapshot: { data: 'screen', cols: 80, rows: 20, seq: 6 },
-      replay: ['c']
+      // A sliced suffix is proven post-snapshot output, so it applies with live
+      // kitty semantics rather than as redelivery.
+      replay: [{ data: 'c', mode: 'live' }]
     })
     expect(runtime.registerRawTerminalViewSubscriber).toHaveBeenCalledWith('p1')
   })
@@ -237,6 +239,64 @@ describe('registerTerminalPreviewHandlers', () => {
     })
     runtime.listeners[0]!('held until reconnect')
     expect(sender.send).not.toHaveBeenCalled()
+  })
+
+  // Flags and image must come from ONE capture. Publishing flags from
+  // a separate "current state" read would describe a different stream position,
+  // so replaying the intervening bytes could duplicate or reorder transitions.
+  it('returns the kitty flags of the capture that produced the returned image', async () => {
+    const runtime = makeRuntime()
+    const snapshotResolvers: ((snapshot: {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      kittyKeyboardFlags?: number
+    }) => void)[] = []
+    runtime.serializeTerminalBuffer.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          snapshotResolvers.push(resolve)
+        })
+    )
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+
+    const resultPromise = handlers.get('terminalPreview:connect')!(eventFor(sender), {
+      ptyId: 'p1'
+    }) as Promise<unknown>
+    const chunk = 'x'.repeat(64 * 1024)
+    for (let index = 0; index < 5; index++) {
+      runtime.listeners[0]!(chunk)
+    }
+    // The first capture overflowed; its flags must not survive onto the second image.
+    snapshotResolvers[0]!({
+      data: 'first',
+      cols: 80,
+      rows: 20,
+      seq: 1,
+      kittyKeyboardFlags: 0
+    })
+    await vi.waitFor(() => expect(snapshotResolvers).toHaveLength(2))
+    snapshotResolvers[1]!({
+      data: 'second',
+      cols: 80,
+      rows: 20,
+      seq: 2,
+      kittyKeyboardFlags: 8
+    })
+
+    await expect(resultPromise).resolves.toEqual({
+      snapshot: {
+        data: 'second',
+        cols: 80,
+        rows: 20,
+        seq: 2,
+        kittyKeyboardFlags: 8
+      },
+      replay: []
+    })
+    expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2)
   })
 
   it('releases output and raw-view presence on unsubscribe and sender destruction', async () => {

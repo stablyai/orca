@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -108,6 +108,48 @@ describe('repo update serialization', () => {
     )
   })
 
+  it('runs same-ID updates on different hosts independently', async () => {
+    const slowLocalUpdate = deferred<void>()
+    reposUpdate.mockImplementationOnce(() => slowLocalUpdate.promise)
+    reposUpdate.mockResolvedValueOnce(undefined)
+    const sshRepo: Repo = {
+      ...localRepo,
+      path: '/ssh/repo',
+      displayName: 'SSH',
+      executionHostId: 'ssh:connection-1'
+    }
+    const store = createTestStore()
+    store.setState({ repos: [localRepo, sshRepo] })
+
+    const local = store
+      .getState()
+      .updateRepo(localRepo.id, { displayName: 'Local slow' }, { hostId: 'local' })
+    const ssh = store
+      .getState()
+      .updateRepo(sshRepo.id, { displayName: 'SSH fast' }, { hostId: 'ssh:connection-1' })
+
+    expect(reposUpdate).toHaveBeenCalledTimes(2)
+    await ssh
+    expect(store.getState().repos).toEqual([localRepo, { ...sshRepo, displayName: 'SSH fast' }])
+
+    slowLocalUpdate.resolve()
+    await local
+    expect(store.getState().repos).toEqual([
+      { ...localRepo, displayName: 'Local slow' },
+      { ...sshRepo, displayName: 'SSH fast' }
+    ])
+    expect(reposUpdate).toHaveBeenNthCalledWith(1, {
+      repoId: localRepo.id,
+      updates: { displayName: 'Local slow' },
+      hostId: 'local'
+    })
+    expect(reposUpdate).toHaveBeenNthCalledWith(2, {
+      repoId: sshRepo.id,
+      updates: { displayName: 'SSH fast' },
+      hostId: 'ssh:connection-1'
+    })
+  })
+
   it('continues a repo update chain after a failed update', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
@@ -126,6 +168,43 @@ describe('repo update serialization', () => {
     } finally {
       errorSpy.mockRestore()
     }
+  })
+
+  it('clears nullable fallback fields when local IPC returns no authoritative repo', async () => {
+    reposUpdate.mockResolvedValueOnce(undefined)
+    const repo: Repo = {
+      ...localRepo,
+      externalWorktreeVisibility: 'show',
+      agentWorktreeVisibility: 'hide',
+      sourceControlAi: {},
+      externalWorktreeDiscoverySuppressedAt: 123
+    }
+    const store = createTestStore()
+    store.setState({ repos: [repo] })
+
+    await store.getState().updateRepo(repo.id, {
+      externalWorktreeVisibility: null,
+      agentWorktreeVisibility: null,
+      sourceControlAi: null,
+      externalWorktreeDiscoverySuppressedAt: null
+    })
+
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: repo.id,
+      updates: {
+        externalWorktreeVisibility: null,
+        agentWorktreeVisibility: null,
+        sourceControlAi: null,
+        externalWorktreeDiscoverySuppressedAt: null
+      }
+    })
+    expect(store.getState().repos[0]).toMatchObject({
+      externalWorktreeVisibilityLegacy: false
+    })
+    expect(store.getState().repos[0]?.externalWorktreeVisibility).toBeUndefined()
+    expect(store.getState().repos[0]?.agentWorktreeVisibility).toBeUndefined()
+    expect(store.getState().repos[0]?.sourceControlAi).toBeUndefined()
+    expect(store.getState().repos[0]?.externalWorktreeDiscoverySuppressedAt).toBeUndefined()
   })
 
   it('does not apply repo icons that fail shared sanitization', async () => {

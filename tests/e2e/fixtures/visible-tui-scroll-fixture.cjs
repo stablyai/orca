@@ -12,7 +12,7 @@ const MOUSE_REPORT_PATTERN = new RegExp(`${ESC}\\[<(64|65);\\d+;\\d+M`, 'g')
 //                  at 120 reports/s) instead of minimal rows.
 const args = process.argv.slice(2)
 const logIndex = args.indexOf('--log')
-const LOG_PATH = logIndex >= 0 ? args[logIndex + 1] : null
+const LOG_PATH = logIndex !== -1 ? args[logIndex + 1] : null
 const HEAVY_FRAMES = args.includes('--heavy')
 
 let offset = 0

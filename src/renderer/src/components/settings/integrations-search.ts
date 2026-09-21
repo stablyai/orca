@@ -56,8 +56,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
       'Bitbucket Integration'
     ),
     description: translate(
-      'auto.components.settings.integrations.search.c97d58a0f3',
-      'Bitbucket Cloud authentication via API token environment variables.'
+      'auto.components.settings.integrations.search.760e2446e0',
+      'Bitbucket Cloud authentication with a saved API token or environment variables.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -75,6 +75,22 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.2ec2bd328c',
         'api token'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.20540996ef',
+        'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.af5ae87847',
+        'access token'
       )
     ]
   },

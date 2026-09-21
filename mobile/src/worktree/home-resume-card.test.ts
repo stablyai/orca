@@ -7,7 +7,10 @@ import {
 } from './home-resume-card'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
 
-const homeSource = readFileSync(new URL('../../app/index.tsx', import.meta.url), 'utf8')
+const resumeCardSource = readFileSync(
+  new URL('../home/MobileHomeResumeCard.tsx', import.meta.url),
+  'utf8'
+)
 
 function worktree(worktreeId: string): HomeWorktreeSummary {
   return {
@@ -120,17 +123,8 @@ describe('home resume card', () => {
   })
 
   it('renders the home Resume card inert until its host connects', () => {
-    const start = homeSource.indexOf('{/* ─── Resume card ─── */}')
-    const end = homeSource.indexOf('{/* ─── Quick actions ─── */}', start)
-
-    // Assert the markers first: a renamed banner would otherwise slice garbage and report a
-    // missing prop instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(end).toBeGreaterThan(start)
-
-    const resumeCard = homeSource.slice(start, end)
-    expect(resumeCard).toContain('disabled={!resumeCard.actionable}')
-    expect(resumeCard).toContain('!resumeCard.actionable && styles.cardDisabled')
+    expect(resumeCardSource).toContain('disabled={!props.card.actionable}')
+    expect(resumeCardSource).toContain('!props.card.actionable && styles.cardDisabled')
   })
 })
 

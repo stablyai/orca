@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import path from 'node:path'
-import type { LinuxRootPackageType } from '../shared/types'
+import type { LinuxRootPackageType } from '../shared/update-status-types'
 
 // Why: an absolute but user-writable PATH entry must never be treated as a trusted package manager.
 const TRUSTED_EXECUTABLE_DIRECTORIES = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
@@ -50,6 +50,16 @@ export function resolveTrustedExecutable(name: string): string | null {
     }
   }
   return null
+}
+
+/**
+ * Whether this host has any package manager able to install the marker's format. A repackaged
+ * install (AUR, Nix, a container rebuild) inherits the `package-type` marker from the .deb/.rpm it
+ * was built from, so the marker alone never proves the host can act on it.
+ */
+export function hasTrustedPackageManagerFor(packageType: LinuxRootPackageType): boolean {
+  const candidates = packageType === 'deb' ? DEB_PACKAGE_MANAGERS : RPM_PACKAGE_MANAGERS
+  return candidates.some((candidate) => resolveTrustedExecutable(candidate.name) !== null)
 }
 
 /**

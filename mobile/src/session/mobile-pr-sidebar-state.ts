@@ -1,4 +1,6 @@
-import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
 
@@ -9,6 +11,9 @@ export type PrSidebarData = {
   pr: PRInfo
   details: GitHubWorkItemDetails | null
   checks: PRCheckDetail[]
+  // Non-null when the checks read failed; the checks section shows it and the rest
+  // of the PR still renders. Checks alone never take the sidebar to `error`.
+  checksError: string | null
 }
 
 // `blocked` is a permanent failure (no GitHub account / permission denied) that the
@@ -110,12 +115,20 @@ export async function loadPrSidebarData(
       // checks correctly; fall back to an explicit override then null.
       prRepo: pr.prRepo ?? args.prRepo ?? null
     })
-    if (!checksOutcome.ok) {
-      return failureState(checksOutcome.error)
-    }
     // details: null = comments still loading (phase 2). The header/reviewers degrade to
     // the PRInfo fields until it arrives.
-    return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
+    // Checks are contained the way phase 2 is: a failed read costs the checks row, not
+    // the title/body/comments/merge controls the user opened the sidebar for.
+    if (!checksOutcome.ok) {
+      return {
+        kind: 'ready',
+        data: { pr, details: null, checks: [], checksError: checksOutcome.error }
+      }
+    }
+    return {
+      kind: 'ready',
+      data: { pr, details: null, checks: checksOutcome.result, checksError: null }
+    }
   } catch (err) {
     // Why: a dep that rejects (instead of returning `{ ok:false }`) must still
     // resolve to an error state, not escape as an unhandled rejection.

@@ -4,10 +4,11 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { isMissingRemoteSessionPathError, statRemoteSessionFile } from './remote-session-file-stat'
 import type { FileWithMtime } from './session-scanner-types'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import { recordRemoteSessionScanIssue } from './remote-session-scan-issues'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type {
   RemoteScannerContext,
   RemoteSessionCandidate,
@@ -29,18 +30,7 @@ export async function discoverRemoteSourceCandidates(args: {
   const files = await mapRemoteScanBatches(
     paths,
     REMOTE_DISCOVERY_CONCURRENCY,
-    (path) =>
-      statRemoteSessionFile(
-        args.context.provider,
-        path,
-        args.source.agent,
-        args.context.executionHostId,
-        args.issues,
-        {
-          missingIsExpected: Boolean(args.source.fixedChildFileSegments),
-          signal: args.context.signal
-        }
-      ),
+    (path) => statRemoteCandidateFile(path, args.source, args.context, args.issues),
     args.context.signal
   )
   return files
@@ -50,6 +40,61 @@ export async function discoverRemoteSourceCandidates(args: {
       file,
       subagentTranscriptCount: partition?.subagentTranscriptCounts.get(file.path) ?? 0
     }))
+}
+
+async function statRemoteCandidateFile(
+  path: string,
+  source: RemoteSessionSource,
+  context: RemoteScannerContext,
+  issues: AiVaultScanIssue[]
+): Promise<FileWithMtime | null> {
+  const file = await statRemoteSessionFile(
+    context.provider,
+    path,
+    source.agent,
+    context.executionHostId,
+    issues,
+    {
+      missingIsExpected: Boolean(source.fixedChildFileSegments),
+      signal: context.signal
+    }
+  )
+  if (!file || !source.contentDependencyPath) {
+    return file
+  }
+  const sidecarPath = source.contentDependencyPath(path)
+  // Recorded beside the transcript's own stat, never folded into it: one key
+  // cannot mean both "the transcript grew" and "the sibling changed".
+  return { ...file, sidecar: await observeRemoteSidecar(source, context, sidecarPath, issues) }
+}
+
+/**
+ * A stat that failed for any reason other than a missing path is `'unknown'`,
+ * not `'none'`: serving the cached session over an unreadable sibling would
+ * publish metadata nobody can currently see. `statRemoteSessionFile` already
+ * recorded the issue for the failure.
+ */
+async function observeRemoteSidecar(
+  source: RemoteSessionSource,
+  context: RemoteScannerContext,
+  sidecarPath: string,
+  issues: AiVaultScanIssue[]
+): Promise<SessionSidecarObservation> {
+  try {
+    const sidecar = await statRemoteSessionFile(
+      context.provider,
+      sidecarPath,
+      source.agent,
+      context.executionHostId,
+      issues,
+      { missingIsExpected: true, signal: context.signal, rethrowFailures: true }
+    )
+    return sidecar
+      ? { path: sidecarPath, mtimeMs: sidecar.mtimeMs, sizeBytes: sidecar.sizeBytes ?? 0 }
+      : 'none'
+  } catch {
+    return 'unknown'
+  }
 }
 
 async function listRemoteFixedChildFiles(
@@ -124,7 +169,7 @@ function recordRemoteDirectoryIssue(
   err: unknown
 ): void {
   if (!isMissingRemoteSessionPathError(err)) {
-    recordRemoteSessionScanIssue(issues, {
+    recordSessionScanIssue(issues, {
       executionHostId,
       agent: source.agent,
       kind: 'host',

@@ -1,13 +1,13 @@
 import type {
-  RuntimeFileOpenResult,
+  RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type FileTapSessionTab = {
   id: string
@@ -15,13 +15,14 @@ export type FileTapSessionTab = {
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
-  client: Pick<RpcClient, 'sendRequest'>
+  client: RpcOperationSender
   hostId: string
   worktreeId: string
   worktreeName?: string
   terminalHandle?: string | null
   pathText: string
   cwd?: string | null
+  nativeChatContext?: RuntimeNativeChatFileContext | null
   line: number | null
   column: number | null
   pushPreviewRoute: (href: ReturnType<typeof createMobileFilePreviewHref>) => void
@@ -34,8 +35,10 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
     activated: boolean
     activationSeq: number
     latestActivationSeq: number
-    sourceTerminalHandle: string
+    sourceTerminalHandle: string | null
     activeTerminalHandle: string | null
+    sourceSessionTabId?: string | null
+    activeSessionTabId?: string | null
     activeTabType: string | null
   }
   switchSessionTab: (tab: T) => void
@@ -70,8 +73,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const worktree = `id:${options.worktreeId}`
-  const response = await options.client.sendRequest(
-    'files.resolveTerminalPath',
+  const response = await fileTapPathResolve.request(
+    options.client,
     {
       worktree,
       pathText: options.pathText,
@@ -80,15 +83,18 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
       ...(options.terminalHandle && options.terminalHandle.trim().length > 0
         ? { terminal: options.terminalHandle }
         : {}),
-      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {})
+      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
+      ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
     },
     { timeoutMs: 10_000 }
   )
-  if (!response.ok) {
+  const accepted = fileTapPathResolve.interpret(response)
+  if (!accepted.accepted) {
     reportOpenFailure(options)
     return
   }
-  const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const resolved = accepted.value as RuntimeTerminalPathResolution
   if (!resolved.exists || resolved.isDirectory) {
     reportOpenFailure(options)
     return
@@ -115,6 +121,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
         ...(options.terminalHandle && options.terminalHandle.trim().length > 0
           ? { terminal: options.terminalHandle }
+          : {}),
+        ...(options.nativeChatContext
+          ? {
+              nativeChatTab: options.nativeChatContext.tabId,
+              nativeChatSession: options.nativeChatContext.sessionId
+            }
           : {}),
         name: displayNameFromPath(resolved.openTarget.absolutePath),
         ...(options.line !== null ? { line: String(options.line) } : {}),
@@ -161,17 +173,17 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
-  const openResponse = await options.client.sendRequest(
-    'files.open',
+  const openResponse = await fileTapOpenRun.request(
+    options.client,
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
-  if (!openResponse.ok) {
+  const opened = fileTapOpenRun.interpret(openResponse)
+  if (!opened.accepted) {
     reportOpenFailure(options)
     return
   }
-  const openResult = (openResponse as RpcSuccess).result as RuntimeFileOpenResult
-  if (!openResult.opened) {
+  if (!opened.value.opened) {
     reportOpenFailure(options)
     return
   }

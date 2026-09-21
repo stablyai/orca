@@ -1,11 +1,8 @@
+import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type {
-  OrcaHooks,
-  Project,
-  ProjectUpdateArgs,
-  Repo,
-  RepoHookSettings
-} from '../../../../shared/types'
+import type { OrcaHooks, RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
+import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
@@ -28,16 +25,23 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
+import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
-type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi'> & {
+type RepositoryPaneRepoUpdate = Omit<
+  Partial<Repo>,
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+> & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
+  ghAccount?: GhAccountBinding | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -52,7 +56,7 @@ type RepositoryPaneProps = {
     repoId: string,
     updates: RepositoryPaneRepoUpdate,
     options?: { hostId?: ExecutionHostId }
-  ) => void
+  ) => void | Promise<boolean>
   removeProject: (repoId: string) => void
   project?: Project | null
   selectedProjectSetupId?: string
@@ -95,6 +99,20 @@ export function RepositoryPane({
   )
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const settings = useAppStore((state) => state.settings)
+  const worktreeVisibilityDefaultsByHost = useAppStore(
+    (state) => state.worktreeVisibilityDefaultsByHost
+  )
+  const repoOwnerSettings = settings
+    ? {
+        ...settings,
+        worktreeVisibilityDefaults: getRepoOwnerWorktreeVisibilityDefaults(
+          repo,
+          settings,
+          worktreeVisibilityDefaultsByHost
+        )
+      }
+    : null
+  const fetchWorktrees = useAppStore((state) => state.fetchWorktrees)
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
@@ -164,12 +182,14 @@ export function RepositoryPane({
   const identityEntryTitles = new Set([
     translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
     translate(
       'auto.components.settings.repository.search.keepForkUpToDate',
       'Keep Fork Up to Date'
     ),
     translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
     translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
     translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
@@ -349,10 +369,22 @@ export function RepositoryPane({
               forceVisible={forceFullPaneForRepoMatch}
             />
 
+            <RepositoryGitHubAccountSection
+              repo={repo}
+              updateRepo={updateSelectedRepo}
+              forceVisible={forceFullPaneForRepoMatch}
+            />
+
             <RepositoryWorktreeDefaultsSection
               repo={repo}
-              settings={settings}
+              settings={repoOwnerSettings}
               updateRepo={updateSelectedRepo}
+              refreshRepo={(repoId) =>
+                fetchWorktrees(repoId, {
+                  executionHostId: selectedHostId,
+                  requireAuthoritative: true
+                })
+              }
               forceVisible={forceFullPaneForRepoMatch}
             />
           </>

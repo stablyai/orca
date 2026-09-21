@@ -20,11 +20,9 @@ import {
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type {
-  GitHubWorkItem,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 
@@ -188,15 +186,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       toast.error(agentArgsPlan.error)
       return false
     }
-    if (!activateAndRevealWorktree(targetWorktreeId)) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.03c1d61f83',
-          'Unable to open the workspace attached to these checks.'
-        )
-      )
-      return false
-    }
+    let revealFailed = false
     const result = launchAgentInNewTab({
       agent,
       worktreeId: targetWorktreeId,
@@ -205,19 +195,32 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       agentArgs: recipe.agentArgs,
       promptDelivery: 'submit-after-ready',
       launchPlatform,
-      launchSource: args.launchSource
+      launchSource: args.launchSource,
+      beforeSurfaceOpen: () => {
+        // Why: the launcher owns the initial surface, so revealing must not seed a sibling shell.
+        const revealed = activateAndRevealWorktree(targetWorktreeId, {
+          providesInitialSurface: true
+        })
+        revealFailed = revealed === false
+        return !revealFailed
+      }
     })
     if (!result) {
       toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.fb6c294e85',
-          'Could not build the agent launch command.'
-        )
+        revealFailed
+          ? translate(
+              'auto.lib.fix.checks.agent.launch.03c1d61f83',
+              'Unable to open the workspace attached to these checks.'
+            )
+          : translate(
+              'auto.lib.fix.checks.agent.launch.fb6c294e85',
+              'Could not build the agent launch command.'
+            )
       )
       return false
     }
-    if (result.tabId) {
-      focusTerminalTabSurface(result.tabId)
+    if (result.surface.kind === 'local-terminal') {
+      focusTerminalTabSurface(result.surface.tabId)
     }
     return true
   }

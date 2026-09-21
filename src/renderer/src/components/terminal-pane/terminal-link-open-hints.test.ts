@@ -138,4 +138,30 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     expect(options.modifierInverts).toBe(true)
     expect(getTerminalUrlOpenHint(options)).toContain('to open in Orca')
   })
+
+  it('keeps inversion for a runtime pane when its host can open an Orca browser', () => {
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true
+      },
+      { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+      true
+    )
+
+    expect(options.modifierInverts).toBe(true)
+  })
+
+  it('keeps inversion for an eligible SSH pane', () => {
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true
+      },
+      { kind: 'ssh', connectionId: 'ssh-1' },
+      true
+    )
+
+    expect(options.modifierInverts).toBe(true)
+  })
 })

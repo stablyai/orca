@@ -14,6 +14,7 @@ import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl
  */
 type XtermRendererInternals = {
   _canvas?: HTMLCanvasElement
+  _devicePixelRatio?: number
   _gl?: { canvas?: HTMLCanvasElement }
   dimensions?: {
     device?: { canvas?: { width?: number; height?: number } }
@@ -22,33 +23,42 @@ type XtermRendererInternals = {
   handleResize?: (cols: number, rows: number) => void
 }
 
-export function repairPaneWebglCanvasDprMismatch(pane: ManagedPane): boolean {
+export type PaneWebglCanvasDprRepairState = 'current' | 'deferred' | 'repaired'
+
+export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprRepairState {
   const renderer = (
     pane.terminal as unknown as {
       _core?: { _renderService?: { _renderer?: { value?: XtermRendererInternals } } }
     }
   )._core?._renderService?._renderer?.value
   const canvas = renderer?._canvas ?? renderer?._gl?.canvas
-  if (!renderer || !canvas?.isConnected) {
-    return false
+  if (!renderer || !canvas) {
+    return 'current'
+  }
+  if (!canvas.isConnected) {
+    return 'deferred'
   }
   const view = canvas.ownerDocument?.defaultView
   const expected = renderer.dimensions?.device?.canvas
   const expectedWidth = expected?.width ?? 0
   const expectedHeight = expected?.height ?? 0
   if (!view || expectedWidth <= 0 || expectedHeight <= 0) {
-    return false
+    return 'deferred'
   }
   const staleBackingWidth = canvas.width
   const staleBackingHeight = canvas.height
+  const cachedDevicePixelRatio = renderer._devicePixelRatio
+  const devicePixelRatioChanged =
+    typeof cachedDevicePixelRatio === 'number' && cachedDevicePixelRatio !== view.devicePixelRatio
   // xterm rounds its CSS canvas size before ResizeObserver converts it back to
   // device pixels; allow that round trip without forcing layout on every fit.
   const roundingTolerance = Math.max(1, Math.ceil(view.devicePixelRatio / 2))
   if (
+    !devicePixelRatioChanged &&
     Math.abs(staleBackingWidth - expectedWidth) <= roundingTolerance &&
     Math.abs(staleBackingHeight - expectedHeight) <= roundingTolerance
   ) {
-    return false
+    return 'current'
   }
   try {
     // Order matters: refresh the renderer's cached dpr/dimensions first, then
@@ -58,13 +68,18 @@ export function repairPaneWebglCanvasDprMismatch(pane: ManagedPane): boolean {
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   } catch {
     // Pane may be mid-teardown; the next reveal/fit retries the check.
-    return false
+    return 'deferred'
   }
   recordTerminalWebglDiagnostic('webgl-canvas-dpr-repair', {
     paneId: pane.id,
     staleBackingWidth,
     expectedBackingWidth: expectedWidth,
+    ...(cachedDevicePixelRatio === undefined ? {} : { cachedDevicePixelRatio }),
     devicePixelRatio: view.devicePixelRatio
   })
-  return true
+  return 'repaired'
+}
+
+export function repairPaneWebglCanvasDprMismatch(pane: ManagedPane): boolean {
+  return repairPaneWebglCanvasDpr(pane) === 'repaired'
 }

@@ -1,6 +1,6 @@
 import type { OnMount } from '@monaco-editor/react'
 import type { IDisposable } from 'monaco-editor'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   getMarkdownDocCompletionContext,
   getMarkdownDocCompletionDocuments
@@ -9,7 +9,7 @@ import {
 type MonacoApi = Parameters<OnMount>[1]
 
 let provider: IDisposable | null = null
-let providerMonaco: MonacoApi | null = null
+let providerMonaco: MonacoApi = null
 const documentsByModel = new Map<string, MarkdownDocument[]>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {

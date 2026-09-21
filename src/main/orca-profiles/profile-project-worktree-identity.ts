@@ -1,8 +1,13 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import type { Repo, WorkspaceKey } from '../../shared/types'
+import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { Repo } from '../../shared/repo-types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../shared/worktree/host-qualified-identity'
 
 export function repoPhysicalKey(
   repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
@@ -45,8 +50,14 @@ export function rekeyOwnerKey(
   newRepoId: string,
   ownerKey: string
 ): string | null {
-  if (isRepoWorktreeId(oldRepoId, ownerKey)) {
-    return rekeyWorktreeId(oldRepoId, newRepoId, ownerKey)
+  const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
+    ? getWorktreeIdFromHostIdentity(ownerKey)
+    : ownerKey
+  if (isRepoWorktreeId(oldRepoId, rawOwnerKey)) {
+    const rekeyed = rekeyWorktreeId(oldRepoId, newRepoId, rawOwnerKey)
+    return isWorktreeHostIdentity(ownerKey)
+      ? `${ownerKey.slice(0, ownerKey.length - rawOwnerKey.length)}${rekeyed}`
+      : rekeyed
   }
   const parsed = parseWorkspaceKey(ownerKey)
   if (parsed?.type === 'worktree' && isRepoWorktreeId(oldRepoId, parsed.worktreeId)) {
@@ -55,8 +66,29 @@ export function rekeyOwnerKey(
   return null
 }
 
+/**
+ * Every worktree locator an owner key could name.
+ *
+ * Two readings, because one key can be both: with a repo literally named `worktree`,
+ * `worktree::/p` is a `<repoId>::<path>` locator AND parses as a `worktree:` workspace key naming
+ * repo `` (empty). `ownerKeyBelongsToRepo` accepts either, so a caller that reasons about a key
+ * without a repo id in hand has to consider both or it will disagree with the predicate.
+ */
+export function ownerKeyWorktreeIds(ownerKey: string): string[] {
+  const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
+    ? getWorktreeIdFromHostIdentity(ownerKey)
+    : ownerKey
+  const scope = parseWorkspaceKey(ownerKey)
+  return scope?.type === 'worktree' && scope.worktreeId !== rawOwnerKey
+    ? [rawOwnerKey, scope.worktreeId]
+    : [rawOwnerKey]
+}
+
 export function ownerKeyBelongsToRepo(ownerKey: string, repoId: string): boolean {
-  if (isRepoWorktreeId(repoId, ownerKey)) {
+  const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
+    ? getWorktreeIdFromHostIdentity(ownerKey)
+    : ownerKey
+  if (isRepoWorktreeId(repoId, rawOwnerKey)) {
     return true
   }
   const parsed = parseWorkspaceKey(ownerKey)

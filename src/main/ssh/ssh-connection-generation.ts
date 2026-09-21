@@ -14,6 +14,16 @@ let sessionInitialized = false
 const connectionGenerationByTarget = new Map<string, number>()
 const usedSessionScopes = new Set<number>()
 
+/** Permanent target removal makes its reconnect fence unreachable; release its key. */
+export function forgetSshConnectionGeneration(targetId: string): void {
+  connectionGenerationByTarget.delete(targetId)
+}
+
+/** @internal - cache-bound test view. */
+export function getSshConnectionGenerationEntryCountForTests(): number {
+  return connectionGenerationByTarget.size
+}
+
 function assertGenerationInCurrentSession(generation: number): void {
   if (
     !Number.isSafeInteger(generation) ||

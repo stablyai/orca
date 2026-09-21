@@ -5,10 +5,10 @@ import {
   sendCapturedTerminalInput
 } from './terminal-captured-input-dispatch'
 
-function createTransport(ptyId: string | null): PtyTransport {
+function createTransport(ptyId: string | null, sendResult = true): PtyTransport {
   return {
     getPtyId: vi.fn(() => ptyId),
-    sendInput: vi.fn(() => true)
+    sendInput: vi.fn(() => sendResult)
   } as unknown as PtyTransport
 }
 
@@ -31,11 +31,48 @@ describe('sendCapturedTerminalInput', () => {
     }
   )
 
+  it('runs the accepted callback only after a successful captured send', () => {
+    const transport = createTransport('pty-original')
+    const onAccepted = vi.fn()
+
+    expect(
+      sendCapturedTerminalInput({
+        targetPaneMounted: true,
+        currentTransport: transport,
+        capturedTransport: transport,
+        capturedPtyId: 'pty-original',
+        data: '\x1b[13;2u',
+        onAccepted
+      })
+    ).toBe(true)
+
+    expect(onAccepted).toHaveBeenCalledOnce()
+  })
+
+  it('does not run the accepted callback for a rejected captured send', () => {
+    const transport = createTransport('pty-original', false)
+    const onAccepted = vi.fn()
+
+    expect(
+      sendCapturedTerminalInput({
+        targetPaneMounted: true,
+        currentTransport: transport,
+        capturedTransport: transport,
+        capturedPtyId: 'pty-original',
+        data: '\x1b[13;2u',
+        onAccepted
+      })
+    ).toBe(false)
+
+    expect(onAccepted).not.toHaveBeenCalled()
+  })
+
   it.each(['local IPC', 'SSH remote runtime'])(
     'does not deliver to a replacement %s transport for a reused pane',
     () => {
       const original = createTransport('pty-original')
       const replacement = createTransport('pty-replacement')
+      const onAccepted = vi.fn()
 
       expect(
         sendCapturedTerminalInput({
@@ -43,11 +80,13 @@ describe('sendCapturedTerminalInput', () => {
           currentTransport: replacement,
           capturedTransport: original,
           capturedPtyId: 'pty-original',
-          data: '\r'
+          data: '\r',
+          onAccepted
         })
       ).toBe(false)
       expect(original.sendInput).not.toHaveBeenCalled()
       expect(replacement.sendInput).not.toHaveBeenCalled()
+      expect(onAccepted).not.toHaveBeenCalled()
     }
   )
 

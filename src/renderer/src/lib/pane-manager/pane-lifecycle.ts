@@ -16,8 +16,10 @@ import {
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
@@ -27,7 +29,11 @@ import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anch
 export { createPaneDOM } from './pane-dom-creation'
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
-export function openTerminal(pane: ManagedPaneInternal): void {
+export function openTerminal(
+  pane: ManagedPaneInternal,
+  // Named rather than positional: two adjacent optional booleans swap silently.
+  { ligatures = false, inlineImages = false }: { ligatures?: boolean; inlineImages?: boolean } = {}
+): void {
   const {
     terminal,
     container,
@@ -99,6 +105,14 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
+  // Configure the first atlas with ligatures instead of immediately rebuilding it.
+  if (ligatures) {
+    attachLigatures(pane)
+  }
+  // Deferred attachment restores Orca's DA1 handler after the addon registers its own.
+  if (inlineImages) {
+    attachInlineImages(pane)
+  }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }
@@ -136,16 +150,15 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     pane.ligaturesAddon = ligaturesAddon
     // Why: ligatures can be enabled after rows already rendered, especially
     // from Settings. Force existing glyph runs to be recomputed immediately.
-    pane.terminal.refresh(0, pane.terminal.rows - 1)
+    if (!pane.webglAttachmentDeferred) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
     // docs call this out explicitly — reactivating WebGL after ligatures
     // forces a fresh atlas that includes the ligated glyphs.
-    if (pane.webglAddon) {
-      disposeWebgl(pane)
-      attachWebgl(pane)
-    }
+    rebuildAttachedWebgl(pane)
   } catch (err) {
     console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
     pane.ligaturesAddon = null
@@ -162,10 +175,7 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
     // Why: ligatures lived inside the WebGL atlas, so after disposing the
     // addon the atlas still holds the ligated glyphs. Rebuild it so text
     // renders as the non-ligated fallback immediately.
-    if (pane.webglAddon) {
-      disposeWebgl(pane)
-      attachWebgl(pane)
-    }
+    rebuildAttachedWebgl(pane)
   }
 }
 
@@ -228,6 +238,9 @@ export function disposePane(
   } catch {
     /* ignore */
   }
+  // Detach removes the pane from the deferred-attach set and disposes the addon
+  // (canvas layers + parser handlers) before the terminal surface goes away.
+  detachInlineImages(pane)
   disposeWebgl(pane)
   try {
     pane.searchAddon.dispose()

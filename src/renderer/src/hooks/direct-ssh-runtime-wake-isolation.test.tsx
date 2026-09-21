@@ -142,6 +142,7 @@ describe('runtime and direct SSH wake isolation', () => {
                 }
               ]
             ]),
+            targetGenerations: new Map(),
             targetLabels: new Map([['runtime-owned-target', 'runtime target']]),
             removedTargetLabels: new Map(),
             targetsHydrated: true

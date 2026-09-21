@@ -1,5 +1,5 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { JiraProject } from '../../../shared/types'
+import type { JiraProject } from '../../../shared/jira-types'
 
 export const JIRA_PROJECT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 

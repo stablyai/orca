@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 import { getDiffCommentLineLabel } from './diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
@@ -93,10 +93,9 @@ function forEachMarkdownReviewLine(
 ): void {
   let lineStart = 0
   let lineNumber = 1
-  for (let index = 0; index <= content.length; index += 1) {
-    if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
-    }
+  while (lineStart <= content.length) {
+    const newline = content.indexOf('\n', lineStart)
+    const index = newline === -1 ? content.length : newline
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     if (visit(content.slice(lineStart, lineEnd), lineNumber) === false) {
       return

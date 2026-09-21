@@ -1,0 +1,334 @@
+{
+  "operation": "tasks.workspace-ssh",
+  "family": "tasks.workspace-ssh",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "495f51d9c2f7f3d71f53a53e88786b8d1f767a5bf66b8655c28222d2909a964c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ba2cee4b538": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      }
+    },
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "13e6d0c47ca4": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": ["codex"]
+    },
+    "18e6a3ac6471": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "2bdbcded5f9b": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "38ce16e16515": {
+      "name": "ssh.connect#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "43ead075ce12": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      },
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "80ffce5fa2b3": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "84149cfb1467": {
+      "name": "workspaceSshState",
+      "ordinal": 8,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connecting",
+        "targetId": "ssh-1"
+      }
+    },
+    "9637248df9cb": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "a1f755a38636": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "a9ec92743b9e": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 2,
+      "value": false
+    },
+    "bf0c0c00caf9": {
+      "name": "repo.hooks#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "d68ba9a6772a": {
+      "name": "workspaceSshConnecting",
+      "ordinal": 7,
+      "value": true
+    },
+    "d760f20b60ad": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "e44d3b580ab0": {
+      "name": "workspaceSshConnecting",
+      "ordinal": 12,
+      "value": false
+    },
+    "e65f26fdbe1a": {
+      "name": "repo.hooks#1",
+      "ordinal": 13,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "  pnpm install  "
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "contentHash": "hash-1",
+              "scriptContent": "pnpm install"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "edf7372929cd": {
+      "name": "ssh.connect#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 120000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-ssh-connected",
+    "checkpoints": [
+      {
+        "id": "agents-detected",
+        "observation": {
+          "sender": ["2bdbcded5f9b"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "18e6a3ac6471",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "13e6d0c47ca4"]
+        }
+      },
+      {
+        "id": "connected",
+        "observation": {
+          "sender": ["2bdbcded5f9b", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "a1f755a38636",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "13e6d0c47ca4",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "setup-prompted",
+        "observation": {
+          "sender": ["2bdbcded5f9b", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "43ead075ce12",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "13e6d0c47ca4",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -14,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
-import { getEndpointFileName } from '../shared/agent-hook-listener'
+import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
@@ -204,7 +205,8 @@ describe('Subprocess: Relay entry point', () => {
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
-    expect(repaired.result).toMatchObject({ id: 'pty-1' })
+    // Why: a spawn that never loaded node-pty must not burn a mint sequence, so the repair is still :1.
+    expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:1$/) })
   }, 10_000)
 
   it('reloads node-pty after a late native binding failure without restarting', async () => {
@@ -228,7 +230,8 @@ describe('Subprocess: Relay entry point', () => {
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
-    expect(repaired.result).toMatchObject({ id: 'pty-2' })
+    // Why: the late failure happens after the id is minted, so the repair lands on the next sequence.
+    expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:2$/) })
   }, 10_000)
 
   it('responds to fs.stat over stdin/stdout', async () => {
@@ -414,6 +417,85 @@ describe('Subprocess: Relay entry point', () => {
       }
     },
     10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves the endpoint credential equal to the winning daemon when two starts race one socket',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-cred-race-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const credentialFile = `${sockPath}.credential`
+      const starters = [0, 1].map(() =>
+        spawnRelay(relayEntry, [
+          '--detached',
+          '--grace-time',
+          '10',
+          '--sock-path',
+          sockPath,
+          '--endpoint-dir',
+          path.join(tmpDir, 'agent-hooks'),
+          '--credential-file',
+          credentialFile
+        ])
+      )
+      const stderrByStarter = starters.map((starter) => {
+        let text = ''
+        starter.proc.stderr!.on('data', (chunk: Buffer) => {
+          text += chunk.toString('utf8')
+        })
+        return () => text
+      })
+      try {
+        const outcomes = await Promise.all(
+          starters.map((starter) =>
+            Promise.race([
+              starter.sentinelReceived.then(() => 'ready'),
+              starter.waitForExit(8000).then((code) => `exit:${code}`)
+            ])
+          )
+        )
+        expect(outcomes.filter((outcome) => outcome === 'ready')).toHaveLength(1)
+        expect(outcomes.filter((outcome) => outcome === 'exit:1')).toHaveLength(1)
+        const winnerIndex = outcomes.indexOf('ready')
+        const loserIndex = 1 - winnerIndex
+        const loserStderr = stderrByStarter[loserIndex]()
+        expect(loserStderr, loserStderr).toContain('Socket path already in use')
+
+        // The loser must not have touched the file: whatever is on disk authenticates against
+        // the daemon that owns the socket, with the mode the relay requires.
+        const credential = readFileSync(credentialFile, 'utf8').trim()
+        expect(credential).toMatch(/^[A-Za-z0-9_-]{32,256}$/)
+        expect(statSync(credentialFile).mode & 0o777).toBe(0o600)
+
+        const bridge = spawn([
+          '--connect',
+          '--sock-path',
+          sockPath,
+          '--credential-file',
+          credentialFile
+        ])
+        try {
+          await bridge.sentinelReceived
+          const resp = await bridge.waitForResponse(bridge.send('relay.status'))
+          expect(resp.error).toBeUndefined()
+          expect(resp.result as { pid: number }).toMatchObject({
+            pid: starters[winnerIndex].proc.pid
+          })
+        } finally {
+          bridge.kill('SIGTERM')
+          await bridge.waitForExit().catch(() => {})
+        }
+        expect(stderrByStarter[winnerIndex]()).not.toContain('credential mismatch')
+      } finally {
+        for (const starter of starters) {
+          if (starter.proc.exitCode === null) {
+            starter.proc.kill('SIGKILL')
+            await starter.waitForExit().catch(() => {})
+          }
+        }
+      }
+    },
+    20_000
   )
 
   it.skipIf(process.platform === 'win32')(

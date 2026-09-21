@@ -126,6 +126,8 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
     roster.delete(id)
     return
   }
+  tracked.backgroundTasksAuthoritative = undefined
+  tracked.restoredFromSnapshot = undefined
   tracked.state = 'idle'
 }
 
@@ -245,13 +247,8 @@ export function foldClaudeBackgroundTasksIntoRoster(
   }
 }
 
-/** Second reap path for restored rows, used when the agent process that wrote
- *  the snapshot is gone. The inventory reap needs the parent to emit a complete
- *  `background_tasks` list; a parent that went idle before Orca restarted never
- *  emits one, so an unconfirmed row would gate the pane 'working' forever and
- *  keep it out of hibernation. Rows confirmed by live activity are untouched.
- *  Returns whether anything was dropped. */
-export function reapRestoredClaudeSubagentsWithoutLiveAgent(roster: ClaudeSubagentRoster): boolean {
+/** Drop restored rows that no current-runtime child activity has confirmed. */
+export function reapUnconfirmedRestoredClaudeSubagents(roster: ClaudeSubagentRoster): boolean {
   let changed = false
   for (const [id, tracked] of roster) {
     if (tracked.restoredFromSnapshot === true) {
@@ -297,6 +294,8 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
   for (const [id, tracked] of roster) {
     if (claudeTeammateIdMatchesName(id, name)) {
       changed = changed || tracked.state !== 'idle' || tracked.confirmedTeammate !== true
+      tracked.backgroundTasksAuthoritative = undefined
+      tracked.restoredFromSnapshot = undefined
       tracked.state = 'idle'
       tracked.confirmedTeammate = true
     }
@@ -312,6 +311,21 @@ export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | un
   }
   for (const tracked of roster.values()) {
     if (tracked.state === 'working') {
+      return true
+    }
+  }
+  return false
+}
+
+/** A working child observed in this listener runtime, not merely restored from disk. */
+export function claudeRosterHasRuntimeWorkingSubagent(
+  roster: ClaudeSubagentRoster | undefined
+): boolean {
+  if (!roster) {
+    return false
+  }
+  for (const tracked of roster.values()) {
+    if (tracked.state === 'working' && tracked.restoredFromSnapshot !== true) {
       return true
     }
   }

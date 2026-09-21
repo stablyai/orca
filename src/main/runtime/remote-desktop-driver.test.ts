@@ -20,15 +20,17 @@ vi.mock('../git/worktree', () => ({
   listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 vi.mock('../hooks', () => ({
-  createSetupRunnerScript: vi.fn(),
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
-vi.mock('../ipc/filesystem-auth', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))
+vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
@@ -41,6 +43,12 @@ vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
+
+class TestOrcaRuntimeService extends OrcaRuntimeService {
+  getLayoutQueues() {
+    return this.layoutQueues
+  }
+}
 
 const store = {
   getRepo: () => ({
@@ -58,6 +66,9 @@ const store = {
   getGitHubCache: () => ({ pr: {}, issue: {} }),
   setWorktreeMeta: () => undefined as never,
   removeWorktreeMeta: () => {},
+  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
+  addRetiredWorktreeName: () => {},
+  mergeRetiredWorktreeNames: () => false,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
@@ -69,7 +80,7 @@ const store = {
 }
 
 function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
-  const runtime = new OrcaRuntimeService({
+  const runtime = new TestOrcaRuntimeService({
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
   })
@@ -79,11 +90,16 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
   const resizeCalls: { ptyId: string; cols: number; rows: number }[] = []
   const driverEvents: { ptyId: string; driver: { kind: string; clientId?: string } }[] = []
   const fitOverrideEvents: { ptyId: string; mode: string; cols: number; rows: number }[] = []
+  let resizeSucceeds = true
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null,
     resize: (ptyId, cols, rows) => {
+      // Why: the production controller returns false when the provider throws — a dropped SSH/WSL provider or an exited PTY.
+      if (!resizeSucceeds) {
+        return false
+      }
       resizeCalls.push({ ptyId, cols, rows })
       ptySizes.set(ptyId, { cols, rows })
       return true
@@ -109,9 +125,13 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
   })
   return {
     runtime,
+    ptySizes,
     driverEvents,
     fitOverrideEvents,
-    resizeCalls
+    resizeCalls,
+    setResizeSucceeds: (next: boolean) => {
+      resizeSucceeds = next
+    }
   }
 }
 
@@ -240,6 +260,21 @@ describe('remote desktop viewer width driver', () => {
     expect(fitOverrideEvents).toHaveLength(0)
   })
 
+  it('repairs host-side drift when the current viewer reasserts an unchanged grid', async () => {
+    const { runtime, ptySizes, resizeCalls } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    ptySizes.set('pty-1', { cols: 80, rows: 24 })
+    resizeCalls.splice(0)
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+
+    expect(resizeCalls).toEqual([{ ptyId: 'pty-1', cols: 100, rows: 30 }])
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    expect(resizeCalls).toHaveLength(1)
+  })
+
   it('reclaims the host width when the last viewer detaches', async () => {
     const { runtime } = createRuntime()
     // The viewer drives the source PTY to its own 80-wide viewport.
@@ -327,17 +362,18 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24, false)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { target: { ownerSubscriptionKey?: string } }[] }
-    >
+    const layoutQueues = runtime.getLayoutQueues()
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 90, 28)
     void runtime.claimRemoteDesktopViewer('pty-1', 'sub-B')
 
     expect(
-      layoutQueues.get('pty-1')?.pending.map(({ target }) => target.ownerSubscriptionKey)
+      layoutQueues
+        .get('pty-1')
+        ?.pending.map(({ target }) =>
+          target.kind === 'remote-desktop' ? target.ownerSubscriptionKey : null
+        )
     ).toEqual(['sub-A', 'sub-B'])
     layoutQueues.delete('pty-1')
   })
@@ -345,10 +381,7 @@ describe('remote desktop viewer width driver', () => {
   it('makes a host claim join a pending disconnect reclaim', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
-    const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
-      string,
-      { running: Promise<unknown>; pending: { waiters: unknown[] }[] }
-    >
+    const layoutQueues = runtime.getLayoutQueues()
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
@@ -513,5 +546,67 @@ describe('remote desktop viewer width driver', () => {
     // A fresh viewer on the same id re-establishes suppression cleanly (no stale set).
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 100, 40)
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
+  })
+
+  it('held phone-fit take-back releases the lock when the remote reclaim resize fails', async () => {
+    // Why: the local held branch releases unconditionally (mobile-presence-lock.test.ts scenario 4).
+    // The remote branch rolled the lock back instead, so the banner survived and every retry was a no-op.
+    const { runtime, fitOverrideEvents, setResizeSucceeds } = createRuntime(null)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
+    runtime.onClientDisconnected('phone-A')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(runtime.getTerminalFitOverride('pty-1')).toMatchObject({ mode: 'mobile-fit' })
+
+    setResizeSucceeds(false)
+    const notifierBefore = fitOverrideEvents.length
+
+    await expect(runtime.reclaimTerminalForDesktop('pty-1')).resolves.toBe(true)
+
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(fitOverrideEvents.slice(notifierBefore).some((e) => e.mode === 'desktop-fit')).toBe(true)
+    // A second click must not be needed, and must stay idempotent.
+    await expect(runtime.reclaimTerminalForDesktop('pty-1')).resolves.toBe(false)
+  })
+
+  it('driving take-back reports success when the trailing remote layout cannot converge', async () => {
+    // Why: the lock is already released here, so returning false told the desktop renderer
+    // "nothing was reclaimed" and it skipped the post-take-back refit and focus.
+    const { runtime, setResizeSucceeds } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    setResizeSucceeds(false)
+
+    await expect(runtime.reclaimTerminalForDesktop('pty-1')).resolves.toBe(true)
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+  })
+
+  it('take-back during the resubscribe grace still resizes the PTY off the phone grid', async () => {
+    // Why: both take-back tests above force the resize to fail, so nothing pinned that a
+    // converging remote reclaim reaches the host. A phone that unsubscribes cleanly holds
+    // driver=mobile for the 250ms resubscribe grace, and applyRemoteDesktopLayout no-ops on
+    // a mobile driver — so without the idle flip the lock drops and `true` is still reported
+    // while the PTY stays stranded at the phone grid.
+    const { runtime, resizeCalls } = createRuntime(null)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    // Inside the grace window on purpose: the driver still reads mobile here.
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(runtime.getTerminalFitOverride('pty-1')).toMatchObject({ mode: 'mobile-fit' })
+    const resizesBefore = resizeCalls.length
+
+    await expect(runtime.reclaimTerminalForDesktop('pty-1')).resolves.toBe(true)
+
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(resizeCalls.slice(resizesBefore)).toContainEqual({ ptyId: 'pty-1', cols: 100, rows: 30 })
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
   })
 })

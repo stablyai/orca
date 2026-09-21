@@ -1,4 +1,6 @@
-import type { GlobalSettings, Repo, WorkspaceHostScope } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
@@ -10,8 +12,8 @@ import {
 } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import { translate } from '@/i18n/i18n'
 
 export type SidebarHostOption = {
@@ -41,10 +43,7 @@ export function buildSidebarHostOptions(args: {
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   // Why: live per-environment runtime status lets the registry surface compat
   // verdicts and blocked health in the sidebar without re-probing servers.
-  runtimeStatusByEnvironmentId?: ReadonlyMap<
-    string,
-    { status?: RuntimeStatus | null; appVersion?: string | null }
-  >
+  runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
   runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'name'>[]
   // Why: per-host display-label overrides rename hosts everywhere the sidebar
   // options feed (host headers, scope picker, focus menu).

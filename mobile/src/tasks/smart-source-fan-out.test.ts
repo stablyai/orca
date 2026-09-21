@@ -22,6 +22,23 @@ function fakeClient(byMethod: Record<string, unknown>, calls: Call[]): RpcClient
   } as unknown as RpcClient
 }
 
+const workItem = {
+  state: 'open',
+  url: '',
+  labels: [],
+  updatedAt: '2020-01-01T00:00:00.000Z',
+  author: null
+}
+
+const linearIssue = {
+  url: '',
+  state: { name: 'Todo', type: 'unstarted', color: '#000' },
+  team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+  labels: [],
+  priority: 0,
+  updatedAt: '2020-01-01T00:00:00.000Z'
+}
+
 const smartArgs = {
   mode: 'smart' as const,
   query: 'bug',
@@ -38,9 +55,15 @@ describe('fanOutSmartSearch', () => {
     const calls: Call[] = []
     const client = fakeClient(
       {
-        'github.listWorkItems': { items: [{ id: 'g1', type: 'issue', number: 1, title: 'A' }] },
-        'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
-        'linear.searchIssues': { items: [{ id: 'l1', identifier: 'ENG-1', title: 'C' }] },
+        'github.listWorkItems': {
+          items: [{ ...workItem, id: 'g1', type: 'issue', number: 1, title: 'A' }]
+        },
+        'gitlab.listWorkItems': {
+          items: [{ ...workItem, id: 'gl1', type: 'mr', number: 2, title: 'B' }]
+        },
+        'linear.searchIssues': {
+          items: [{ ...linearIssue, id: 'l1', identifier: 'ENG-1', title: 'C' }]
+        },
         'repo.searchRefs': { refDetails: [{ refName: 'main', localBranchName: 'main' }] }
       },
       calls
@@ -64,7 +87,9 @@ describe('fanOutSmartSearch', () => {
     const client = fakeClient(
       {
         'github.listWorkItems': new Error('gh down'),
-        'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
+        'gitlab.listWorkItems': {
+          items: [{ ...workItem, id: 'gl1', type: 'mr', number: 2, title: 'B' }]
+        },
         'linear.searchIssues': { items: [] },
         'repo.searchRefs': { refDetails: [] }
       },

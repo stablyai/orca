@@ -10,7 +10,7 @@ import {
   type SourceControlTreeNode
 } from '@/components/right-sidebar/source-control-tree'
 import type { ConflictReviewEntry } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { translate } from '@/i18n/i18n'
 
 type ConflictReviewTreeEntry = ConflictReviewEntry & {
@@ -178,7 +178,9 @@ function ConflictReviewFileTreeRow({
         }
       }}
     >
-      <FileIcon className={cn('size-3.5 shrink-0', isStillUnresolved && 'text-destructive')} />
+      {React.createElement(FileIcon, {
+        className: cn('size-3.5 shrink-0', isStillUnresolved && 'text-destructive')
+      })}
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{node.name}</span>
       </span>

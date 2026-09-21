@@ -8,7 +8,7 @@
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
-// Per the design doc:
+// Invariants both ends rely on:
 // - The relay normalizes; Orca routes. The envelope's `payload` field has
 //   already been through `normalizeHookPayload` (which calls
 //   `parseAgentStatusPayload` → `normalizeAgentStatusObject`) on the relay
@@ -41,6 +41,7 @@ const AGENT_HOOK_SOURCES = [
   'antigravity',
   'amp',
   'opencode',
+  'opencode2',
   'mimo-code',
   'cursor',
   'pi',
@@ -85,14 +86,18 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
-  /** Claude's provider-owned user-prompt UUID. */
+  /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
+  /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */
+  grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
+  /** Claude teammate name carried by TeammateIdle. */
+  teammateName?: string
   /** Claude agent type, used only as a lower-confidence identity fallback. */
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
@@ -194,8 +199,9 @@ export function restoreShedStatusFields(
 }
 
 /** JSON-RPC request method Orca issues after `--connect` reattach to ask the
- *  relay to replay its per-paneKey last-payload cache. See §5 Path 3 of the
- *  design doc for the race that ruled out push-on-`setWrite`. */
+ *  relay to replay its per-paneKey last-payload cache. Pull, not push: a relay
+ *  that pushed on `setWrite` can emit before Orca has wired its `agent.hook`
+ *  handler, and those notifications are dropped silently. */
 export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as const
 
 /** JSON-RPC request method Orca issues at session-ready to ship the
@@ -212,6 +218,8 @@ export type AgentHookInstallManagedHooksParams = {
   hostKeyFingerprint?: string
   /** Positively detected and enabled agents allowed to mutate remote config. */
   agents: readonly AgentHookTarget[]
+  /** Execution-host Claude version; absent means retain the legacy hook set. */
+  claudeVersion?: string
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

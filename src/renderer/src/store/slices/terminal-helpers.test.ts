@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { emptyLayoutSnapshot, clearTransientTerminalState } from './terminal-helpers'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {

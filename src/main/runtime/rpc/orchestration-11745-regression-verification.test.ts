@@ -23,6 +23,7 @@ import {
   request,
   type LegacyCompatibilityDispatcherHarness
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 // Why: an unrelated caller the runtime CAN resolve to a pane — otherwise the refusal would be
 // stable_pane_required and would prove nothing about Run authorization.
@@ -641,13 +642,19 @@ function createAdoptedDb(options: { settleWork: boolean }): {
   const dbPath = join(dir, 'orchestration.db')
 
   const before = new OrchestrationDb(dbPath)
-  const task = before.createTask({ spec: 'legacy assignment', createdByTerminalHandle: 'term_old' })
-  before.createDispatchContext(
+  const task = before.createTask({
+    runId: 'run_legacy_local',
+    spec: 'legacy assignment',
+    createdByTerminalHandle: 'term_old'
+  })
+  createRootDispatch(
+    before,
     task.id,
     'term_old_worker',
     'tab_old:33333333-3333-4333-8333-333333333333'
   )
   const recovery = before.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_old_worker',
     to: 'term_old',
     subject: 'recovered worker outcome',

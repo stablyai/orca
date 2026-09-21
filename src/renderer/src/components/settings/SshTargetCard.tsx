@@ -301,8 +301,10 @@ export function SshTargetCard({
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
           {` \u2022 ${terminalPersistence}`}
         </p>
+        {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
+            and a one-line clamp with no tooltip made it unreachable even on hover. */}
         {state?.error ? (
-          <p className="mt-0.5 truncate text-xs text-red-400">{state.error}</p>
+          <p className="mt-0.5 text-xs text-red-400 [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
       </div>
 

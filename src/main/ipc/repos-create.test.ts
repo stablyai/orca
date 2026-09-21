@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../shared/constants'
 
 const {
   handleMock,
@@ -33,7 +33,8 @@ const {
     addRepo: vi.fn(),
     removeProject: vi.fn(),
     getRepo: vi.fn(),
-    updateRepo: vi.fn()
+    updateRepo: vi.fn(),
+    getSettings: vi.fn()
   },
   mkdirMock: vi.fn(),
   accessMock: vi.fn(),
@@ -60,8 +61,11 @@ vi.mock('fs/promises', () => ({
   rm: rmMock
 }))
 
+// `availableParallelism` is read at module load by the git admission scheduler,
+// which this module graph reaches; a partial `os` mock breaks that import.
 vi.mock('os', () => ({
-  homedir: homedirMock
+  homedir: homedirMock,
+  availableParallelism: () => 8
 }))
 
 vi.mock('../git/runner', () => ({
@@ -76,7 +80,7 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -107,6 +111,8 @@ describe('repos:create', () => {
   }
   const tmpPath = (...segments: string[]): string => join('/tmp', ...segments)
   const defaultProjectParent = join('/Users/alice', 'orca', 'projects')
+  // The value a fresh install seeds Settings -> Workspace Directory with.
+  const defaultWorkspaceDir = getDefaultWorkspaceDir('/Users/alice')
 
   const callCreate = (args: CreateArgs): Promise<CreateResult> => {
     const handler = handlers.get('repos:create')
@@ -132,6 +138,7 @@ describe('repos:create', () => {
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.getSettings.mockReset().mockReturnValue({ workspaceDir: defaultWorkspaceDir })
     mockWindow.webContents.send.mockReset()
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
@@ -144,7 +151,7 @@ describe('repos:create', () => {
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
     homedirMock.mockReset().mockReturnValue('/Users/alice')
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('registers the repos:create handler', () => {
@@ -154,6 +161,52 @@ describe('repos:create', () => {
   it('registers the home-backed create-project default handler', async () => {
     expect(handlers.has('repos:getDefaultCreateProjectParent')).toBe(true)
     await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
+  })
+
+  // ── create-project default parent (orca#14767) ────────────────────
+
+  it('defaults new projects to a configured Workspace Directory', async () => {
+    mockStore.getSettings.mockReturnValue({ workspaceDir: 'J:\\PROJECTS' })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('J:\\PROJECTS')
+  })
+
+  it('prefers the local host override over the client-default workspace directory', async () => {
+    mockStore.getSettings.mockReturnValue({
+      workspaceDir: 'J:\\PROJECTS',
+      hostSettingOverrides: { local: { defaultWorktreeLocation: 'D:\\code' } }
+    })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('D:\\code')
+  })
+
+  it.each([undefined, '', '   '])(
+    'falls back to ~/orca/projects for a blank workspace directory: %p',
+    async (workspaceDir) => {
+      mockStore.getSettings.mockReturnValue({ workspaceDir })
+      await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
+    }
+  )
+
+  // Why: workspaceDir is seeded, never blank, so the seeded value is not a user
+  // choice. Honouring it would move every existing user's new projects into the
+  // worktree root, where each project would host its own worktrees inside itself.
+  it('ignores the seeded workspace directory that the user never changed', async () => {
+    mockStore.getSettings.mockReturnValue({ workspaceDir: defaultWorkspaceDir })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
+  })
+
+  it('ignores the seeded workspace directory spelled with a trailing separator', async () => {
+    mockStore.getSettings.mockReturnValue({ workspaceDir: `${defaultWorkspaceDir}/` })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
+  })
+
+  it('ignores a Windows seeded workspace directory regardless of drive-letter case', async () => {
+    homedirMock.mockReturnValue('C:\\Users\\alice')
+    mockStore.getSettings.mockReturnValue({
+      workspaceDir: 'c:\\users\\alice\\orca\\workspaces'
+    })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe(
+      join('C:\\Users\\alice', 'orca', 'projects')
+    )
   })
 
   it('unregisters any previously-registered repos:create handler', () => {

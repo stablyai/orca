@@ -22,7 +22,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }

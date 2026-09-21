@@ -536,4 +536,48 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     emitScroll(3_500)
     expect(el.scrollTop).toBe(4_000)
   })
+
+  it('lands a caller-supplied row index map on the same row as the internally built one', async () => {
+    const runRestore = async (rowIndexByKey?: ReadonlyMap<string, number>) => {
+      // Why: each run needs its own hook module, or the second run inherits the first harness's refs.
+      vi.resetModules()
+      const { harness, useVirtualizedScrollAnchor } = await loadHook()
+      const { el } = createScrollElement({ rowElements: [], scrollTop: 0 })
+      const anchorRef = { current: { key: 'row-1', offset: 40, scrollTop: 0 } }
+      let getRowKeyCalls = 0
+
+      harness.beginRender()
+      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
+      useVirtualizedScrollAnchor({
+        anchorRef,
+        getRowKey: (row: string) => {
+          getRowKeyCalls += 1
+          return row
+        },
+        programmaticScrollMarks: createProgrammaticScrollMarks(),
+        recordAnchorOnScroll: false,
+        restoreSignal: 'signal-a',
+        rowIndexByKey,
+        rows: ['row-0', 'row-1'],
+        scrollElementRef: { current: el },
+        scrollOffsetRef: { current: 0 },
+        totalSize: 30_000,
+        virtualizer: virtualizerWithRow1()
+      } as never)
+      harness.effects[1]?.effect()
+      return { getRowKeyCalls, scrollTop: el.scrollTop }
+    }
+
+    const builtInternally = await runRestore()
+    const supplied = await runRestore(
+      new Map([
+        ['row-0', 0],
+        ['row-1', 1]
+      ])
+    )
+
+    expect(supplied.scrollTop).toBe(builtInternally.scrollTop)
+    expect(builtInternally.getRowKeyCalls).toBeGreaterThan(0)
+    expect(supplied.getRowKeyCalls).toBe(0)
+  })
 })

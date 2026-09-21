@@ -156,6 +156,25 @@ describe('E2EEChannel v2', () => {
     })
   })
 
+  it('forwards post-auth capability-shaped frames without mutating authenticated capabilities', () => {
+    const ctx = setup()
+    const { schedule } = startV2(ctx)
+    const onMessage = vi.fn()
+    ctx.channel.onMessage(onMessage)
+    authenticate(ctx, schedule)
+
+    const capabilityFrame = JSON.stringify({
+      type: 'e2ee_client_capabilities',
+      v: 1,
+      clientCapabilities: ['agent-session.structured.v1']
+    })
+    ctx.channel.handleRawMessage(clientText(capabilityFrame, schedule, 1n))
+
+    expect(ctx.channel.clientCapabilities).toEqual([])
+    expect(onMessage).toHaveBeenCalledOnce()
+    expect(onMessage.mock.calls[0]?.[0]).toBe(capabilityFrame)
+  })
+
   it('rejects legacy downgrade and runtime-only capability metadata when mobile v2 is required', () => {
     const legacy = setup()
     legacy.channel.handleRawMessage(

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { useNow } from '@/components/dashboard/useNow'
+import { useNow } from '@/hooks/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import {
   selectSendTargetControlInputs,
@@ -26,6 +26,8 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
+import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -89,16 +91,19 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: derive per-agent unvisited flags from the ack map so rows bold on first appearance and mute once the tab is visited.
-  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  // Why: acknowledgement writes are app-global; project only this card's rows
+  // so unrelated worktree activity does not rerender every agent body.
+  const acknowledgedAgentTimes = useAppStore(
+    useShallow((s) => selectAcknowledgedAgentTimes(s, agents))
+  )
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
-    for (const a of agents) {
-      const ackAt = acknowledgedAgentsByPaneKey[a.paneKey] ?? 0
-      out[a.paneKey] = ackAt < a.entry.stateStartedAt
+    for (const [index, agent] of agents.entries()) {
+      const ackAt = acknowledgedAgentTimes[index] ?? 0
+      out[agent.paneKey] = ackAt < agent.entry.stateStartedAt
     }
     return out
-  }, [agents, acknowledgedAgentsByPaneKey])
+  }, [agents, acknowledgedAgentTimes])
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
@@ -173,7 +178,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           flashFocusedPane: true,
           scrollToBottomIfOutputSinceLastView: true
         })
-      } else {
+      } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
         const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
         if (liveEntry?.worktreeId === worktreeId) {
           // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.

@@ -56,4 +56,23 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
       })
     ).toBe('orca')
   })
+
+  it('uses the runtime-provided command locally but never leaks it to SSH', () => {
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: null,
+        isWsl: true,
+        worktreeId: 'repo::C:\\repo',
+        runtimeCliCommand: 'orca-dev'
+      })
+    ).toBe('orca-dev')
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: 'ssh-1',
+        isWsl: true,
+        worktreeId: 'repo::C:\\repo',
+        runtimeCliCommand: 'orca-dev'
+      })
+    ).toBe('orca')
+  })
 })

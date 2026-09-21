@@ -44,4 +44,85 @@ describe('ReviewIcon', () => {
     expect(blocked).not.toContain('text-emerald-500/80')
     expect(blocked).not.toBe(passing)
   })
+
+  // Why: #13088 — a draft with failing checks used the same glyph as every other
+  // review and was painted red, so it was indistinguishable from a closed PR.
+  it('gives a draft its own glyph and never paints it with a check tone', () => {
+    const draft = renderToStaticMarkup(
+      <ReviewIcon
+        review={{
+          provider: 'github',
+          number: 1,
+          title: 'Draft',
+          state: 'draft',
+          status: 'failure'
+        }}
+        className="size-3"
+        variant="generic"
+      />
+    )
+    const closed = renderToStaticMarkup(
+      <ReviewIcon
+        review={{ provider: 'github', number: 1, title: 'Closed', state: 'closed' }}
+        className="size-3"
+        variant="generic"
+      />
+    )
+
+    expect(draft).toContain('lucide-git-pull-request-draft')
+    expect(draft).not.toContain('text-rose-500/85')
+    expect(closed).toContain('lucide-git-pull-request-closed')
+    expect(draft).not.toBe(closed)
+  })
+
+  it('keeps check tones on open reviews so failing checks still stand out', () => {
+    const failing = renderToStaticMarkup(
+      <ReviewIcon
+        review={{ provider: 'github', number: 1, title: 'Open', state: 'open', status: 'failure' }}
+        className="size-3"
+        variant="generic"
+      />
+    )
+
+    expect(failing).toContain('text-rose-500/85')
+  })
+
+  it('renders merged reviews with the merge glyph', () => {
+    const merged = renderToStaticMarkup(
+      <ReviewIcon
+        review={{ provider: 'github', number: 1, title: 'Merged', state: 'merged' }}
+        className="size-3"
+        variant="generic"
+      />
+    )
+
+    expect(merged).toContain('lucide-git-merge')
+  })
+
+  // Why: a closed MR used to render the merge glyph, which read as "already merged".
+  it('overrides the GitLab provider glyph for closed merge requests', () => {
+    const closed = renderToStaticMarkup(
+      <ReviewIcon review={{ ...gitlabReview, state: 'closed' }} className="size-3" />
+    )
+
+    expect(closed).toContain('lucide-git-pull-request-closed')
+    expect(closed).not.toContain('lucide-git-merge')
+  })
+
+  // Why: folder cards render a stateless row while a linked review loads or its
+  // details fail. There is no state glyph to contradict, so problems must still be
+  // visible — but a tone-less row must not be promoted to a passing green.
+  it('flags problems on a stateless row without ever claiming success', () => {
+    const stateless = (status: 'failure' | 'pending' | 'success') =>
+      renderToStaticMarkup(
+        <ReviewIcon
+          review={{ provider: 'github', number: 1, title: 'Loading PR...', status }}
+          className="size-3"
+        />
+      )
+
+    expect(stateless('failure')).toContain('text-rose-500/85')
+    expect(stateless('pending')).toContain('text-amber-500/85')
+    expect(stateless('success')).not.toContain('text-emerald-500/80')
+  })
 })

@@ -1,10 +1,15 @@
-import type { WorktreeCreateTiming, WorktreeCreateTimingPhase } from '../shared/types'
+import type {
+  PreparedCheckoutOutcome,
+  WorktreeCreateTiming,
+  WorktreeCreateTimingPhase
+} from '../shared/worktree/create-types'
 
 type TimingClock = () => number
 
 export type WorktreeCreateTimingRecorder = {
   time<T>(phase: string, operation: () => Promise<T>): Promise<T>
   timeSync<T>(phase: string, operation: () => T): T
+  recordPreparedCheckout(outcome: PreparedCheckoutOutcome): void
   finish(): WorktreeCreateTiming
 }
 
@@ -34,6 +39,7 @@ export function createWorktreeCreateTimingRecorder(
 ): WorktreeCreateTimingRecorder {
   const startedAt = clock()
   const phases: WorktreeCreateTimingPhase[] = []
+  let preparedCheckout: PreparedCheckoutOutcome | undefined
 
   const recordPhase = (phase: string, operationStartedAt: number): void => {
     phases.push(createPhase(phase, operationStartedAt, clock(), startedAt))
@@ -56,10 +62,14 @@ export function createWorktreeCreateTimingRecorder(
         recordPhase(phase, operationStartedAt)
       }
     },
+    recordPreparedCheckout(outcome: PreparedCheckoutOutcome): void {
+      preparedCheckout = outcome
+    },
     finish() {
       return {
         totalDurationMs: clampDuration(clock() - startedAt),
-        phases: [...phases]
+        phases: [...phases],
+        ...(preparedCheckout ? { preparedCheckout } : {})
       }
     }
   }

@@ -1,14 +1,100 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
+import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('repo RPC methods', () => {
+  it('passes oversized safe ref-search limits to the runtime clamp', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      searchRepoRefs: vi.fn().mockResolvedValue({ refs: [], truncated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.searchRefs', {
+        repo: 'id:repo-1',
+        query: 'main',
+        limit: REPO_SEARCH_REFS_MAX_LIMIT + 1
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { refs: [], truncated: true } })
+    expect(runtime.searchRepoRefs).toHaveBeenCalledWith(
+      'id:repo-1',
+      'main',
+      REPO_SEARCH_REFS_MAX_LIMIT + 1
+    )
+  })
+
+  it('projects inherited visibility for old clients but preserves inheritance for capable clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      enrichMissingRepoGitRemoteIdentities: vi.fn(),
+      listRepos: () => [{ id: 'repo-1', path: '/repo', externalWorktreeVisibilityLegacy: false }],
+      getClientSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+    const legacyReplies: string[] = []
+    const currentReplies: string[] = []
+
+    await dispatcher.dispatchStreaming(makeRequest('repo.list'), (reply) =>
+      legacyReplies.push(reply)
+    )
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.list'),
+      (reply) => currentReplies.push(reply),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(JSON.parse(legacyReplies[0]!).result.repos[0].externalWorktreeVisibility).toBe('show')
+    expect(
+      JSON.parse(currentReplies[0]!).result.repos[0].externalWorktreeVisibility
+    ).toBeUndefined()
+  })
+
+  it('projects inherited visibility on repo mutation responses for old clients', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/repo',
+      kind: 'git' as const,
+      externalWorktreeVisibilityLegacy: false
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      addRepo: vi.fn().mockResolvedValue(repo),
+      getClientSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const legacyResponse = await dispatcher.dispatch(
+      makeRequest('repo.add', { path: '/repo', kind: 'git' })
+    )
+    const currentReplies: string[] = []
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.add', { path: '/repo', kind: 'git' }),
+      (reply) => currentReplies.push(reply),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+    const currentResponse = JSON.parse(currentReplies[0]!)
+
+    expect(legacyResponse).toMatchObject({
+      ok: true,
+      result: { repo: { externalWorktreeVisibility: 'show' } }
+    })
+    expect(currentResponse).toMatchObject({ ok: true, result: { repo } })
+    expect((currentResponse as { result: { repo: typeof repo } }).result.repo).not.toHaveProperty(
+      'externalWorktreeVisibility'
+    )
+  })
+
   it('updates project runtime preferences on the runtime server', async () => {
     const project = {
       id: 'project-1',
@@ -300,6 +386,121 @@ describe('repo RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', forkSyncMode: 'safe-auto' } }
+    })
+  })
+
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'updateRepo').mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
+  })
+
+  it('persists agent worktree visibility updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        agentWorktreeVisibility: 'show'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentWorktreeVisibility: 'show' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      agentWorktreeVisibility: 'show'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', agentWorktreeVisibility: 'show' } }
+    })
+  })
+
+  it('validates additive source settings at the remote RPC boundary', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({ id: 'repo-1', path: '/srv/repo' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: {
+          customWorktreeVisibilitySources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'relative', rootPath: '../team' }
+          ],
+          worktreeVisibilitySourcePreferences: {
+            builtIn: { claude: 'show', gsd: 'bad' },
+            custom: { team: 'hide' }
+          }
+        }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' },
+        custom: { team: 'hide' }
+      }
+    })
+  })
+
+  it('passes the null visibility sentinel through to clear a repository override', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({ id: 'repo-1', path: '/srv/repo' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { externalWorktreeVisibility: null }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      externalWorktreeVisibility: null
     })
   })
 

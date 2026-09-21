@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   getQuickCommandPreview,
   MAX_QUICK_COMMANDS,

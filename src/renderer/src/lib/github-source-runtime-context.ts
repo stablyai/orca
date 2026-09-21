@@ -2,7 +2,7 @@ import type { ParsedExecutionHost } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {

@@ -5,7 +5,8 @@ import {
   DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,
-  sendTerminalOscColorQueryReplies
+  sendTerminalOscColorQueryReplies,
+  withSixelDa1Attribute
 } from './terminal-capability-replies'
 
 function writeTerminal(term: Terminal, data: string): Promise<void> {
@@ -63,6 +64,103 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     }
   })
 
+  it('advertises Sixel in DA1 while inline images are enabled', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      sixelSupported: () => true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+
+      expect(sendInput).toHaveBeenCalledWith('\x1b[?1;2;4c')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('omits Sixel from DA1 when inline images are disabled', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      sixelSupported: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+
+      expect(sendInput).toHaveBeenCalledWith(DEFAULT_DA1_RESPONSE)
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('reflects a live inline-images toggle on the next DA1 query', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    let enabled = false
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      sixelSupported: () => enabled
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+      expect(sendInput).toHaveBeenLastCalledWith(DEFAULT_DA1_RESPONSE)
+
+      enabled = true
+      await writeTerminal(term, '\x1b[c')
+      expect(sendInput).toHaveBeenLastCalledWith('\x1b[?1;2;4c')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('does not double-add Sixel to a ConPTY DA1 response that already lists it', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      da1Response: CONPTY_DA1_RESPONSE,
+      sixelSupported: () => true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+
+      expect(sendInput).toHaveBeenCalledWith(CONPTY_DA1_RESPONSE)
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('withSixelDa1Attribute inserts and dedupes the Sixel capability', () => {
+    expect(withSixelDa1Attribute('\x1b[?1;2c')).toBe('\x1b[?1;2;4c')
+    expect(withSixelDa1Attribute('\x1b[?61;4c')).toBe('\x1b[?61;4c')
+    expect(withSixelDa1Attribute('\x1b[?62;4;9;22c')).toBe('\x1b[?62;4;9;22c')
+    // Leaves anything that is not a DA1 response untouched.
+    expect(withSixelDa1Attribute('\x1b[0m')).toBe('\x1b[0m')
+  })
+
   it('answers OSC foreground and background color queries from the active theme', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     term.options.theme = {
@@ -83,6 +181,34 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
       expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
     } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it.each([
+    ['OSC 11 then CPR', '\x1b]11;?\x1b\\\x1b[6n', ['osc', 'cpr']],
+    ['CPR then OSC 11', '\x1b[6n\x1b]11;?\x1b\\', ['cpr', 'osc']]
+  ] as const)('preserves combined query order (%s)', async (_name, input, expectedKinds) => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = { background: '#ffffff' }
+    const replies: string[] = []
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput: (data) => {
+        replies.push(data)
+      },
+      isReplaying: () => false
+    })
+    const onData = term.onData((data) => replies.push(data))
+
+    try {
+      await writeTerminal(term, input)
+      const kinds = replies.map((reply) => (reply.startsWith('\x1b]11;') ? 'osc' : 'cpr'))
+      expect(kinds).toEqual(expectedKinds)
+    } finally {
+      onData.dispose()
       disposable.dispose()
       term.dispose()
     }

@@ -1,14 +1,14 @@
 import {
+  parseFileLinkLocation,
+  type ParsedFileLinkLocation
+} from '../../../shared/file-link-location'
+import {
   joinAbsolutePath,
   normalizeAbsolutePath,
   resolveTildePath
 } from './terminal-path-normalization'
 
-export type ParsedExplicitFileLinkTarget = {
-  pathText: string
-  line: number | null
-  column: number | null
-}
+export type ParsedExplicitFileLinkTarget = ParsedFileLinkLocation
 
 export type ResolvedExplicitFileLinkTarget = Pick<
   ParsedExplicitFileLinkTarget,
@@ -34,15 +34,12 @@ export function parseExplicitFileLinkTarget(
   value: string,
   options: ParseExplicitFileLinkTargetOptions = {}
 ): ParsedExplicitFileLinkTarget | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
-  if (!match) {
+  const parsed = parseFileLinkLocation(value)
+  if (!parsed) {
     return null
   }
-  const pathText = match[1]
-  const hasLineOrColumn = Boolean(match[2] || match[3])
-  if (!pathText) {
-    return null
-  }
+  const { pathText, line, column } = parsed
+  const hasLineOrColumn = line !== null || column !== null
   if (/^[\\/]\s/.test(pathText)) {
     return null
   }
@@ -51,12 +48,6 @@ export function parseExplicitFileLinkTarget(
     if (hasLineOrColumn || (!canKeepRelativeDirectory && !canKeepTrailingSeparator(pathText))) {
       return null
     }
-  }
-
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
-  if ((line !== null && line < 1) || (column !== null && column < 1)) {
-    return null
   }
 
   return { pathText, line, column }

@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod, PRState } from '../../../../src/shared/types'
+import type { GitHubPRMergeMethod, PRState } from '../../../../src/shared/github/pull-request-types'
 
 // Which actions the PR actions section may offer for a given PR state. Merged PRs
 // expose only unlink (+ open-on-host elsewhere); closed PRs add reopen; open/draft

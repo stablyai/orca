@@ -16,11 +16,13 @@ import type {
   LinearAttachResult,
   LinearCreateResult,
   LinearSaveIssueResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
+import { appendLinearListTruncation } from '../../shared/linear/list-truncation-format'
+import { linearPriorityLabel } from '../../shared/linear/priority-label'
 import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
-} from '../../shared/linear-project-list-format'
+} from '../../shared/linear/project-list-format'
 import {
   isLinearAttachResult,
   isLinearCommentAddResult,
@@ -46,19 +48,31 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
   }
   if (isLinearSearchResult(result)) {
     return {
-      stdout: `${formatLinearIssueRows(result.issues)}\n`,
+      stdout: `${appendLinearListTruncation(
+        formatLinearIssueRows(result.issues),
+        result.issues.length,
+        result.truncated ?? result.meta.limitReached
+      )}\n`,
       stderr: linearListWarnings(result, 'Linear search')
     }
   }
   if (isLinearMcpIssueListResult(result)) {
     return {
-      stdout: `${formatLinearIssueRows(result.issues)}\n`,
+      stdout: `${appendLinearListTruncation(
+        formatLinearIssueRows(result.issues),
+        result.issues.length,
+        result.truncated ?? result.meta.hasMore
+      )}\n`,
       stderr: linearMcpListWarnings(result)
     }
   }
   if (isLinearIssueListResult(result)) {
     return {
-      stdout: `${formatLinearIssueRows(result.issues)}\n`,
+      stdout: `${appendLinearListTruncation(
+        formatLinearIssueRows(result.issues),
+        result.issues.length,
+        result.truncated ?? result.meta.hasMore
+      )}\n`,
       stderr: linearListWarnings(result)
     }
   }
@@ -158,21 +172,7 @@ function formatLinearIssueRow(issue: LinearSearchIssueSummary): string {
 }
 
 function formatPriority(priority: number | null | undefined): string {
-  if (priority == null || priority === 0) {
-    return 'none'
-  }
-  switch (priority) {
-    case 1:
-      return 'urgent'
-    case 2:
-      return 'high'
-    case 3:
-      return 'medium'
-    case 4:
-      return 'low'
-    default:
-      return 'none'
-  }
+  return linearPriorityLabel(priority)
 }
 
 function formatLinearTeamList(result: LinearTeamListResult): string {

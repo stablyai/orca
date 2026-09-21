@@ -10,7 +10,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type ResolvedAgentLaunchCommand =
   | {
@@ -43,7 +43,7 @@ export function resolveAgentLaunchCommand(args: {
   }
   const trailingTokens = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
-    : { ok: true as const, tokens: [] }
+    : { ok: true as const, tokens: [], spans: [] }
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }

@@ -20,7 +20,7 @@ const {
   toWindowsWslPathMock: vi.fn((value: string) => value)
 }))
 
-const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -43,10 +43,16 @@ vi.mock('../wsl', () => ({
 
 vi.mock('./filesystem-auth', () => ({
   authorizeExternalPath: vi.fn(async (value: string) => value),
+  resolveAuthorizedPath: resolveAuthorizedPathMock
+}))
+
+vi.mock('./filesystem-path-containment', () => ({
   isENOENT: vi.fn(() => false),
-  resolveAuthorizedPath: resolveAuthorizedPathMock,
-  resolveRegisteredWorktreePath: vi.fn(async (value: string) => value),
   validateGitRelativeFilePath: vi.fn((value: string) => value)
+}))
+
+vi.mock('./registered-worktree-roots-cache', () => ({
+  resolveRegisteredWorktreePath: vi.fn(async (value: string) => value)
 }))
 
 vi.mock('./filesystem-list-files', () => ({

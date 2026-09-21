@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Pressable,
@@ -89,6 +89,28 @@ export function MountedBottomDrawer({
       })
     : undefined
 
+  // Why: a sheet pinned under a fill picker holds progress at its target while the
+  // picker owns the window, so nothing re-applies its transform when the picker
+  // leaves. If the native view was rebuilt underneath, it keeps a stale transform
+  // and never paints — a dimmed, dead screen the user can only escape by dismissing
+  // the whole modal. A shared-value write alone cannot heal that (verified on
+  // device: an unchanged or nudged style lands on the stale native binding), so the
+  // remount is what repaints; the writes below keep the shared values authoritative
+  // for the fresh view, which matters because the drawer swap (166ms) hands back
+  // before the 180ms enter animation has finished.
+  const [windowEpoch, setWindowEpoch] = useState(0)
+  const wasInteractiveRef = useRef(interactive)
+  useEffect(() => {
+    const tookWindowBack = visible && interactive && !wasInteractiveRef.current
+    wasInteractiveRef.current = interactive
+    if (!tookWindowBack) {
+      return
+    }
+    translateY.value = 0
+    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    setWindowEpoch((epoch) => epoch + 1)
+  }, [interactive, visible])
+
   useEffect(() => {
     if (visible) {
       translateY.value = 0
@@ -172,7 +194,11 @@ export function MountedBottomDrawer({
   }, [onClose, progress])
 
   useEffect(() => {
-    if (!visible || !interactive) {
+    // Native only: react-native-web's `BackHandler.addEventListener` logs "BackHandler is not
+    // supported on web and should not be used." and hands back an inert subscription, so inside the
+    // shell's page every drawer that opened put that line on the console and armed nothing. There
+    // is no hardware back to intercept in a WebView; the shell owns the one the phone has.
+    if (!visible || !interactive || Platform.OS === 'web') {
       return
     }
 
@@ -276,12 +302,12 @@ export function MountedBottomDrawer({
         }
       ]
     }
-  })
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -358,6 +384,10 @@ export function MountedBottomDrawer({
 
         <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
           <Animated.View
+            // Why: remount per window hand-back — see the windowEpoch effect.
+            key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

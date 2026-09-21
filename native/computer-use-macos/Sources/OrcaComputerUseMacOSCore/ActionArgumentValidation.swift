@@ -6,6 +6,18 @@ public struct ActionArgumentValidationError: Error, Equatable {
     }
 }
 
+public enum MouseButtonSelection: String, Equatable, Sendable, CaseIterable {
+    case left
+    case right
+    case middle
+
+    /// Why: AXPress/AXShowMenu only model primary and secondary intent, so a middle
+    /// click has no accessibility equivalent and must reach the app as real events.
+    public var hasAccessibilityAction: Bool {
+        self != .middle
+    }
+}
+
 public enum ActionArgumentValidation {
     public static func positiveInteger(
         _ value: Double?,
@@ -29,6 +41,16 @@ public enum ActionArgumentValidation {
             return .failure(ActionArgumentValidationError("\(name) must be a positive number"))
         }
         return .success(value)
+    }
+
+    public static func mouseButton(
+        _ value: String?
+    ) -> Result<MouseButtonSelection, ActionArgumentValidationError> {
+        guard let value else { return .success(.left) }
+        guard let button = MouseButtonSelection(rawValue: value) else {
+            return .failure(ActionArgumentValidationError("unsupported mouse button '\(value)'"))
+        }
+        return .success(button)
     }
 
     public static func scrollDirection(_ value: String) -> Result<String, ActionArgumentValidationError> {

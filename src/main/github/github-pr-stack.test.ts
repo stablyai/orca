@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubPRStack } from '../../shared/types'
+import type { GitHubPRStack } from '../../shared/github/pull-request-types'
 
 const { ghExecFileAsyncMock, rateLimitGuardMock, noteRateLimitSpendMock } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),

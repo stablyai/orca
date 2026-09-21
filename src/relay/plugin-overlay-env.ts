@@ -1,4 +1,5 @@
-import { readShellStartupEnvVar } from '../main/pty/shell-startup-env'
+import { resolveLoginShellEnvironment } from '../main/startup/login-shell-environment'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
 import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
@@ -14,7 +15,9 @@ function readStartupEnv(
   env: Record<string, string>,
   shell: string | undefined
 ): string | undefined {
-  return readShellStartupEnvVar(name, env.HOME ?? process.env.HOME, shell ?? env.SHELL)
+  // Why the session env first: it is closer to the user's shell than the relay
+  // process env, and fish config lives under its XDG_CONFIG_HOME.
+  return readSessionShellStartupEnvVar(name, env, shell)
 }
 
 export function resolveOpenCodeSourceConfigDir(
@@ -64,4 +67,18 @@ export function resolvePiSourceAgentDir(
     return env[primaryKey]
   }
   return undefined
+}
+
+export async function resolveOmpConfigDirName(
+  env: Record<string, string>,
+  shell: string | undefined
+): Promise<string | undefined> {
+  if (env.PI_CONFIG_DIR !== undefined) {
+    return env.PI_CONFIG_DIR || '.omp'
+  }
+  const profile = await resolveLoginShellEnvironment({
+    shellOverride: shell ?? env.SHELL ?? null,
+    env
+  })
+  return profile.PI_CONFIG_DIR === '' ? '.omp' : profile.PI_CONFIG_DIR
 }

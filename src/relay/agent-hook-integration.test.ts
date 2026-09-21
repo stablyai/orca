@@ -118,7 +118,13 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('forwards a Claude UserPromptSubmit POST through to ingestRemote', async () => {
+  it.each([
+    { agent: 'claude', input: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' } },
+    {
+      agent: 'opencode2',
+      input: { hook_event_name: 'MessagePart', role: 'user', text: 'roundtrip' }
+    }
+  ])('forwards a $agent prompt through the relay to ingestRemote', async ({ agent, input }) => {
     const events: { paneKey: string; payload: unknown; connectionId: string | null }[] = []
     orcaServer.setListener((event) => {
       events.push({
@@ -129,7 +135,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     })
 
     const { port, token } = hookServer.getCoordinates()
-    const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+    const res = await fetch(`http://127.0.0.1:${port}/hook/${agent}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -141,7 +147,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         worktreeId: 'wt-7',
         env: 'remote',
         version: '1',
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' }
+        payload: input
       })
     })
     expect(res.status).toBe(204)
@@ -159,7 +165,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     const payload = events[0].payload as { state: string; prompt: string; agentType: string }
     expect(payload.state).toBe('working')
     expect(payload.prompt).toBe('roundtrip')
-    expect(payload.agentType).toBe('claude')
+    expect(payload.agentType).toBe(agent)
   })
 
   it('sheds an oversized assistant message through the production publication path', async () => {
@@ -251,6 +257,48 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         toolInput: 'pnpm test'
       })
     ])
+  })
+
+  it('clears remote Claude permission when its teammate idles', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    const postClaude = (payload: Record<string, unknown>): Promise<Response> =>
+      fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: `tab-9:${LEAF_9}`,
+          tabId: 'tab-9',
+          worktreeId: 'wt-9',
+          env: 'remote',
+          version: '1',
+          payload
+        })
+      })
+
+    await postClaude({
+      hook_event_name: 'PermissionRequest',
+      agent_id: 'areviewer-6d3cb5b5',
+      agent_type: 'reviewer',
+      tool_name: 'Bash',
+      tool_input: { command: 'false' }
+    })
+    await postClaude({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+
+    const start = Date.now()
+    while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    expect(orcaServer.getStatusSnapshot()[0]).toMatchObject({
+      paneKey: `tab-9:${LEAF_9}`,
+      connectionId: 'conn-test',
+      state: 'working',
+      agentType: 'claude',
+      subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'idle' })]
+    })
+    expect(orcaServer.getStatusSnapshot()[0]?.toolName).toBeUndefined()
   })
 
   it('clears remote Claude permission when approved PostToolUse matches the preceding tool use id', async () => {

@@ -1,4 +1,5 @@
-import type { PersistedUIState, TopLevelView } from '../../../shared/types'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { TopLevelView } from '../../../shared/ui-chrome-types'
 
 type ActiveViewUnloadState = {
   activeView: TopLevelView

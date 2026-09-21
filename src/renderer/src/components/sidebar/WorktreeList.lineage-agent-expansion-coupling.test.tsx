@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 // Regression test for the child-worktrees <-> agent-list expansion coupling:
 // in a worktree card that shows BOTH inline agent rows (with orchestration
 // lineage) AND a "N children" child-worktrees chip, toggling the child-worktrees
@@ -20,13 +24,11 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import type {
-  Repo,
-  TerminalTab,
-  Worktree,
-  WorktreeCardProperty,
-  WorktreeLineage
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -426,7 +428,7 @@ function compactAgentSummary(container: HTMLElement): HTMLButtonElement | null {
 }
 
 function childWorktreeCardPresent(container: HTMLElement): boolean {
-  return container.querySelector('[id="worktree-list-option-all%3Achild"]') !== null
+  return container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]') !== null
 }
 
 function parentVirtualRowKey(container: HTMLElement): string | null {
@@ -525,7 +527,7 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
 
     // The remount still happens: the parent moved to a standalone 'item' render
     // row with a DIFFERENT React key, and the child card is gone.
-    expect(parentVirtualRowKey(container)).toBe('wt:all:parent')
+    expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
     // FIXED: the card remounted, but the durable expansion cache means the

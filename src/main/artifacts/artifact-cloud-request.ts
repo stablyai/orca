@@ -1,7 +1,14 @@
 import type { ArtifactWriteRequest } from '../../shared/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 
-export function artifactWriteBody(request: ArtifactWriteRequest): Record<string, string> {
+export type ArtifactWriteBody = {
+  content: string
+  contentType: ArtifactWriteRequest['contentType']
+  fileName: string
+  title?: string
+}
+
+export function artifactWriteBody(request: ArtifactWriteRequest): ArtifactWriteBody {
   return {
     content: request.content,
     contentType: request.contentType,

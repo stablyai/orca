@@ -107,7 +107,7 @@ export class SshPtyModelAdmissionPressure {
     if (options.disposed) {
       return
     }
-    for (let index = 0; index < this.entries.length; ) {
+    for (let index = 0; index < this.entries.length;) {
       const entry = this.entries[index]!
       const hasEarlierEntryForPty = this.entries
         .slice(0, index)

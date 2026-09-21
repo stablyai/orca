@@ -8,47 +8,35 @@ import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
+import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-
-// Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
-function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
-  switch (state) {
-    case 'working':
-    case 'blocked':
-    case 'waiting':
-    case 'done':
-    case 'idle':
-      return state
-  }
-  return 'idle'
-}
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
     return 'just now'
   }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m ago`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h ago`
-  }
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return `${formatCompactDuration(delta)} ago`
 }
 
-function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {
+function stateDotTooltipLabel(
+  agent: DashboardAgentRowData,
+  dotState: AgentDotState,
+  now: number
+): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
-  return agentStateLabel(dotState)
+  // Why: report the observation, not a verdict on the agent — the elapsed gap is what
+  // lets the user apply context Orca has no way to know (a long build, a slow download).
+  return dotState === 'unverifiable'
+    ? agentNoUpdateLabel(agent.entry, now)
+    : agentStateLabel(dotState)
 }
 
 type Props = {
@@ -56,7 +44,7 @@ type Props = {
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
   onActivate: (tabId: string, paneKey: string) => void
-  /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see useNow.ts), not a per-row interval. */
+  /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see hooks/use-now.ts), not a per-row interval. */
   now: number
   /** Why: bold prompt rides on the card's unvisited signal (shared with the workspace name), not per-agent state. */
   isUnvisited?: boolean
@@ -142,12 +130,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
   const model = agent.entry.model?.trim() ?? ''
-  // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
-  const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
+  const isWorking = agent.state === 'working' && !isMonitoring
+  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
+  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
+  // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
+  const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
+  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
@@ -161,15 +153,20 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
-  const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
+  const dotState: AgentDotState = isInterrupted
+    ? 'interrupted'
+    : asDotState(agent.state, agent.entry.workingMode)
+  const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
+  // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
+  // row's own timestamp slot rather than hiding in a hover tooltip.
+  const noUpdateLabel = dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
   const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
   const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
-  const relativeTimestamp = doneTimeAgo ?? startedTimeAgo
-  const tsParts: string[] = []
+  const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
+  const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
     tsParts.push(`started ${startedTimeAgo}`)
   }
@@ -242,7 +239,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               className="inline-flex shrink-0 items-center justify-center"
               aria-label={dotTooltipLabel}
             >
-              <AgentStateDot state={dotState} size={stateDotSize} />
+              <AgentStateDot state={dotState} size={stateDotSize} title={null} />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
@@ -300,7 +297,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       </div>
       <DashboardAgentRowToolStep
         expanded={expanded}
-        isWorking={isWorking}
+        showsTool={showsTool}
+        reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
       />

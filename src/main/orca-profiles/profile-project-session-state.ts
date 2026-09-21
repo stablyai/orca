@@ -1,7 +1,8 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import {
   isRepoWorktreeId,
   ownerKeyBelongsToRepo,
@@ -48,6 +49,14 @@ export function mergeWorkspaceSessions(
       ...base.terminalLayoutsByTabId,
       ...incoming.terminalLayoutsByTabId
     },
+    ...(base.localOnlyScrollbackByTabId || incoming.localOnlyScrollbackByTabId
+      ? {
+          localOnlyScrollbackByTabId: {
+            ...base.localOnlyScrollbackByTabId,
+            ...incoming.localOnlyScrollbackByTabId
+          }
+        }
+      : {}),
     openFilesByWorktree: { ...base.openFilesByWorktree, ...incoming.openFilesByWorktree },
     browserTabsByWorktree: {
       ...base.browserTabsByWorktree,
@@ -133,9 +142,8 @@ export function removeRepoFromWorkspaceSession(
   }
   for (const tabId of removedTerminalTabIds) {
     delete next.terminalLayoutsByTabId[tabId]
+    delete next.localOnlyScrollbackByTabId?.[tabId]
   }
-  next.openFilesByWorktree = removeRepoWorktreeRecord(next.openFilesByWorktree, repoId)
-  next.activeFileIdByWorktree = removeRepoWorktreeRecord(next.activeFileIdByWorktree, repoId)
   const removedBrowserWorkspaceIds = new Set<string>()
   for (const [ownerKey, workspaces] of Object.entries(next.browserTabsByWorktree ?? {})) {
     if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
@@ -149,25 +157,11 @@ export function removeRepoFromWorkspaceSession(
       delete next.browserPagesByWorkspace[workspaceId]
     }
   }
-  next.activeBrowserTabIdByWorktree = removeRepoWorktreeRecord(
-    next.activeBrowserTabIdByWorktree,
-    repoId
-  )
-  next.activeTabTypeByWorktree = removeRepoWorktreeRecord(next.activeTabTypeByWorktree, repoId)
-  next.activeTabIdByWorktree = removeRepoWorktreeRecord(next.activeTabIdByWorktree, repoId)
-  next.unifiedTabs = removeRepoWorktreeRecord(next.unifiedTabs, repoId)
-  next.tabGroups = removeRepoWorktreeRecord(next.tabGroups, repoId)
-  next.tabGroupLayouts = removeRepoWorktreeRecord(next.tabGroupLayouts, repoId)
-  next.activeGroupIdByWorktree = removeRepoWorktreeRecord(next.activeGroupIdByWorktree, repoId)
-  next.lastVisitedAtByWorktreeId = removeRepoWorktreeRecord(next.lastVisitedAtByWorktreeId, repoId)
-  next.defaultTerminalTabsAppliedByWorktreeId = removeRepoWorktreeRecord(
-    next.defaultTerminalTabsAppliedByWorktreeId,
-    repoId
-  )
-  next.terminalTopologyRevisionByRepoId = removeRepoWorktreeRecord(
-    next.terminalTopologyRevisionByRepoId,
-    repoId
-  )
+  // Driven by the census so a field cannot be added to the session type and forgotten here.
+  for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
+    const record = next[field] as Record<string, unknown> | undefined
+    ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)
+  }
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
       Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(

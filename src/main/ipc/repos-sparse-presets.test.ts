@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CryptoModule from 'node:crypto'
-import type { SparsePreset } from '../../shared/types'
+import type { SparsePreset } from '../../shared/worktree/create-types'
 
 const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock('../git/repo', () => ({
   filterBaseRefSearchOutput: vi.fn().mockReturnValue([])
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
 
@@ -96,7 +96,7 @@ describe('sparse preset repo IPC handlers', () => {
     mockStore.saveSparsePreset.mockReset().mockImplementation((preset: SparsePreset) => preset)
     mockStore.removeSparsePreset.mockReset()
 
-    registerRepoHandlers(mainWindow as never, mockStore as never)
+    registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
   })
 
   it('normalizes and de-duplicates saved sparse preset directories', () => {

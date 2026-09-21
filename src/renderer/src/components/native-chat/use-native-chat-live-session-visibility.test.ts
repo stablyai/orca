@@ -122,7 +122,7 @@ describe('useNativeChatLiveSession visibility', () => {
   it('unsubscribes on hide, retains committed messages, and rejects hidden work', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: {
-        [BASE_ARGS.paneKey]: { state: 'working', stateStartedAt: 100 }
+        [BASE_ARGS.paneKey]: { state: 'working', stateStartedAt: 100, updatedAt: Date.now() }
       }
     } as never)
     await render(BASE_ARGS)
@@ -319,7 +319,11 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(transport.readSession.mock.calls[2]?.[2]).toBe(pagedLimit)
     expect(transport.subscribe.mock.calls[1]?.[0]?.limit).toBe(pagedLimit)
 
-    await render({ ...BASE_ARGS, sessionId: 'session-2', transcriptPath: '/remote/session-2.jsonl' })
+    await render({
+      ...BASE_ARGS,
+      sessionId: 'session-2',
+      transcriptPath: '/remote/session-2.jsonl'
+    })
 
     expect(transport.readSession.mock.calls[3]?.[2]).toBe(NATIVE_CHAT_INITIAL_LIMIT)
   })

@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { WorkspaceSessionPatch, WorkspaceSessionState } from '../../shared/types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../shared/workspace-session-state-types'
 
 export function registerSessionHandlers(store: Store): void {
   // Why: hostId is an optional second arg so an older renderer that invokes
@@ -8,6 +11,13 @@ export function registerSessionHandlers(store: Store): void {
   // exactly as before. Channel names stay stable.
   ipcMain.handle('session:get', (_event, hostId?: string | null) => {
     return store.getWorkspaceSession(hostId)
+  })
+
+  // Why a census channel: boot used to infer which partitions exist from the repo catalog, which
+  // cannot name an SSH target whose only workspace is a folder — the runtime wrote that partition
+  // and no reader ever enumerated it (#12723).
+  ipcMain.handle('session:list-host-ids', () => {
+    return store.getWorkspaceSessionHostIds()
   })
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {

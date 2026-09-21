@@ -16,7 +16,8 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import {
   buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
+  getWslCliDistroRequest,
+  type LocalAgentRuntime
 } from './CliSkillRuntimeSetup'
 
 // Shared install/update wiring for Task Sources + Linear settings.
@@ -29,9 +30,12 @@ export function useLinearAgentSkillSetup(): {
   // Status surfaces (step badges, checklist pills) read this so a focus-triggered
   // rescan does not flip a known result back to "checking".
   skillChecking: boolean
+  /** The scan could not vouch for "not installed", so no surface may claim it. */
+  skillUnverifiable: boolean
   installDisabled: boolean
   error: string | null
   terminalShellOverride: string | undefined
+  terminalRuntime: LocalAgentRuntime | undefined
   preInstallNotice: string
   refreshSkill: () => Promise<boolean>
   getPrerequisiteStatus: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
@@ -42,6 +46,7 @@ export function useLinearAgentSkillSetup(): {
     installed: skillInstalled,
     loading: skillLoading,
     settled: skillSettled,
+    installedUnverifiable: skillUnverifiable,
     error: skillError,
     skills: linearSkills,
     refresh: refreshSkill
@@ -96,9 +101,11 @@ export function useLinearAgentSkillSetup(): {
     skillInstalled,
     skillLoading,
     skillChecking: skillLoading && !skillSettled,
+    skillUnverifiable,
     installDisabled,
     error: activeSkillRuntime.installDisabledReason ?? skillError,
     terminalShellOverride: activeSkillRuntime.terminalShellOverride,
+    terminalRuntime: activeSkillRuntime.agentRuntime,
     preInstallNotice: AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
     refreshSkill,
     getPrerequisiteStatus,

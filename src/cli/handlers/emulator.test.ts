@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { callMock, remoteMock } = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -29,6 +29,9 @@ import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
 describe('orca emulator CLI handlers', () => {
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()
@@ -36,6 +39,19 @@ describe('orca emulator CLI handlers', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
   })
 
   it('resolves relative APK paths before calling the runtime', async () => {
@@ -69,6 +85,46 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: undefined, focus: false },
+      { timeoutMs: 180_000 }
+    )
+  })
+
+  it('uses the folder workspace exported by the current Orca terminal', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    delete process.env.ORCA_WORKTREE_ID
+    callMock.mockResolvedValue(
+      okFixture('req_attach', {
+        attached: true,
+        info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
+      })
+    )
+
+    await main(['emulator', 'attach', 'device-1'], '/folder/project')
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith(
+      'emulator.attach',
+      { device: 'device-1', worktree: 'folder:folder-1', focus: false },
+      { timeoutMs: 180_000 }
+    )
+  })
+
+  it('uses the current git worktree exported by the Orca terminal', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:stale-parent'
+    process.env.ORCA_WORKTREE_ID = 'repo-1::/repo/project '
+    callMock.mockResolvedValue(
+      okFixture('req_attach', {
+        attached: true,
+        info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
+      })
+    )
+
+    await main(['emulator', 'attach', 'device-1'], '/repo/project')
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith(
+      'emulator.attach',
+      { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
       { timeoutMs: 180_000 }
     )
   })

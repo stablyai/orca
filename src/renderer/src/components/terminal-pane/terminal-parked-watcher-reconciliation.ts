@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { useAppStore } from '@/store'
 import {
   collectLeafIdsInOrder,
@@ -62,7 +62,17 @@ export function resolveParkedTerminalPaneCandidates(
   }
   return fallback.map((pane) => {
     const prior = captured?.panes.find((candidate) => candidate.leafId === pane.leafId)
-    return prior ? { ...pane, paneId: prior.paneId, drivesTabTitle: prior.drivesTabTitle } : pane
+    return prior
+      ? {
+          ...pane,
+          paneId: prior.paneId,
+          drivesTabTitle: prior.drivesTabTitle,
+          // Why: the fact belongs to the captured PTY; a re-minted id on this leaf is a different shell.
+          ...(prior.ptyId === pane.ptyId && prior.untouchedFreshSpawn
+            ? { untouchedFreshSpawn: true }
+            : {})
+        }
+      : pane
   })
 }
 

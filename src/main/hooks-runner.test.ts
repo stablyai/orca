@@ -3,7 +3,7 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -49,7 +49,7 @@ describe('createSetupRunnerScript', () => {
     })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature\\',
@@ -95,7 +95,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
@@ -138,7 +138,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
         await import('../shared/terminal-git-credential-guard')
       const result = createSetupRunnerScript(
@@ -162,7 +162,7 @@ describe('createSetupRunnerScript', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
@@ -181,7 +181,7 @@ describe('createSetupRunnerScript', () => {
   })
 
   it('preserves exclamation marks in Windows runner script lines', async () => {
-    const { buildWindowsRunnerScript } = await import('./hooks')
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
 
     const runner = buildWindowsRunnerScript('echo hello!world!')
 
@@ -192,7 +192,7 @@ describe('createSetupRunnerScript', () => {
   })
 
   it('refuses to run a shebang script as a batch command', async () => {
-    const { buildWindowsRunnerScript } = await import('./hooks')
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
 
     // Regression: a POSIX script reaching the cmd runner (no Git Bash terminal, or an SSH
     // Windows host) must not have its interpreter-agnostic prefix executed under cmd —
@@ -207,7 +207,7 @@ describe('createSetupRunnerScript', () => {
   })
 
   it('keeps a `#` comment that is not an interpreter line', async () => {
-    const { buildWindowsRunnerScript } = await import('./hooks')
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
 
     const runner = buildWindowsRunnerScript('# not a shebang\nrem still batch')
 
@@ -220,7 +220,7 @@ describe('createSetupRunnerScript', () => {
     async () => {
       // Regression: `set` rejects `-l`/`-s`/`-i` with exit 2, and the runner's own `set -e` turns
       // that into an aborted setup before the first user line.
-      const { buildPosixRunnerScript } = await import('./hooks')
+      const { buildPosixRunnerScript } = await import('./setup-runner-script-text')
       const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
       const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
 
@@ -250,7 +250,7 @@ describe('createSetupRunnerScript', () => {
     })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
 
       expect(result.envVars).toEqual(
@@ -278,7 +278,7 @@ describe('createSetupRunnerScript', () => {
     })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         {
           ...makeRepo(),
@@ -327,7 +327,7 @@ describe('createSetupRunnerScript', () => {
     })
 
     try {
-      const { createSetupRunnerScript } = await import('./hooks')
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const result = createSetupRunnerScript(
         makeRepo(),
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\feature',
@@ -386,7 +386,7 @@ describe('createIssueCommandRunnerScript', () => {
     })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         '/test/repo-feature',
@@ -427,7 +427,7 @@ describe('createIssueCommandRunnerScript', () => {
     })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo\\feature',
@@ -456,7 +456,7 @@ describe('createIssueCommandRunnerScript', () => {
     })
 
     try {
-      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
       const result = createIssueCommandRunnerScript(makeRepo(), 'C:\\repo\\feature', 'pnpm install')
 
       expect(result.shell).toEqual({ family: 'cmd' })

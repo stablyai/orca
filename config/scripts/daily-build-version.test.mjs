@@ -45,27 +45,27 @@ describe('formatDailyReleaseName', () => {
     formatDailyReleaseName('1.4.163-daily.x', buildNumber, commit, new Date(iso))
 
   it('renders version, number, Pacific timestamp, and short sha', () => {
-    // 13:15 UTC is 6:15AM PDT in July (the daily cut time).
-    expect(name('2026-07-28T13:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 6:15AM • e698241')
+    // 17:15 UTC is 10:15AM PDT in July (the daily cut time).
+    expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
   })
 
   // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
   // the offset between them is not a constant. A test pinned to one season would
   // pass all summer and start failing in November.
   it('follows the Pacific offset across DST', () => {
-    expect(name('2026-01-15T14:15:00Z')).toBe('1.4.163 • 01 • Jan 15, 6:15AM • e698241')
-    expect(name('2026-07-28T13:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 6:15AM • e698241')
+    expect(name('2026-01-15T18:15:00Z')).toBe('1.4.163 • 01 • Jan 15, 10:15AM • e698241')
+    expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
   })
 
   it('pads to two digits and grows past them', () => {
-    expect(name('2026-07-28T13:15:00Z', 9)).toContain(' • 09 • ')
-    expect(name('2026-07-28T13:15:00Z', 42)).toContain(' • 42 • ')
+    expect(name('2026-07-28T17:15:00Z', 9)).toContain(' • 09 • ')
+    expect(name('2026-07-28T17:15:00Z', 42)).toContain(' • 42 • ')
   })
 
   it('rejects a build number that is not a positive integer', () => {
-    expect(() => name('2026-07-28T13:15:00Z', 0)).toThrow(/positive integer/)
-    expect(() => name('2026-07-28T13:15:00Z', -1)).toThrow(/positive integer/)
-    expect(() => name('2026-07-28T13:15:00Z', 1.5)).toThrow(/positive integer/)
+    expect(() => name('2026-07-28T17:15:00Z', 0)).toThrow(/positive integer/)
+    expect(() => name('2026-07-28T17:15:00Z', -1)).toThrow(/positive integer/)
+    expect(() => name('2026-07-28T17:15:00Z', 1.5)).toThrow(/positive integer/)
   })
 
   it('rejects an invalid timestamp', () => {

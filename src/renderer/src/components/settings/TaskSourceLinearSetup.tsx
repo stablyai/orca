@@ -137,6 +137,7 @@ export function TaskSourceLinearSetup({
               )}
               terminalWorktreeId="settings-tasks-linear-skill-terminal"
               terminalShellOverride={skillSetup.terminalShellOverride}
+              terminalRuntime={skillSetup.terminalRuntime}
               installed={skillSetup.skillInstalled}
               loading={skillSetup.skillLoading}
               error={skillSetup.error}

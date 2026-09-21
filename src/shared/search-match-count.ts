@@ -1,4 +1,4 @@
-import type { SearchFileResult, SearchResult } from './types'
+import type { SearchFileResult, SearchResult } from './code-search-types'
 
 function isValidMatchCount(value: unknown): value is number {
   return (

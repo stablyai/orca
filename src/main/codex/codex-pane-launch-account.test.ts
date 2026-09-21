@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { resolveCodexPaneLaunchAccount } from './codex-pane-launch-account'
 
 const SYSTEM_HOME = '/Users/example/.codex'
@@ -201,7 +202,35 @@ describe('resolveCodexPaneLaunchAccount', () => {
     ).toEqual({
       selectionKey: 'wsl:Ubuntu',
       accountId: 'wsl-account',
-      homeRoute: 'wsl-home'
+      homeRoute: 'account-home'
+    })
+  })
+
+  it('attributes a mounted-drive WSL launch through its distro UNC spelling', () => {
+    const account = managedAccount({
+      id: 'drive-account',
+      managedHomePath: 'C:\\Users\\u\\orca\\codex-accounts\\drive-account\\home',
+      managedHomeRuntime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxHomePath: '/mnt/c/Users/u/orca/codex-accounts/drive-account/home'
+    })
+    const args = {
+      launchCodexHomePath:
+        '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\u\\orca\\codex-accounts\\drive-account\\home',
+      systemCodexHomePath: SYSTEM_HOME,
+      settings: settings({ wsl: { Ubuntu: 'drive-account' }, accounts: [account] }),
+      target: { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+    }
+
+    expect(resolveCodexPaneLaunchAccount({ ...args, pinnedByResume: false })).toEqual({
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'drive-account',
+      homeRoute: 'account-home'
+    })
+    expect(resolveCodexPaneLaunchAccount({ ...args, pinnedByResume: true })).toEqual({
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'drive-account',
+      homeRoute: 'account-home'
     })
   })
 

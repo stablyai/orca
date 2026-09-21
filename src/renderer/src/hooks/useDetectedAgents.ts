@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -17,7 +17,7 @@ export type UseDetectedAgentsResult = {
 }
 
 export type AgentDetectionTarget =
-  | { kind: 'local' }
+  | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'runtime'; environmentId: string }
 
@@ -65,6 +65,8 @@ export function useDetectedAgents(
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
+  const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
+  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -82,7 +84,9 @@ export function useDetectedAgents(
     if (targetKind === 'runtime' && targetId) {
       return s.runtimeDetectedAgentIds[targetId] ?? null
     }
-    return s.detectedAgentIds
+    return localContextKey
+      ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
+      : s.detectedAgentIds
   })
   const isLoading = useAppStore((s) => {
     if (isUnknown) {
@@ -94,7 +98,9 @@ export function useDetectedAgents(
     if (targetKind === 'runtime' && targetId) {
       return s.isDetectingRuntimeAgents[targetId] ?? false
     }
-    return s.isDetectingAgents
+    return localContextKey
+      ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
+      : s.isDetectingAgents
   })
   const isRefreshing = useAppStore((s) => {
     if (targetKind === 'runtime' && targetId) {
@@ -103,7 +109,12 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
-    return targetKind === 'local' ? s.isRefreshingAgents : false
+    if (targetKind !== 'local') {
+      return false
+    }
+    return localContextKey
+      ? (s.isRefreshingLocalAgentsByContext[localContextKey] ?? false)
+      : s.isRefreshingAgents
   })
   const detectionFailed =
     detectedIds === null &&
@@ -126,8 +137,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
-    return state.refreshDetectedAgents()
-  }, [isUnknown, targetKind, targetId])
+    return state.refreshDetectedAgents(localWorktreeId)
+  }, [isUnknown, localWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -144,25 +155,39 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: a newly opened remote launch surface should get one fresh probe
-        // after a prior empty result, but must not spin while the host has no agents.
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Why: a host can install an agent after its cached list was populated;
+        // refresh once when a new launch surface first observes that host.
+        void state.refreshRemoteDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
         void state.ensureRemoteDetectedAgents(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
         void state.ensureRuntimeDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: remote `orca serve` users can install/fix PATH without reconnecting;
-        // retry once per mounted surface so the menu can pick that up.
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Why: a host can install an agent after its cached list was populated;
+        // refresh once when a new launch surface first observes that host.
+        void state.refreshRuntimeDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
         void state.ensureRuntimeDetectedAgents(targetId)
       }
     } else {
       if (detectedIds === null) {
-        void state.ensureDetectedAgents()
+        void state.ensureDetectedAgents(localWorktreeId)
       }
     }
-  }, [isUnknown, targetKind, targetId, remoteTargetKey, detectedIds])
+  }, [
+    isUnknown,
+    targetKind,
+    targetId,
+    remoteTargetKey,
+    detectedIds,
+    localWorktreeId,
+    localContextKey
+  ])
 
   return { detectedIds, isLoading, detectionFailed, isRefreshing, refresh }
 }

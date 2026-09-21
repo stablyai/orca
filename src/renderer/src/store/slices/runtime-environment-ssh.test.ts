@@ -251,3 +251,83 @@ describe('runtime-environment-ssh slice', () => {
     })
   })
 })
+
+describe('runtime-environment-ssh target registration generations', () => {
+  it('mirrors generations per target and leaves omitted ones absent', () => {
+    const store = createTestStore()
+    store.getState().setEnvironmentSshTargetsMetadata(ENV_A, [
+      { id: 'ssh-a', label: 'a-box', generation: 4 },
+      { id: 'ssh-legacy', label: 'legacy-box' }
+    ])
+    const bucket = store.getState().sshStateByEnvironment.get(ENV_A)
+    expect(bucket?.targetGenerations.get('ssh-a')).toBe(4)
+    expect(bucket?.targetGenerations.has('ssh-legacy')).toBe(false)
+  })
+
+  it('rejects generation values that could not have been issued', () => {
+    const store = createTestStore()
+    store.getState().setEnvironmentSshTargetsMetadata(ENV_A, [
+      { id: 'zero', label: 'z', generation: 0 },
+      { id: 'fraction', label: 'f', generation: 1.5 },
+      { id: 'negative', label: 'n', generation: -3 }
+    ])
+    expect(store.getState().sshStateByEnvironment.get(ENV_A)?.targetGenerations.size).toBe(0)
+  })
+
+  it('updates the bucket when only a generation changed', () => {
+    const store = createTestStore()
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 4 }])
+    const before = store.getState().sshStateByEnvironment.get(ENV_A)
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 5 }])
+    const after = store.getState().sshStateByEnvironment.get(ENV_A)
+    expect(after).not.toBe(before)
+    expect(after?.targetGenerations.get('ssh-a')).toBe(5)
+  })
+
+  it('keeps the bucket reference when labels and generations are unchanged', () => {
+    const store = createTestStore()
+    const targets = [{ id: 'ssh-a', label: 'a-box', generation: 4 }]
+    store.getState().setEnvironmentSshTargetsMetadata(ENV_A, targets)
+    const before = store.getState().sshStateByEnvironment.get(ENV_A)
+    store.getState().setEnvironmentSshTargetsMetadata(ENV_A, [...targets])
+    expect(store.getState().sshStateByEnvironment.get(ENV_A)).toBe(before)
+  })
+
+  it('clears generations when the environment SSH state goes stale, keeping labels', () => {
+    const store = createTestStore()
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 4 }])
+    store.getState().markEnvironmentSshStateStale(ENV_A)
+    const bucket = store.getState().sshStateByEnvironment.get(ENV_A)
+    expect(bucket?.targetGenerations.size).toBe(0)
+    expect(bucket?.targetLabels.get('ssh-a')).toBe('a-box')
+    expect(bucket?.targetsHydrated).toBe(false)
+  })
+
+  it('drops generations with the whole bucket on environment removal', () => {
+    const store = createTestStore()
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 4 }])
+    store.getState().removeEnvironmentSshState(ENV_A)
+    expect(store.getState().sshStateByEnvironment.has(ENV_A)).toBe(false)
+  })
+
+  it('respects the stale-generation guard', () => {
+    const store = createTestStore()
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 4 }])
+    store.getState().markEnvironmentSshStateStale(ENV_A)
+    // Generation 0 belongs to the pre-stale incarnation and must be ignored.
+    store
+      .getState()
+      .setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-a', label: 'a-box', generation: 9 }], 0)
+    expect(store.getState().sshStateByEnvironment.get(ENV_A)?.targetGenerations.size).toBe(0)
+  })
+})

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
 
@@ -35,5 +36,27 @@ describe('lastEnteredDoneAt session boundaries (STA-3386)', () => {
         )
       )
     ).toBe(1_000)
+  })
+})
+
+describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
+  it('times an ordinary completion from stateStartedAt, not updatedAt', () => {
+    const entry = doneEntry({ stateStartedAt: 2_000, updatedAt: 190_000 })
+    expect(lastEnteredDoneAt(row(entry))).toBe(2_000)
+    expect(agentEntryCompletionAt(entry)).toBe(2_000)
+  })
+
+  it('still shows when an interrupted turn stopped, though it never ranks as done', () => {
+    const entry = doneEntry({ interrupted: true, stateStartedAt: 2_000 })
+    expect(lastEnteredDoneAt(row(entry))).toBe(2_000)
+    expect(agentEntryCompletionAt(entry)).toBeNull()
+  })
+})
+
+describe('lastEnteredDoneAt subagent rows', () => {
+  it('does not report a synthetic completion when the child is unverifiable', () => {
+    const entry = doneEntry()
+
+    expect(lastEnteredDoneAt({ rowSource: 'subagent', state: 'unverifiable', entry })).toBeNull()
   })
 })

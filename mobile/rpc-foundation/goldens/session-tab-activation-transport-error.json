@@ -1,0 +1,85 @@
+{
+  "operation": "session.tab-activation",
+  "family": "session.tab-activation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
+  "scenarioSha256": "44e25e8624c6d7f072c5f7aa3c706df29d0e751bb59b3fb58bec003233f7e5e3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "36e84700f75b": {
+      "name": "terminal.focus#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.focus\",\"params\":{\"terminal\":\"terminal-1\",\"navigation\":\"host\"}}"
+    },
+    "50dc9b14a69a": {
+      "name": "terminal.focus#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.focus"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Request timed out",
+          "isRpcDeliveryUnknown": false
+        }
+      }
+    },
+    "6b74a7e08acf": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Request timed out",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "9acb73463ead": {
+      "failure": "Request timed out"
+    }
+  },
+  "recording": {
+    "scenario": "session-tab-activation-transport-error",
+    "checkpoints": [
+      {
+        "id": "errored",
+        "observation": {
+          "sender": ["50dc9b14a69a"],
+          "payloads": ["36e84700f75b"],
+          "settlements": {
+            "focus": "6b74a7e08acf"
+          },
+          "state": "9acb73463ead",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

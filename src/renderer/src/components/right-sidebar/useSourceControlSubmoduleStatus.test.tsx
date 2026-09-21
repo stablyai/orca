@@ -14,8 +14,8 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined })
 import {
   useSourceControlSubmoduleStatus,
   type UseSourceControlSubmoduleStatusResult
-} from './useSourceControlSubmoduleStatus'
-import type { GitStatusEntry } from '../../../../shared/types'
+} from './source-control/listing/use-submodule-status'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 const roots: Root[] = []
 

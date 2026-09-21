@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
-import { COLD_RESTORE_SEED_MODE_RESET } from '../../shared/terminal-mode-reset-profiles'
+import {
+  COLD_RESTORE_SEED_MODE_RESET,
+  RESET_GRAPHIC_RENDITION
+} from '../../shared/terminal-mode-reset-profiles'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { TerminalModes } from './types'
 
@@ -38,7 +41,7 @@ describe('getRecoveredHistorySeedSegments', () => {
       restoreInfo({ pendingEscapeTailAnsi: '\x1b[3' })
     )
     expect(segments).toEqual([
-      '\x1b[?1003h\x1b[?1006h',
+      `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h`,
       'user@host ~ $ \x1b[?1003h',
       MOUSE_OFF,
       '\x1b[3'
@@ -50,7 +53,7 @@ describe('getRecoveredHistorySeedSegments', () => {
       getRecoveredHistorySeedSegments(
         restoreInfo({ modes: { ...ARMED_MODES, alternateScreen: true } })
       )
-    ).toEqual(['user@host ~ $ ', MOUSE_OFF])
+    ).toEqual([`${RESET_GRAPHIC_RENDITION}user@host ~ $ `, MOUSE_OFF])
   })
 
   it('stays empty when there is no recovered normal buffer', () => {
@@ -115,5 +118,11 @@ describe('getRecoveredHistorySeedSegments', () => {
     // Why: only recovery seeding knows the arming TUI is dead; live reattach
     // snapshots must keep re-arming or an alt-screen TUI loses scroll forever.
     expect(buildRehydrateSequences(ARMED_MODES)).toBe('\x1b[?1003h\x1b[?1006h')
+  })
+
+  it('grounds the pen before re-entering the alternate screen', () => {
+    expect(buildRehydrateSequences({ ...ARMED_MODES, alternateScreen: true })).toBe(
+      `${RESET_GRAPHIC_RENDITION}\x1b[?1049h\x1b[?1003h\x1b[?1006h`
+    )
   })
 })

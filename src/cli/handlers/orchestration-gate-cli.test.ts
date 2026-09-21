@@ -34,6 +34,9 @@ import { okFixture, queueFixtures } from '../test-fixtures'
 
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
+// Why: a structured-session marker inherited from the runner diverts these cases to the
+// structured refusal, so which branch they exercise would depend on who ran them.
+const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
 
 const restoreEnv = (name: string, value: string | undefined): void => {
   if (value === undefined) {
@@ -54,6 +57,7 @@ describe('orchestration gate commands carry caller identity', () => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    delete process.env.ORCA_STRUCTURED_SESSION
     process.exitCode = 0
   })
 
@@ -62,6 +66,7 @@ describe('orchestration gate commands carry caller identity', () => {
     errorSpy.mockRestore()
     restoreEnv('ORCA_TERMINAL_HANDLE', originalTerminalHandle)
     restoreEnv('ORCA_PANE_KEY', originalPaneKey)
+    restoreEnv('ORCA_STRUCTURED_SESSION', originalStructuredSession)
     process.exitCode = 0
   })
 
@@ -72,7 +77,7 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
-      okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
       okFixture('req_gate', { gate: { id: 'gate_1', task_id: 'task_1', status: 'pending' } })
     )
 
@@ -91,8 +96,8 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
     process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
     callMock.mockImplementation(async (method: string) => {
-      if (method === 'terminal.show') {
-        throw new RuntimeClientError('terminal_handle_stale', 'stale')
+      if (method === 'terminal.resolveIdentity') {
+        return okFixture('req_identity', { identity: { handle: 'term_stale', live: false } })
       }
       if (method === 'terminal.resolvePane') {
         return okFixture('req_pane', { terminal: { handle: 'term_live' } })
@@ -146,7 +151,7 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
-      okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
       okFixture('req_list', { gates: [], count: 0 })
     )
 
@@ -192,7 +197,62 @@ describe('orchestration gate commands carry caller identity', () => {
 
     expect(process.exitCode).toBe(1)
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(stderr).toContain('Pass --from <terminal-handle>')
+    expect(stderr).toContain("Pass --from with your own terminal's handle")
     expect(callMock).not.toHaveBeenCalledWith('orchestration.gateCreate', expect.anything())
+  })
+
+  it('reports idempotent recovery when a mutation connection drops', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    callMock
+      .mockResolvedValueOnce(
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } })
+      )
+      .mockRejectedValueOnce(
+        new RuntimeClientError(
+          'runtime_unavailable',
+          'The Orca runtime closed the connection before responding. Restart Orca and try again. Orchestration mutation request ID: mutation_1.',
+          {
+            orchestrationRequestId: 'mutation_1',
+            originalCommand: [
+              'orca',
+              'orchestration',
+              'gate-create',
+              '--task',
+              'task_1',
+              '--question',
+              'ship?',
+              '--json'
+            ],
+            failedStage: 'dispatch_input',
+            residualResources: [
+              { kind: 'worktree', id: 'repo::child' },
+              { kind: 'terminal', id: 'term_worker' }
+            ]
+          }
+        )
+      )
+
+    await main(
+      ['orchestration', 'gate-create', '--task', 'task_1', '--question', 'ship?', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    const output = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as {
+      error: { message: string; data: Record<string, unknown> }
+    }
+    expect(output.error.message).toContain('--retry-request mutation_1')
+    expect(output.error.message).toContain('may already have taken effect')
+    expect(output.error.message).toContain('Failed stage: dispatch_input')
+    expect(output.error.message).toMatch(/Residual resources:.*repo::child.*term_worker/)
+    expect(output.error.message).not.toMatch(/restart Orca/i)
+    expect(output.error.data).toMatchObject({
+      orchestrationRequestId: 'mutation_1',
+      failedStage: 'dispatch_input',
+      residualResources: expect.arrayContaining([
+        expect.objectContaining({ kind: 'worktree', id: 'repo::child' }),
+        expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
+      ])
+    })
   })
 })

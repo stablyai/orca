@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../shared/types'
+import type { GlobalSettings } from '../shared/global-settings-types'
 
 /**
  * Why: with the side-effect kill switch off, renderer byte parsers are the

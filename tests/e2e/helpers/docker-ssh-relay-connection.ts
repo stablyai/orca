@@ -1,4 +1,5 @@
-import type { Page } from '@stablyai/playwright-test'
+import { connectSshTestTarget } from './ssh-test-target-connection'
+import { expect, type Page } from '@stablyai/playwright-test'
 
 import {
   DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
@@ -16,6 +17,13 @@ type DockerSshRelayConnectionOptions = {
   relayGracePeriodSeconds?: number
   remotePath?: string
   viaProxyJump?: boolean
+  /**
+   * Seed a terminal tab when the worktree has none. Default true.
+   *
+   * Why it is optional: a spec asking whether the PRODUCT adds a tab cannot tell this helper's
+   * tab from the one under test, so it must be able to leave the worktree empty.
+   */
+  seedInitialTab?: boolean
 }
 
 export async function connectDockerSshRelayTarget(
@@ -23,152 +31,26 @@ export async function connectDockerSshRelayTarget(
   target: DockerSshRelayTarget,
   options: DockerSshRelayConnectionOptions = {}
 ): Promise<ConnectedDockerSshRelayTarget> {
-  return page.evaluate(
-    async ({ target, remotePath, relayGracePeriodSeconds, viaProxyJump }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
-      })
-      try {
-        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-          target: {
-            label: `${viaProxyJump ? 'Docker SSH ProxyJump' : 'Docker SSH Relay'} E2E ${Date.now()}`,
-            ...(viaProxyJump ? { configHost: 'orca-e2e-destination' } : {}),
-            host: target.host,
-            port: viaProxyJump ? 22 : target.port,
-            username: 'root',
-            identityFile: target.identityFile,
-            identitiesOnly: true,
-            ...(viaProxyJump ? { jumpHost: 'orca-e2e-jump' } : {}),
-            relayGracePeriodSeconds
-          }
-        })
-        store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
-        if (!state || state.status !== 'connected') {
-          throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
-        }
-        if (
-          !state.providerEpoch ||
-          !Number.isSafeInteger(state.connectionGeneration) ||
-          state.connectionGeneration === undefined ||
-          state.connectionGeneration < 0
-        ) {
-          throw new Error(`SSH target returned incomplete authority: ${JSON.stringify(state)}`)
-        }
-        store.getState().setSshConnectionState(createdTarget.id, state)
-        const labels = new Map(store.getState().sshTargetLabels)
-        labels.set(createdTarget.id, createdTarget.label)
-        store.getState().setSshTargetLabels(labels)
-        const executionHostId = `ssh:${encodeURIComponent(createdTarget.id)}` as const
-        const authority = {
-          targetId: createdTarget.id,
-          providerEpoch: state.providerEpoch,
-          connectionGeneration: state.connectionGeneration
-        }
-
-        const result = await window.api.repos.addRemote({
-          connectionId: createdTarget.id,
-          remotePath,
-          displayName: viaProxyJump ? 'Docker SSH ProxyJump E2E' : 'Docker SSH Relay E2E'
-        })
-        if ('error' in result) {
-          throw new Error(result.error)
-        }
-        const hasExpectedRepoOwner = (): boolean =>
-          store
-            .getState()
-            .repos.some(
-              (repo) =>
-                repo.id === result.repo.id &&
-                repo.connectionId === createdTarget.id &&
-                repo.executionHostId === executionHostId
-            )
-        const waitForRepoOwner = async (): Promise<void> => {
-          if (hasExpectedRepoOwner()) {
-            return
-          }
-          await new Promise<void>((resolve, reject) => {
-            const timer = window.setTimeout(() => {
-              unsubscribe()
-              reject(new Error(`Remote repo owner did not hydrate for ${result.repo.path}`))
-            }, 15_000)
-            const unsubscribe = store.subscribe((next) => {
-              if (
-                !next.repos.some(
-                  (repo) =>
-                    repo.id === result.repo.id &&
-                    repo.connectionId === createdTarget.id &&
-                    repo.executionHostId === executionHostId
-                )
-              ) {
-                return
-              }
-              window.clearTimeout(timer)
-              unsubscribe()
-              resolve()
-            })
-          })
-        }
-        await store.getState().fetchRepos()
-        await waitForRepoOwner()
-        const currentState = store.getState().sshConnectionStates.get(createdTarget.id)
-        if (
-          currentState?.providerEpoch !== authority.providerEpoch ||
-          currentState.connectionGeneration !== authority.connectionGeneration
-        ) {
-          throw new Error(`SSH authority rotated before worktree hydration for ${result.repo.path}`)
-        }
-        const worktreeResult = await store.getState().fetchWorktrees(result.repo.id, {
-          executionHostId,
-          directSshAuthority: authority,
-          requireAuthoritative: true
-        })
-        if (
-          worktreeResult.status !== 'complete' ||
-          worktreeResult.repoId !== result.repo.id ||
-          worktreeResult.authority.kind !== 'direct-ssh' ||
-          worktreeResult.authority.executionHostId !== executionHostId ||
-          worktreeResult.authority.targetId !== authority.targetId ||
-          worktreeResult.authority.providerEpoch !== authority.providerEpoch ||
-          worktreeResult.authority.connectionGeneration !== authority.connectionGeneration
-        ) {
-          throw new Error(
-            `Remote worktree hydration was not authoritative: ${JSON.stringify(worktreeResult)}`
-          )
-        }
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? []).find(
-          (candidate) => candidate.hostId === executionHostId
-        )
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return {
-          targetId: createdTarget.id,
-          repoId: result.repo.id,
-          worktreeId: worktree.id
-        }
-      } finally {
-        credentialUnsub()
-      }
+  const viaProxyJump = options.viaProxyJump ?? false
+  return connectSshTestTarget(
+    page,
+    {
+      label: `${viaProxyJump ? 'Docker SSH ProxyJump' : 'Docker SSH Relay'} E2E ${Date.now()}`,
+      ...(viaProxyJump ? { configHost: 'orca-e2e-destination' } : {}),
+      host: target.host,
+      port: viaProxyJump ? 22 : target.port,
+      username: 'root',
+      identityFile: target.identityFile,
+      identitiesOnly: true,
+      ...(viaProxyJump ? { jumpHost: 'orca-e2e-jump' } : {}),
+      relayGracePeriodSeconds: options.relayGracePeriodSeconds ?? 1
     },
     {
-      target,
       remotePath:
         options.remotePath ??
-        (options.viaProxyJump
-          ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH
-          : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
-      viaProxyJump: options.viaProxyJump ?? false,
-      relayGracePeriodSeconds: options.relayGracePeriodSeconds ?? 1
+        (viaProxyJump ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
+      displayName: viaProxyJump ? 'Docker SSH ProxyJump E2E' : 'Docker SSH Relay E2E',
+      seedInitialTab: options.seedInitialTab
     }
   )
 }
@@ -218,4 +100,34 @@ export async function reconnectDisconnectedDockerSshRelayTarget(
   targetId: string
 ): Promise<void> {
   return performDockerSshRelayReconnect(page, targetId, false)
+}
+
+export async function recoverDockerSshRelayAfterFault(
+  page: Page,
+  targetId: string,
+  injectFault: () => void | Promise<void>
+): Promise<void> {
+  const readAuthority = () =>
+    page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
+  const before = await readAuthority()
+  expect(before).toMatchObject({
+    status: 'connected',
+    providerEpoch: expect.any(String),
+    connectionGeneration: expect.any(Number)
+  })
+  await injectFault()
+  // The pre-fault connected publication can remain visible until the next IPC event.
+  await expect
+    .poll(
+      async () => {
+        const after = await readAuthority()
+        return (
+          after?.status === 'connected' &&
+          (after.providerEpoch !== before?.providerEpoch ||
+            after.connectionGeneration !== before?.connectionGeneration)
+        )
+      },
+      { timeout: 120_000, message: 'SSH authority did not recover after the injected fault' }
+    )
+    .toBe(true)
 }

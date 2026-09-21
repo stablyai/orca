@@ -1,4 +1,4 @@
-import type { GitHubProjectSummary } from '../../../../shared/github-project-types'
+import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
 
 export const PROJECT_PICKER_BROWSE_CACHE_TTL_MS = 5 * 60_000
 export const PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES = 32

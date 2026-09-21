@@ -56,6 +56,29 @@ describe('runtime RPC call queue', () => {
     await expect(second).resolves.toBe('second')
   })
 
+  it('removes an aborted call before it starts', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+    })
+    const controller = new AbortController()
+    const run = vi.fn(async () => 'cancelled')
+    const cancelled = queue.enqueue('runtime-a', 'status.get', run, 1, controller.signal)
+
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(run).not.toHaveBeenCalled()
+
+    releaseFirst()
+    await expect(first).resolves.toBeUndefined()
+    await expect(
+      queue.enqueue('runtime-a', 'status.get', async () => 'recovered', 1)
+    ).resolves.toBe('recovered')
+  })
+
   it('preserves queued background ordering across large bursts', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const started: number[] = []

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcFailure } from './types'
+import type { RpcFailure, RpcSuccess } from './types'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 
 function rpcFailure(id: string): RpcFailure {
@@ -148,5 +148,50 @@ describe('MobileRelayRpcStreams failure parity', () => {
     expect(() => streams.handleResponse(rpcFailure('stream-1'))).toThrow('listener failed')
     expect(streams.handleResponse(rpcFailure('stream-1'))).toBe(false)
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+function readyReply(id: string): RpcSuccess {
+  return {
+    id,
+    ok: true,
+    streaming: true,
+    result: { type: 'ready', subscriptionId: 'sub-1' },
+    _meta: { runtimeId: 'runtime-1' }
+  }
+}
+
+describe('MobileRelayRpcStreams cancel fencing', () => {
+  function subscribed() {
+    const listener = vi.fn()
+    const streams = new MobileRelayRpcStreams({
+      nextId: () => 'stream-1',
+      sendFrame: vi.fn(() => true),
+      waitForConnected: async () => {}
+    })
+    const cancel = streams.subscribe(
+      'notifications.subscribe',
+      { includeDesktopSuppressed: true },
+      listener
+    )
+    return { listener, streams, cancel }
+  }
+
+  it('delivers a ready reply to a live subscription', async () => {
+    const { listener, streams } = subscribed()
+    await Promise.resolve()
+
+    expect(streams.handleResponse(readyReply('stream-1'))).toBe(true)
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'ready', subscriptionId: 'sub-1' })
+  })
+
+  it('drops a ready reply that lands after the caller cancelled', async () => {
+    const { listener, streams, cancel } = subscribed()
+    await Promise.resolve()
+
+    cancel()
+
+    expect(streams.handleResponse(readyReply('stream-1'))).toBe(false)
+    expect(listener).not.toHaveBeenCalled()
   })
 })

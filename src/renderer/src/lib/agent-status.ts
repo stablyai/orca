@@ -1,4 +1,6 @@
-import type { TerminalTab, TuiAgent, Worktree } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
@@ -102,6 +104,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   codex: true,
   autohand: true,
   opencode: true,
+  opencode2: true,
   'mimo-code': true,
   pi: true,
   omp: true,
@@ -139,9 +142,7 @@ export function agentTypeToIconAgent(agentType: AgentType | null | undefined): T
   if (!agentType || agentType === 'unknown') {
     return null
   }
-  return Object.prototype.hasOwnProperty.call(ICONABLE_AGENT_TYPES, agentType)
-    ? (agentType as TuiAgent)
-    : null
+  return Object.hasOwn(ICONABLE_AGENT_TYPES, agentType) ? (agentType as TuiAgent) : null
 }
 
 // Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.

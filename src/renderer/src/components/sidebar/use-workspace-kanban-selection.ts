@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   areWorktreeSelectionsEqual,
   getWorktreeSelectionIntent,
@@ -30,17 +31,20 @@ export function useWorkspaceKanbanSelection(
   renderedWorktrees: readonly Worktree[] = boardWorktrees
 ) {
   const boardWorktreeIds = useMemo(
-    () => boardWorktrees.map((worktree) => worktree.id),
+    () => boardWorktrees.map(getWorktreeHostIdentity),
     [boardWorktrees]
   )
   const renderedWorktreeIds = useMemo(
-    () => renderedWorktrees.map((worktree) => worktree.id),
+    () => renderedWorktrees.map(getWorktreeHostIdentity),
     [renderedWorktrees]
   )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
   const selectedWorktrees = useMemo(
-    () => boardWorktrees.filter((worktree) => selectedWorktreeIds.has(worktree.id)),
+    () =>
+      boardWorktrees.filter((worktree) =>
+        selectedWorktreeIds.has(getWorktreeHostIdentity(worktree))
+      ),
     [boardWorktrees, selectedWorktreeIds]
   )
 
@@ -94,11 +98,12 @@ export function useWorkspaceKanbanSelection(
 
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
-      if (selectedWorktreeIds.has(worktree.id) && selectedWorktreeIds.size > 1) {
+      const worktreeIdentity = getWorktreeHostIdentity(worktree)
+      if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees
       }
-      setSelectedWorktreeIds(new Set([worktree.id]))
-      setSelectionAnchorId(worktree.id)
+      setSelectedWorktreeIds(new Set([worktreeIdentity]))
+      setSelectionAnchorId(worktreeIdentity)
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]

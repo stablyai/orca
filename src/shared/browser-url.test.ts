@@ -222,6 +222,21 @@ describe('browser-url helpers', () => {
     expect(buildSearchUrl('hello world', 'kagi')).toBe('https://kagi.com/search?q=hello%20world')
   })
 
+  it('encodes Unicode, reserved characters, and emoji for every search engine', () => {
+    const query = 'snow 雪 &?# 😀'
+    const encoded = 'snow%20%E9%9B%AA%20%26%3F%23%20%F0%9F%98%80'
+    for (const engine of ['google', 'duckduckgo', 'bing', 'kagi'] as const) {
+      expect(buildSearchUrl(query, engine)).toContain(encoded)
+    }
+  })
+
+  it('replaces unmatched surrogates without changing valid pairs', () => {
+    expect(buildSearchUrl('\ud800a\udc00😀', 'google')).toBe(
+      'https://www.google.com/search?q=%EF%BF%BDa%EF%BF%BD%F0%9F%98%80'
+    )
+    expect(buildSearchUrl('\ud800', 'google')).toBe('https://www.google.com/search?q=%EF%BF%BD')
+  })
+
   it('uses a Kagi private session link when configured', () => {
     const sessionLink = 'https://kagi.com/search?token=secret&q=%s#ignored'
     expect(normalizeKagiSessionLink(sessionLink)).toBe('https://kagi.com/search?token=secret')

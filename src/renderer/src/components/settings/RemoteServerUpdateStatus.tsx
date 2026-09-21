@@ -96,7 +96,7 @@ export function getRemoteServerManualUpdateHelp(entry: RemoteServerUpdateEntry):
   if (entry.support?.reason === 'manual-service-update-required') {
     return translate(
       'auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp',
-      'Update Orca through the service manager that starts this server.'
+      'Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.'
     )
   }
   if (entry.support?.reason === 'unpackaged-build') {

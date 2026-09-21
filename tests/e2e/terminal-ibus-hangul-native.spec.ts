@@ -21,6 +21,7 @@ import {
   startTerminalImeByteReader,
   waitForTerminalImeBytes
 } from './terminal-ime-byte-reader'
+import { appendImeEngagementReceipt } from './terminal-ime-engagement-receipt'
 
 const DEFAULT_REPETITIONS = 30
 const MAX_REPETITIONS = 30
@@ -141,6 +142,9 @@ async function runNativeIbusScenario(
     expect(receivedBytes).toEqual(Array.from({ length: repetitions }, () => expectedBytes))
 
     expect(trace.onData.join('')).toBe(`${expectedText}\r`.repeat(repetitions))
+    // Why after the assertions: the receipt is the runner's proof this test ran against a live
+    // engine, so it must not exist for a run that reached here with the bytes wrong.
+    appendImeEngagementReceipt(testInfo.title, trace)
     completed = true
   } finally {
     await attachTerminalImeBoundaryEvidence(page, testInfo, 'native-ibus-boundaries', {

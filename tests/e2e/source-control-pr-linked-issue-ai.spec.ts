@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/source-control-generation-app'
 import {
   createBranchCommit,
   openSourceControl,

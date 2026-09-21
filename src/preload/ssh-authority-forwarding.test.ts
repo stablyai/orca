@@ -5,7 +5,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
 } from '../shared/detected-worktree-provider-contract'
-import type { DetectedWorktreeListResult } from '../shared/types'
+import type { DetectedWorktreeListResult } from '../shared/worktree/types'
 
 function listDetectedVariableTypeProbe(api: PreloadApi, args: ListDetectedWorktreesArgs) {
   return api.worktrees.listDetected(args)
@@ -30,8 +30,6 @@ vi.mock('electron', () => ({
   },
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
-
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
 
 describe('native preload SSH authority forwarding', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')

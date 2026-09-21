@@ -19,14 +19,14 @@ export function resetRuntimeCatalogListingForTests(): void {
 
 type RuntimeStatusHydrationDependencies = {
   listEnvironments: () => Promise<PublicKnownRuntimeEnvironment[]>
-  getCurrentEnvironments: () => PublicKnownRuntimeEnvironment[]
-  publishEnvironments: (environments: PublicKnownRuntimeEnvironment[]) => void
+  getCurrentEnvironments: () => readonly PublicKnownRuntimeEnvironment[]
+  publishEnvironments: (environments: readonly PublicKnownRuntimeEnvironment[]) => void
   refreshEnvironmentStatus: (environmentId: string) => Promise<boolean>
   markCatalogSettled: () => void
 }
 
 function environmentRevisions(
-  environments: PublicKnownRuntimeEnvironment[]
+  environments: readonly PublicKnownRuntimeEnvironment[]
 ): ReadonlyMap<string, number> {
   return new Map(
     environments.map((environment) => [
@@ -37,7 +37,7 @@ function environmentRevisions(
 }
 
 function revisionsMatch(
-  environments: PublicKnownRuntimeEnvironment[],
+  environments: readonly PublicKnownRuntimeEnvironment[],
   expected: ReadonlyMap<string, number>
 ): boolean {
   const current = environmentRevisions(environments)

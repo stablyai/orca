@@ -1,0 +1,143 @@
+{
+  "operation": "settings.quick-commands",
+  "family": "settings.quick-commands",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "72517336e451e1e078135103073c1821e8af27c0702f6dc83b9a686fe7ff8c04",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "293828e985f4": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": []
+          }
+        }
+      }
+    },
+    "3a752c2955e2": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
+    "4864c34d28ba": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "settings_locked",
+            "message": "Settings are locked"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "6ab1d0c3a5d5": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "84f50b30247b": {
+      "commands": [],
+      "error": "Settings are locked",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "quick-commands-save-refused-rolls-back",
+    "checkpoints": [
+      {
+        "id": "rolled-back",
+        "observation": {
+          "sender": ["293828e985f4", "4864c34d28ba"],
+          "payloads": ["3a752c2955e2", "6ab1d0c3a5d5"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "84f50b30247b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

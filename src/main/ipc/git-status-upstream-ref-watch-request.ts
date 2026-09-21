@@ -6,7 +6,7 @@ import {
   getSshGitProviderGeneration,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
-import { resolveRegisteredWorktreePath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree

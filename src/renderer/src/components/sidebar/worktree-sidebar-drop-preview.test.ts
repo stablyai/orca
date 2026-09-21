@@ -174,6 +174,80 @@ describe('computeWorktreeSidebarDropPreview', () => {
 
     expect(new Set(dropIndexes).size).toBe(1)
   })
+
+  it('keeps a downward end drop stable when leading rows are virtualized', () => {
+    const groupIds = ['a', 'b', 'c', 'd', 'e', 'f']
+    const mountedRects = [
+      { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+      { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+      { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+    ]
+    const input = {
+      pointerY: 320,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: mountedRects,
+      groupIds,
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      grab: { offsetY: 25, height: 50 }
+    }
+
+    const first = computeWorktreeSidebarDropPreview(input)!
+    const held = computeWorktreeSidebarDropPreview({
+      ...input,
+      anchor: { beforeWorktreeId: first.dropAnchorId, pointerY: 320, scrollTop: 0 }
+    })!
+
+    for (const preview of [first, held]) {
+      expect(preview).toMatchObject({
+        dropIndex: 6,
+        dropIndicatorY: 277,
+        dropAnchorId: null
+      })
+      expect(Array.from(preview.previewOffsetsByWorktreeId)).toEqual([
+        ['d', -56],
+        ['e', -56],
+        ['f', -56]
+      ])
+    }
+  })
+
+  it('uses the full group index when the dragged row is outside the mounted window', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 193,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+        { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+      ],
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['e'],
+      draggingWorktreeId: 'e',
+      grab: { offsetY: 25, height: 50 }
+    })
+
+    expect(preview?.dropIndex).toBe(3)
+  })
+
+  it('preserves the virtual row gap when only one row remains mounted', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 305,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [{ worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }],
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      fallbackGap: 6,
+      grab: { offsetY: 25, height: 50 }
+    })
+
+    expect(preview).toMatchObject({ dropIndex: 6, dropIndicatorY: 277 })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['f', -56]])
+  })
 })
 
 describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {

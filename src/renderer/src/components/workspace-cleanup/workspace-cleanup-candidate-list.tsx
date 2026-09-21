@@ -1,6 +1,8 @@
 import React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+
+/** Any row shape the flat list renders — raw candidates or enriched facet rows. */
+type WorkspaceCleanupListRow = { worktreeId: string }
 
 // Why: below this count plain rows keep the pre-virtualization DOM (natural
 // flow, no absolute positioning), so the common few-worktrees case is
@@ -19,16 +21,23 @@ const WORKSPACE_CLEANUP_ROW_OVERSCAN = 8
  * no scroll-margin bookkeeping is needed. Lists shorter than
  * WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS render plainly.
  */
-export function WorkspaceCleanupCandidateList({
+export function WorkspaceCleanupCandidateList<Row extends WorkspaceCleanupListRow>({
   rows,
   renderRow,
+  getRowKey,
+  estimatedRowHeight = WORKSPACE_CLEANUP_ROW_ESTIMATE_PX,
   // Why: a state-held element, not a ref — the ScrollArea viewport is not
   // attached when this component first mounts, so a ref would leave the
   // virtualizer unobserved until some unrelated re-render.
   scrollElement
 }: {
-  rows: readonly WorkspaceCleanupCandidate[]
-  renderRow: (candidate: WorkspaceCleanupCandidate, index: number) => React.ReactNode
+  rows: readonly Row[]
+  renderRow: (row: Row, index: number) => React.ReactNode
+  // Why: required — the same worktreeId exists on two hosts, so a row key must
+  // be host-qualified by the caller that knows the host. Omitting it is a
+  // compile error rather than a silent fall back to the colliding bare id.
+  getRowKey: (row: Row) => string
+  estimatedRowHeight?: number
   scrollElement: HTMLDivElement | null
 }): React.JSX.Element {
   const virtualize = rows.length >= WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS
@@ -37,11 +46,14 @@ export function WorkspaceCleanupCandidateList({
     count: rows.length,
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
-    estimateSize: () => WORKSPACE_CLEANUP_ROW_ESTIMATE_PX,
+    estimateSize: () => estimatedRowHeight,
     overscan: WORKSPACE_CLEANUP_ROW_OVERSCAN,
     // Why: stable worktree keys let the virtualizer carry row identity across
     // scan refreshes instead of remounting the window on every streamed row.
-    getItemKey: (index) => rows[index]?.worktreeId ?? index
+    getItemKey: (index) => {
+      const row = rows[index]
+      return row === undefined ? index : getRowKey(row)
+    }
   })
 
   if (!virtualize) {

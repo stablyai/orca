@@ -42,9 +42,12 @@ function readFactoryDotEnvKey(): string | null {
         continue
       }
       const key = withoutExport.slice(0, separator).trim()
-      const value = withoutExport.slice(separator + 1)
-      if (key === 'FACTORY_API_KEY' && value.trim().length > 0) {
-        return unquoteDotEnvValue(value)
+      if (key !== 'FACTORY_API_KEY') {
+        continue
+      }
+      const value = unquoteDotEnvValue(withoutExport.slice(separator + 1)).trim()
+      if (value.length > 0) {
+        return value
       }
     }
   } catch {

@@ -10,7 +10,7 @@ const { gitSpawnMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../git/runner', () => ({
-  gitSpawn: gitSpawnMock
+  gitSpawnAfterWindowsEnvironmentReady: gitSpawnMock
 }))
 
 import { listFilesWithGit } from './filesystem-list-files-git-fallback'
@@ -56,11 +56,13 @@ describe('main Quick Open git directory expansion', () => {
     const primary = createMockProcess()
     const ignored = createMockProcess()
     gitSpawnMock
-      .mockReturnValueOnce(revParse)
-      .mockReturnValueOnce(primary)
-      .mockReturnValueOnce(ignored)
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockResolvedValueOnce(ignored)
 
-    const promise = listFilesWithGit(root, [], {})
+    const promise = listFilesWithGit(root, [], { wslDistro: 'Ubuntu' })
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
     revParse.emit('close', 0, null)
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     ;(primary.stdout as unknown as EventEmitter).emit(
@@ -76,6 +78,12 @@ describe('main Quick Open git directory expansion', () => {
       'scratch/notes.txt',
       'src/index.ts'
     ])
+    expect(gitSpawnMock.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ admissionTier: 'interactive', wslDistro: 'Ubuntu' })
+    )
+    expect(gitSpawnMock.mock.calls[2][1]).toEqual(
+      expect.objectContaining({ admissionTier: 'interactive', wslDistro: 'Ubuntu' })
+    )
     expect(gitSpawnMock.mock.calls[2][0]).toContain('--directory')
   })
 
@@ -86,12 +94,14 @@ describe('main Quick Open git directory expansion', () => {
     const primary = createMockProcess()
     const ignored = createMockProcess()
     gitSpawnMock
-      .mockReturnValueOnce(revParse)
-      .mockReturnValueOnce(primary)
-      .mockReturnValueOnce(ignored)
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockResolvedValueOnce(ignored)
 
     const controller = new AbortController()
     const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
     revParse.emit('close', 0, null)
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     controller.abort()
@@ -99,5 +109,93 @@ describe('main Quick Open git directory expansion', () => {
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
     expect(primary.kill).toHaveBeenCalled()
     expect(ignored.kill).toHaveBeenCalled()
+  })
+
+  it('kills a repository probe returned after cancellation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-probe-race-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    let resolveRevParse!: (child: ChildProcess) => void
+    gitSpawnMock.mockReturnValueOnce(
+      new Promise<ChildProcess>((resolve) => {
+        resolveRevParse = resolve
+      })
+    )
+
+    const controller = new AbortController()
+    const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
+    controller.abort()
+    resolveRevParse(revParse)
+
+    await expect(promise).rejects.toSatisfy(isFileListingCancellation)
+    expect(revParse.kill).toHaveBeenCalled()
+    expect(revParse.listenerCount('close')).toBe(0)
+  })
+
+  it('kills file scans returned after cancellation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-scan-race-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    let resolvePrimary!: (child: ChildProcess) => void
+    let resolveIgnored!: (child: ChildProcess) => void
+    gitSpawnMock
+      .mockResolvedValueOnce(revParse)
+      .mockReturnValueOnce(
+        new Promise<ChildProcess>((resolve) => {
+          resolvePrimary = resolve
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<ChildProcess>((resolve) => {
+          resolveIgnored = resolve
+        })
+      )
+
+    const controller = new AbortController()
+    const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
+    revParse.emit('close', 0, null)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
+    controller.abort()
+    resolvePrimary(primary)
+    resolveIgnored(ignored)
+
+    await expect(promise).rejects.toSatisfy(isFileListingCancellation)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).toHaveBeenCalled()
+  })
+
+  it('cancels a pending sibling spawn when the primary scan fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-sibling-failure-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    const primary = createMockProcess()
+    let pendingSignal: AbortSignal | undefined
+    gitSpawnMock
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockImplementationOnce(
+        (_args: string[], options: { signal?: AbortSignal }) =>
+          new Promise<ChildProcess>((_resolve, reject) => {
+            pendingSignal = options.signal
+            options.signal?.addEventListener(
+              'abort',
+              () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+              { once: true }
+            )
+          })
+      )
+
+    const promise = listFilesWithGit(root, [], {})
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
+    revParse.emit('close', 0, null)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
+    primary.emit('error', new Error('primary failed'))
+
+    await expect(promise).rejects.toThrow('primary failed')
+    expect(pendingSignal?.aborted).toBe(true)
   })
 })

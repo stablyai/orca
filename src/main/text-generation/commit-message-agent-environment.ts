@@ -4,7 +4,9 @@ import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
-  prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
+  prepareForCodexLaunch?: (
+    target?: CommitMessageAgentRuntimeTarget
+  ) => string | null | Promise<string | null>
   prepareForClaudeLaunch?: (
     target?: CommitMessageAgentRuntimeTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -100,7 +102,7 @@ export async function prepareLocalCommitMessageAgentEnv(
 
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch(target)
+      const codexHomePath = await resolvers.prepareForCodexLaunch(target)
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null

@@ -35,6 +35,13 @@ const specs: CommandSpec[] = [
     summary: 'Kill the emulator',
     usage: 'orca emulator kill',
     allowedFlags: []
+  },
+  {
+    path: ['terminal', 'stop'],
+    hidden: true,
+    summary: 'Deprecated terminal stop',
+    usage: 'orca terminal stop',
+    allowedFlags: []
   }
 ]
 
@@ -110,6 +117,10 @@ describe('suggestCommands', () => {
 
   it('still recovers non-destructive near-misses', () => {
     expect(suggestCommands(specs, ['worktree', 'lst'])).toContain('worktree list')
+  })
+
+  it('does not suggest hidden compatibility commands', () => {
+    expect(suggestCommands(specs, ['terminal', 'stp'])).not.toContain('terminal stop')
   })
 })
 

@@ -5,13 +5,23 @@ const browserViewModeByPageKey = new Map<string, MobileBrowserViewMode>()
 
 export function getInitialMobileBrowserViewMode(
   worktreeId: string,
-  browserPageId: string | null
+  browserPageId: string | null,
+  url = 'about:blank'
 ): MobileBrowserViewMode {
   const pageKey = makeBrowserViewModePageKey(worktreeId, browserPageId)
   if (!pageKey) {
+    return defaultMobileBrowserViewMode(url)
+  }
+  return browserViewModeByPageKey.get(pageKey) ?? defaultMobileBrowserViewMode(url)
+}
+
+function defaultMobileBrowserViewMode(url: string): MobileBrowserViewMode {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'file:' && /\.html?$/i.test(parsed.pathname) ? 'mobile' : 'web'
+  } catch {
     return 'web'
   }
-  return browserViewModeByPageKey.get(pageKey) ?? 'web'
 }
 
 export function saveMobileBrowserViewMode(

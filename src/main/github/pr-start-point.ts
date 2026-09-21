@@ -1,4 +1,6 @@
-import type { GitHubPrStartPoint, GitPushTarget, IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/worktree/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import {
   isMissingRemoteRefGitError,
@@ -20,7 +22,7 @@ type ResolveGitHubPrStartPointArgs = {
   isCrossRepository?: boolean
   issueSourcePreference?: IssueSourcePreference
   connectionId?: string | null
-  localGitOptions?: { wslDistro?: string }
+  localGitOptions?: { wslDistro?: string; ghAccount?: GhAccountBinding }
   gitExec: GitExec
   fetchRemoteTrackingRef: (remote: string, branch: string) => Promise<void>
   // Why: returns the durable local ref the fetch wrote so resolve can rev-parse

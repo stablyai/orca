@@ -1,0 +1,28 @@
+{
+  // NOT ENFORCED YET, and deliberately so: tests/ has never been typechecked, so this currently
+  // reports ~198 errors across ~94 files. Wiring it into `typecheck` or CI today would just paint
+  // the whole build red. It earns its place anyway — pointing it at the SSH reconnect spec found
+  // two real bugs a passing suite had hidden (a targetId read off the wrong type, and a required
+  // argument omitted), because that spec had never actually executed. Run `pnpm typecheck:e2e`,
+  // fix a file, repeat; when the count reaches zero, add it to the `typecheck` chain.
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  // Why: specs import renderer and main modules directly, so the ambient declarations those
+  // modules rely on (vite client types, build-time defines) have to be in the program too.
+  "include": [
+    "../tests/**/*.ts",
+    "../tests/**/*.tsx",
+    "../src/renderer/src/env.d.ts",
+    "../src/types/**/*"
+  ],
+  "exclude": ["../tests/e2e/.cross-version-checkouts/**"],
+  "compilerOptions": {
+    // Why: specs run browser code inside page.evaluate, so the DOM lib has to be visible here
+    // even though the harness itself is Node.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "paths": {
+      "@renderer/*": ["../src/renderer/src/*"],
+      "@/*": ["../src/renderer/src/*"]
+    }
+  }
+}

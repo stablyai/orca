@@ -79,6 +79,9 @@ export function shouldResubscribeAfterViewportMeasure(args: {
   return args.hostCols !== args.measured.cols || args.hostRows !== args.measured.rows
 }
 
+/** Reference-identity token for a resubscribe attempt; carries no data, only compared by `===`. */
+type RetryGenerationToken = Readonly<Record<string, never>>
+
 /** Per-handle resubscribe budget, mirroring the chat-side rearm bound: attempts
  *  refill only when the handle actually left terminal.list and came back. A
  *  still-listed non-converging handle re-funded on every list refresh would undo
@@ -87,7 +90,7 @@ export class TerminalViewportResubscribeBudget {
   private readonly attemptsByHandle = new Map<string, number>()
   private readonly absentSinceExhaustion = new Set<string>()
   private readonly announcedExhaustion = new Set<string>()
-  private readonly retryGenerationByHandle = new Map<string, object>()
+  private readonly retryGenerationByHandle = new Map<string, RetryGenerationToken>()
 
   attempts(handle: string): number {
     return this.attemptsByHandle.get(handle) ?? 0
@@ -97,17 +100,17 @@ export class TerminalViewportResubscribeBudget {
     this.attemptsByHandle.set(handle, this.attempts(handle) + 1)
   }
 
-  retryGeneration(handle: string): object {
+  retryGeneration(handle: string): RetryGenerationToken {
     const existing = this.retryGenerationByHandle.get(handle)
     if (existing) {
       return existing
     }
-    const generation = {}
+    const generation: RetryGenerationToken = {}
     this.retryGenerationByHandle.set(handle, generation)
     return generation
   }
 
-  isRetryGenerationCurrent(handle: string, generation: object): boolean {
+  isRetryGenerationCurrent(handle: string, generation: RetryGenerationToken): boolean {
     return this.retryGenerationByHandle.get(handle) === generation
   }
 

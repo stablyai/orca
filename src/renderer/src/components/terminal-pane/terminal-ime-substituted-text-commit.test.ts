@@ -195,10 +195,8 @@ describe('input-source text substitution reaches the terminal', () => {
   describe.each([
     ['none', 0],
     ['disambiguate', 1],
-    ['event types', 2],
     ['alternate keys', 4],
     ['disambiguate + alternate keys', 5],
-    ['disambiguate + event types + alternate keys', 7],
     // Bit 4 asks for associated text, which only decorates a report bit 3 would already have
     // produced — on its own it does not turn a printable key into one.
     ['associated text', 16]
@@ -208,40 +206,44 @@ describe('input-source text substitution reaches the terminal', () => {
     })
   })
 
+  // Bit 1 (`report_event_types`) is orthogonal to bit 3: the press stays raw substituted text,
+  // but the app asked to be told when the key came back up, and the forwarder owns that keyup.
+  describe.each([
+    ['event types', 2],
+    ['disambiguate + event types + alternate keys', 7]
+  ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
+    it('sends the substituted character raw followed by one CSI-u release', () => {
+      expect(type([COMMA], flags)).toBe('，\x1b[44;1:3u')
+    })
+  })
+
   // Bit 3 is `report_all_keys_as_escape_codes`: the app asked for every printable key as a CSI-u
   // report, so committing raw UTF-8 hands it a byte stream it declined. Re-encode the press that
   // produced the commit. This is not CJK-specific — it is every printable key in such a pane.
   describe.each([
     ['all keys as escape codes', 8],
-    ['all keys + disambiguate', 9],
-    ['all keys + disambiguate + event types + alternate keys', 15]
+    ['all keys + disambiguate', 9]
   ])('with kitty flags %s (%d) negotiated', (_name, flags) => {
     it('sends a CSI-u report for the physical key instead of the substituted character', () => {
-      // `,` is the physical Comma key; U+002C is 44. The committed `，` is deliberately absent —
-      // see terminal-ime-kitty-commit-encoding.ts on why bit 3 without an encoder change cannot
-      // carry it.
+      // `,` is the physical Comma key; U+002C is 44.
       expect(type([COMMA], flags)).toBe('\x1b[44u')
     })
   })
 
-  it('reports the physical key as the associated text under bit 3 + bit 4, not the substitution', () => {
-    // Pins the limit named in terminal-ime-kitty-commit-encoding.ts: bit 4 is where the committed
-    // glyph U+FF0C (65292) would ride, and 44 shows up in that slot instead. Closing that needs the
-    // encoder to take the text separately from the key, so it is not reachable by widening a gate.
-    expect(type([COMMA], 24)).toBe('\x1b[44;;44u')
+  it('pairs the CSI-u press with exactly one release when event types are also negotiated', () => {
+    expect(type([COMMA], 15)).toBe('\x1b[44u\x1b[44;1:3u')
+  })
+
+  it('reports committed text independently from the physical key', () => {
+    expect(type([COMMA], 24)).toBe('\x1b[44;;65292u')
   })
 
   it('encodes a shifted substitution as a CSI-u report with the shift modifier', () => {
-    // Shift is the one modifier the claim keeps eligible, so it has to survive the encoding.
-    // 63 is `?`, not 47 for the unshifted `/`: xterm's encoder only unwinds a shifted key to its
-    // base through `Digit*`/`Key*` codes, and this press carries `Slash`. Pinned as-is — that is
-    // the shared encoder's behaviour for shifted punctuation on every path, not something the
-    // commit path introduces.
-    expect(type([QUESTION], 8)).toBe('\x1b[63;2u')
+    expect(type([QUESTION], 8)).toBe('\x1b[47;2u')
   })
 
   it('encodes a multi-character substitution as one report, not one per character', () => {
     // One press produced `——`; bit 3 reports keys, and this was a single key.
-    expect(type([EM_DASH], 8)).toBe('\x1b[95;2u')
+    expect(type([EM_DASH], 8)).toBe('\x1b[45;2u')
   })
 })

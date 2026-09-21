@@ -6,7 +6,7 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
   type BrowserFocusRequestDetail
-} from '../components/browser-pane/browser-focus'
+} from '../components/browser-pane/host-guest/browser-focus'
 import {
   resolveModalReturnFocusAction,
   type ModalReturnFocusSurface

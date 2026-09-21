@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SkillBundleManifest } from '../../shared/skill-freshness'
@@ -50,7 +50,14 @@ describe('observed skill git tree identity', () => {
     await chmod(join(work, 'nested', 'deep', 'tool.sh'), 0o755)
     await writeFile(join(work, 'blob.bin'), Buffer.from([0, 1, 2, 253, 254, 255]))
 
-    const env = { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_SYSTEM: devNull }
+    const globalConfig = join(base, 'global.gitconfig')
+    const systemConfig = join(base, 'system.gitconfig')
+    await Promise.all([writeFile(globalConfig, ''), writeFile(systemConfig, '')])
+    const env = {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: globalConfig,
+      GIT_CONFIG_SYSTEM: systemConfig
+    }
     execFileSync('git', ['init', '--quiet', repoShell], { env })
     const gitDirArgs = ['--git-dir', join(repoShell, '.git'), '--work-tree', work]
     execFileSync('git', [...gitDirArgs, '-c', 'core.autocrlf=false', 'add', '-A'], {

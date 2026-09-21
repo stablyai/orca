@@ -1,8 +1,14 @@
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
   classifyWorktreeBaseChange,
   type WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
+import {
+  EMPTY_HEAD_IDENTITY_SCOPE,
+  FULL_HEAD_IDENTITY_SCOPE,
+  mergeHeadIdentityScopes,
+  type WorktreeHeadIdentityScope
+} from './worktree-head-identity-scope'
 
 type WorktreeBaseWatcherEvent = {
   type: 'create' | 'update' | 'delete'
@@ -14,6 +20,7 @@ export type WorktreeBaseCollectedChanges = {
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
   headIdentityRepoIds: string[]
+  headIdentityScope: WorktreeHeadIdentityScope
 }
 
 export function hasCollectedWorktreeBaseChanges(changes: WorktreeBaseCollectedChanges): boolean {
@@ -26,22 +33,28 @@ type ChangeBuckets = {
   structureRepoIds: Set<string>
   gitStatusRepoIds: Set<string>
   headIdentityRepoIds: Set<string>
+  headIdentityScope: WorktreeHeadIdentityScope
 }
 
 function emptyBuckets(): ChangeBuckets {
   return {
     structureRepoIds: new Set<string>(),
     gitStatusRepoIds: new Set<string>(),
-    headIdentityRepoIds: new Set<string>()
+    headIdentityRepoIds: new Set<string>(),
+    headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
   }
 }
 
-function emptyChanges(): WorktreeBaseCollectedChanges {
+// Why: overflow means every event in the window was lost, so the scope must be
+// stated as FULL here rather than left to a downstream `?? FULL` on an absent
+// field — a caller that forwards this object must not read it as "nothing moved".
+function overflowChanges(): WorktreeBaseCollectedChanges {
   return {
-    overflow: false,
+    overflow: true,
     structureRepoIds: [],
     gitStatusRepoIds: [],
-    headIdentityRepoIds: []
+    headIdentityRepoIds: [],
+    headIdentityScope: FULL_HEAD_IDENTITY_SCOPE
   }
 }
 
@@ -60,6 +73,10 @@ function addMatchingChange(
   for (const repoId of change.headIdentityRepoIds) {
     buckets.headIdentityRepoIds.add(repoId)
   }
+  buckets.headIdentityScope = mergeHeadIdentityScopes(
+    buckets.headIdentityScope,
+    change.headIdentityScope
+  )
 }
 
 function toCollectedChanges(buckets: ChangeBuckets): WorktreeBaseCollectedChanges {
@@ -67,7 +84,8 @@ function toCollectedChanges(buckets: ChangeBuckets): WorktreeBaseCollectedChange
     overflow: false,
     structureRepoIds: [...buckets.structureRepoIds],
     gitStatusRepoIds: [...buckets.gitStatusRepoIds],
-    headIdentityRepoIds: [...buckets.headIdentityRepoIds]
+    headIdentityRepoIds: [...buckets.headIdentityRepoIds],
+    headIdentityScope: buckets.headIdentityScope
   }
 }
 
@@ -89,7 +107,7 @@ export function collectRemoteWorktreeBaseChanges(
   const buckets = emptyBuckets()
   for (const event of events) {
     if (event.kind === 'overflow') {
-      return { ...emptyChanges(), overflow: true }
+      return overflowChanges()
     }
     if (event.kind === 'rename') {
       if (event.oldAbsolutePath) {

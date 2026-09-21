@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from 'vitest'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
@@ -11,25 +14,41 @@ describe('isWorktreeLineageDropZoneHit', () => {
   it('keeps the top and bottom of a card available for reorder drops', () => {
     const rect = { top: 100, bottom: 200 } as DOMRect
 
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 120, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 107, rect })).toBe(false)
     expect(isWorktreeLineageDropZoneHit({ pointerY: 150, rect })).toBe(true)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 180, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 193, rect })).toBe(false)
   })
 
-  it('caps the parent-drop band on tall cards', () => {
+  it('makes most of tall cards available for nesting', () => {
     const rect = { top: 0, bottom: 180 } as DOMRect
 
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 67, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 8, rect })).toBe(true)
     expect(isWorktreeLineageDropZoneHit({ pointerY: 90, rect })).toBe(true)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 113, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 172, rect })).toBe(true)
+  })
+
+  it('scales down reorder gutters for compact cards', () => {
+    const rect = { top: 100, bottom: 120 }
+
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 103, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 104, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 116, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 117, rect })).toBe(false)
+  })
+
+  it.each([
+    { top: 100, bottom: 100 },
+    { top: 100, bottom: 90 }
+  ])('rejects empty and inverted rectangles', (rect) => {
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 100, rect })).toBe(false)
   })
 })
 
 describe('getWorktreeLineageDropTargetId', () => {
-  it('returns the row id only when the pointer is in the card content middle band', () => {
+  it('returns the row id only when the pointer is away from the reorder gutters', () => {
     const { container, target } = makeTarget({ worktreeId: 'parent', top: 100, bottom: 200 })
 
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBeNull()
+    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 107 })).toBeNull()
     expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
   })
 
@@ -42,6 +61,76 @@ describe('getWorktreeLineageDropTargetId', () => {
     })
 
     expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBeNull()
+  })
+
+  it.each(['status', 'agent'] as const)(
+    'keeps the %s region in the lineage nesting hit zone',
+    (targetRole) => {
+      const { container, target } = makeTarget({
+        worktreeId: 'parent',
+        top: 100,
+        bottom: 200,
+        targetRole
+      })
+
+      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
+    }
+  )
+
+  it('accepts horizontal card padding outside the content element', () => {
+    const { container } = makeTarget({ worktreeId: 'parent', top: 100, bottom: 200 })
+    const row = container.firstElementChild!
+    const padding = document.createElement('div')
+    row.append(padding)
+
+    expect(getWorktreeLineageDropTargetId({ container, target: padding, pointerY: 120 })).toBe(
+      'parent'
+    )
+    expect(getWorktreeLineageDropTargetId({ container, target: row, pointerY: 180 })).toBe('parent')
+    expect(getWorktreeLineageDropTargetId({ container, target: padding, pointerY: 201 })).toBeNull()
+  })
+
+  it.each([true, false])(
+    'keeps descendants out of the ancestor hit zone (inline content: %s)',
+    (insideParentContent) => {
+      const { container, target } = makeTarget({
+        worktreeId: 'parent',
+        top: 100,
+        bottom: insideParentContent ? 300 : 200
+      })
+      const child = makeTarget({ worktreeId: 'child', top: 220, bottom: 300 })
+      const parentContent = target.closest('[data-worktree-card-parent-content]')!
+      const children = document.createElement('div')
+      children.append(child.container.firstElementChild!)
+      const childrenHost = insideParentContent ? parentContent : container.firstElementChild!
+      childrenHost.append(children)
+      const childRow = children.firstElementChild as HTMLElement
+      childRow.getBoundingClientRect = () => ({ top: 220, bottom: 300 }) as DOMRect
+
+      expect(
+        getWorktreeLineageDropTargetId({ container, target: child.target, pointerY: 250 })
+      ).toBe('child')
+      expect(getWorktreeLineageDropTargetId({ container, target: childRow, pointerY: 250 })).toBe(
+        'child'
+      )
+      expect(
+        getWorktreeLineageDropTargetId({ container, target: children, pointerY: 250 })
+      ).toBeNull()
+      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBe('parent')
+    }
+  )
+
+  it('does not use a descendant content element for a row without its own content', () => {
+    const { container, target } = makeTarget({ worktreeId: 'child', top: 100, bottom: 200 })
+    const parentRow = document.createElement('div')
+    parentRow.setAttribute('data-worktree-drag-id', 'parent')
+    parentRow.append(container.firstElementChild!)
+    container.append(parentRow)
+
+    expect(
+      getWorktreeLineageDropTargetId({ container, target: parentRow, pointerY: 150 })
+    ).toBeNull()
+    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('child')
   })
 })
 
@@ -167,24 +256,30 @@ function makeTarget(args: {
   top: number
   bottom: number
   contained?: boolean
+  targetRole?: 'identity' | 'status' | 'agent'
 }): {
   container: HTMLElement
   target: Element
 } {
-  const row = {
-    getAttribute: (name: string) => (name === 'data-worktree-drag-id' ? args.worktreeId : null)
-  } as HTMLElement
-  const content = {
-    getBoundingClientRect: () => ({ top: args.top, bottom: args.bottom }),
-    closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? row : null)
-  } as HTMLElement
-  const target = {
-    closest: (selector: string) =>
-      selector === '[data-worktree-card-hover-trigger]' ? content : null
-  } as Element
+  const container = document.createElement('div')
+  const row = document.createElement('div')
+  row.setAttribute('data-worktree-drag-id', args.worktreeId)
+  const content = document.createElement('div')
+  content.setAttribute('data-worktree-card-parent-content', '')
+  content.getBoundingClientRect = () => ({ top: args.top, bottom: args.bottom }) as DOMRect
+  const status = document.createElement('div')
+  const identity = document.createElement('div')
+  identity.setAttribute('data-worktree-card-hover-trigger', '')
+  const agent = document.createElement('div')
+  content.append(status, identity, agent)
+  row.append(content)
+  container.append(row)
+
+  const targetByRole = { status, identity, agent }
+  const target = targetByRole[args.targetRole ?? 'identity']
   const contained = args.contained ?? true
-  const container = {
-    contains: (element: Element) => contained && (element === content || element === row)
-  } as HTMLElement
+  if (!contained) {
+    container.removeChild(row)
+  }
   return { container, target }
 }

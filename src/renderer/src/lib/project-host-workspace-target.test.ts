@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget

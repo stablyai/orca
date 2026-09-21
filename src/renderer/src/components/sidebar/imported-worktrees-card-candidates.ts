@@ -1,11 +1,18 @@
-import type { DetectedWorktreeListResult, Repo, Worktree } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  WorktreeVisibilityDefaults
+} from '../../../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getHiddenExternalWorktrees } from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree-ownership'
-import type { ImportedWorktreesCardCandidate } from './worktree-list-groups'
+} from '../../../../shared/worktree/ownership'
+import type { ImportedWorktreesCardCandidate } from './worktree-list/grouping/row-types'
 
 export function getHiddenImportedWorktrees(
   detected: DetectedWorktreeListResult | undefined
@@ -19,6 +26,8 @@ export function buildImportedWorktreesCardCandidates(args: {
   detectedWorktreesByRepo: Readonly<Record<string, DetectedWorktreeListResult | undefined>>
   filterRepoIds?: readonly string[]
   forceVisibleRepoIds?: ReadonlySet<string>
+  settings?: Pick<GlobalSettings, 'worktreeVisibilityDefaults'> | null
+  visibilityDefaultsByHost?: Partial<Record<ExecutionHostId, WorktreeVisibilityDefaults | null>>
 }): Map<string, ImportedWorktreesCardCandidate> {
   const visibleRepoIds = args.visibleWorktrees
     ? new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
@@ -40,7 +49,12 @@ export function buildImportedWorktreesCardCandidates(args: {
     }
     const visibility = effectiveExternalWorktreeVisibility(
       repo,
-      isLegacyRepoForExternalWorktreeVisibility(repo)
+      isLegacyRepoForExternalWorktreeVisibility(repo),
+      getRepoOwnerWorktreeVisibilityDefaults(
+        repo,
+        args.settings,
+        args.visibilityDefaultsByHost ?? {}
+      )
     )
     if (visibility !== 'hide' && !args.forceVisibleRepoIds?.has(repo.id)) {
       continue

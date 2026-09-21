@@ -133,6 +133,13 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /**
+   * True when a MiniMax API key is persisted on disk. The key value itself
+   * never leaves main, so the renderer only sees this boolean. The status bar
+   * ORs it with the cookie flag to decide whether to keep the MiniMax bar
+   * visible across reloads.
+   */
+  minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
   /** True when a Factory API key is resolvable (Orca store, FACTORY_API_KEY, or ~/.factory/.env). */

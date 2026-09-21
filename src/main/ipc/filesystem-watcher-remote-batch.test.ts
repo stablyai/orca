@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 
 const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
   () => ({
@@ -23,7 +23,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type WatchCallback = (events: FsChangeEvent[]) => void
 
 const WORKTREE_PATH = '/home/me/repo'
@@ -107,13 +107,10 @@ describe('remote filesystem watcher batching', () => {
     await handlers['fs:watchWorktree']({ sender }, WATCH_ARGS)
 
     watchCallbacks[0](
-      Array.from(
-        { length: 6_000 },
-        (_unused, index): FsChangeEvent => ({
-          kind: 'update',
-          absolutePath: `${WORKTREE_PATH}/file-${index}.ts`
-        })
-      )
+      Array.from({ length: 6_000 }, (_unused, index): FsChangeEvent => ({
+        kind: 'update',
+        absolutePath: `${WORKTREE_PATH}/file-${index}.ts`
+      }))
     )
     await vi.advanceTimersByTimeAsync(150)
 

@@ -3,8 +3,8 @@
  *
  * SessionIds are minted fresh per pane and never reused, so a `TerminalHost`
  * that never removes exited sessions from its `sessions` map leaks one dead
- * `Session` — each pinning a `@xterm/headless` emulator with ~5000 rows of
- * scrollback — per terminal for the lifetime of the long-lived daemon process.
+ * `Session` and its `@xterm/headless` scrollback grid per terminal for the
+ * lifetime of the long-lived daemon process.
  *
  * The fix wires a Session `onExit` hook to `TerminalHost.reapSession`, which
  * disposes the emulator and drops the entry from the map. These tests assert the
@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
@@ -33,6 +33,7 @@ function createMockSubprocess(): SubprocessHandle & {
     kill: vi.fn(() => {
       setTimeout(() => onExitCb?.(0), 5)
     }),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {
@@ -129,13 +130,21 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     })
     lastSubprocess.forceKill = vi.fn()
 
+    let releaseSweep = (): void => {}
+    killWithDescendantSweepMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSweep = resolve
+        })
+    )
     const killed = host.kill('session-1', { immediate: true })
 
-    // Immediate teardown skips the graceful kill and force-kills the child directly. On POSIX
-    // that reaches the child pgroup, so no Windows taskkill /T /F descendant sweep is needed.
+    expect(killWithDescendantSweepMock).toHaveBeenCalledTimes(1)
     expect(lastSubprocess.kill).not.toHaveBeenCalled()
-    expect(lastSubprocess.forceKill).toHaveBeenCalled()
-    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+    expect(emulatorDispose).not.toHaveBeenCalled()
+    releaseSweep()
+    await vi.waitFor(() => expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1))
     expect(emulatorDispose).not.toHaveBeenCalled()
     expect(host.listSessions()).toHaveLength(1)
     lastSubprocess._onExitCb?.(137)

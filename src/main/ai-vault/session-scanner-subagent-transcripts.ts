@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 
 // Exported so discovery can prune these subtrees using the same literal that
@@ -38,7 +38,7 @@ export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
 export async function countSubagentTranscripts(transcriptFilePath: string): Promise<number> {
   let entries
   try {
-    entries = await readdir(subagentTranscriptsDirFor(transcriptFilePath), { withFileTypes: true })
+    entries = await wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan')
   } catch {
     return 0
   }

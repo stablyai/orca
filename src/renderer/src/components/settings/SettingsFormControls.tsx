@@ -262,13 +262,19 @@ type ColorFieldProps = {
 type NumberFieldProps = {
   label: string
   description: string
-  value: number
+  /** undefined renders the field empty — pair it with `placeholder` and `onClear` for an unset state. */
+  value: number | undefined
   defaultValue?: number
   min: number
-  max: number
+  max?: number
   step?: number
+  integer?: boolean
   onChange: (value: number) => void
+  /** When set, emptying the field clears the setting instead of snapping back to the current value. */
+  onClear?: () => void
+  placeholder?: string
   suffix?: string
+  className?: string
 }
 
 export function ColorField({
@@ -312,8 +318,12 @@ export function NumberField({
   min,
   max,
   step = 1,
+  integer = false,
   onChange,
-  suffix
+  onClear,
+  placeholder,
+  suffix,
+  className
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -327,13 +337,18 @@ export function NumberField({
   const commit = (): void => {
     const trimmed = draft.trim()
     if (trimmed === '') {
+      if (onClear) {
+        // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
+        onClear()
+        return
+      }
       // Empty input — reset to current value rather than committing 0
       setDraft(Number.isFinite(value) ? String(value) : '')
       return
     }
     const next = Number(trimmed)
-    if (Number.isFinite(next)) {
-      const clamped = Math.min(max, Math.max(min, next))
+    if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
+      const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
       onChange(clamped)
       setDraft(String(clamped))
     } else {
@@ -344,6 +359,7 @@ export function NumberField({
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={
         <>
@@ -363,6 +379,8 @@ export function NumberField({
             min={min}
             max={max}
             step={step}
+            aria-label={label}
+            placeholder={placeholder}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}

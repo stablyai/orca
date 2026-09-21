@@ -132,14 +132,14 @@ describe('check-terminal-perf-report-budgets', () => {
 
   it('fails multi-pane redraw scenarios that exceed the under-load timer-drift budget', () => {
     const failPath = writeReport(
-      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=2501.0ms'].join(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=3501.0ms'].join(
         ' '
       ),
       'opencode-cross-workspace-typing'
     )
     const failResult = runChecker(failPath)
     expect(failResult.status).toBe(1)
-    expect(failResult.stderr).toContain('timer drift 2501ms exceeded budget 2500ms')
+    expect(failResult.stderr).toContain('timer drift 3501ms exceeded budget 3500ms')
   })
 
   it('fails malformed metric values instead of treating them as absent', () => {

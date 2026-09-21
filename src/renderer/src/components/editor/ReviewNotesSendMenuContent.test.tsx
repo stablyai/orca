@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
@@ -102,7 +102,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: harness.track
 }))
 
-vi.mock('@/components/dashboard/useNow', () => ({
+vi.mock('@/hooks/use-now', () => ({
   useNow: () => harness.now
 }))
 
@@ -506,9 +506,11 @@ describe('ReviewNotesSendMenuContent', () => {
 
     const tree = render()
     const item = findByType(tree, 'DropdownMenuItem')
+    const stateDot = findByType(item, 'AgentStateDot')
 
     expect(item.props.disabled).toBe(true)
     expect(item.props.title).toBe('Agent needs permission')
+    expect(stateDot.props.title).toBeNull()
     ;(item.props.onSelect as () => void)()
     expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })

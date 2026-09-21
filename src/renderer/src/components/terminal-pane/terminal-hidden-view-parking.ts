@@ -1,9 +1,9 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
@@ -49,6 +49,8 @@ export type TerminalTabColdParkCandidate = ColdParkableTerminalTab & {
   isVisible: boolean
   hasActivityTerminalPortal: boolean
   hiddenSinceMs: number | null
+  /** Higher means activated more recently; breaks same-pass hidden-time ties. */
+  lastActivatedSeq?: number
 }
 
 function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
@@ -73,7 +75,7 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   if (!ptyId) {
     return false
   }
-  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (isRemoteExecutionHostPtyId(ptyId)) {
     return false
   }
   // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
@@ -90,17 +92,11 @@ export type TerminalParkRestorePolicy = {
   pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }
 
-export function selectPairedRuntimeParkingEnvironmentIds(
-  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
-): Set<string> {
-  const capable = new Set<string>()
-  for (const [environmentId, entry] of statuses) {
-    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
-      capable.add(environmentId)
-    }
-  }
-  return capable
-}
+export {
+  resetPairedRuntimeParkingEnvironmentIdsCacheForTest,
+  selectPairedRuntimeParkingEnvironmentIds,
+  selectPairedRuntimeParkingEnvironmentIdsFromState
+} from './paired-runtime-parking-capabilities'
 
 // Why: SSH uses local main's model; paired PTYs are eligible only when their
 // exact host advertises authoritative bounded restore.
@@ -198,21 +194,33 @@ export function canParkTerminalTabRenderer(args: {
   return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
 }
 
-export type ColdParkRetainCandidate = { id: string; hiddenSinceMs: number }
+export type ColdParkRetainCandidate = {
+  id: string
+  hiddenSinceMs: number
+  lastActivatedSeq?: number
+}
+
+// Why: a view switch stamps every owned tab at once, so activation order must
+// break the routine hidden-time tie before the deterministic UUID fallback.
+function compareColdParkRecencyDesc(
+  a: ColdParkRetainCandidate,
+  b: ColdParkRetainCandidate
+): number {
+  if (a.hiddenSinceMs !== b.hiddenSinceMs) {
+    return b.hiddenSinceMs - a.hiddenSinceMs
+  }
+  const activationDelta = (b.lastActivatedSeq ?? -1) - (a.lastActivatedSeq ?? -1)
+  return activationDelta === 0 ? a.id.localeCompare(b.id) : activationDelta
+}
 
 // Why: the single most-recently-hidden candidate is the view the user just
 // switched away from; keeping it warm regardless of the TTL or cap means
 // switching back after any absence (a meeting, coffee) is always instant, the
-// remount cost users actually notice. Ties break by id for determinism.
+// remount cost users actually notice.
 function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): string | null {
   let lastActive: ColdParkRetainCandidate | null = null
   for (const candidate of candidates) {
-    if (
-      lastActive === null ||
-      candidate.hiddenSinceMs > lastActive.hiddenSinceMs ||
-      (candidate.hiddenSinceMs === lastActive.hiddenSinceMs &&
-        candidate.id.localeCompare(lastActive.id) < 0)
-    ) {
+    if (lastActive === null || compareColdParkRecencyDesc(candidate, lastActive) < 0) {
       lastActive = candidate
     }
   }
@@ -221,8 +229,7 @@ function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): stri
 
 // Why: hot-retain keeps the most recently hidden ids warm up to the limit;
 // ids hidden past hotRetainMs or beyond the limit cold-park. The last-active
-// id is exempt from both so returning to it never pays a remount. Ties sort by
-// id so the selection is deterministic.
+// id is exempt from both so returning to it never pays a remount.
 export function selectIdsBeyondHotRetain(
   candidates: ColdParkRetainCandidate[],
   args: { nowMs: number; hotRetainMs: number; hotRetainLimit: number }
@@ -240,10 +247,7 @@ export function selectIdsBeyondHotRetain(
       retainedCandidates.push(candidate)
     }
   }
-  retainedCandidates.sort((a, b) => {
-    const recencyDelta = b.hiddenSinceMs - a.hiddenSinceMs
-    return recencyDelta === 0 ? a.id.localeCompare(b.id) : recencyDelta
-  })
+  retainedCandidates.sort(compareColdParkRecencyDesc)
   // Why: the last-active id already holds one slot in the warm working set, so
   // the cap counts it out — the remaining candidates fill hotRetainLimit-1.
   const remainingLimit = lastActiveId === null ? args.hotRetainLimit : args.hotRetainLimit - 1
@@ -322,7 +326,11 @@ export function selectColdParkedTerminalTabs(
     ) {
       continue
     }
-    candidates.push({ id: tab.id, hiddenSinceMs: tab.hiddenSinceMs })
+    candidates.push({
+      id: tab.id,
+      hiddenSinceMs: tab.hiddenSinceMs,
+      lastActivatedSeq: tab.lastActivatedSeq
+    })
   }
   return selectIdsBeyondHotRetain(candidates, {
     nowMs: args.nowMs,

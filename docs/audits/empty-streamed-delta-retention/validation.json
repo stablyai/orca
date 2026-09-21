@@ -1,0 +1,50 @@
+{
+  "reviewedHead": "a8c4bed3fa4191d731bb28826d00318f18a5db0a",
+  "backgroundLaunch": "ORCA_BACKGROUND_LAUNCH=1 on every check",
+  "productHashes": {
+    "src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts": "7caf0f24250b42e0ac4fe99e93bcbe0a4acb7cb3465fdde6b248d8bf6ba0d2d0",
+    "src/main/native-chat/agent-session-wire/agent-session-empty-delta-retention.test.ts": "2e4ed51b8c205e650cd0d3d4fcb968fdf8f509be4c4013ca1dc6e70b59703a55"
+  },
+  "focusedTests": {
+    "files": 6,
+    "passed": 64,
+    "failed": 0,
+    "paths": [
+      "src/main/native-chat/agent-session-wire/agent-session-empty-delta-retention.test.ts",
+      "src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.test.ts",
+      "src/main/codex/codex-persistent-command-retention.test.ts",
+      "src/main/codex/codex-structured-journal-translation.test.ts",
+      "src/main/codex/codex-structured-journal-translation-streams.test.ts",
+      "src/main/claude/claude-streamed-text-checkpoints.test.ts"
+    ]
+  },
+  "baselineTests": {
+    "config": "docs/audits/empty-streamed-delta-retention/before.config.mjs",
+    "passed": 14,
+    "expectedFailures": 1,
+    "failureName": "empty streamed deltas does not retain empty array slots through repeated Codex publications",
+    "assertion": "expected 65537 to be 1",
+    "scope": "Only the new retained-slot regression fails; all publication/backpressure controls pass."
+  },
+  "checks": {
+    "nodeTypecheck": "passed: pnpm tc:node",
+    "ordinaryLint": "passed: oxlint on two product files",
+    "typeAwareLint": "passed: oxlint --type-aware --config config/oxlint-code-quality-type-aware.json --deny-warnings on two product files",
+    "changedQuality": "passed: pnpm run check:code-quality:changed HEAD, two files, zero new findings",
+    "format": "passed: oxfmt product and artifact files",
+    "diffWhitespace": "git diff --check on exact product paths; zero-context historical/fix patches"
+  },
+  "proofReports": {
+    "node-results.json": "a858b703a1c94c2bc4bc817f244a76fb84bd4ea4cb2dbbb6688acef91d25905d",
+    "electron-results.json": "1ba7c0dd598244cc8c5af9643823470198bf4409deae60939f13dc5dc4b716d5"
+  },
+  "independentReview": "rpc_queue_retention reviewed actual source, tests, named hashes and behavior parity; separately reran all 15 coalescer/new tests.",
+  "ciArtifactCorrection": {
+    "pullRequest": 21142,
+    "failedHead": "9ed7c4f5c880ab64dda8a1a8a04ca8455af42b5d",
+    "failedJob": "https://github.com/stablyai/orca/actions/runs/35178713175/job/105066129816",
+    "cause": "One-line if in scenario.cjs lacked braces. Product-only local quality omitted durable proof sources; CI correctly rejected it.",
+    "change": "Add braces; product code unchanged. Rerun both actual-source runtime reports and all five quality scan configurations over all six published code files with --no-ignore.",
+    "result": "Both runtime proofs and all five quality scans pass. CI status remains separately recorded at the observed head."
+  }
+}

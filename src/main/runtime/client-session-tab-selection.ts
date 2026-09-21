@@ -2,20 +2,18 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
-import type { PersistedMobileClientTabSelections } from '../../shared/types'
+import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
+import {
+  forgetClosedClientSessionTabsByWorktree,
+  projectWithoutClosedClientSessionTabs
+} from './client-session-tab-closed-selection'
+import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 
 export type ClientSessionTabSelection = {
   activeTabId: string | null
   activeGroupId: string | null
   activeTabIdByGroupId: Readonly<Record<string, string>>
-}
-
-type StoredClientSessionTabSelection = {
-  selection: ClientSessionTabSelection
-  revision: number
-  // Why: listAll projects every worktree; only hydrated or user-activated selections belong on disk.
-  shouldPersist: boolean
 }
 
 function emptyClientSessionTabSelection(): ClientSessionTabSelection {
@@ -139,7 +137,12 @@ export class ClientSessionTabSelectionStore {
     )) {
       const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
       for (const [worktreeId, selection] of Object.entries(selectionsByWorktree)) {
-        statesByWorktree.set(worktreeId, { selection, revision: 0, shouldPersist: true })
+        statesByWorktree.set(worktreeId, {
+          selection,
+          revision: 0,
+          shouldPersist: true,
+          closedTabIds: new Set()
+        })
       }
     }
   }
@@ -187,25 +190,40 @@ export class ClientSessionTabSelectionStore {
       return snapshot
     }
     const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
-    const state = statesByWorktree.get(snapshot.worktree) ?? {
+    const existingState = statesByWorktree.get(snapshot.worktree)
+    const state = existingState ?? {
       // Why: host focus is private navigation; a new paired device starts from deterministic topology instead of inheriting it.
       selection: emptyClientSessionTabSelection(),
       revision: 0,
-      shouldPersist: false
+      shouldPersist: false,
+      closedTabIds: new Set<string>()
     }
-    if (snapshot.tabs.length === 0) {
+    const closed = projectWithoutClosedClientSessionTabs(snapshot, state.closedTabIds)
+    if (closed.snapshot.tabs.length === 0) {
+      if (existingState) {
+        statesByWorktree.set(snapshot.worktree, {
+          ...state,
+          closedTabIds: closed.retainedClosedTabIds
+        })
+      }
       // Why: an empty snapshot has no topology to project; writing it back would wipe a restart-hydrated selection before tabs arrive.
       return {
-        ...snapshot,
+        ...closed.snapshot,
         publicationEpoch: `${snapshot.publicationEpoch}:client-navigation`,
         snapshotVersion: snapshot.snapshotVersion + state.revision
       }
     }
-    const projected = projectClientSessionTabSelection(snapshot, state.selection)
+    const projected = projectClientSessionTabSelection(closed.snapshot, state.selection)
+    // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
+    // must not overwrite (and persist) the device's explicit pick, or focus never returns.
+    const selectionSurvived =
+      !state.selection.activeTabId ||
+      closed.snapshot.tabs.some((tab) => tab.id === state.selection.activeTabId)
     statesByWorktree.set(snapshot.worktree, {
-      selection: projected.selection,
+      selection: selectionSurvived ? projected.selection : state.selection,
       revision: state.revision,
-      shouldPersist: state.shouldPersist
+      shouldPersist: state.shouldPersist,
+      closedTabIds: closed.retainedClosedTabIds
     })
     return {
       ...projected.snapshot,
@@ -223,16 +241,33 @@ export class ClientSessionTabSelectionStore {
     const state = statesByWorktree.get(snapshot.worktree) ?? {
       selection: emptyClientSessionTabSelection(),
       revision: 0,
-      shouldPersist: false
+      shouldPersist: false,
+      closedTabIds: new Set<string>()
     }
     const nextSelection = activateClientSessionTabSelection(snapshot, state.selection, activeTabId)
+    const activeTab = snapshot.tabs.find((tab) => tab.id === activeTabId)
+    const closedTabIds = new Set(state.closedTabIds)
+    closedTabIds.delete(activeTabId)
+    if (activeTab) {
+      closedTabIds.delete(topLevelTabId(activeTab))
+    }
     statesByWorktree.set(snapshot.worktree, {
       selection: nextSelection,
       revision: state.revision + 1,
-      shouldPersist: true
+      shouldPersist: true,
+      closedTabIds
     })
     this.persistNow()
     return this.project(snapshot, clientNavigationId)
+  }
+
+  forgetTabs(worktreeId: string, tabIds: readonly string[]): void {
+    if (tabIds.length === 0) {
+      return
+    }
+    if (forgetClosedClientSessionTabsByWorktree(this.statesByClient, worktreeId, tabIds)) {
+      this.persistNow()
+    }
   }
 
   forgetClient(clientNavigationId: string): void {

@@ -2,7 +2,8 @@ import React from 'react'
 
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { IssueInfo, LinearIssue } from '../../../../shared/types'
+import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
 import type { WorktreeCardIssueDisplay } from './WorktreeCardMeta'
 import {

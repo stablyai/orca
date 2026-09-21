@@ -1,0 +1,197 @@
+import {
+  agentErrorSchema,
+  agentPromptSentSchema,
+  agentStartedSchema,
+  appOpenedSchema,
+  appStarredOrcaSchema,
+  featureInteractionUsageBucketReachedSchema,
+  repoAddedSchema,
+  starNagOutcomeEventSchema,
+  workspaceCreatedSchema
+} from './telemetry-app-event-schemas'
+import {
+  agentHookInstallFailedSchema,
+  agentHookTransportBlockedSchema,
+  agentHookUnattributedSchema,
+  codexTrustGrantSchema,
+  daemonAdoptedSchema,
+  daemonAuditEligibilitySchema,
+  daemonLifecycleSchema,
+  daemonPtyCwdDeniedSchema,
+  daemonStartFailedSchema,
+  mainThreadHangDetectedSchema,
+  remoteOutboundBudgetCloseSchema,
+  runtimeRpcStartFailedSchema,
+  settingsChangedSchema
+} from './telemetry-daemon-event-schemas'
+import {
+  contextualTourOutcomeSchema,
+  contextualTourShownSchema,
+  directSshReconnectOperationSchema,
+  editorExternalChangeConflictActionSchema,
+  editorExternalChangeConflictShownSchema,
+  setupGuideClosedSchema,
+  setupGuideOpenedSchema,
+  setupGuideStepCompletedSchema,
+  terminalPaneSplitSchema
+} from './telemetry-feature-education-event-schemas'
+import {
+  cmdJPaletteFeatureTipAcknowledgedSchema,
+  cmdJPaletteFeatureTipShownSchema,
+  featureWallClosedSchema,
+  featureWallDocsClickedSchema,
+  featureWallFeatureSelectedSchema,
+  featureWallGroupSelectedSchema,
+  featureWallOpenedSchema,
+  featureWallTileClickedSchema,
+  featureWallTileFocusedSchema,
+  nativeChatMessageSentSchema,
+  nativeChatPickerItemAcceptedSchema,
+  nativeChatPickerOpenedSchema,
+  nativeChatSendClassifiedSchema,
+  nativeChatSkillDiscoverySchema,
+  nativeChatToggledSchema,
+  orcaCliFeatureTipSetupClickedSchema,
+  orcaCliFeatureTipSetupResultSchema,
+  orcaCliFeatureTipShownSchema,
+  telemetryOptedInSchema,
+  telemetryOptedOutSchema
+} from './telemetry-native-feature-event-schemas'
+import {
+  activationChecklistItemCompletedSchema,
+  onboardingAgentPickedSchema,
+  onboardingCompletedSchema,
+  onboardingDismissedSchema,
+  onboardingFeatureSetupRunSchema,
+  onboardingFeatureSetupTerminalInteractedSchema,
+  onboardingFeatureSetupTerminalOpenedSchema,
+  onboardingFeatureSetupToggledSchema,
+  onboardingGhosttyDiscoveredSchema,
+  onboardingGhosttyImportClickedSchema,
+  onboardingGhosttyImportFailedSchema,
+  onboardingStartedSchema,
+  onboardingStep4PathClickedSchema,
+  onboardingStep4PathFailedSchema,
+  onboardingStepCompletedSchema,
+  onboardingStepSkippedSchema,
+  onboardingStepViewedSchema,
+  onboardingTaskSourcesSnapshotSchema,
+  onboardingTourOutcomeEventSchema,
+  onboardingWindowsTerminalSnapshotSchema,
+  smartSortClass1PromotionSchema,
+  smartSortClassDistributionSchema,
+  smartToRecentSwitchSchema
+} from './telemetry-onboarding-event-schemas'
+import {
+  addRepoDefaultCheckoutHandoffSchema,
+  addRepoExistingWorkspacesDetectedSchema,
+  addRepoNestedImportActionSchema,
+  addRepoNestedImportResultSchema,
+  addRepoNestedScanResultSchema,
+  addRepoSetupStepActionEventSchema,
+  setupScriptPromptActionSchema,
+  setupScriptPromptShownSchema,
+  workspaceCreateFailedSchema
+} from './telemetry-repository-event-schemas'
+
+// ── Event registry: the one record the validator consumes ───────────────
+// Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
+export const eventSchemas = {
+  app_opened: appOpenedSchema,
+  app_starred_orca: appStarredOrcaSchema,
+  star_nag_outcome: starNagOutcomeEventSchema,
+  feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
+
+  repo_added: repoAddedSchema,
+  add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
+  add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
+  add_repo_default_checkout_handoff: addRepoDefaultCheckoutHandoffSchema,
+  add_repo_nested_scan_result: addRepoNestedScanResultSchema,
+  add_repo_nested_import_action: addRepoNestedImportActionSchema,
+  add_repo_nested_import_result: addRepoNestedImportResultSchema,
+  workspace_created: workspaceCreatedSchema,
+  workspace_create_failed: workspaceCreateFailedSchema,
+  setup_script_prompt_shown: setupScriptPromptShownSchema,
+  setup_script_prompt_action: setupScriptPromptActionSchema,
+
+  agent_started: agentStartedSchema,
+  agent_prompt_sent: agentPromptSentSchema,
+  agent_error: agentErrorSchema,
+  agent_hook_install_failed: agentHookInstallFailedSchema,
+  agent_hook_unattributed: agentHookUnattributedSchema,
+  agent_hook_transport_blocked: agentHookTransportBlockedSchema,
+
+  daemon_start_failed: daemonStartFailedSchema,
+  main_thread_hang_detected: mainThreadHangDetectedSchema,
+  daemon_lifecycle: daemonLifecycleSchema,
+  daemon_adopted: daemonAdoptedSchema,
+  daemon_pty_cwd_denied: daemonPtyCwdDeniedSchema,
+  daemon_audit_eligibility: daemonAuditEligibilitySchema,
+  runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
+  remote_outbound_budget_close: remoteOutboundBudgetCloseSchema,
+
+  codex_trust_grant: codexTrustGrantSchema,
+
+  settings_changed: settingsChangedSchema,
+
+  native_chat_toggled: nativeChatToggledSchema,
+  native_chat_message_sent: nativeChatMessageSentSchema,
+  native_chat_picker_opened: nativeChatPickerOpenedSchema,
+  native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
+  native_chat_send_classified: nativeChatSendClassifiedSchema,
+  native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
+
+  telemetry_opted_in: telemetryOptedInSchema,
+  telemetry_opted_out: telemetryOptedOutSchema,
+
+  orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
+  orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
+  orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
+  cmd_j_palette_feature_tip_shown: cmdJPaletteFeatureTipShownSchema,
+  cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
+
+  feature_wall_opened: featureWallOpenedSchema,
+  feature_wall_closed: featureWallClosedSchema,
+  feature_wall_tile_focused: featureWallTileFocusedSchema,
+  feature_wall_tile_clicked: featureWallTileClickedSchema,
+  feature_wall_group_selected: featureWallGroupSelectedSchema,
+  feature_wall_feature_selected: featureWallFeatureSelectedSchema,
+  feature_wall_docs_clicked: featureWallDocsClickedSchema,
+
+  onboarding_started: onboardingStartedSchema,
+  onboarding_step_viewed: onboardingStepViewedSchema,
+  onboarding_step_completed: onboardingStepCompletedSchema,
+  onboarding_step_skipped: onboardingStepSkippedSchema,
+  onboarding_tour_outcome: onboardingTourOutcomeEventSchema,
+  onboarding_step4_path_clicked: onboardingStep4PathClickedSchema,
+  onboarding_step4_path_failed: onboardingStep4PathFailedSchema,
+  onboarding_task_sources_snapshot: onboardingTaskSourcesSnapshotSchema,
+  onboarding_windows_terminal_snapshot: onboardingWindowsTerminalSnapshotSchema,
+  onboarding_completed: onboardingCompletedSchema,
+  onboarding_dismissed: onboardingDismissedSchema,
+  onboarding_agent_picked: onboardingAgentPickedSchema,
+  onboarding_ghostty_discovered: onboardingGhosttyDiscoveredSchema,
+  onboarding_ghostty_import_clicked: onboardingGhosttyImportClickedSchema,
+  onboarding_ghostty_import_failed: onboardingGhosttyImportFailedSchema,
+  onboarding_feature_setup_toggled: onboardingFeatureSetupToggledSchema,
+  onboarding_feature_setup_run: onboardingFeatureSetupRunSchema,
+  onboarding_feature_setup_terminal_opened: onboardingFeatureSetupTerminalOpenedSchema,
+  onboarding_feature_setup_terminal_interacted: onboardingFeatureSetupTerminalInteractedSchema,
+  activation_checklist_item_completed: activationChecklistItemCompletedSchema,
+
+  contextual_tour_shown: contextualTourShownSchema,
+  contextual_tour_outcome: contextualTourOutcomeSchema,
+  setup_guide_opened: setupGuideOpenedSchema,
+  setup_guide_closed: setupGuideClosedSchema,
+  setup_guide_step_completed: setupGuideStepCompletedSchema,
+  terminal_pane_split: terminalPaneSplitSchema,
+
+  editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
+  editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
+
+  direct_ssh_reconnect_operation: directSshReconnectOperationSchema,
+
+  smart_sort_class_distribution: smartSortClassDistributionSchema,
+  smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
+  smart_to_recent_switch: smartToRecentSwitchSchema
+} as const

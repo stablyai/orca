@@ -70,25 +70,25 @@ export function shouldReevaluateWorktreeSidebarDropAnchor(args: {
 
 /**
  * Resolve a held anchor back to a drop index in the current layout. Returns null
- * when the anchored card is gone (deleted, filtered, or unmounted by
- * virtualization), so the caller falls back to a fresh geometric decision.
+ * when the anchored card is gone (deleted or filtered), so the caller falls
+ * back to a fresh geometric decision.
  */
 export function resolveWorktreeSidebarDropAnchorIndex(args: {
   anchor: WorktreeSidebarDropAnchor
-  rects: readonly WorktreeSidebarDragRect[]
+  groupIds: readonly string[]
 }): number | null {
   if (args.anchor.beforeWorktreeId === null) {
-    return args.rects.length
+    return args.groupIds.length
   }
-  const target = args.rects.find((rect) => rect.worktreeId === args.anchor.beforeWorktreeId)
-  return target ? target.groupIndex : null
+  const targetIndex = args.groupIds.indexOf(args.anchor.beforeWorktreeId)
+  return targetIndex !== -1 ? targetIndex : null
 }
 
 export function getWorktreeSidebarDropAnchorId(args: {
-  rects: readonly WorktreeSidebarDragRect[]
+  groupIds: readonly string[]
   dropIndex: number
 }): string | null {
-  return args.rects.find((rect) => rect.groupIndex === args.dropIndex)?.worktreeId ?? null
+  return args.groupIds[args.dropIndex] ?? null
 }
 
 /**

@@ -2,8 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { InlineInputRow } from './FileExplorerRow'
-import type { InlineInput } from './FileExplorerRow'
+import { InlineInputRow } from './file-explorer-inline-input-row'
+import type { InlineInput } from './file-explorer-inline-input-row'
 
 const renameInput: InlineInput = {
   parentPath: '/repo/src',

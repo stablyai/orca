@@ -10,6 +10,10 @@
 import { clampToSafeSplitIndex } from './daemon-stream-data-split'
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonEvent, DataGapEvent } from './types'
+import {
+  accountDaemonStreamEntry,
+  releaseDaemonStreamEntry
+} from './daemon-stream-entry-accounting'
 
 // A control entry carries a whole pre-shaped stream event (background marker,
 // data gap, transient fact) that must ride at its exact position in the
@@ -24,6 +28,7 @@ export type StreamQueueEntry = {
   seq?: number
   transformed?: boolean
   control?: DaemonEvent
+  retainedBytes?: number
 }
 
 export type PendingStreamDataBatch = {
@@ -33,6 +38,7 @@ export type PendingStreamDataBatch = {
   // Per-session held totals so the flush hold can spare small talkers
   // (echo/replies) from waiting behind other sessions' floods.
   queuedCharsBySession: Map<string, number>
+  queuedMetadataBytesBySession: Map<string, number>
   // Membership is reconciled when queued data first appears and on rare
   // background lifecycle changes, keeping steady-state enqueue constant-time.
   droppableQueuedSessionIds: Set<string>
@@ -121,6 +127,7 @@ export function dropOldestQueuedForSession(
       if (insertGapAt === -1) {
         insertGapAt = i
       }
+      releaseDaemonStreamEntry(batch, entry)
       batch.queue.splice(i, 1)
       i--
     } else {
@@ -159,16 +166,20 @@ export function dropOldestQueuedForSession(
       sessionIdSuffix: sessionId.slice(-10),
       droppedChars: dropped
     })
-    batch.queue.splice(Math.max(0, insertGapAt), 0, {
-      sessionId,
-      data: '',
-      control: {
-        type: 'event',
-        event: 'dataGap',
+    batch.queue.splice(
+      Math.max(0, insertGapAt),
+      0,
+      accountDaemonStreamEntry(batch, {
         sessionId,
-        payload: { droppedChars: dropped, sequenceChars: droppedSequenceChars }
-      }
-    })
+        data: '',
+        control: {
+          type: 'event',
+          event: 'dataGap',
+          sessionId,
+          payload: { droppedChars: dropped, sequenceChars: droppedSequenceChars }
+        }
+      })
+    )
     insertGapAt = Math.max(0, insertGapAt) + 1
   }
   if (salvaged.length > 0) {
@@ -177,7 +188,11 @@ export function dropOldestQueuedForSession(
     const at = existingGap
       ? batch.queue.findIndex((e) => e.control === existingGap) + 1
       : insertGapAt
-    batch.queue.splice(at, 0, { sessionId, data: salvaged, sequenceChars: 0 })
+    batch.queue.splice(
+      at,
+      0,
+      accountDaemonStreamEntry(batch, { sessionId, data: salvaged, sequenceChars: 0 })
+    )
     batch.queuedChars += salvaged.length
     batch.queuedCharsBySession.set(
       sessionId,

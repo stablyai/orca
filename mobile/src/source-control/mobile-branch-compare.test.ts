@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { GitBranchCompareResult } from '../../../src/shared/types'
+import type { GitBranchCompareResult } from '../../../src/shared/git-diff-compare-types'
 import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff,

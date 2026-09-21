@@ -133,7 +133,7 @@ export function trackTerminalPaneSplit(args: {
 }
 
 export function readEmittedSetupGuideStepIds(): Set<FeatureWallSetupStepId> {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return new Set()
   }
   try {
@@ -150,7 +150,7 @@ export function readEmittedSetupGuideStepIds(): Set<FeatureWallSetupStepId> {
 }
 
 export function persistEmittedSetupGuideStepId(id: FeatureWallSetupStepId): void {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return
   }
   try {
@@ -170,7 +170,7 @@ export function reserveTerminalPaneSplitTelemetry(
   source: TerminalPaneSplitSource,
   direction: 'vertical' | 'horizontal'
 ): boolean {
-  if (typeof globalThis.localStorage === 'undefined') {
+  if (globalThis.localStorage === undefined) {
     return true
   }
   try {

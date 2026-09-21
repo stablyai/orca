@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Tab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
 import {
   decideInitialAgentTabViewMode,
   initialAgentTabViewModeProps
@@ -47,15 +47,18 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
-  it('returns undefined for unsupported agents', () => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'gemini'
-      })
-    ).toBeUndefined()
-  })
+  it.each(['gemini', 'opencode'] as const)(
+    'keeps unsupported agent %s in terminal view',
+    (agent) => {
+      expect(
+        decideInitialAgentTabViewMode({
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true,
+          agent
+        })
+      ).toBeUndefined()
+    }
+  )
 
   it.each([
     ['local', null],

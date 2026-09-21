@@ -1,0 +1,94 @@
+{
+  "operation": "transport.host-status-gates",
+  "family": "transport.host-status-gates",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "9c5095c24bdf5ab65d6387cc22b9984fee3aa7d5ce93d96bcb470944ac253f86",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "36d81979cef2": {
+      "appVersion": "1.4.200",
+      "capabilities": ["mobile.tasks.v1", "push.v1"],
+      "floatingWorkspace": true,
+      "pending": false,
+      "verdict": {
+        "kind": "ok"
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f2be9b1b6c7a": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "appVersion": "1.4.200",
+            "capabilities": ["mobile.tasks.v1", "push.v1"],
+            "floatingWorkspaceEnabled": true,
+            "minCompatibleMobileVersion": 1,
+            "protocolVersion": 5
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "transport-host-status-gates-ready",
+    "checkpoints": [
+      {
+        "id": "gates-proven",
+        "observation": {
+          "sender": ["f2be9b1b6c7a"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "36d81979cef2",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

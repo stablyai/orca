@@ -1,4 +1,4 @@
-import type { LinearErrorCode, LinearIncludeErrorCode } from '../../shared/linear-agent-access'
+import type { LinearErrorCode, LinearIncludeErrorCode } from '../../shared/linear/agent-access'
 
 export class LinearAgentAccessError extends Error {
   readonly code: LinearErrorCode

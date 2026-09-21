@@ -8,7 +8,9 @@ import type {
   SshConnectionState,
   SshProviderEpoch
 } from '../../../../shared/ssh-types'
-import type { Project, ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { createTestStore } from './store-test-helpers'
 
 const repoId = 're-adopted-repo'

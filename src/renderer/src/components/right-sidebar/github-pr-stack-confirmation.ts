@@ -1,6 +1,9 @@
 import type { ConfirmationDialogOptions } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type { GitHubPRMergeMethod, GitHubPRStack } from '../../../../shared/types'
+import type {
+  GitHubPRMergeMethod,
+  GitHubPRStack
+} from '../../../../shared/github/pull-request-types'
 import { getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export function buildGitHubPRStackMergeConfirmation({

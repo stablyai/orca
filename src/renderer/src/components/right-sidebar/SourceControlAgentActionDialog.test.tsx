@@ -5,8 +5,11 @@ import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 const mocks = vi.hoisted(() => ({
   ensureDetectedAgents: vi.fn(),
@@ -55,6 +58,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
 import { useAppStore, type AppState } from '@/store'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 let container: HTMLDivElement
 let root: Root
@@ -81,20 +85,30 @@ function settingsWithGlobalRecipe(
     }
   }
 }
-function repoWithSavedRecipe(): Repo {
+function repoWithSavedRecipe(
+  agentArgs = '',
+  connectionId: string | null = null,
+  executionHostId: Repo['executionHostId'] = undefined
+): Repo {
   return {
     id: 'repo-1',
+    path: '/repo-1',
+    displayName: 'Repo 1',
+    badgeColor: 'blue',
+    addedAt: 0,
+    connectionId,
+    executionHostId,
     sourceControlAi: {
       enabled: true,
       actionOverrides: {
         resolveConflicts: {
           agentId: 'codex',
           commandInputTemplate: '{basePrompt}',
-          agentArgs: ''
+          agentArgs
         }
       }
     }
-  } as Repo
+  }
 }
 function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
   useAppStore.setState(
@@ -158,6 +172,7 @@ async function flushEffects(): Promise<void> {
 }
 describe('SourceControlAgentActionDialog', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests(null)
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
@@ -183,6 +198,7 @@ describe('SourceControlAgentActionDialog', () => {
     })
     container.remove()
     useAppStore.setState(initialState, true)
+    setLocalRuntimeCapabilitiesForTests(null)
   })
   it('hides the dialog and auto-starts once when the saved global launch recipe matches', async () => {
     renderControlledDialog()
@@ -212,6 +228,62 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain('Launch agent')
+  })
+  it('keeps saved arguments on a prospective SSH terminal launch', async () => {
+    setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
+    const recipe = {
+      agentId: 'codex' as const,
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '--model saved'
+    }
+    resetStore(
+      {
+        ...settingsWithGlobalRecipe(null),
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      },
+      [repoWithSavedRecipe('--model saved', 'build-box', 'ssh:build-box')]
+    )
+
+    renderControlledDialog({
+      repoId: 'repo-1',
+      connectionId: 'build-box',
+      savedAgentArgs: recipe.agentArgs
+    })
+
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: '--model saved'
+    })
+  })
+  it('omits saved arguments from a structured local launch', async () => {
+    setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
+    const recipe = {
+      agentId: 'codex' as const,
+      commandInputTemplate: '{basePrompt}',
+      agentArgs: '--model saved'
+    }
+    resetStore(
+      {
+        ...settingsWithGlobalRecipe(recipe),
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      },
+      []
+    )
+
+    renderControlledDialog({ savedAgentArgs: recipe.agentArgs })
+
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: undefined
+    })
   })
   it('renders the form and does not auto-start when the saved launch recipe mismatches', async () => {
     resetStore(

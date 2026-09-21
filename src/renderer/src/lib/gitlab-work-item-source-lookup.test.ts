@@ -5,7 +5,7 @@ import {
   listGitLabMRsForSource,
   lookupGitLabWorkItemByPathForSource
 } from './gitlab-work-item-source-lookup'
-import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/types'
+import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
