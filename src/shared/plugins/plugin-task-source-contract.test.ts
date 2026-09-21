@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   pluginTaskItemSchema,
+  pluginTaskQuerySchema,
   pluginTaskSourceResultSchema,
   pluginTaskSourceStatusSchema,
   PLUGIN_TASK_SOURCE_METHODS,
@@ -26,6 +27,93 @@ describe('plugin task source contract', () => {
       pluginTaskItemSchema.safeParse({ ...item, state: { name: 'Active', category: 'nope' } })
         .success
     ).toBe(false)
+  })
+
+  it('accepts an item with priority and labels, and one without either', () => {
+    const item = {
+      id: '4821',
+      key: '4821',
+      title: 'Crash on resume',
+      state: { name: 'Active', category: 'in-progress' },
+      assignee: null,
+      url: null,
+      updatedAt: null,
+      scopeId: null
+    }
+
+    expect(
+      pluginTaskItemSchema.safeParse({ ...item, priority: 'High', labels: ['bug', 'p1'] }).success
+    ).toBe(true)
+    expect(pluginTaskItemSchema.safeParse(item).success).toBe(true)
+  })
+
+  it('rejects more labels than the cap and a label past its length cap', () => {
+    const item = {
+      id: '4821',
+      key: '4821',
+      title: 'Crash on resume',
+      state: { name: 'Active', category: 'in-progress' },
+      assignee: null,
+      url: null,
+      updatedAt: null,
+      scopeId: null
+    }
+
+    expect(
+      pluginTaskItemSchema.safeParse({ ...item, labels: Array.from({ length: 33 }, () => 'x') })
+        .success
+    ).toBe(false)
+    expect(pluginTaskItemSchema.safeParse({ ...item, labels: ['x'.repeat(129)] }).success).toBe(
+      false
+    )
+  })
+
+  it('accepts a status with declared filters, and one without any', () => {
+    const status = {
+      connected: true,
+      accountLabel: 'Ada Lovelace',
+      notice: null,
+      supports: {
+        comment: true,
+        transition: true,
+        assign: false,
+        editTitle: false,
+        editDescription: false
+      }
+    }
+
+    expect(
+      pluginTaskSourceStatusSchema.safeParse({
+        ...status,
+        filters: [{ id: 'assigned', label: 'Assigned to me' }]
+      }).success
+    ).toBe(true)
+    expect(pluginTaskSourceStatusSchema.safeParse(status).success).toBe(true)
+  })
+
+  it('rejects a status with more filters than the cap', () => {
+    const status = {
+      connected: true,
+      accountLabel: 'Ada Lovelace',
+      notice: null,
+      supports: {
+        comment: true,
+        transition: true,
+        assign: false,
+        editTitle: false,
+        editDescription: false
+      },
+      filters: Array.from({ length: 17 }, (_, i) => ({ id: `f${i}`, label: `Filter ${i}` }))
+    }
+
+    expect(pluginTaskSourceStatusSchema.safeParse(status).success).toBe(false)
+  })
+
+  it('accepts a query with filterId set, and one that omits it', () => {
+    const query = { scopeIds: [], search: null, cursor: null, limit: 50 }
+
+    expect(pluginTaskQuerySchema.safeParse({ ...query, filterId: 'assigned' }).success).toBe(true)
+    expect(pluginTaskQuerySchema.safeParse(query).success).toBe(true)
   })
 
   it('discriminates ok results from failures on a closed error code set', () => {

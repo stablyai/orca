@@ -25,6 +25,12 @@ const TITLE_MAX = 1024
 const BODY_MAX = 128 * 1024
 export const PLUGIN_TASK_PAGE_LIMIT = 200
 
+const PRIORITY_MAX = 128
+const LABEL_MAX = 128
+const LABELS_MAX = 32
+const FILTER_LABEL_MAX = 256
+const FILTERS_MAX = 16
+
 export const pluginTaskSourceErrorSchema = z.object({
   ok: z.literal(false),
   code: z.enum(PLUGIN_TASK_SOURCE_ERROR_CODES),
@@ -71,7 +77,11 @@ export const pluginTaskItemSchema = z.object({
   assignee: pluginTaskIdentitySchema.nullable(),
   url: z.string().max(2048).nullable(),
   updatedAt: z.string().datetime().nullable(),
-  scopeId: z.string().max(512).nullable()
+  scopeId: z.string().max(512).nullable(),
+  /** Display string, not an enum: providers disagree on vocabulary (Azure
+   *  DevOps uses '1'-'4', Jira uses 'High'/'Medium'). Never parsed, only shown. */
+  priority: z.string().max(PRIORITY_MAX).nullable().optional(),
+  labels: z.array(z.string().min(1).max(LABEL_MAX)).max(LABELS_MAX).optional()
 })
 
 export const pluginTaskPageSchema = z.object({
@@ -111,7 +121,13 @@ export const pluginTaskSourceStatusSchema = z.object({
     assign: z.boolean(),
     editTitle: z.boolean(),
     editDescription: z.boolean()
-  })
+  }),
+  /** Named presets the source offers (Jira's Assigned/Reported/All Open/Done
+   *  are Jira's own vocabulary), rendered as chips. Omitted when none apply. */
+  filters: z
+    .array(z.object({ id: z.string().min(1).max(512), label: z.string().min(1).max(FILTER_LABEL_MAX) }))
+    .max(FILTERS_MAX)
+    .optional()
 })
 
 export const pluginTaskQuerySchema = z.object({
@@ -119,7 +135,10 @@ export const pluginTaskQuerySchema = z.object({
   scopeIds: z.array(z.string().min(1).max(512)).max(64),
   search: z.string().max(1024).nullable(),
   cursor: z.string().max(4096).nullable(),
-  limit: z.number().int().positive().max(PLUGIN_TASK_PAGE_LIMIT)
+  limit: z.number().int().positive().max(PLUGIN_TASK_PAGE_LIMIT),
+  /** Which declared status.filters entry is active. Absent/null means the
+   *  source's own default. */
+  filterId: z.string().min(1).max(512).nullable().optional()
 })
 
 export const pluginTaskPatchSchema = z
