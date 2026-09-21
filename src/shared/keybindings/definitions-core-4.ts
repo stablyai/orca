@@ -66,5 +66,46 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'view.sessions.toggle',
+    title: 'Toggle Session Grid',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'sessions',
+      'grid',
+      'terminals',
+      'agents',
+      'toggle',
+      'open',
+      'close'
+    ],
+    // Why unbound: Mod+Shift+G already ships as Show Source Control and the terminal claims
+    // it for find-previous; like workspace.openBoard, a new surface must not take a global chord.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  // Why bare keys: the grid's own listener skips terminals and inputs, so PageDown is free there.
+  {
+    id: 'sessions.grid.nextPage',
+    title: 'Session Grid: Next Page',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sessions', 'grid', 'page', 'row', 'next', 'down', 'scroll'],
+    defaultBindings: platformBindings(['PageDown', 'Alt+ArrowDown']),
+    allowBareKeybindings: true,
+    allowInTerminal: true
+  },
+  {
+    id: 'sessions.grid.prevPage',
+    title: 'Session Grid: Previous Page',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sessions', 'grid', 'page', 'row', 'previous', 'up', 'scroll'],
+    defaultBindings: platformBindings(['PageUp', 'Alt+ArrowUp']),
+    allowBareKeybindings: true,
+    allowInTerminal: true
   }
 ]

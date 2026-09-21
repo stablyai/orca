@@ -1,16 +1,15 @@
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { TerminalDropSurface, TerminalDropTransport } from './terminal-drop-surface'
 
 export type CapturedTerminalDropTarget = {
   paneId: number
   leafId: string
   ptyId: string | null
-  transport: PtyTransport
+  transport: TerminalDropTransport
 }
 
 export function captureTerminalDropTarget(
   pane: { id: number; leafId: string },
-  transport: PtyTransport
+  transport: TerminalDropTransport
 ): CapturedTerminalDropTarget {
   return {
     paneId: pane.id,
@@ -21,10 +20,10 @@ export function captureTerminalDropTarget(
 }
 
 export function getCurrentTerminalDropTransport(
-  manager: PaneManager,
-  paneTransports: Map<number, PtyTransport>,
+  manager: TerminalDropSurface,
+  paneTransports: Map<number, TerminalDropTransport>,
   target: CapturedTerminalDropTarget
-): PtyTransport | null {
+): TerminalDropTransport | null {
   const liveTransport = paneTransports.get(target.paneId)
   if (
     liveTransport !== target.transport ||

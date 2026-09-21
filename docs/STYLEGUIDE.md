@@ -45,6 +45,8 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
+`agent-working` identifies running agents; `agent-unread` identifies an unread turn. Use `agent-question` / `agent-question-text` for a request that needs attention.
+
 ### Git decoration colors
 
 For diff status, file-tree decorations, and the changes view, use the git decoration tokens (mirroring VS Code's palette so users transferring from VS Code aren't surprised):

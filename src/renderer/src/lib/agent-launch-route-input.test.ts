@@ -86,6 +86,23 @@ describe('buildAgentLaunchRouteInput', () => {
     ])
   })
 
+  it('uses the explicitly selected SSH host even when the catalog resolves the same workspace locally', () => {
+    const input = buildAgentLaunchRouteInput(store(), {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1', executionHostId: 'ssh:selected' }
+    })
+    expect(input.executionHostId).toBe('ssh:selected')
+    expect(input.nativeChatTranscriptIsLocalReadable).toBe(false)
+    expect(input.projectRuntime).toBeUndefined()
+    expect(mocks.getExecutionHostIdForWorktree).not.toHaveBeenCalled()
+    expect(
+      routeFor(store(), {
+        agent: 'codex',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1', executionHostId: 'ssh:selected' }
+      })
+    ).not.toBe('structured-native-chat')
+  })
+
   it('gathers the full input set for an existing local git worktree', () => {
     mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
     const appStore = store()

@@ -65,23 +65,19 @@ import {
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { hydrateSessionGridState } from './ui-slice-session-grid-hydration'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
   const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+    ['_portsStatusBarDefaultAdded', 'ports'],
+    ['_kimiStatusBarDefaultAdded', 'kimi'],
+    ['_minimaxStatusBarDefaultAdded', 'minimax'],
+    ['_antigravityStatusBarDefaultAdded', 'antigravity'],
+    ['_grokStatusBarDefaultAdded', 'grok']
   ] as const
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {
@@ -285,6 +281,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
           activeView:
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
+          ...hydrateSessionGridState(ui, s),
           persistedUIReady: true
         }
         // The incoming payload is authoritative for the writer-owned fields, so it becomes the

@@ -1073,6 +1073,14 @@
           "label": "Workspaces"
         }
       },
+      "session": {
+        "grid": {
+          "SessionGridToolbar": {
+            "c525d4f2b3": "Mouse Wheel",
+            "e84bece7ac": "Terminal until its end, then the grid"
+          }
+        }
+      },
       "settings": {
         "AccountsPane": {
           "0023cc336e": "Paste either the raw token value (e.g.",

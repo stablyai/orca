@@ -9,6 +9,7 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { AppState } from '../types'
 import type { JiraIssue } from '../../../../shared/jira-types'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
+import { setWorktreeNavActivator } from './worktree-nav-history'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -724,6 +725,59 @@ describe('createUISlice space navigation', () => {
 
     expect(store.getState().worktreeNavHistory).toEqual(['skills'])
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('records and rewinds Sessions visits on close', () => {
+    const store = createUIStore()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openSessionsPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'sessions'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    // Without the rewind the index would still name a view nobody is looking at,
+    // and back would land on the workspace already on screen.
+    store.getState().closeSessionsPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('keeps the Sessions history index when the grid is the only entry', () => {
+    const store = createUIStore()
+
+    store.getState().openSessionsPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['sessions'])
+
+    store.getState().closeSessionsPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('sends the first back press after closing the grid to the previous workspace', () => {
+    const store = createUIStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [makeWorktree('a'), makeWorktree('b')] }
+    })
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return { primaryTabId: null }
+    })
+
+    try {
+      store.getState().recordWorktreeVisit('a')
+      store.getState().recordWorktreeVisit('b')
+      store.getState().openSessionsPage()
+      store.getState().closeSessionsPage()
+
+      // Left on the closed grid's entry, this back press would re-activate 'b' — the
+      // workspace already on screen — and swallow the press the user meant for 'a'.
+      store.getState().goBackWorktree()
+      expect(activated).toEqual(['a'])
+    } finally {
+      setWorktreeNavActivator(null)
+    }
   })
 
   it('opens and restores Artifacts when its sidebar shortcut is hidden', () => {

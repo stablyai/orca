@@ -66,6 +66,13 @@ describe('launchAgentInStructuredNewTab', () => {
     expect(consoleError).not.toHaveBeenCalled()
   })
 
+  it('keeps a provisional chat in the background until its caller reveals it', () => {
+    launchAgentInStructuredNewTab({ plan: structuredPlan('', 'draft'), activate: false })
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ activate: false })
+    )
+  })
+
   it('reports failed settlement without opening a terminal fallback', async () => {
     const error = new Error('boom')
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue({

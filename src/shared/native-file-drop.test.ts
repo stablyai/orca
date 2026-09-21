@@ -318,3 +318,22 @@ describe('isNativeFileDropPayload', () => {
     ).toBe(false)
   })
 })
+
+it('preserves the preview destination through native path resolution and IPC validation', () => {
+  const resolution = resolveNativeFileDropPath([
+    {
+      nativeFileDropTarget: 'terminal',
+      terminalTabId: 'tab-1',
+      terminalPreviewSurfaceId: 'preview-a'
+    }
+  ])
+  const payload = createNativeFileDropPayload(resolution, ['/tmp/file.txt'])
+  expect(payload).toEqual({
+    target: 'terminal',
+    paths: ['/tmp/file.txt'],
+    tabId: 'tab-1',
+    previewSurfaceId: 'preview-a'
+  })
+  expect(isNativeFileDropPayload(payload)).toBe(true)
+  expect(isNativeFileDropPayload({ ...payload, previewSurfaceId: 5 })).toBe(false)
+})

@@ -175,6 +175,25 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('activity')
   })
 
+  it('drops a persisted sessions view on a paired web client', () => {
+    // The web preload has no terminalPreview transport, so the grid's cards
+    // would stall; the web client hides the entry points for the same reason.
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'sessions' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted sessions view on the desktop', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'sessions' }), 'startup')
+
+    expect(store.getState().activeView).toBe('sessions')
+  })
+
   it('restores a default-on view (mobile) even when its nav button is hidden', () => {
     const store = createUIStore()
     store.setState({

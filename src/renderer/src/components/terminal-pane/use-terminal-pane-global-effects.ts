@@ -305,7 +305,7 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     return window.api.ui.onFileDrop((data) => {
-      if (data.target !== 'terminal') {
+      if (data.target !== 'terminal' || data.previewSurfaceId) {
         return
       }
       if (data.tabId) {

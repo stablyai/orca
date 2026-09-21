@@ -8,14 +8,22 @@ import { REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT } from '@/constants/terminal'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 
-const storeMock = vi.hoisted(() => ({
-  dropUnifiedTab: vi.fn(),
-  state: {
-    keybindings: {},
-    unifiedTabsByWorktree: {},
-    groupsByWorktree: {}
-  } as Record<string, unknown>
-}))
+const storeMock = vi.hoisted(
+  (): {
+    dropUnifiedTab: ReturnType<typeof vi.fn>
+    toggleSessionsGridHiddenTab: ReturnType<typeof vi.fn>
+    state: Record<string, unknown>
+  } => ({
+    dropUnifiedTab: vi.fn(),
+    toggleSessionsGridHiddenTab: vi.fn(),
+    state: {
+      keybindings: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      sessionsGridHiddenTabIds: new Array<string>()
+    }
+  })
+)
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   formatShortcutLabel: () => '⌘D',
@@ -56,6 +64,8 @@ vi.mock('lucide-react', () => ({
   ArrowUp: () => null,
   Columns2: () => null,
   Copy: () => null,
+  Eye: () => null,
+  EyeOff: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -153,9 +163,12 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 
 beforeEach(() => {
   storeMock.dropUnifiedTab.mockReset()
+  storeMock.toggleSessionsGridHiddenTab.mockReset()
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
+    sessionsGridHiddenTabIds: [],
+    toggleSessionsGridHiddenTab: storeMock.toggleSessionsGridHiddenTab,
     groupsByWorktree: {
       'wt-1': [
         {

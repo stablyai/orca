@@ -8,6 +8,7 @@ import {
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { readAgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import {
   acknowledgeViewedAutoAckTarget,
   readAgentAttentionTurnRecords,
@@ -32,6 +33,8 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     // Init to undefined so the first maybeAck() (on mount) always passes the ref guard and scans.
     let lastActiveView: unknown = undefined
     let lastActiveTabId: unknown = undefined
+    let lastActiveSessionGridTabId: unknown = undefined
+    let lastActiveSessionGridWorktreeId: unknown = undefined
     let lastActiveWorktreeId: unknown = undefined
     let lastActiveWorkspaceGroupId: unknown = undefined
     let lastActiveWorkspaceGroups: unknown = undefined
@@ -43,6 +46,7 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     let lastAcknowledged: unknown = undefined
     let lastLayouts: unknown = undefined
     let lastUnreadAgentCompletionPanes: unknown = undefined
+    let lastUnreadTerminalTabs: unknown = undefined
 
     // `force` re-scans after a signal the store never sees: panel open/closed is React-local state.
     const presence = createAutoAckPresenceCheck(
@@ -67,6 +71,10 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
         !options?.force &&
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
+        // Why its own ref: selecting another grid card moves nothing else in the store,
+        // so without this the scan would skip the very transition that means "I'm looking".
+        s.activeSessionGridTabId === lastActiveSessionGridTabId &&
+        s.activeSessionGridWorktreeId === lastActiveSessionGridWorktreeId &&
         activeWorktreeId === lastActiveWorktreeId &&
         activeWorkspaceGroupId === lastActiveWorkspaceGroupId &&
         activeWorkspaceGroups === lastActiveWorkspaceGroups &&
@@ -77,7 +85,13 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
         s.retainedAgentsByPaneKey === lastRetained &&
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
         s.terminalLayoutsByTabId === lastLayouts &&
-        s.unreadAgentCompletionPanes === lastUnreadAgentCompletionPanes
+        s.unreadAgentCompletionPanes === lastUnreadAgentCompletionPanes &&
+        // Why this one too, and not just the completion panes: a parked pane's BEL writes
+        // ONLY `markTerminalTabUnread` (parked-terminal-byte-watcher's onBell), and a grid
+        // card is exactly the parked case — it mounts a preview, not a pane. Without this
+        // ref the bell lights on the card you already have selected and no click can put it
+        // out, because nothing the guard watches ever moved.
+        s.unreadTerminalTabs === lastUnreadTerminalTabs
       ) {
         return
       }
@@ -85,6 +99,9 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       // Presence signals force a rescan; unrelated writes must not retry an away result.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
+      lastActiveSessionGridTabId = s.activeSessionGridTabId
+      lastActiveSessionGridWorktreeId = s.activeSessionGridWorktreeId
+      lastUnreadTerminalTabs = s.unreadTerminalTabs
       lastActiveWorktreeId = activeWorktreeId
       lastActiveWorkspaceGroupId = activeWorkspaceGroupId
       lastActiveWorkspaceGroups = activeWorkspaceGroups
@@ -123,6 +140,7 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
             target.tabId
           )
           return (
+            readAgentAttentionUnreadReason(s.unreadTerminalTabs[target.tabId]) !== null ||
             computeAgentAcknowledgementTargets(records, subjectKey).length > 0 ||
             resolveViewedUnreadSubjectKey(s.unreadAgentCompletionPanes, subjectKey) !== null
           )

@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 const SURFACE_PROVIDING_CALLERS = [
   'src/renderer/src/components/editor/check-annotation-open.ts',
   'src/renderer/src/components/feature-wall/FeatureWallBrowserAction.tsx',
+  'src/renderer/src/components/session-grid/session-grid-launch-actions.ts',
   'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
   'src/renderer/src/components/sidebar/run-worktree-delete-with-toast.ts',
   'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',

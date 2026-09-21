@@ -3,6 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const mockStructuredLaunch = vi.hoisted(() => vi.fn(() => null))
+vi.mock('@/lib/launch-agent-in-new-tab-structured', () => ({
+  launchAgentInStructuredNewTab: mockStructuredLaunch
+}))
+
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 
@@ -38,6 +43,7 @@ const store = {
   sshConnectionStates: new Map<string, { status: string }>(),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
+  getKnownWorktreeById: vi.fn(),
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
   openFiles: [] as { id: string; worktreeId: string }[],
@@ -117,6 +123,26 @@ describe('launchAgentInNewTab execution host resolution', () => {
     store.ptyIdsByTabId = {}
   })
 
+  it('forwards background activation to the structured launcher', async () => {
+    store.repos = []
+    store.worktreesByRepo = {}
+    const { adoptAgentSessionLaunchVerdict } = await import('./agent-session-launch-plan')
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      activate: false,
+      agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+        route: 'structured-native-chat',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: '',
+        promptDelivery: 'draft'
+      })
+    })
+    expect(mockStructuredLaunch).toHaveBeenCalledWith(expect.objectContaining({ activate: false }))
+  })
+
   it('shapes the launch from the worktree host, not a rival repo row on another SSH host', async () => {
     // `store.repos.find` is host-blind, so a worktree that names its own host could be shaped by
     // an `ssh:openclaw` row it has nothing to do with (#11163).
@@ -140,6 +166,25 @@ describe('launchAgentInNewTab execution host resolution', () => {
 
     await launchOnLinux()
 
+    expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
+  })
+
+  it('uses the explicitly selected SSH host when workspace IDs collide', async () => {
+    store.repos = [
+      { id: 'repo-1', connectionId: null, executionHostId: 'local', path: '/repo' },
+      { id: 'repo-1', connectionId: 'remote', executionHostId: 'ssh:remote', path: '/srv' }
+    ]
+    store.worktreesByRepo = {
+      'repo-1': [worktreeOn('local', '/repo'), worktreeOn('ssh:remote', '/srv')]
+    }
+    store.getKnownWorktreeById.mockReturnValue(worktreeOn('ssh:remote', '/srv'))
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      agent: 'claude-agent-teams',
+      worktreeId: 'wt-1',
+      executionHostId: 'ssh:remote',
+      launchPlatform: 'linux'
+    })
     expect(queuedCommand()).toBe("orca claude-teams '--dangerously-skip-permissions'")
   })
 

@@ -74,6 +74,67 @@ export function CompactAgentExpansion({
   )
 }
 
+/**
+ * A workspace's agents at a glance: one pill per state, the state dot then up to three
+ * provider icons overlapped. Decorative — the caller names the agents for assistive tech.
+ * Shared by the sidebar's collapsed agent row and the session grid's workspace picker.
+ */
+export function CompactAgentSummaryCluster({
+  agents,
+  className
+}: {
+  agents: DashboardAgentRowData[]
+  className?: string
+}): React.JSX.Element {
+  const groups = buildSummaryAgentGroups(agents)
+  const visibleGroups = groups.slice(0, 3)
+  const hiddenGroupAgentCount = groups
+    .slice(visibleGroups.length)
+    .reduce((count, group) => count + group.agents.length, 0)
+  return (
+    <span
+      className={cn('flex min-w-0 items-center gap-1 overflow-hidden', className)}
+      aria-hidden
+      data-agent-summary-cluster
+    >
+      {visibleGroups.map((group) => {
+        const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
+        const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
+        return (
+          <span
+            key={group.state}
+            className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
+          >
+            <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
+            {/* Why: same-state agent identities read as one status cluster;
+                overlapping them saves width without merging different states. */}
+            <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
+              {iconAgents.map((agent) => (
+                <span
+                  key={agent.paneKey}
+                  className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
+                >
+                  <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+                </span>
+              ))}
+            </span>
+            {hiddenIconCount > 0 && (
+              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+                +{hiddenIconCount}
+              </span>
+            )}
+          </span>
+        )
+      })}
+      {hiddenGroupAgentCount > 0 && (
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+          +{hiddenGroupAgentCount}
+        </span>
+      )}
+    </span>
+  )
+}
+
 export function CompactAgentSummaryButton({
   agents,
   subjectLabel,
@@ -81,11 +142,6 @@ export function CompactAgentSummaryButton({
   onToggle
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const summary = summarizeAgents(agents, subjectLabel)
-  const groups = buildSummaryAgentGroups(agents)
-  const visibleGroups = groups.slice(0, 3)
-  const hiddenGroupAgentCount = groups
-    .slice(visibleGroups.length)
-    .reduce((count, group) => count + group.agents.length, 0)
   const agentIdentitySummary = summarizeAgentIdentities(agents)
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
@@ -140,44 +196,7 @@ export function CompactAgentSummaryButton({
           {subjectLabel}
         </span>
       ) : (
-        <>
-          <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-hidden>
-            {visibleGroups.map((group) => {
-              const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
-              const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
-              return (
-                <span
-                  key={group.state}
-                  className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
-                >
-                  <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
-                  {/* Why: same-state agent identities read as one status cluster;
-                      overlapping them saves width without merging different states. */}
-                  <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
-                    {iconAgents.map((agent) => (
-                      <span
-                        key={agent.paneKey}
-                        className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
-                      >
-                        <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
-                      </span>
-                    ))}
-                  </span>
-                  {hiddenIconCount > 0 && (
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-                      +{hiddenIconCount}
-                    </span>
-                  )}
-                </span>
-              )
-            })}
-          </span>
-          {hiddenGroupAgentCount > 0 && (
-            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-              +{hiddenGroupAgentCount}
-            </span>
-          )}
-        </>
+        <CompactAgentSummaryCluster agents={agents} className="flex-1" />
       )}
       <ChevronDown
         className={cn(

@@ -1,0 +1,24 @@
+{
+  "es": {
+    "sourcePrefixes": [
+      "src/renderer/src/components/session-grid/",
+      "src/renderer/src/components/sidebar/SidebarNav.tsx",
+      "src/renderer/src/components/tab-bar/QuickLaunchButton.tsx",
+      "src/renderer/src/components/dashboard-popout/agent-dashboard-filter-options.ts"
+    ],
+    "keyPrefixes": ["sessionGrid.", "auto.components.session.grid.", "dashboardPopout.terminal."],
+    "acceptedIdentical": {
+      "auto.components.session.grid.SessionGridToolbar.33561c90fb": "Terminal",
+      "auto.components.session.grid.SessionGridViewMenu.zoom": "Zoom",
+      "auto.components.session.grid.session.grid.items.builder.5c39f0175d": "Terminal",
+      "auto.components.settings.AccountsPane.endpointChina": "China (platform.minimaxi.com)",
+      "auto.components.settings.browser.search.terminalLinkActions.chat": "chat",
+      "auto.components.UnexpectedSignoutCard.6e3f1a9c5b": "Orca Relay",
+      "components.native-chat.backgroundTasks.countMonitorsOne": "1 monitor",
+      "components.native-chat.backgroundTasks.groupShell": "Shell",
+      "components.native-chat.notices.plan": "Plan",
+      "components.native-chat.subagents.tokens": "{{value0}} tokens",
+      "components.native-chat.tool.milliseconds": "{{value0}}ms"
+    }
+  }
+}
