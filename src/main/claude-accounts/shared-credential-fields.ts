@@ -74,5 +74,11 @@ export function mergeSharedClaudeCredentialFields(
       merged[key] = live[key]
     }
   }
+
+  // Why: read-back detection treats any byte diff from the last write as an external
+  // refresh; only reformat (dropping e.g. a trailing newline) when the merge is non-empty.
+  if (JSON.stringify(merged) === JSON.stringify(target)) {
+    return targetCredentialsJson
+  }
   return JSON.stringify(merged)
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { mergeSharedClaudeCredentialFields, SHARED_CLAUDE_CREDENTIAL_KEYS } from './shared-credential-fields'
+import {
+  mergeSharedClaudeCredentialFields,
+  SHARED_CLAUDE_CREDENTIAL_KEYS
+} from './shared-credential-fields'
 
 describe('mergeSharedClaudeCredentialFields', () => {
   it('merges the live credential shared fields into the target credential', () => {
@@ -58,6 +61,15 @@ describe('mergeSharedClaudeCredentialFields', () => {
   it('returns the target unchanged when the target JSON is malformed', () => {
     const target = '{not valid json'
     const live = JSON.stringify({ claudeAiOauth: {}, mcpOAuth: { conn1: 'v1' } })
+    expect(mergeSharedClaudeCredentialFields(target, live)).toBe(target)
+  })
+
+  it('returns the target byte-for-byte unchanged when neither side has any shared key (no-op merge)', () => {
+    // Why: a no-op reformat (e.g. dropped trailing newline) reads as an external refresh downstream.
+    const target = `${JSON.stringify({
+      claudeAiOauth: { accessToken: 'target-token', refreshToken: 'target-refresh' }
+    })}\n`
+    const live = JSON.stringify({ claudeAiOauth: { accessToken: 'live-token' } })
     expect(mergeSharedClaudeCredentialFields(target, live)).toBe(target)
   })
 
