@@ -58,53 +58,74 @@ function parseResetAt(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function agyQuotaFormatError(now: number): ProviderRateLimits {
+  return emptyAntigravityResult(
+    'error',
+    'Antigravity usage returned an unexpected quota format from the agy CLI.',
+    now,
+    'parse'
+  )
+}
+
+/**
+ * Maps the `agy -p /usage` quota groups onto rate-limit buckets. Well-formed but
+ * unknown groups/windows are preserved; any malformed entry rejects the whole
+ * response so a partial read can never hide the tightest quota pool as `ok`.
+ */
 function parseAgyUsageResponse(value: unknown, now = Date.now()): ProviderRateLimits {
   const root = isRecord(value) ? value : {}
   const command = isRecord(root.command) ? root.command : {}
   const data = isRecord(command.data) ? command.data : {}
   const groups = data.groups
+  if (!Array.isArray(groups) || groups.length === 0) {
+    return emptyAntigravityResult(
+      'unavailable',
+      'Antigravity usage is not available. The agy CLI returned no quota buckets.',
+      now,
+      'usage-unavailable'
+    )
+  }
   const buckets: RateLimitBucket[] = []
-  if (Array.isArray(groups)) {
-    for (const groupValue of groups) {
-      if (!groupValue || typeof groupValue !== 'object') {
-        continue
+  for (const groupValue of groups) {
+    if (!isRecord(groupValue)) {
+      return agyQuotaFormatError(now)
+    }
+    const groupName = typeof groupValue.name === 'string' ? groupValue.name.trim() : ''
+    if (!groupName || !Array.isArray(groupValue.buckets) || groupValue.buckets.length === 0) {
+      return agyQuotaFormatError(now)
+    }
+    const groupDescription =
+      typeof groupValue.description === 'string' ? groupValue.description.trim() || null : null
+    for (const bucketValue of groupValue.buckets) {
+      if (!isRecord(bucketValue)) {
+        return agyQuotaFormatError(now)
       }
-      const group = groupValue
-      const groupName = typeof group.name === 'string' ? group.name.trim() : ''
-      if (!groupName || !Array.isArray(group.buckets)) {
-        continue
+      const name = typeof bucketValue.name === 'string' ? bucketValue.name.trim() : ''
+      const remaining = bucketValue.remaining_fraction
+      const sourceWindow = typeof bucketValue.window === 'string' ? bucketValue.window.trim() : ''
+      if (
+        !name ||
+        !sourceWindow ||
+        typeof remaining !== 'number' ||
+        !Number.isFinite(remaining) ||
+        remaining < 0 ||
+        remaining > 1
+      ) {
+        return agyQuotaFormatError(now)
       }
-      const groupDescription =
-        typeof group.description === 'string' ? group.description.trim() || null : null
-      for (const bucketValue of group.buckets) {
-        if (!bucketValue || typeof bucketValue !== 'object') {
-          continue
-        }
-        const bucket = bucketValue
-        const name = typeof bucket.name === 'string' ? bucket.name.trim() : ''
-        const remaining = bucket.remaining_fraction
-        if (
-          !name ||
-          typeof remaining !== 'number' ||
-          !Number.isFinite(remaining) ||
-          remaining < 0 ||
-          remaining > 1
-        ) {
-          continue
-        }
-        const sourceWindow = typeof bucket.window === 'string' ? bucket.window.trim() : ''
-        buckets.push({
-          ...(typeof bucket.id === 'string' && bucket.id.trim() ? { id: bucket.id.trim() } : {}),
-          name,
-          groupName,
-          groupDescription,
-          windowMinutes: parseWindowMinutes(sourceWindow),
-          ...(sourceWindow ? { windowLabel: sourceWindow } : {}),
-          usedPercent: (1 - remaining) * 100,
-          resetsAt: parseResetAt(bucket.reset_time),
-          resetDescription: null
-        })
-      }
+      buckets.push({
+        ...(typeof bucketValue.id === 'string' && bucketValue.id.trim()
+          ? { id: bucketValue.id.trim() }
+          : {}),
+        name,
+        groupName,
+        groupDescription,
+        windowMinutes: parseWindowMinutes(sourceWindow),
+        windowLabel: sourceWindow,
+        usedPercent: (1 - remaining) * 100,
+        resetsAt: parseResetAt(bucketValue.reset_time),
+        resetDescription: null
+      })
     }
   }
   if (buckets.length === 0) {
@@ -167,6 +188,7 @@ function classifyAgyFailure(error: unknown): {
   }
 }
 
+/** Resolves the `agy` executable off PATH (bare name when absent). */
 export function getAntigravityUsageCommand(): string {
   return resolveCliCommand('agy')
 }
@@ -174,11 +196,13 @@ export function getAntigravityUsageCommand(): string {
 // Why a pre-check: invoking /usage on agy <1.1.11 starts an agent turn that spends
 // quota on every refresh, so the version gate must run before any usage invocation.
 // Unreadable versions fail closed for the same reason.
+/** Extracts the first semver triple (preserving prerelease/build) from `agy --version` output. */
 export function extractAgyVersion(output: string): string | null {
-  const match = output.match(/(\d+)\.(\d+)\.(\d+)/)
-  return match ? `${match[1]}.${match[2]}.${match[3]}` : null
+  const match = output.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?)/)
+  return match ? match[1] : null
 }
 
+/** Probes `agy --version`; aborts propagate, every other failure reads as unsupported. */
 async function checkAgyUsageSupport(
   command: string,
   signal?: AbortSignal
@@ -204,6 +228,7 @@ async function checkAgyUsageSupport(
   }
 }
 
+/** Reads native Antigravity quota: version-gated `agy -p /usage`, else an actionable `unavailable`. */
 export async function fetchAntigravityRateLimits(
   signal?: AbortSignal
 ): Promise<ProviderRateLimits> {
@@ -239,12 +264,7 @@ export async function fetchAntigravityRateLimits(
     try {
       return parseAgyUsageResponse(JSON.parse(String(stdout)), now)
     } catch {
-      return emptyAntigravityResult(
-        'error',
-        'Antigravity usage returned malformed JSON from the agy CLI.',
-        now,
-        'parse'
-      )
+      return agyQuotaFormatError(now)
     }
   } catch (error) {
     if (signal?.aborted || (isRecord(error) && error.name === 'AbortError')) {

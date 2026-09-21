@@ -112,13 +112,66 @@ describe('parseAgyUsageResponse', () => {
 
   it.each([
     { name: 'missing groups', value: {} },
-    { name: 'empty groups', value: { command: { data: { groups: [] } } } },
+    { name: 'empty groups', value: { command: { data: { groups: [] } } } }
+  ])('returns unavailable for $name', ({ value }) => {
+    const result = parseAgyUsageResponse(value)
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+  })
+
+  // Why: a partial read must never present as `ok` — a dropped pool could hide
+  // the tightest quota while the status bar reports a successful refresh.
+  it.each([
     {
       name: 'partial bucket',
       value: { command: { data: { groups: [{ name: 'x', buckets: [{}] }] } } }
+    },
+    {
+      name: 'group without a name',
+      value: {
+        command: {
+          data: {
+            groups: [
+              {
+                buckets: [{ name: 'x', window: '5h', remaining_fraction: 0.5 }]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      name: 'bucket without a window',
+      value: {
+        command: {
+          data: {
+            groups: [{ name: 'x', buckets: [{ name: 'x', remaining_fraction: 0.5 }] }]
+          }
+        }
+      }
+    },
+    {
+      name: 'one malformed bucket beside a valid one',
+      value: {
+        command: {
+          data: {
+            groups: [
+              {
+                name: 'Gemini Models',
+                buckets: [
+                  { name: 'Weekly', window: 'weekly', remaining_fraction: 0.5 },
+                  { name: 'Broken', window: '5h' }
+                ]
+              }
+            ]
+          }
+        }
+      }
     }
-  ])('returns unavailable for $name', ({ value }) => {
-    expect(parseAgyUsageResponse(value).status).toBe('unavailable')
+  ])('returns a parse error for $name', ({ value }) => {
+    const result = parseAgyUsageResponse(value)
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
   })
 })
 
@@ -126,7 +179,9 @@ describe('extractAgyVersion', () => {
   it.each([
     { output: '1.2.4', expected: '1.2.4' },
     { output: 'agy version 1.1.11\n', expected: '1.1.11' },
-    { output: 'v1.1.10 (darwin arm64)', expected: '1.1.10' }
+    { output: 'v1.1.10 (darwin arm64)', expected: '1.1.10' },
+    { output: '1.1.11-rc.1', expected: '1.1.11-rc.1' },
+    { output: 'agy 1.2.4+build.7', expected: '1.2.4+build.7' }
   ])('reads $output as $expected', ({ output, expected }) => {
     expect(extractAgyVersion(output)).toBe(expected)
   })
@@ -198,6 +253,20 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('1.1.10')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(vi.mocked(execFileCaptureToTermination).mock.calls).toHaveLength(1)
+    expect(usageInvocations()).toHaveLength(0)
+  })
+
+  // Why: `hasReachedAppVersion` ranks prereleases below the stable floor, and the
+  // extractor preserves the suffix, so an unverified build can never spawn /usage.
+  it('never invokes /usage on a prerelease below the stable floor', async () => {
+    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
+    vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
+      stdout: '1.1.11-rc.1',
+      stderr: ''
+    })
+    const result = await fetchAntigravityRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
     expect(usageInvocations()).toHaveLength(0)
   })
 
@@ -290,7 +359,7 @@ describe('fetchAntigravityRateLimits', () => {
   it.each([
     { remaining: -0.1, label: 'below zero' },
     { remaining: 1.1, label: 'above one' }
-  ])('rejects remaining_fraction $label', ({ remaining }) => {
+  ])('rejects remaining_fraction $label as a parse error', ({ remaining }) => {
     const result = parseAgyUsageResponse({
       command: {
         data: {
@@ -300,6 +369,7 @@ describe('fetchAntigravityRateLimits', () => {
         }
       }
     })
-    expect(result.status).toBe('unavailable')
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
   })
 })
