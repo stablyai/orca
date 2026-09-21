@@ -16,6 +16,7 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import { isPluginTaskSourceIconAssetPath } from './plugin-task-source-icon'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -59,13 +60,31 @@ const commandContributionSchema = z.object({
   action: pluginCommandIdSchema.optional()
 })
 
+/** The `.svg` suffix is what separates the two arms, so a Lucide token may not
+ *  wear it. Both arms stay open: installed manifests declare bare tokens. */
+const taskSourceIconSchema = z.union([
+  z
+    .string()
+    .max(1024)
+    .refine(isPluginTaskSourceIconAssetPath, 'must be a plugin-relative ".svg" path')
+    // The conventional "./" prefix is canonicalized away so one identity is stored.
+    .transform((value) => value.replace(/^\.[\\/]/, ''))
+    .pipe(pluginRelativePathSchema),
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .refine((value) => !isPluginTaskSourceIconAssetPath(value), 'must not be a file path')
+])
+
 /** A task source contributes entries to the Tasks list. The worker supplies
  *  data; core renders it, so no entry point is declared here. */
 const taskSourceContributionSchema = z.object({
   id: pluginIdSchema,
   title: z.string().min(1).max(256),
-  /** Lucide icon name rendered in the Tasks source bar. */
-  icon: z.string().min(1).max(64).optional()
+  /** Lucide icon name rendered in the Tasks source bar, or a plugin-relative
+   *  `.svg` the host validates and resolves before the renderer paints it. */
+  icon: taskSourceIconSchema.optional()
 })
 
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side

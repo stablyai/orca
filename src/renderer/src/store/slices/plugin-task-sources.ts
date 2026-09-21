@@ -74,7 +74,8 @@ export function deriveContributedPluginTaskSources(
         pluginKey: plugin.pluginKey,
         sourceId: source.id,
         title: source.title,
-        ...(source.icon ? { icon: source.icon } : {})
+        ...(source.icon ? { icon: source.icon } : {}),
+        ...(source.iconDataUrl ? { iconDataUrl: source.iconDataUrl } : {})
       }))
     )
 }

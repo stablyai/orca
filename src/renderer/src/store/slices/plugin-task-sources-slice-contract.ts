@@ -16,7 +16,11 @@ export type ContributedPluginTaskSource = {
   pluginKey: string
   sourceId: string
   title: string
+  /** As the plugin declared it: a Lucide token, or its own `.svg` path. */
   icon?: string
+  /** The host-validated SVG, already encoded. Absent whenever the declared
+   *  icon is a Lucide token or the asset failed validation. */
+  iconDataUrl?: string
 }
 
 export type SelectedPluginTaskSource = {

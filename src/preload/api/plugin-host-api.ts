@@ -22,8 +22,10 @@ export type PluginHostPanel = {
 export type PluginHostTaskSource = {
   id: string
   title: string
-  /** Lucide icon name declared in the plugin manifest. */
+  /** Lucide icon name, or the plugin-relative `.svg` path, as declared. */
   icon?: string
+  /** The host-validated SVG, already encoded for a CSS mask. */
+  iconDataUrl?: string
 }
 
 /** `pending` = awaiting (re-)consent; `idle` = enabled, worker not running

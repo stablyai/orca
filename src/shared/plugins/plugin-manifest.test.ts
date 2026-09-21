@@ -140,3 +140,35 @@ describe('taskSources contribution', () => {
     expect(result.ok).toBe(false)
   })
 })
+
+describe('task source icon declarations', () => {
+  function withIcon(icon: string): ReturnType<typeof parsePluginManifest> {
+    return parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'boards', title: 'Boards', icon }]
+        }
+      })
+    )
+  }
+
+  it('accepts a bare Lucide token', () => {
+    expect(withIcon('kanban').ok).toBe(true)
+  })
+
+  it('accepts a plugin-relative svg path', () => {
+    expect(withIcon('./azure-boards.svg').ok).toBe(true)
+  })
+
+  it('rejects an svg path that escapes the plugin directory', () => {
+    expect(withIcon('../escape.svg').ok).toBe(false)
+  })
+
+  it('rejects an absolute svg path', () => {
+    expect(withIcon('/etc/escape.svg').ok).toBe(false)
+  })
+})
