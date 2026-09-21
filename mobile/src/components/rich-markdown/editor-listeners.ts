@@ -24,14 +24,13 @@ function mirrorCheckedState(input: HTMLInputElement) {
 }
 
 function handleInput(scope: RichMarkdownEditorScope, event: Event) {
-  // Why: one checkbox tap raises click, input and change, and `change` is the one that records it.
-  if (checkboxAt(event.target)) {
+  // The flag is cleared for a checkbox too, as it always was: only the change is `change`'s, since
+  // one tap raises click, input and change and each of the three used to report.
+  scope.selectionDroppedOnBlur = false
+  if (checkboxAt(event.target) || !scope.editable) {
     return
   }
-  scope.selectionDroppedOnBlur = false
-  if (scope.editable) {
-    emitChange(scope)
-  }
+  emitChange(scope)
 }
 
 function handleChange(scope: RichMarkdownEditorScope, event: Event) {
