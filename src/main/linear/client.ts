@@ -248,6 +248,13 @@ export async function testConnection(
       credentialEpoch: saved?.credentialEpoch
     }
     if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
+      if (getWorkspaceState().workspaces.some((entry) => entry.id === org.id)) {
+        return {
+          ok: false,
+          error:
+            'This workspace is already connected. Reconnect explicitly to replace its identity.'
+        }
+      }
       replaceLegacyWorkspace(workspace, token)
     } else {
       saveWorkspaceToken(workspace.id, token)

@@ -151,6 +151,24 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('never migrates a legacy token over an explicitly connected workspace', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Legacy',
+      email: 'legacy@example.com',
+      organizationName: 'Alpha'
+    })
+    fixtures.set('token-new', { ...fixtures.get('token-alpha')!, id: 'new-viewer' })
+    const linear = await loadClientModule()
+    await linear.connect('token-new')
+    const saved = linear.getStatus().workspaces?.find((entry) => entry.id === 'org-alpha')
+    await expect(linear.testConnection('legacy')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('already connected')
+    })
+    expect(linear.getStatus().workspaces?.find((entry) => entry.id === 'org-alpha')).toBe(saved)
+    expect(readFileSync(workspaceTokenPath('org-alpha'), 'utf-8')).toBe('token-new')
+  })
+
   it('persists the verified viewer only on explicit connect', async () => {
     const linear = await loadClientModule()
     await linear.connect('token-alpha')
