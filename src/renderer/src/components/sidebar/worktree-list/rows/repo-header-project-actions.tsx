@@ -1,10 +1,14 @@
 import React from 'react'
+import { useAppStore } from '@/store'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
   CircleX,
   Ellipsis,
   Eye,
   FolderInput,
   FolderTree,
+  Moon,
+  Sun,
   Plus,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
@@ -79,6 +83,10 @@ export function RepoHeaderProjectActionsMenu({
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
+  const hiddenProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
+  const setHiddenProjectKeys = useAppStore((s) => s.setHideSleepingProjectKeys)
+  const projectKey = getRepoHostIdentity(repo)
+  const sleepingHidden = hiddenProjectKeys?.includes(projectKey) ?? false
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -135,6 +143,21 @@ export function RepoHeaderProjectActionsMenu({
             {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo))}
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem
+          onSelect={() => {
+            const keys = useAppStore.getState().hideSleepingProjectKeys ?? []
+            setHiddenProjectKeys(
+              keys.includes(projectKey)
+                ? keys.filter((key) => key !== projectKey)
+                : [...keys, projectKey]
+            )
+          }}
+        >
+          {sleepingHidden ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          {sleepingHidden
+            ? translate('sidebar.projectSleeping.show', 'Show sleeping worktrees')
+            : translate('sidebar.projectSleeping.hide', 'Hide sleeping worktrees')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
           {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
           <FolderTree className="size-3.5" />

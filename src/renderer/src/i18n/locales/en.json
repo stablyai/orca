@@ -5,6 +5,10 @@
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
       "confirm": "Adjust filters and reveal",
       "cancel": "Keep filters"
+    },
+    "projectSleeping": {
+      "show": "Show sleeping worktrees",
+      "hide": "Hide sleeping worktrees"
     }
   },
   "app": {

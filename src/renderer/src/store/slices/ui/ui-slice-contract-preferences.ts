@@ -35,6 +35,8 @@ export type UISlicePreferences = {
   setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
+  hideSleepingProjectKeys: string[]
+  setHideSleepingProjectKeys: (keys: string[]) => void
   showSleepingWorkspaces: boolean
   setShowSleepingWorkspaces: (v: boolean) => void
   workspaceHostScope: WorkspaceHostScope

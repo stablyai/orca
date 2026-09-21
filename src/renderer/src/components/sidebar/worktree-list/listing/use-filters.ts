@@ -33,6 +33,8 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 // Every sidebar filter, plus the single escape hatch that resets all of them.
 export function useSidebarWorktreeFilters() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const hiddenProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
+  const setHiddenProjectKeys = useAppStore((s) => s.setHideSleepingProjectKeys)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -145,6 +147,7 @@ export function useSidebarWorktreeFilters() {
   const filterState = useMemo(
     () => ({
       showSleepingWorkspaces,
+      hideSleepingProjectKeys: hiddenProjectKeys,
       filterRepoIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -156,6 +159,7 @@ export function useSidebarWorktreeFilters() {
       workspaceHostScope
     }),
     [
+      hiddenProjectKeys,
       showSleepingWorkspaces,
       filterRepoIds,
       hideDefaultBranchWorkspace,
@@ -170,6 +174,9 @@ export function useSidebarWorktreeFilters() {
   )
 
   const clearFilters = useCallback(() => {
+    if (hiddenProjectKeys?.length) {
+      setHiddenProjectKeys([])
+    }
     const actions = computeClearFilterActions(filterState)
     if (actions.resetShowSleepingWorkspaces) {
       setShowSleepingWorkspaces(DEFAULT_SHOW_SLEEPING_WORKSPACES)
@@ -199,6 +206,8 @@ export function useSidebarWorktreeFilters() {
       setVisibleWorkspaceHostIds(null)
     }
   }, [
+    hiddenProjectKeys,
+    setHiddenProjectKeys,
     setShowSleepingWorkspaces,
     setFilterRepoIds,
     setHideDefaultBranchWorkspace,

@@ -47,6 +47,27 @@ beforeEach(() => {
 })
 
 describe('createUISlice hydratePersistedUI', () => {
+  it('persists project sleeping filters and clears them without altering the global setting', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    store.getState().setHideSleepingProjectKeys(['local\0repo1', 'local\0repo1'])
+    expect(store.getState().hideSleepingProjectKeys).toEqual(['local\0repo1'])
+    expect(setUI).toHaveBeenLastCalledWith({ hideSleepingProjectKeys: ['local\0repo1'] })
+    store.getState().setHideSleepingProjectKeys([])
+    expect(setUI).toHaveBeenLastCalledWith({ hideSleepingProjectKeys: [] })
+    expect(store.getState().showSleepingWorkspaces).toBe(true)
+  })
+
+  it('restores project sleeping filters and defaults legacy profiles to no project filters', () => {
+    const store = createUIStore()
+    const keys = ['local\0repo1', 'ssh:box\0repo1']
+    store.getState().hydratePersistedUI(makePersistedUI({ hideSleepingProjectKeys: keys }))
+    expect(store.getState().hideSleepingProjectKeys).toEqual(keys)
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+    expect(store.getState().hideSleepingProjectKeys).toEqual([])
+  })
+
   it('does not restore the retired active-only filter from persisted UI state', () => {
     const store = createUIStore()
 
