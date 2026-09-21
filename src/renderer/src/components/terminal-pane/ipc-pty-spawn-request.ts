@@ -27,6 +27,7 @@ export async function spawnIpcPty(
     launchToken,
     launchAgent,
     startupCommandDelivery,
+    quickCommandSubmission,
     connectionId,
     worktreeId,
     tabId,
@@ -68,6 +69,9 @@ export async function spawnIpcPty(
       ? {
           startupCommandDelivery: connectOptions.startupCommandDelivery ?? startupCommandDelivery
         }
+      : {}),
+    ...((connectOptions.quickCommandSubmission ?? quickCommandSubmission)
+      ? { quickCommandSubmission: connectOptions.quickCommandSubmission ?? quickCommandSubmission }
       : {}),
     ...(connectionId ? { connectionId } : {}),
     ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
