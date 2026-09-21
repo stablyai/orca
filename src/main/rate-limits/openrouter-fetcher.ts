@@ -151,17 +151,22 @@ export async function fetchOpenRouterRateLimits(
 
     // Uncapped key: the account credit balance is the only remaining ceiling.
     const creditsOutcome = await fetchOpenRouterJson(CREDITS_URL, key, options.signal)
-    if (creditsOutcome.kind === 'data') {
-      const credits = unwrapData(creditsOutcome.data) as OpenRouterCreditsData
-      const total = typeof credits.total_credits === 'number' ? credits.total_credits : null
-      const spent = typeof credits.total_usage === 'number' ? credits.total_usage : null
-      if (total !== null && total > 0 && spent !== null) {
-        return result('ok', null, {
-          monthly: spendWindow((spent / total) * 100),
-          planType,
-          usageMetadata: { source: 'web' }
-        })
-      }
+    if (creditsOutcome.kind === 'result') {
+      // Why surface this rather than fall through: with no cap on the key, the
+      // balance is the only ceiling left, so a failed read means the headroom is
+      // unknown — not that there is none. Reporting 'unavailable' here would
+      // also discard the previous reading, where an error keeps it.
+      return creditsOutcome.result
+    }
+    const credits = unwrapData(creditsOutcome.data) as OpenRouterCreditsData
+    const total = typeof credits.total_credits === 'number' ? credits.total_credits : null
+    const spent = typeof credits.total_usage === 'number' ? credits.total_usage : null
+    if (total !== null && total > 0 && spent !== null) {
+      return result('ok', null, {
+        monthly: spendWindow((spent / total) * 100),
+        planType,
+        usageMetadata: { source: 'web' }
+      })
     }
 
     // Why: a key with no cap and no purchased credits is a working key with no

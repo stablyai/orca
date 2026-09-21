@@ -123,6 +123,20 @@ describe('fetchOpenRouterRateLimits', () => {
     expect(limits.monthly).toBeUndefined()
   })
 
+  it('reports a failed credits read as an error, not as "no cap"', async () => {
+    // Why: with no cap on the key the balance is the only ceiling left, so a
+    // 429 there means the headroom is unknown rather than absent. Reporting
+    // 'unavailable' would also drop the previous reading.
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse(keyPayload({ limit: null, limit_remaining: null })))
+      .mockResolvedValueOnce(jsonResponse(null, 429))
+
+    const limits = await fetchOpenRouterRateLimits({ apiKey: 'sk-or-test' })
+
+    expect(limits.status).toBe('error')
+    expect(limits.usageMetadata?.failureKind).toBe('rate-limited')
+  })
+
   it('surfaces a network failure as an error rather than throwing', async () => {
     netFetchMock.mockRejectedValueOnce(new Error('socket hang up'))
 

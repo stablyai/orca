@@ -83,8 +83,6 @@ export const MAX_ACTIVE_FAILURE_STREAK = 8
 export const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
   'codex',
-  'cursor',
-  'openrouter',
   'grok'
 ])
 export const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped

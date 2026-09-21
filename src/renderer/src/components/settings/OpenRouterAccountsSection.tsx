@@ -8,6 +8,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { OpenRouterIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
+import { getAccountsOpenRouterSearchEntries } from './accounts-search'
 
 const OPENROUTER_KEYS_URL = 'https://openrouter.ai/settings/keys'
 
@@ -19,6 +20,7 @@ const OPENROUTER_KEYS_URL = 'https://openrouter.ai/settings/keys'
  * The draft lives in local state and is cleared the moment it is handed to main.
  */
 export function OpenRouterAccountsSection(): React.JSX.Element {
+  const [searchEntry] = getAccountsOpenRouterSearchEntries()
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -101,12 +103,18 @@ export function OpenRouterAccountsSection(): React.JSX.Element {
         </a>
       </div>
 
+      {/* Why the catalog entry is threaded in: this filter matches only its own
+          title, description and keywords — it does not inherit the parent
+          section's entry. Without them a search that mounts the section (say
+          "credits") would then hide the controls inside it. */}
       <SearchableSetting
         id="accounts-openrouter-api-key"
         title={translate(
           'auto.components.settings.AccountsPane.openrouterApiKey',
           'OpenRouter API key'
         )}
+        description={searchEntry.description}
+        keywords={searchEntry.keywords}
       >
         <div className="space-y-2">
           <Label htmlFor="openrouter-api-key" className="text-xs">
@@ -164,7 +172,7 @@ export function OpenRouterAccountsSection(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.AccountsPane.openrouterStorageNote',
-                'Stored encrypted on this computer and never included in settings sync.'
+                'Kept on this computer and never included in settings sync. Encrypted when your system keyring is available.'
               )}
             </p>
           </div>
