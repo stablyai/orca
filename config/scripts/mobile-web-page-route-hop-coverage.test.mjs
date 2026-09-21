@@ -46,15 +46,29 @@ function sameRoute(pushed, declared) {
  * document — which is C3.1's pairwise pin, now a consequence of the rule rather than a rule of its
  * own. The two `-> tasks` entries and the four `-> files/*` entries are the hops the sidebar and
  * the rows make into a route that asks for more than their opener holds.
+ *
+ * Absent for the same reason, and the reason C4 registered its two routes in one PR:
+ * `source-control ⇄ review` in both directions. The hub's rows push review and review replaces
+ * back, and the two declare the same five grants, so both hops stay in the document. Either one
+ * landing alone would have put a handoff — a new native screen and a new bridge session — between
+ * a changed-file row and its diff.
  */
 const HANDED_OFF = [
   '/h/[hostId] -> /h/[hostId]/files/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/files/preview/[worktreeId]',
+  '/h/[hostId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/tasks',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/preview/[worktreeId]',
+  '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/tasks',
+  '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/tasks',
+  '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/tasks'
 ]
 
@@ -104,5 +118,21 @@ describe('in-page hops between page routes', () => {
     }
     expect(preview.grants.length, 'the preview declares something to inherit').toBeGreaterThan(0)
     expect(preview.grants.filter((grant) => !explorer.grants.includes(grant))).toEqual([])
+  })
+
+  it('keeps the hub and review local to each other, in both directions', () => {
+    // The pair C4 registered together. Asserted as equality of the two grant lists rather than as
+    // the absence of two rows above: absent is also what an unregistered route looks like, and the
+    // hop that matters — a changed-file row opening its diff — would read as covered either way.
+    const grantsOf = (pathname) => {
+      const route = MOBILE_WEB_PAGE_ROUTES.find((entry) => entry.pathname === pathname)
+      if (!route) {
+        throw new Error(`${pathname} is not registered`)
+      }
+      return [...route.grants].sort()
+    }
+    const hub = grantsOf('/h/[hostId]/source-control/[worktreeId]')
+    expect(hub.length).toBeGreaterThan(0)
+    expect(grantsOf('/h/[hostId]/review/[worktreeId]')).toEqual(hub)
   })
 })

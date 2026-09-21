@@ -1,15 +1,28 @@
-import { useCallback, useMemo } from 'react'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { MobileDiffReviewScreenView } from '../../../../src/components/MobileDiffReviewScreenView'
+import { useLocalSearchParams } from 'expo-router'
+import { MobileDiffReviewRouteScreen } from '../../../../src/session/MobileDiffReviewRouteScreen'
+import { firstReviewParam } from '../../../../src/session/mobile-diff-review-screen-model'
 import {
-  firstReviewParam,
-  normalizeReviewFilterParam
-} from '../../../../src/session/mobile-diff-review-screen-model'
-import { normalizeReviewAreaParam } from '../../../../src/session/mobile-diff-review-positioning'
-import { useMobileDiffReviewController } from '../../../../src/session/use-mobile-diff-review-controller'
-import { useForceReconnect, useHostClient } from '../../../../src/transport/client-context'
+  shellScreenRoute,
+  shellScreenRouteKey
+} from '../../../../src/mobile-web-shell/shell-screen-route'
+import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
+import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
 
+/**
+ * Diff review, from the desktop's bundle or from this app.
+ *
+ * The files switch's shape. What is different here is that the native screen is a component rather
+ * than the body of this file: `MobileDiffReviewRouteScreen` calls the review controller, and a
+ * controller at this file's top level would subscribe behind the page as well as in front of it.
+ * As an element it is built and not mounted, and only `fallback` ever mounts it.
+ *
+ * `matchesRoutePattern` is segment-count exact with literal equality on the static segments, so
+ * these five segments collide with nothing: the explorer's five carry `files`.
+ */
 export default function MobileDiffReviewScreen() {
+  // Through `firstReviewParam`, which is this domain's spelling of the rule every switch follows:
+  // expo-router answers a repeated query key with an array, and a bare read would build a single
+  // segment out of `String(['a','b'])` that the bridge's segment rule accepts.
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -20,36 +33,37 @@ export default function MobileDiffReviewScreen() {
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
-  const name = firstReviewParam(params.name)
-  const initialFilter = normalizeReviewFilterParam(firstReviewParam(params.scope))
-  const initialFile = firstReviewParam(params.file)
-  const initialArea = normalizeReviewAreaParam(firstReviewParam(params.area))
-  const initialTarget = useMemo(
-    () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
-    [initialArea, initialFile]
+  const enabled = useMobileWebShellEnabled()
+  const native = <MobileDiffReviewRouteScreen />
+
+  // The four query params are read by the screen itself, so they are carried across whole rather
+  // than re-derived here; each is omitted when empty, because the screen's own normalizers treat an
+  // absent scope, file or area differently from one named nothing.
+  const routeParams = Object.fromEntries(
+    (['name', 'scope', 'file', 'area'] as const)
+      .map((key) => [key, firstReviewParam(params[key])] as const)
+      .filter(([, value]) => value !== '')
   )
-  const router = useRouter()
-  const { client, state: connState } = useHostClient(hostId)
-  const forceReconnect = useForceReconnect()
+  const route =
+    hostId && worktreeId
+      ? shellScreenRoute({
+          pathname: `/h/${encodeURIComponent(hostId)}/review/${encodeURIComponent(worktreeId)}`,
+          ...(Object.keys(routeParams).length === 0 ? {} : { params: routeParams })
+        })
+      : null
 
-  const openSession = useCallback(() => {
-    const query = name ? `?${new URLSearchParams({ name }).toString()}` : ''
-    router.replace(
-      `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${query}`
-    )
-  }, [hostId, name, router, worktreeId])
-
-  const controller = useMobileDiffReviewController({
-    client,
-    connState,
-    hostId,
-    worktreeId,
-    name,
-    initialFilter,
-    initialTarget,
-    onOpenSession: openSession,
-    onReconnect: forceReconnect
-  })
-
-  return <MobileDiffReviewScreenView controller={controller} onBack={() => router.back()} />
+  if (enabled !== true || !hostId || route === null) {
+    return native
+  }
+  // Keyed on the route: a host captures the grants its session was opened with, so a screen reused
+  // across a route change would keep authorising frames under the grants of the route the page has
+  // left. A `file` change is the common case here and is a param change, not a path change.
+  return (
+    <MobileWebShellScreen
+      key={shellScreenRouteKey(route)}
+      hostId={hostId}
+      route={route}
+      fallback={native}
+    />
+  )
 }

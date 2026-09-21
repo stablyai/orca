@@ -1,7 +1,12 @@
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
-import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
+import {
+  BRIDGE_MAX_PENDING_REQUESTS,
+  BRIDGE_MAX_SUBSCRIPTIONS,
+  isBridgeFrameWithinCap,
+  utf8ByteLength
+} from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
@@ -11,6 +16,7 @@ import {
   BridgeClientClosedError,
   BridgeClientNotNativeVerbError,
   BridgeClientNotReadyError,
+  BridgeRequestOversizedError,
   BridgeSendFailedError,
   BridgeShellReplacedError
 } from './bridge-client-errors'
@@ -34,6 +40,7 @@ export {
   BridgeClientClosedError,
   BridgeClientNotReadyError,
   BridgeReplyRefusedError,
+  BridgeRequestOversizedError,
   BridgeSendFailedError,
   BridgeShellReplacedError
 } from './bridge-client-errors'
@@ -127,17 +134,40 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     options.onDiagnostic?.(diagnostic)
   }
 
-  /** False when the frame never left. Every value in a page frame is one the caller handed in, so
-   *  the throw this catches is the port's, never `JSON.stringify`'s. */
-  function sendFrame(frame: BridgeClientMessage): boolean {
+  /**
+   * Posts one frame, or says why it did not leave. Never throws, which is the contract every caller
+   * below depends on: a throw escaping here skips the id bookkeeping that follows the call, and the
+   * slot it leaves open is one of sixty-four for the life of the page.
+   *
+   * `oversized` is refused here rather than by the shell, under the shell reader's own predicate:
+   * the reader drops a frame over the cap and answers nothing, which would leave a request pending
+   * for the life of the page.
+   *
+   * Serialization is inside the `try` and not before it. Every value in a page frame is one the
+   * caller handed in, so `JSON.stringify` can throw on one — a `BigInt`, a cycle, a `toJSON` of its
+   * own — and that throw is a send that failed, not an exception for a tap handler to discover.
+   */
+  function sendFrame(frame: BridgeClientMessage): 'sent' | 'oversized' | 'port-failed' {
     try {
-      options.send(JSON.stringify(frame))
-      return true
+      const json = JSON.stringify(frame)
+      if (!isBridgeFrameWithinCap(json)) {
+        // UTF-8 bytes, because that is the unit both shells count: `json.utf8.count` on iOS and
+        // `json.toByteArray(Charsets.UTF_8).size` on Android. A code-unit count under the same name
+        // understates every non-ASCII frame — a diff of CJK text is three bytes a unit.
+        report({ kind: 'send-oversized', bytes: utf8ByteLength(json) })
+        return 'oversized'
+      }
+      options.send(json)
+      return 'sent'
     } catch (error) {
       report({ kind: 'send-failed', error })
-      return false
+      return 'port-failed'
     }
   }
+
+  /** For the members whose contract is a boolean: a frame that did not leave is a false, whichever
+   *  of the two reasons it was. */
+  const posted = (frame: BridgeClientMessage): boolean => sendFrame(frame) === 'sent'
 
   // Counted rather than random: a recorded run replays the same ids, and one page holds one client,
   // so a counter is already unique across everything the shell is asked to keep in flight.
@@ -147,7 +177,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => sendFrame(frame),
+    send: (frame) => posted(frame),
     onDroppedBinaryFrame: () => {
       report({ kind: 'binary-frame-dropped' })
     }
@@ -237,7 +267,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     const id = nextId()
     return new Promise<RpcResponse>((resolve, reject) => {
       requests.open(id, { resolve, reject })
-      const sent = sendFrame({
+      const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'request',
         id,
@@ -249,9 +279,13 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         ...(args.length > 1 ? { params } : {}),
         ...(requestOptions === undefined ? {} : { options: requestOptions })
       })
-      if (!sent) {
+      if (outcome !== 'sent') {
         requests.abandon(id)
-        reject(new BridgeSendFailedError())
+        // Both are definite failures — the frame never left — and they are told apart because a
+        // caller can act on one of them: an oversized request says which action to retry smaller.
+        reject(
+          outcome === 'oversized' ? new BridgeRequestOversizedError() : new BridgeSendFailedError()
+        )
       }
     })
   }
@@ -304,7 +338,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const notifications = createBridgeClientNotifications({
-    send: sendFrame,
+    send: posted,
     requireSession,
     isClosed: () => closed,
     hasGrant: (name) => session?.grants.native.includes(name) === true

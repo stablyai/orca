@@ -20,13 +20,17 @@ const AGENT_HISTORY_ROUTE = 'app/h/[hostId]/agent-history/[worktreeId].tsx'
 const TASKS_ROUTE = 'app/h/[hostId]/tasks.tsx'
 const FILES_ROUTE = 'app/h/[hostId]/files/[worktreeId].tsx'
 const FILES_PREVIEW_ROUTE = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
+const SOURCE_CONTROL_ROUTE = 'app/h/[hostId]/source-control/[worktreeId].tsx'
+const REVIEW_ROUTE = 'app/h/[hostId]/review/[worktreeId].tsx'
 /** One entry per screen the flag can switch to the page, which is what a review reads. */
 const SWITCHED_ROUTES = [
   HOST_ROUTE,
   AGENT_HISTORY_ROUTE,
   TASKS_ROUTE,
   FILES_ROUTE,
-  FILES_PREVIEW_ROUTE
+  FILES_PREVIEW_ROUTE,
+  SOURCE_CONTROL_ROUTE,
+  REVIEW_ROUTE
 ]
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
 /** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,

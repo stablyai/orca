@@ -106,6 +106,23 @@ patch still adds `L"msys-2.0.dll"` to that file. Without that, editing the patch
 would turn the gate into a permanent false positive that fails every correctly
 rebuilt addon and tells the developer to do the one thing that cannot help.
 
+## A stale source tree looks exactly like a stale addon
+
+`rebuild-native-deps.mjs` rejects a marker-less addon in its Electron probe and
+again after the rebuild, so an unpatched `build/Release/conpty.node` is never
+left in place silently. But the rebuild compiles whatever `node_modules/node-pty`
+holds, and pnpm materializes that from the patch only at install time. On a
+checkout whose `node_modules` predates the denial, `--force` compiles for
+minutes and rewrites `conpty.node` byte-identical and unpatched; measured on a
+Windows dev checkout, same size, new mtime, marker still absent. The
+post-rebuild gate then said "rebuild from source", which was the step that had
+just run.
+
+So the script reads `src/win/conpty.cc` before it compiles: if the source does
+not carry `L"msys-2.0.dll"`, it stops before the rebuild and says to run
+`pnpm install`, which re-applies the current patch. If the patch itself lacks
+the literal, the checkout predates the denial and a reinstall cannot help.
+
 ## Every path the loader can fall through to
 
 `loadNativeModule` tries `build/Release`, then `build/Debug`, then

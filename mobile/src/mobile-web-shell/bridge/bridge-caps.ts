@@ -258,13 +258,25 @@ function inspectDocument(root: unknown): DocumentRefusal | null {
 }
 
 /**
+ * Whether a frame this long is one the reader on the other side will accept.
+ *
+ * The receiving half of the bridge drops an oversized frame and answers nothing, so a sender that
+ * posts one leaves its caller waiting for a reply that cannot come. Exported so the sender can
+ * refuse in advance under the receiver's own predicate rather than a second spelling of it.
+ *
+ * A code unit never encodes to fewer than one byte, so a string longer than the cap in units is
+ * over it in bytes too: the hostile case is refused without walking it.
+ */
+export function isBridgeFrameWithinCap(raw: string): boolean {
+  return raw.length <= BRIDGE_MAX_MESSAGE_BYTES && utf8ByteLength(raw) <= BRIDGE_MAX_MESSAGE_BYTES
+}
+
+/**
  * Parses a frame far enough to hand it to a schema, and no further. `direction` has no default: a
  * new call site has to say which bounds it is asking for.
  */
 export function parseBridgeMessage(raw: string, direction: BridgeDirection): BridgeRead<unknown> {
-  // A code unit never encodes to fewer than one byte, so a string longer than the cap in units is
-  // over it in bytes too: the hostile case is refused without walking it.
-  if (raw.length > BRIDGE_MAX_MESSAGE_BYTES || utf8ByteLength(raw) > BRIDGE_MAX_MESSAGE_BYTES) {
+  if (!isBridgeFrameWithinCap(raw)) {
     return { ok: false, refusal: 'oversized' }
   }
   let parsed: unknown
