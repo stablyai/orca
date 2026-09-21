@@ -15,6 +15,8 @@ describe('mobile file syntax highlighting', () => {
     expect(detectMobileFileLanguage('C:\\repo\\scripts\\postinstall.CTS')).toBe('typescript')
     expect(detectMobileFileLanguage('scripts/deploy.sh')).toBe('shell')
     expect(detectMobileFileLanguage('Dockerfile')).toBe('dockerfile')
+    expect(detectMobileFileLanguage('kernels/matmul.cu')).toBe('cpp')
+    expect(detectMobileFileLanguage('kernels/matmul.cuh')).toBe('cpp')
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')

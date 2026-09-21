@@ -39,6 +39,10 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cc': 'cpp',
   '.cxx': 'cpp',
   '.hpp': 'cpp',
+  // Why: mobile's lowlight renderer has no cuda grammar; cpp gives CUDA files
+  // C++-level highlighting instead of falling all the way back to plaintext.
+  '.cu': 'cpp',
+  '.cuh': 'cpp',
   '.cs': 'csharp',
   '.rb': 'ruby',
   '.php': 'php',

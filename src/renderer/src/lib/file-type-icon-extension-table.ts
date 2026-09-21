@@ -50,6 +50,8 @@ export const FILE_ICON_BY_EXTENSION: Record<string, LucideIcon> = {
   css: FileType,
   csv: FileSpreadsheet,
   cts: FileCode,
+  cu: FileCode,
+  cuh: FileCode,
   cxx: FileCode,
   dart: FileCode,
   db: Database,
