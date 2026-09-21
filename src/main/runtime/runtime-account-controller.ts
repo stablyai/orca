@@ -72,6 +72,7 @@ export class RuntimeAccountController {
     await Promise.allSettled([
       rateLimits.refresh(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchBoundClaudeHomesOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
   }
@@ -81,6 +82,7 @@ export class RuntimeAccountController {
     await Promise.allSettled([
       rateLimits.refreshIfStale(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchBoundClaudeHomesOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
   }

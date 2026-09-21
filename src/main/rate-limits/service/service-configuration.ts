@@ -13,6 +13,7 @@ import {
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
   type InactiveClaudeAccountInfo,
+  type BoundClaudeHomesResolver,
   type RateLimitState,
   normalizeCodexAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget,
@@ -59,6 +60,12 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
     this.inactiveClaudeAccountsResolver = resolver
     this.inactiveClaudeAccountsGeneration += 1
+  }
+
+  setBoundClaudeHomesResolver(resolver: BoundClaudeHomesResolver): void {
+    this.boundClaudeHomesResolver = resolver
+    this.boundClaudeHomesGeneration += 1
+    this.pruneBoundClaudeHomeState()
   }
 
   setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
@@ -109,6 +116,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
     this.inactiveCodexFetching.clear()
+    this.boundClaudeHomeFetching.clear()
     this.resolveAndClearFetchIdleWaiters()
     this.stopTimer()
     this.clearDeferredStartupRefresh()
@@ -120,6 +128,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
+    this.pruneBoundClaudeHomeState()
     return {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
@@ -135,7 +144,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
-      )
+      ),
+      boundClaudeHomes: this.buildBoundClaudeHomeArray()
     }
   }
 }

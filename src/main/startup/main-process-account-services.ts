@@ -24,6 +24,9 @@ import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
 import { isRealHomeCodexHookLaneUsable } from '../codex/codex-real-home-hook-install'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
+import { resolveClaudeHomeBindingForGroup } from '../../shared/claude-home-binding'
+import { getProjectGroupExecutionHostId } from '../../shared/execution-host'
+import type { BoundClaudeHomeBinding } from '../rate-limits/service/service-types'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
@@ -155,6 +158,23 @@ export function initializeMainProcessAccountServices(): void {
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
+  })
+  // Why: resolve every group through the shared resolver and keep one row per owning group —
+  // a child that inherits its ancestor's directory resolves to that ancestor, not to itself.
+  state.rateLimits.setBoundClaudeHomesResolver(() => {
+    const groups = store.getProjectGroups?.() ?? []
+    const byGroupId = new Map<string, BoundClaudeHomeBinding>()
+    for (const group of groups) {
+      const binding = resolveClaudeHomeBindingForGroup(
+        groups,
+        group.id,
+        getProjectGroupExecutionHostId(group)
+      )
+      if (binding) {
+        byGroupId.set(binding.groupId, binding)
+      }
+    }
+    return [...byGroupId.values()]
   })
   state.rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
