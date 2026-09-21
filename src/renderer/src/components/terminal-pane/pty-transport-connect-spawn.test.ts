@@ -26,7 +26,7 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
-  it.each([0, 420])(
+  it.each([0, 1, 420])(
     'preserves snapshot sequence and keyboard proof %s across IPC reattach',
     async (seq) => {
       const { createIpcPtyTransport } = await import('./pty-transport')

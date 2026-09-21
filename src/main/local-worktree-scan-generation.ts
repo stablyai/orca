@@ -17,6 +17,15 @@ export function bumpLocalWorktreeScanGeneration(repoId: string): void {
   mutationRevision += 1
 }
 
+export function forgetLocalWorktreeScanGeneration(repoId: string): void {
+  generationByRepoId.delete(repoId)
+}
+
+export function retireLocalWorktreeScanGeneration(repoId: string): void {
+  bumpLocalWorktreeScanGeneration(repoId)
+  forgetLocalWorktreeScanGeneration(repoId)
+}
+
 /**
  * Advances on every event above that can change what a worktree scan would find — repo add,
  * removal, update, and scan-cache invalidation — and on nothing else. A cache that must not answer
@@ -40,4 +49,8 @@ export function resetLocalWorktreeScanGenerationsForTests(): void {
   generationSequence += 1
   mutationRevision += 1
   generationByRepoId.clear()
+}
+
+export function _getLocalWorktreeScanGenerationCacheSize(): number {
+  return generationByRepoId.size
 }

@@ -1,5 +1,7 @@
 import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
+import { declaredDeviceSubstitutes, type DeclaredDeviceState } from './declared-device-state'
 import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
+import { bindSalvageObserver } from './salvage-observation'
 import type { MountOptions } from './mounted-operation-module'
 import type { MountAdapter } from './recording-scenario'
 
@@ -14,11 +16,12 @@ import type { MountAdapter } from './recording-scenario'
  */
 export function pilotMountAdapters(
   root: string,
-  options: MountOptions & { mutation?: OperationMutation } = {}
+  options: MountOptions & { mutation?: OperationMutation; device?: DeclaredDeviceState } = {}
 ) {
+  const device = declaredDeviceSubstitutes(options.device ?? {})
   const loaders = MOUNTED_OPERATION_MODULES.map((module) => ({
     module,
-    modules: operationModuleLoader(root, options.mutation, module.exposes ?? [])
+    modules: operationModuleLoader(root, options.mutation, module.exposes ?? [], device.substitutes)
   }))
   const adapters: Record<string, MountAdapter> = {}
   for (const { module, modules } of loaders) {
@@ -26,7 +29,15 @@ export function pilotMountAdapters(
       if (operation in adapters) {
         throw new Error(`Two adapter modules mount ${operation}`)
       }
-      adapters[operation] = adapter
+      // The declared device writes through the same effect recorder the adapter is handed, so a
+      // scenario records one without its adapter having to wire the sink itself.
+      adapters[operation] = (context) => {
+        device.bind(context.effect)
+        // Same reason as the device sink: the reply classifier is loaded per adapter module, and
+        // the mount is what knows which recording a salvaged read belongs to.
+        bindSalvageObserver(context.effect)
+        return adapter(context)
+      }
     }
   }
   return {

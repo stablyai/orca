@@ -1,0 +1,1150 @@
+{
+  "operation": "tasks.provider-load",
+  "family": "tasks.provider-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "e9bdad78cf60e3dd931eab8810d011c6e0066f9a336a206f8f9ca62621b21fee",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "03738b1bd64d": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-5",
+          "ok": false
+        }
+      }
+    },
+    "084da53ea1e3": {
+      "name": "linear.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "0d5034d2e543": {
+      "name": "linearTeams",
+      "ordinal": 8,
+      "value": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "1c97db0775ed": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": 0
+    },
+    "2037697422a5": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "30a58f63c90f": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "3efe0a92588d": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "413e4f429e18": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": 4
+    },
+    "470893ebd4a7": {
+      "name": "linearWorkspaces",
+      "ordinal": 4,
+      "value": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ]
+    },
+    "49c5fd241816": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "failedCount": 0,
+        "items": [
+          {
+            "key": "github:repo-1:issue:9",
+            "provider": "github",
+            "source": {
+              "author": {
+                "$rpc": "null"
+              },
+              "id": "issue:9",
+              "labels": [],
+              "number": 9,
+              "repoId": "repo-1",
+              "repoName": "Repo",
+              "state": "open",
+              "title": "An issue",
+              "type": "issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": ""
+            },
+            "status": "Open",
+            "subtitle": "Repo #9",
+            "title": "An issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          }
+        ],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {
+          "repo-1": {
+            "issues": "upstream"
+          }
+        }
+      }
+    },
+    "50982acf6b28": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-5",
+          "ok": false
+        }
+      }
+    },
+    "5e1882223b41": {
+      "name": "linear.listTeams#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "5efa1426d38f": {
+      "name": "selectedLinearWorkspaceId",
+      "ordinal": 5,
+      "value": "linear-workspace"
+    },
+    "601208d7476f": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "63a020a8e787": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-5",
+          "ok": false
+        }
+      }
+    },
+    "67b5ebc67646": {
+      "connected": true,
+      "selectedTeams": ["team-1"],
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ],
+      "workspaceId": "linear-workspace",
+      "workspaces": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ]
+    },
+    "6c06142a5dd6": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7a279381c58b": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+    },
+    "8e7fd8abdcb3": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true
+        }
+      }
+    },
+    "9050cedbf1cf": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
+    },
+    "91220356fb85": {
+      "name": "selectedLinearTeamIds",
+      "ordinal": 9,
+      "value": ["team-1"]
+    },
+    "93695401e4f8": {
+      "name": "linear.listTeams#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listTeams"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "a3b6191b3861": {
+      "name": "settings.update#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "b1e3cf829be4": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "b972a52a94fe": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "connected": true,
+            "selectedWorkspaceId": "linear-workspace",
+            "workspaces": [
+              {
+                "id": "linear-workspace",
+                "name": "Workspace"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "bd4e7772cf07": {
+      "name": "settings.update#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultLinearTeamSelection": ["team-1"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "de7bfe07e04b": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": 4
+        }
+      }
+    },
+    "e93bedf82315": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "before": {
+              "$rpc": "undefined"
+            },
+            "limit": 36,
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:9",
+                "labels": [],
+                "number": 9,
+                "state": "open",
+                "title": "An issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ],
+            "sources": {
+              "issues": "upstream"
+            }
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f57b6504f168": {
+      "name": "linearConnected",
+      "ordinal": 3,
+      "value": true
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.provider-load-github.countworkitems-1",
+    "checkpoints": [
+      {
+        "id": "tk-provider-load.prelude:linear-context-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8"],
+          "payloads": ["084da53ea1e3", "5e1882223b41"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.prelude:persist-teams-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.prelude:github-page-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07", "e93bedf82315"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861", "7a279381c58b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.normal:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "de7bfe07e04b"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.result-absent:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "8e7fd8abdcb3"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.result-null:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "30a58f63c90f"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-ok-missing:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "601208d7476f"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-string-error:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "6c06142a5dd6"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-object-error:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "b1e3cf829be4"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "63a020a8e787"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused-no-message:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "03738b1bd64d"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.method-not-found:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "50982acf6b28"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "2037697422a5"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection-no-message:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "3efe0a92588d"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "1c97db0775ed"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -214,7 +214,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
   })
 
-  it('closes the durable native owner from the real structured tab close action', async () => {
+  it('routes durable native owner close through the unified tab action', async () => {
     const agentTab = {
       id: 'structured-agent-session-codex-session-1',
       entityId: 'codex-session-1',
@@ -249,18 +249,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     model.commands.closeItem(agentTab.id)
 
     await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(agentTab.id))
-    expect(mocks.callRuntimeRpc.mock.calls).toEqual([
-      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }],
-      [
-        { kind: 'local' },
-        'session.tabs.close',
-        {
-          worktree: 'id:wt-1',
-          tabId: 'agent-session:codex-session-1',
-          reason: 'user'
-        }
-      ]
-    ])
+    // Why: the unified store action owns cancellation and host retirement for every close path.
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {

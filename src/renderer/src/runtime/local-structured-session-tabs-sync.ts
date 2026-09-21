@@ -16,9 +16,9 @@ export {
   applyLocalStructuredSessionTabSnapshots,
   applyStructuredSessionTabSnapshots,
   clearLocalStructuredSessionTabs,
-  LOCAL_STRUCTURED_SESSION_OWNER,
   removeLocalStructuredSessionTabs
 } from './local-structured-session-tabs-sync/snapshot-apply'
+export { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 export { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
 export { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 

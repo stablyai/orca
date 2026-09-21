@@ -34,6 +34,9 @@ export type ClaudeStructuredSessionEvent =
       message: Record<string, unknown>
       /** Present only when this replay acknowledged Orca's in-flight dispatch. */
       startsTurn?: true
+      /** Submission instant of the dispatch this replay acknowledged; the origin
+       *  of the turn it opens. Absent when the host cannot name a send. */
+      requestedAt?: number
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }
@@ -110,8 +113,10 @@ export type ClaudeDispatchWaiter = {
   clientMessageId: string | null
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
-  /** Sequence used to fence a late identity from a newer dispatch. */
+  /** Sequence used to identify the latest pending dispatch for control ownership. */
   dispatchSequence: number
+  /** Host submission instant owned by this exact dispatch. */
+  requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
   /** The write failed or the child died, but a replay may still name it. */
@@ -147,16 +152,12 @@ export type ClaudeSession = {
   restoreSkippedOptions: Set<string>
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
-  /** Provider uuid of the most recently admitted turn, if one is active. */
-  activeTurnId?: string
   backgroundTasks: ClaudeBackgroundTaskTracker
   /** The `/` surface the CLI reports for itself; seeded from init, kept current
    *  by later init and `commands_changed` frames. */
   commands: ClaudeSlashCommandCatalog
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
-  /** Dispatch sequence that admitted activeTurnId. */
-  activeTurnSequence?: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
   optionMutationSequence: number
   /** Shared durable-close write; a failed write clears this for a retry. */
@@ -169,6 +170,7 @@ export type ClaudeSession = {
   closeEnded?: boolean
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+  unbindReadingControl?: () => void
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {

@@ -1317,7 +1317,7 @@
         "326a578923": "orca.yaml + 로컬",
         "2132b670da": "둘 다",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "이름 또는 '다음에서 만들기'",
+        "ac3748dcda": "다음에서 만들기",
         "f660aa1454": "연결 중",
         "7711ad5122": "로컬 설정 명령",
         "e5db1b0419": "결합된 설정 명령",
@@ -1949,7 +1949,8 @@
         "0f3066256e": "이전 일치 항목",
         "42e466b9f1": "정규식",
         "90c61387d9": "대소문자 구분",
-        "e07012f26e": "검색..."
+        "e07012f26e": "검색...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "업데이트하려면 다시 시작하세요.",
@@ -5808,7 +5809,12 @@
           "14444243ba": "PATH에서 `{{value0}}`을(를) 제거하시겠습니까?",
           "5d432fe44d": "설치됨",
           "8a9b784c60": "오래됨",
-          "d363e5929b": "CLI 등록 확인 중…"
+          "d363e5929b": "CLI 등록 확인 중…",
+          "6f894ef9c2": "Finder에서 보기",
+          "cbe55e4d48": "탐색기에서 보기",
+          "9fd4023db0": "파일 관리자에서 보기",
+          "installFailureUnknownReason": "Orca가 CLI 등록을 완료하지 못했고 이유를 보고하지 않았습니다.",
+          "installFailureConflictRemedy": "{{value0}}을(를) 제거하고 더 이상 필요하지 않으면 다시 등록하세요."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -8884,6 +8890,12 @@
             "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
             "projectRuntime": "프로젝트 런타임",
             "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다.",
+            "githubAccount": "GitHub 계정",
+            "githubAccountDescription": "이 프로젝트의 GitHub API 호출에 키링 gh 로그인을 바인딩합니다.",
+            "githubAccountKeyword": "GitHub 계정",
+            "ghAccount": "gh 계정",
+            "login": "로그인",
+            "token": "token",
             "externalWorktrees": "외부 작업 트리",
             "externalWorktreesDescription": "이 프로젝트에서 Orca 외부 작업 트리를 표시할지 재정의합니다.",
             "copy": "copy",
@@ -9292,6 +9304,24 @@
           "on": "켜짐",
           "auto": "에이전트",
           "off": "꺼짐"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "이 런타임의 GitHub CLI는 계정 바인딩을 지원하기에는 너무 오래되었습니다(gh ≥ 2.40 필요).",
+          "capabilityUnknown": "이 런타임의 GitHub CLI가 계정 바인딩을 지원하는지 확인할 수 없습니다. 다시 시도하세요.",
+          "envToken": "환경 토큰 계정은 바인딩할 수 없습니다. 키링 로그인을 사용하세요.",
+          "invalidBinding": "해당 GitHub 계정 바인딩이 유효하지 않습니다.",
+          "unavailable": "이 런타임에서는 해당 GitHub 계정을 사용할 수 없습니다.",
+          "saveFailed": "GitHub 계정 바인딩을 저장할 수 없습니다.",
+          "title": "GitHub 계정",
+          "description": "이 프로젝트의 GitHub 이슈 및 PR 호출에 특정 gh 로그인을 사용하세요.",
+          "longDescription": "Orca는 선택한 키링 로그인의 단기 토큰을 이 프로젝트의 각 gh 호출에 주입합니다. 프로젝트 보기는 활성 gh 로그인을 계속 사용합니다.",
+          "retry": "다시 시도",
+          "selectLabel": "계정",
+          "ambient": "기본값 (활성 gh 로그인)",
+          "unavailableOption": "{{user}} @ {{host}} (사용할 수 없음)",
+          "capabilityBlocked": "이 런타임의 GitHub CLI가 `gh auth token --user`(gh ≥ 2.40)를 지원할 때까지 바인딩을 사용할 수 없습니다.",
+          "capabilityUnknownHint": "이 런타임에서 GitHub CLI 계정 바인딩 지원을 확인할 수 없습니다. 바인딩을 지우거나 다시 시도하세요.",
+          "notEnforced": "저장되었지만 이 런타임(혼합 버전 호스트)에서는 적용되지 않습니다."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 상태 훅",
@@ -10300,7 +10330,6 @@
           "checking": "계정 상태 확인 중…",
           "account": "Orca 계정",
           "signOut": "로그아웃",
-          "signingIn": "로그인 중…",
           "signInAgain": "다시 로그인",
           "signIn": "Orca 로그인",
           "title": "Orca 계정",
@@ -14943,27 +14972,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "대시보드 보기",
-      "board": "대시보드",
-      "map": "에이전트 맵"
-    },
-    "map": {
-      "host": {
-        "local": "로컬",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "원격"
-      },
-      "liveContainmentMap": "실시간 포함 관계 맵",
-      "empty": "현재 필터와 일치하는 에이전트가 없습니다.",
-      "canvasLabel": "프로젝트, 작업 공간, 에이전트의 중첩 맵",
-      "zoomOut": "축소",
-      "zoomIn": "확대",
-      "fit": "맞춤",
-      "projectCount": "에이전트 {{agents}}개 · 작업 공간 {{workspaces}}개",
-      "agentCount": "에이전트 {{count}}개"
-    },
     "placeholder": {
       "title": "에이전트 대시보드",
       "description": "모든 에이전트를 한눈에 볼 수 있는 곳입니다. 보드는 곧 제공됩니다."

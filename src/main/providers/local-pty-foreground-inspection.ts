@@ -7,6 +7,7 @@ import {
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
 import { buildPaneProcessFingerprint } from './posix-pane-foreground-fingerprint'
+import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
 import { resolveForegroundFallbackProcess } from './local-pty-launch-helpers'
 import {
   ptyAgentForegroundContextPaths,
@@ -22,10 +23,18 @@ import {
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
+/**
+ * A retired master does not fail loudly: the `process` getter answers with the spawn file, which
+ * equals the recorded shell and would otherwise read as a real "nothing is running here". Ask the
+ * descriptor before the name, because an unreadable PTY is not evidence that its children exited.
+ */
 export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdict {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return 'no-children'
+  }
+  if (isRetiredPtyMaster(proc)) {
+    return 'unverifiable'
   }
   try {
     const foreground = proc.process

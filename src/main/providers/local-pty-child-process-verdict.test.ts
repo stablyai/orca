@@ -1,4 +1,4 @@
-import type * as pty from 'node-pty'
+import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
@@ -7,6 +7,7 @@ vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
   confirmShellForegroundProcess: vi.fn()
 }))
+import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
 import {
   hasLocalPtyChildProcesses,
   inspectLocalPtyChildProcesses
@@ -14,6 +15,8 @@ import {
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyProcesses, ptyShellName } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
+
+const POSIX_SHELL = '/bin/sh'
 
 function registerPane(id: string, foreground: string | (() => string), shell?: string): void {
   const pane: pty.IPty = {
@@ -39,6 +42,32 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
   }
 }
 
+/**
+ * A real node-pty whose master has been given up. The getter does not throw here -- it answers
+ * `POSIX_SHELL`, which is exactly the recorded shell name, so only the descriptor distinguishes
+ * this pane from an idle one.
+ */
+async function registerRetiredPane(id: string): Promise<pty.IPty> {
+  const term = pty.spawn(POSIX_SHELL, ['-c', 'exit 0'], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: process.cwd(),
+    env: { ...process.env }
+  })
+  await new Promise<void>((resolve) => {
+    term.onExit(() => resolve())
+  })
+  // `onExit` runs before node-pty's `_close()`, which is where the patch retires `_fd`.
+  await vi.waitFor(() => expect(isRetiredPtyMaster(term)).toBe(true), {
+    timeout: 10000,
+    interval: 10
+  })
+  ptyProcesses.set(id, term)
+  ptyShellName.set(id, POSIX_SHELL)
+  return term
+}
+
 beforeEach(() => {
   resolveForegroundMock.mockReset()
   resolveForegroundMock.mockResolvedValue({ available: true, processName: '/bin/zsh' })
@@ -49,6 +78,9 @@ afterEach(() => {
   ptyShellName.clear()
 })
 
+// Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
+const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
+
 describe('inspectLocalPtyChildProcesses', () => {
   it('reports unverifiable when the pty fd cannot be read', () => {
     registerPane(
@@ -58,8 +90,6 @@ describe('inspectLocalPtyChildProcesses', () => {
       },
       '/bin/zsh'
     )
-
-    // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
     expect(inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
   })
 
@@ -78,17 +108,37 @@ describe('inspectLocalPtyChildProcesses', () => {
   })
 
   it('collapses uncertainty to false only in the boolean adapter', async () => {
+    let reads = 0
     registerPane(
       'pty-closed',
       () => {
+        reads += 1
         throw new Error('EBADF: bad file descriptor')
       },
       '/bin/zsh'
     )
+    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(false)
+    // The `false` has to come from the failed read, not from an earlier short-circuit.
+    expect(reads).toBe(1)
+  })
+})
+
+describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
+  it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
+    const term = await registerRetiredPane('pty-retired')
+
+    // The mechanism is silent: this is the same string an idle pane reports.
+    expect(term.process).toBe(POSIX_SHELL)
+    // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
+    expect(inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
+  }, 15000)
+
+  it('collapses uncertainty to false only in the boolean adapter', async () => {
+    await registerRetiredPane('pty-retired')
 
     // The adapter exists for `IPtyProvider.hasChildProcesses`, which has no third slot.
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(false)
-  })
+    await expect(hasLocalPtyChildProcesses('pty-retired')).resolves.toBe(false)
+  }, 15000)
 })
 
 describe('inspectPtyProviderProcess child-process evidence', () => {
@@ -107,7 +157,6 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
       },
       '/bin/zsh'
     )
-
     await expect(inspectPtyProviderProcess(provider, 'pty-closing')).resolves.toEqual({
       foregroundProcess: '/bin/zsh',
       hasChildProcesses: false,
@@ -139,4 +188,31 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
     expect(inspection.hasChildProcesses).toBe(true)
     expect(inspection.childProcessEvidence).toBe('children')
   })
+
+  it('refuses to pair one panes foreground with its replacements children', async () => {
+    registerPane('pty-swapped', '/bin/zsh', '/bin/zsh')
+    resolveForegroundMock.mockImplementation(async () => {
+      // Cleanup plus reactivation lands a different IPty under the same id mid-read.
+      registerPane('pty-swapped', 'vim', '/bin/zsh')
+      return { available: true, processName: '/bin/zsh' }
+    })
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-swapped')).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      childProcessEvidence: 'unverifiable'
+    })
+  })
+})
+
+describeOnPosix('inspectPtyProviderProcess on a retired master', () => {
+  const provider = new LocalPtyProvider()
+
+  it('carries unverifiable child evidence beside the foreground it could still read', async () => {
+    await registerRetiredPane('pty-retired')
+
+    const inspection = await inspectPtyProviderProcess(provider, 'pty-retired')
+    expect(inspection.hasChildProcesses).toBe(false)
+    expect(inspection.childProcessEvidence).toBe('unverifiable')
+  }, 15000)
 })

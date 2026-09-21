@@ -10,6 +10,7 @@ export {
   ClaudePromptRegistry,
   type ClaudePendingPrompt,
   type ClaudePromptClaim,
+  type ClaudePromptPresentation,
   type ClaudePromptRegistration,
   type ClaudePromptSettle
 } from './claude-prompt-registry'
@@ -87,7 +88,9 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
     return {
       behavior: 'allow',
       updatedInput: prompt.input,
-      ...(decision === 'allowForSession' && prompt.suggestions.length > 0
+      ...(decision === 'allowForSession' &&
+      prompt.subject?.kind !== 'plan' &&
+      prompt.suggestions.length > 0
         ? { updatedPermissions: prompt.suggestions }
         : {}),
       toolUseID: prompt.toolUseId
@@ -95,7 +98,12 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
   }
   return {
     behavior: 'deny',
-    message: decision === 'cancel' ? 'User stopped this turn.' : 'User denied this action.',
+    message:
+      decision === 'cancel'
+        ? 'User stopped this turn.'
+        : prompt.subject?.kind === 'plan'
+          ? 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.'
+          : 'User denied this action.',
     ...(decision === 'cancel' ? { interrupt: true } : {}),
     toolUseID: prompt.toolUseId
   }

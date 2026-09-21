@@ -3,9 +3,9 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "865a659012dd882fd6073813585e2911a1d6252404fbf5a5e273f062b89fc91d",
   "platform": "darwin",
@@ -13,32 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "193c0bc3cf2a": {
-      "presets": [],
-      "presetsError": "Failed to save sparse preset.",
-      "saving": false,
-      "ssh": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
-    },
-    "86cc01b1e541": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "a6bf06ff84e0": {
+    "02daf4600c50": {
       "name": "repo.saveSparsePreset#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    },
+    "0df082978757": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 8,
+      "value": "Failed to save sparse preset."
+    },
+    "137e0fd71a21": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -70,28 +57,25 @@
         }
       }
     },
-    "cea9d7e8986e": {
-      "name": "workspaceSparseSaving",
-      "value": true
-    },
-    "da3a01640280": {
-      "name": "workspaceSparsePresetsError",
-      "value": "Failed to save sparse preset."
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "193c0bc3cf2a": {
+      "presets": [],
+      "presetsError": "Failed to save sparse preset.",
+      "saving": false,
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
       }
     },
-    "f22d3216eb8d": {
+    "37c5cc533ab4": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 9,
+      "value": false
+    },
+    "4e16f40bd113": {
       "name": "ssh.getState#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -124,13 +108,38 @@
         }
       }
     },
-    "f9dfbe0c0ea7": {
+    "973f31a4e64b": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 5,
+      "value": ""
+    },
+    "a11809a84754": {
       "name": "ssh.getState#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
-    "fd758406cc2c": {
-      "name": "repo.saveSparsePreset#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    "a71abdbfefa8": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "ea6e5bf810d9": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 4,
+      "value": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -139,19 +148,19 @@
       {
         "id": "saved-without-preset",
         "observation": {
-          "sender": ["f22d3216eb8d", "a6bf06ff84e0"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "sender": ["4e16f40bd113", "137e0fd71a21"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
           "state": "193c0bc3cf2a",
           "effects": [
-            "86cc01b1e541",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "da3a01640280",
-            "7fd0cde62993"
+            "a71abdbfefa8",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "0df082978757",
+            "37c5cc533ab4"
           ]
         }
       }

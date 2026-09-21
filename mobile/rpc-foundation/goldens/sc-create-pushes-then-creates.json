@@ -3,9 +3,9 @@
   "family": "hostedReview.create-chain",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "0f86b3e6059c48cd327c55df2452a9bc6ea85584ffbeacafad496f600c20e06f",
   "platform": "darwin",
@@ -13,19 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "06a94a810e5f": {
+    "0122a4affef8": {
       "name": "hostedReview.create#1",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
     },
-    "06e930bb7dd8": {
+    "121d8ad302a6": {
       "name": "worktree.set#1",
+      "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
     },
-    "3f946ad0279c": {
-      "outcome": "uncreated"
-    },
-    "7037e9e29078": {
+    "147a3131d1b9": {
       "name": "hostedReview.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -66,8 +66,46 @@
         }
       }
     },
-    "7c0cf8d696d8": {
+    "2b7bba64b59e": {
+      "name": "git.push#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "7cd929185e93": {
       "name": "worktree.set#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -101,13 +139,14 @@
         }
       }
     },
+    "840445dcb569": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "95b1f2f379aa": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "9fca4a23f963": {
       "outcome": {
@@ -116,8 +155,73 @@
         "url": "https://review.test/5"
       }
     },
-    "a1f0c8bb5bcd": {
+    "a95ae8a9ee57": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "number": 5,
+        "ok": true,
+        "url": "https://review.test/5"
+      }
+    },
+    "b9099560487b": {
+      "name": "git.push#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cbe1742f3b41": {
+      "name": "worktree.set#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 5,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "dfaf8f437106": {
       "name": "hostedReview.create#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -147,101 +251,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "a942a97a5d17": {
-      "name": "worktree.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "main",
-            "linkedPR": 5,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "a95ae8a9ee57": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "number": 5,
-        "ok": true,
-        "url": "https://review.test/5"
-      }
-    },
-    "b7a56d89f615": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "f9869252c305": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -250,8 +259,8 @@
       {
         "id": "push-pending",
         "observation": {
-          "sender": ["b7a56d89f615"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["b9099560487b"],
+          "payloads": ["840445dcb569"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -262,8 +271,8 @@
       {
         "id": "create-pending",
         "observation": {
-          "sender": ["f9869252c305", "a1f0c8bb5bcd"],
-          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "sender": ["2b7bba64b59e", "dfaf8f437106"],
+          "payloads": ["840445dcb569", "0122a4affef8"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -274,8 +283,8 @@
       {
         "id": "link-pending",
         "observation": {
-          "sender": ["f9869252c305", "7037e9e29078", "a942a97a5d17"],
-          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "sender": ["2b7bba64b59e", "147a3131d1b9", "cbe1742f3b41"],
+          "payloads": ["840445dcb569", "0122a4affef8", "121d8ad302a6"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -286,8 +295,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["f9869252c305", "7037e9e29078", "7c0cf8d696d8"],
-          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "sender": ["2b7bba64b59e", "147a3131d1b9", "7cd929185e93"],
+          "payloads": ["840445dcb569", "0122a4affef8", "121d8ad302a6"],
           "settlements": {
             "create": "a95ae8a9ee57"
           },

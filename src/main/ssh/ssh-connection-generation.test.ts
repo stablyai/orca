@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   advanceSshConnectionGeneration,
   assertSshMutationExpectation,
+  forgetSshConnectionGeneration,
   getSshConnectionGeneration,
+  getSshConnectionGenerationEntryCountForTests,
   resetSshConnectionGenerations,
   setSshConnectionGeneration
 } from './ssh-connection-generation'
@@ -32,6 +34,16 @@ describe('SSH connection generation session scope', () => {
 
     expect(advanceSshConnectionGeneration('ssh-a')).toBe(advanceSshConnectionGeneration('ssh-b'))
     expect(getSshConnectionGeneration('ssh-a')).toBe(getSshConnectionGeneration('ssh-b'))
+  })
+
+  it('forgets generations when a target is permanently removed', () => {
+    resetSshConnectionGenerations(7)
+    advanceSshConnectionGeneration('removed-target')
+
+    forgetSshConnectionGeneration('removed-target')
+
+    expect(getSshConnectionGenerationEntryCountForTests()).toBe(0)
+    expect(getSshConnectionGeneration('removed-target')).toBe(7 * SESSION_COUNTER_STRIDE)
   })
 
   it('rejects an SSH execution-host expectation when direct IPC resolves locally', () => {

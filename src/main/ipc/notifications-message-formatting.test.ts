@@ -98,48 +98,51 @@ describe('registerNotificationHandlers', () => {
 
     expect(notificationCtorMock).toHaveBeenCalledWith(
       expectedNativeNotificationOptions({
-        title: 'feat/notis - Codex finished',
-        body: 'Updated the notification body.'
-      })
-    )
-  })
-
-  it('includes the repo name when multiple repos are active', async () => {
-    registerNotificationHandlers({
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: false,
-          suppressWhenFocused: true
-        }
-      })
-    } as never)
-
-    const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          worktreeLabel: 'feat/notis',
-          repoLabel: 'orca',
-          hasMultipleActiveRepos: true,
-          agentType: 'codex',
-          agentState: 'done',
-          agentLastAssistantMessage: 'Updated the notification body.'
-        }
-      )
-    ).toEqual({ delivered: true })
-
-    expect(notificationCtorMock).toHaveBeenCalledWith(
-      expectedNativeNotificationOptions({
         title: 'orca / feat/notis - Codex finished',
         body: 'Updated the notification body.'
       })
     )
   })
+
+  it.each([true, false, undefined])(
+    'includes the repo name regardless of the legacy multiple-repo flag (%s)',
+    async (hasMultipleActiveRepos) => {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(
+        await handler(
+          {},
+          {
+            source: 'agent-task-complete',
+            worktreeId: 'repo::wt1',
+            worktreeLabel: 'feat/notis',
+            repoLabel: 'orca',
+            hasMultipleActiveRepos,
+            agentType: 'codex',
+            agentState: 'done',
+            agentLastAssistantMessage: 'Updated the notification body.'
+          }
+        )
+      ).toEqual({ delivered: true })
+
+      expect(notificationCtorMock).toHaveBeenCalledWith(
+        expectedNativeNotificationOptions({
+          title: 'orca / feat/notis - Codex finished',
+          body: 'Updated the notification body.'
+        })
+      )
+    }
+  )
 
   it('keeps a readable body when no assistant response was captured', async () => {
     registerNotificationHandlers({

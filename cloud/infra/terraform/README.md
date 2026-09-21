@@ -311,8 +311,9 @@ Every `relay_gce_cells` entry is one durable cell generation and must pin both i
 image and its Artifact Registry relay image. Terraform creates one private COS instance template, one size-one zonal
 MIG, and one backend service for that exact host. The MIG uses `RECREATE`, zero surge, and one
 unavailable worker; `/health` alone drives autoheal while SQL/JWKS-backed `/ready` controls LB
-admission. The backend timeout is 86,400 seconds with connection draining, and the URL map aborts
-unknown wildcard hosts before they reach a worker. The startup script obtains short-lived metadata
+admission. The backend timeout is 86,400 seconds and connection draining is 60 seconds, which
+covers only a host still mid-handshake because the rollout drains a cell before Terraform runs.
+The URL map aborts unknown wildcard hosts before they reach a worker. The startup script obtains short-lived metadata
 credentials, fetches the two relay secrets without logging them, and runs a digest-pinned Cloud SQL
 Auth Proxy beside the digest-pinned relay image.
 

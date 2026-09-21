@@ -116,6 +116,7 @@ describe('SshRelaySession managed hooks', () => {
       ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
     )
     expect(muxRequestMock.mock.calls[pluginsIndex]?.[1]).toMatchObject({
+      opencode2PluginSource: expect.stringContaining('/hook/opencode2'),
       piExtensionSource: expect.stringContaining('/hook/pi'),
       ompExtensionSource: expect.stringContaining('/hook/omp'),
       primeAgentExtensionSource: expect.stringContaining('/hook/prime-agent')

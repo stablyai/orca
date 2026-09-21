@@ -3,38 +3,19 @@
   "family": "worktree.hosted-base",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "b3734c24f8a083d3efcdd995ea6a57e608d3d3ae3bbbd514db19dcf69448fa48",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0e24d2a37a0d": {
+    "1788fb968913": {
       "name": "worktree.resolvePrBase#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
-    },
-    "236529aa012d": {
-      "mrBase": "unresolved",
-      "prBase": {
-        "baseBranch": "main",
-        "compareBaseRef": "origin/main"
-      }
-    },
-    "3cca8119f144": {
-      "mrBase": {
-        "baseBranch": "develop"
-      },
-      "prBase": {
-        "baseBranch": "main",
-        "compareBaseRef": "origin/main"
-      }
-    },
-    "4febe923ceea": {
-      "name": "worktree.resolvePrBase#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -69,6 +50,22 @@
         }
       }
     },
+    "236529aa012d": {
+      "mrBase": "unresolved",
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
+    "3cca8119f144": {
+      "mrBase": {
+        "baseBranch": "develop"
+      },
+      "prBase": {
+        "baseBranch": "main",
+        "compareBaseRef": "origin/main"
+      }
+    },
     "5428de0f5130": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -78,12 +75,19 @@
         "compareBaseRef": "origin/main"
       }
     },
-    "69afcaf1cb72": {
+    "92df85b51d0c": {
       "name": "worktree.resolveMrBase#1",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
     },
-    "aad8e7ddeea2": {
+    "aafcb4cd89c9": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
+    },
+    "d29aaf6d46d3": {
       "name": "worktree.resolveMrBase#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -132,8 +136,8 @@
       {
         "id": "pr-base-resolved",
         "observation": {
-          "sender": ["4febe923ceea"],
-          "payloads": ["0e24d2a37a0d"],
+          "sender": ["1788fb968913"],
+          "payloads": ["aafcb4cd89c9"],
           "settlements": {
             "pr": "5428de0f5130"
           },
@@ -144,8 +148,8 @@
       {
         "id": "mr-base-resolved",
         "observation": {
-          "sender": ["4febe923ceea", "aad8e7ddeea2"],
-          "payloads": ["0e24d2a37a0d", "69afcaf1cb72"],
+          "sender": ["1788fb968913", "d29aaf6d46d3"],
+          "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
           "settlements": {
             "pr": "5428de0f5130",
             "mr": "fd552ecb03da"

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { validateRelayAsiaTopologyPlan } from './validate-relay-asia-topology-plan.mjs'
+import {
+  RELAY_CELL_BACKEND_TIMEOUT_SECONDS,
+  RELAY_CELL_CONNECTION_DRAIN_SECONDS,
+  RELAY_CELL_LOG_SAMPLE_RATE,
+  validateRelayAsiaTopologyPlan
+} from './validate-relay-asia-topology-plan.mjs'
 
 const image = `us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:${'a'.repeat(64)}`
 const config = { environment: 'staging', cells: ['staging-gce-c4'], image }
@@ -49,7 +55,8 @@ const resources = [
     update_policy: [{ replacement_method: 'RECREATE', max_surge_fixed: 0, max_unavailable_fixed: 1 }]
   }),
   create('google_compute_backend_service.relay_gce_cell["staging-gce-c4"]', {
-    timeout_sec: 86_400, connection_draining_timeout_sec: 300,
+    timeout_sec: RELAY_CELL_BACKEND_TIMEOUT_SECONDS,
+    connection_draining_timeout_sec: RELAY_CELL_CONNECTION_DRAIN_SECONDS,
     load_balancing_scheme: 'EXTERNAL_MANAGED', protocol: 'HTTP', port_name: 'relay',
     session_affinity: 'NONE',
     health_checks: ['projects/p/global/healthChecks/orca-cloud-staging-relay-gce-ready'],
@@ -220,4 +227,53 @@ test('rejects incomplete NAT, backend, and URL routing shapes', () => {
     () => validateRelayAsiaTopologyPlan({ resource_changes: route }, config),
     /no exact backend route/
   )
+})
+
+// Terraform cannot export a local to JS, so this validator restates two topology values that
+// the Asia workflow applies. Read the .tf source and equate all three statements of each: the
+// local, the topology `check` assert that pins it, and the constant above.
+test('the reviewed backend constants match the Terraform topology they validate', () => {
+  const terraform = readFileSync(
+    new URL('../../infra/terraform/relay-gce-cells.tf', import.meta.url),
+    'utf8'
+  )
+  const local = (name) => {
+    const found = new RegExp(`\\n\\s*${name}\\s*=\\s*(\\d+)\\n`).exec(terraform)
+    assert.notEqual(found, null, `relay_gce_topology has no ${name}`)
+    return Number(found[1])
+  }
+  const asserted = (name) => {
+    const found =
+      new RegExp(`local\\.relay_gce_topology\\.${name}\\s*==\\s*(\\d+)`).exec(terraform)
+    assert.notEqual(found, null, `the topology check does not pin ${name}`)
+    return Number(found[1])
+  }
+  for (const [name, constant] of [
+    ['backend_timeout_seconds', RELAY_CELL_BACKEND_TIMEOUT_SECONDS],
+    ['connection_drain_seconds', RELAY_CELL_CONNECTION_DRAIN_SECONDS]
+  ]) {
+    assert.equal(local(name), constant, `${name} local differs from the validator constant`)
+    assert.equal(asserted(name), constant, `${name} check assert differs from the validator`)
+  }
+  // The sample rate is a variable, not a local, and no environment file overrides it, so the
+  // declared default is what every cell backend gets. Equate the default and that absence.
+  const variables = readFileSync(
+    new URL('../../infra/terraform/variables.tf', import.meta.url),
+    'utf8'
+  )
+  const declared =
+    /variable "relay_gce_cell_log_sample_rate" \{[\s\S]*?\n {2}default {5}= (\d+)\n/.exec(variables)
+  assert.notEqual(declared, null, 'relay_gce_cell_log_sample_rate declares no default')
+  assert.equal(Number(declared[1]), RELAY_CELL_LOG_SAMPLE_RATE)
+  assert.match(terraform, /sample_rate = var\.relay_gce_cell_log_sample_rate/)
+  for (const environment of ['production', 'staging']) {
+    assert.doesNotMatch(
+      readFileSync(
+        new URL(`../../infra/terraform/environments/${environment}.tfvars`, import.meta.url),
+        'utf8'
+      ),
+      /relay_gce_cell_log_sample_rate/,
+      `${environment} overrides the reviewed log sample rate`
+    )
+  }
 })

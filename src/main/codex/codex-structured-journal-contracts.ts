@@ -1,4 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
@@ -20,6 +21,8 @@ export type CodexJournalTranslatorDeps = {
    *  identity the journal row carries so a replay computes the same key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
+  /** Submission origin for one exact client message still awaiting its echo. */
+  dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number
@@ -44,6 +47,10 @@ export type CodexJournalTranslationAdmission =
 
 export type CodexItemTranslation =
   | { handled: false }
-  | { handled: true; admission: CodexJournalTranslationAdmission }
+  | {
+      handled: true
+      admission: CodexJournalTranslationAdmission
+      dispatchEcho?: { clientMessageId: string; providerIdentity: AgentJournalItemIdentity }
+    }
 
 export const CODEX_JOURNAL_ADMITTED = { accepted: true } as const

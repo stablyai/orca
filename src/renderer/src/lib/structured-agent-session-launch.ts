@@ -1,9 +1,9 @@
-import { useSyncExternalStore } from 'react'
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   createStructuredAgentSessionLaunchIntent,
+  retryStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateRefusalError
 } from '@/lib/launch-structured-agent-session'
 import {
@@ -13,36 +13,47 @@ import {
 import {
   launchAndReconcile,
   reconcileUnknownLaunch,
-  type StructuredAgentLaunchReceipt,
-  type StructuredLaunchRecoveryState
+  type StructuredAgentLaunchReceipt
 } from '@/lib/structured-agent-session-launch-recovery'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import {
   addStructuredLaunchCaller,
-  claimStructuredLaunchCallerFallback,
   createStructuredLaunchCallerGroup,
   releaseStructuredLaunchCallerAfterUnknownOutcome,
-  settleStructuredLaunchCallersWithFallback,
-  settleStructuredLaunchCallersWithoutFallback,
+  settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork,
   type StructuredAgentLaunchOptions,
-  type StructuredLaunchCaller,
-  type StructuredLaunchCallerGroup,
-  type StructuredRefusalFallback
+  type StructuredLaunchCaller
 } from '@/lib/structured-agent-session-launch-callers'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import { trackStructuredLaunchFailureToast } from './structured-agent-session-launch-failure-toast'
+import {
+  deleteStructuredLaunchStateIfCurrent,
+  getStructuredLaunchState,
+  getStructuredLaunchStateBySessionId,
+  markStructuredAgentSessionLaunchCancelled,
+  notifyStructuredLaunchListeners,
+  retireStructuredAgentSessionLaunchCancellationTombstone,
+  setStructuredLaunchState,
+  structuredLaunchIdentity,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-registry'
+import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
-
-type StructuredLaunchState = StructuredLaunchRecoveryState & {
-  identity: string
-  /** Fixed by the caller that opened this launch; a joiner delivers its text the same way. Without
-   *  that, two entrypoints racing one identity seed the composer AND submit. */
-  promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
-  callers: StructuredLaunchCallerGroup
-}
+export {
+  getStructuredAgentLaunchStatus,
+  getStructuredAgentSessionLaunchLifecycle,
+  hasStructuredAgentSessionLaunchCancellationTombstone,
+  markStructuredAgentSessionLaunchCancelled,
+  retireStructuredAgentSessionLaunchCancellationTombstone,
+  shouldRetainStructuredAgentSessionLaunchTab,
+  subscribeStructuredAgentLaunchStatus,
+  useStructuredAgentSessionLaunchLifecycle,
+  type StructuredAgentLaunchStatus,
+  type StructuredAgentSessionLaunchLifecycle
+} from './structured-agent-session-launch-registry'
+export { useStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -55,69 +66,6 @@ export type StructuredAgentLaunchResult = {
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   isVisibilityUnknown: () => boolean
   releaseCallerAfterUnknownOutcome: () => boolean
-  claimDefinitiveRefusalFallback: (fallback: StructuredRefusalFallback) => Promise<boolean>
-}
-
-export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
-
-const pendingStructuredLaunchesByIdentity = new Map<string, StructuredLaunchState>()
-const structuredLaunchListeners = new Set<() => void>()
-
-function notifyStructuredLaunchListeners(): void {
-  for (const listener of structuredLaunchListeners) {
-    listener()
-  }
-}
-
-export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
-  structuredLaunchListeners.add(listener)
-  return () => structuredLaunchListeners.delete(listener)
-}
-
-export function getStructuredAgentLaunchStatus(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider
-): StructuredAgentLaunchStatus {
-  // Any launch for this pair, not just the blank one: adopting launches carry the conversation in
-  // their identity, and a caller asking "is a chat starting here" means all of them.
-  const states = [
-    pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
-      .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
-      .map(([, state]) => state)
-  ].filter((state): state is StructuredLaunchState => Boolean(state))
-  if (states.length === 0) {
-    return 'idle'
-  }
-  return states.some((state) => state.visibilityUnknown) ? 'unknown' : 'pending'
-}
-
-export function useStructuredAgentLaunchStatus(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider
-): StructuredAgentLaunchStatus {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentLaunchStatus(worktreeId, agent),
-    () => 'idle'
-  )
-}
-
-// Why keyed by agent too: one worktree can hold a Claude and a Codex launch at once, and a shared
-// key would hand the second caller the first agent's intent.
-//
-// Why keyed by the adopted conversation as well: a joining caller is handed the EXISTING intent and
-// contributes only its prompt, so without this a resume that arrives while a blank launch is pending
-// would be silently dropped — the user would get a blank chat, or another row's conversation, with
-// no error. A launch that adopts a conversation is a different launch.
-function launchIdentity(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider,
-  resumeFrom?: StructuredAgentSessionResumeSource
-): string {
-  return resumeFrom
-    ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
-    : `${agent}:${worktreeId}`
 }
 
 /** What the outbox must carry: a draft goes to the composer seed instead. */
@@ -137,27 +85,28 @@ function joinLaunchDelivery(
 }
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
-  if (pendingStructuredLaunchesByIdentity.get(state.identity) === state) {
-    pendingStructuredLaunchesByIdentity.delete(state.identity)
+  if (deleteStructuredLaunchStateIfCurrent(state)) {
     notifyStructuredLaunchListeners()
   }
 }
 
 function maybeCleanupLaunchState(state: StructuredLaunchState): void {
-  if (structuredLaunchCallersHavePendingWork(state.callers)) {
+  if (state.callers.outcome === 'failed' || structuredLaunchCallersHavePendingWork(state.callers)) {
     return
   }
   cleanupLaunchState(state)
 }
 
-function settleDefinitiveRefusalFallback(state: StructuredLaunchState): void {
-  if (state.callers.outcome === 'refused') {
+function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
+  if (state.callers.outcome !== 'pending' && state.callers.outcome !== 'unknown') {
     return
   }
-  abandonStructuredAgentSessionLaunchIntent(state.intent)
-  discardStructuredAgentSessionLaunchOutbox(state.intent.sessionId)
-  launchDraft.clearStructuredAgentLaunchDraft(state.intent.sessionId)
-  settleStructuredLaunchCallersWithFallback(state.callers)
+  retireStructuredAgentSessionLaunchCancellationTombstone(
+    state.intent.worktreeId,
+    state.intent.sessionId
+  )
+  settleStructuredLaunchCallers(state.callers, 'failed')
+  notifyStructuredLaunchListeners()
 }
 
 function trackLaunchSettlement(
@@ -169,20 +118,27 @@ function trackLaunchSettlement(
       if (state.promise !== promise) {
         return
       }
-      settleStructuredLaunchCallersWithoutFallback(state.callers, 'published')
-      maybeCleanupLaunchState(state)
+      settleStructuredLaunchCallers(state.callers, 'published')
+      notifyStructuredLaunchListeners()
     },
     (error) => {
-      if (state.promise !== promise || state.cancelled) {
+      if (state.promise !== promise) {
+        return
+      }
+      if (state.cancelled) {
+        if (error instanceof StructuredAgentSessionCreateRefusalError) {
+          retireStructuredAgentSessionLaunchCancellationTombstone(
+            state.intent.worktreeId,
+            state.intent.sessionId
+          )
+        }
         return
       }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
-        settleDefinitiveRefusalFallback(state)
+        settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
-        settleStructuredLaunchCallersWithoutFallback(state.callers, 'failed')
-        // Why: the seed lives under a tab that will never open; unknown keeps it for the retry.
-        launchDraft.clearStructuredAgentLaunchDraft(state.intent.sessionId)
-        maybeCleanupLaunchState(state)
+        settleStructuredLaunchCallers(state.callers, 'failed')
+        notifyStructuredLaunchListeners()
       } else {
         state.callers.outcome = 'unknown'
         notifyStructuredLaunchListeners()
@@ -191,43 +147,53 @@ function trackLaunchSettlement(
   )
 }
 
+function resetStructuredLaunchCallers(state: StructuredLaunchState): void {
+  state.callers = createStructuredLaunchCallerGroup()
+  state.callers.onSettled = () => maybeCleanupLaunchState(state)
+}
+
+function restartStructuredLaunchState(state: StructuredLaunchState): void {
+  const wasVisibilityUnknown = state.visibilityUnknown
+  if (!wasVisibilityUnknown) {
+    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
+  }
+  resetStructuredLaunchCallers(state)
+  state.callers.outcome = 'pending'
+  state.promise = wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
+  trackLaunchSettlement(state, state.promise)
+  trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
+  notifyStructuredLaunchListeners()
+}
+
 function structuredAgentLaunchState(
   worktreeId: string,
   agent: AgentSessionHandleProvider,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = launchIdentity(worktreeId, agent, options.resumeFrom)
-  const existing = pendingStructuredLaunchesByIdentity.get(identity)
+  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
+  const existing = getStructuredLaunchState(identity)
   if (existing) {
-    if (existing.visibilityUnknown) {
-      existing.callers.outcome = 'pending'
-      existing.promise = reconcileUnknownLaunch(existing)
-      trackLaunchSettlement(existing, existing.promise)
-      trackStructuredLaunchFailureToast(
-        existing.intent.agent,
-        existing.promise,
-        existing.callers.refusalSettlement.promise
-      )
-      notifyStructuredLaunchListeners()
+    const retrying = existing.visibilityUnknown || existing.callers.outcome === 'failed'
+    if (retrying) {
+      restartStructuredLaunchState(existing)
     }
     const joined = joinLaunchDelivery(options, existing.promptDelivery)
-    const refusedAlready = existing.callers.outcome === 'refused'
-    const text = outboxPromptText(joined)
-    const stagedPrompt =
-      text && !refusedAlready
-        ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
-        : null
-    // Why: a refused launch is already settled, so nothing would ever clear a new seed — it would
-    // live on under a tab that never opens.
-    if (!refusedAlready) {
+    // Why: failed launches keep their draft/outbox, so a retry must not stage the same prompt twice.
+    const text = retrying ? '' : outboxPromptText(joined)
+    const stagedPrompt = text
+      ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
+      : null
+    if (!retrying) {
       launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)
     }
+    const { prompt: _retryPrompt, ...joinedWithoutPrompt } = joined
+    const callerOptions = retrying ? joinedWithoutPrompt : joined
     return {
       state: existing,
       caller: addStructuredLaunchCaller({
         group: existing.callers,
         launchResult: existing.promise,
-        options: joined,
+        options: callerOptions,
         stagedEntry: stagedPrompt
       })
     }
@@ -270,14 +236,10 @@ function structuredAgentLaunchState(
     options,
     stagedEntry: stagedPrompt
   })
-  pendingStructuredLaunchesByIdentity.set(identity, state)
+  setStructuredLaunchState(state)
   notifyStructuredLaunchListeners()
   trackLaunchSettlement(state, state.promise)
-  trackStructuredLaunchFailureToast(
-    state.intent.agent,
-    state.promise,
-    state.callers.refusalSettlement.promise
-  )
+  trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
   return {
     state,
     caller
@@ -285,16 +247,11 @@ function structuredAgentLaunchState(
 }
 
 export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: string): boolean {
-  const state = [...pendingStructuredLaunchesByIdentity.values()].find(
-    (candidate) =>
-      candidate.intent.worktreeId === worktreeId && candidate.intent.sessionId === sessionId
-  )
+  const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state) {
     return false
   }
-  state.cancelled = true
-  settleStructuredLaunchCallersWithoutFallback(state.callers, 'cancelled')
-  cleanupLaunchState(state)
+  markStructuredAgentSessionLaunchCancelled(worktreeId, sessionId)
   discardStructuredAgentSessionLaunchOutbox(state.intent.sessionId)
   launchDraft.clearStructuredAgentLaunchDraft(state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
@@ -314,8 +271,20 @@ export function startStructuredAgentLaunch(
     ...(caller.promptDeliveryResult ? { promptDeliveryResult: caller.promptDeliveryResult } : {}),
     isVisibilityUnknown: () => state.visibilityUnknown,
     releaseCallerAfterUnknownOutcome: () =>
-      releaseStructuredLaunchCallerAfterUnknownOutcome(state.callers, caller),
-    claimDefinitiveRefusalFallback: (fallback) =>
-      claimStructuredLaunchCallerFallback(state.callers, caller, fallback)
+      releaseStructuredLaunchCallerAfterUnknownOutcome(state.callers, caller)
   }
+}
+
+export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId: string): boolean {
+  const state =
+    getStructuredLaunchStateBySessionId(sessionId) ??
+    restorePersistedStructuredLaunchState(worktreeId, sessionId)
+  if (
+    state?.intent.worktreeId !== worktreeId ||
+    (!state.visibilityUnknown && state.callers.outcome !== 'failed')
+  ) {
+    return false
+  }
+  restartStructuredLaunchState(state)
+  return true
 }

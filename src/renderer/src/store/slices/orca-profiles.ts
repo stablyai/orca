@@ -21,7 +21,6 @@ export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   orcaProfilesMultiProfileUi: boolean
   orcaProfilesLoading: boolean
   orcaProfileSwitching: boolean
-  orcaProfileConnecting: boolean
   fetchOrcaProfiles: () => Promise<void>
   fetchOrcaProfileAuthStatus: () => Promise<OrcaProfileAuthStatus | null>
   createLocalOrcaProfile: (name?: string) => Promise<OrcaProfileSummary | null>
@@ -42,7 +41,6 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
   orcaProfilesMultiProfileUi: false,
   orcaProfilesLoading: false,
   orcaProfileSwitching: false,
-  orcaProfileConnecting: false,
 
   fetchOrcaProfiles: async () => {
     set({ orcaProfilesLoading: true })

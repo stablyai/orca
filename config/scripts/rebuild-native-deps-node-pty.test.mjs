@@ -11,6 +11,7 @@ import {
   writeFakeElectronRebuild,
   writeFakeLoadableNodePty,
   writeFakeNodePtyConptyPayload,
+  writeFakeNodePtyConptySource,
   writeFakeUsableElectronPackage,
   writeFakeWindowsProcessTree,
   writeFakeWindowsProcessTreeWithNodeAddonApi,
@@ -260,6 +261,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeLoadableNodePty(projectDir, { ownsPtyJob: false })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
+        writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
           ORCA_REBUILD_TEST_LOG: rebuildLogPath,
@@ -270,6 +272,42 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         expect(result.status, result.stderr).toBe(0)
         expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
         expect(result.stdout).toContain('missing listJobProcessIds')
+        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
+        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    }
+  )
+
+  // The shape measured on a Windows dev checkout: the addon loads under
+  // Electron, exports all three job functions, and predates the denial. A bare
+  // require proves nothing about it; the probe has to read the binary.
+  it.skipIf(process.platform !== 'win32')(
+    'rebuilds a loadable ConPTY native that owns its job but predates the MSYS breakaway denial',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir, { cygwinBreakawayDenied: false })
+        writeFakeWindowsRegistry(projectDir)
+        writeFakeWindowsProcessTree(projectDir)
+        writeFakeNodePtyConptyPayload(projectDir, process.arch)
+        writeFakeNodePtyConptySource(projectDir)
+
+        const result = runRebuildScript(projectDir, {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
+          npm_config_platform: 'win32',
+          npm_config_arch: process.arch
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
+        expect(result.stdout).toContain('predates the Cygwin/MSYS job-breakaway denial')
+        expect(result.stdout).not.toContain('skipping rebuild')
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
         expect(rebuildCall.onlyModules).toEqual(['node-pty'])
       } finally {
@@ -399,4 +437,170 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       }
     })
   }
+
+  // The Electron probe carries this check too, but it is skipped whenever the
+  // Electron package binary is unusable. Every job export predates the MSYS
+  // breakaway denial, so without reading the binary this step would hand the
+  // packaged app one that leaks every Git Bash child out of its pane's job.
+  it('fails a Windows rebuild that leaves an addon predating the MSYS breakaway denial', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64', { cygwinBreakawayDenied: false })
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('predates the Cygwin/MSYS job-breakaway denial')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  // Measured on a Windows dev checkout whose node_modules predated the denial:
+  // `--force` compiled for minutes, rewrote conpty.node byte-identical and
+  // unpatched, and the addon gate then said "rebuild from source" -- the step
+  // that had just run. The source is readable before the compile; read it.
+  it('refuses to compile node-pty source that lacks the denial, before the rebuild runs', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeNodePtyConptySource(projectDir, { cygwinBreakawayDenied: false })
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
+          npm_config_platform: 'win32',
+          npm_config_arch: 'x64'
+        },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain(join('src', 'win', 'conpty.cc'))
+      expect(result.stderr).toContain('`pnpm install`')
+      expect(result.stderr).not.toContain('Rebuild node-pty from source')
+      expect(existsSync(rebuildLogPath)).toBe(false)
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  it('compiles node-pty when its source carries the denial', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeNodePtyConptySource(projectDir)
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
+          npm_config_platform: 'win32',
+          npm_config_arch: 'x64'
+        },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
+      expect(rebuildCall.onlyModules).toContain('node-pty')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  it('accepts a Windows rebuild whose addon carries the denial', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).not.toContain('job-breakaway denial')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  // A cross-host rebuild does not necessarily leave a win32 addon on this disk,
+  // and neither does a tree with no node-pty in it. That must warn, not fail an
+  // install that was working.
+  it('warns rather than fails when no addon is expected on this disk', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr + result.stdout).toContain('could not check the MSYS job-breakaway')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  // The other half: on the host that will run this install, a missing addon is
+  // not an absence to shrug at. loadNativeModule falls through to the published
+  // prebuild, which is the binary that leaks every MSYS pane child.
+  // Runs only on Windows -- nothing else can make a win32 rebuild same-host.
+  it.skipIf(process.platform !== 'win32')(
+    'fails a same-host Windows rebuild that left no addon, naming the prebuild that would load',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir)
+        writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+        writeFakeLoadableNodePty(projectDir, { nativeDir: `prebuilds/win32-${process.arch}` })
+
+        const result = runRebuildScript(
+          projectDir,
+          { npm_config_platform: 'win32', npm_config_arch: process.arch },
+          ['--platform=win32', `--arch=${process.arch}`, '--force']
+        )
+
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain(join('build', 'Release', 'conpty.node'))
+        expect(result.stderr).toContain(join('prebuilds', `win32-${process.arch}`, 'conpty.node'))
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    }
+  )
 })

@@ -67,4 +67,46 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts().cellInventoryHolds).toBe(2)
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
+
+  // Why: this is the case the hold metrics alone cannot see. A NOWAIT grab that
+  // fails has no duration, so a retry storm used to leave every hold field at
+  // zero while the lock was saturated.
+  it('counts failed acquisitions in a window that recorded no holds', () => {
+    const samples = new CellInventoryHoldSamples()
+    for (let attempt = 0; attempt < 65; attempt++) samples.recordUnavailable()
+
+    const counts = samples.readCounts()
+
+    expect(counts.cellInventoryLockUnavailable).toBe(65)
+    expect(counts.cellInventoryHolds).toBe(0)
+    expect(counts.cellInventoryHoldMsMax).toBe(0)
+  })
+
+  it('reports failed acquisitions alongside the holds that did succeed', () => {
+    const samples = samplesOf([12, 34])
+    samples.recordUnavailable(3)
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHolds: 2,
+      cellInventoryHoldMsMax: 34,
+      cellInventoryLockUnavailable: 3
+    })
+  })
+
+  it('ignores a failure count that is not a positive number', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.recordUnavailable(0)
+    samples.recordUnavailable(-2)
+    samples.recordUnavailable(Number.NaN)
+
+    expect(samples.readCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
+
+  it('resets failed acquisitions on consume', () => {
+    const samples = new CellInventoryHoldSamples()
+    samples.recordUnavailable(4)
+
+    expect(samples.consumeCounts().cellInventoryLockUnavailable).toBe(4)
+    expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
 })

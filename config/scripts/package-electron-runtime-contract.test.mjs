@@ -24,11 +24,6 @@ describe('Electron runtime package contract', () => {
     linux: createPackagedRuntimeNodeModuleResources('linux')
   }
 
-  it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
-    expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
-  })
-
   it('keeps the native Windows registry addon optional and platform-gated', () => {
     const rebuildScript = readProject('config/scripts/rebuild-native-deps.mjs')
     const ensureScript = readProject('config/scripts/ensure-native-runtime.mjs')

@@ -68,6 +68,7 @@ describe('cancelClaudeTurn', () => {
       clientMessageId: `client-${index}`,
       sentUuid,
       dispatchSequence: index + 1,
+      requestedAt: null,
       replayContentKey: `content-${index}`,
       resolve: resolutions[index]!
     }))
@@ -197,6 +198,7 @@ describe('answerClaudePrompt', () => {
         cancel: vi.fn(() => ({ accepted: true as const })),
         resolve: resolvePrompt
       },
+      currentTurnId: null,
       flush: vi.fn(),
       pendingStreamedBlocks: 0,
       dispose: vi.fn()

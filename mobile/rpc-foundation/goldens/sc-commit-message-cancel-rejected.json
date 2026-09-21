@@ -3,9 +3,9 @@
   "family": "git.commit-message-ai",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "013db25622b180a8333bb1ef27c22a5b1f8e04148201201e5cc3413a10640781",
   "platform": "darwin",
@@ -13,8 +13,27 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "029ea2c16f05": {
+    "25b63dbb4c58": {
       "name": "git.cancelGenerateCommitMessage#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.cancelGenerateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "adb40821f3e2": {
+      "generated": "ungenerated"
+    },
+    "d7e067c96156": {
+      "name": "git.cancelGenerateCommitMessage#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -43,23 +62,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "677c1cb5e628": {
-      "name": "git.cancelGenerateCommitMessage#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.cancelGenerateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "adb40821f3e2": {
-      "generated": "ungenerated"
     }
   },
   "recording": {
@@ -68,8 +70,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["029ea2c16f05"],
-          "payloads": ["677c1cb5e628"],
+          "sender": ["d7e067c96156"],
+          "payloads": ["25b63dbb4c58"],
           "settlements": {
             "cancel": "a947768bc0ed"
           },

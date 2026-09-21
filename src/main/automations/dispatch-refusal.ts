@@ -119,3 +119,50 @@ export function sendRendererDispatch(
     })
   }
 }
+
+/**
+ * Grace is a downtime catch-up budget. It must not also absorb the scheduler's own tick latency:
+ * evaluation runs on a fixed interval never aligned to an occurrence, so with zero grace every
+ * tick arrived "late" and skipped the run, blaming downtime that never happened (#11299).
+ *
+ * Why not process liveness: a suspended process (system sleep) keeps its start time, so a
+ * liveness flag waves through an occurrence that came due during a multi-hour sleep -- exactly
+ * what grace exists for. Elapsed lateness cannot be faked that way.
+ *
+ * Consequence worth knowing: elapsed lateness cannot distinguish a short outage from a late
+ * tick, so a zero-grace run that came due during an outage shorter than the tolerance is
+ * dispatched rather than skipped. That is the deliberate trade -- the alternative was a
+ * liveness flag, which got the far worse case wrong (a multi-hour sleep replayed on wake).
+ *
+ * Known remaining gap: an evaluation pass holds the re-entrancy guard across its dispatches, and
+ * in serve mode a dispatch runs inline (precheck up to 600s, then a worktree create). A pass
+ * longer than the tolerance drops every intervening tick, so the next automation's lateness is
+ * the scheduler's stall rather than downtime and can still be mis-skipped. Desktop is
+ * unaffected -- its dispatch is synchronous IPC. Tracked separately; forgiving "time since the
+ * last pass" is NOT the fix, because a suspended process runs no passes either.
+ */
+export function missedBeyondGrace(input: {
+  automation: Automation
+  scheduledFor: number
+  now: number
+  tickMs: number
+}): boolean {
+  const graceMs = input.automation.missedRunGraceMinutes * 60 * 1000
+  // Two intervals: one for the tick that should have caught it, one for ordinary jitter.
+  const jitterMs = input.tickMs * 2
+  return input.now - input.scheduledFor > graceMs + jitterMs
+}
+
+export function recordMissedRun(input: {
+  runs: AutomationRunWriter
+  automation: Automation
+  scheduledFor: number
+}): void {
+  const missed = input.runs.createRun(input.automation, input.scheduledFor)
+  input.runs.updateRun({
+    runId: missed.id,
+    status: 'skipped_missed',
+    workspaceId: input.automation.workspaceId,
+    error: 'This run was past its missed-run grace window when Orca next checked.'
+  })
+}

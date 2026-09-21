@@ -13,6 +13,7 @@ export type RoadmapTickLabel = { label: string; sublabel: string | null }
 // and per bar on every render — cache per locale; the options never vary.
 const monthFormatters = new Map<string, Intl.DateTimeFormat>()
 const dayFormatters = new Map<string, Intl.DateTimeFormat>()
+const MAX_FORMATTER_LOCALES = 32
 
 function cachedFormatter(
   cache: Map<string, Intl.DateTimeFormat>,
@@ -23,6 +24,13 @@ function cachedFormatter(
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(locale, options)
     cache.set(locale, formatter)
+    while (cache.size > MAX_FORMATTER_LOCALES) {
+      const oldest = cache.keys().next()
+      if (oldest.done) {
+        break
+      }
+      cache.delete(oldest.value)
+    }
   }
   return formatter
 }

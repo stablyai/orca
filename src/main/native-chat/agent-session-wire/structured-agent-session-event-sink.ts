@@ -8,6 +8,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -36,9 +37,12 @@ export type StructuredAgentSessionLifecycleJournal = Pick<
   'epoch' | 'visitItems'
 >
 
-export type StructuredAgentSessionLifecycleIdentityResolver = (
+export type StructuredAgentSessionIdentityResolver = (
   journal: StructuredAgentSessionLifecycleJournal
 ) => AgentJournalItemIdentity | null
+
+/** Compatibility alias for lifecycle callers that already use this resolver. */
+export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
 export type StructuredAgentSessionEventSink = {
   appendItem(
@@ -61,11 +65,25 @@ export type StructuredAgentSessionEventSink = {
     body: AgentJournalItemBody,
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  /** Queues an ordinary append whose identity is resolved after journal bind. */
+  tryAppendResolvedItem?(
+    identitySizeBound: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    options?: StructuredAgentSessionAppendOptions
+  ): StructuredAgentSessionSinkAdmission
+  /** Queues one resolved append and its publication as a single admitted operation. */
+  tryAppendResolvedItemAndPublish?(
+    identitySizeBound: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    options?: StructuredAgentSessionAppendOptions
+  ): StructuredAgentSessionSinkAdmission
   /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
+    resolveIdentity: StructuredAgentSessionIdentityResolver
   ): StructuredAgentSessionSinkAdmission
   /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
@@ -142,6 +160,7 @@ export function createDeferredStructuredAgentSessionEventSink(
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
     ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
   })
+  const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue)
 
   const appendLifecycleBatch = (
     settlementId: string,
@@ -203,6 +222,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           },
           options
         ),
+      ...resolvedAppend,
       tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
         const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
         return queue.submit(

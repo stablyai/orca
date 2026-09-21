@@ -25,6 +25,8 @@ type CaptureTerminalShutdownLayoutArgs = {
   paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
   paneTitlesByPaneId: Record<number, string>
   existingLayout: TerminalLayoutSnapshot | undefined
+  /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
+  priorBuffersByLeafId?: Record<string, string>
   captureBuffers?: boolean
   clearedScrollbackLeafIds?: ReadonlySet<string>
 }
@@ -96,6 +98,7 @@ export function captureTerminalShutdownLayout({
   paneTransports,
   paneTitlesByPaneId,
   existingLayout,
+  priorBuffersByLeafId = existingLayout?.buffersByLeafId,
   captureBuffers = true,
   clearedScrollbackLeafIds
 }: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
@@ -157,7 +160,7 @@ export function captureTerminalShutdownLayout({
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
-        prior: omitClearedLeafState(existingLayout?.buffersByLeafId, clearedScrollbackLeafIds),
+        prior: omitClearedLeafState(priorBuffersByLeafId, clearedScrollbackLeafIds),
         fresh: buffers,
         currentLeafIds
       })

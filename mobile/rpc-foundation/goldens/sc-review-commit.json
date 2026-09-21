@@ -3,9 +3,9 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "a29d518b2d075e8e4811404e0fcbf8948fbfe53a3aefbf0948cb2f2e622e8cbb",
   "platform": "darwin",
@@ -19,8 +19,9 @@
       },
       "status": "unread"
     },
-    "3553e2d27023": {
+    "2a7ee2985949": {
       "name": "git.commit#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -54,8 +55,9 @@
         }
       }
     },
-    "e9c816eee026": {
+    "342343f97688": {
       "name": "git.commit#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
     },
     "fbc958e4d46e": {
@@ -73,8 +75,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["3553e2d27023"],
-          "payloads": ["e9c816eee026"],
+          "sender": ["2a7ee2985949"],
+          "payloads": ["342343f97688"],
           "settlements": {
             "commit": "fbc958e4d46e"
           },

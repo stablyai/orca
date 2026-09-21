@@ -8,6 +8,8 @@
  * terminators, best-effort exit codes) must be identical in both.
  */
 
+import { ownRetainedString } from './own-retained-string'
+
 type OscTerminator = {
   index: number
   length: number
@@ -91,6 +93,7 @@ export function createOsc133CommandFinishedScanner(
         if (carry.length > MAX_OSC_CARRY_LENGTH) {
           carry = carry.slice(carry.length - MAX_OSC_CARRY_LENGTH)
         }
+        carry = ownRetainedString(carry)
         return
       }
 

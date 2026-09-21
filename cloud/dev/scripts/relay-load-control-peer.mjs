@@ -11,9 +11,10 @@ const { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } = await import
   requireFromRelay.resolve('@orca-cloud/relay-contract')
 )
 
-const CAPACITY_ASSIGNMENT_ERRORS = [
+const REPORTABLE_ASSIGNMENT_ERRORS = [
   'relay_capacity_exhausted',
-  'relay_connection_headroom_exhausted'
+  'relay_connection_headroom_exhausted',
+  'relay_home_cell_unavailable'
 ]
 
 function waitForOpen(socket, timeoutMs = 10_000) {
@@ -744,7 +745,7 @@ export class RelayLoadControlPeer {
       'relay assignment timeout',
       (status, errorCode) =>
         `relay assignment failed: ${status}${errorCode ? ` ${errorCode}` : ''}`,
-      CAPACITY_ASSIGNMENT_ERRORS
+      REPORTABLE_ASSIGNMENT_ERRORS
     )
     if (
       typeof body.cellUrl !== 'string' ||

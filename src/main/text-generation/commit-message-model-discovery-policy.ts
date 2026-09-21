@@ -57,7 +57,10 @@ export function finalizeModelDiscoveryOutput(
     }
     return { success: false, error: `${spec.label} returned no available models.` }
   }
-  const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
+  // A sentinel model in the static spec (for example `default`) means the CLI
+  // should keep its configured provider even when discovery lists concrete models.
+  const defaultModelId =
+    spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')

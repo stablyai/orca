@@ -38,6 +38,10 @@ import {
   importAdoptedTranscript,
   prepareAdoptedTranscript
 } from './structured-agent-session-adopted-import'
+import {
+  withAgentSessionCreatePhase,
+  type AgentSessionCreatePhaseRecorder
+} from '../../observability/agent-session-instrumentation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 
 export type AttachFlowInput = {
@@ -49,6 +53,7 @@ export type AttachFlowInput = {
   callerKey: string
   params: AgentSessionAttachParams
   now: () => number
+  recordPhase?: AgentSessionCreatePhaseRecorder
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
    *  true only when this attach spawned the provider child, so a re-attach to a live one is not
    *  mistaken for a cold acquire. */
@@ -102,15 +107,17 @@ export async function performAttach(
     return preparedTranscript
   }
   try {
-    const reserved = await store.reserveOwner(
-      reserveRequestFor({
-        sessionId,
-        params,
-        authority: input.authority,
-        callerKey: input.callerKey,
-        fingerprint: admitted.fingerprint,
-        now: input.now()
-      })
+    const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
+      store.reserveOwner(
+        reserveRequestFor({
+          sessionId,
+          params,
+          authority: input.authority,
+          callerKey: input.callerKey,
+          fingerprint: admitted.fingerprint,
+          now: input.now()
+        })
+      )
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'
@@ -153,7 +160,9 @@ export async function performAttach(
       ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
     })
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
-      const acquired = await acquireOwner(input, record)
+      const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
+        acquireOwner(input, record)
+      )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
       acquiredOwner = true

@@ -149,6 +149,38 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
   }
 } as const satisfies ProviderFrameClassificationTable
 
+/**
+ * Frame kinds a DEDICATED typed translator owns end to end.
+ *
+ * Coverage is a contract, not a label. The catalogue classification alone is
+ * only a hint about where a frame belongs, and `hasProviderError` deliberately
+ * outranks it so an unmodelled failure still reaches the user — which is how a
+ * failed background task ended up rendered by the generic fallback, whose row
+ * text is the wire opcode when the payload carries no key the fallback knows.
+ * A kind listed here is guaranteed no fallback row instead, so its translator
+ * may legitimately emit zero rows for a frame and nothing appears beside it.
+ *
+ * Listing a kind before its translator exists deletes the only report of a
+ * failure, so nothing may be added here except together with the code that
+ * renders it.
+ *
+ * A frame of a listed kind that names no task writes nothing. The row it
+ * replaces named no task either — it printed the opcode and a raw payload —
+ * and every frame this protocol sends carries the id its own tracker and
+ * roster have always required.
+ */
+const CLAUDE_TYPED_TRANSLATOR_KINDS: ReadonlySet<string> = new Set([
+  'message:system:task_started',
+  'message:system:task_updated',
+  'message:system:task_progress',
+  'message:system:task_notification',
+  'message:system:background_tasks_changed'
+] satisfies ClaudeStreamJsonFrameKind[])
+
+export function hasTypedProviderFrameTranslator(provider: string, kind: string): boolean {
+  return provider === 'claude' && CLAUDE_TYPED_TRANSLATOR_KINDS.has(kind)
+}
+
 const ERROR_VARIANT_KEYS = new Set(['type', 'status', 'state', 'subtype', 'outcome'])
 const ERROR_VALUE_KEYS = new Set(['error', 'failureReason', 'failure_reason'])
 
@@ -226,7 +258,7 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
-export function isDeltaShapedProviderFrameKind(kind: string): boolean {
+export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
 
@@ -260,7 +292,7 @@ export function classifyProviderFrame(
   if (hasProviderError(payload)) {
     return 'error-surface'
   }
-  if (isDeltaShapedProviderFrameKind(kind)) {
+  if (isDeltaProviderFrameKind(kind)) {
     return 'stream-into-item'
   }
   if (provider === 'claude' && kind === 'message:result') {

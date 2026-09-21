@@ -108,7 +108,6 @@ describe('scanSourceTree filesystem traversal', () => {
     expect(statSync).toHaveBeenCalledExactlyOnceWith(join(root, 'alias'))
   })
 
-
   it('still reports a broken link instead of silently dropping it', () => {
     const target = join(root, '.target')
     mkdirSync(target)

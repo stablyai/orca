@@ -3,9 +3,9 @@
   "family": "project-explicit-false",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "b31992be2f91bd61fbe1b8a5400da3b7a56753564b0b0b2b38bc5d549812d693",
   "platform": "darwin",
@@ -27,30 +27,9 @@
         "itemType": "ISSUE"
       }
     },
-    "204a5c5728c2": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "2cd14f7121a5": {
-      "name": "projectMutating",
-      "value": false
-    },
-    "52a7a7239fbb": {
+    "1158580f696d": {
       "name": "github.project.updateIssueBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
-    },
-    "6f0142de3930": {
-      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -88,20 +67,14 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "c2a271fc5d97": {
+    "5d32aa29303c": {
       "name": "projectMutating",
+      "ordinal": 1,
       "value": true
     },
-    "d330309fabb3": {
-      "name": "projectRowDetailError",
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "e5673036d45e": {
+    "7ecf3a14081d": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -131,6 +104,39 @@
         "startedAt": 0
       }
     },
+    "87a06aebc58e": {
+      "error": "The host sent a reply this app could not read (github.project.updateIssueBySlug)",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "c4a308482e58": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
+    },
+    "cee96a551fcd": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "The host sent a reply this app could not read (github.project.updateIssueBySlug)"
+    },
+    "e9296dde8e41": {
+      "name": "projectMutating",
+      "ordinal": 5,
+      "value": false
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -146,27 +152,27 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["e5673036d45e"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["7ecf3a14081d"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "0c4dced3e005",
-          "effects": ["c2a271fc5d97"]
+          "effects": ["5d32aa29303c"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["6f0142de3930"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["1158580f696d"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "204a5c5728c2",
-          "effects": ["c2a271fc5d97", "d330309fabb3", "2cd14f7121a5"]
+          "state": "87a06aebc58e",
+          "effects": ["5d32aa29303c", "cee96a551fcd", "e9296dde8e41"]
         }
       }
     ]

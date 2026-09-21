@@ -136,18 +136,73 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     ).toBeNull()
   })
 
-  it('still reports non-ASCII Option chords as kitty CSI-u hotkeys', () => {
-    // #8031: compose layouts must keep reaching TUI Option hotkeys, and every
-    // glyph those layouts compose on a bound key is non-ASCII.
+  it('types non-ASCII composed characters instead of reporting chords on a compose side (#20171)', () => {
     expect(resolveKitty(event({ key: 'ƒ', code: 'KeyF', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[102;3u'
+      data: 'ƒ'
     })
     expect(resolveKitty(event({ key: '∫', code: 'KeyB', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[98;3u'
+      data: '∫'
     })
     expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: 'å'
+    })
+  })
+
+  it.each([1, 5])('types every Polish letter and uppercase form under kitty flags %s', (flags) => {
+    const letters = [
+      ['a', 'ą'],
+      ['c', 'ć'],
+      ['e', 'ę'],
+      ['l', 'ł'],
+      ['n', 'ń'],
+      ['o', 'ó'],
+      ['s', 'ś'],
+      ['x', 'ź'],
+      ['z', 'ż']
+    ]
+    for (const [base, composed] of letters) {
+      for (const shiftKey of [false, true]) {
+        const key = shiftKey ? composed.toUpperCase() : composed
+        const code = `Key${base.toUpperCase()}`
+        const layout = (candidate: string, shifted: boolean): string | undefined =>
+          candidate === code ? (shifted ? base.toUpperCase() : base) : undefined
+        for (const [mode, side] of [
+          ['false', 0],
+          ['left', 2],
+          ['right', 1]
+        ] as const) {
+          expect(
+            resolveKitty(event({ key, code, altKey: true, shiftKey }), mode, side, layout, flags)
+          ).toEqual({ type: 'sendInput', data: key })
+        }
+        for (const [mode, side] of [
+          ['true', 0],
+          ['left', 1],
+          ['right', 2]
+        ] as const) {
+          expect(
+            resolveKitty(event({ key, code, altKey: true, shiftKey }), mode, side, layout, flags)
+          ).toEqual({
+            type: 'sendInput',
+            data: `\x1b[${base.codePointAt(0)}${flags === 5 && shiftKey ? `:${base.toUpperCase().codePointAt(0)}` : ''};${shiftKey ? 4 : 3}u`
+          })
+        }
+      }
+    }
+  })
+
+  it('counts supplementary-plane compositions as one character, not a chord', () => {
+    expect(resolveKitty(event({ key: '𝕒', code: 'KeyA', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '𝕒'
+    })
+  })
+
+  it('still reports non-ASCII chords when the user explicitly configures Option as Alt', () => {
+    expect(resolveKitty(event({ key: 'å', code: 'KeyA', altKey: true }), 'true', 0)).toEqual({
       type: 'sendInput',
       data: '\x1b[97;3u'
     })

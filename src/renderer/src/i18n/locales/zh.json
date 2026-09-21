@@ -1315,7 +1315,7 @@
         "326a578923": "orca.yaml + 本地",
         "2132b670da": "两者",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "名称或创建来源",
+        "ac3748dcda": "创建来源",
         "f660aa1454": "连接中",
         "7711ad5122": "本地设置命令",
         "e5db1b0419": "组合设置命令",
@@ -1947,7 +1947,8 @@
         "0f3066256e": "上一个结果",
         "42e466b9f1": "正则表达式",
         "90c61387d9": "区分大小写",
-        "e07012f26e": "搜索..."
+        "e07012f26e": "搜索...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "重启即可更新",
@@ -5869,7 +5870,12 @@
           "14444243ba": "从路径中删除`{{value0}}`？",
           "5d432fe44d": "已安装",
           "8a9b784c60": "陈旧",
-          "d363e5929b": "正在检查 CLI 注册..."
+          "d363e5929b": "正在检查 CLI 注册...",
+          "6f894ef9c2": "在 Finder 中显示",
+          "cbe55e4d48": "在资源管理器中显示",
+          "9fd4023db0": "在文件管理器中显示",
+          "installFailureUnknownReason": "Orca 无法完成 CLI 注册，且未报告任何原因。",
+          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -8949,6 +8955,12 @@
             "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。",
             "projectRuntime": "项目运行时",
             "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+            "githubAccount": "GitHub 账户",
+            "githubAccountDescription": "为该项目的 GitHub API 调用绑定密钥环中的 gh 登录。",
+            "githubAccountKeyword": "GitHub 账户",
+            "ghAccount": "gh 账户",
+            "login": "登录",
+            "token": "token",
             "externalWorktrees": "外部工作树",
             "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
             "copy": "复制",
@@ -9357,6 +9369,24 @@
           "on": "开启",
           "auto": "智能体",
           "off": "关闭"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "此运行时的 GitHub CLI 版本过旧，不支持账户绑定（需要 gh ≥ 2.40）。",
+          "capabilityUnknown": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请重试。",
+          "envToken": "环境令牌账户无法绑定。请使用密钥环登录。",
+          "invalidBinding": "该 GitHub 账户绑定无效。",
+          "unavailable": "该 GitHub 账户在此运行时不可用。",
+          "saveFailed": "无法保存 GitHub 账户绑定。",
+          "title": "GitHub 账户",
+          "description": "为此项目的 GitHub 议题和拉取请求调用使用特定的 gh 登录。",
+          "longDescription": "Orca 会将所选密钥环登录的短期令牌注入此项目的每次 gh 调用。项目视图继续使用当前活动的 gh 登录。",
+          "retry": "重试",
+          "selectLabel": "账户",
+          "ambient": "默认（当前活动的 gh 登录）",
+          "unavailableOption": "{{user}} @ {{host}}（不可用）",
+          "capabilityBlocked": "在此运行时的 GitHub CLI 支持 `gh auth token --user`（gh ≥ 2.40）之前，无法使用账户绑定。",
+          "capabilityUnknownHint": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请清除绑定或重试。",
+          "notEnforced": "已保存，但此运行时（混合版本主机）不会强制执行。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -10269,7 +10299,8 @@
           "noteKeysBody": "API 密钥和工作区存储在当前运行环境中。",
           "noteVisibilityTitle": "隐藏不等于断开连接",
           "noteVisibilityBody": "在任务来源中隐藏 Linear 只会将其从选择器中移除，不会删除密钥或技能。",
-          "setupChecking": "检查中…"
+          "setupChecking": "检查中…",
+          "setupUnverified": "无法验证"
         },
         "TaskSourceLinearSetup": {
           "connectTitle": "连接 Linear",
@@ -10291,6 +10322,7 @@
           "statusReady": "已就绪",
           "statusConnectRequired": "需要连接",
           "statusSkillRequired": "需要技能",
+          "statusUnverified": "无法验证",
           "statusUnavailable": "状态不可用",
           "statusHidden": "已从任务中隐藏",
           "statusIncomplete": "需要设置",
@@ -14908,27 +14940,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "仪表盘视图",
-      "board": "仪表盘",
-      "map": "智能体地图"
-    },
-    "map": {
-      "host": {
-        "local": "本地",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "远程"
-      },
-      "liveContainmentMap": "实时包含关系图",
-      "empty": "没有智能体符合当前筛选条件。",
-      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
-      "zoomOut": "缩小",
-      "zoomIn": "放大",
-      "fit": "适配屏幕",
-      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
-      "agentCount": "{{count}} 个智能体"
-    },
     "placeholder": {
       "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"

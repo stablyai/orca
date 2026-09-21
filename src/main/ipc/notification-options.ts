@@ -87,7 +87,7 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
   )
   const repoLabel = normalizeNotificationText(args.repoLabel, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH)
-  if (args.hasMultipleActiveRepos && repoLabel && worktreeLabel) {
+  if (repoLabel && worktreeLabel) {
     return normalizeNotificationText(
       `${repoLabel} / ${worktreeLabel}`,
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH

@@ -1,20 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const keepAwake = vi.hoisted(() => ({
-  activate: vi.fn<(tag: string) => Promise<void>>(),
-  deactivate: vi.fn<(tag: string) => Promise<void>>()
-}))
-
-vi.mock('expo-keep-awake', () => ({
-  activateKeepAwakeAsync: keepAwake.activate,
-  deactivateKeepAwake: keepAwake.deactivate
-}))
-
 import {
   MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS,
   MobileDictationKeepAwakeOwner,
   drainMobileDictationKeepAwakeCleanup
 } from './mobile-dictation-keep-awake'
+
+/** The two calls the owner makes, which on a device are `expo-keep-awake` and on the page are
+ *  `native.wakelock.set`. Everything under test here is what the owner does around them. */
+const keepAwake = {
+  activate: vi.fn<(tag: string) => Promise<void>>(),
+  deactivate: vi.fn<(tag: string) => Promise<void>>()
+}
+
+const device = { activate: keepAwake.activate, deactivate: keepAwake.deactivate }
 
 function deferred(): {
   promise: Promise<void>
@@ -41,7 +39,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('retries a failed native deactivation after the hook owner is replaced', async () => {
-    const firstOwner = new MobileDictationKeepAwakeOwner()
+    const firstOwner = new MobileDictationKeepAwakeOwner(device)
 
     await firstOwner.acquire('first')
     const firstTag = keepAwake.activate.mock.calls[0]?.[0]
@@ -50,7 +48,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     keepAwake.deactivate.mockRejectedValueOnce(new Error('Activity unavailable'))
     await expect(firstOwner.release('first')).rejects.toThrow('Activity unavailable')
 
-    const replacementOwner = new MobileDictationKeepAwakeOwner()
+    const replacementOwner = new MobileDictationKeepAwakeOwner(device)
     await replacementOwner.acquire('second')
     const secondTag = keepAwake.activate.mock.calls[1]?.[0]
     expect(secondTag).toContain(':second')
@@ -65,7 +63,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   it('serializes cancel and restart without letting a stale release deactivate the restart', async () => {
     const firstActivation = deferred()
     keepAwake.activate.mockImplementationOnce(() => firstActivation.promise)
-    const owner = new MobileDictationKeepAwakeOwner()
+    const owner = new MobileDictationKeepAwakeOwner(device)
 
     const acquireFirst = owner.acquire('first')
     const releaseFirst = owner.release('first')
@@ -83,7 +81,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('waits for an in-flight failed release before a replacement owner activates', async () => {
     const deactivation = deferred()
-    const firstOwner = new MobileDictationKeepAwakeOwner()
+    const firstOwner = new MobileDictationKeepAwakeOwner(device)
     await firstOwner.acquire('first')
     keepAwake.deactivate.mockImplementationOnce(() => deactivation.promise)
 
@@ -91,7 +89,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(keepAwake.deactivate).toHaveBeenCalledOnce()
 
-    const replacementOwner = new MobileDictationKeepAwakeOwner()
+    const replacementOwner = new MobileDictationKeepAwakeOwner(device)
     const acquireReplacement = replacementOwner.acquire('replacement')
     expect(keepAwake.activate).toHaveBeenCalledOnce()
 
@@ -108,7 +106,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('does not fail a fresh acquire when stale-tag cleanup keeps failing', async () => {
-    const firstOwner = new MobileDictationKeepAwakeOwner()
+    const firstOwner = new MobileDictationKeepAwakeOwner(device)
     await firstOwner.acquire('first')
 
     // Both the release deactivate and its trailing drain retry fail.
@@ -118,7 +116,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     await expect(firstOwner.release('first')).rejects.toThrow('Activity unavailable')
 
     keepAwake.deactivate.mockRejectedValueOnce(new Error('Activity unavailable'))
-    const replacementOwner = new MobileDictationKeepAwakeOwner()
+    const replacementOwner = new MobileDictationKeepAwakeOwner(device)
     await expect(replacementOwner.acquire('second')).resolves.toBeUndefined()
     expect(keepAwake.activate).toHaveBeenCalledTimes(2)
 
@@ -133,7 +131,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     vi.useFakeTimers()
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
-      const hungOwner = new MobileDictationKeepAwakeOwner()
+      const hungOwner = new MobileDictationKeepAwakeOwner(device)
       const hungAcquire = hungOwner.acquire('hung')
       // Drain microtasks to quiescence so the timeout timer is registered.
       await vi.advanceTimersByTimeAsync(0)
@@ -143,7 +141,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
       // The queue must advance, and another owner's drain must spare the
       // still-wanted maybe-late activation.
-      const nextOwner = new MobileDictationKeepAwakeOwner()
+      const nextOwner = new MobileDictationKeepAwakeOwner(device)
       await nextOwner.acquire('next')
       expect(keepAwake.deactivate).not.toHaveBeenCalled()
       expect(keepAwake.activate.mock.calls[1]?.[0]).toContain(':next')
@@ -164,7 +162,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       const acquire = owner.acquire('late')
       await vi.advanceTimersByTimeAsync(0)
 
@@ -190,13 +188,13 @@ describe('MobileDictationKeepAwakeOwner', () => {
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
-      const ownerA = new MobileDictationKeepAwakeOwner()
+      const ownerA = new MobileDictationKeepAwakeOwner(device)
       const acquireA = ownerA.acquire('wanted')
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
       await expect(acquireA).rejects.toThrow('Keep-awake native call timed out')
 
-      const ownerB = new MobileDictationKeepAwakeOwner()
+      const ownerB = new MobileDictationKeepAwakeOwner(device)
       await ownerB.acquire('other')
       expect(keepAwake.deactivate).not.toHaveBeenCalled()
 
@@ -218,7 +216,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       const acquire = owner.acquire('ended')
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
@@ -236,7 +234,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   it('retries a timed-out final deactivation via the foreground drain', async () => {
     vi.useFakeTimers()
     try {
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       await owner.acquire('final')
       const tag = keepAwake.activate.mock.calls[0]?.[0]
       // The release deactivate times out and its trailing drain retry fails.
@@ -249,7 +247,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
       await expect(release).rejects.toThrow('Keep-awake native call timed out')
       expect(keepAwake.deactivate).toHaveBeenCalledTimes(2)
 
-      await drainMobileDictationKeepAwakeCleanup()
+      await drainMobileDictationKeepAwakeCleanup(device)
       expect(keepAwake.deactivate).toHaveBeenCalledTimes(3)
       expect(keepAwake.deactivate).toHaveBeenLastCalledWith(tag)
     } finally {
@@ -261,7 +259,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     vi.useFakeTimers()
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       const acquire = owner.acquire('orphan')
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
@@ -279,7 +277,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('recovers on foreground reacquire after a failed initial acquisition', async () => {
     keepAwake.activate.mockRejectedValueOnce(new Error('Unable to activate keep awake'))
-    const owner = new MobileDictationKeepAwakeOwner()
+    const owner = new MobileDictationKeepAwakeOwner(device)
     await expect(owner.acquire('current')).rejects.toThrow('Unable to activate keep awake')
     expect(keepAwake.deactivate).not.toHaveBeenCalled()
 
@@ -295,7 +293,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('recovers keep-awake on a later reacquire after a failed refresh', async () => {
-    const owner = new MobileDictationKeepAwakeOwner()
+    const owner = new MobileDictationKeepAwakeOwner(device)
     await owner.acquire('current')
     const tag = keepAwake.activate.mock.calls[0]?.[0]
 
@@ -314,7 +312,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('records new-dictation intent even when previous-tag cleanup fails', async () => {
-    const owner = new MobileDictationKeepAwakeOwner()
+    const owner = new MobileDictationKeepAwakeOwner(device)
     await owner.acquire('first')
 
     // Release and its trailing drain both fail; the owner keeps stale intent.
@@ -343,7 +341,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     try {
       const first = deferred()
       keepAwake.activate.mockImplementationOnce(() => first.promise)
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       const acquire = owner.acquire('stacked')
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
@@ -376,7 +374,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     vi.useFakeTimers()
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
-      const owner = new MobileDictationKeepAwakeOwner()
+      const owner = new MobileDictationKeepAwakeOwner(device)
       const acquire = owner.acquire('maybe')
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
@@ -398,7 +396,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('keeps a live tag out of the orphan pool when a refresh deactivation fails', async () => {
-    const ownerA = new MobileDictationKeepAwakeOwner()
+    const ownerA = new MobileDictationKeepAwakeOwner(device)
     await ownerA.acquire('live')
     const liveTag = keepAwake.activate.mock.calls[0]?.[0]
 
@@ -409,7 +407,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
     expect(keepAwake.deactivate.mock.calls.filter(([tag]) => tag === liveTag)).toHaveLength(1)
 
     // Another owner's drain must spare the still-wanted live tag.
-    const ownerB = new MobileDictationKeepAwakeOwner()
+    const ownerB = new MobileDictationKeepAwakeOwner(device)
     await ownerB.acquire('other')
     expect(keepAwake.deactivate.mock.calls.filter(([tag]) => tag === liveTag)).toHaveLength(1)
 
@@ -422,7 +420,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
   })
 
   it('reacquires by deactivating before activating so Android re-applies the window flag', async () => {
-    const owner = new MobileDictationKeepAwakeOwner()
+    const owner = new MobileDictationKeepAwakeOwner(device)
     await owner.acquire('current')
     const tag = keepAwake.activate.mock.calls[0]?.[0]
 

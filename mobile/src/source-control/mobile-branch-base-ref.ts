@@ -1,7 +1,7 @@
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import { repoBaseRefListRead, repoDefaultBaseRefRead } from './mobile-repo-base-ref-operations'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 
 function getRepoIdFromMobileWorktreeId(id: string): string {
@@ -10,7 +10,7 @@ function getRepoIdFromMobileWorktreeId(id: string): string {
 }
 
 export async function resolveMobileBranchCompareBaseRef(
-  client: MobileSourceControlRpcSender,
+  client: RpcOperationSender,
   worktreeId: string
 ): Promise<string | null> {
   const repoId = getRepoIdFromMobileWorktreeId(worktreeId)

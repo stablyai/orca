@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -13,6 +14,7 @@ import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
+  searching?: boolean
   query: string
   loading: boolean
   shownCount: number
@@ -29,6 +31,8 @@ type AiVaultPanelHeaderProps = {
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
   adjustmentCount: number
+  /** Bumped by a caller that sent the user here, e.g. Settings; focuses the search box once. */
+  focusSearchRequestId?: number
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
@@ -44,6 +48,7 @@ type AiVaultPanelHeaderProps = {
 
 export function AiVaultPanelHeader({
   query,
+  searching = false,
   loading,
   shownCount,
   sessionCount,
@@ -59,6 +64,7 @@ export function AiVaultPanelHeader({
   hideEmptySessions,
   sessionLimit,
   adjustmentCount,
+  focusSearchRequestId = 0,
   onQueryChange,
   onScopeChange,
   onExecutionHostScopeChange,
@@ -71,6 +77,13 @@ export function AiVaultPanelHeader({
   onReset,
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (focusSearchRequestId > 0) {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    }
+  }, [focusSearchRequestId])
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
       <div className="flex items-center gap-1.5">
@@ -88,7 +101,9 @@ export function AiVaultPanelHeader({
             </span>
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
-            {hasScanResult ? (
+            {searching ? (
+              translate('sessionSearch.panel.indexedHistory', 'Indexed history · best matches')
+            ) : hasScanResult ? (
               <>
                 <span className="@max-[300px]/ai-vault:hidden">
                   {translate(
@@ -120,6 +135,7 @@ export function AiVaultPanelHeader({
             onExecutionHostScopeChange={onExecutionHostScopeChange}
           />
           <VaultViewMenu
+            searching={searching}
             agents={agents}
             sort={sort}
             group={group}
@@ -168,6 +184,7 @@ export function AiVaultPanelHeader({
       <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <input
+          ref={searchInputRef}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={translate(
@@ -175,6 +192,16 @@ export function AiVaultPanelHeader({
             'Search sessions'
           )}
           className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+          aria-label={translate(
+            'auto.components.right.sidebar.AiVaultPanel.searchSessions',
+            'Search sessions'
+          )}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              onQueryChange('')
+            }
+          }}
           spellCheck={false}
         />
         {loading ? <LoaderCircle className="size-3 animate-spin text-muted-foreground" /> : null}

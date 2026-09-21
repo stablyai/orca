@@ -22,7 +22,7 @@ function option(name) {
 
 const cliVersion = option('cli')
 const autocrlf = option('autocrlf')
-const shape = option('shape')
+const placement = option('shape')
 // Why: PR branch names are untrusted workflow input. Keep them out of the
 // generated shell command and pass them to Node through the environment.
 const source = option('source') ?? process.env.SKILL_UPDATE_SOURCE
@@ -30,7 +30,7 @@ const ref = option('ref') ?? process.env.SKILL_UPDATE_REF
 if (
   !cliVersion ||
   (autocrlf !== 'true' && autocrlf !== 'false') ||
-  (shape !== 'symlink' && shape !== 'copy') ||
+  (placement !== 'symlink' && placement !== 'copy') ||
   !source ||
   !ref ||
   !/^[^/\s]+\/[^/\s]+$/.test(source)
@@ -103,7 +103,7 @@ async function seedPlacement(name, tag) {
   const providerRoot = path.join(home, '.claude', 'skills')
   const provider = path.join(providerRoot, name)
   await mkdir(providerRoot, { recursive: true })
-  await (shape === 'copy'
+  await (placement === 'copy'
     ? cp(canonical, provider, { recursive: true })
     : symlink(canonical, provider, process.platform === 'win32' ? 'junction' : 'dir'))
 }
@@ -211,20 +211,20 @@ try {
   await assertCurrentCanonical(targetName)
   const targetProviderAfter = await packageDigestAt(await realpath(targetProvider))
   const targetProviderStat = await lstat(targetProvider)
-  if (shape === 'symlink' && !targetProviderStat.isSymbolicLink()) {
+  if (placement === 'symlink' && !targetProviderStat.isSymbolicLink()) {
     throw new Error(`${targetName} provider alias was replaced with an independent copy`)
   }
-  if (shape === 'symlink' && targetProviderAfter !== currentSkill(targetName).packageDigest) {
+  if (placement === 'symlink' && targetProviderAfter !== currentSkill(targetName).packageDigest) {
     throw new Error(`${targetName} provider alias did not converge with the canonical update`)
   }
   if (
-    shape === 'copy' &&
+    placement === 'copy' &&
     targetProviderAfter !== targetProviderBefore &&
     targetProviderAfter !== currentSkill(targetName).packageDigest
   ) {
     throw new Error('Independent provider copy changed to an unexpected package identity')
   }
-  if (shape === 'copy') {
+  if (placement === 'copy') {
     // Why: hosted 1.5.17 replaces copies with aliases while equivalent local runs
     // retain the copy. Both prove this input topology must remain ineligible.
     const outcome = targetProviderStat.isSymbolicLink()
@@ -241,7 +241,7 @@ try {
     throw new Error('Targeted update changed the non-targeted control provider placement')
   }
   const controlProviderStat = await lstat(controlProvider)
-  if (shape === 'symlink' && !controlProviderStat.isSymbolicLink()) {
+  if (placement === 'symlink' && !controlProviderStat.isSymbolicLink()) {
     throw new Error('Targeted update changed the non-targeted control topology')
   }
 } finally {

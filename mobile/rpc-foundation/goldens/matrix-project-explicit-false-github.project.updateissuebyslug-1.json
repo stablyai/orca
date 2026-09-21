@@ -3,9 +3,9 @@
   "family": "project-explicit-false",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "926f0d8c37a33d465bf3a04f056600cfc9f1669b1eca7e968aa1a1f797a74c61",
   "platform": "darwin",
@@ -13,340 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "057a0b5a420b": {
-      "name": "projectRowDetailError",
-      "value": ""
-    },
-    "064bc8399cbc": {
+    "0053a93946cd": {
       "name": "github.project.updateIssueBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "addLabels": ["recorded"]
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "0924615699bf": {
-      "name": "projectRowDetailError",
-      "value": "transport failure"
-    },
-    "0c4dced3e005": {
-      "error": "",
-      "mutating": true,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "1ddee45b4bc3": {
-      "name": "github.project.updateIssueBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "addLabels": ["recorded"]
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "204a5c5728c2": {
-      "error": "Cannot read properties of null (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "22021a77bba3": {
-      "error": "Unknown method",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "27f506c59cc7": {
-      "name": "projectRowDetailError",
-      "value": "outer refused"
-    },
-    "29f9b15bed7a": {
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "2b3c1b95331e": {
-      "error": "outer refused",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "2cd14f7121a5": {
-      "name": "projectMutating",
-      "value": false
-    },
-    "2e2da1bbd7ed": {
-      "name": "projectRowDetailError",
-      "value": "Cannot read properties of undefined (reading 'ok')"
-    },
-    "32cc1f3ceec8": {
-      "error": "inner refused",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "347cc433c473": {
-      "name": "projectRowDetail",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "37124163eb76": {
-      "name": "github.project.updateIssueBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "addLabels": ["recorded"]
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "3f996c0d0403": {
-      "error": "",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "52a7a7239fbb": {
-      "name": "github.project.updateIssueBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
-    },
-    "538107aee28b": {
-      "name": "github.project.updateIssueBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "addLabels": ["recorded"]
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "5ea692508d69": {
-      "error": "transport failure",
-      "mutating": false,
-      "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "5f998cf9a955": {
-      "name": "github.project.updateIssueBySlug#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "github.project.updateIssueBySlug"
-        },
-        {
-          "name": "params",
-          "value": {
-            "host": "github.enterprise.test",
-            "number": 1,
-            "owner": "owner",
-            "repo": "repo",
-            "updates": {
-              "addLabels": ["recorded"]
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "6b5f90ac558c": {
-      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -387,12 +56,61 @@
         }
       }
     },
-    "6b6431f01d00": {
-      "name": "projectRowDetailError",
-      "value": "Unknown method"
+    "0c4dced3e005": {
+      "error": "",
+      "mutating": true,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
     },
-    "6f0142de3930": {
+    "0e5683ebf4cc": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "addLabels": ["recorded"]
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "1158580f696d": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -430,12 +148,14 @@
         }
       }
     },
-    "6fe1c7d73e4d": {
+    "11ca5361468e": {
       "name": "projectRowDetailError",
-      "value": "inner refused"
+      "ordinal": 4,
+      "value": "outer refused"
     },
-    "7a55b2ec205b": {
+    "14caa463840a": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -466,25 +186,17 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
+          "ok": true
         }
       }
     },
-    "7df10429e862": {
-      "error": "",
+    "22021a77bba3": {
+      "error": "Unknown method",
       "mutating": false,
       "row": {
         "content": {
           "assignees": [],
-          "labels": [
-            {
-              "color": "808080",
-              "name": "recorded"
-            }
-          ],
+          "labels": [],
           "number": 1,
           "repository": "owner/repo"
         },
@@ -492,8 +204,184 @@
         "itemType": "ISSUE"
       }
     },
-    "90cf28d0b84a": {
+    "25c096d77bae": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "transport failure"
+    },
+    "2b3c1b95331e": {
+      "error": "outer refused",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "3081102388ad": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "inner refused"
+    },
+    "32cc1f3ceec8": {
+      "error": "inner refused",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "349173b5b21b": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": ""
+    },
+    "3621cf5aa876": {
+      "name": "githubProjectTable",
+      "ordinal": 5,
+      "value": {
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "labels": [
+                {
+                  "color": "808080",
+                  "name": "recorded"
+                }
+              ],
+              "number": 1,
+              "repository": "owner/repo"
+            },
+            "id": "item-1",
+            "itemType": "ISSUE"
+          }
+        ]
+      }
+    },
+    "3c58a941fdb5": {
+      "name": "githubProjectTable",
+      "ordinal": 6,
+      "value": {
+        "rows": [
+          {
+            "content": {
+              "assignees": [],
+              "labels": [
+                {
+                  "color": "808080",
+                  "name": "recorded"
+                }
+              ],
+              "number": 1,
+              "repository": "owner/repo"
+            },
+            "id": "item-1",
+            "itemType": "ISSUE"
+          }
+        ]
+      }
+    },
+    "3f996c0d0403": {
+      "error": "",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "4324304a281a": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "Unknown method"
+    },
+    "5c98e5ca5ab0": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "addLabels": ["recorded"]
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5d32aa29303c": {
+      "name": "projectMutating",
+      "ordinal": 1,
+      "value": true
+    },
+    "5ea692508d69": {
+      "error": "transport failure",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "6f9e1f332b23": {
+      "name": "projectMutating",
+      "ordinal": 8,
+      "value": false
+    },
+    "72332e237f1f": {
+      "name": "projectMutating",
+      "ordinal": 6,
+      "value": false
+    },
+    "78a9fc64d7dd": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -532,12 +420,14 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
+    "78f76d021b3f": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "Connection closed"
     },
-    "c1213bb55edc": {
+    "7dd074a8e448": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -563,37 +453,23 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
-    "c2a271fc5d97": {
-      "name": "projectMutating",
-      "value": true
-    },
-    "c679565dc881": {
-      "error": "Failed to update GitHub item",
+    "7df10429e862": {
+      "error": "",
       "mutating": false,
       "row": {
-        "content": {
-          "assignees": [],
-          "labels": [],
-          "number": 1,
-          "repository": "owner/repo"
-        },
-        "id": "item-1",
-        "itemType": "ISSUE"
-      }
-    },
-    "cb9738a42f12": {
-      "name": "projectRowItem",
-      "value": {
         "content": {
           "assignees": [],
           "labels": [
@@ -609,16 +485,16 @@
         "itemType": "ISSUE"
       }
     },
-    "cbdef49cc723": {
-      "name": "projectRowDetailError",
-      "value": "Failed to update GitHub item"
+    "7e2bde0922c0": {
+      "name": "projectRowDetail",
+      "ordinal": 7,
+      "value": {
+        "$rpc": "null"
+      }
     },
-    "d330309fabb3": {
-      "name": "projectRowDetailError",
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
-    "e5673036d45e": {
+    "7ecf3a14081d": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -648,16 +524,119 @@
         "startedAt": 0
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
+    "810c401fc52a": {
+      "name": "reply-salvage",
+      "ordinal": 4,
       "value": {
-        "$rpc": "undefined"
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.project.updateIssueBySlug",
+        "operation": "github.project.update-issue",
+        "variant": "github-project-updated-issue"
       }
     },
-    "f12e58847110": {
+    "85734cd25ad9": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "addLabels": ["recorded"]
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "87a06aebc58e": {
+      "error": "The host sent a reply this app could not read (github.project.updateIssueBySlug)",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "887e8ce3ae91": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "addLabels": ["recorded"]
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a25fb60f47da": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -696,8 +675,76 @@
         }
       }
     },
-    "f6a325457a33": {
+    "a735fd6aee5f": {
+      "name": "projectMutating",
+      "ordinal": 7,
+      "value": false
+    },
+    "b54187ba0262": {
+      "name": "projectRowItem",
+      "ordinal": 4,
+      "value": {
+        "content": {
+          "assignees": [],
+          "labels": [
+            {
+              "color": "808080",
+              "name": "recorded"
+            }
+          ],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "c4a308482e58": {
       "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
+    },
+    "c679565dc881": {
+      "error": "Failed to update GitHub item",
+      "mutating": false,
+      "row": {
+        "content": {
+          "assignees": [],
+          "labels": [],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "cee96a551fcd": {
+      "name": "projectRowDetailError",
+      "ordinal": 4,
+      "value": "The host sent a reply this app could not read (github.project.updateIssueBySlug)"
+    },
+    "e2a12ae3c71a": {
+      "name": "projectRowItem",
+      "ordinal": 5,
+      "value": {
+        "content": {
+          "assignees": [],
+          "labels": [
+            {
+              "color": "808080",
+              "name": "recorded"
+            }
+          ],
+          "number": 1,
+          "repository": "owner/repo"
+        },
+        "id": "item-1",
+        "itemType": "ISSUE"
+      }
+    },
+    "e506ad19ffcf": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -730,36 +777,73 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "ok": true
+            "error": "refused"
           }
         }
       }
     },
-    "f871d643501c": {
-      "name": "projectRowDetailError",
-      "value": "Connection closed"
-    },
-    "fa333bb6724e": {
-      "name": "githubProjectTable",
-      "value": {
-        "rows": [
-          {
-            "content": {
-              "assignees": [],
-              "labels": [
-                {
-                  "color": "808080",
-                  "name": "recorded"
-                }
-              ],
-              "number": 1,
-              "repository": "owner/repo"
-            },
-            "id": "item-1",
-            "itemType": "ISSUE"
+    "e8653f04c0eb": {
+      "name": "github.project.updateIssueBySlug#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.updateIssueBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "updates": {
+              "addLabels": ["recorded"]
+            }
           }
-        ]
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
       }
+    },
+    "e9296dde8e41": {
+      "name": "projectMutating",
+      "ordinal": 5,
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eedadfe7f88b": {
+      "name": "projectRowDetail",
+      "ordinal": 6,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "ffe14a16b6b6": {
+      "name": "projectRowDetailError",
+      "ordinal": 5,
+      "value": "Failed to update GitHub item"
     }
   },
   "recording": {
@@ -768,182 +852,183 @@
       {
         "id": "b2.prelude:pending",
         "observation": {
-          "sender": ["e5673036d45e"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["7ecf3a14081d"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "0c4dced3e005",
-          "effects": ["c2a271fc5d97"]
+          "effects": ["5d32aa29303c"]
         }
       },
       {
         "id": "b2.prelude:cleanup",
         "observation": {
-          "sender": ["c1213bb55edc"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["5c98e5ca5ab0"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "0c4dced3e005",
-          "effects": ["c2a271fc5d97", "f871d643501c", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "78f76d021b3f", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.normal:settled",
         "observation": {
-          "sender": ["f6a325457a33"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["85734cd25ad9"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "7df10429e862",
           "effects": [
-            "c2a271fc5d97",
-            "cb9738a42f12",
-            "fa333bb6724e",
-            "347cc433c473",
-            "2cd14f7121a5"
+            "5d32aa29303c",
+            "b54187ba0262",
+            "3621cf5aa876",
+            "eedadfe7f88b",
+            "a735fd6aee5f"
           ]
         }
       },
       {
         "id": "b2.result-absent:settled",
         "observation": {
-          "sender": ["1ddee45b4bc3"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["14caa463840a"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "29f9b15bed7a",
-          "effects": ["c2a271fc5d97", "2e2da1bbd7ed", "2cd14f7121a5"]
+          "state": "87a06aebc58e",
+          "effects": ["5d32aa29303c", "cee96a551fcd", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.result-null:settled",
         "observation": {
-          "sender": ["6f0142de3930"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["1158580f696d"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
-          "state": "204a5c5728c2",
-          "effects": ["c2a271fc5d97", "d330309fabb3", "2cd14f7121a5"]
+          "state": "87a06aebc58e",
+          "effects": ["5d32aa29303c", "cee96a551fcd", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.inner-ok-missing:settled",
         "observation": {
-          "sender": ["7a55b2ec205b"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["e506ad19ffcf"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "7df10429e862",
           "effects": [
-            "c2a271fc5d97",
-            "cb9738a42f12",
-            "fa333bb6724e",
-            "347cc433c473",
-            "2cd14f7121a5"
+            "5d32aa29303c",
+            "810c401fc52a",
+            "e2a12ae3c71a",
+            "3c58a941fdb5",
+            "7e2bde0922c0",
+            "6f9e1f332b23"
           ]
         }
       },
       {
         "id": "b2.inner-false-string-error:settled",
         "observation": {
-          "sender": ["90cf28d0b84a"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["78a9fc64d7dd"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "c679565dc881",
-          "effects": ["c2a271fc5d97", "cbdef49cc723", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "810c401fc52a", "ffe14a16b6b6", "72332e237f1f"]
         }
       },
       {
         "id": "b2.inner-false-object-error:settled",
         "observation": {
-          "sender": ["6b5f90ac558c"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["0053a93946cd"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "32cc1f3ceec8",
-          "effects": ["c2a271fc5d97", "6fe1c7d73e4d", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "3081102388ad", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.outer-refused:settled",
         "observation": {
-          "sender": ["f12e58847110"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["a25fb60f47da"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "2b3c1b95331e",
-          "effects": ["c2a271fc5d97", "27f506c59cc7", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "11ca5361468e", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["5f998cf9a955"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["887e8ce3ae91"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "3f996c0d0403",
-          "effects": ["c2a271fc5d97", "057a0b5a420b", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "349173b5b21b", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.method-not-found:settled",
         "observation": {
-          "sender": ["064bc8399cbc"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["7dd074a8e448"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "22021a77bba3",
-          "effects": ["c2a271fc5d97", "6b6431f01d00", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "4324304a281a", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.transport-rejection:settled",
         "observation": {
-          "sender": ["538107aee28b"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["e8653f04c0eb"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "5ea692508d69",
-          "effects": ["c2a271fc5d97", "0924615699bf", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "25c096d77bae", "e9296dde8e41"]
         }
       },
       {
         "id": "b2.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["37124163eb76"],
-          "payloads": ["52a7a7239fbb"],
+          "sender": ["0e5683ebf4cc"],
+          "payloads": ["c4a308482e58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "3f996c0d0403",
-          "effects": ["c2a271fc5d97", "057a0b5a420b", "2cd14f7121a5"]
+          "effects": ["5d32aa29303c", "349173b5b21b", "e9296dde8e41"]
         }
       }
     ]

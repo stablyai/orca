@@ -40,8 +40,12 @@ const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 // Every module the catalog may import from: the extracted params modules plus the
 // pre-existing src/shared schemas the RPC methods already bind directly.
 function indexableModules() {
+  // Tests are excluded here for the same reason as the RPC_DIR walk below: bundling one pulls
+  // vitest into the CJS catalog build, which throws on require().
   const modules = new Set(
-    globSync('*.ts', { cwd: CONTRACT_DIR }).map((name) => path.join(CONTRACT_DIR, name))
+    globSync('*.ts', { cwd: CONTRACT_DIR })
+      .filter((name) => !name.endsWith('.test.ts'))
+      .map((name) => path.join(CONTRACT_DIR, name))
   )
   modules.delete(OUTPUT_PATH)
   for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {

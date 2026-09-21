@@ -3,9 +3,9 @@
   "family": "settings.bot-overrides",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "cac4980465661fba372e187699741123a4edeb9270125a0a1cad7bbb6a6adebd",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
-      "name": "settings.get#1",
+    "02740e15d2b5": {
+      "name": "settings.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -38,8 +39,9 @@
         "startedAt": 0
       }
     },
-    "466ddfe469f9": {
+    "0295319768b4": {
       "name": "settings.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -73,33 +75,9 @@
       }
     },
     "4f53cda18c2b": [],
-    "7ad8a0996352": {
-      "name": "settings.get#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "7ca23c4c946b": {
+    "b0e514c7c334": {
       "name": "settings.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -137,15 +115,43 @@
         }
       }
     },
-    "7ddcb1852b39": {
+    "c8c77ac17e0a": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "8f6fe9452bda": {
+    "ca63426ad6cf": {
       "name": "settings.get#2",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "d52c8e96e222": ["bot-user"],
+    "e3973bb12da1": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -161,8 +167,8 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["e3973bb12da1"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -173,8 +179,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -185,8 +191,8 @@
       {
         "id": "refresh-pending",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "refresh": "eb79a9b3682a"
@@ -198,8 +204,8 @@
       {
         "id": "refused-retains-overrides",
         "observation": {
-          "sender": ["7ca23c4c946b", "466ddfe469f9"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "0295319768b4"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "refresh": "eb79a9b3682a"

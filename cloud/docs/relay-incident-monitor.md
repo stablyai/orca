@@ -39,12 +39,68 @@ days. No tokens, request bodies, logs, user IDs, host IDs, or relay device IDs a
 Reruns keep one stable incident ID, restore the immediately preceding private
 artifact, verify its commit/run/attempt provenance and content hashes, and pass
 `--restart`. A missing or mismatched artifact fails closed. A missing, stale,
-or collector-failed sample is durably recorded and resets the active continuous
-window. The next fresh sample starts a new 15- or 90-minute window under the
-same incident lineage.
+or collector-failed sample is durably recorded. Up to two consecutive such
+samples per source are tolerated and the window keeps running; a third resets
+the active continuous window, and the next fresh sample starts a new 15- or
+90-minute window under the same incident lineage. A pre-drain dry run must reach
+a verdict within 35 minutes of its lineage start.
 
 Exit code `2` means the gate froze or a dry run failed. Missing, stale, malformed, unauthorized, or
 unavailable telemetry fails closed.
+
+## Gate override (break-glass)
+
+`Deploy Relay Production Same-Cap` can skip this 15-minute dry-run gate. Supply both
+`gate-override-reason` and `gate-override-confirmation`, where the confirmation is exactly
+`SKIP_RELAY_MONITOR_GATE <target-image-digest>`. Supplying one without the other, a
+confirmation bound to any other digest, or a reason shorter than 12 characters fails the
+run before it touches production. `verify` mode rejects the override outright.
+
+### When it is legitimate
+
+The gate proves the fleet is healthy before a wave mutates it. That proof is the wrong
+question in exactly two situations.
+
+- **The roll is the fix for the measured condition.** When a chronic fault is the reason
+  the gate freezes, waiting for a green 15-minute window means waiting for the condition
+  the wave removes. On 2026-09-17 the gate froze 44 consecutive times on the recurring
+  Cloud SQL stall the rolling image addresses.
+- **An incident where the director is healthy.** Rolling back off a bad image should not
+  wait 15 minutes for aggregate evidence about a fleet the operator is already watching.
+
+It is not a way to move faster on an ordinary wave. Use it when you can name the signal
+the gate is freezing on and say why this wave is the answer to it.
+
+### What it does not skip
+
+Only the aggregate 15-minute dry-run and its sealed evidence are skipped. Every other
+control still runs, unchanged:
+
+- The live per-wave preflight, against the same thresholds this document lists. With no
+  sealed state to read, the expected selector comes from the dispatch inputs instead, and
+  the migration policy is pinned to `strict`. That membership is canonicalised exactly as
+  the monitor canonicalises its own, so it must still name every configured cell exactly
+  once and the order you type it in does not matter. A live threshold breach or selector
+  mismatch still fails the wave before any mutation.
+- Durable regional rehome disabled, and the exact selector generation and membership,
+  verified against the live director.
+- The reviewed Terraform plan, the exact image digest served by Artifact Registry, the
+  predecessor runtime check, and the new-incarnation check.
+- One cell at a time behind the Cloud SQL rollout lease, with the failed-wave failsafe
+  that leaves a cell isolated.
+- Single-dispatch mutation: a re-run still cannot replay a wave.
+
+### The audit trail
+
+Three places record it, and none of them depend on the operator writing anything down:
+
+- The workflow run's inputs, kept by GitHub for the life of the run.
+- The gate job's run summary: actor, mode, cells, target digest, reason, and confirmation.
+- The sealed canary artifact, under `gateOverride`, for a `canary-apply` wave.
+
+The canary authority a later batch verifies never carried a monitor run ID, so a batch can
+reuse a canary that was rolled under an override. The override is recorded in that
+artifact as audit trail, not as authority: each wave is authorized by its own confirmation.
 
 ## Local use
 
@@ -83,8 +139,9 @@ freezes as before.
 A production candidate or multi-target mutation must download the exact
 dry-run artifact by workflow run ID and attempt. It verifies the artifact
 hashes and provenance, requires a green completed 15-minute state no older
-than five minutes, then rechecks the live selector and one complete fresh
-sample of every safety signal immediately before running the mutation command.
+than ten minutes (plus 75 minutes per predecessor same-cap wave), then
+rechecks the live selector and one complete fresh sample of every safety
+signal immediately before running the mutation command.
 The signed state binds `strict` evidence to ordinary mutations and
 `recover-forward` evidence to the exact recover-forward source; neither can
 authorize the other.
@@ -102,17 +159,17 @@ durably marked consumed before mutation and cannot authorize another run.
 | Endpoint latency | over 2,000 ms |
 | Cloud SQL CPU | over 80% |
 | Cloud SQL memory | over 90% |
-| Cloud SQL backends | over 250 (62% of the verified 400-connection ceiling) |
+| Cloud SQL backends | over 320 (65% of the 490 usable of `max_connections` 500) |
 | Cloud SQL waiting backends | over 20 |
 | Cloud SQL deadlocks | over 0 |
 | Relay pool waiters | over 800 |
 | Relay pool wait | over 2,500 ms |
 | PostgreSQL retries in five minutes | over 2,000 |
 | Exhausted PostgreSQL retries in five minutes | over 300 |
-| Director instances | outside 5–6 |
+| Director instances | outside 5–6 for more than two consecutive samples |
 | Director CPU or memory | over 80% |
 | Director concurrency | over 64 |
-| Unexpected director 5xx in five minutes (excludes 503) | over 3 |
+| Unexpected director 5xx in five minutes (excludes 503) | over 15 |
 | Auth 5xx in five minutes | over 0 |
 | Connections per cell process | over 500 |
 | Queued bytes per cell process | over 48 MiB |
@@ -121,6 +178,23 @@ durably marked consumed before mutation and cannot authorize another run.
 
 Expected enabled cells must also have a powered runtime, healthy and ready endpoints, fresh
 heartbeats, and matching live admission.
+
+Two readings are the exception to the freeze-on-first-breach rule above.
+
+A cell's endpoint readings are the first. Health, ready and latency are a single HTTP
+round trip from one runner, so they must fail more than two consecutive samples before
+they freeze the run; the streak is keyed by cell, so one cell's three readings share it.
+
+The director instance count is the second. Cloud Run replaces an instance in place
+rather than holding the count, so the reading leaves the band for about one sample
+roughly twice a day, and a deploy that briefly serves two revisions raises it the same
+way. Neither is an unhealthy fleet. The minimum and maximum share one streak, so a count
+that alternates above and below the band still freezes the run.
+
+Absorbed breaches are recorded in the state artifact under `toleratedProbeEvents`. Every
+other signal, including the director and auth health probes, freezes on the first bad
+sample. The live preflight that runs before each mutating wave re-samples on the same
+tolerance.
 
 ## Region placement alert policies
 
@@ -197,6 +271,49 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ## Implementation log
 
+- Gave `collector_failed` the same two-consecutive-sample tolerance as an unread
+  signal and raised the pre-drain lineage cap from 25 to 35 minutes
+  (2026-09-17). Basis: dry-run 35258662628 sampled a healthy fleet clean for
+  13 minutes, then a single unreadable Cloud Monitoring sample restarted the
+  window, and the restarted window ran past the 25-minute cap at 1 500 002 ms,
+  so a healthy fleet produced no verdict. One failed collector round trip is
+  evidence about that round trip, not about the fleet, and it cannot freeze the
+  gate on its own because it carries no threshold breach. `monitor_gap` keeps
+  zero tolerance: it means the run stopped sampling, so the window has a real
+  hole. 35 minutes fits a 15-minute window plus one restart: a reset on the
+  window's last sample restarts at minute 16 and finishes at 31. The job
+  timeout is already 100 minutes.
+- Recalibrated the Cloud SQL backends freeze from 250 to 320, the unexpected
+  director 5xx freeze from 3 to 15, and gave per-cell endpoint probes a
+  two-consecutive-sample tolerance (2026-09-17). Basis: the pre-roll dry-run had
+  frozen 39 times out of 39, every time on a chronic production condition
+  unrelated to the roll it gates, so it was adding delay rather than safety.
+  Measured over the 24 h to 2026-09-17 through the Cloud Monitoring API with the
+  monitor's own aggregation. `cloud_sql.backends` latest-sum per minute: p50 118 /
+  p90 165 / p95 212 / p99 262 / max 282, so the old bar of 250 sat under the
+  observed peak and tripped 1.95% of minutes and 21.8% of 15-minute gates; 320
+  clears every healthy minute with 13% headroom and still fires at 65% of the 490
+  usable connections, leaving 170 in hand for the runaway that exhaustion actually
+  is. `director.errors` non-503 5xx per rolling five minutes: p50 0 / p90 3 /
+  p95 5 / p99 9 / max 52, so the old bar of 3 sat on the p90 and froze 9.2% of
+  windows and 29.0% of gates on the chronic `/v1/assign`, `/v1/regions` and
+  `/v1/resolve` 500 bursts that accompany the recurring Cloud SQL stall; 15 clears
+  the chronic p99, drops the gate-freeze rate to 1.5%, and deliberately leaves the
+  exceptional 20-52 bursts detectable. The director serves roughly 50 requests a
+  minute in 503s alone, so a genuinely broken director lands in the hundreds per
+  window. For the cell probes, the asia-east2 cells run readiness as `SELECT 1`
+  against Cloud SQL in us-central1 over a 176 ms round trip behind a 2 s timeout,
+  so a saturated pool makes the load balancer answer "no healthy upstream" for
+  about 30 s; 7 of the last 14 freezes were that. It arrives as a real HTTP 503, so
+  provenance cannot separate it from a cell serving `health=0` and persistence has
+  to: at the 60 s interval it spans one sample and at worst two. The streak is
+  keyed by cell rather than by signal, because keyed per signal a cell that
+  alternates between slow and unanswered holds every streak at one and never
+  reaches the tolerance. The live preflight before each mutating wave re-samples on
+  the same tolerance, so a blip cannot fail a wave there either. Thresholds stay
+  code constants sealed into every checkpoint rather than workflow inputs, so a
+  green run stays auditable. Re-tighten the backends bar when the auth connection
+  model lands (#21165).
 - Recalibrated the relay pool freezes from 30 waiters / 1,000 ms to
   800 waiters / 2,500 ms (2026-08-27). Basis, measured from
   `orca_relay_runtime_metrics` (`databasePoolWaitersMax`,
@@ -212,9 +329,11 @@ without its segment is a compile error in relay-contract, not a silent gap.
   Basis, measured from `cloudsql.googleapis.com/database/postgresql/num_backends`
   latest-sum over 24 healthy hours: mean ~100, 1-minute spikes to 216, with
   10 minutes over the old bar of 160 — enough to freeze roughly one in ten
-  15-minute pre-drain gates on baseline noise. 250 clears measured healthy
-  peaks and still fires well before the verified 400-connection ceiling;
-  pool waiters and pool wait latency keep their strict thresholds.
+  15-minute pre-drain gates on baseline noise. 250 cleared the healthy peaks
+  measured then and still fired well before the verified 400-connection ceiling;
+  pool waiters and pool wait latency keep their strict thresholds. Superseded by
+  the 2026-09-17 entry above, which re-measured a grown baseline against the
+  490-connection budget.
 - Recalibrated the PostgreSQL-retry freeze from 20 to 300 per five minutes
   (2026-08-26). Basis, measured from
   `jsonPayload.event="orca_relay_postgres_transaction_retry"` in production
@@ -280,4 +399,4 @@ without its segment is a compile error in relay-contract, not a silent gap.
 
 ### Director error allowance (2026-09-12)
 
-The serving-cell rollout observed three unexpected director 500 responses among approximately 33,600 responses in an hour, all two-second PostgreSQL connection timeouts. CPU remained near 30–37% and the zero-error bar repeatedly prevented any cell mutation. The five-minute allowance is now three non-503 director 5xx; four freezes. Auth errors, data freshness, active probes, SQL/pool pressure and other limits are unchanged. This is a bounded operational allowance, not a calibrated SLO or proof that intermittent failures are resolved; persistent low-frequency errors below this limit still require diagnosis.
+The serving-cell rollout observed three unexpected director 500 responses among approximately 33,600 responses in an hour, all two-second PostgreSQL connection timeouts. CPU remained near 30–37% and the zero-error bar repeatedly prevented any cell mutation. The five-minute allowance was set to three non-503 director 5xx here, and was superseded by the 2026-09-17 recalibration to 15 recorded above. Auth errors, data freshness, active probes, SQL/pool pressure and other limits are unchanged. This is a bounded operational allowance, not a calibrated SLO or proof that intermittent failures are resolved; persistent low-frequency errors below this limit still require diagnosis.

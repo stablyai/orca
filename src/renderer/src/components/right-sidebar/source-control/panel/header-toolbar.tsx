@@ -6,8 +6,8 @@ import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-t
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import type { PrimaryAction } from '../../source-control-primary-action'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
@@ -80,30 +80,24 @@ function CreatePrHeaderButton({
   onClick: () => void
 }): React.JSX.Element {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0">
-          <Button
-            type="button"
-            size="xs"
-            disabled={action.disabled}
-            onClick={onClick}
-            className="h-6 shrink-0 px-2 text-[11px]"
-            title={action.title}
-          >
-            {isCreatePrIntentInFlight || isCreatingPr ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-            )}
-            {action.label}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-        {action.title}
-      </TooltipContent>
-    </Tooltip>
+    <PrimaryActionTooltip action={action} side="bottom">
+      <span className="inline-flex shrink-0">
+        <Button
+          type="button"
+          size="xs"
+          disabled={action.disabled}
+          onClick={onClick}
+          className="h-6 shrink-0 px-2 text-[11px]"
+        >
+          {isCreatePrIntentInFlight || isCreatingPr ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+          )}
+          {action.label}
+        </Button>
+      </span>
+    </PrimaryActionTooltip>
   )
 }
 

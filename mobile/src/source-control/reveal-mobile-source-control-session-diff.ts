@@ -3,10 +3,10 @@ import {
   sessionFileTabListRead,
   type MobileSessionFileTabCandidate
 } from './mobile-source-file-open-operations'
-import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type Options = {
-  client: MobileSourceControlRpcSender
+  client: RpcOperationSender
   worktreeId: string
   relativePath: string
   tabMode: 'diff' | 'edit'

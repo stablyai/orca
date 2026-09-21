@@ -3,9 +3,9 @@
   "family": "tasks.workspace-source",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "2cd1e8972f226572744dad7da82afffbdf0452a121c1cd8c3334d5c3fde5d57c",
   "platform": "darwin",
@@ -13,24 +13,53 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2399e995a370": {
-      "name": "workspaceSparsePresets",
-      "value": []
-    },
-    "273f4074a9b5": {
-      "name": "workspaceSparsePresetsLoaded",
-      "value": false
-    },
-    "35afa5cb107f": {
-      "name": "workspaceBaseBranchLoading",
-      "value": false
-    },
-    "4cedb91a2f7a": {
+    "02e24a49522e": {
       "name": "repo.sparsePresets#1",
+      "ordinal": 8,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
     },
-    "5bad21b1e042": {
+    "22b30d5c0550": {
+      "name": "workspaceSparsePresetId",
+      "ordinal": 11,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "4efabea114c4": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 3,
+      "value": ""
+    },
+    "62bc28c39ffc": {
+      "branchError": "",
+      "branches": [],
+      "presets": [],
+      "presetsError": "",
+      "presetsLoaded": false
+    },
+    "666bd27e7019": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 2,
+      "value": false
+    },
+    "802594b0307e": {
+      "name": "workspaceBaseBranchLoading",
+      "ordinal": 6,
+      "value": false
+    },
+    "8aa6d1392eee": {
+      "name": "workspaceSparsePresetsLoading",
+      "ordinal": 13,
+      "value": false
+    },
+    "985b44577ba8": {
+      "name": "workspaceSparsePresets",
+      "ordinal": 9,
+      "value": []
+    },
+    "a4ad08dfe36b": {
       "name": "repo.sparsePresets#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -63,37 +92,14 @@
         }
       }
     },
-    "5f1c84e00d4f": {
+    "b2d70a96a17a": {
       "name": "workspaceBaseBranchResults",
+      "ordinal": 5,
       "value": []
     },
-    "62bc28c39ffc": {
-      "branchError": "",
-      "branches": [],
-      "presets": [],
-      "presetsError": "",
-      "presetsLoaded": false
-    },
-    "6c344c5f4ac0": {
-      "name": "workspaceBaseBranchError",
-      "value": ""
-    },
-    "8353b8e1a426": {
-      "name": "workspaceSparsePresetsLoading",
-      "value": true
-    },
-    "9357f7ea8445": {
-      "name": "workspaceSparsePresetId",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "cfc8af2a7169": {
-      "name": "workspaceSparsePresetsLoading",
-      "value": false
-    },
-    "dba381378b08": {
+    "bb6152049822": {
       "name": "workspaceSparsePresetsError",
+      "ordinal": 12,
       "value": ""
     },
     "eb79a9b3682a": {
@@ -103,6 +109,21 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f7ab22c990a5": {
+      "name": "workspaceBaseBranchError",
+      "ordinal": 7,
+      "value": ""
+    },
+    "faf6e6083f43": {
+      "name": "workspaceSparsePresetsLoading",
+      "ordinal": 1,
+      "value": true
+    },
+    "fe3395a9e94f": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 10,
+      "value": false
     }
   },
   "recording": {
@@ -111,24 +132,24 @@
       {
         "id": "presets-refused-empty-message",
         "observation": {
-          "sender": ["5bad21b1e042"],
-          "payloads": ["4cedb91a2f7a"],
+          "sender": ["a4ad08dfe36b"],
+          "payloads": ["02e24a49522e"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "62bc28c39ffc",
           "effects": [
-            "8353b8e1a426",
-            "273f4074a9b5",
-            "dba381378b08",
-            "5f1c84e00d4f",
-            "35afa5cb107f",
-            "6c344c5f4ac0",
-            "2399e995a370",
-            "273f4074a9b5",
-            "9357f7ea8445",
-            "dba381378b08",
-            "cfc8af2a7169"
+            "faf6e6083f43",
+            "666bd27e7019",
+            "4efabea114c4",
+            "b2d70a96a17a",
+            "802594b0307e",
+            "f7ab22c990a5",
+            "985b44577ba8",
+            "fe3395a9e94f",
+            "22b30d5c0550",
+            "bb6152049822",
+            "8aa6d1392eee"
           ]
         }
       }

@@ -3,9 +3,9 @@
   "family": "worktree.review-link",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "4520bd54a55eabfe6ec64a4b2f824f095f98b2fffd1bf22fe4f9ec7f63cbfa3f",
   "platform": "darwin",
@@ -16,6 +16,11 @@
     "17ab8ab0a9f4": {
       "linkedPR": 7,
       "outcome": "unlinked"
+    },
+    "23cf25973682": {
+      "name": "worktree.show#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
     "6f0c2307a94d": {
       "status": "fulfilled",
@@ -29,57 +34,9 @@
       },
       "outcome": "unlinked"
     },
-    "cec763c8abc6": {
+    "c0b049a3056b": {
       "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "e29f6962cb3e": {
-      "name": "worktree.show#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "e499e48f3fce": {
-      "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "ee20a1dc39e7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "f2580933d0e2": {
-      "name": "worktree.show#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -112,6 +69,53 @@
           }
         }
       }
+    },
+    "e6131d48fd98": {
+      "name": "worktree.show#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "fd03e9caa747": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     }
   },
   "recording": {
@@ -120,8 +124,8 @@
       {
         "id": "read-settled",
         "observation": {
-          "sender": ["f2580933d0e2"],
-          "payloads": ["cec763c8abc6"],
+          "sender": ["c0b049a3056b"],
+          "payloads": ["fd03e9caa747"],
           "settlements": {
             "read": "6f0c2307a94d"
           },
@@ -132,8 +136,8 @@
       {
         "id": "null-result-settled",
         "observation": {
-          "sender": ["f2580933d0e2", "e29f6962cb3e"],
-          "payloads": ["cec763c8abc6", "e499e48f3fce"],
+          "sender": ["c0b049a3056b", "e6131d48fd98"],
+          "payloads": ["fd03e9caa747", "23cf25973682"],
           "settlements": {
             "read": "6f0c2307a94d",
             "read-again": "ee20a1dc39e7"

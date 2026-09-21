@@ -37,8 +37,9 @@ export function buildViewportUserAgentOverride(args: {
   url: string
   mobile: boolean
   baseUserAgent: string
+  googleAuthEnabled?: boolean
 }): ViewportUserAgentOverride {
-  if (isGoogleAuthUrl(args.url)) {
+  if (args.googleAuthEnabled !== false && isGoogleAuthUrl(args.url)) {
     // Why: match the header-level Firefox switch exactly, and send no userAgentMetadata — real
     // Firefox emits no client hints, so Chrome brands here would contradict the stripped headers.
     return { userAgent: googleAuthUserAgent() }

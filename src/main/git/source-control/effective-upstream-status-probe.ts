@@ -11,7 +11,7 @@ import { gitExecFileAsync } from '../runner'
 import {
   MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES,
   effectiveUpstreamStatusInFlight,
-  effectiveUpstreamStatusWriteGeneration,
+  getEffectiveUpstreamStatusWriteGeneration,
   readCachedEffectiveUpstreamStatus,
   rememberEffectiveUpstreamStatus,
   trimEffectiveUpstreamStatusGeneration
@@ -46,7 +46,7 @@ export async function readOrProbeEffectiveUpstreamStatus(
   }
 
   // Why: overlapping refreshes at startup — coalesce the upstream probe so a stable missing ref fails once.
-  const writeGeneration = effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0
+  const writeGeneration = getEffectiveUpstreamStatusWriteGeneration(cacheKey)
   const probe = probeOrRevalidateEffectiveUpstreamStatus(
     cacheKey,
     worktreePath,

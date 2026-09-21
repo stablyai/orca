@@ -11,14 +11,14 @@ import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/worktree-activation'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
 
-export function activateAiVaultResumeWorkspace(workspaceId: string): void {
+export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type === 'folder') {
-    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
-    return
+    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId) !== false
   }
-  activateAndRevealWorktree(workspaceId)
+  return activateAndRevealWorktree(workspaceId) !== false
 }
 
 /** Adopt a vault conversation into a new structured chat. The route was decided by the
@@ -34,22 +34,28 @@ export async function resumeAiVaultSessionInNewChat(
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
     // runs re-pins them, and its result is what names the conversation the host will look for.
     const preparedSession = await prepareAiVaultSessionForResume(session)
-    const settlement = await adoptAgentSessionLaunchVerdict({
+    const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
-    }).launch({})
-    if (settlement?.kind === 'failed') {
-      notifyAiVaultSessionResumeInChatFailure(settlement.error)
-      return
-    }
-    // Why: an unknown outcome is not a failure; the launch layer reconciles it on the next attempt.
-    if (settlement?.kind !== 'structured') {
-      return
-    }
-    if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-      activateAiVaultResumeWorkspace(worktreeId)
+    })
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan,
+      hooks: {},
+      beforeOpen: () => {
+        if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+          return activateAiVaultResumeWorkspace(worktreeId)
+        }
+        return true
+      }
+    })
+    if (launch) {
+      void launch.settlement.then((settlement) => {
+        if (settlement.kind === 'failed') {
+          notifyAiVaultSessionResumeInChatFailure(settlement.error)
+        }
+      })
     }
   } catch (error) {
     notifyAiVaultSessionResumeInChatFailure(error)

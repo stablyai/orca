@@ -55,6 +55,7 @@ it('selects a primary team without pairwise membership checks or sorting all tea
         if (typeof key === 'string' && /^\d+$/.test(key)) {
           reads += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         return Reflect.get(target, key, receiver)
       }
     }

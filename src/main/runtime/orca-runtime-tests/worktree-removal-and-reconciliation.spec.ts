@@ -612,7 +612,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'runtime:env-b')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-b'
+      })
     ).rejects.toThrow('no longer belongs to runtime:env-b')
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()

@@ -26,7 +26,10 @@ import {
   closeClaudeSession,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
-import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import {
+  drainClaudeObservedExits,
+  persistClaudeSessionHandle
+} from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 import {
@@ -80,7 +83,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       attempt.buffered.push(event)
       return
     }
-    if (this.sessions.get(sessionId)?.connection === attempt.connection) {
+    if (
+      this.sessions.get(sessionId)?.connection === attempt.connection ||
+      this.exits.get(sessionId)?.connection === attempt.connection
+    ) {
       event()
     }
   }
@@ -103,7 +109,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     }
     this.exits.set(sessionId, exit)
     exit.publication = closePromise
-      .then((proven) => (proven ? this.settleUnexpectedExit(sessionId, exit) : undefined))
+      .then((proven) => {
+        if (!proven) {
+          return undefined
+        }
+        return this.settleUnexpectedExit(sessionId, exit)
+      })
       .catch(() => undefined)
   }
 
@@ -112,37 +123,19 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
    *  retry. Publication trails observation by the close ladder and the
    *  transcript cursor write, so nothing outside can otherwise tell the two
    *  apart without guessing at wall-clock. */
-  drainObservedExits = async (): Promise<void> => {
-    const awaited = new Set<Promise<void>>()
-    for (;;) {
-      const pending = [...this.exits.values()]
-        .map((exit) => exit.publication)
-        .filter(
-          (publication): publication is Promise<void> =>
-            publication !== undefined && !awaited.has(publication)
-        )
-      if (pending.length === 0) {
-        return
-      }
-      for (const publication of pending) {
-        awaited.add(publication)
-      }
-      // A publication can settle an exit that itself observes another; only the
-      // ones this pass has not already awaited keep the loop going.
-      await Promise.all(pending)
-    }
-  }
+  drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
 
   /** Lifecycle recovery is published only after the child tree proof is true. */
   private settleUnexpectedExit(sessionId: string, exit: ClaudeSessionExit): Promise<void> {
     exit.settlementPromise ??= (async () => {
+      exit.session.unbindReadingControl?.()
       if (this.exits.get(sessionId) !== exit) {
         settleClaudeExitedSession(exit.session)
         return
       }
       // Persist the transcript-derived cursor before publishing the lifecycle
       // event that lets the host release and reacquire this exact child.
-      await this.persistSessionHandle(sessionId, exit.session).catch(() => undefined)
+      await persistClaudeSessionHandle(sessionId, exit.session, this.deps).catch(() => undefined)
       if (this.exits.get(sessionId) !== exit) {
         settleClaudeExitedSession(exit.session)
         return
@@ -177,30 +170,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
     })
 
-  private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
-    try {
-      const transcriptLeaf = this.deps.readTranscriptLeaf
-        ? await readClaudeTranscriptLeafWithReproof({
-            readTranscriptLeaf: this.deps.readTranscriptLeaf,
-            providerSessionId: session.providerSessionId,
-            previousLeafUuid: session.leafUuid,
-            claudeConfigDir: session.claudeConfigDir
-          })
-        : null
-      if (transcriptLeaf) {
-        session.leafUuid = transcriptLeaf
-      }
-    } catch {
-      // A stale or unavailable tail must not overwrite the last observed leaf.
-    }
-    await this.deps.persistHandle?.({
-      sessionId,
-      providerSessionId: session.providerSessionId,
-      leafUuid: session.leafUuid,
-      fence: session.fence
-    })
-  }
-
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
     const backgroundTasksChanged =
       event.type === 'ended'
@@ -232,12 +201,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       journalItemId,
       promptKey,
       questionId,
-      session.activeTurnId ?? null
+      session.translator?.currentTurnId ?? null
     )
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(this.session(input.sessionId), input)
+    dispatchClaudeTurn(this.session(input.sessionId), input, input.beforeDispatch)
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactClaudeSession(this.session(input.sessionId), this.compactions, input)

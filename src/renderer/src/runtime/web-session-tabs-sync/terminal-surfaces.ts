@@ -6,6 +6,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -21,6 +22,7 @@ import type {
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -60,7 +62,12 @@ export function buildMirroredAgentTabs(
   currentUnifiedTabs: readonly Tab[],
   now: number
 ): MirroredAgentTab[] {
-  const agentTabs = snapshot.tabs.filter(isAgentSessionTab)
+  const agentTabs = snapshot.tabs
+    .filter(isAgentSessionTab)
+    .filter(
+      (tab) =>
+        !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+    )
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
@@ -110,7 +117,9 @@ export function buildMirroredAgentTabs(
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
-        groupId: hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        // Keep the local group while a provisional tab is promoted; host placement can lag the
+        // user's split choice and must not move the mounted pane during adoption.
+        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
@@ -192,15 +201,21 @@ export function chooseRemoteTerminalLayout(
       : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
         ? parentLayout.expandedLeafId
         : null
-  return {
-    // Why: host parentLayout is authoritative for split direction; else keep the prior client tree, then degenerate — never re-guess a direction.
+  // Why retained: this rebuilds the layout from the host's picture, and the host publishes no
+  // scrollback of its own — a parked remote pane's bytes live only in the client's copy. Without
+  // this, ANY inventory frame landing between park and reveal drops the only copy: the rebuild is
+  // bufferless, terminalLayoutEqual compares buffers so the write is not bailed out, and
+  // apply-terminal-records assigns it wholesale. Structure still comes from the host; only bytes
+  // for leaves the host itself names are carried over.
+  return retainLocalScrollbackInRemoteLayout(existingLayout, {
+    // Why: host parentLayout is authoritative for split direction; else keep the prior client tree — a leaf-set mismatch prunes/grafts it, never re-guesses the directions it already carries.
     root: resolveTerminalLayoutRoot({
       authoritativeRoot: parentLayout?.root,
       existingRoot: existingLayout?.root,
       leafIds,
       onSynthesize: (leafCount) =>
         console.warn(
-          `[web-session-tabs-sync] synthesized layout for ${leafCount} leaves; no authoritative or prior tree covered them`
+          `[web-session-tabs-sync] synthesized a split direction for ${leafCount} leaves no authoritative or prior tree placed`
         )
     }),
     activeLeafId,
@@ -208,7 +223,7 @@ export function chooseRemoteTerminalLayout(
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
-  }
+  })
 }
 
 export function shouldReplaceTerminalTab(

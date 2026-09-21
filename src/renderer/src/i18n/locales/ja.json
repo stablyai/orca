@@ -1312,7 +1312,7 @@
         "326a578923": "orca.yaml + ローカル",
         "2132b670da": "両方",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "名前または「作成元」",
+        "ac3748dcda": "作成元",
         "f660aa1454": "接続中",
         "7711ad5122": "ローカルセットアップコマンド",
         "e5db1b0419": "組み合わせセットアップコマンド",
@@ -1944,7 +1944,8 @@
         "0f3066256e": "前の一致",
         "42e466b9f1": "正規表現",
         "90c61387d9": "大文字と小文字を区別",
-        "e07012f26e": "検索…"
+        "e07012f26e": "検索…",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "再起動してアップデートする",
@@ -5803,7 +5804,12 @@
           "14444243ba": "PATH から {{value0}} を削除しますか?",
           "5d432fe44d": "インストール済み",
           "8a9b784c60": "古い",
-          "d363e5929b": "CLI の登録を確認しています…"
+          "d363e5929b": "CLI の登録を確認しています…",
+          "6f894ef9c2": "Finderで表示",
+          "cbe55e4d48": "エクスプローラーで表示",
+          "9fd4023db0": "ファイルマネージャーで表示",
+          "installFailureUnknownReason": "Orca は CLI 登録を完了できず、理由を報告しませんでした。",
+          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -8916,6 +8922,12 @@
             "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。",
             "projectRuntime": "プロジェクトのランタイム",
             "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
+            "githubAccount": "GitHub アカウント",
+            "githubAccountDescription": "このプロジェクトの GitHub API 呼び出し用のキーリング gh ログインをバインドします。",
+            "githubAccountKeyword": "GitHub アカウント",
+            "ghAccount": "gh アカウント",
+            "login": "ログイン",
+            "token": "token",
             "externalWorktrees": "外部ワークツリー",
             "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
@@ -9324,6 +9336,24 @@
           "on": "オン",
           "auto": "Agent",
           "off": "オフ"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "このランタイムの GitHub CLI はアカウントバインディングには古すぎます (gh ≥ 2.40 が必要です)。",
+          "capabilityUnknown": "このランタイムの GitHub CLI がアカウントバインディングをサポートしているかどうかを判断できませんでした。再試行してください。",
+          "envToken": "環境トークンのアカウントはバインドできません。キーリングのログインを使用してください。",
+          "invalidBinding": "その GitHub アカウントバインディングは無効です。",
+          "unavailable": "その GitHub アカウントはこのランタイムでは使用できません。",
+          "saveFailed": "GitHub アカウントバインディングを保存できませんでした。",
+          "title": "GitHub アカウント",
+          "description": "このプロジェクトの GitHub Issue および PR の呼び出しには、特定の gh ログインを使用してください。",
+          "longDescription": "Orca は、選択したキーリングのログインから有効期間の短いトークンを取得し、このプロジェクトの各 gh 呼び出しに注入します。プロジェクトビューはアクティブな gh ログインを使い続けます。",
+          "retry": "再試行",
+          "selectLabel": "アカウント",
+          "ambient": "デフォルト (アクティブな gh ログイン)",
+          "unavailableOption": "{{user}} @ {{host}} (利用不可)",
+          "capabilityBlocked": "このランタイムの GitHub CLI が `gh auth token --user` (gh ≥ 2.40) をサポートするまで、バインディングは使用できません。",
+          "capabilityUnknownHint": "このランタイムでの GitHub CLI アカウントバインディングのサポートを確認できませんでした。バインディングをクリアするか、再試行してください。",
+          "notEnforced": "保存されましたが、このランタイム (混合バージョンのホスト) では適用されません。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",
@@ -14804,27 +14834,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "ダッシュボード表示",
-      "board": "ダッシュボード",
-      "map": "Agent マップ"
-    },
-    "map": {
-      "host": {
-        "local": "ローカル",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "リモート"
-      },
-      "liveContainmentMap": "ライブ包含マップ",
-      "empty": "現在のフィルターに一致する Agent はありません。",
-      "canvasLabel": "プロジェクト、ワークスペース、Agent の入れ子マップ",
-      "zoomOut": "ズームアウト",
-      "zoomIn": "ズームイン",
-      "fit": "全体表示",
-      "projectCount": "{{agents}}件の Agent · {{workspaces}}件のワークスペース",
-      "agentCount": "{{count}}件の Agent"
-    },
     "placeholder": {
       "title": "Agent ダッシュボード",
       "description": "ここに、すべての Agent が一覧で表示されます。ボードは近日公開です。"

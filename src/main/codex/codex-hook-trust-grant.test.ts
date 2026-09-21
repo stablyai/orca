@@ -70,13 +70,16 @@ function managedEntry(eventLabel: CodexTrustEntry['eventLabel']): CodexTrustEntr
   }
 }
 
-function buildPlan(entries: CodexTrustEntry[]): CodexManagedTrustGrantPlan {
+function buildPlan(
+  entries: CodexTrustEntry[],
+  host: CodexManagedTrustGrantPlan['host'] = { kind: 'native' }
+): CodexManagedTrustGrantPlan {
   return {
     runtimeHomePath: runtimeHomeDir,
     tomlPath: join(runtimeHomeDir, 'config.toml'),
     managedCommand: MANAGED_COMMAND,
     managedEntries: entries,
-    host: { kind: 'native' },
+    host,
     telemetryLane: 'real-home'
   }
 }
@@ -268,6 +271,19 @@ describe('grantManagedCodexHookTrust', () => {
     vi.setSystemTime(1_000 + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds transient cooldowns when host identities churn', async () => {
+    _internals.setGrantSessionRunner(() => {
+      throw new Error('spawn ETIMEDOUT')
+    })
+    const entry = managedEntry('session_start')
+    for (let index = 0; index < 260; index += 1) {
+      await grantManagedCodexHookTrust(
+        buildPlan([entry], { kind: 'wsl', distro: `Distro-${index}`, linuxRuntimeHome: '/home/u' })
+      )
+    }
+    expect(_internals.transientCooldownCountForTests()).toBe(256)
   })
 
   it('falls back on verify-failed without marking unsupported', async () => {

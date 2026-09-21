@@ -1,0 +1,581 @@
+{
+  "operation": "session.tab-documents",
+  "family": "session.markdown-disk-fallback",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "42ddfcc6c8cac61e5891b72fbac9d04763fa9c52d0cb4f44e1044714a8a1ee77",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0d6b0adc036f": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "# served",
+            "editable": true,
+            "isDirty": false,
+            "version": "v1"
+          }
+        }
+      }
+    },
+    "11d4233470ab": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "27c8f1a219da": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "30ca4532d665": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "3e3efaab3a20": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# served",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# served",
+          "readOnlyReason": {
+            "$rpc": "undefined"
+          },
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "3f9b64bce472": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "44abbe2af7aa": {
+      "name": "markdown.readTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
+    },
+    "4b881f02b557": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7316598fc7ff": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "877720375363": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "message": "Couldn't load markdown",
+          "status": "error"
+        }
+      }
+    },
+    "8f5af40a86f8": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9678ee74c12b": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a2bc1f147779": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "dec5db38cd1c": {
+      "name": "markdown.readTab#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.readTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.markdown-disk-fallback-markdown.readtab-1",
+    "checkpoints": [
+      {
+        "id": "session-markdown-disk-read.normal:fell-back",
+        "observation": {
+          "sender": ["0d6b0adc036f"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "3e3efaab3a20",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.result-absent:fell-back",
+        "observation": {
+          "sender": ["30ca4532d665"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.result-null:fell-back",
+        "observation": {
+          "sender": ["7316598fc7ff"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-ok-missing:fell-back",
+        "observation": {
+          "sender": ["dec5db38cd1c"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-false-string-error:fell-back",
+        "observation": {
+          "sender": ["a2bc1f147779"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.inner-false-object-error:fell-back",
+        "observation": {
+          "sender": ["9678ee74c12b"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.outer-refused:fell-back",
+        "observation": {
+          "sender": ["11d4233470ab"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.outer-refused-no-message:fell-back",
+        "observation": {
+          "sender": ["4b881f02b557"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.method-not-found:fell-back",
+        "observation": {
+          "sender": ["27c8f1a219da"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.transport-rejection:fell-back",
+        "observation": {
+          "sender": ["8f5af40a86f8"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-disk-read.transport-rejection-no-message:fell-back",
+        "observation": {
+          "sender": ["3f9b64bce472"],
+          "payloads": ["44abbe2af7aa"],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "877720375363",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

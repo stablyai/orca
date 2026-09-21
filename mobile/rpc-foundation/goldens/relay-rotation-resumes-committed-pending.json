@@ -1,0 +1,146 @@
+{
+  "operation": "relay.credential-rotation",
+  "family": "relay.credential-rotation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
+  "scenarioSha256": "96df784c1d56de3bdd04afe20ab019339c7d9a616528ca2617e2fffe4f0157c8",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "351d2bec2471": {
+      "outcome": {
+        "relayHostId": "relay-host-0001x",
+        "version": 5
+      },
+      "pending": false,
+      "version": 5
+    },
+    "49e785379d97": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 5,
+                "graceExpiresAt": 1767398400000,
+                "reqId": "install-fixture-1",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "760bb6245333": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "bundle": {
+          "current": {
+            "expiresAt": 1767830400000,
+            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "token": "pending00000000000000000000000000000000001x",
+            "version": 5
+          },
+          "deviceToken": "device-token-1",
+          "grace": {
+            "expiresAt": 1767398400000,
+            "hash": "r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30",
+            "token": "current00000000000000000000000000000000001x",
+            "version": 3
+          },
+          "hostId": "host-1",
+          "pending": {
+            "$rpc": "undefined"
+          },
+          "v": 1
+        },
+        "relay": {
+          "assignmentEpoch": 1,
+          "cellUrl": "https://cell.example",
+          "directorUrl": "https://director.example",
+          "e2eeFraming": 2,
+          "relayHostId": "relay-host-0001x",
+          "v": 1
+        }
+      }
+    },
+    "b56e90125f8d": {
+      "name": "bundle-written",
+      "ordinal": 3,
+      "value": {
+        "grace": 1767398400000,
+        "pending": false,
+        "version": 5
+      }
+    },
+    "c5d28dd067e4": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "relay-rotation-resumes-committed-pending",
+    "checkpoints": [
+      {
+        "id": "pending-install-adopted",
+        "observation": {
+          "sender": ["49e785379d97"],
+          "payloads": ["c5d28dd067e4"],
+          "settlements": {
+            "rotate": "760bb6245333"
+          },
+          "state": "351d2bec2471",
+          "effects": ["b56e90125f8d"]
+        }
+      }
+    ]
+  }
+}

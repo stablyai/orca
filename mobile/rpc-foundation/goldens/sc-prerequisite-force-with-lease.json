@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "ec2847b4af357d8564d8e0a9a1072713c1afd7ff86ba69e9c83c056a6841ee39",
   "platform": "darwin",
@@ -28,8 +28,19 @@
         "ran": true
       }
     },
-    "3d5bc718d103": {
+    "4299ad7b940b": {
+      "name": "progress",
+      "ordinal": 1,
+      "value": "force_pushing"
+    },
+    "cc960da45357": {
       "name": "git.push#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}"
+    },
+    "f2c25f0a16f9": {
+      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -61,14 +72,6 @@
           }
         }
       }
-    },
-    "ef6c20bf075b": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"forceWithLease\":true}}"
-    },
-    "f664712ae7ac": {
-      "name": "progress",
-      "value": "force_pushing"
     }
   },
   "recording": {
@@ -77,13 +80,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["3d5bc718d103"],
-          "payloads": ["ef6c20bf075b"],
+          "sender": ["f2c25f0a16f9"],
+          "payloads": ["cc960da45357"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["f664712ae7ac"]
+          "effects": ["4299ad7b940b"]
         }
       }
     ]

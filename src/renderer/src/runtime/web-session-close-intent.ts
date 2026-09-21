@@ -12,6 +12,7 @@ import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 const CLOSE_INTENT_ANSWER_GRACE_MS = 5_000
 export const WEB_SESSION_CLOSE_INTENT_TTL_MS =
   WEB_SESSION_TAB_RPC_TIMEOUT_MS + CLOSE_INTENT_ANSWER_GRACE_MS
+export const MAX_WEB_SESSION_CLOSE_INTENT_PARTITIONS = 512
 
 type CloseIntent = { recordedAt: number; durable: boolean }
 
@@ -35,6 +36,13 @@ export function recordWebSessionCloseIntent(
   let byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
   if (!byTab) {
     byTab = new Map()
+    while (pendingCloseByOwnerAndWorktree.size >= MAX_WEB_SESSION_CLOSE_INTENT_PARTITIONS) {
+      const oldest = pendingCloseByOwnerAndWorktree.keys().next()
+      if (oldest.done || oldest.value === partitionKey) {
+        break
+      }
+      pendingCloseByOwnerAndWorktree.delete(oldest.value)
+    }
     pendingCloseByOwnerAndWorktree.set(partitionKey, byTab)
   }
   byTab.set(trimmed, { recordedAt: now, durable: byTab.get(trimmed)?.durable === true })

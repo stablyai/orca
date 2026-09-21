@@ -131,3 +131,38 @@ describe('readIpcErrorDetail', () => {
     ).toBe('SSH connection failed: Relay package not found.')
   })
 })
+
+// Why (#19334): a typed main-process error keeps its class name after the wrapper comes off, and
+// the worktree-removal refusal is rendered to a user who does not care what the class was called.
+describe('typed main-process errors', () => {
+  const wrapped = new Error(
+    "Error invoking remote method 'worktrees:remove': WorktreeArchiveHookFailedError: " +
+      'Archive hook failed for worktree: /w/feature — exited 23.\nbackup target unreachable'
+  )
+
+  it('drops the error class name along with the wrapper', () => {
+    expect(readIpcErrorDetail(wrapped)).toBe(
+      'Archive hook failed for worktree: /w/feature — exited 23.\nbackup target unreachable'
+    )
+  })
+
+  it('keeps the detail lines a refusal needs, unlike the clamped read', () => {
+    // The hook's own output is the actionable part of an archive refusal, so the unclamped read
+    // has to survive the newline that `readIpcErrorMessage` deliberately cuts at.
+    expect(readIpcErrorMessage(wrapped)).toBe(
+      'Archive hook failed for worktree: /w/feature — exited 23.'
+    )
+  })
+
+  it('leaves a renderer-local error its class name, having unwrapped nothing', () => {
+    expect(readIpcErrorDetail(new Error('TypeError: x is not a function'))).toBe(
+      'TypeError: x is not a function'
+    )
+  })
+
+  it('does not mistake an errno prefix for a class name', () => {
+    expect(
+      readIpcErrorDetail(new Error("Error occurred in handler for 'fs:read': EACCES: denied"))
+    ).toBe('EACCES: denied')
+  })
+})

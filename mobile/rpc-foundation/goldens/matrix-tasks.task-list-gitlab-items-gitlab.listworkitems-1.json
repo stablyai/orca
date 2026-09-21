@@ -1,0 +1,848 @@
+{
+  "operation": "tasks.task-list-gitlab-items",
+  "family": "tasks.task-list-gitlab-items",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "038221907a57f5bb25338f9b07a744dbac3ea0a7ea2ba43281f171912f45a586",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "18c09c3772f4": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "1e54d4dce85b": {
+      "error": "",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "1f4eeb3dcff1": {
+      "name": "items",
+      "ordinal": 5,
+      "value": []
+    },
+    "24ac11e94500": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2af5bdc42011": {
+      "error": "",
+      "items": [
+        {
+          "key": "gitlab:repo-1:issue:4",
+          "provider": "gitlab",
+          "source": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:4",
+            "labels": [],
+            "number": 4,
+            "repoId": "repo-1",
+            "repoName": "Repo",
+            "state": "opened",
+            "title": "A GitLab issue",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
+          },
+          "status": "Open",
+          "subtitle": "Repo #4",
+          "title": "A GitLab issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "3382fcd7c4d2": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "341101aedcbe": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50}}"
+    },
+    "341ebd23fc0b": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:4",
+                "labels": [],
+                "number": 4,
+                "state": "opened",
+                "title": "A GitLab issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ]
+          }
+        }
+      }
+    },
+    "39f99cf479f0": {
+      "name": "error",
+      "ordinal": 1,
+      "value": ""
+    },
+    "40cf838c0930": {
+      "error": "transport failure",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "411aee2eccd9": {
+      "name": "refreshing",
+      "ordinal": 8,
+      "value": false
+    },
+    "4272f84fe506": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "4b933ef4d8e8": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "59ae87905e65": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "5a3a7999f165": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Unknown method"
+    },
+    "5ac1816a09df": {
+      "name": "loading",
+      "ordinal": 7,
+      "value": false
+    },
+    "609f32a21704": {
+      "name": "loading",
+      "ordinal": 2,
+      "value": true
+    },
+    "63f4bd373653": {
+      "error": "The host sent a reply this app could not read (gitlab.listWorkItems)",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "820944a2683d": {
+      "error": "outer refused",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "890c3bd12005": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "8f4406e0198e": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "transport failure"
+    },
+    "93b371b019f8": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a2f93be0d571": {
+      "name": "items",
+      "ordinal": 5,
+      "value": [
+        {
+          "key": "gitlab:repo-1:issue:4",
+          "provider": "gitlab",
+          "source": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:4",
+            "labels": [],
+            "number": 4,
+            "repoId": "repo-1",
+            "repoName": "Repo",
+            "state": "opened",
+            "title": "A GitLab issue",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
+          },
+          "status": "Open",
+          "subtitle": "Repo #4",
+          "title": "A GitLab issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "a4a363a8d319": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c0eea71a0827": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (gitlab.listWorkItems)"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f01cd569d93d": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f11183466799": {
+      "error": "Unknown method",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "f1dcb0c02c92": {
+      "name": "error",
+      "ordinal": 6,
+      "value": ""
+    },
+    "f457139d901b": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "outer refused"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.task-list-gitlab-items-gitlab.listworkitems-1",
+    "checkpoints": [
+      {
+        "id": "tk-list-gitlab-items.normal:load-settled",
+        "observation": {
+          "sender": ["341ebd23fc0b"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "2af5bdc42011",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "a2f93be0d571",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.result-absent:load-settled",
+        "observation": {
+          "sender": ["4272f84fe506"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "63f4bd373653",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "c0eea71a0827",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.result-null:load-settled",
+        "observation": {
+          "sender": ["18c09c3772f4"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "63f4bd373653",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "c0eea71a0827",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.inner-ok-missing:load-settled",
+        "observation": {
+          "sender": ["59ae87905e65"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "63f4bd373653",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "c0eea71a0827",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.inner-false-string-error:load-settled",
+        "observation": {
+          "sender": ["890c3bd12005"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "63f4bd373653",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "c0eea71a0827",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.inner-false-object-error:load-settled",
+        "observation": {
+          "sender": ["93b371b019f8"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "63f4bd373653",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "c0eea71a0827",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.outer-refused:load-settled",
+        "observation": {
+          "sender": ["24ac11e94500"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "820944a2683d",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "f457139d901b",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.outer-refused-no-message:load-settled",
+        "observation": {
+          "sender": ["4b933ef4d8e8"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "1e54d4dce85b",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.method-not-found:load-settled",
+        "observation": {
+          "sender": ["3382fcd7c4d2"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "f11183466799",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "5a3a7999f165",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.transport-rejection:load-settled",
+        "observation": {
+          "sender": ["a4a363a8d319"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "40cf838c0930",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "8f4406e0198e",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      },
+      {
+        "id": "tk-list-gitlab-items.transport-rejection-no-message:load-settled",
+        "observation": {
+          "sender": ["f01cd569d93d"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "1e54d4dce85b",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "1f4eeb3dcff1",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
+import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
   readTerminalViewportDims,
   runTerminalViewportFitPass
@@ -9,6 +10,9 @@ import {
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
 import type { MobileDisplayMode } from './mobile-session-route-types'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
+
+/** Derived from constants, so it is read once rather than on every subscribe. */
+const snapshotByteBudget = mobileTerminalSnapshotByteBudget()
 
 export function useMobileSessionTerminalSubscription(
   scope: MobileSessionTerminalSubscriptionFoundationModel
@@ -98,7 +102,10 @@ export function useMobileSessionTerminalSubscription(
             covered,
             viewportRef.current
           ),
-          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
+          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
+          // Undefined on a phone, where no per-message cap exists; omitted rather than sent as
+          // undefined so an older host sees the params it has always seen.
+          ...(snapshotByteBudget === undefined ? {} : { snapshotByteBudget })
         },
         (result) => {
           if (subscribeSeqRef.current.get(handle) !== seq) {

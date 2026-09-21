@@ -1,0 +1,728 @@
+{
+  "operation": "tasks.linear-connect",
+  "family": "tasks.linear-connect",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "a60d7c0ce3d155116aecbb3d1ca015b4d9de310155f4e840b2fc391dc9d04860",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0d5ee6814ade": {
+      "name": "linearConnectState",
+      "ordinal": 6,
+      "value": "idle"
+    },
+    "0eb2b134d2a8": {
+      "name": "linearApiKeyDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "138ccbb348fe": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": "inner refused"
+    },
+    "182dd1d40c04": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2802c16af7f7": {
+      "name": "linearConnectState",
+      "ordinal": 5,
+      "value": "error"
+    },
+    "289a0f2782e3": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": ""
+    },
+    "2f8d5603d8c0": {
+      "connected": true,
+      "error": "",
+      "provider": "linear",
+      "providers": ["github", "linear"],
+      "state": "idle"
+    },
+    "3223c75c85dd": {
+      "connected": false,
+      "error": "The host sent a reply this app could not read (linear.connect)",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "33e9492211b7": {
+      "connected": false,
+      "error": "Failed to connect Linear",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "3abc7d437bb5": {
+      "connected": false,
+      "error": "outer refused",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "419764f3b217": {
+      "name": "linearConnectState",
+      "ordinal": 1,
+      "value": "connecting"
+    },
+    "6ab852352273": {
+      "name": "linearConnectError",
+      "ordinal": 7,
+      "value": "Failed to connect Linear"
+    },
+    "748ae6b2e419": {
+      "name": "reply-salvage",
+      "ordinal": 5,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.connect",
+        "operation": "linear.connect-account",
+        "variant": "linear-account-connected"
+      }
+    },
+    "787e45f0206b": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7b027170ab7f": {
+      "name": "linearConnected",
+      "ordinal": 8,
+      "value": true
+    },
+    "7b8a70aff80d": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7cc9b174cc9e": {
+      "name": "linearConnectError",
+      "ordinal": 2,
+      "value": ""
+    },
+    "90675c627fb4": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "b4cc0fd29848": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (linear.connect)"
+    },
+    "b4daffcf8e85": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b59099af6718": {
+      "name": "linear.connect#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.connect\",\"params\":{\"apiKey\":\"lin_api_key\"}}"
+    },
+    "ba59d5e7d5dd": {
+      "connected": false,
+      "error": "",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "c29c2ae2911b": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": "transport failure"
+    },
+    "c53564bc94be": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c78daa2d0ec8": {
+      "name": "showLinearConnect",
+      "ordinal": 7,
+      "value": false
+    },
+    "cae561637f0b": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d1c2253f0b59": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "d35d1934b202": {
+      "name": "provider",
+      "ordinal": 10,
+      "value": "linear"
+    },
+    "d5d0231ddaec": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "dd595ae96cc8": {
+      "name": "visibleProviders",
+      "ordinal": 9,
+      "value": ["github", "linear"]
+    },
+    "dfd3413a2232": {
+      "connected": false,
+      "error": "inner refused",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "e0a6285e78b3": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e9d903fbfa72": {
+      "connected": false,
+      "error": "Unknown method",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec46acd73834": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": "Unknown method"
+    },
+    "edaf57a433ea": {
+      "name": "linear.connect#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "apiKey": "lin_api_key"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "f0b657356ae3": {
+      "name": "linearConnectError",
+      "ordinal": 6,
+      "value": "outer refused"
+    },
+    "f28ad4aa4288": {
+      "name": "linearConnectState",
+      "ordinal": 6,
+      "value": "error"
+    },
+    "f54167ff739b": {
+      "connected": false,
+      "error": "transport failure",
+      "provider": "github",
+      "providers": ["github"],
+      "state": "error"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.linear-connect-linear.connect-1",
+    "checkpoints": [
+      {
+        "id": "tk-linear-connect.normal:connect-settled",
+        "observation": {
+          "sender": ["90675c627fb4"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "2f8d5603d8c0",
+          "effects": [
+            "419764f3b217",
+            "7cc9b174cc9e",
+            "0eb2b134d2a8",
+            "0d5ee6814ade",
+            "c78daa2d0ec8",
+            "7b027170ab7f",
+            "dd595ae96cc8",
+            "d35d1934b202"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-connect.result-absent:connect-settled",
+        "observation": {
+          "sender": ["cae561637f0b"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "3223c75c85dd",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "b4cc0fd29848"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.result-null:connect-settled",
+        "observation": {
+          "sender": ["d5d0231ddaec"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "3223c75c85dd",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "b4cc0fd29848"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.inner-ok-missing:connect-settled",
+        "observation": {
+          "sender": ["edaf57a433ea"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "2f8d5603d8c0",
+          "effects": [
+            "419764f3b217",
+            "7cc9b174cc9e",
+            "0eb2b134d2a8",
+            "0d5ee6814ade",
+            "c78daa2d0ec8",
+            "7b027170ab7f",
+            "dd595ae96cc8",
+            "d35d1934b202"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-connect.inner-false-string-error:connect-settled",
+        "observation": {
+          "sender": ["e0a6285e78b3"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "dfd3413a2232",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "138ccbb348fe"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.inner-false-object-error:connect-settled",
+        "observation": {
+          "sender": ["d1c2253f0b59"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "33e9492211b7",
+          "effects": [
+            "419764f3b217",
+            "7cc9b174cc9e",
+            "748ae6b2e419",
+            "f28ad4aa4288",
+            "6ab852352273"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-connect.outer-refused:connect-settled",
+        "observation": {
+          "sender": ["787e45f0206b"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "3abc7d437bb5",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "f0b657356ae3"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.outer-refused-no-message:connect-settled",
+        "observation": {
+          "sender": ["b4daffcf8e85"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "ba59d5e7d5dd",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "289a0f2782e3"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.method-not-found:connect-settled",
+        "observation": {
+          "sender": ["182dd1d40c04"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "e9d903fbfa72",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "ec46acd73834"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.transport-rejection:connect-settled",
+        "observation": {
+          "sender": ["7b8a70aff80d"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "f54167ff739b",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "c29c2ae2911b"]
+        }
+      },
+      {
+        "id": "tk-linear-connect.transport-rejection-no-message:connect-settled",
+        "observation": {
+          "sender": ["c53564bc94be"],
+          "payloads": ["b59099af6718"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect-0": "eb79a9b3682a"
+          },
+          "state": "ba59d5e7d5dd",
+          "effects": ["419764f3b217", "7cc9b174cc9e", "2802c16af7f7", "289a0f2782e3"]
+        }
+      }
+    ]
+  }
+}

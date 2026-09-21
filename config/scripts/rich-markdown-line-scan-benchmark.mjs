@@ -45,9 +45,9 @@ const arms = {
 }
 const results = []
 for (const size of [20_000, 200_000, 600_000]) {
-  for (const shape of ['lines', 'long-line']) {
+  for (const lineLayout of ['lines', 'long-line']) {
     const phrase =
-      shape === 'lines'
+      lineLayout === 'lines'
         ? 'Ordinary prose with a little `code`.\n'
         : 'Ordinary prose with a little `code`. '
     const content = phrase.repeat(Math.ceil(size / phrase.length)).slice(0, size)
@@ -73,7 +73,7 @@ for (const size of [20_000, 200_000, 600_000]) {
         samples[arm].push({ ms, cpuMs: (cpu.user + cpu.system) / 20_000 })
       }
     }
-    results.push({ size, shape, samples })
+    results.push({ size, lineLayout, samples })
   }
 }
 console.log(

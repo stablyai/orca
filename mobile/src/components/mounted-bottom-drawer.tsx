@@ -194,7 +194,11 @@ export function MountedBottomDrawer({
   }, [onClose, progress])
 
   useEffect(() => {
-    if (!visible || !interactive) {
+    // Native only: react-native-web's `BackHandler.addEventListener` logs "BackHandler is not
+    // supported on web and should not be used." and hands back an inert subscription, so inside the
+    // shell's page every drawer that opened put that line on the console and armed nothing. There
+    // is no hardware back to intercept in a WebView; the shell owns the one the phone has.
+    if (!visible || !interactive || Platform.OS === 'web') {
       return
     }
 
@@ -298,12 +302,12 @@ export function MountedBottomDrawer({
         }
       ]
     }
-  })
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -382,6 +386,8 @@ export function MountedBottomDrawer({
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

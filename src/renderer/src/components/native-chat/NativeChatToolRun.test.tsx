@@ -443,7 +443,7 @@ describe('NativeChatToolRun', () => {
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
 
-  it('keeps failed tool runs visually neutral while collapsed', () => {
+  it('refuses the completion mark to a collapsed run whose call failed', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'false' }, state: 'failed' },
       { type: 'tool-result', output: 'exit 1', isError: true }
@@ -451,9 +451,44 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
+    // The defect: nothing was running, so the header inherited a check and
+    // asserted success over a failure only expanding the run would reveal.
+    expect(container.querySelector('.lucide-check')).toBeNull()
+    expect(runHeader(container)).toHaveTextContent('1 failed')
+    expect(runHeader(container)).toHaveAccessibleName(/Failed tool calls: 1/)
+    // Quiet text, not a severity escalation: no destructive tint, no swapped glyph.
     expect(container.querySelector('.lucide-circle-alert')).toBeNull()
+    expect(container.querySelector('[class*="destructive"]')).toBeNull()
+    // The detail still belongs behind the disclosure.
     expect(screen.queryByText('exit 1')).toBeNull()
+  })
+
+  it('counts every failed call in a run, not just the last one', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' },
+      { type: 'tool-result', output: 'exit 1', isError: true },
+      { type: 'tool-call', name: 'shell', input: { command: 'b' }, state: 'failed' },
+      { type: 'tool-result', output: 'exit 2', isError: true },
+      { type: 'tool-call', name: 'shell', input: { command: 'c' }, state: 'completed' },
+      { type: 'tool-result', output: 'ok' }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).toHaveTextContent('2 failed')
+    expect(container.querySelector('.lucide-check')).toBeNull()
+  })
+
+  it('says nothing and keeps the mark when every call in the run succeeded', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'completed' },
+      { type: 'tool-result', output: 'ok' }
+    ]
+
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
+
+    expect(runHeader(container)).not.toHaveTextContent('failed')
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
   it('keeps settled tool activity behind the completed turn disclosure', () => {
@@ -552,7 +587,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }
@@ -569,7 +604,7 @@ describe('NativeChatToolRun', () => {
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
-        name: 'AskUserQuestion',
+        name: 'CreateWidget',
         input: { prompt: 'which?' },
         state: 'completed'
       }
@@ -738,6 +773,64 @@ describe('NativeChatToolRun', () => {
 
     expect(container.querySelector('.lucide-folder')).toBeInTheDocument()
     expect(screen.getByTitle('ls')).toHaveTextContent('ls')
+  })
+
+  // A bare `group-hover:` matches a hover on ANY ancestor carrying `.group`, and
+  // the assistant message row around this run is one. Hovering a single tool line
+  // therefore revealed every chevron in the message at once.
+  describe('hover reveal', () => {
+    const run: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' }, state: 'completed' },
+      { type: 'tool-result', output: 'a\nb' },
+      { type: 'tool-call', name: 'Bash', input: { command: 'pwd' }, state: 'completed' },
+      { type: 'tool-result', output: '/tmp' }
+    ]
+
+    /** Every node's class list, read through the attribute because an SVG's
+     *  `className` is an `SVGAnimatedString` rather than a string. */
+    function hoverRevealed(container: HTMLElement): { element: Element; classes: string }[] {
+      return [...container.querySelectorAll('[class*="group-hover"]')].map((element) => ({
+        element,
+        classes: element.getAttribute('class') ?? ''
+      }))
+    }
+
+    it('scopes a row’s reveal to that row rather than the whole message', () => {
+      // Open run, collapsed children — the state the turn caret leaves behind.
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      const revealed = hoverRevealed(container)
+      expect(revealed.length).toBeGreaterThan(0)
+      revealed.forEach(({ classes }) => {
+        expect(classes).not.toMatch(/(^|\s)group-hover:/)
+      })
+    })
+
+    it('puts every reveal inside the row button that governs it', () => {
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      hoverRevealed(container).forEach(({ element, classes }) => {
+        const scope = /group-hover\/([a-z-]+):/.exec(classes)?.[1]
+        expect(scope).toBeDefined()
+        expect(element.closest(`.group\\/${scope}`)).not.toBeNull()
+      })
+    })
+
+    it('hides a collapsed chevron on every row until its own row is hovered', () => {
+      const { container } = render(
+        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
+      )
+
+      const chevrons = [...container.querySelectorAll('.pl-4 button svg.lucide-chevron-right')]
+      expect(chevrons.length).toBeGreaterThan(1)
+      chevrons.forEach((chevron) => {
+        expect(chevron.getAttribute('class')).toContain('group-hover/tool-line:opacity-100')
+      })
+    })
   })
 })
 

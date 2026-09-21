@@ -46,8 +46,8 @@ nothing — only a positive `live` or `exited` verdict does.
 
 A worker started with `--on <environment>` reads `unverifiable` until you
 enumerate with `--include-remote`, which asks its execution host for the
-verdict. Past 100 rows the response pages, so follow `page.nextCursor` with
-`--cursor <value>` until `page.hasMore` is false.
+verdict. Rows come newest first and past 100 the response pages, so follow
+`page.nextCursor` with `--cursor <value>` until `page.hasMore` is false.
 
 ## Stall needs positive evidence
 

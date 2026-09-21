@@ -1,5 +1,8 @@
-import { realpath, stat } from 'node:fs/promises'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { join, posix } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../shared/worktree/create-preparation'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -20,8 +23,6 @@ import {
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
-import { resolveGitCommonDir } from './worktree-sparse-state'
-import { resolveGitDir } from './source-control/resolve-git-dir'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -151,25 +152,75 @@ export async function annotateSparseCheckoutStatus(
  *
  * Deadlined because a `.git` on a hung mount (dead NFS/SSHFS, stalled WSL 9p) never rejects, and an
  * unbounded read here would leave the whole create IPC pending instead of failing like it used to.
+ *
+ * A missing `.git` is a real "no candidate"; every other read failure is unverifiable and rejects.
  */
 async function readRepoCommonDirFromDisk(
   repoPath: string,
   timeoutMs: number
 ): Promise<string | undefined> {
+  const dotGit = join(repoPath, '.git')
   try {
-    const dotGit = join(repoPath, '.git')
-    // A bare repo has no `.git`, and resolveGitDir would fabricate one; offer no candidate instead.
-    await withDeadline(stat(dotGit), timeoutMs)
-    const commonDir = await withDeadline(
-      resolveGitDir(repoPath).then(resolveGitCommonDir),
-      timeoutMs
-    )
-    // Node answers in the caller's space, Git in the distro's. Without this the WSL candidate is a UNC
-    // path that can never equal Git's `/home/...`, leaving this witness inert on exactly the fallback
-    // path that needs it (realpath cannot bridge the two: a Linux path has no local inode).
-    return toWslExecutionSpace(commonDir)
-  } catch {
-    return undefined
+    const commonDir = await withDeadline(resolveRepoCommonDirFromDisk(repoPath, dotGit), timeoutMs)
+    return commonDir ? toWslExecutionSpace(commonDir) : undefined
+  } catch (error) {
+    // A bare repo has no `.git`; do not fabricate a candidate for it.
+    if (isDefinitiveAbsence(error)) {
+      return undefined
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`repo common dir unverifiable: could not read ${dotGit}: ${reason}`, {
+      cause: error
+    })
+  }
+}
+
+async function resolveRepoCommonDirFromDisk(
+  repoPath: string,
+  dotGit: string
+): Promise<string | undefined> {
+  // The general metadata resolvers are intentionally best effort; a witness must preserve read failures.
+  const dotGitStats = await stat(dotGit)
+  let gitDir = dotGit
+  if (!dotGitStats.isDirectory()) {
+    const pointer = parseGitdirMarkerPayload(await readFile(dotGit, 'utf8'))
+    if (!pointer) {
+      return undefined
+    }
+    gitDir = resolveGitMetadataPath(repoPath, pointer) ?? dotGit
+    await assertGitDirIsDirectory(gitDir)
+  }
+
+  return readCommonDirMarker(gitDir)
+}
+
+/**
+ * A marker target that is missing or is not a directory is unverifiable, not an absent `.git`:
+ * without this, `commondir`'s own ENOENT/ENOTDIR would pass as absence and hand the caller the
+ * pointer target as a common dir it never proved exists.
+ */
+async function assertGitDirIsDirectory(gitDir: string): Promise<void> {
+  let gitDirStats
+  try {
+    gitDirStats = await stat(gitDir)
+  } catch (error) {
+    // Rewrapped so the outer absence check cannot read this errno as a bare repo's missing `.git`.
+    throw new Error(`gitdir marker target unreadable: ${gitDir}`, { cause: error })
+  }
+  if (!gitDirStats.isDirectory()) {
+    throw new Error(`gitdir marker target is not a directory: ${gitDir}`)
+  }
+}
+
+async function readCommonDirMarker(gitDir: string): Promise<string> {
+  try {
+    const pointer = await readFile(join(gitDir, 'commondir'), 'utf8')
+    return resolveGitMetadataPath(gitDir, pointer) ?? gitDir
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+    return gitDir
   }
 }
 

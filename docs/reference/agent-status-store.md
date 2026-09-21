@@ -2,17 +2,19 @@
 
 ## Status
 
-Proposed on 2026-09-09 as the follow-up to #19217. It lands in four steps, in
-this order, each independently shippable:
+The current boundary is PR 2A: structured sessions use the hook server's fully
+scoped canonical store; unbound PTY/relay evidence remains in an isolated legacy
+adapter. Do not remove the renderer bridge or its publication filters in this
+slice: they still carry native-chat child rows.
+
+The sections below record the original 2026-09-09 rollout. Its PR 1a and PR 1b
+have landed; its proposed PR 2/3 sequence is superseded by that boundary:
 
 1. main-only: every producer writes into one store and `worktree ps` reads it,
    split into 1a (structured sessions join the store) and 1b (the runtime's
    duplicate retained store is deleted);
 2. renderer: the sidebar becomes a subscriber and stops re-deriving rows;
 3. shared: one worktree-status rollup and one freshness rule for every reader.
-
-The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; PR 1a and PR 1b have landed.
 
 ## The problem this solves
 
@@ -352,3 +354,27 @@ call it.
   the retained store restored.
 - Live: the parity check from #19217 (working, done, close, reload) repeated
   against the merged store, with both surfaces read from the one row.
+
+## Retired OMP pane recovery
+
+A desktop renderer retirement carries an optional UUID through the existing
+`agentStatus:retirePaneAuthority` IPC message. The hook server retains it with
+its bounded retirement fence. A validated live OMP new turn consumes that UUID
+and echoes `authorityRestartId` only in the live notification. Cached rows,
+persistence and startup replay never carry the acknowledgement. Older peers
+omit or ignore it and retain explicit attach restoration.
+
+The renderer keeps the UUID in its existing non-persisted retirement tombstone;
+every re-retirement mints a new one. A matching acknowledgement may clear that
+tombstone only with a successful status write for the existing pane and matching
+workspace/connection. Closed tombstones remain `true`, including after the tab
+LRU evicts its entry. Closing a retired physical alias revokes its whole group.
+This is control-plane retirement correlation, not a second agent-status store.
+
+Fallback restores the hook server's recorded status aliases through the existing
+attach-restoration path. The accepted renderer write restores the matching status
+alias routes too, preserving group membership for the next retirement. It does
+not restore orchestration or launch credentials.
+It is scoped to the requesting desktop renderer. A different window's retirement
+UUID cannot be cleared by the acknowledgement, and web mirrors keep their existing
+host-snapshot/attach behavior.

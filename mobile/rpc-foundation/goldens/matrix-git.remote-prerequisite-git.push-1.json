@@ -3,9 +3,9 @@
   "family": "git.remote-prerequisite",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "5009c22df7e74a850bcea41fc110ea7d7eb4bdada623837279f32eaa5149a9b8",
   "platform": "darwin",
@@ -22,8 +22,14 @@
         "ran": true
       }
     },
-    "0e00dbc486b4": {
+    "03b4110a11c7": {
       "name": "git.push#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "0e1f9869a8e7": {
+      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -50,7 +56,7 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "refused"
+            "$rpc": "null"
           }
         }
       }
@@ -70,163 +76,14 @@
         "ok": false
       }
     },
-    "33b2843692a3": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "34eee892be9b": {
-      "outcome": {
-        "error": "Failed to push commits",
-        "ok": false
-      }
-    },
-    "3718951f62b7": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "3c6a5a164e8a": {
-      "outcome": {
-        "error": "",
-        "ok": false
-      }
-    },
-    "3e6cf1f04a9c": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "Failed to push commits",
-        "ok": false
-      }
-    },
-    "403ae2f01ce3": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "60421d882fd2": {
+    "1cfd4ed2f051": {
       "name": "progress",
+      "ordinal": 1,
       "value": "pushing"
     },
-    "6c0349218dd0": {
+    "23b84f51f056": {
       "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "7b027798abe5": {
-      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -255,25 +112,30 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
+    "34eee892be9b": {
+      "outcome": {
+        "error": "Failed to push commits",
+        "ok": false
+      }
     },
-    "95b1f2f379aa": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    "3c6a5a164e8a": {
+      "outcome": {
+        "error": "",
+        "ok": false
+      }
     },
-    "a197c20578aa": {
+    "3e6cf1f04a9c": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
-        "error": "transport failure",
+        "error": "Failed to push commits",
         "ok": false
       }
     },
-    "a28defbf7f69": {
+    "4d624d24f06b": {
       "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -308,14 +170,43 @@
         }
       }
     },
-    "aa8b30457cff": {
-      "outcome": {
-        "error": "outer refused",
-        "ok": false
+    "5f39628d3b36": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
       }
     },
-    "ae61c1e930df": {
+    "6b69938298b4": {
       "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -340,44 +231,17 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": ""
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "b7a56d89f615": {
+    "6ef673dffbd4": {
       "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "cf19981c2114": {
-      "outcome": "unapplied"
-    },
-    "d493a7059b00": {
-      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -410,53 +274,9 @@
         }
       }
     },
-    "e157741a28a1": {
-      "outcome": {
-        "error": "Unknown method",
-        "ok": false
-      }
-    },
-    "e58ae363032b": {
+    "7fbeade80602": {
       "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "f4ca76ee9f22": {
-      "outcome": {
-        "error": "transport failure",
-        "ok": false
-      }
-    },
-    "f9869252c305": {
-      "name": "git.push#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -488,6 +308,200 @@
         }
       }
     },
+    "8eb317f57a8c": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a197c20578aa": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "aa8b30457cff": {
+      "outcome": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "ac7133c88c30": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "bc748fe67a42": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c1ca3b60f701": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cf19981c2114": {
+      "outcome": "unapplied"
+    },
+    "e157741a28a1": {
+      "outcome": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "f367b374b36e": {
+      "name": "git.push#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f4ca76ee9f22": {
+      "outcome": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
     "fa93ca01f266": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -513,145 +527,145 @@
       {
         "id": "sc-prerequisite-push.prelude:pending",
         "observation": {
-          "sender": ["b7a56d89f615"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["c1ca3b60f701"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "9270aeb7d9c6"
           },
           "state": "cf19981c2114",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.normal:settled",
         "observation": {
-          "sender": ["f9869252c305"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["7fbeade80602"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.result-absent:settled",
         "observation": {
-          "sender": ["7b027798abe5"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["23b84f51f056"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.result-null:settled",
         "observation": {
-          "sender": ["e58ae363032b"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["0e1f9869a8e7"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.inner-ok-missing:settled",
         "observation": {
-          "sender": ["0e00dbc486b4"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["5f39628d3b36"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.inner-false-string-error:settled",
         "observation": {
-          "sender": ["3718951f62b7"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["8eb317f57a8c"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.inner-false-object-error:settled",
         "observation": {
-          "sender": ["a28defbf7f69"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["4d624d24f06b"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.outer-refused:settled",
         "observation": {
-          "sender": ["d493a7059b00"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["6ef673dffbd4"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "1b2778bf67a2"
           },
           "state": "aa8b30457cff",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["6c0349218dd0"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["6b69938298b4"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "3e6cf1f04a9c"
           },
           "state": "34eee892be9b",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.method-not-found:settled",
         "observation": {
-          "sender": ["ae61c1e930df"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["ac7133c88c30"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "fa93ca01f266"
           },
           "state": "e157741a28a1",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.transport-rejection:settled",
         "observation": {
-          "sender": ["33b2843692a3"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["f367b374b36e"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "a197c20578aa"
           },
           "state": "f4ca76ee9f22",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       },
       {
         "id": "sc-prerequisite-push.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["403ae2f01ce3"],
-          "payloads": ["95b1f2f379aa"],
+          "sender": ["bc748fe67a42"],
+          "payloads": ["03b4110a11c7"],
           "settlements": {
             "apply": "fb4429083480"
           },
           "state": "3c6a5a164e8a",
-          "effects": ["60421d882fd2"]
+          "effects": ["1cfd4ed2f051"]
         }
       }
     ]

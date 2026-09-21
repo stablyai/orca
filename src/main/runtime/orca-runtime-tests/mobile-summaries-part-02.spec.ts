@@ -514,7 +514,8 @@ describe('OrcaRuntimeService', () => {
     // paneKey-only record: the tabId rescue must not be what keeps this row.
     runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
       connected: true,
-      paneKey
+      paneKey,
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -552,7 +553,8 @@ describe('OrcaRuntimeService', () => {
     runtime['recordPtyWorktree']('daemon-pty-2', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'daemon-tab',
-      paneKey: 'daemon-tab:99999999-9999-4999-8999-999999999998'
+      paneKey: 'daemon-tab:99999999-9999-4999-8999-999999999998',
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -579,7 +581,8 @@ describe('OrcaRuntimeService', () => {
     runtime['recordPtyWorktree']('osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'osc-tab',
-      paneKey: 'osc-tab:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      paneKey: 'osc-tab:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
     runtime.onPtyData(
       'osc-pty',
@@ -609,7 +612,8 @@ describe('OrcaRuntimeService', () => {
     runtime['recordPtyWorktree']('race-pty', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'race-tab',
-      paneKey
+      paneKey,
+      surfaceRecordedAtGraphSequence: runtime['graphSequence']
     })
     runtime.onPtyData(
       'race-pty',

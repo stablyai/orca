@@ -721,6 +721,7 @@ describe('runtime git client', () => {
     await generateRuntimeCommitMessage({
       settings: {
         activeRuntimeEnvironmentId: 'env-1',
+        defaultTuiAgent: 'codex',
         commitMessageAi,
         agentCmdOverrides
       },
@@ -733,6 +734,7 @@ describe('runtime git client', () => {
       method: 'git.generateCommitMessage',
       params: {
         worktree: 'id:wt-1',
+        defaultTuiAgent: 'codex',
         commitMessageAi,
         agentCmdOverrides,
         commitMessageDiscoveryHostKey: 'runtime:env-1'

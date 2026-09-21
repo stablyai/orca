@@ -130,7 +130,18 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const proc = ptyProcesses.get(id)
     const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    // Both fields have to describe one PTY: cleanup plus reactivation across the await above would
+    // otherwise pair the old pane's identity with the replacement's children. The child read below
+    // is synchronous, so this recheck is the last point either answer can drift.
+    if (ptyProcesses.get(id) !== proc) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
     const childProcessEvidence = inspectLocalPtyChildProcesses(id)
     return {
       foregroundProcess,

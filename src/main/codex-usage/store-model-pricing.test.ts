@@ -11,8 +11,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanCodexUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanCodexUsageFilesViaWorker: vi.fn()
 }))
 
 describe('CodexUsageStore', () => {

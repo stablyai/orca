@@ -3,18 +3,38 @@
   "family": "settings.workspace-submit",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
-  "adapterSha256": "411f2288f09b7940ceb46304c7fc3325e248bf009ff3a7cc12839d521cfad599",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
   "scenarioSha256": "dfbacbd6392ae8e8199550952fe917e7c01182349df6c99a06eb0682cfd9175c",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
+    "13c996e4ec2b": {
+      "creating": true,
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "2e8e352c8dd1": {
+      "creating": false,
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "39f99cf479f0": {
+      "name": "error",
+      "ordinal": 1,
+      "value": ""
+    },
+    "51d4cb56be85": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -38,8 +58,39 @@
         "startedAt": 0
       }
     },
-    "10aeb294c268": {
+    "5940cb6d5fdf": {
+      "name": "error",
+      "ordinal": 6,
+      "value": "Selected agent is disabled. Choose an enabled agent before creating."
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "94ddc6962cd6": {
+      "name": "selectedAgent",
+      "ordinal": 4,
+      "value": {
+        "id": "codex",
+        "label": "Codex"
+      }
+    },
+    "bc0a5f0f4956": {
+      "name": "agentOverridden",
+      "ordinal": 5,
+      "value": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f4c218ff736f": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -69,54 +120,10 @@
         }
       }
     },
-    "13c996e4ec2b": {
-      "creating": true,
-      "error": "",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "2e8e352c8dd1": {
-      "creating": false,
-      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
-      "settings": {
-        "disabledTuiAgents": ["claude"]
-      }
-    },
-    "3405a06dce84": {
-      "name": "error",
-      "value": "Selected agent is disabled. Choose an enabled agent before creating."
-    },
-    "7ddcb1852b39": {
+    "f648b042d810": {
       "name": "settings.get#1",
+      "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "ae291b5dba88": {
-      "name": "agentOverridden",
-      "value": false
-    },
-    "eb6f7a9c5bf1": {
-      "name": "selectedAgent",
-      "value": {
-        "id": "codex",
-        "label": "Codex"
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -125,27 +132,27 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["51d4cb56be85"],
+          "payloads": ["f648b042d810"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
           },
           "state": "13c996e4ec2b",
-          "effects": ["82cd71d524c8"]
+          "effects": ["39f99cf479f0"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["10aeb294c268"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["f4c218ff736f"],
+          "payloads": ["f648b042d810"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
           },
           "state": "2e8e352c8dd1",
-          "effects": ["82cd71d524c8", "eb6f7a9c5bf1", "ae291b5dba88", "3405a06dce84"]
+          "effects": ["39f99cf479f0", "94ddc6962cd6", "bc0a5f0f4956", "5940cb6d5fdf"]
         }
       }
     ]

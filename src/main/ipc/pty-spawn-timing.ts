@@ -1,3 +1,5 @@
+import { startSpan } from '../observability/tracer'
+
 // Why: pty:spawn latency has several very different suspects (startup barrier,
 // Claude auth prep, Codex resume/hook prep, account resolution, buildPtyHostEnv
 // filesystem work, provider/daemon spawn). A single opt-in log line per spawn
@@ -21,23 +23,34 @@ export function createPtySpawnTiming(): PtySpawnTiming {
   if (!flag || flag === '0' || flag.toLowerCase() === 'false') {
     return noopTiming
   }
-  const startedAt = Date.now()
+  const startedAt = performance.now()
   let lastAt = startedAt
   const phases: string[] = []
+  const phaseDurations: Record<string, number> = {}
   return {
     mark(phase: string): void {
-      const now = Date.now()
-      phases.push(`${phase}=${now - lastAt}ms`)
+      const now = performance.now()
+      const elapsed = now - lastAt
+      phases.push(`${phase}=${Math.round(elapsed)}ms`)
+      phaseDurations[phase] = elapsed
       lastAt = now
     },
     log(id: string, extra?: Record<string, string | number | boolean>): void {
+      const totalMs = performance.now() - startedAt
       const extras = extra
         ? ` ${Object.entries(extra)
             .map(([key, value]) => `${key}=${value}`)
             .join(' ')}`
         : ''
+      try {
+        startSpan('pty.spawn.timing', {
+          attributes: { ptyId: id, totalMs, phaseDurations, ...extra }
+        }).end()
+      } catch {
+        // Optional diagnostics must not reject a successful spawn.
+      }
       console.log(
-        `[pty-spawn-timing] id=${id} total=${Date.now() - startedAt}ms ${phases.join(' ')}${extras}`
+        `[pty-spawn-timing] id=${id} total=${Math.round(totalMs)}ms ${phases.join(' ')}${extras}`
       )
     }
   }

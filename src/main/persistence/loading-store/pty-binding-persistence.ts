@@ -218,6 +218,11 @@ function applyPtyBinding(
       [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
     }
   }
+  // Why: host-initiated persist snapshots used to omit this write-once guard, so every launch or reattach treated the worktree as never having default terminals applied.
+  session.defaultTerminalTabsAppliedByWorktreeId = {
+    ...session.defaultTerminalTabsAppliedByWorktreeId,
+    [bindingWorktreeId]: true
+  }
   if (!isTerminalLeafId(args.leafId)) {
     // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
     advanceTopologyFence()
@@ -266,7 +271,7 @@ function applyPtyBinding(
 }
 
 export function installPtyBindingPersistenceOperationsContext(
-  target: object,
+  target: PtyBindingPersistenceOperations,
   source: PtyBindingPersistenceOperations
 ): void {
   Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {

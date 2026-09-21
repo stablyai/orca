@@ -65,7 +65,8 @@ function countAllocations(run: () => void): { entries: number; maps: number } {
   const RealMap = globalThis.Map
   let entries = 0
   let maps = 0
-  Object.entries = ((target: object) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `Object.entries` is an overload set no single arrow can satisfy; this wrapper only counts calls and returns the native result unchanged.
+  Object.entries = ((target: Record<string, unknown>) => {
     entries += 1
     return realEntries(target)
   }) as typeof Object.entries

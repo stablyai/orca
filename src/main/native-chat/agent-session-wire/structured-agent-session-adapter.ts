@@ -14,6 +14,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalDispatchState,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
@@ -30,6 +31,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   constructor(
@@ -139,6 +141,7 @@ export type StructuredAgentSessionAcquireInput = {
   options?: Readonly<Record<string, string>>
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
+  recordPhase?: AgentSessionCreatePhaseRecorder
 }
 
 export type StructuredAgentSessionSetOptionInput = {
@@ -167,6 +170,11 @@ export type StructuredAgentSessionAdapter = {
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    /** Host clock on the submission row this send came from; the origin the turn
+     *  it opens records as `requestedAt`. */
+    requestedAt?: number
+    /** Revalidate after preparation, immediately before writing to the provider. */
+    beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
   rewindSupport?(sessionId: string): AgentSessionRewindSupport
   recoverRewind?(input: {
@@ -202,6 +210,12 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     fence: number
     prompt?: { itemId: string }
+    /** Latest journal submission for this fence, when the host has one. */
+    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
+    /** Re-reads the turn the published journal says is running — the only turn a client
+     *  could have named. A function, not a value, because the guard re-checks after the
+     *  delivery fence may have waited. Absent for direct callers with no journal. */
+    resolveLiveTurnId?: () => string | null
   }): Promise<{ cancelled: boolean }>
   stopBackgroundTasks?(input: {
     sessionId: string

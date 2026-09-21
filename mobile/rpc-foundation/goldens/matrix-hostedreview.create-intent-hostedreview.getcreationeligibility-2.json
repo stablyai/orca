@@ -3,9 +3,9 @@
   "family": "hostedReview.create-intent",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "75ba135731290bf734a5eef0b65f9ad8b7cac453c4e2006faac88a5da9dbe3a3",
   "platform": "darwin",
@@ -13,33 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0278e0f0d6cf": {
-      "name": "git.status#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "079e57b28866": {
+    "0347742c8f12": {
       "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 16,
       "args": [
         {
           "name": "method",
@@ -95,12 +71,9 @@
         }
       }
     },
-    "0a191e58baef": {
-      "name": "hostedReview.create#1",
-      "json": "{\"id\":\"frame-11\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Host title\",\"body\":\"Host body\",\"draft\":false}}"
-    },
-    "0ea11c3b0bda": {
+    "0708af780dc4": {
       "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -140,214 +113,13 @@
         "settledAt": 0,
         "value": {
           "id": "frame-10",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
+          "ok": true
         }
       }
     },
-    "125fbea5f50a": {
-      "name": "git.generateCommitMessage#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.generateCommitMessage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "1402e70471f8": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "16f662c17969": {
-      "name": "git.status#4",
-      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "1ce01a83322f": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-10",
-          "ok": false
-        }
-      }
-    },
-    "21c1956cb4f7": {
-      "name": "git.bulkStage#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.bulkStage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePaths": ["src/new.ts"],
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "2342c6f737d2": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-10",
-          "ok": false
-        }
-      }
-    },
-    "27e9d0778f22": {
+    "0e4c5b9b4b61": {
       "name": "git.commit#1",
+      "ordinal": 12,
       "args": [
         {
           "name": "method",
@@ -380,16 +152,40 @@
         }
       }
     },
-    "2af3debae21a": {
+    "0f6982ada2e6": {
       "name": "git.commit#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"feat: recorded\"}}"
-    },
-    "2c3c06911cb2": {
-      "name": "git.status#4",
+      "ordinal": 12,
       "args": [
         {
           "name": "method",
-          "value": "git.status"
+          "value": "git.commit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "message": "feat: recorded",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "10f528114aef": {
+      "name": "git.generateCommitMessage#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.generateCommitMessage"
         },
         {
           "name": "params",
@@ -405,27 +201,13 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-9",
-          "ok": true,
-          "result": {
-            "branch": "feature",
-            "entries": [],
-            "head": "def5678",
-            "upstreamStatus": {
-              "ahead": 0,
-              "behind": 0,
-              "hasUpstream": true
-            }
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "302b94359544": {
+    "1858779f58e9": {
       "name": "git.status#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -475,42 +257,140 @@
         }
       }
     },
-    "319e2b2ccc22": {
-      "name": "git.bulkStage#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.bulkStage\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePaths\":[\"src/new.ts\"]}}"
+    "201cece6e0bb": {
+      "name": "git.status#3",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
-    "368b0b9ce80a": {
-      "name": "progress",
-      "value": "staging"
-    },
-    "3baf33626add": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "committed": true,
-        "error": "This branch is not ready for a pull request yet.",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [],
-          "head": "def5678",
-          "upstreamStatus": {
-            "ahead": 0,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
+    "22cb4850c7e9": {
+      "name": "git.generateCommitMessage#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.generateCommitMessage"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
           }
         }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "message": "feat: recorded",
+            "success": true
+          }
+        }
+      }
+    },
+    "28edd52f4d29": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-10",
+          "ok": false
+        }
+      }
+    },
+    "395c47c3d42e": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 17,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"hasUncommittedChanges\":false,\"hasUpstream\":true,\"ahead\":1,\"behind\":0,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    },
+    "42e0a785c289": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 16,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 1,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
     "43ccfe31d2a4": {
@@ -557,57 +437,19 @@
         }
       }
     },
-    "44dd632a8def": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-10",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
+    "49a4ef454656": {
+      "name": "git.generateCommitMessage#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
-    "4c9c8122480a": {
-      "name": "git.status#3",
+    "4e72cd693c7e": {
+      "name": "progress",
+      "ordinal": 25,
+      "value": "creating_review"
+    },
+    "570c09f158bd": {
+      "name": "git.status#4",
+      "ordinal": 21,
       "args": [
         {
           "name": "method",
@@ -631,24 +473,20 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-6",
+          "id": "frame-9",
           "ok": true,
           "result": {
             "branch": "feature",
             "entries": [],
             "head": "def5678",
             "upstreamStatus": {
-              "ahead": 1,
+              "ahead": 0,
               "behind": 0,
               "hasUpstream": true
             }
           }
         }
       }
-    },
-    "5975e0bdd4a4": {
-      "name": "progress",
-      "value": "creating_review"
     },
     "5a0d2dca259b": {
       "outcome": {
@@ -677,381 +515,14 @@
         }
       }
     },
-    "5b46f52533a0": {
-      "name": "hostedReview.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": "main",
-            "body": "Host body",
-            "draft": false,
-            "head": "feature",
-            "provider": "github",
-            "repo": "id:repo42",
-            "title": "Host title",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "5b5a307c10d7": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-12\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
-    },
-    "5e330d49c396": {
-      "name": "git.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "60421d882fd2": {
+    "682fbd1f6b74": {
       "name": "progress",
-      "value": "pushing"
-    },
-    "6a5c9570c542": {
-      "name": "progress",
-      "value": "generating_commit_message"
-    },
-    "6bdfb4167cc6": {
-      "outcome": {
-        "committed": true,
-        "error": "This branch is not ready for a pull request yet.",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [],
-          "head": "def5678",
-          "upstreamStatus": {
-            "ahead": 0,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
-    "6df8e4961ee3": {
-      "name": "git.generateCommitMessage#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.generateCommitMessage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "message": "feat: recorded",
-            "success": true
-          }
-        }
-      }
-    },
-    "6f10a6bfd795": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-10",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "72b388fd3302": {
-      "outcome": "unrun"
-    },
-    "73e6cf23f0b3": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "7679f4e521d1": {
-      "name": "git.push#1",
-      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "7778d4c43a58": {
-      "name": "progress",
+      "ordinal": 11,
       "value": "committing"
     },
-    "788869e46db6": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-8",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "8302a20e080f": {
-      "name": "git.status#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "8b784bb9dff5": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "committed": true,
-        "ok": true,
-        "prefill": {
-          "base": "main",
-          "blockedReason": {
-            "$rpc": "null"
-          },
-          "body": "Host body",
-          "canCreate": true,
-          "nextAction": {
-            "$rpc": "null"
-          },
-          "provider": "github",
-          "reviewLookupOutcome": "not_found",
-          "title": "Host title"
-        },
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [],
-          "head": "def5678",
-          "upstreamStatus": {
-            "ahead": 0,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        },
-        "url": "https://review.test/5",
-        "warning": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "8ca8f03c0069": {
-      "name": "git.commit#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.commit"
-        },
-        {
-          "name": "params",
-          "value": {
-            "message": "feat: recorded",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "98b13de38dae": {
-      "name": "hostedReview.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "base": "main",
-            "body": "Host body",
-            "draft": false,
-            "head": "feature",
-            "provider": "github",
-            "repo": "id:repo42",
-            "title": "Host title",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-11",
-          "ok": true,
-          "result": {
-            "number": 5,
-            "ok": true,
-            "url": "https://review.test/5"
-          }
-        }
-      }
-    },
-    "9bc50e10f310": {
+    "6a9e29548c49": {
       "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -1109,8 +580,89 @@
         }
       }
     },
-    "a6f6cd5af9d1": {
-      "name": "git.status#2",
+    "6b3d90cdf382": {
+      "name": "hostedReview.create#1",
+      "ordinal": 26,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Host body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Host title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "6e227482ca80": {
+      "name": "git.push#1",
+      "ordinal": 19,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-8",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "6f8094ed6558": {
+      "name": "git.status#4",
+      "ordinal": 22,
+      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "72b388fd3302": {
+      "outcome": "unrun"
+    },
+    "77a1112e7648": {
+      "name": "hostedReview.create#1",
+      "ordinal": 27,
+      "json": "{\"id\":\"frame-11\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Host title\",\"body\":\"Host body\",\"draft\":false}}"
+    },
+    "7b98416e2b81": {
+      "name": "git.status#3",
+      "ordinal": 14,
       "args": [
         {
           "name": "method",
@@ -1134,18 +686,12 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-6",
           "ok": true,
           "result": {
             "branch": "feature",
-            "entries": [
-              {
-                "area": "staged",
-                "path": "src/app.ts",
-                "status": "modified"
-              }
-            ],
-            "head": "abc1234",
+            "entries": [],
+            "head": "def5678",
             "upstreamStatus": {
               "ahead": 1,
               "behind": 0,
@@ -1155,106 +701,9 @@
         }
       }
     },
-    "ac748ef3fb83": {
-      "name": "worktree.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "main",
-            "linkedPR": 5,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-12",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "b7a56d89f615": {
-      "name": "git.push#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.push"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "b87dea84b950": {
-      "name": "git.generateCommitMessage#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.generateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "bf0e050653a2": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "committed": true,
-        "error": "Orca could not confirm whether this branch already has a pull request. Try again in a moment.",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [],
-          "head": "def5678",
-          "upstreamStatus": {
-            "ahead": 0,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
-    "c444aeacec59": {
-      "name": "git.status#3",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "c51356d4650a": {
+    "81faa0ecff79": {
       "name": "git.bulkStage#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -1287,12 +736,225 @@
         }
       }
     },
-    "c997e6a2a82a": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"hasUncommittedChanges\":false,\"hasUpstream\":true,\"ahead\":1,\"behind\":0,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    "8601995022f5": {
+      "name": "git.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "d0dab08215c6": {
+    "8b6eab764c7a": {
       "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "8b784bb9dff5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "committed": true,
+        "ok": true,
+        "prefill": {
+          "base": "main",
+          "blockedReason": {
+            "$rpc": "null"
+          },
+          "body": "Host body",
+          "canCreate": true,
+          "nextAction": {
+            "$rpc": "null"
+          },
+          "provider": "github",
+          "reviewLookupOutcome": "not_found",
+          "title": "Host title"
+        },
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [],
+          "head": "def5678",
+          "upstreamStatus": {
+            "ahead": 0,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        },
+        "url": "https://review.test/5",
+        "warning": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "8ba927ec85fb": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-10",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "8f3b0ba895a1": {
+      "name": "hostedReview.create#1",
+      "ordinal": 26,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Host body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Host title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-11",
+          "ok": true,
+          "result": {
+            "number": 5,
+            "ok": true,
+            "url": "https://review.test/5"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "953b822a0b10": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -1339,8 +1001,414 @@
         }
       }
     },
-    "da6ca0b0c7f1": {
+    "962b56dc8acd": {
+      "name": "git.bulkStage#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.bulkStage"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePaths": ["src/new.ts"],
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "96f0e8413cda": {
+      "name": "git.push#1",
+      "ordinal": 20,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "982c7a7a656d": {
+      "name": "worktree.set#1",
+      "ordinal": 28,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 5,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-12",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "9df18368de2c": {
+      "name": "git.status#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "b2ae4b8e30b7": {
+      "name": "progress",
+      "ordinal": 8,
+      "value": "generating_commit_message"
+    },
+    "b62cd9a5696f": {
       "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-10",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "bf0e050653a2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "committed": true,
+        "error": "Orca could not confirm whether this branch already has a pull request. Try again in a moment.",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [],
+          "head": "def5678",
+          "upstreamStatus": {
+            "ahead": 0,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
+    "cb7f55acccce": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-10",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "d7fed979e629": {
+      "name": "git.push#1",
+      "ordinal": 19,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d87301dfe69c": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-10",
+          "ok": false
+        }
+      }
+    },
+    "d921a388f59f": {
+      "name": "git.status#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "branch": "feature",
+            "entries": [
+              {
+                "area": "staged",
+                "path": "src/app.ts",
+                "status": "modified"
+              }
+            ],
+            "head": "abc1234",
+            "upstreamStatus": {
+              "ahead": 1,
+              "behind": 0,
+              "hasUpstream": true
+            }
+          }
+        }
+      }
+    },
+    "ddee63fd3bf5": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "e20a71f63f51": {
+      "name": "git.bulkStage#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.bulkStage\",\"params\":{\"worktree\":\"id:repo42::/p\",\"filePaths\":[\"src/new.ts\"]}}"
+    },
+    "e6dbcef99c41": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 24,
+      "json": "{\"id\":\"frame-10\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"hasUncommittedChanges\":false,\"hasUpstream\":true,\"ahead\":0,\"behind\":0,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
+    },
+    "e83dca631c9c": {
+      "name": "progress",
+      "ordinal": 3,
+      "value": "staging"
+    },
+    "e9d1ec1b983a": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 0,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f192f1898bef": {
+      "name": "git.commit#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"feat: recorded\"}}"
+    },
+    "f979f6837cf8": {
+      "name": "hostedReview.getCreationEligibility#2",
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -1388,94 +1456,15 @@
         }
       }
     },
-    "de647ad73f93": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 1,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+    "fccf28a4e541": {
+      "name": "progress",
+      "ordinal": 18,
+      "value": "pushing"
     },
-    "eab004af0939": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "json": "{\"id\":\"frame-10\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.getCreationEligibility\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"branch\":\"feature\",\"base\":null,\"hasUncommittedChanges\":false,\"hasUpstream\":true,\"ahead\":0,\"behind\":0,\"linkedGitHubPR\":null,\"linkedGitLabMR\":null}}"
-    },
-    "ede606fdecdb": {
-      "name": "hostedReview.getCreationEligibility#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 0,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-10",
-          "ok": true
-        }
-      }
+    "ffef2a178ce4": {
+      "name": "worktree.set#1",
+      "ordinal": 29,
+      "json": "{\"id\":\"frame-12\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
     }
   },
   "recording": {
@@ -1484,8 +1473,8 @@
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:initial-status-pending",
         "observation": {
-          "sender": ["0278e0f0d6cf"],
-          "payloads": ["5e330d49c396"],
+          "sender": ["8601995022f5"],
+          "payloads": ["ddee63fd3bf5"],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
@@ -1496,148 +1485,148 @@
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:stage-pending",
         "observation": {
-          "sender": ["302b94359544", "21c1956cb4f7"],
-          "payloads": ["5e330d49c396", "319e2b2ccc22"],
+          "sender": ["1858779f58e9", "962b56dc8acd"],
+          "payloads": ["ddee63fd3bf5", "e20a71f63f51"],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a"]
+          "effects": ["e83dca631c9c"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:generate-message-pending",
         "observation": {
-          "sender": ["302b94359544", "c51356d4650a", "a6f6cd5af9d1", "125fbea5f50a"],
-          "payloads": ["5e330d49c396", "319e2b2ccc22", "8302a20e080f", "b87dea84b950"],
+          "sender": ["1858779f58e9", "81faa0ecff79", "d921a388f59f", "10f528114aef"],
+          "payloads": ["ddee63fd3bf5", "e20a71f63f51", "9df18368de2c", "49a4ef454656"],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:commit-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "8ca8f03c0069"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0f6982ada2e6"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef"
           ],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:prefill-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "de647ad73f93"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "42e0a785c289"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e"
           ],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.prelude:push-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "b7a56d89f615"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "d7fed979e629"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda"
           ],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.normal:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "9bc50e10f310",
-            "5b46f52533a0"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "6a9e29548c49",
+            "6b3d90cdf382"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939",
-            "0a191e58baef"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41",
+            "77a1112e7648"
           ],
           "settlements": {
             "run": "9270aeb7d9c6"
           },
           "state": "72b388fd3302",
           "effects": [
-            "368b0b9ce80a",
-            "6a5c9570c542",
-            "7778d4c43a58",
-            "60421d882fd2",
-            "5975e0bdd4a4"
+            "e83dca631c9c",
+            "b2ae4b8e30b7",
+            "682fbd1f6b74",
+            "fccf28a4e541",
+            "4e72cd693c7e"
           ]
         }
       },
@@ -1645,43 +1634,43 @@
         "id": "sc-create-intent-stage-commit-push-create.normal:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "9bc50e10f310",
-            "98b13de38dae",
-            "ac748ef3fb83"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "6a9e29548c49",
+            "8f3b0ba895a1",
+            "982c7a7a656d"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939",
-            "0a191e58baef",
-            "5b5a307c10d7"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41",
+            "77a1112e7648",
+            "ffef2a178ce4"
           ],
           "settlements": {
             "run": "8b784bb9dff5"
           },
           "state": "43ccfe31d2a4",
           "effects": [
-            "368b0b9ce80a",
-            "6a5c9570c542",
-            "7778d4c43a58",
-            "60421d882fd2",
-            "5975e0bdd4a4"
+            "e83dca631c9c",
+            "b2ae4b8e30b7",
+            "682fbd1f6b74",
+            "fccf28a4e541",
+            "4e72cd693c7e"
           ]
         }
       },
@@ -1689,680 +1678,680 @@
         "id": "sc-create-intent-stage-commit-push-create.result-absent:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "ede606fdecdb"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "0708af780dc4"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.result-absent:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "ede606fdecdb"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "0708af780dc4"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.result-null:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "0ea11c3b0bda"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "8ba927ec85fb"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.result-null:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "0ea11c3b0bda"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "8ba927ec85fb"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-ok-missing:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "d0dab08215c6"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "953b822a0b10"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-ok-missing:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "d0dab08215c6"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "953b822a0b10"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-false-string-error:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "44dd632a8def"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "b62cd9a5696f"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-false-string-error:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "44dd632a8def"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "b62cd9a5696f"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-false-object-error:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "6f10a6bfd795"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "cb7f55acccce"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.inner-false-object-error:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "6f10a6bfd795"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "cb7f55acccce"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
             "run": "bf0e050653a2"
           },
           "state": "5a0d2dca259b",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.outer-refused:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "2342c6f737d2"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "28edd52f4d29"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.outer-refused:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "2342c6f737d2"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "28edd52f4d29"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.outer-refused-no-message:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "1ce01a83322f"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "d87301dfe69c"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.outer-refused-no-message:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "1ce01a83322f"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "d87301dfe69c"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.method-not-found:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "da6ca0b0c7f1"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "f979f6837cf8"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.method-not-found:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "da6ca0b0c7f1"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "f979f6837cf8"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.transport-rejection:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "73e6cf23f0b3"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "8b6eab764c7a"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.transport-rejection:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "73e6cf23f0b3"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "8b6eab764c7a"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.transport-rejection-no-message:create-pending",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "1402e70471f8"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "e9d1ec1b983a"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       },
       {
         "id": "sc-create-intent-stage-commit-push-create.transport-rejection-no-message:settled",
         "observation": {
           "sender": [
-            "302b94359544",
-            "c51356d4650a",
-            "a6f6cd5af9d1",
-            "6df8e4961ee3",
-            "27e9d0778f22",
-            "4c9c8122480a",
-            "079e57b28866",
-            "788869e46db6",
-            "2c3c06911cb2",
-            "1402e70471f8"
+            "1858779f58e9",
+            "81faa0ecff79",
+            "d921a388f59f",
+            "22cb4850c7e9",
+            "0e4c5b9b4b61",
+            "7b98416e2b81",
+            "0347742c8f12",
+            "6e227482ca80",
+            "570c09f158bd",
+            "e9d1ec1b983a"
           ],
           "payloads": [
-            "5e330d49c396",
-            "319e2b2ccc22",
-            "8302a20e080f",
-            "b87dea84b950",
-            "2af3debae21a",
-            "c444aeacec59",
-            "c997e6a2a82a",
-            "7679f4e521d1",
-            "16f662c17969",
-            "eab004af0939"
+            "ddee63fd3bf5",
+            "e20a71f63f51",
+            "9df18368de2c",
+            "49a4ef454656",
+            "f192f1898bef",
+            "201cece6e0bb",
+            "395c47c3d42e",
+            "96f0e8413cda",
+            "6f8094ed6558",
+            "e6dbcef99c41"
           ],
           "settlements": {
-            "run": "3baf33626add"
+            "run": "bf0e050653a2"
           },
-          "state": "6bdfb4167cc6",
-          "effects": ["368b0b9ce80a", "6a5c9570c542", "7778d4c43a58", "60421d882fd2"]
+          "state": "5a0d2dca259b",
+          "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74", "fccf28a4e541"]
         }
       }
     ]

@@ -18,14 +18,48 @@ type PendingRequest = {
   timer: ReturnType<typeof setTimeout>
 }
 
+export type RelayControlRequestTimeout = {
+  kind: PendingRequest['kind']
+  sentAt: number
+}
+
+/** Notified when a request hits its deadline, so liveness can probe the socket. */
+export type OnRelayControlRequestTimeout = (timeout: RelayControlRequestTimeout) => void
+
+// A classification key, not prose: consumers exact-match this against
+// /^relay_[a-z0-9_]{1,74}$/ (src/shared/mobile-relay-mint-failure.ts), so any
+// appended diagnostic downgrades a precise code to the generic fallback.
+// Diagnostics belong in the log — see RelayControlLiveness.noteRequestTimeout.
+const REQUEST_TIMEOUT_CODE = 'relay_control_request_timeout'
+
 export type DeviceCredentialInstallAuthorization =
   | { mode: 'relay-basis'; basisConnId: string }
   | { mode: 'authenticated-direct'; directAuthId: string }
 
+export type DeviceCredentialInstallInput = {
+  relayDeviceId: string
+  newResumeTokenHash: string
+  expectedCurrentHash?: string
+  authorization: DeviceCredentialInstallAuthorization
+}
+
+/** Every control-plane request this class hands to `send`. */
+type RelayControlRequestPayload =
+  | { type: 'invite-create'; reqId: string; relayDeviceId: string }
+  | { type: 'device-revoke'; reqId: string; relayDeviceId: string }
+  | ({ type: 'device-credential-install'; v: 1; reqId: string } & DeviceCredentialInstallInput)
+  | { type: 'device-credential-install-status'; v: 1; reqId: string; relayDeviceId: string }
+  | { type: 'device-resume-confirm'; v: 1; reqId: string; basisConnId: string }
+
+type SendRelayControlRequest = (payload: RelayControlRequestPayload) => void
+
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
 
-  constructor(private readonly onPendingChanged?: () => void) {}
+  constructor(
+    private readonly onPendingChanged?: () => void,
+    private readonly onTimeout?: OnRelayControlRequestTimeout
+  ) {}
 
   get size(): number {
     return this.pending.size
@@ -34,7 +68,7 @@ export class RelayControlRequests {
   createInvite(
     reqId: string,
     relayDeviceId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayInviteCreatedMessage> {
     return this.request(
       reqId,
@@ -44,11 +78,7 @@ export class RelayControlRequests {
     ) as Promise<RelayInviteCreatedMessage>
   }
 
-  revokeDevice(
-    reqId: string,
-    relayDeviceId: string,
-    send: (payload: object) => void
-  ): Promise<void> {
+  revokeDevice(reqId: string, relayDeviceId: string, send: SendRelayControlRequest): Promise<void> {
     return this.request(
       reqId,
       'revoke',
@@ -59,13 +89,8 @@ export class RelayControlRequests {
 
   installCredential(
     reqId: string,
-    input: {
-      relayDeviceId: string
-      newResumeTokenHash: string
-      expectedCurrentHash?: string
-      authorization: DeviceCredentialInstallAuthorization
-    },
-    send: (payload: object) => void
+    input: DeviceCredentialInstallInput,
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceCredentialInstalledMessage> {
     return this.request(
       reqId,
@@ -78,7 +103,7 @@ export class RelayControlRequests {
   credentialInstallStatus(
     reqId: string,
     relayDeviceId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceCredentialInstallStatusResultMessage> {
     return this.request(
       reqId,
@@ -91,7 +116,7 @@ export class RelayControlRequests {
   confirmResume(
     reqId: string,
     basisConnId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceResumeConfirmedMessage> {
     return this.request(
       reqId,
@@ -156,16 +181,19 @@ export class RelayControlRequests {
   private request(
     reqId: string,
     kind: PendingRequest['kind'],
-    payload: object,
-    send: (payload: object) => void
+    payload: RelayControlRequestPayload,
+    send: SendRelayControlRequest
   ): Promise<unknown> {
     if (this.pending.has(reqId)) {
       return Promise.reject(new Error('duplicate_relay_request_id'))
     }
+    const sentAt = Date.now()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.finish(reqId)
-        reject(new Error('relay_control_request_timeout'))
+        // Runs before the reject so the probe observes the socket as the deadline found it.
+        this.onTimeout?.({ kind, sentAt })
+        reject(new Error(REQUEST_TIMEOUT_CODE))
       }, 10_000)
       this.pending.set(reqId, { kind, resolve, reject, timer })
       try {

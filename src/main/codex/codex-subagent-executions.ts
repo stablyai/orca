@@ -106,6 +106,11 @@ export class CodexSubagentExecutions {
     this.settledTurns.clear()
   }
 
+  /** Retention bounds are not observable through the child/turn API, so expose the two counts. */
+  retentionSizes(): { children: number; settledTurns: number } {
+    return { children: this.children.size, settledTurns: this.settledTurns.size }
+  }
+
   private child(agentThreadId: string): CodexExecutionChild | undefined {
     const existing = this.children.get(agentThreadId)
     if (existing) {

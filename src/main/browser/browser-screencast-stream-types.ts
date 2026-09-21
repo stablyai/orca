@@ -34,6 +34,14 @@ export type BrowserScreencastSession = {
   done: Promise<void>
   updateViewport: (viewport: BrowserScreencastViewport) => Promise<void>
   updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  /**
+   * Answers the dialog this stream reported, and says whether there was one to answer.
+   *
+   * Only the CDP session that received `Page.javascriptDialogOpening` may answer it; anything
+   * that attaches afterwards is told no dialog is showing, and every renderer-bound command it
+   * sends first blocks behind the dialog it is trying to clear.
+   */
+  settleDialog: (accept: boolean, promptText?: string) => Promise<boolean>
 }
 
 export type BrowserScreencastEvent =

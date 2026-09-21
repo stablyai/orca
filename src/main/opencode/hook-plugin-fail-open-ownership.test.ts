@@ -19,6 +19,10 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+/** The session half of the SDK client, as the plugin's ancestry lookup uses it. */
+type SessionClientFixture = {
+  list: (options?: { signal?: AbortSignal }) => Promise<{ data: SessionFixture[] }>
+}
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
@@ -83,7 +87,7 @@ describe('OpenCode plugin fail-open ownership', () => {
     return loadHooksWithSession({ list })
   }
 
-  async function loadHooksWithSession(session: object): Promise<PluginHooks> {
+  async function loadHooksWithSession(session: SessionClientFixture): Promise<PluginHooks> {
     return loadHooksWithContext({ client: { session } })
   }
 

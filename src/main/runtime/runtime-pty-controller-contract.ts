@@ -58,9 +58,12 @@ export type RuntimePtyController = {
     tabId?: string
     leafId?: string
     sessionId?: string
+    /** Windows shell to spawn AS this PTY, instead of the host default. */
+    shellOverride?: string
     isNewSession?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim

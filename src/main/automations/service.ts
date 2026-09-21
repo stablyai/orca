@@ -25,8 +25,11 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
+  missedBeyondGrace,
+  recordMissedRun,
   recordRefusedAutomationRun,
   recordUnevaluableAutomation,
   sendRendererDispatch,
@@ -115,6 +118,7 @@ export class AutomationService {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+    reportAutomationScheduleDrift(this.store.listAutomations())
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
@@ -249,15 +253,8 @@ export class AutomationService {
       this.store.advanceAutomationNextRun(automation.id, now)
       return
     }
-    const graceMs = automation.missedRunGraceMinutes * 60 * 1000
-    if (now - scheduledFor > graceMs) {
-      const missed = this.runs.createRun(automation, scheduledFor)
-      this.runs.updateRun({
-        runId: missed.id,
-        status: 'skipped_missed',
-        workspaceId: automation.workspaceId,
-        error: 'Orca was unavailable during the missed-run grace window.'
-      })
+    if (missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
+      recordMissedRun({ runs: this.runs, automation, scheduledFor })
       this.store.advanceAutomationNextRun(automation.id, now)
       return
     }

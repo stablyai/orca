@@ -7,6 +7,7 @@ export type LocalPtyProviderOptions = {
     id: string,
     baseEnv: Record<string, string>,
     ctx?: {
+      explicitEnv?: PtySpawnOptions['env']
       command?: string
       launchAgent?: PtySpawnOptions['launchAgent']
       codexHomePathOverride?: PtySpawnOptions['codexHomePathOverride']
@@ -23,6 +24,7 @@ export type LocalPtyProviderOptions = {
   isHistoryEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
   getWindowsShell?: () => string | undefined
+  getDefaultShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
   pwshAvailable?: () => boolean | Promise<boolean>
   onSpawned?: (id: string, incarnationId: string) => void

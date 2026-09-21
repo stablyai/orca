@@ -103,6 +103,7 @@ export function connectPanePty(
   // foreground frame opened, so a split end marker that lands after the redraw
   // window still drains on the fast path instead of the 1s coalesce fallback.
   session.synchronizedForegroundFrameInteractive = false
+  session.synchronizedForegroundInteractivePresentPending = false
   session.suppressStructuralReplayPtyResize = false
   // Why: hidden-delivery gate sync is wired up alongside the deferred PTY
   // output plumbing inside the connect frame; lifecycle hooks (visibility

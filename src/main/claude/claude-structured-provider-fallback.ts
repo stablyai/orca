@@ -5,6 +5,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
 import {
+  type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
   unhandledProviderFrameJournalItem
 } from '../native-chat/agent-session-wire/unhandled-provider-frame'
@@ -13,6 +14,7 @@ import {
   claudeText,
   type ClaudeMessageEnvelope
 } from './claude-structured-item-translation'
+import { claudeResultOutcome } from './claude-result-outcome'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -44,11 +46,9 @@ export function isSettledClaudeResultKind(kind: string): boolean {
 export function claudeResultFailure(
   message: Record<string, unknown>
 ): { text: string | null } | null {
-  if (message.is_error !== true) {
-    return null
-  }
-  const terminalReason = claudeText(message.terminal_reason)
-  if (terminalReason === 'aborted_streaming' || terminalReason === 'aborted_tools') {
+  // A cancellation is not a fault and earns no error row; the outcome classifier
+  // owns that distinction so this reader cannot drift from the turn's verdict.
+  if (claudeResultOutcome(message) !== 'failure') {
     return null
   }
   const result = claudeText(message.result)?.trim()
@@ -110,14 +110,23 @@ export function createClaudeProviderFrameFallback(
     kind: string,
     payload: unknown,
     displayText?: string | null,
-    beforeAppend?: () => void
+    /** Runs only when a row is actually going to be written, so a frame that
+     *  translates to nothing never opens a turn. */
+    beforeAppend?: () => void,
+    options?: UnhandledProviderFrameJournalItemOptions
   ) => boolean
 } {
   let sequence = 0
   return {
-    append: (kind, payload, displayText, beforeAppend) => {
+    append: (kind, payload, displayText, beforeAppend, options) => {
       sequence += 1
-      const translated = unhandledProviderFrameJournalItem('claude', kind, payload)
+      const translated = unhandledProviderFrameJournalItem(
+        'claude',
+        kind,
+        payload,
+        DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+        options
+      )
       if (!translated) {
         return false
       }

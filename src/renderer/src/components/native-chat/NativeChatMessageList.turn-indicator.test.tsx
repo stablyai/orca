@@ -309,6 +309,75 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(document.querySelectorAll('.animate-bounce')).toHaveLength(3)
   })
 
+  it('replaces a bridge ask row and settles it from the FIFO tool result', () => {
+    const user = {
+      id: 'bridge-user',
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'Help me choose' }],
+      timestamp: 1,
+      source: 'transcript' as const
+    }
+    const call = {
+      id: 'bridge-ask',
+      role: 'assistant' as const,
+      blocks: [
+        {
+          type: 'tool-call' as const,
+          name: 'AskUserQuestion',
+          input: { questions: [{ question: 'Which branch?' }] }
+        }
+      ],
+      timestamp: 2,
+      source: 'transcript' as const
+    }
+    const bridgeSession: NativeChatLiveSession = {
+      ...session,
+      agent: 'claude',
+      messages: [user, call],
+      transcriptLifecycle: { state: 'working', turnId: user.id, timestamp: 1 }
+    }
+    const rendered = render(
+      <NativeChatMessageList
+        session={bridgeSession}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        showTurnStatus={false}
+      />
+    )
+
+    expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
+    expect(screen.getByText('Which branch?')).toBeInTheDocument()
+    expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
+
+    rendered.rerender(
+      <NativeChatMessageList
+        session={{
+          ...bridgeSession,
+          messages: [
+            user,
+            call,
+            {
+              id: 'bridge-answer',
+              role: 'tool',
+              blocks: [{ type: 'tool-result', output: 'main' }],
+              timestamp: 3,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        showTurnStatus={false}
+      />
+    )
+
+    expect(screen.queryByText('Awaiting user input:')).toBeNull()
+    expect(screen.getByText('Asked:')).toBeInTheDocument()
+    expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
+  })
+
   it('reads "Thinking" on the one live row while the turn is reasoning', () => {
     const { container } = render(
       <NativeChatMessageList

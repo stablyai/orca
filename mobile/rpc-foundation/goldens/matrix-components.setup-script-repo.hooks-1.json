@@ -1,0 +1,612 @@
+{
+  "operation": "components.setup-script",
+  "family": "components.setup-script",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "a844134d7bad3c7c12107d60dbd298f5cfba778703fb9dd0f7ad454615d26b07",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2bf6d40fe6a5": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "2ed131bd117d": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "53c329108725": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "5b3d63680ed1": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5d1cf72f4e12": {
+      "advanced": true,
+      "command": "pnpm install",
+      "run": true,
+      "runPolicy": "ask",
+      "source": "repo",
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "61356700c3b5": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "705f41b59c9e": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "79deedc9f2ed": {
+      "name": "repo.hooks#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "80cf8444e458": {
+      "advanced": false,
+      "command": {
+        "$rpc": "null"
+      },
+      "run": true,
+      "runPolicy": "run-by-default",
+      "source": {
+        "$rpc": "null"
+      },
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "87a6275dee63": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "9a92e3b90399": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a4e4636264db": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "pnpm install"
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "$rpc": "null"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "b74f016dd450": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "ca248946ffc1": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d1abf380a13d": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-components.setup-script-repo.hooks-1",
+    "checkpoints": [
+      {
+        "id": "components-setup-ask.prelude:hooks-pending",
+        "observation": {
+          "sender": ["2bf6d40fe6a5"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.normal:settled",
+        "observation": {
+          "sender": ["a4e4636264db"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "5d1cf72f4e12",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.result-absent:settled",
+        "observation": {
+          "sender": ["ca248946ffc1"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.result-null:settled",
+        "observation": {
+          "sender": ["53c329108725"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["61356700c3b5"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["b74f016dd450"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["87a6275dee63"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.outer-refused:settled",
+        "observation": {
+          "sender": ["705f41b59c9e"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["d1abf380a13d"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.method-not-found:settled",
+        "observation": {
+          "sender": ["2ed131bd117d"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.transport-rejection:settled",
+        "observation": {
+          "sender": ["5b3d63680ed1"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-setup-ask.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["9a92e3b90399"],
+          "payloads": ["79deedc9f2ed"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "80cf8444e458",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

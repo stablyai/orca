@@ -1,6 +1,6 @@
 import type { RequestContext } from './dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
-import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
 import type { GitPushTarget } from '../shared/worktree/types'
 import { normalizeGitErrorMessage, isExecKilledError } from '../shared/git-remote-error'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
@@ -21,7 +21,7 @@ export class GitHandlerFetchOperations extends GitHandlerOperationContext {
     try {
       try {
         if (params.pushTarget !== undefined) {
-          assertGitPushTargetShape(params.pushTarget)
+          assertValidGitPushTarget(params.pushTarget)
           const pushTarget = params.pushTarget as GitPushTarget
           await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
           await this.git(['fetch', '--prune', pushTarget.remoteName], worktreePath)

@@ -106,7 +106,7 @@ describe('buildAgentLaunchRouteInput', () => {
       promptDelivery: 'auto-submit',
       launchText: 'fix the flaky test',
       nativeChatTranscriptIsLocalReadable: true,
-      requiresTuiLaunchCustomization: false,
+      requiresTuiLaunchCommand: false,
       initialSessionOptions: { model: 'gpt-5.4' }
     })
     expect(mocks.getExecutionHostIdForWorktree).toHaveBeenCalledWith(appStore, 'wt-1')
@@ -240,7 +240,6 @@ describe('buildAgentLaunchRouteInput', () => {
 
   it.each([
     ['a cwd', { cwd: '/repo/sub' }, {}],
-    ['explicit agent args', { agentArgs: '--model gpt-5.4' }, {}],
     ['a settings command override', {}, { agentCmdOverrides: { codex: 'codex-nightly' } }]
   ] as const)('requires a terminal for %s', (_name, tuiCustomization, settingsOverride) => {
     const input = buildAgentLaunchRouteInput(
@@ -251,7 +250,28 @@ describe('buildAgentLaunchRouteInput', () => {
         tuiCustomization
       }
     )
-    expect(input.requiresTuiLaunchCustomization).toBe(true)
+    expect(input.requiresTuiLaunchCommand).toBe(true)
+  })
+
+  // The reported P0: `--dangerously-skip-permissions --model Opus` matched no blessed string, so
+  // every new Claude tab was silently demoted to the terminal-backed chat. The Arguments field is
+  // a terminal concern and no longer reaches this decision.
+  it.each([
+    ['claude', '--dangerously-skip-permissions --model Opus'],
+    ['codex', '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'],
+    ['claude', '--append-system-prompt "be brief"']
+  ] as const)('keeps %s structured with configured arguments %s', (agent, agentArgs) => {
+    const appStore = store({
+      ...STRUCTURED_SETTINGS,
+      agentDefaultArgs: { [agent]: agentArgs },
+      agentDefaultEnv: { [agent]: { ORCA_QA: '1' } }
+    })
+    const args = {
+      agent,
+      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
+    }
+    expect(routeFor(appStore, args)).toBe('structured-native-chat')
+    expect(buildAgentLaunchRouteInput(appStore, args).requiresTuiLaunchCommand).toBe(false)
   })
 
   // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.

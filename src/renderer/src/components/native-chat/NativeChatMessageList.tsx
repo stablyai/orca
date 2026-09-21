@@ -4,6 +4,7 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/Comme
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
+import { structuredQuestionTranscript } from './structured-agent-question-projection'
 import { nativeChatTaskListState } from './native-chat-task-list-state'
 import { nativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import { NativeChatTaskList } from './NativeChatTaskList'
@@ -51,6 +52,7 @@ type NativeChatNavigationRequest =
 export function NativeChatMessageList({
   session,
   journalItems,
+  isVisible = true,
   isWorking,
   expandSignal,
   fontScale,
@@ -66,6 +68,7 @@ export function NativeChatMessageList({
 }: {
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
+  isVisible?: boolean
   isWorking: boolean
   /** Toolbar-driven desired open state for every tool run; each flip re-syncs. */
   expandSignal: boolean
@@ -98,15 +101,7 @@ export function NativeChatMessageList({
     })
   }, [])
   const receipts = useMemo(
-    () =>
-      new Map(
-        journalItems?.flatMap((item) =>
-          (item.body.kind === 'approval' || item.body.kind === 'question') &&
-          item.body.resolution.state !== 'pending'
-            ? [[item.itemId, item.body] as const]
-            : []
-        )
-      ),
+    () => (journalItems ? structuredQuestionTranscript(journalItems).receipts : new Map()),
     [journalItems]
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -214,6 +209,7 @@ export function NativeChatMessageList({
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
+    isVisible,
     // One pin serves both: revealing a diff and jumping from the rail are
     // mutually exclusive things to be doing.
     revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId)
@@ -224,11 +220,13 @@ export function NativeChatMessageList({
     itemCount: slots.length,
     isWorking,
     showTypingIndicator,
+    isVisible,
     hasMore,
     loadingEarlier,
     loadEarlier,
     alignToViewportTop: transcriptWindow.alignToViewportTop,
     scrollToEnd: transcriptWindow.scrollToEnd,
+    restoreScrollOffset: transcriptWindow.restoreScrollOffset,
     consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
     reconcileReaderScroll: transcriptWindow.reconcileReaderScroll
   })

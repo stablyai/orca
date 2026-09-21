@@ -18,7 +18,7 @@ export type PtyKillIpcDeps = {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ) => Promise<boolean>
-  rememberSyntheticKillExit: (id: string) => void
+  rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }
 
@@ -70,7 +70,7 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
       })
       runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
       runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
+      rememberSyntheticKillExit(args.id, incarnationId)
       sendPtyExitToRenderer({
         id: args.id,
         code: -1,
@@ -100,7 +100,7 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     const incarnationId = finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
       runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
+      rememberSyntheticKillExit(args.id, incarnationId)
       sendPtyExitToRenderer({
         id: args.id,
         code: -1,

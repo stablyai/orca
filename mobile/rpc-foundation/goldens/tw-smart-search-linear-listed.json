@@ -3,18 +3,19 @@
   "family": "tasks.smart-source-search",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "2e90933db32efc17d752cf5d506ecdd9ec54ce53ea30ba55021ea3d1bc1d3fb2",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
-  "scenarioSha256": "34ab4edb621856980c8678629bd809c100d27dcd0747db5abbf4508c7231b7e5",
+  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "9681485eec93644a01dd6dff0d07f9629361a86989a900176c5aaff3d5805db3",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "4e3aac46030e": {
+    "15d6e85f9f78": {
       "name": "linear.listIssues#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,32 +47,84 @@
           "ok": true,
           "result": [
             {
-              "id": "issue-2"
+              "id": "issue-2",
+              "identifier": "ENG-2",
+              "labels": [],
+              "priority": 0,
+              "state": {
+                "color": "#000",
+                "name": "Todo",
+                "type": "unstarted"
+              },
+              "team": {
+                "id": "team-1",
+                "key": "ENG",
+                "name": "Engineering"
+              },
+              "title": "An assigned issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": "",
+              "workspaceId": "linear-workspace"
             }
           ]
         }
       }
     },
-    "a95bdb94e589": {
+    "5ada0ba09955": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": [
         {
-          "id": "issue-2"
+          "id": "issue-2",
+          "identifier": "ENG-2",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "An assigned issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
         }
       ]
     },
-    "b107467b4d7c": {
-      "name": "linear.listIssues#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
-    },
-    "f2b981b0b281": {
+    "68e656392151": {
       "linear": [
         {
-          "id": "issue-2"
+          "id": "issue-2",
+          "identifier": "ENG-2",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "An assigned issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
         }
       ]
+    },
+    "b272a4494870": {
+      "name": "linear.listIssues#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
     }
   },
   "recording": {
@@ -80,12 +133,12 @@
       {
         "id": "linear-assigned",
         "observation": {
-          "sender": ["4e3aac46030e"],
-          "payloads": ["b107467b4d7c"],
+          "sender": ["15d6e85f9f78"],
+          "payloads": ["b272a4494870"],
           "settlements": {
-            "linear": "a95bdb94e589"
+            "linear": "5ada0ba09955"
           },
-          "state": "f2b981b0b281",
+          "state": "68e656392151",
           "effects": []
         }
       }

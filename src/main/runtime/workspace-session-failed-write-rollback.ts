@@ -2,9 +2,21 @@ import { isDeepStrictEqual } from 'node:util'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const MISSING = Symbol('missing')
-type RollbackValue = unknown
 
-function isRecord(value: RollbackValue): value is Record<string, unknown> {
+/** A JSON-shaped slot of persisted session state, or the absent-key sentinel. */
+type RollbackSlot =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | typeof MISSING
+  | readonly RollbackSlot[]
+  | RollbackRecord
+
+type RollbackRecord = { readonly [key: string]: RollbackSlot }
+
+function isRecord(value: RollbackSlot): value is RollbackRecord {
   return (
     value !== MISSING &&
     typeof value === 'object' &&
@@ -15,10 +27,10 @@ function isRecord(value: RollbackValue): value is Record<string, unknown> {
 }
 
 function rollbackValue(
-  original: RollbackValue,
-  staged: RollbackValue,
-  current: RollbackValue
-): RollbackValue {
+  original: RollbackSlot,
+  staged: RollbackSlot,
+  current: RollbackSlot
+): RollbackSlot {
   if (isDeepStrictEqual(original, staged)) {
     return current
   }
@@ -29,7 +41,7 @@ function rollbackValue(
     return current
   }
   let changed = false
-  const next: Record<string, unknown> = { ...current }
+  const next: Record<string, RollbackSlot> = { ...current }
   for (const key of new Set([
     ...Object.keys(original),
     ...Object.keys(staged),
