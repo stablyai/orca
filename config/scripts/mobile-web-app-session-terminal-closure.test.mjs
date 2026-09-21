@@ -106,8 +106,13 @@ const EXPECTED_OFFENDERS = 0
 const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.generated.ts'
 const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
-/** The module list with mermaid on the page, recorded at the base in the docstring above. */
-const MODULES_WITH_MERMAID = 4323
+/**
+ * The module list with mermaid on the page, recorded at the base in the docstring above, plus
+ * one: `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches
+ * since C7.10 E landed beside this pin (#21864 and #21871 were each green against a main without
+ * the other).
+ */
+const MODULES_WITH_MERMAID = 4324
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
