@@ -72,3 +72,58 @@ describe('plugin panel serve RPC identity', () => {
     })
   })
 })
+
+describe('plugins.invokeTaskSource RPC', () => {
+  it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn()
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        { pluginKey: 'acme.boards', sourceId: 'azure-boards', method: 'deleteEverything' },
+        context()
+      )
+    ).resolves.toMatchObject({ ok: false, code: 'validation' })
+    expect(resolveTaskSourceProxy).not.toHaveBeenCalled()
+  })
+
+  it('returns the extension-point proxy envelope unchanged for a valid call', async () => {
+    const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call })
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        {
+          pluginKey: 'acme.boards',
+          sourceId: 'azure-boards',
+          method: 'listItems',
+          params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+        },
+        context()
+      )
+    ).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+  })
+
+  it('reports unavailable, not a throw, for an unresolvable plugin/source pair', async () => {
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue(null)
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        { pluginKey: 'acme.boards', sourceId: 'missing-source', method: 'status' },
+        context()
+      )
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+  })
+})

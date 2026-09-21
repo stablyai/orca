@@ -32,6 +32,7 @@ const plugin: PluginHostListEntry = {
   bundled: true,
   capabilities: [],
   panels: [],
+  taskSources: [],
   commands: [],
   hasWorker: false,
   restarts: 0,

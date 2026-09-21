@@ -221,4 +221,31 @@ describe('buildPluginList consent identity', () => {
       }
     ])
   })
+
+  it('projects a contributed task source with its title and icon', async () => {
+    const taskSourceManifest = pluginManifestSchema.parse({
+      ...manifest,
+      main: 'dist/worker.js',
+      contributes: {
+        taskSources: [{ id: 'issues', title: 'Issues', icon: 'ticket' }]
+      }
+    })
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'demo'),
+      manifest: taskSourceManifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: null,
+      isDev: true
+    }
+
+    expect(
+      (
+        await buildPluginList(
+          serviceWith(plugin, { activation: 'approved' }),
+          emptyPluginLockfile()
+        )
+      )[0]?.taskSources
+    ).toEqual([{ id: 'issues', title: 'Issues', icon: 'ticket' }])
+  })
 })

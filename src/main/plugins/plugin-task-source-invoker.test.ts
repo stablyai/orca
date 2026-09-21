@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
+import { describe, expect, it, vi } from 'vitest'
+import { invokeContributedTaskSource, invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
 import { pluginTaskPageSchema } from '../../shared/plugins/plugin-task-source-contract'
 
 async function invoke(callWorker: () => Promise<unknown>) {
@@ -57,5 +57,61 @@ describe('invokePluginTaskSourceMethod', () => {
     }))
 
     expect(result).toEqual({ ok: false, code: 'unauthorized', message: 'token expired' })
+  })
+})
+
+describe('invokeContributedTaskSource', () => {
+  it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
+    const resolveProxy = vi.fn()
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy,
+      pluginKey: 'acme.boards',
+      sourceId: 'azure-boards',
+      method: 'deleteEverything',
+      params: {}
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'validation',
+      message: 'unknown task source method deleteEverything'
+    })
+    expect(resolveProxy).not.toHaveBeenCalled()
+  })
+
+  it('returns the proxy envelope unchanged for a valid call', async () => {
+    const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const resolveProxy = vi.fn().mockReturnValue({ sourceId: 'azure-boards', call })
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy,
+      pluginKey: 'acme.boards',
+      sourceId: 'azure-boards',
+      method: 'listItems',
+      params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+    })
+
+    expect(result).toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    expect(call).toHaveBeenCalledWith('listItems', {
+      scopeIds: [],
+      search: null,
+      cursor: null,
+      limit: 50
+    })
+  })
+
+  it('reports unavailable, not a throw, when the (pluginKey, sourceId) pair has no registered proxy', async () => {
+    const resolveProxy = vi.fn().mockReturnValue(null)
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy,
+      pluginKey: 'acme.boards',
+      sourceId: 'missing-source',
+      method: 'status',
+      params: undefined
+    })
+
+    expect(result).toMatchObject({ ok: false, code: 'unavailable' })
   })
 })

@@ -8,7 +8,11 @@ import {
   type PluginConsentLists
 } from '../../shared/plugins/plugin-consent-state'
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
-import { createPluginExtensionRegistry } from '../../shared/plugins/plugin-extension-registry'
+import {
+  createPluginExtensionRegistry,
+  PLUGIN_TASK_SOURCE_EXTENSION_POINT,
+  type PluginTaskSourceProxy
+} from '../../shared/plugins/plugin-extension-registry'
 import {
   getPluginsDataDir,
   getUserPluginsDir,
@@ -259,6 +263,13 @@ export class PluginService {
 
   invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
     return invokePluginWorkerCommand(this.workerInvocation, { pluginKey, commandId, args })
+  }
+
+  /** The sanctioned entry for a client-facing task source call: the proxy
+   *  validates and scrubs, unlike `invokeTaskSource` below. Null when the
+   *  worker hasn't registered that source (not yet started, or unknown). */
+  resolveTaskSourceProxy(pluginKey: string, sourceId: string): PluginTaskSourceProxy | null {
+    return this.registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId)
   }
 
   /** Unvalidated worker data, unscrubbed rejections. The sanctioned entry

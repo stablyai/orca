@@ -145,6 +145,13 @@ export const PLUGIN_TASK_SOURCE_METHODS = [
 
 export type PluginTaskSourceMethod = (typeof PLUGIN_TASK_SOURCE_METHODS)[number]
 
+/** A `method` taken off the wire is an untyped string; narrow it before any
+ *  lookup keyed by PluginTaskSourceMethod, or an unknown key reads as
+ *  `undefined` and the caller crashes on the next `.` access. */
+export function isPluginTaskSourceMethod(value: string): value is PluginTaskSourceMethod {
+  return (PLUGIN_TASK_SOURCE_METHODS as readonly string[]).includes(value)
+}
+
 /** What each method's `data` must be. A new method without an entry here is a
  *  compile error, so no call can reach a consumer unvalidated. */
 export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z.ZodTypeAny> = {

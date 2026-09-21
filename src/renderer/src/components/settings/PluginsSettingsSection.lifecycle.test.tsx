@@ -102,6 +102,7 @@ const plugin: PluginHostListEntry = {
   bundled: false,
   capabilities: [{ kind: 'panels', description: 'Add a Notes panel' }],
   panels: [],
+  taskSources: [],
   commands: [],
   hasWorker: false,
   restarts: 0

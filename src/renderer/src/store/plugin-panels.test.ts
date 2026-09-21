@@ -22,6 +22,7 @@ function plugin(pluginKey: string): PluginHostListEntry {
     bundled: false,
     capabilities: [],
     panels: [],
+    taskSources: [],
     commands: [],
     hasWorker: false,
     restarts: 0

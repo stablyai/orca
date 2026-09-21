@@ -157,3 +157,62 @@ describe('plugin settings lifecycle authority', () => {
     expect(service.refresh).toHaveBeenCalledOnce()
   })
 })
+
+describe('plugins:invokeTaskSource IPC', () => {
+  function registerAndFindHandler(service: PluginService): (args: unknown) => Promise<unknown> {
+    const store = { onSettingsChanged: vi.fn(() => vi.fn()) } as unknown as Store
+    registerPluginHandlers(store, service, null)
+    const registration = electronMocks.handle.mock.calls.find(
+      ([name]) => name === 'plugins:invokeTaskSource'
+    )
+    if (!registration) {
+      throw new Error('plugins:invokeTaskSource was not registered')
+    }
+    const handler = registration[1] as (event: unknown, args: unknown) => Promise<unknown>
+    return (args: unknown) => handler(undefined, args)
+  }
+
+  it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn()
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({ pluginKey: 'acme.boards', sourceId: 'azure-boards', method: 'deleteEverything' })
+    ).resolves.toMatchObject({ ok: false, code: 'validation' })
+    expect(resolveTaskSourceProxy).not.toHaveBeenCalled()
+  })
+
+  it('returns the extension-point proxy envelope unchanged for a valid call', async () => {
+    const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call })
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({
+        pluginKey: 'acme.boards',
+        sourceId: 'azure-boards',
+        method: 'listItems',
+        params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+      })
+    ).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+  })
+
+  it('reports unavailable, not a throw, for an unresolvable plugin/source pair', async () => {
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue(null)
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({ pluginKey: 'acme.boards', sourceId: 'missing-source', method: 'status' })
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+  })
+})

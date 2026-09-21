@@ -32,6 +32,12 @@ export type PluginListPanelEntry = {
   tabKey: `plugin:${string}`
 }
 
+export type PluginListTaskSourceEntry = {
+  id: string
+  title: string
+  icon?: string
+}
+
 export type PluginListStatus =
   | 'running'
   | 'restarting'
@@ -57,6 +63,7 @@ export type PluginListEntry = {
   bundled: boolean
   capabilities: { kind: PluginCapabilityKind; description: string }[]
   panels: PluginListPanelEntry[]
+  taskSources: PluginListTaskSourceEntry[]
   commands: {
     id: string
     title: string
@@ -112,6 +119,7 @@ export async function buildPluginList(
           bundled: false,
           capabilities: [],
           panels: [],
+          taskSources: [],
           commands: [],
           hasWorker: false,
           vmRecipes: [],
@@ -176,6 +184,11 @@ export async function buildPluginList(
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
+        })),
+        taskSources: plugin.manifest.contributes.taskSources.map((source) => ({
+          id: source.id,
+          title: source.title,
+          ...(source.icon ? { icon: source.icon } : {})
         })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,

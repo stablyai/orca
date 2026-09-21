@@ -19,6 +19,7 @@ const plugin: PluginHostListEntry = {
   bundled: false,
   capabilities: [{ kind: 'worker', description: 'Run a background worker process' }],
   panels: [],
+  taskSources: [],
   commands: [],
   hasWorker: true,
   restarts: 0,
