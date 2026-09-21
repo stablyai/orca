@@ -112,6 +112,8 @@ docs/**
 !docs/audits/
 !docs/audits/crashpad-read-limit/
 !docs/audits/crashpad-read-limit/source-hashes.json
+!docs/adr/
+!docs/adr/**
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/

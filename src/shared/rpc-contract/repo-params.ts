@@ -54,7 +54,9 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    // Additive optional field (remote-wire Rule 1); null clears the binding.
+    claudeConfigDir: OptionalString.nullable().optional()
   })
 })
 
