@@ -22,6 +22,7 @@ import {
   canUseLocalAiVaultSessionPathActions
 } from './ai-vault-session-path-actions'
 import { canContinueAiVaultSessionInNewSession } from './ai-vault-session-continuation'
+import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { canResumeAiVaultSearchHit, hasAiVaultSearchHitPath } from './ai-vault-search-session'
@@ -93,6 +94,7 @@ export function AiVaultVirtualRow({
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
 }): React.JSX.Element | null {
+  const { getSessionDisplayTitle } = useAiVaultOriginalPaneActions()
   if (!row) {
     return null
   }
@@ -164,6 +166,7 @@ export function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           searchHit={searchHit}
+          displayTitle={getSessionDisplayTitle(row.session)}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={

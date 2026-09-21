@@ -78,4 +78,15 @@ describe('AI Vault session continuation', () => {
     expect(request.source.lastPrompt).toBeNull()
     expect(request.source.lastAssistantMessage).toBe('The component tests still need work.')
   })
+
+  it('keeps an Orca tab rename as the continuation source name', () => {
+    const request = prepareAiVaultSessionContinuation({
+      session: session(),
+      targetWorktreeId: 'worktree-1',
+      targetWorkspacePath: '/Users/ada/Desktop/current-worktree',
+      displayTitle: 'Payments spike'
+    })
+
+    expect(request.source.sourceTitle).toBe('Payments spike')
+  })
 })

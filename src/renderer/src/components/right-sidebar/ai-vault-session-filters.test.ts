@@ -335,6 +335,47 @@ describe('filterAiVaultSessions', () => {
     ).toEqual(['claude:project'])
   })
 
+  it('rejects project-scope sessions missing from sessionProjectById (history-only search gap)', () => {
+    const historyOnly = { ...baseSession, id: 'claude:history-only', cwd: '/repo/project' }
+    const searchHit = { ...baseSession, id: 'claude:search-hit', cwd: '/repo/project' }
+    // Bug: map built from search.sessions alone omits history-only ids → project filter drops them.
+    const incompleteMap = new Map([
+      [searchHit.id, { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }]
+    ])
+    const completeMap = new Map([
+      ...incompleteMap,
+      [historyOnly.id, { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }]
+    ])
+
+    expect(
+      filterAiVaultSessions([historyOnly], {
+        query: 'needle',
+        agents: ['claude'],
+        scope: 'project',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        activeProjectKey: 'project:orca',
+        sessionProjectById: incompleteMap,
+        hideEmptySessions: false,
+        sessionDisplayTitleById: new Map([[historyOnly.id, 'Renamed needle']])
+      }).map((session) => session.id)
+    ).toEqual([])
+
+    expect(
+      filterAiVaultSessions([historyOnly], {
+        query: 'needle',
+        agents: ['claude'],
+        scope: 'project',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        activeProjectKey: 'project:orca',
+        sessionProjectById: completeMap,
+        hideEmptySessions: false,
+        sessionDisplayTitleById: new Map([[historyOnly.id, 'Renamed needle']])
+      }).map((session) => session.id)
+    ).toEqual(['claude:history-only'])
+  })
+
   it('does not show all sessions for project scope without an active project key', () => {
     expect(
       filterAiVaultSessions([baseSession], {
