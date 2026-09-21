@@ -2,6 +2,7 @@ import type { LinearIssueAttributeFilter } from '../../shared/linear/issue-attri
 import type { LinearIssueWriteRecord } from './linear-issue-write-support'
 
 export type LinearIssueListOptions = {
+  rejectPartialResponse?: boolean
   teamId?: string
   attributeFilter?: LinearIssueAttributeFilter | null
 }

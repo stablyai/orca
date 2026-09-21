@@ -1,4 +1,9 @@
 import type { LinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
+import type {
+  LinearAttentionRequest,
+  LinearInboxPage,
+  LinearTriagePage
+} from '../../shared/linear/attention-types'
 import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
 import type { LinearComment, LinearIssue } from '../../shared/linear/issue-types'
 import type {
@@ -19,6 +24,8 @@ import type {
 } from '../../shared/linear/workspace-types'
 
 export type LinearApi = {
+  personalInbox?: (args: LinearAttentionRequest) => Promise<LinearInboxPage>
+  triagePage?: (args: LinearAttentionRequest & { teamId: string }) => Promise<LinearTriagePage>
   connect: (args: {
     apiKey: string
   }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>

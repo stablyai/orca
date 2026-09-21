@@ -6,6 +6,7 @@ import { registerLinearIssueHandlers } from './linear-issue-handlers'
 import { registerLinearProjectHandlers } from './linear-project-handlers'
 import { registerLinearCustomViewHandlers } from './linear-custom-view-handlers'
 import { registerLinearTeamHandlers } from './linear-team-handlers'
+import { registerLinearAttentionHandlers } from './linear-attention-handlers'
 
 export function registerLinearHandlers(): void {
   ipcMain.handle('linear:connect', async (_event, args: { apiKey: string }) => {
@@ -44,4 +45,5 @@ export function registerLinearHandlers(): void {
   registerLinearProjectHandlers()
   registerLinearCustomViewHandlers()
   registerLinearTeamHandlers()
+  registerLinearAttentionHandlers()
 }
