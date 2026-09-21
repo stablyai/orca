@@ -110,6 +110,21 @@ describe('the editor document, from markdown and back', () => {
     expect(currentMarkdown(surface(markdown).scope)).toBe(markdown)
   })
 
+  it('makes progress on a marker with nothing after it, rather than reading it forever', () => {
+    // `isBlockStart` admits `# ` and the list test admits `- `, but the heading reader needs text
+    // after the hashes and `parseListLine` needs text after the marker, so neither consumed the
+    // line and the index never moved: `markdownToHtml` looped forever on a one-line source the
+    // host could hand it from any file. Bare markers are text.
+    expect(markdownToHtml(createRichMarkdownEditorScope(), '# ')).toBe('<p># </p>')
+    expect(markdownToHtml(createRichMarkdownEditorScope(), '- ')).toBe('<p>- </p>')
+    expect(markdownToHtml(createRichMarkdownEditorScope(), '1. ')).toBe('<p>1. </p>')
+    // The control, so the guard is not swallowing the readers it falls back from.
+    expect(markdownToHtml(createRichMarkdownEditorScope(), '# ok')).toBe('<h1>ok</h1>')
+    expect(markdownToHtml(createRichMarkdownEditorScope(), '- ok')).toBe(
+      '<ul><li><p>ok</p></li></ul>'
+    )
+  })
+
   it('renders no link for a javascript: URL, which is the one scheme it filters', () => {
     // The refused token falls through to the emphasis branch, so the URL survives as inert text
     // rather than disappearing. What must not survive is an element that can be tapped.

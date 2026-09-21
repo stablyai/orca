@@ -94,9 +94,13 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
       const list = parseListTree(lines, index)
-      html.push(renderListItems(scope, list.items))
-      index = list.nextIndex
-      continue
+      // Why: a marker with nothing after it parses as no item, so the run is empty and the index
+      // has not moved. Falling through rather than continuing makes the line the text it is.
+      if (list.nextIndex > index) {
+        html.push(renderListItems(scope, list.items))
+        index = list.nextIndex
+        continue
+      }
     }
     const paragraph: string[] = []
     while (
@@ -109,6 +113,13 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         isTableSeparator(lines[index + 1] ?? '')
       )
     ) {
+      paragraph.push(lines[index] ?? '')
+      index += 1
+    }
+    if (paragraph.length === 0) {
+      // Why: a line that opens a block by `isBlockStart` but matches no block reader's own grammar
+      // — `# `, `- `, a fence with a backtick in its language — is gathered by nothing, and the
+      // loop would read it again forever. It is text.
       paragraph.push(lines[index] ?? '')
       index += 1
     }
