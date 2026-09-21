@@ -7,6 +7,10 @@ import {
   getDaemonProvider,
   restartDaemon
 } from '../daemon/daemon-init'
+import {
+  getDaemonReplacementDeferral,
+  type DaemonReplacementDeferral
+} from '../daemon/daemon-replacement-deferral'
 import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonSessionInfo } from '../daemon/types'
 
@@ -58,14 +62,21 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:restart')
   ipcMain.removeHandler('pty:management:macTccAttribution')
 
-  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491).
+  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491),
+  // and say why Orca left the daemon in place instead of replacing it (#20007).
   ipcMain.handle(
     'pty:management:macTccAttribution',
-    async (): Promise<{ health: MacDaemonTccAttributionHealth }> => {
+    async (): Promise<{
+      health: MacDaemonTccAttributionHealth
+      deferredReplacement: DaemonReplacementDeferral | null
+    }> => {
       try {
-        return { health: await getCurrentDaemonMacTccAttributionHealth() }
+        return {
+          health: await getCurrentDaemonMacTccAttributionHealth(),
+          deferredReplacement: getDaemonReplacementDeferral()
+        }
       } catch {
-        return { health: 'unknown' }
+        return { health: 'unknown', deferredReplacement: null }
       }
     }
   )

@@ -25,12 +25,19 @@ vi.mock('../../store', () => ({
 let container: HTMLDivElement
 let root: Root
 
-function stubAttributionHealth(health: 'intact' | 'severed' | 'unknown'): void {
+function stubAttributionHealth(
+  health: 'intact' | 'severed' | 'unknown',
+  deferredReplacement: {
+    reason: 'severed_tcc_attribution' | 'stale_bundle'
+    liveSessionCount: number | null
+    observedAtMs: number
+  } | null = null
+): void {
   Object.assign(window, {
     api: {
       pty: {
         management: {
-          macTccAttribution: vi.fn(async () => ({ health }))
+          macTccAttribution: vi.fn(async () => ({ health, deferredReplacement }))
         }
       }
     }
@@ -66,6 +73,28 @@ it('renders the remedy banner only while attribution is severed', async () => {
     root.render(<TerminalTccAttributionNotice key="fresh" />)
   })
   expect(container.querySelector('[role="alert"]')).toBeNull()
+})
+
+it('explains why the daemon was preserved when replacement was declined for live sessions', async () => {
+  stubAttributionHealth('severed', {
+    reason: 'severed_tcc_attribution',
+    liveSessionCount: 20,
+    observedAtMs: 1
+  })
+  await act(async () => {
+    root.render(<TerminalTccAttributionNotice />)
+  })
+  const alert = container.querySelector('[role="alert"]')
+  expect(alert?.textContent).toContain('Documents, Desktop and Downloads')
+  expect(alert?.textContent).toContain('live terminal sessions (20)')
+
+  stubAttributionHealth('severed', { reason: 'stale_bundle', liveSessionCount: 3, observedAtMs: 1 })
+  await act(async () => {
+    root.render(<TerminalTccAttributionNotice key="other-reason" />)
+  })
+  expect(container.querySelector('[role="alert"]')?.textContent).not.toContain(
+    'live terminal sessions'
+  )
 })
 
 it('navigates to Manage Sessions from the banner action', async () => {

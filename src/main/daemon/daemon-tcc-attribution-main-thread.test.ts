@@ -29,6 +29,11 @@ vi.mock('node:child_process', async (importOriginal) => ({
   execFileSync: execFileSyncMock
 }))
 
+// Why: these tests pin the ps spawn budget; the codesign probe is covered by its own suite.
+vi.mock('./daemon-mac-code-identity', () => ({
+  inspectMacProcessCodeIdentity: async () => ({ status: 'unavailable' })
+}))
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof FsModule>()
   return {
