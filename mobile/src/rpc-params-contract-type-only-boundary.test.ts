@@ -155,13 +155,13 @@ describe('RPC params contract boundary', () => {
     ).toEqual([])
   })
 
-  it('lets every shape the analyser flags reach it', () => {
+  it('lets every contract import spelling the analyser flags reach it', () => {
     // The soundness half of the two-stage read below. The analyser only ever sees what this
     // predicate admits, so a narrowing here is a fence that stops fencing while staying green —
     // and it would stay green, because the tree has no offender to miss.
     const path = join(mobileRoot, 'src', 'probe.ts')
     const contract = '../../src/shared/rpc-contract/repo-params'
-    const shapes = [
+    const contractImportSpellings = [
       `import { RepoSelector } from '${contract}'`,
       `import '${contract}'`,
       `export { RepoSelector } from '${contract}'`,
@@ -174,8 +174,10 @@ describe('RPC params contract boundary', () => {
       `export type { RepoSelector } from '${contract}'`,
       ESCAPED_SPECIFIER
     ]
-    expect(shapes.filter((source) => !referencesContract(path, source))).toEqual([])
-    // The escaped shape's own premise, asserted rather than described: its text really does not
+    expect(contractImportSpellings.filter((source) => !referencesContract(path, source))).toEqual(
+      []
+    )
+    // The escaped spelling's own premise, asserted rather than described: its text really does not
     // contain the directory name, so admitting it is the scanner decoding the specifier and not a
     // substring happening to match. A plain `includes` filter over the file would miss this one.
     expect(ESCAPED_SPECIFIER).not.toContain('rpc-contract')
