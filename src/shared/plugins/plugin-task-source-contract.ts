@@ -103,7 +103,10 @@ export const pluginTaskCommentSchema = z.object({
   id: z.string().min(1).max(512),
   author: pluginTaskIdentitySchema,
   body: z.string().max(BODY_MAX),
-  bodyFormat: z.enum(['text', 'html']),
+  /** A source that converts a provider's HTML comment needs a format that says
+   *  so, as `descriptionFormat` does for a description. `'html'` predates the
+   *  no-HTML decision taken for descriptions and is not removed here. */
+  bodyFormat: z.enum(['text', 'markdown', 'html']),
   createdAt: z.string().datetime()
 })
 

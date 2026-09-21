@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pluginTaskCommentSchema,
   pluginTaskCreateSchema,
   pluginTaskItemDetailSchema,
   pluginTaskItemSchema,
@@ -293,6 +294,40 @@ describe('plugin task source contract', () => {
           descriptionFormat: 'html'
         }).success
       ).toBe(false)
+    })
+  })
+
+  describe('plugin task comment schema', () => {
+    const base = {
+      id: 'c1',
+      author: { id: 'ada', displayName: 'Ada Lovelace' },
+      body: 'Looks good',
+      createdAt: '2026-09-20T10:00:00.000Z'
+    }
+
+    it('accepts a comment whose body is markdown', () => {
+      expect(
+        pluginTaskCommentSchema.safeParse({
+          ...base,
+          body: '**Steps**\n\n- Open app',
+          bodyFormat: 'markdown'
+        }).success
+      ).toBe(true)
+    })
+
+    it('still accepts text and html bodies', () => {
+      expect(pluginTaskCommentSchema.safeParse({ ...base, bodyFormat: 'text' }).success).toBe(true)
+      expect(
+        pluginTaskCommentSchema.safeParse({ ...base, body: '<p>ok</p>', bodyFormat: 'html' }).success
+      ).toBe(true)
+    })
+
+    it('rejects an unknown body format', () => {
+      expect(pluginTaskCommentSchema.safeParse({ ...base, bodyFormat: 'adf' }).success).toBe(false)
+    })
+
+    it('requires a body format, so a converted body cannot go undeclared', () => {
+      expect(pluginTaskCommentSchema.safeParse(base).success).toBe(false)
     })
   })
 
