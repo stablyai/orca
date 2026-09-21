@@ -4,7 +4,8 @@ import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/t
 import {
   BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS,
-  isBridgeFrameWithinCap
+  isBridgeFrameWithinCap,
+  utf8ByteLength
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
@@ -150,7 +151,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     try {
       const json = JSON.stringify(frame)
       if (!isBridgeFrameWithinCap(json)) {
-        report({ kind: 'send-oversized', bytes: json.length })
+        // UTF-8 bytes, because that is the unit both shells count: `json.utf8.count` on iOS and
+        // `json.toByteArray(Charsets.UTF_8).size` on Android. A code-unit count under the same name
+        // understates every non-ASCII frame — a diff of CJK text is three bytes a unit.
+        report({ kind: 'send-oversized', bytes: utf8ByteLength(json) })
         return 'oversized'
       }
       options.send(json)
