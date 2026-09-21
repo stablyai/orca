@@ -197,3 +197,83 @@ describe('adopted conversation ownership', () => {
     ).toThrow('agent_session_conflict')
   })
 })
+
+describe('re-attach account identity', () => {
+  /** Deliberately NOT relaxed for a bound record: a group whose binding changed between attaches
+   *  is a different account, and silently re-attaching to it is the fork this refuses. */
+  it('refuses a re-attach whose account home path changed', () => {
+    const existing: AgentSessionRecord = {
+      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-bound' })),
+      location: LOCATION,
+      provider: 'claude',
+      accountHome: {
+        variable: 'CLAUDE_CONFIG_DIR',
+        path: '/bound/group-a',
+        binding: { kind: 'project-group', groupId: 'group-a' }
+      },
+      providerHandleChain: []
+    }
+
+    expect(() =>
+      applyAgentSessionReservation(
+        storeState([existing]),
+        reserveRequest({
+          sessionId: 'session-bound',
+          provider: 'claude',
+          expectedFence: existing.lease.runtimeFence,
+          accountHome: {
+            variable: 'CLAUDE_CONFIG_DIR',
+            path: '/bound/group-b',
+            binding: { kind: 'project-group', groupId: 'group-b' }
+          }
+        }),
+        LEASE_TTL_MS
+      )
+    ).toThrow('agent_session_conflict')
+  })
+
+  /** The marker decides which safety gates a launch runs, so acquiring it across a re-attach is an
+   *  account change in its own right even when the path never moves. */
+  it.each([
+    [
+      'attaching a binding to an unbound record',
+      undefined,
+      { kind: 'project-group', groupId: 'g' }
+    ],
+    ['dropping the binding', { kind: 'project-group', groupId: 'g' }, undefined],
+    [
+      'changing the bound group',
+      { kind: 'project-group', groupId: 'g' },
+      { kind: 'project-group', groupId: 'other' }
+    ]
+  ] as const)('refuses a re-attach at the same path %s', (_name, before, after) => {
+    const existing: AgentSessionRecord = {
+      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-marker' })),
+      location: LOCATION,
+      provider: 'claude',
+      accountHome: {
+        variable: 'CLAUDE_CONFIG_DIR',
+        path: '/bound/group-a',
+        ...(before ? { binding: before } : {})
+      },
+      providerHandleChain: []
+    }
+
+    expect(() =>
+      applyAgentSessionReservation(
+        storeState([existing]),
+        reserveRequest({
+          sessionId: 'session-marker',
+          provider: 'claude',
+          expectedFence: existing.lease.runtimeFence,
+          accountHome: {
+            variable: 'CLAUDE_CONFIG_DIR',
+            path: '/bound/group-a',
+            ...(after ? { binding: after } : {})
+          }
+        }),
+        LEASE_TTL_MS
+      )
+    ).toThrow('agent_session_conflict')
+  })
+})

@@ -67,6 +67,8 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   providerSessionId: string
   selfSessionId: string
   selectedAccountHomePath: string
+  /** True when a project-group binding chose the selected home, which narrows the candidates. */
+  selectedAccountHomeBound: boolean
 }) {
   const conflict = input.host
     ? findConflictingStructuredAdoption({
@@ -95,11 +97,18 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
 }
 
 /** Recognised adoption homes, most-preferred first. */
-function structuredAdoptionAccountHomeCandidates(input: {
+export function structuredAdoptionAccountHomeCandidates(input: {
   settings: AdoptionSettings
   agent: 'claude' | 'codex'
   selectedAccountHomePath: string
+  selectedAccountHomeBound: boolean
 }): string[] {
+  // A bound group offers its own home and nothing else. Falling through to the shared `~/.claude`
+  // would commit the session to another organisation's account without a word; a miss here surfaces
+  // the existing `agent_session_identity_required` refusal instead.
+  if (input.selectedAccountHomeBound) {
+    return [input.selectedAccountHomePath]
+  }
   if (input.agent === 'claude') {
     return [input.selectedAccountHomePath, join(homedir(), '.claude')]
   }

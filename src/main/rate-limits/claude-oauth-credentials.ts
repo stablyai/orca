@@ -115,7 +115,7 @@ export async function readClaudeCredentialsFromStrictKeychain(
   }
 }
 
-async function readFromCredentialsFile(
+export async function readFromCredentialsFile(
   configDir?: string
 ): Promise<ClaudeOAuthCredentialReadResult> {
   const credentialPath = path.join(
@@ -129,6 +129,54 @@ async function readFromCredentialsFile(
     )
   } catch {
     return emptyClaudeOAuthCredentialReadResult()
+  }
+}
+
+/**
+ * Credentials that belong to exactly this config dir: its scoped Keychain item on darwin, then its
+ * own `.credentials.json` — parsed, never merely present.
+ *
+ * Deliberately no legacy-Keychain fallback, unlike `readClaudeOAuthCredentials`: that item answers
+ * for the shared login, so a signed-out bound directory would read as signed in and the launch
+ * would land on another organisation's account.
+ *
+ * A Keychain that could not be read is reported as such rather than as "no credentials": the two
+ * have different remedies, and a locked keychain is not a directory nobody signed into.
+ */
+export async function readClaudeConfigDirScopedOAuthCredentials(
+  configDir: string,
+  options?: {
+    platform?: NodeJS.Platform
+    readScopedKeychain?: (configDir: string) => Promise<string | null>
+  }
+): Promise<ClaudeOAuthCredentialReadResult> {
+  let keychainUnavailable = false
+  if ((options?.platform ?? process.platform) === 'darwin') {
+    const scoped = options?.readScopedKeychain
+      ? await readInjectedScopedKeychain(configDir, options.readScopedKeychain)
+      : await readClaudeCredentialsFromStrictKeychain(configDir, 'scoped-keychain')
+    if (scoped.token || scoped.hasRefreshableCredentials) {
+      return scoped
+    }
+    keychainUnavailable = scoped.keychainUnavailable === true
+  }
+  const file = await readFromCredentialsFile(configDir)
+  return !file.token && !file.hasRefreshableCredentials && keychainUnavailable
+    ? unavailableKeychainResult()
+    : file
+}
+
+async function readInjectedScopedKeychain(
+  configDir: string,
+  read: (configDir: string) => Promise<string | null>
+): Promise<ClaudeOAuthCredentialReadResult> {
+  try {
+    const credentials = await read(configDir)
+    return credentials
+      ? parseClaudeOAuthCredentialsJson(credentials, 'scoped-keychain')
+      : emptyClaudeOAuthCredentialReadResult()
+  } catch {
+    return unavailableKeychainResult()
   }
 }
 

@@ -5,7 +5,10 @@ import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session
 import { join } from 'node:path'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
+import {
+  createClaudeStructuredLaunchResolver,
+  type ClaudeStructuredLaunchResolverDeps
+} from '../claude/claude-structured-launch-resolution'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionAdapterDeps
@@ -31,6 +34,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   /** The user's Agent Permissions setting for Claude; absent means prompting. */
   resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
+  /** The workspace group's current Claude binding, for the "this chat predates the binding" check. */
+  readClaudeHomeBinding?: ClaudeStructuredLaunchResolverDeps['readClaudeHomeBinding']
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onUnexpectedExit: (event: StructuredAgentSessionLifecycleEvent) => void
@@ -57,7 +62,8 @@ export function createStructuredClaudeRuntimeAdapter(
         : {}),
       ...(deps.readClaudeManagedAccountGate
         ? { readManagedAccountGate: deps.readClaudeManagedAccountGate }
-        : {})
+        : {}),
+      ...(deps.readClaudeHomeBinding ? { readClaudeHomeBinding: deps.readClaudeHomeBinding } : {})
     }),
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence

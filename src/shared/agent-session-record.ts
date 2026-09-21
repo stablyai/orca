@@ -10,6 +10,18 @@ import { isAgentSessionConversationName } from './agent-session-conversation-nam
 
 import type { ExecutionHostId } from './execution-host'
 import {
+  isAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from './agent-session-account-home'
+import {
+  MAX_ID_LENGTH,
+  MAX_LAUNCH_ARGS,
+  MAX_LAUNCH_ARGS_BYTES,
+  MAX_LAUNCH_ENV_ENTRIES,
+  MAX_LAUNCH_ENV_VALUE_LENGTH,
+  isBoundedString
+} from './agent-session-record-field-limits'
+import {
   isAgentSessionConversationCommandRecord,
   type AgentSessionConversationCommandRecord
 } from './agent-session-conversation-command'
@@ -18,6 +30,8 @@ import {
   type AgentSessionHandleProvider,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
+
+export type { AgentSessionAccountHome } from './agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -34,13 +48,6 @@ export type AgentSessionExecutionLocation = {
   wslDistro: string | null
   workspaceId: string
   workspaceKind: AgentSessionWorkspaceKind
-}
-
-/** Account root pinned at launch by the account selector, so a resume cannot drift to another login. */
-export type AgentSessionAccountHome = {
-  variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME'
-  /** Host-resolved absolute path in the execution host's own path syntax. */
-  path: string
 }
 
 /** Provider launch environment captured by the host when the session is created. */
@@ -148,17 +155,7 @@ export type AgentSessionOptionsReplacement = {
   now: number
 }
 
-const MAX_ID_LENGTH = 512
-const MAX_PATH_LENGTH = 4096
-const MAX_LAUNCH_ENV_ENTRIES = 256
-const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
-const MAX_LAUNCH_ARGS = 256
-const MAX_LAUNCH_ARGS_BYTES = 16 * 1024
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
-
-function isBoundedString(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max
-}
 
 export function isAgentSessionId(value: unknown): value is string {
   return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
@@ -217,17 +214,6 @@ export function isAgentSessionProcessIdentity(
       (Number.isSafeInteger(identity.processStartTimeMs) &&
         (identity.processStartTimeMs as number) >= 0)) &&
     isBoundedString(identity.spawnToken, MAX_ID_LENGTH)
-  )
-}
-
-function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccountHome {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const home = value as Partial<AgentSessionAccountHome>
-  return (
-    (home.variable === 'CLAUDE_CONFIG_DIR' || home.variable === 'CODEX_HOME') &&
-    isBoundedString(home.path, MAX_PATH_LENGTH)
   )
 }
 
