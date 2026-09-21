@@ -6,6 +6,13 @@ import {
 } from './tab-agent-launch-options'
 
 describe('tab agent launch options', () => {
+  it('offers a configured Antigravity path without detection, unless disabled', () => {
+    const overrides = { antigravity: '"C:\\Agent Tools\\agy.exe"' }
+    expect(orderTabLaunchAgents(null, [], [], overrides)).toEqual(['antigravity'])
+    expect(orderTabLaunchAgents(null, [], ['antigravity'], overrides)).toEqual([])
+    expect(orderTabLaunchAgents(null, [], [], { antigravity: '  ' })).toEqual([])
+  })
+
   it('orders detected agents by the configured default first', () => {
     expect(orderTabLaunchAgents('codex', ['claude', 'codex', 'gemini'])).toEqual([
       'codex',

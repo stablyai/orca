@@ -1,0 +1,110 @@
+---
+title: Antigravity CLI in Orca
+description: Install, find, and launch Google's agy CLI, including Windows and remote workspaces.
+---
+
+Orca launches Google's **Antigravity CLI**, whose command is `agy`. Installing the
+Antigravity desktop application alone does not establish that this command is available.
+The separate `gemini` command is a different agent entry in Orca.
+
+## Check the CLI first
+
+Install the CLI using [Google's current instructions](https://antigravity.google/docs/cli-overview).
+Open a new terminal after installation so it receives any updated `PATH` entries.
+
+On Windows, use PowerShell:
+
+```powershell
+Get-Command agy -All | Select-Object CommandType, Source, Definition
+agy --version
+agy --help
+```
+
+On macOS or Linux:
+
+```sh
+command -v agy
+agy --version
+agy --help
+```
+
+If the command cannot be found, complete the CLI installation or correct its `PATH`
+entry before troubleshooting an Orca launch. A PowerShell alias or function is not
+necessarily an executable Orca can launch; use the actual CLI executable path.
+
+Run `agy` in a project directory and complete Google's authentication flow. Check
+that you can send a small prompt there. Finding the binary, opening its composer,
+or listing models with `agy models` does not prove the account can generate a reply.
+
+## Find it in Orca
+
+Open **Settings → Agents** and click **Refresh**. This refreshes the agent search;
+it does not install the CLI or sign you in. Select **Antigravity** when launching an
+agent in the desired workspace.
+
+If the CLI lives outside the locations Orca searches, expand Antigravity's command
+editor and enter its executable path. For example, a custom Windows installation
+with spaces in its path can use this **Command** value:
+
+```text
+"C:\Agent Tools\agy.exe"
+```
+
+Replace the example with your actual path. Do not paste PowerShell's leading `&`
+invocation operator into the Command field. Keep launch flags in **Arguments**.
+The editor saves when you leave the field or press Enter. **Reset** restores `agy`.
+
+A saved custom command is available in the new-workspace agent picker and the
+**New Tab** menu and search, even if automatic detection did not find `agy`.
+Keep Antigravity enabled in Settings. A custom command is your explicit launch
+choice, not a verified installation: an invalid path can still fail when launched.
+Automatic default-agent selection still depends on detection; choose the configured
+agent explicitly when it is not detected.
+
+If your Orca build hides the command editor on an undetected agent, add the CLI to
+`PATH` and Refresh as a workaround. The ability to edit an undetected agent is tracked
+in [#21653](https://github.com/stablyai/orca/pull/21653).
+
+## Workspace and execution host
+
+Launch from the repository, git worktree, or folder workspace where the task belongs.
+Check the working directory shown by the CLI before sending the task. Use a separate
+worktree when agents should edit independent checkouts; a folder workspace does not
+create that isolation for you.
+
+For SSH, WSL, or a paired Remote Orca Server, install and authenticate `agy` on the
+host or WSL distribution that runs the workspace. A working CLI on the client laptop
+does not establish availability on that host. Custom command settings are global
+launch defaults: the configured path must be valid on the execution host. A Windows
+path does not name a Linux executable inside WSL or on an SSH server.
+
+## Permissions and session state
+
+Orca's default Antigravity arguments include `--dangerously-skip-permissions`.
+To retain the CLI's normal permission prompts, choose **Manual** in
+**Settings → Agents → Agent Permissions** before launching. Existing custom arguments
+are preserved by that switch; review Antigravity's Arguments field and remove the
+bypass flag there if you have customized it. See [Supported agents](/docs/agents/supported).
+
+[Agent status hooks](/docs/agents/hooks-memory) report supported session events.
+A status indicator does not establish that authentication succeeded or that the
+agent produced a valid result; read the terminal output. A remote disconnect also
+does not establish that the process exited. Avoid starting replacement work solely
+because its host cannot currently be reached.
+
+## Troubleshooting
+
+| Symptom | Next check |
+| --- | --- |
+| Antigravity desktop opens, but Orca cannot find the agent | Confirm that `agy --help` works; Orca needs the CLI executable. |
+| `agy` works in a new terminal but is missing in Orca | Click Refresh in Settings → Agents, then check the custom Command value if needed. |
+| A custom path with spaces fails | Quote the executable path, use the actual executable rather than a shell alias, and keep flags in Arguments. |
+| The composer opens but a request returns 401 or `UNAUTHENTICATED` | Test the same CLI on the execution host outside Orca and follow Google's account setup. Reinstalling Orca's hooks does not repair account credentials. |
+| A model name is rejected | Run `agy models` on the execution host and select an available model; an older model identifier may no longer be offered. |
+| Local launches work, remote launches fail | Check the executable, account, command path, and working directory on the remote host or selected WSL distribution. |
+| A restored terminal stops accepting input | Preserve the terminal and report the host/client OS, Orca version, CLI version, and reconnect steps. Do not assume the process exited. |
+
+When reporting a setup problem, include the Orca version, execution host, selected
+shell, `agy --version` output, and the error text. Remove account identifiers,
+credentials, and private paths before sharing logs. Some CLI installations can
+show a different version in their interactive banner; include both if they differ.

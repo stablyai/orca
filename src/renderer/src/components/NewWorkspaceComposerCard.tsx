@@ -22,6 +22,7 @@ import {
   filterEnabledTuiAgents
 } from '../../../shared/tui-agent-selection'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { hasExplicitTuiLaunchCommand } from '../../../shared/tui-agent-launch-command-override'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
@@ -88,6 +89,7 @@ export default function NewWorkspaceComposerCard(
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+  const agentCmdOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const projects = useAppStore((state) => state.projects)
   const repos = useAppStore((state) => state.repos)
@@ -167,7 +169,9 @@ export default function NewWorkspaceComposerCard(
   const visibleQuickAgents = agentCatalog.filter((agent) => {
     return (
       enabledAgentIds.has(agent.id) &&
-      (props.detectedAgentIds === null || props.detectedAgentIds.has(agent.id))
+      (props.detectedAgentIds === null ||
+        props.detectedAgentIds.has(agent.id) ||
+        hasExplicitTuiLaunchCommand({ agentCmdOverrides }, agent.id))
     )
   })
 

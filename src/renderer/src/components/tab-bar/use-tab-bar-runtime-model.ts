@@ -153,7 +153,7 @@ export function useTabBarRuntimeModel({
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
-        orderTabLaunchAgents(defaultAgent, detectedIds ?? [], disabledTuiAgents),
+        orderTabLaunchAgents(defaultAgent, detectedIds ?? [], disabledTuiAgents, agentCmdOverrides),
         agentCmdOverrides
       ),
     [agentCmdOverrides, defaultAgent, detectedIds, disabledTuiAgents]
