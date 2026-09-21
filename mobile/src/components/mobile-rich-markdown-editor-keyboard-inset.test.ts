@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset'
 
 describe('normalizeMobileRichMarkdownKeyboardInset', () => {
   it('rounds finite inset measurements for native layout', () => {

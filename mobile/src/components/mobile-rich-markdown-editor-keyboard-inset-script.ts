@@ -2,13 +2,6 @@
 // Native Keyboard events are unreliable while focus lives in the editor
 // WebView, so measure the covered region directly from visualViewport and let
 // RN lift its native Save/Discard bar above it.
-export function normalizeMobileRichMarkdownKeyboardInset(value: number): number | null {
-  if (!Number.isFinite(value)) {
-    return null
-  }
-  return Math.max(0, Math.round(value))
-}
-
 export const MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT = `
       var lastInset = -1;
       function reportKeyboardInset() {
