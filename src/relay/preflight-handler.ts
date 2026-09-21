@@ -8,7 +8,7 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
-import { runProcess } from '../shared/child-process/run-process'
+import { probeCommandVersion, runIdentityProbe } from './relay-command-probes'
 import {
   excludeMisidentifiedAgents,
   type SerializedIdentityExclusion
@@ -38,8 +38,6 @@ type AgentDetectionCommand = {
   unsupportedRuntimes?: readonly AgentDetectionRuntime[]
   identityExclusion?: SerializedIdentityExclusion
 }
-
-const IDENTITY_PROBE_TIMEOUT_MS = 5000
 
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
@@ -157,54 +155,6 @@ export class PreflightHandler {
   // startup files sourced. Ask the user's configured shell so agent dirs added
   // by zsh/bash/fish startup hooks match the remote terminal experience.
   // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
-}
-
-async function probeCommandVersion(executablePath: string): Promise<string | null> {
-  try {
-    const env = buildRelayCommandEnv(process.env, process.platform)
-    const pathKey = process.platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
-    const executableDir = path.dirname(executablePath)
-    const inheritedPath = env[pathKey]
-    const result = await runProcess({
-      program: executablePath,
-      args: ['--version'],
-      env: {
-        ...env,
-        [pathKey]: inheritedPath
-          ? `${executableDir}${path.delimiter}${inheritedPath}`
-          : executableDir
-      },
-      timeoutMs: 5_000,
-      maxOutputBytes: 4_096
-    })
-    if (result.code !== 0) {
-      return null
-    }
-    const output = `${result.stdout}\n${result.stderr}`.trim()
-    return output.length > 0 ? output : null
-  } catch {
-    return null
-  }
-}
-
-async function runIdentityProbe(
-  program: string | undefined,
-  args: readonly string[]
-): Promise<{ stdout: string; stderr: string }> {
-  if (!program) {
-    throw new Error('no resolved path to probe')
-  }
-  // Why runProcess: it starts Windows `.cmd` shims, which execFile cannot without a shell.
-  const result = await runProcess({
-    program,
-    args,
-    env: buildRelayCommandEnv(process.env, process.platform),
-    timeoutMs: IDENTITY_PROBE_TIMEOUT_MS
-  })
-  if (result.timedOut || result.code !== 0) {
-    throw new Error(`${program} exited with ${result.code ?? result.signal ?? 'timeout'}`)
-  }
-  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 function isDetectionUnsupportedInRuntime(
