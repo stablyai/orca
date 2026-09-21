@@ -634,5 +634,44 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_TAB_ID).toBe('child-tab')
       expect(spawnCall[2].env.ORCA_WORKTREE_ID).toBe('child-worktree')
     })
+
+    // Consumers read ORCA_AUTOMATION_ID as "this is an automation"; an inherited copy
+    // would make an interactive terminal answer for a run it is not part of.
+    it('does not inherit parent Orca automation identity when caller omits it', async () => {
+      const saved = {
+        ORCA_AUTOMATION_ID: process.env.ORCA_AUTOMATION_ID,
+        ORCA_AUTOMATION_RUN_ID: process.env.ORCA_AUTOMATION_RUN_ID
+      }
+      process.env.ORCA_AUTOMATION_ID = 'parent-automation'
+      process.env.ORCA_AUTOMATION_RUN_ID = 'parent-run'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_AUTOMATION_ID).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_AUTOMATION_RUN_ID).toBeUndefined()
+    })
+
+    it('preserves the automation identity an automation launch asks for', async () => {
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { ORCA_AUTOMATION_ID: 'automation-1', ORCA_AUTOMATION_RUN_ID: 'run-7' }
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_AUTOMATION_ID).toBe('automation-1')
+      expect(spawnCall[2].env.ORCA_AUTOMATION_RUN_ID).toBe('run-7')
+    })
   })
 })

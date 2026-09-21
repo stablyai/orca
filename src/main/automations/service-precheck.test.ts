@@ -111,6 +111,14 @@ describe('AutomationService prechecks', () => {
         command: 'test -f ready',
         timeoutSeconds: 30
       },
+      // The probe decides whether the run happens at all, so it is told which run it is deciding.
+      env: {
+        ORCA_AUTOMATION_ID: automation.id,
+        ORCA_AUTOMATION_NAME: 'Conditional check',
+        ORCA_AUTOMATION_RUN_ID: run.id,
+        ORCA_AUTOMATION_RUN_NUMBER: String(run.runNumber),
+        ORCA_AUTOMATION_RUN_TRIGGER: 'scheduled'
+      },
       target: {
         type: 'local',
         cwd: '/repo/path'

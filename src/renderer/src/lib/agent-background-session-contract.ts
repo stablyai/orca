@@ -10,6 +10,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   launchSource?: LaunchSource
   title?: string
+  /** Launch-scoped variables layered over the agent's configured env, e.g. automation identity. */
+  env?: Record<string, string>
   onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void

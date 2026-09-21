@@ -4,12 +4,16 @@ import { parseWslPath } from '../wsl'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { AUTOMATION_RUN_ENV_KEYS } from '../../shared/automation-run-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  // Same rule for the run a pane serves: an inherited copy would let an interactive
+  // launch answer as an automation it has nothing to do with.
+  ...AUTOMATION_RUN_ENV_KEYS
 ] as const
 
 export function getDefaultCwd(): string {

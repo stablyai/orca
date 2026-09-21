@@ -21,13 +21,17 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { AUTOMATION_RUN_ENV_KEYS } from '../../../shared/automation-run-env'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  // Same rule for the run a pane serves: an inherited copy would let an interactive
+  // launch answer as an automation it has nothing to do with.
+  ...AUTOMATION_RUN_ENV_KEYS
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 

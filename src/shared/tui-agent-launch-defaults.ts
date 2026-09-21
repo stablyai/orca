@@ -155,12 +155,20 @@ export function resolvedTuiAgentArgsBypassPermissions(
   )
 }
 
+/**
+ * The environment one launch of this agent starts with.
+ *
+ * `launchEnv` is what the caller knows about this launch in particular — the automation and run
+ * it serves, say. It is layered last because a configured agent default is a standing preference
+ * and must not be able to rewrite the launch's own identity.
+ */
 export function resolveTuiAgentLaunchEnv(
   agent: TuiAgent,
-  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
+  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined,
+  launchEnv?: Record<string, string>
 ): Record<string, string> {
   if (configuredEnv && Object.hasOwn(configuredEnv, agent)) {
-    return { ...configuredEnv[agent] }
+    return { ...configuredEnv[agent], ...launchEnv }
   }
-  return getTuiAgentDefaultEnv(agent)
+  return { ...getTuiAgentDefaultEnv(agent), ...launchEnv }
 }

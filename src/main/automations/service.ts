@@ -14,6 +14,7 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
+import { buildAutomationRunEnv } from '../../shared/automation-run-env'
 import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
@@ -190,6 +191,7 @@ export class AutomationService {
     }
     return await runAutomationPrecheck({
       precheck: automation.precheck,
+      env: buildAutomationRunEnv({ automation, run }),
       target:
         automation.executionTargetType === 'ssh'
           ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }

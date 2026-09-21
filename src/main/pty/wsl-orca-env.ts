@@ -10,6 +10,7 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
+import { AUTOMATION_RUN_ENV_KEYS } from '../../shared/automation-run-env'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -83,6 +84,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    // Automation identity is plain text, never a path.
+    ...AUTOMATION_RUN_ENV_KEYS.map((name) => `${name}/u`),
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',

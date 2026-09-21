@@ -6,6 +6,7 @@ import { observeExistingAutomationSession } from '@/lib/automation-session-obser
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
+import { buildAutomationRunEnv } from '../../../shared/automation-run-env'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -108,6 +109,9 @@ export async function handleAutomationDispatchRequest({
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
           try {
+            // Why no automation env here: this types into a process whose environment was fixed
+            // when it launched. Reuse only ever adopts a pane this same automation started, so its
+            // ORCA_AUTOMATION_ID/NAME still describe it; the run-scoped keys name the seeding run.
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
@@ -168,8 +172,9 @@ export async function handleAutomationDispatchRequest({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
-      launchSource: 'unknown',
+      launchSource: 'automation',
       title: run.title,
+      env: buildAutomationRunEnv({ automation, run }),
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)

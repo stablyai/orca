@@ -131,7 +131,8 @@ export function killLocalPrecheckProcessTree(
 
 function runLocalPrecheck(
   precheck: AutomationPrecheck,
-  target: Extract<AutomationPrecheckExecutionTarget, { type: 'local' }>
+  target: Extract<AutomationPrecheckExecutionTarget, { type: 'local' }>,
+  env: Record<string, string> | undefined
 ): Promise<AutomationPrecheckResult> {
   const startedAt = Date.now()
   const timeoutMs = precheck.timeoutSeconds * 1000
@@ -146,7 +147,7 @@ function runLocalPrecheck(
     const child = spawn(precheck.command, {
       cwd: target.cwd,
       detached: process.platform !== 'win32',
-      env: process.env,
+      env: env ? { ...process.env, ...env } : process.env,
       shell: true,
       windowsHide: true
     })
@@ -251,9 +252,22 @@ function runSshChannelPrecheck(args: {
   })
 }
 
+/**
+ * `export` statements, not a `VAR=value command` prefix: a precheck is a whole shell line, so the
+ * assignments have to stand on their own. `exec` wraps the command in /bin/sh, so this is POSIX
+ * even when the remote login shell is csh or fish.
+ */
+function sshPrecheckEnvPrefix(env: Record<string, string> | undefined): string {
+  const assignments = Object.entries(env ?? {}).map(
+    ([name, value]) => `${name}=${shellEscape(value)}`
+  )
+  return assignments.length === 0 ? '' : `export ${assignments.join(' ')}; `
+}
+
 async function runSshPrecheck(
   precheck: AutomationPrecheck,
-  target: Extract<AutomationPrecheckExecutionTarget, { type: 'ssh' }>
+  target: Extract<AutomationPrecheckExecutionTarget, { type: 'ssh' }>,
+  env: Record<string, string> | undefined
 ): Promise<AutomationPrecheckResult> {
   const startedAt = Date.now()
   const manager = getSshConnectionManager()
@@ -262,7 +276,7 @@ async function runSshPrecheck(
     return failedPrecheckResult(precheck, startedAt, 'SSH target is not connected.')
   }
   try {
-    const remoteCommand = `cd ${shellEscape(target.cwd)} && ${precheck.command}`
+    const remoteCommand = `${sshPrecheckEnvPrefix(env)}cd ${shellEscape(target.cwd)} && ${precheck.command}`
     const channel = await connection.exec(remoteCommand)
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {
@@ -277,9 +291,11 @@ async function runSshPrecheck(
 export async function runAutomationPrecheck(args: {
   precheck: AutomationPrecheck
   target: AutomationPrecheckExecutionTarget
+  /** Run identity layered over the inherited environment; see shared/automation-run-env.ts. */
+  env?: Record<string, string>
 }): Promise<AutomationPrecheckResult> {
   if (args.target.type === 'ssh') {
-    return await runSshPrecheck(args.precheck, args.target)
+    return await runSshPrecheck(args.precheck, args.target, args.env)
   }
-  return await runLocalPrecheck(args.precheck, args.target)
+  return await runLocalPrecheck(args.precheck, args.target, args.env)
 }

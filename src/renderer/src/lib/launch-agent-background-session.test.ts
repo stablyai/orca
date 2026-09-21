@@ -173,6 +173,29 @@ describe('launchAgentBackgroundSession', () => {
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
+  // The whole point of the caller env: it has to survive the startup plan and land on the PTY.
+  it('carries caller env through the startup plan onto the spawned PTY', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-1' })
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      env: { ORCA_AUTOMATION_ID: 'automation-1', ORCA_AUTOMATION_RUN_ID: 'run-7' }
+    })
+
+    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
+      env: expect.objectContaining({
+        ORCA_AUTOMATION_ID: 'automation-1',
+        ORCA_AUTOMATION_RUN_ID: 'run-7'
+      }),
+      // ...but not onto the durable resume record, which a later user-initiated
+      // resume re-spawns from and which must not claim to be an automation run.
+      launchConfig: { agentEnv: {} }
+    })
+  })
+
   it('does not create or mount the tab while the explicit PTY spawn is unresolved', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(

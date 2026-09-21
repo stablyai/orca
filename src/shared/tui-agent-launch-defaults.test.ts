@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   resolvedTuiAgentArgsBypassPermissions,
   resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv,
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
 
@@ -105,5 +106,29 @@ describe('resolveTuiAgentLaunchArgs', () => {
   it('falls back to the agent default when nothing is configured', () => {
     expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
     expect(resolveTuiAgentLaunchArgs('claude', { claude: '' })).toBe('')
+  })
+})
+
+describe('resolveTuiAgentLaunchEnv', () => {
+  it('layers the launch env over the configured one', () => {
+    expect(
+      resolveTuiAgentLaunchEnv(
+        'claude',
+        { claude: { MODEL: 'opus', ORCA_AUTOMATION_ID: 'stale' } },
+        { ORCA_AUTOMATION_ID: 'automation-1' }
+      )
+    ).toEqual({ MODEL: 'opus', ORCA_AUTOMATION_ID: 'automation-1' })
+  })
+
+  it('layers the launch env over the agent default when nothing is configured', () => {
+    expect(resolveTuiAgentLaunchEnv('claude', {}, { ORCA_AUTOMATION_ID: 'automation-1' })).toEqual({
+      ORCA_AUTOMATION_ID: 'automation-1'
+    })
+  })
+
+  it('resolves to the configured env alone when the launch adds nothing', () => {
+    expect(resolveTuiAgentLaunchEnv('claude', { claude: { MODEL: 'opus' } })).toEqual({
+      MODEL: 'opus'
+    })
   })
 })

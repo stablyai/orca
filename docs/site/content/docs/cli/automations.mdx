@@ -54,6 +54,20 @@ orca automations create \
   --json
 ```
 
+## Run identity in the environment
+
+Every scheduled run stamps its identity into the environment of the precheck command and of the agent process it starts:
+
+| Variable                      | Value                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `ORCA_AUTOMATION_ID`          | The automation's id. Set only for automation runs, so its presence is the test for "this is not an interactive launch". |
+| `ORCA_AUTOMATION_NAME`        | The automation's name, as shown in the list.                                                                            |
+| `ORCA_AUTOMATION_RUN_ID`      | This run's id.                                                                                                          |
+| `ORCA_AUTOMATION_RUN_NUMBER`  | This run's number within the automation. Absent for runs recorded before Orca tracked it.                               |
+| `ORCA_AUTOMATION_RUN_TRIGGER` | `scheduled` for the schedule, `manual` for **Run now**.                                                                 |
+
+Three limits are worth knowing. With `--reuse-session` a later run types into the terminal the previous run left running, whose environment was fixed when it launched: `ORCA_AUTOMATION_ID` and `ORCA_AUTOMATION_NAME` still describe it, because reuse only ever adopts a pane the same automation started, but the run-scoped variables still name the run that opened the terminal. And an automation whose workspace lives on a [Remote Orca Server](/docs/remote-servers) starts its agent through the server's own agent-session call, which carries no environment, so these variables are not set there. Finally, resuming a sleeping automation session is a new launch the user started, so it does not carry the variables the original run had.
+
 ## Project host / setup targets
 
 When the automation should run on a specific project host setup rather than only `--repo` / `--workspace`:

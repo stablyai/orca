@@ -52,6 +52,20 @@ describe('runAutomationPrecheck', () => {
     expect(result.error).toBeNull()
   })
 
+  it('adds run identity to the local precheck environment', async () => {
+    const result = await runAutomationPrecheck({
+      precheck: {
+        command: nodeCommand('process.stdout.write(String(process.env.ORCA_AUTOMATION_RUN_ID))'),
+        timeoutSeconds: 5
+      },
+      target: { type: 'local', cwd },
+      env: { ORCA_AUTOMATION_RUN_ID: 'run-7' }
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('run-7')
+  })
+
   it('marks a local precheck as timed out', async () => {
     const result = await runAutomationPrecheck({
       precheck: {
@@ -64,6 +78,37 @@ describe('runAutomationPrecheck', () => {
     expect(result.exitCode).toBeNull()
     expect(result.timedOut).toBe(true)
     expect(result.error).toBe('Precheck timed out after 1s.')
+  })
+
+  // A precheck is a whole shell line, so the identity has to be exported before it, not
+  // prefixed onto it as a `VAR=value command` assignment.
+  it('exports run identity ahead of the SSH precheck command', async () => {
+    const channel = Object.assign(new EventEmitter(), {
+      stderr: new PassThrough(),
+      close: vi.fn()
+    })
+    const exec = vi.fn(async () => channel)
+    sshManagerState.manager = {
+      getConnection: vi.fn(() => ({
+        getState: () => ({ status: 'connected' }),
+        exec
+      }))
+    }
+
+    const resultPromise = runAutomationPrecheck({
+      precheck: { command: "printf 'ready'", timeoutSeconds: 5 },
+      target: { type: 'ssh', cwd: '/repo/path', connectionId: 'ssh-1' },
+      env: { ORCA_AUTOMATION_ID: 'automation-1', ORCA_AUTOMATION_NAME: "Andy's triage" }
+    })
+    await Promise.resolve()
+    channel.emit('exit', 0)
+    channel.emit('close')
+    await resultPromise
+
+    expect(exec).toHaveBeenCalledWith(
+      "export ORCA_AUTOMATION_ID='automation-1' ORCA_AUTOMATION_NAME='Andy'\\''s triage'; " +
+        "cd '/repo/path' && printf 'ready'"
+    )
   })
 
   it('uses the SSH channel exit event as the precheck exit code', async () => {
