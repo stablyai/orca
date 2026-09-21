@@ -166,7 +166,8 @@ export function MobileWebShellScreen({
     retry,
     reportShellFailure,
     reportDocumentLoaded,
-    reportPageReady
+    reportPageReady,
+    pageReady
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
     hostId,
@@ -193,6 +194,7 @@ export function MobileWebShellScreen({
     pageRouteGrants,
     routeGrants,
     session: state,
+    sessionEstablished: pageReady,
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,

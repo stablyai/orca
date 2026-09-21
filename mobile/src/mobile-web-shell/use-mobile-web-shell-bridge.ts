@@ -60,6 +60,14 @@ export type MobileWebShellBridgeView = {
 export type MobileWebShellBridgeArgs = {
   hostId: string
   session: MobileWebShellSessionState
+  /**
+   * Whether this session has already handshaken, as the reducer that owns it records it.
+   *
+   * A host is rebuilt when the client under it changes and the page is never told: the session id
+   * does not move, so it neither handshakes again nor hears that the shell was replaced. The fact
+   * is about the session rather than this mount, so it arrives with the render.
+   */
+  sessionEstablished: boolean
   /** The screen the page is standing in for, which the document's own `/` cannot tell it. */
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
@@ -113,8 +121,6 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const buildId = ready?.buildId ?? null
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
-  /** The session that has completed a handshake, so a host rebuilt for it inherits that. */
-  const establishedSessionRef = useRef<string | null>(null)
   /**
    * Every prop, held rather than depended on: the host is built once per session, and a caller's
    * fresh closures and inline objects every render must not tear one down and settle its pendings.
@@ -152,7 +158,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
-      sessionEstablished: establishedSessionRef.current === sessionId,
+      sessionEstablished: latest.sessionEstablished,
       host: snapshot.host,
       post: (json) => {
         const mounted = viewRef.current
@@ -172,12 +178,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
       onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
       onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      // The one that is more than a forward: the fence a rebuilt host inherits is recorded where
-      // the page speaks.
-      onPageReady: () => {
-        establishedSessionRef.current = sessionId
-        argsRef.current.onPageReady()
-      }
+      onPageReady: () => argsRef.current.onPageReady()
     })
     hostRef.current = { sessionId, host }
     // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps

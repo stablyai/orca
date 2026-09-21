@@ -1,4 +1,10 @@
-import { createElement, useImperativeHandle, useLayoutEffect, type ReactElement } from 'react'
+import {
+  createElement,
+  useImperativeHandle,
+  useLayoutEffect,
+  useState,
+  type ReactElement
+} from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
@@ -128,10 +134,14 @@ function Harness(props: {
   faults: BridgeErrorCapture[]
   readies: string[]
 }): ReactElement | null {
+  // The screen's own reducer in miniature: the handshake is a fact about the session, so the
+  // render that carries it is what a host rebuilt over that session is built from.
+  const [handshook, setHandshook] = useState<string | null>(null)
+  const sessionId = props.session.kind === 'ready' ? props.session.sessionId : null
   const view = useMobileWebShellBridge({
     hostId: 'host-1',
     session: props.session,
-    sessionEstablished: props.sessionEstablished ?? false,
+    sessionEstablished: props.sessionEstablished ?? (sessionId !== null && handshook === sessionId),
     // Built inline on every render, as a caller writes it: the host is not rebuilt for it.
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
@@ -162,9 +172,8 @@ function Harness(props: {
     onRouteParamClear: () => {},
     onBinaryFramesDropped: (total) => props.probe.droppedBinaryFrames.push(total),
     onPageReady: () => {
-      props.readies.push(
-        props.session.kind === 'ready' ? props.session.sessionId : props.session.kind
-      )
+      setHandshook(sessionId)
+      props.readies.push(sessionId ?? props.session.kind)
     }
   })
   props.probe.view = view
