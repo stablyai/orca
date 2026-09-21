@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
@@ -8,11 +9,14 @@ import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
+import { launchAgentInNewTab, type LaunchAgentInNewTabResult } from './launch-agent-in-new-tab'
 
 type FloatingWorkspaceTerminalStore = Pick<
   AppState,
   'activeGroupIdByWorktree' | 'createTab' | 'activateTab'
 >
+
+type FloatingWorkspaceAgentStore = Pick<AppState, 'activeGroupIdByWorktree'>
 
 type FloatingWorkspaceBrowserStore = Pick<
   AppState,
@@ -88,4 +92,19 @@ export async function createFloatingWorkspaceMarkdownTab(
       suppressActiveRuntimeFallback: true
     }
   )
+}
+
+// Why: `tab.newAgent`'s launch routing already treats FLOATING_TERMINAL_WORKTREE_ID as a first-class
+// 'floating' workspace kind (see workspaceKindForWorktreeId) — this just gives the floating panel's
+// own callers (keyboard shortcut, future UI) the same entry point terminal/browser/markdown use.
+export function launchFloatingWorkspaceAgentTab(
+  store: FloatingWorkspaceAgentStore,
+  agent: TuiAgent
+): LaunchAgentInNewTabResult {
+  return launchAgentInNewTab({
+    agent,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    groupId: store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID],
+    launchSource: 'shortcut'
+  })
 }
