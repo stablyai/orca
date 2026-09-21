@@ -50,8 +50,10 @@ import {
  * the first time, when main had drifted the haptics module after recording its own number, and a
  * sum would have read 4283 and been wrong about a module neither side of that merge touched.
  *
- * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and the four postinstall
- * generators run first, the before side in a scratch worktree detached at the same sha, and the
+ * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and every postinstall generator
+ * `mobile/package.json` names run first — five at this reading, since C7.10 C1 added the rich
+ * Markdown editor's document, and the list is read there rather than counted from here because it
+ * grows. The before side is a scratch worktree detached at the same sha, and the
  * three modules above read out of the after side's list by name rather than inferred from the
  * total. Measured rather than taken from main's pin because the pin covers only the module count,
  * so the local count beside it would otherwise be a number nobody had read.
