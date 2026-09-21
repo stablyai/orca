@@ -56,7 +56,6 @@ export function TaskPagePluginSourceGroup({
   }
   return (
     <>
-      <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
       {sources.map((source) => {
         const active =
           selected?.pluginKey === source.pluginKey && selected.sourceId === source.sourceId

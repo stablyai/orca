@@ -37,7 +37,7 @@ describe('TaskPage source switching host boundary', () => {
     const section = sourceBetween(
       SOURCE_BAR_SOURCE,
       '{visibleSourceOptions.map((source) => {',
-      "{taskSource === 'linear' && linearConnected ?"
+      "taskSource === 'linear' && linearConnected ?"
     )
 
     expect(section).toContain('openTaskPage(')
