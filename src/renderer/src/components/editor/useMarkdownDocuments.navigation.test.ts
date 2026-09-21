@@ -6,10 +6,10 @@ import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 
 const runtime = vi.hoisted(() => ({
-  connectionId: null as string | null,
   stat: vi.fn(),
   list: vi.fn()
 }))
+let runtimeConnectionId: string | null = null
 const target = {
   filePath: '/repo/target.md',
   relativePath: 'target.md',
@@ -28,7 +28,7 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => runtime.connectionId }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => runtimeConnectionId }))
 vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({ owner })
@@ -69,7 +69,7 @@ async function render(file: OpenFile, viewMode: MarkdownViewMode): Promise<void>
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.clearAllMocks()
-  runtime.connectionId = null
+  runtimeConnectionId = null
   runtime.stat.mockResolvedValue({ isDirectory: false })
   runtime.list.mockResolvedValue([target])
   container = document.createElement('div')
@@ -162,7 +162,7 @@ describe('Markdown document navigation', () => {
   })
 
   it('retains SSH and runtime ownership for an indexed wiki link', async () => {
-    runtime.connectionId = 'ssh-owner'
+    runtimeConnectionId = 'ssh-owner'
     await render(sourceFile('markdown-preview', 'runtime-owner'), 'source')
     await act(async () => {
       controller.onOpenDocLink('target')
