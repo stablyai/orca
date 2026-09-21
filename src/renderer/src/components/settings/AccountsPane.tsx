@@ -27,10 +27,8 @@ import {
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { matchesSettingsSearch } from './settings-search'
-import {
-  codexRateLimitTargetMatchesAccountRuntime,
-  getCodexAccountAuthWarning
-} from './codex-account-auth-warning'
+import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { rateLimitTargetMatchesAccountRuntime } from './rate-limit-target-match'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,
@@ -181,7 +179,7 @@ export function AccountsPane({
   // rate-limit poll says nothing about accounts owned by a remote runtime.
   const claudeUsageVisible = !isRemoteAccountScope
   const activeClaudeAccountId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
-  const claudeUsageTargetMatches = codexRateLimitTargetMatchesAccountRuntime(
+  const claudeUsageTargetMatches = rateLimitTargetMatchesAccountRuntime(
     claudeRateLimitTarget,
     accountRuntime
   )
