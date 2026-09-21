@@ -13,6 +13,15 @@ const makeProject = (overrides: Partial<Project> = {}): Project => ({
 })
 
 describe('carryProjectStateThroughIdentityChange', () => {
+  it('preserves coordination through repository identity promotion', () => {
+    const coordination = { goal: 'Ship', instructions: 'Review first', revision: 7 }
+    const previous = makeProject({ id: 'repo:r1', sourceRepoIds: ['r1'], coordination })
+    const projected = makeProject({ id: 'github:acme/app', sourceRepoIds: ['r1'] })
+    expect(
+      carryProjectStateThroughIdentityChange([projected], [previous]).projects[0]?.coordination
+    ).toEqual(coordination)
+  })
+
   it('keeps the exact-id match and reports no remap', () => {
     const projected = makeProject({ id: 'git:host/acme/app', sourceRepoIds: ['r1'] })
     const previous = makeProject({

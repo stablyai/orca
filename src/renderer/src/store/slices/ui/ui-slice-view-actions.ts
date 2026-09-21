@@ -3,6 +3,19 @@ import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    projectHomeDrafts: {},
+    setProjectHomeDraft: (key, draft) =>
+      set((state) => {
+        const drafts = { ...state.projectHomeDrafts }
+        if (draft) {
+          drafts[key] = draft
+        } else {
+          delete drafts[key]
+        }
+        return { projectHomeDrafts: drafts }
+      }),
+    projectHomeRepo: null,
+    openProjectHome: (repo) => set({ activeView: 'project-home', projectHomeRepo: repo }),
     openActivityPage: () => {
       set((state) => ({
         activeView: 'activity',

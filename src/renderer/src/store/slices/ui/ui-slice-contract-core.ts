@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../shared/repo-types'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -107,6 +108,7 @@ export type NewWorkspaceDraft = {
 }
 
 export type UiViewHistory =
+  | 'project-home'
   | 'terminal'
   | 'settings'
   | 'tasks'
@@ -142,6 +144,16 @@ export type UISliceCore = {
   /** Session-local protection for turns explicitly marked unread. */
   manuallyUnreadTurnsByPaneKey: Record<string, number>
   clearManuallyUnreadTurns: (paneKeys: string[]) => void
+  projectHomeDrafts: Record<
+    string,
+    { goal: string; instructions: string; expectedRevision: number }
+  >
+  setProjectHomeDraft: (
+    key: string,
+    draft: { goal: string; instructions: string; expectedRevision: number } | null
+  ) => void
+  projectHomeRepo: Repo | null
+  openProjectHome: (repo: Repo) => void
   activeView: TopLevelView
   previousViewBeforeTasks: Exclude<UiViewHistory, 'tasks'>
   previousViewBeforeSettings: Exclude<UiViewHistory, 'settings'>

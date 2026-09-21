@@ -8,10 +8,13 @@ export type ProjectIdentitySuccession = {
 }
 
 function carryUserState(projected: Project, previous: Project): Project {
-  return previous.localWindowsRuntimePreference
+  return previous.localWindowsRuntimePreference || previous.coordination
     ? {
         ...projected,
-        localWindowsRuntimePreference: previous.localWindowsRuntimePreference,
+        ...(previous.coordination ? { coordination: previous.coordination } : {}),
+        ...(previous.localWindowsRuntimePreference
+          ? { localWindowsRuntimePreference: previous.localWindowsRuntimePreference }
+          : {}),
         updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
       }
     : projected

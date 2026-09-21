@@ -13,7 +13,14 @@ export type ProjectProviderIdentity = {
   host?: string
 }
 
+export type ProjectCoordination = {
+  goal: string
+  instructions: string
+  revision: number
+}
+
 export type Project = {
+  coordination?: ProjectCoordination
   id: string
   displayName: string
   badgeColor: string
@@ -30,7 +37,9 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>> & {
+    coordination?: { goal: string; instructions: string; expectedRevision: number }
+  }
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
