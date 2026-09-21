@@ -161,7 +161,6 @@ const MERMAID_PAGE_ENGINE = 'src/components/pr-sidebar/mermaid-page-engine.gener
 const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
 /**
-/**
  * The module list on the merge, recorded at the base in the docstring above, which is where every
  * part of it is accounted for: the document's own modules replacing the factory that carried them,
  * mermaid's three, and the three bridge modules #21908 and C2.9 pin on main.

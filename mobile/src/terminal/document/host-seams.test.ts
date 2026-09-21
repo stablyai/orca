@@ -32,13 +32,6 @@ const SURFACE_MARKUP =
   '<div id="scroll-indicator"><div id="scroll-thumb"></div></div>'
 
 /**
- * A started document over a scope the case owns, with the hooks it wants as the host argument.
- *
- * The whole sequence, not a hand-picked subset: the elements `surface-swap`, `text-scaling` and
- * `selection-state-and-eviction` read are read in the one order both hosts run them in, and a
- * module added to that sequence is covered here without this file being edited.
- */
-/**
  * Every document a case started, so `afterEach` can stop them.
  *
  * A start installs six listeners on `document` and `window` — the dispatcher's four capture-phase
@@ -48,6 +41,13 @@ const SURFACE_MARKUP =
  */
 const startedScopes: TerminalDocumentScope[] = []
 
+/**
+ * A started document over a scope the case owns, with the hooks it wants as the host argument.
+ *
+ * The whole sequence, not a hand-picked subset: the elements `surface-swap`, `text-scaling` and
+ * `selection-state-and-eviction` read are read in the one order both hosts run them in, and a
+ * module added to that sequence is covered here without this file being edited.
+ */
 function startedScope(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   document.body.innerHTML = SURFACE_MARKUP
   // The two the sequence itself would otherwise answer with the window: a transport that installs
