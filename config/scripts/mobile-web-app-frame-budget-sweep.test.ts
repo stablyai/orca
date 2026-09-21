@@ -88,6 +88,17 @@ let cdp: CDPSession | null = null
  */
 const describeSweep = mobileWebAppDependenciesPresent() ? describe : describe.skip
 
+/**
+ * The floor under real noise, in bytes per pixel.
+ *
+ * It separates noise the encoder saw pixel-for-pixel from noise averaged away by a layout at
+ * Chromium's default width: the averaged arm reads under 0.3, and the sweep's own minimum has read
+ * 0.543986 on the pinned Chromium (2026-09-20) and 0.480898 on the runner's Chrome 152
+ * (2026-09-21). A floor of 0.5 sat inside that encoder spread and failed the runner on a
+ * measurement that was noise; 0.4 keeps a margin on both sides of it.
+ */
+const NOISE_FLOOR_BYTES_PER_PIXEL = 0.4
+
 beforeAll(async () => {
   if (!mobileWebAppDependenciesPresent()) {
     return
@@ -335,7 +346,7 @@ describeSweep('the frame budget across the viewport range', () => {
     expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
     // The low end too, so a sweep that silently stopped encoding real images is visible: every
     // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
-    expect(bestBytesPerPixel).toBeGreaterThan(0.5)
+    expect(bestBytesPerPixel).toBeGreaterThan(NOISE_FLOOR_BYTES_PER_PIXEL)
   }, 300_000)
 
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
@@ -372,7 +383,7 @@ describeSweep('the frame budget across the viewport range', () => {
 
       expect(bytesPerPixel).toBeLessThan(0.3)
       // And the floor the sweep asserts is above it, so that assertion is what fails first.
-      expect(bytesPerPixel).toBeLessThan(0.5)
+      expect(bytesPerPixel).toBeLessThan(NOISE_FLOOR_BYTES_PER_PIXEL)
     } finally {
       await context.close()
     }

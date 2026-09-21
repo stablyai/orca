@@ -169,6 +169,14 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
       return { base64: '', eof: true }
     case 'native.media.release':
       return { released: false }
+    case 'native.audio.start':
+      return { started: true, sampleRate: 16_000, permission: 'granted' }
+    case 'native.audio.read':
+      return { base64: '', droppedBytes: 0, recording: true, interruption: null }
+    case 'native.audio.stop':
+      return { stopped: true }
+    case 'native.wakelock.set':
+      return { active: true }
   }
 }
 

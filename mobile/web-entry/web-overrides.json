@@ -7,7 +7,7 @@
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
-      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
     },
     {
       "file": "src/navigation/route-handoff.web.ts",
@@ -112,6 +112,10 @@
     {
       "file": "src/terminal/terminal-webview-html.web.ts",
       "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
+    },
+    {
+      "file": "src/platform/dictation-capture.web.ts",
+      "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio and the wake tag through expo-keep-awake, neither of which a browser has; this one asks the shell for both over native.audio.start|read|stop and native.wakelock.set, draining the shell's ring on a timer and raising each reply as the events the engine emits directly. The flow above the seam is one file on both hosts."
     },
     {
       "file": "src/platform/media-picker.web.ts",

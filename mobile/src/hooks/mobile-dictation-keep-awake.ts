@@ -1,4 +1,4 @@
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
+import type { DictationKeepAwakeDevice } from '../platform/dictation-capture-contract'
 
 const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'orca-mobile-dictation'
 
@@ -51,8 +51,12 @@ function withNativeCallTimeout(nativeCall: Promise<void>): Promise<void> {
   })
 }
 
-async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Promise<void> {
-  const nativeActivation = activateKeepAwakeAsync(tag)
+async function activateTrackedTag(
+  device: DictationKeepAwakeDevice,
+  tag: string,
+  isStillWanted: () => boolean
+): Promise<void> {
+  const nativeActivation = device.activate(tag)
   try {
     await withNativeCallTimeout(nativeActivation)
   } catch (err) {
@@ -80,7 +84,7 @@ async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Pr
               return
             }
             // No owner wants it anymore — the screen must not stay awake.
-            await deactivateTrackedTag(tag).catch(() => undefined)
+            await deactivateTrackedTag(device, tag).catch(() => undefined)
           }),
         () => {
           // A late definite rejection means nothing activated after all, but
@@ -98,9 +102,9 @@ async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Pr
   pendingActivations.delete(tag)
 }
 
-async function deactivateTrackedTag(tag: string): Promise<void> {
+async function deactivateTrackedTag(device: DictationKeepAwakeDevice, tag: string): Promise<void> {
   try {
-    await withNativeCallTimeout(deactivateKeepAwake(tag))
+    await withNativeCallTimeout(device.deactivate(tag))
   } catch (err) {
     // A replacement hook must be able to retry cleanup after Android replaces
     // an Activity and the owner that acquired this tag has unmounted.
@@ -112,7 +116,7 @@ async function deactivateTrackedTag(tag: string): Promise<void> {
   pendingActivations.delete(tag)
 }
 
-async function cleanupPendingTags(): Promise<void> {
+async function cleanupPendingTags(device: DictationKeepAwakeDevice): Promise<void> {
   const staleTags = new Set(pendingCleanupTags)
   for (const [tag, isStillWanted] of pendingActivations) {
     // A still-wanted timed-out activation is not an orphan: deactivating it
@@ -129,7 +133,7 @@ async function cleanupPendingTags(): Promise<void> {
   // swallow failures: a stale tag that still cannot be deactivated must not
   // fail the fresh acquire that triggered this retry; it stays queued.
   await Promise.allSettled(
-    Array.from(staleTags, (tag) => deactivateTrackedTag(tag).catch(() => undefined))
+    Array.from(staleTags, (tag) => deactivateTrackedTag(device, tag).catch(() => undefined))
   )
 }
 
@@ -137,10 +141,14 @@ export class MobileDictationKeepAwakeOwner {
   private readonly ownerId = createOwnerId()
   private acquiredTag: string | null = null
 
+  /** The two calls that differ between the hosts, and the only part of this file that does: the
+   *  tag pools, the serialized queue, the timeouts and the retries are the same either way. */
+  constructor(private readonly device: DictationKeepAwakeDevice) {}
+
   acquire(dictationId: string): Promise<void> {
     const tag = this.createTag(dictationId)
     return enqueueKeepAwakeOperation(async () => {
-      await cleanupPendingTags()
+      await cleanupPendingTags(this.device)
       if (this.acquiredTag && !activeTags.has(this.acquiredTag)) {
         this.acquiredTag = null
       }
@@ -152,13 +160,13 @@ export class MobileDictationKeepAwakeOwner {
         this.acquiredTag = null
         // Best-effort: a failed previous-tag cleanup is queued for retry and
         // must not block recording intent for the new dictation below.
-        await deactivateTrackedTag(previousTag).catch(() => undefined)
+        await deactivateTrackedTag(this.device, previousTag).catch(() => undefined)
       }
       // Record ownership before the native call: acquiredTag is intent while
       // activeTags is native state, so a failed initial activation can still
       // be healed by a later foreground reacquire.
       this.acquiredTag = tag
-      await activateTrackedTag(tag, () => this.acquiredTag === tag)
+      await activateTrackedTag(this.device, tag, () => this.acquiredTag === tag)
     })
   }
 
@@ -168,7 +176,7 @@ export class MobileDictationKeepAwakeOwner {
   reacquire(dictationId: string): Promise<void> {
     const tag = this.createTag(dictationId)
     return enqueueKeepAwakeOperation(async () => {
-      await cleanupPendingTags()
+      await cleanupPendingTags(this.device)
       if (this.acquiredTag !== tag) {
         return
       }
@@ -176,7 +184,7 @@ export class MobileDictationKeepAwakeOwner {
       // re-applies the window flag from an empty tag set — deactivate both.
       if (activeTags.has(tag) || pendingActivations.has(tag)) {
         try {
-          await deactivateTrackedTag(tag)
+          await deactivateTrackedTag(this.device, tag)
         } catch (err) {
           // A still-live tag must not sit in the orphan pool where another
           // owner's drain would turn it off without reactivating; keep it in
@@ -192,7 +200,7 @@ export class MobileDictationKeepAwakeOwner {
       // Known gap: if another expo-keep-awake owner exists (e.g. dev-build
       // dev tools), the native module never empties its tag set, so the
       // deactivate/activate cycle cannot re-apply the Android window flag.
-      await activateTrackedTag(tag, () => this.acquiredTag === tag)
+      await activateTrackedTag(this.device, tag, () => this.acquiredTag === tag)
     })
   }
 
@@ -208,14 +216,14 @@ export class MobileDictationKeepAwakeOwner {
           this.acquiredTag = null
           return
         }
-        await deactivateTrackedTag(tag)
+        await deactivateTrackedTag(this.device, tag)
         this.acquiredTag = null
       } finally {
         // Drain after the owner-local unset so this owner's own timed-out
         // activation is no longer wanted and gets cleaned here — an acquire
         // may never happen again this session. Still-wanted tags of other
         // live dictations are spared by the drain itself.
-        await cleanupPendingTags()
+        await cleanupPendingTags(this.device)
       }
     })
   }
@@ -225,12 +233,16 @@ export class MobileDictationKeepAwakeOwner {
   }
 }
 
-export function createMobileDictationKeepAwakeOwner(): MobileDictationKeepAwakeOwner {
-  return new MobileDictationKeepAwakeOwner()
+export function createMobileDictationKeepAwakeOwner(
+  device: DictationKeepAwakeDevice
+): MobileDictationKeepAwakeOwner {
+  return new MobileDictationKeepAwakeOwner(device)
 }
 
 // Foreground is the retry point for wake tags whose final deactivation timed
 // out after a dictation ended — otherwise nothing runs until the next one.
-export function drainMobileDictationKeepAwakeCleanup(): Promise<void> {
-  return enqueueKeepAwakeOperation(cleanupPendingTags)
+export function drainMobileDictationKeepAwakeCleanup(
+  device: DictationKeepAwakeDevice
+): Promise<void> {
+  return enqueueKeepAwakeOperation(() => cleanupPendingTags(device))
 }
