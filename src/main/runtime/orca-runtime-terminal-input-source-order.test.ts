@@ -39,6 +39,15 @@ function deferred() {
   return { promise, resolve }
 }
 
+function mockSendTerminalWriting(ptyId: string) {
+  vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminal').mockImplementation(
+    async (handle, _action, options = {}) => {
+      await options.afterWrite?.(ptyId)
+      return { handle, accepted: true, bytesWritten: 2 }
+    }
+  )
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -91,39 +100,60 @@ describe('OrcaRuntimeService terminal input source keeps PTY write order', () =>
     })
   })
 
-  it('keeps a later send over an agent prompt whose verification returns after it', async () => {
+  // Why two prompt cases: the override records from whichever of the accepted receipt and the
+  // onInputAccepted checkpoint comes first, and either can arrive after a newer send.
+  it('keeps a later send over an agent prompt whose accepted receipt returns after it', async () => {
     const runtime = makeRuntime()
     const verification = deferred()
-    const promptAccepted = deferred()
+    const promptWritten = deferred()
     vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminalAgentPrompt').mockImplementation(
       async (handle, _prompt, options = {}) => {
         await options.afterWrite?.('pty-prompt')
-        options.onInputAccepted?.({ handle, accepted: true, bytesWritten: 6 })
-        promptAccepted.resolve()
+        promptWritten.resolve()
         await verification.promise
         return { handle, accepted: true, bytesWritten: 6 }
       }
     )
-    vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminal').mockImplementation(
-      async (handle, _action, options = {}) => {
+    mockSendTerminalWriting('pty-prompt')
+
+    const prompt = runtime.sendTerminalAgentPrompt('term-1', 'hello', { inputSource: LAPTOP })
+    await promptWritten.promise
+    expect(runtime.getTerminalInputSource('pty-prompt')).toBeNull()
+
+    await runtime.sendTerminal('term-1', { text: 'ls' }, { inputSource: PHONE })
+    verification.resolve()
+    await prompt
+
+    expect(runtime.getTerminalInputSource('pty-prompt')).toMatchObject({
+      pairedDeviceId: 'device-phone'
+    })
+  })
+
+  it('keeps a later send over an agent prompt whose onInputAccepted checkpoint fires after it', async () => {
+    const runtime = makeRuntime()
+    const checkpointGate = deferred()
+    const promptWritten = deferred()
+    vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminalAgentPrompt').mockImplementation(
+      async (handle, _prompt, options = {}) => {
         await options.afterWrite?.('pty-prompt')
-        return { handle, accepted: true, bytesWritten: 2 }
+        promptWritten.resolve()
+        await checkpointGate.promise
+        options.onInputAccepted?.({ handle, accepted: true, bytesWritten: 6 })
+        throw new Error('agent_prompt_observation_aborted')
       }
     )
+    mockSendTerminalWriting('pty-prompt')
 
     const prompt = runtime.sendTerminalAgentPrompt('term-1', 'hello', {
       acceptQueued: true,
       requestId: 'req-1',
       inputSource: LAPTOP
     })
-    await promptAccepted.promise
-    expect(runtime.getTerminalInputSource('pty-prompt')).toMatchObject({
-      pairedDeviceId: 'device-laptop'
-    })
+    await promptWritten.promise
 
     await runtime.sendTerminal('term-1', { text: 'ls' }, { inputSource: PHONE })
-    verification.resolve()
-    await prompt
+    checkpointGate.resolve()
+    await expect(prompt).rejects.toThrow('agent_prompt_observation_aborted')
 
     expect(runtime.getTerminalInputSource('pty-prompt')).toMatchObject({
       pairedDeviceId: 'device-phone'
