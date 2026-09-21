@@ -13,9 +13,16 @@ import { RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT } from './rich-markdown-editor-doc
  *
  * What did not move is the page around it — the head, the stylesheet, the markup — and that is
  * still a byte fact worth holding, because a stray character in the CSS is invisible to every
- * behavioural test there is. This digest was measured on main's own document with its script
- * region removed (`1ef29c8802170800011e8accf1966bc542cdd7dd5c9600bacb6e0860f77b6df8`, 29,852
- * bytes) and on this one, and the two agreed.
+ * behavioural test there is.
+ *
+ * Two different digests, so which is which:
+ *
+ * - The one this file used to assert was of main's *whole document*, script included:
+ *   `1ef29c8802170800011e8accf1966bc542cdd7dd5c9600bacb6e0860f77b6df8`, 29,852 bytes. It is gone,
+ *   and nothing below reproduces it.
+ * - `DOCUMENT_SHELL_SHA256` below is of the *page around the script*, the document with its
+ *   `<script>` region emptied. It was taken twice — on main's document and on this one — and the
+ *   two readings agreed, which is what says the head, the stylesheet and the markup did not move.
  */
 const DOCUMENT_SHELL_SHA256 = '5054e1d5c87e4ce1805d4856ddc8bf36804e697675e6013d84da453d3e81af25'
 const DOCUMENT_SHELL_BYTES = 5621
