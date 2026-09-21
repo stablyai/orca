@@ -41,7 +41,7 @@ function recordFrameParses(page) {
  * the frame can fetch and something about the parser-inserted element is the cause, and if the rig
  * sees neither, requests from this frame are not reaching the rig at all.
  */
-async function describeImageEvidence(page, frame, { originPrefix, requestLog, parses }) {
+async function describeImageEvidence(page, frame, { originPrefix, requestLog, parses, serverSaw }) {
   if (!frame) {
     return `no frame to ask; ${requestLog.describe()}`
   }
@@ -61,10 +61,13 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
         // Every subresource this document actually fetched, from the document's own side. An entry
         // here for a URL the rig never saw would mean the request left the frame and died before it.
         resources: performance.getEntriesByType('resource').map((one) => one.name),
-        // The same entry in full for the element under test. A zero `responseStatus` with a zero
-        // `transferSize` is a fetch that reached the network stack and came back with no response,
-        // which is what a request the rig never intercepted looks like once the host cannot resolve;
-        // `startTime` is what an attachment time is early or late against.
+        // The same entry in full for the element under test. Readable only because the asset
+        // listener sends `Timing-Allow-Origin`: without it every field below reads zero for a
+        // cross-origin resource, which was true of this reading until it was checked and would have
+        // made a healthy request look like a failed one. Even with it, `responseStatus` still read
+        // zero on a request that succeeded, so the discriminators are `transferSize`,
+        // `encodedBodySize` and `nextHopProtocol`. `startTime` is what an attachment time is early
+        // or late against.
         remoteTiming: performance
           .getEntriesByType('resource')
           .filter((one) => one.name === remote?.src)
@@ -91,7 +94,8 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
     })
     .catch((error) => `the reading itself failed: ${String(error).split('\n')[0]}`)
 
-  const freshUrl = `${originPrefix}/fresh-${String(Date.now())}.png`
+  const freshPath = `/fresh-${String(Date.now())}.png`
+  const freshUrl = `${originPrefix}${freshPath}`
   const issued = await frame
     .evaluate((url) => {
       const image = new Image()
@@ -114,7 +118,9 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
   return [
     `frame ${JSON.stringify(inFrame)}`,
     `subframe parses ${JSON.stringify(parses())}`,
-    `fresh ${JSON.stringify(freshUrl)} issued ${JSON.stringify(issued)} seen ${String(requestLog.asked().includes(freshUrl))} element ${JSON.stringify(fresh)}`,
+    // "seen" is the listener's own record, which is the oracle every arm now reads; what the
+    // browser-side log saw is reported beside it, since the two disagreeing is itself the finding.
+    `fresh ${JSON.stringify(freshUrl)} issued ${JSON.stringify(issued)} served ${String(serverSaw?.(freshPath) ?? 'no server')} observed ${String(requestLog.asked().includes(freshUrl))} element ${JSON.stringify(fresh)}`,
     requestLog.describe()
   ].join('; ')
 }
@@ -125,8 +131,8 @@ async function describeImageEvidence(page, frame, { originPrefix, requestLog, pa
  * The subscription is the only part that has to happen at mount; everything it reports is asked for
  * later, and only by an arm that aborted.
  */
-export function watchImageEvidence(page, originPrefix, requestLog) {
+export function watchImageEvidence(page, originPrefix, requestLog, serverSaw) {
   const parses = recordFrameParses(page)
   return async (frame) =>
-    await describeImageEvidence(page, frame, { originPrefix, requestLog, parses })
+    await describeImageEvidence(page, frame, { originPrefix, requestLog, parses, serverSaw })
 }

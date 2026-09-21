@@ -34,6 +34,7 @@ import {
 } from './mobile-web-app-render-harness.mjs'
 import { createCspReportSink, reportedDirectives } from './mobile-web-app-preview-csp-reports.mjs'
 import { recordRequestsTo } from './mobile-web-app-preview-request-log.mjs'
+import { startArtifactAssetServer } from './mobile-web-app-preview-asset-server.mjs'
 import { watchImageEvidence } from './mobile-web-app-preview-image-evidence.mjs'
 import {
   ARTIFACT_RGB,
@@ -62,21 +63,17 @@ const foreignHits = []
 let foreign = null
 
 /**
- * A TLS origin for the arm that measures what `img-src https:` admits, answered by Playwright's
- * route interception rather than by a server: the directive matches on scheme, so what this needs
- * is an `https://` URL and not a certificate. The host is `.invalid` on purpose -- it can never
- * resolve, so a request that got as far as DNS would mean the route missed rather than that the
- * policy allowed it.
+ * The artifact's https asset origin: a real TLS listener rather than route interception.
+ *
+ * Interception could not measure it. Chrome 152 isolates the sandboxed `srcdoc` frame into its own
+ * target, and the parser-inserted `<img>` is the document's first fetch, issued before interception
+ * attaches there: the request escaped to the network, the unresolvable host failed it, and the rig
+ * recorded nothing while the frame's own resource timing showed the fetch. A listener already
+ * accepting before the page exists cannot be raced that way -- the request arrives or it does not,
+ * and either answer is the measurement. `img-src https:` matches on scheme, so `https://127.0.0.1`
+ * exercises the same directive any other https host would.
  */
-const SECURE_ORIGIN = 'https://artifact-images.invalid'
-const secureHits = []
-const secureReferers = []
-
-/** A 1x1 PNG, the smallest body that lets an admitted image request finish rather than error. */
-const PNG_1X1 = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
-  'base64'
-)
+let assetServer = null
 
 let nonceCounter = 0
 
@@ -134,6 +131,8 @@ beforeAll(async () => {
 
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'html-preview-render-'))
+  // Before any page exists, which is the point of it being a listener.
+  assetServer = await startArtifactAssetServer(scratch)
   outDir = join(scratch, 'bundle')
   await mkdir(outDir, { recursive: true })
   await esbuild.build({
@@ -208,6 +207,7 @@ afterAll(async () => {
   openServer?.close()
   leakyServer?.close()
   foreign?.close()
+  assetServer?.server.close()
   if (scratch) {
     // This run's directory only: `mobile/.tmp` is a shared ignored root and another suite may hold
     // one of its own.
@@ -243,14 +243,19 @@ async function open(
   const browserVersion = browser.version()
   // An explicit context, so an arm that aborts mid-read can hand back everything it holds. The
   // arms share one browser per engine; only the context is theirs.
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  // The asset listener's certificate is generated per run and trusted by nothing, which is what
+  // this flag is for; the page's own origin is still plain http from the bundle server.
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    ignoreHTTPSErrors: true
+  })
   const page = await context.newPage()
   // Subscribed before the first navigation, so a request made during load is in the log. Cheap
   // while an arm passes: it fills arrays, and only an abort asks them to speak.
-  const requestLog = await recordRequestsTo(page, SECURE_ORIGIN)
+  const requestLog = await recordRequestsTo(page, assetServer.origin)
   // Asked only when an arm has aborted, so the fresh-image probe and its wait cost a failing run
   // and never a passing one.
-  const describeRequests = watchImageEvidence(page, SECURE_ORIGIN, requestLog)
+  const describeRequests = watchImageEvidence(page, assetServer.origin, requestLog, assetServer.saw)
   try {
     const navigations = []
     const popups = []
@@ -264,41 +269,39 @@ async function open(
       popups.push(popup.url())
       void popup.close().catch(() => {})
     })
-    // The shell's navigation delegate, stood in for: Playwright is not the shell, so a top-frame
-    // navigation is recorded with the frame that asked and aborted. That count is exactly what the
-    // shell's `onExternalNavigation` would be handed.
+    // The record is the page's own event, not the route handler's. Interception is per target and
+    // attaches late on a Chrome that isolates the sandboxed frame, which is what left the CI log
+    // saying `recorded []`; `page.on('request')` is one subscription over every frame the page has.
+    // Armed after the rig's own `goto`, exactly where the route used to be registered: the initial
+    // navigation is a main-frame navigation to this origin and would otherwise count as one the
+    // artifact asked for.
+    let recordingNavigations = false
+    page.on('request', (request) => {
+      if (!recordingNavigations || !request.isNavigationRequest()) {
+        return
+      }
+      const url = request.url()
+      if (!url.startsWith(foreignOrigin) && !url.startsWith(origin)) {
+        return
+      }
+      navigations.push({
+        url,
+        foreign: url.startsWith(foreignOrigin),
+        main: request.frame() === page.mainFrame()
+      })
+    })
+    // The route stays for what only a route can do: refuse the navigation. Playwright is not the
+    // shell, so a top-frame navigation is aborted here the way the shell's delegate would refuse
+    // it, and a frame navigating itself is left alone -- aborting that would make "the frame stayed
+    // on the artifact" true by the rig's own doing.
     const record = (route) => {
       const request = route.request()
-      if (request.isNavigationRequest()) {
-        const main = request.frame() === page.mainFrame()
-        navigations.push({
-          url: request.url(),
-          foreign: request.url().startsWith(foreignOrigin),
-          main
-        })
-        // A frame navigating itself is counted and then left alone: aborting it would make "the frame
-        // stayed on the artifact" true by the rig's own doing.
-        if (main) {
-          return void route.abort()
-        }
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+        return void route.abort()
       }
       return void route.continue()
     }
     await page.route(`${foreignOrigin}/**`, record)
-    // Answered here rather than by a server, and recorded on the way through. A request only reaches
-    // this handler if the policy let it out, which is the whole reading: the font never arrives.
-    await page.route(`${SECURE_ORIGIN}/**`, (route) => {
-      const request = route.request()
-      const url = request.url()
-      secureHits.push(url)
-      // The header as the browser would have put it on the wire. Recorded for every admitted request
-      // and read per arm, because what carries a referrer is the request and not the page.
-      secureReferers.push({ url, referer: request.headers().referer ?? null })
-      if (url.includes('.png')) {
-        return void route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 })
-      }
-      return void route.fulfill({ status: 200, contentType: 'font/woff2', body: Buffer.alloc(0) })
-    })
     // The shell page's violations, and only those: an artifact's own listener would have to run, and
     // the fence under test is that nothing in the artifact runs.
     await page.addInitScript(() => {
@@ -314,6 +317,7 @@ async function open(
     // with the same nonce, which is how a report from a `srcdoc` frame with no URL of its own is
     // attributed to the arm that caused it.
     await page.goto(`${origin}/preview?n=${nonce}`, { waitUntil: 'load' })
+    recordingNavigations = true
     // Registered after the page's own load, not before it: this handler aborts main-frame navigations
     // and the initial `goto` is one. `href="/"` and `href=""` inside an artifact resolve against the
     // embedder's base, so a tap on either asks to navigate the top frame to the shell's own document.
@@ -335,10 +339,7 @@ async function open(
       `reportReady=${reportReady ?? 'none'} nonce=${nonce}`
     // One reader for the wait and for the reading: an arm that waits on one list and asserts on
     // another proves nothing about the list it asserts on.
-    const readImageHits = () =>
-      secureHits
-        .filter((one) => one.includes(`n=${nonce}`))
-        .map((one) => one.split('?')[0].slice(SECURE_ORIGIN.length))
+    const readImageHits = () => assetServer.hitsFor(nonce)
     const artifactFrame = await waitForLoadedFrame(page, {
       frameReady,
       reportReady,
@@ -366,8 +367,13 @@ async function open(
         .catch(() => null)
     // Sampled before the action as well, because the toggle's whole claim is that it changes.
     const togglesBefore = await readToggles()
+    let actError = null
     if (act) {
-      await act({ page, frame: previewFrame(page) })
+      // Recorded, never swallowed: a click that never landed and a click that produced no
+      // navigation are the same empty counter, and only one of them is the product's doing.
+      await act({ page, frame: previewFrame(page) }).catch((error) => {
+        actError = String(error).split('\n')[0]
+      })
     }
     // Every arm settles, acting or not: an artifact can start a navigation with no tap behind it --
     // `<meta http-equiv="refresh">` is one -- and the arms that pin zero were reading their counters
@@ -439,6 +445,8 @@ async function open(
       // Every refusal the browser reported for this arm, which is the evidence an in-frame listener
       // cannot be relied on to have collected.
       reported: reportedDirectives(cspReports, nonce),
+      // Null on every arm that acted successfully, and on every arm that did not act at all.
+      actError,
       topNavigations: navigations.filter((one) => one.main && one.foreign).length,
       ownOriginTopNavigations: navigations.filter((one) => one.main && !one.foreign).length,
       // What the frame asked for itself at the embedder's origin, which is a different escape from a
@@ -454,9 +462,9 @@ async function open(
       // paths. Absolute URLs go in, so the origin is stripped along with the query.
       secureHits: readImageHits(),
       // What each admitted request carried, this arm's only, so an absence is this artifact's.
-      secureReferers: secureReferers
-        .filter((one) => one.url.includes(`n=${nonce}`))
-        .map((one) => one.referer),
+      // Read off the header the listener received rather than off a request object handed to a
+      // route: the header on the wire is what the shell's `Referrer-Policy` is about.
+      secureReferers: assetServer.referersFor(nonce),
       violations: await page.evaluate(() => window.__violations),
       body: await page.evaluate(() => document.body.innerText)
     }
@@ -592,7 +600,7 @@ for (const engine of ['chromium', 'webkit']) {
         // after the requests rather than after a clock. CI's Chrome 152 had recorded the background
         // and not the element when the old bounded settle expired.
         const read = await open(browser(), {
-          assets: SECURE_ORIGIN,
+          assets: assetServer.origin,
           frameReady: 'images',
           signal: ctx.signal
         })
@@ -607,7 +615,7 @@ for (const engine of ['chromium', 'webkit']) {
 
       it('sends no referrer with an admitted https image, which is the shell header doing it', async (ctx) => {
         const sealed = await open(browser(), {
-          assets: SECURE_ORIGIN,
+          assets: assetServer.origin,
           frameReady: 'images',
           signal: ctx.signal
         })
@@ -623,7 +631,7 @@ for (const engine of ['chromium', 'webkit']) {
         // sends none either way, which is worth pinning too: on that engine the reading above is
         // the browser's own behaviour and not evidence the header arrived.
         const leaky = await open(browser(), {
-          assets: SECURE_ORIGIN,
+          assets: assetServer.origin,
           csp: 'leaky',
           frameReady: 'images',
           signal: ctx.signal
@@ -648,10 +656,13 @@ for (const engine of ['chromium', 'webkit']) {
           signal: ctx.signal,
           expectNavigation: 'main-frame',
           act: async ({ frame }) => {
-            await frame?.click('#rootlink', { timeout: 2000 }).catch(() => {})
+            await frame?.click('#rootlink', { timeout: 2000 })
           }
         })
         expect(root.pixelBefore).toBe(ARTIFACT_RGB)
+        // The tap landed. Without this the two counts below read the same whether the product
+        // refused to navigate or the rig never managed to click.
+        expect(root.actError).toBeNull()
         expect(root.ownOriginTopNavigations).toBe(1)
         expect(root.topNavigations).toBe(0)
 
@@ -660,10 +671,11 @@ for (const engine of ['chromium', 'webkit']) {
           signal: ctx.signal,
           expectNavigation: 'main-frame',
           act: async ({ frame }) => {
-            await frame?.click('#emptylink', { timeout: 2000 }).catch(() => {})
+            await frame?.click('#emptylink', { timeout: 2000 })
           }
         })
         expect(empty.pixelBefore).toBe(ARTIFACT_RGB)
+        expect(empty.actError).toBeNull()
         expect(empty.ownOriginTopNavigations).toBe(1)
         expect(empty.topNavigations).toBe(0)
       }, 180_000)
@@ -673,7 +685,7 @@ for (const engine of ['chromium', 'webkit']) {
           signal: ctx.signal,
           expectNavigation: 'main-frame',
           act: async ({ frame }) => {
-            await frame?.click('#toplink', { timeout: 2000 }).catch(() => {})
+            await frame?.click('#toplink', { timeout: 2000 })
           }
         })
         expect(read.pixelBefore).toBe(ARTIFACT_RGB)
@@ -758,7 +770,7 @@ for (const engine of ['chromium', 'webkit']) {
         const form = await open(browser(), {
           signal: ctx.signal,
           act: async ({ frame }) => {
-            await frame?.click('#submit', { timeout: 2000 }).catch(() => {})
+            await frame?.click('#submit', { timeout: 2000 })
           }
         })
         expect(form.pixelBefore).toBe(ARTIFACT_RGB)
@@ -766,7 +778,7 @@ for (const engine of ['chromium', 'webkit']) {
         const blank = await open(browser(), {
           signal: ctx.signal,
           act: async ({ frame }) => {
-            await frame?.click('#blanklink', { timeout: 2000 }).catch(() => {})
+            await frame?.click('#blanklink', { timeout: 2000 })
           }
         })
         expect(blank.pixelBefore).toBe(ARTIFACT_RGB)
