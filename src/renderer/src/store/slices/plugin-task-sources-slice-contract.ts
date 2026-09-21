@@ -25,6 +25,20 @@ export type PluginTaskSourceLoadError = {
   message: string
 }
 
+/** A preset the source declares in `status().filters`, rendered as a chip. */
+export type PluginTaskSourceFilter = {
+  id: string
+  label: string
+}
+
+/** What the user has narrowed the list to. Reset whenever the selected source
+ *  changes: a filter id is that source's own vocabulary and means nothing to
+ *  the next one. */
+export type PluginTaskSourceQuery = {
+  search: string | null
+  filterId: string | null
+}
+
 export type PluginTaskSourcesSlice = {
   /** Populated by `setPluginTaskSources` from the plugin list; this slice
    *  never fetches plugins itself — that stays owned by `usePluginPanelsStore`. */
@@ -33,9 +47,13 @@ export type PluginTaskSourcesSlice = {
   pluginTaskSourceItems: PluginTaskItem[]
   pluginTaskSourceLoading: boolean
   pluginTaskSourceError: PluginTaskSourceLoadError | null
+  pluginTaskSourceFilters: PluginTaskSourceFilter[]
+  pluginTaskSourceQuery: PluginTaskSourceQuery
 
   setPluginTaskSources: (sources: ContributedPluginTaskSource[]) => void
   selectPluginTaskSource: (selection: SelectedPluginTaskSource | null) => void
+  setPluginTaskSourceQuery: (query: PluginTaskSourceQuery) => void
+  loadPluginTaskSourceFilters: () => Promise<void>
   loadPluginTaskSourceItems: () => Promise<void>
 }
 

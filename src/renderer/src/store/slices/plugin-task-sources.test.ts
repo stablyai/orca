@@ -80,6 +80,84 @@ describe('createPluginTaskSourcesSlice', () => {
     })
   })
 
+  it('carries the active filter and search into the list request', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceQuery({ search: 'bar', filterId: 'open' })
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'listItems',
+      params: { scopeIds: [], search: 'bar', cursor: null, limit: 50, filterId: 'open' }
+    })
+  })
+
+  it('drops a response whose query the user has already replaced', async () => {
+    const store = createTestStore()
+    let resolveCall!: (value: unknown) => void
+    const invokeTaskSource = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveCall = resolve
+      })
+    )
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    const request = store.getState().loadPluginTaskSourceItems()
+    store.getState().setPluginTaskSourceQuery({ search: 'newer', filterId: null })
+
+    resolveCall({ ok: true, data: { items: [taskItem('stale')], nextCursor: null } })
+    await request
+
+    expect(store.getState().pluginTaskSourceItems).toEqual([])
+  })
+
+  it('reads declared filters off the status probe', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        connected: true,
+        accountLabel: 'Boards',
+        notice: null,
+        supports: {
+          comment: false,
+          transition: false,
+          assign: false,
+          editTitle: false,
+          editDescription: false
+        },
+        filters: [{ id: 'open', label: 'All open' }]
+      }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceFilters()
+
+    expect(store.getState().pluginTaskSourceFilters).toEqual([{ id: 'open', label: 'All open' }])
+  })
+
+  it('leaves the chip row empty when the status probe fails', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: false, code: 'unauthorized', message: 'token expired' })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceFilters()
+
+    expect(store.getState().pluginTaskSourceFilters).toEqual([])
+    expect(store.getState().pluginTaskSourceError).toBeNull()
+  })
+
   it('sets error and leaves items untouched on an ok: false envelope', async () => {
     const store = createTestStore()
     const invokeTaskSource = vi

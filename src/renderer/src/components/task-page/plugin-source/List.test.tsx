@@ -3,13 +3,21 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PluginTaskItem } from '../../../../../shared/plugins/plugin-task-source-contract'
+import type {
+  PluginTaskSourceFilter,
+  PluginTaskSourceLoadError,
+  PluginTaskSourceQuery
+} from '@/store/slices/plugin-task-sources-slice-contract'
 import { TaskPagePluginSourceList } from './List'
 
 afterEach(cleanup)
+
+const UNFILTERED: PluginTaskSourceQuery = { search: null, filterId: null }
 
 function taskItem(overrides: Partial<PluginTaskItem> = {}): PluginTaskItem {
   return {
@@ -25,84 +33,135 @@ function taskItem(overrides: Partial<PluginTaskItem> = {}): PluginTaskItem {
   }
 }
 
-describe('TaskPage contributed source list', () => {
-  it('renders key, title, state name and assignee for each item', () => {
-    render(
+function renderList(
+  props: {
+    items?: PluginTaskItem[]
+    loading?: boolean
+    error?: PluginTaskSourceLoadError | null
+    filters?: PluginTaskSourceFilter[]
+    query?: PluginTaskSourceQuery
+    onQueryChange?: (query: PluginTaskSourceQuery) => void
+    onUseItem?: (item: PluginTaskItem) => void
+  } = {}
+): ReturnType<typeof render> {
+  return render(
+    <TooltipProvider>
       <TaskPagePluginSourceList
         title="Boards"
-        items={[taskItem()]}
-        loading={false}
-        error={null}
-        onUseItem={vi.fn()}
+        items={props.items ?? []}
+        loading={props.loading ?? false}
+        error={props.error ?? null}
+        filters={props.filters ?? []}
+        query={props.query ?? UNFILTERED}
+        onQueryChange={props.onQueryChange ?? vi.fn()}
+        onUseItem={props.onUseItem ?? vi.fn()}
       />
-    )
+    </TooltipProvider>
+  )
+}
 
-    expect(screen.getByText('BOARD-7')).toBeInTheDocument()
-    expect(screen.getByText('Ship the source bar')).toBeInTheDocument()
-    expect(screen.getByText('In Progress')).toBeInTheDocument()
-    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
+describe('TaskPage contributed source table', () => {
+  it('renders the column header for every contributed field', () => {
+    renderList({ items: [taskItem()] })
+
+    for (const column of ['Key', 'Issue', 'Status', 'Priority', 'Assignee', 'Updated']) {
+      expect(screen.getByText(column)).toBeInTheDocument()
+    }
   })
 
-  it('shows the loading treatment before any item arrives', () => {
-    const { container } = render(
-      <TaskPagePluginSourceList
-        title="Boards"
-        items={[]}
-        loading={true}
-        error={null}
-        onUseItem={vi.fn()}
-      />
-    )
+  it('renders key, title, state, priority, labels and assignee for an item that has them', () => {
+    renderList({
+      items: [
+        taskItem({
+          priority: 'High',
+          labels: ['backend', 'urgent'],
+          updatedAt: new Date().toISOString()
+        })
+      ]
+    })
 
-    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0)
-    expect(screen.queryByText('No tasks found')).not.toBeInTheDocument()
+    expect(screen.getAllByText('BOARD-7').length).toBeGreaterThan(0)
+    expect(screen.getByText('Ship the source bar')).toBeInTheDocument()
+    expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0)
+    expect(screen.getByText('High')).toBeInTheDocument()
+    expect(screen.getByText('backend')).toBeInTheDocument()
+    expect(screen.getByText('urgent')).toBeInTheDocument()
+    expect(screen.getAllByText('Ada Lovelace').length).toBeGreaterThan(0)
+  })
+
+  it('degrades to an empty cell when the provider carries no priority or labels', () => {
+    renderList({ items: [taskItem({ priority: null })] })
+
+    expect(screen.getByRole('button', { name: 'BOARD-7 Ship the source bar' })).toBeInTheDocument()
+    expect(screen.queryByText('undefined')).not.toBeInTheDocument()
+    expect(screen.queryByText('null')).not.toBeInTheDocument()
+  })
+
+  it('groups rows by state with a count on each group', () => {
+    renderList({
+      items: [
+        taskItem({ id: 'a', key: 'BOARD-1' }),
+        taskItem({ id: 'b', key: 'BOARD-2' }),
+        taskItem({ id: 'c', key: 'BOARD-3', state: { name: 'To Do', category: 'todo' } })
+      ]
+    })
+
+    const inProgress = screen.getByRole('button', { name: /In Progress/ })
+    const todo = screen.getByRole('button', { name: /To Do/ })
+    expect(within(inProgress).getByText('2')).toBeInTheDocument()
+    expect(within(todo).getByText('1')).toBeInTheDocument()
+  })
+
+  it('collapses and re-expands a group', async () => {
+    const user = userEvent.setup()
+    renderList({ items: [taskItem({ id: 'a', key: 'BOARD-1' })] })
+
+    const group = screen.getByRole('button', { name: /In Progress/ })
+    expect(screen.getByRole('button', { name: 'BOARD-1 Ship the source bar' })).toBeInTheDocument()
+
+    await user.click(group)
+    expect(
+      screen.queryByRole('button', { name: 'BOARD-1 Ship the source bar' })
+    ).not.toBeInTheDocument()
+
+    await user.click(group)
+    expect(screen.getByRole('button', { name: 'BOARD-1 Ship the source bar' })).toBeInTheDocument()
   })
 
   it('renders the error message instead of an empty-list state', () => {
-    render(
-      <TaskPagePluginSourceList
-        title="Boards"
-        items={[]}
-        loading={false}
-        error={{ code: 'unauthorized', message: 'Board token expired.' }}
-        onUseItem={vi.fn()}
-      />
-    )
+    renderList({ error: { code: 'unauthorized', message: 'Board token expired.' } })
 
     expect(screen.getByRole('alert')).toHaveTextContent('Board token expired.')
     expect(screen.queryByText('No tasks found')).not.toBeInTheDocument()
   })
 
+  it('shows the loading treatment before any item arrives', () => {
+    const { container } = renderList({ loading: true })
+
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No tasks found')).not.toBeInTheDocument()
+  })
+
   it('reports an empty board only when the source succeeded', () => {
-    render(
-      <TaskPagePluginSourceList
-        title="Boards"
-        items={[]}
-        loading={false}
-        error={null}
-        onUseItem={vi.fn()}
-      />
-    )
+    renderList()
 
     expect(screen.getByText('No tasks found')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('seeds a task with the clicked item', async () => {
+  it('renders no chip row for a source that declares no filters', () => {
+    renderList({ items: [taskItem()] })
+
+    expect(screen.queryByRole('group', { name: 'Filters' })).not.toBeInTheDocument()
+  })
+
+  it('seeds a task with the clicked row', async () => {
     const user = userEvent.setup()
     const onUseItem = vi.fn()
     const item = taskItem({ id: 'item-2', key: 'BOARD-9' })
-    render(
-      <TaskPagePluginSourceList
-        title="Boards"
-        items={[taskItem(), item]}
-        loading={false}
-        error={null}
-        onUseItem={onUseItem}
-      />
-    )
+    renderList({ items: [taskItem(), item], onUseItem })
 
-    await user.click(screen.getByRole('button', { name: /BOARD-9/ }))
+    await user.click(screen.getByRole('button', { name: 'BOARD-9 Ship the source bar' }))
     expect(onUseItem).toHaveBeenCalledWith(item)
   })
 })
