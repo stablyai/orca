@@ -34,15 +34,12 @@ export async function untilAborted(wait, signal, describe) {
     }
   }
   void sample()
+  let report = null
   await Promise.race([
     wait,
     new Promise((resolve) => {
       if (!signal) {
         return
-      }
-      const report = () => {
-        console.error(`[html-preview-render] ${latest}`)
-        resolve()
       }
       if (signal.aborted) {
         // Silent: the case was already over when this wait began, so it has nothing of its own to
@@ -50,10 +47,19 @@ export async function untilAborted(wait, signal, describe) {
         resolve()
         return
       }
+      report = () => {
+        console.error(`[html-preview-render] ${latest}`)
+        resolve()
+      }
       signal.addEventListener('abort', report, { once: true })
     })
   ]).catch(() => {})
   sampling = false
+  // Dropped on the way out, so the wait that hung is the only one that speaks: a listener left by a
+  // wait that resolved prints its own stale reading at a later wait's timeout.
+  if (report) {
+    signal?.removeEventListener('abort', report)
+  }
 }
 
 /**
@@ -71,6 +77,13 @@ export async function untilAborted(wait, signal, describe) {
  * cross frames, so the top document's array says nothing about what the frame refused -- and the
  * page's init script installs the same collector in every frame, measured on both engines, so each
  * frame has its own array to report.
+ *
+ * `utilityWorld` is the fourth reading, and it is the one the readings above cannot give. Everything
+ * else here is an evaluate, which needs only a frame's main context; a selector wait needs the
+ * injected script in Chromium's isolated world, created per document by a command whose failure the
+ * driver swallows. Three cases once spent their whole timeout in such a wait while an evaluate in
+ * the same frame answered, so the probe is bounded and reported rather than left to be inferred
+ * again. `unavailable` here and a main-world reading beside it is that split, measured.
  */
 export async function describePreviewFrame(page, frame, browserVersion) {
   const host = await page
@@ -99,12 +112,24 @@ export async function describePreviewFrame(page, frame, browserVersion) {
         readyState: document.readyState,
         bodyChars: document.body?.innerHTML.length ?? null,
         marker: document.getElementById('marker') !== null,
-        ran: window.__ran ?? null,
+        ran: document.documentElement.dataset.ran ?? null,
+        // The order the collector's own reach depends on: when the page's init script ran here and
+        // when the artifact's script did. A listener installed after the parser reached the inline
+        // script can only report what came later.
+        initAt: window.__initAt ?? null,
+        artifactAt: document.documentElement.dataset.artifactAt ?? null,
         violations: window.__violations ?? 'absent'
       }))
       .catch((error) => `evaluate refused: ${String(error).split('\n')[0]}`)
+    // Bounded, and the only wait in the diagnosis: a frame whose isolated world never arrives would
+    // otherwise hold the reading open for as long as the wait it is explaining.
+    const utilityWorld = await one
+      .locator('html')
+      .waitFor({ state: 'attached', timeout: 2000 })
+      .then(() => 'resolved')
+      .catch((error) => `unavailable: ${String(error).split('\n')[0]}`)
     frames.push(
-      `${JSON.stringify(one.url())} name ${JSON.stringify(one.name())} ${JSON.stringify(reading)}`
+      `${JSON.stringify(one.url())} name ${JSON.stringify(one.name())} utilityWorld ${JSON.stringify(utilityWorld)} ${JSON.stringify(reading)}`
     )
   }
   return [

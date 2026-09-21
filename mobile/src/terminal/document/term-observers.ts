@@ -1,22 +1,26 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { updateScrollIndicator } from './viewport-transform'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
 
-export function attachTermObservers() {
+export function attachTermObservers(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
-  disposeTermObservers()
+  disposeTermObservers(scope)
   try {
-    scope.termObserverDisposables.push(scope.term.onLineFeed!(logFeedAndEvict))
+    scope.termObserverDisposables.push(
+      scope.term.onLineFeed!(function () {
+        logFeedAndEvict(scope)
+      })
+    )
   } catch {}
   try {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
-        updateScrollIndicator(false)
+        updateScrollIndicator(scope, false)
       })
     )
   } catch {}
@@ -26,15 +30,15 @@ export function attachTermObservers() {
     if (scope.term.onWriteParsed) {
       scope.termObserverDisposables.push(
         scope.term.onWriteParsed(function () {
-          emitModesIfChanged()
-          emitKeyboardAvoidanceMetrics()
+          emitModesIfChanged(scope)
+          emitKeyboardAvoidanceMetrics(scope)
         })
       )
     }
   } catch {}
   // Initial emit once buffer settles.
-  afterWritesDrained(function () {
-    emitModesIfChanged()
-    emitKeyboardAvoidanceMetrics()
+  afterWritesDrained(scope, function () {
+    emitModesIfChanged(scope)
+    emitKeyboardAvoidanceMetrics(scope)
   })
 }

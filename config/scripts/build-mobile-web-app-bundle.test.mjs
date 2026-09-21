@@ -11,15 +11,13 @@ import {
   entryStaticClosure,
   mobileWebAppBuildOptions,
   renameOutputsByContent,
-  resolveMobileWebPageRoutes,
   routeChunkNames
 } from './build-mobile-web-app-bundle.mjs'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
   ROUTE_SOURCE_LOADERS,
   collectMobileWebAppRouteKeys,
-  collectMobileWebAppRoutes,
-  routePathnameFromKey
+  collectMobileWebAppRoutes
 } from './mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
@@ -36,7 +34,6 @@ import {
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
 import {
-  computeMobileWebBundleBuildId,
   hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
@@ -71,77 +68,6 @@ async function withScratch(run) {
     await rm(scratch, { recursive: true, force: true })
   }
 }
-
-/**
- * Every page route this bundle declares, written out rather than read from the source that
- * produces it: the point is to pin the list, and comparing the manifest to its own input would
- * pass whatever that input became. Shared by the two assertions below, which is also what keeps
- * this file under the 600-line cap.
- */
-const EXPECTED_PAGE_ROUTES = [
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
-  {
-    pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'haptics']
-  },
-  {
-    pathname: '/h/[hostId]/tasks',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
-  },
-  {
-    pathname: '/h/[hostId]/files/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
-  },
-  {
-    pathname: '/h/[hostId]/files/preview/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
-  }
-]
-
-describe('the page routes the manifest declares', () => {
-  it('turns a route key into the URL pattern expo-router gives it', () => {
-    expect(routePathnameFromKey('./h/[hostId]/index.tsx')).toBe('/h/[hostId]')
-    expect(routePathnameFromKey('./h/[hostId]/tasks.tsx')).toBe('/h/[hostId]/tasks')
-    expect(routePathnameFromKey('./h/[hostId]/session/[worktreeId].tsx')).toBe(
-      '/h/[hostId]/session/[worktreeId]'
-    )
-  })
-
-  it('answers null for a layout, which is not a screen anyone navigates to', () => {
-    expect(routePathnameFromKey('./h/_layout.tsx')).toBeNull()
-    expect(routePathnameFromKey('./h/[hostId]/_layout.tsx')).toBeNull()
-  })
-
-  it('declares only routes the bundle has a module for', async () => {
-    const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(resolveMobileWebPageRoutes(keys)).toEqual(EXPECTED_PAGE_ROUTES)
-  })
-
-  it('fails the build on a declaration the bundle cannot render', () => {
-    // The mismatch reaches a phone as a route the shell opens the page for and the page then
-    // paints as Unmatched. This is the only place whoever wrote the declaration can see it.
-    expect(() =>
-      resolveMobileWebPageRoutes(
-        ['./h/[hostId]/index.tsx'],
-        [{ pathname: '/h/[hostId]/gone', grants: [] }]
-      )
-    ).toThrow('has no module in the bundle')
-  })
-
-  itBundling(
-    'reaches the built manifest, where the build id does not move for it',
-    async () => {
-      await withScratch(async (scratch) => {
-        const { manifest } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
-        expect(manifest.routes).toEqual(EXPECTED_PAGE_ROUTES)
-        // The routes are derived from the same tree the script is built from, so the assets
-        // already decide them and the id has no reason to carry them as well.
-        expect(manifest.buildId).toBe(computeMobileWebBundleBuildId(manifest.assets))
-      })
-    },
-    240_000
-  )
-})
 
 describe('the CRLF pin', () => {
   it('exempts the same extensions in .gitattributes as the CRLF scan skips', async () => {

@@ -13,16 +13,16 @@ import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
  * line of this module doing the thing no happy path reaches — a dispose while a surface swap is
  * open, a start that throws, and the component's report of that throw.
  *
- * The document is the real generated factory. Only its *arrival* is a seam here, so a start can be
- * made to throw without a stub standing in for the program under test.
+ * The document is the real factory, hand-written since ruling 25. Only its *arrival* is a seam
+ * here, so a start can be made to throw without a stub standing in for the program under test.
  */
 /** Set for the length of one case; the factory throws it instead of building a document. */
 let startThrows: Error | null = null
 
-vi.mock('./terminal-webview-document-factory.generated', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('./terminal-webview-document-factory.generated')>()
+vi.mock('./document/create-terminal-document', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./document/create-terminal-document')>()
   return {
+    ...actual,
     createTerminalDocument: (host: Parameters<typeof actual.createTerminalDocument>[0]) => {
       if (startThrows) {
         throw startThrows
@@ -41,7 +41,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ RefreshCw: 'Icon' }))
 
-const { createTerminalDocument } = await import('./terminal-webview-document-factory.generated')
+const { createTerminalDocument } = await import('./document/create-terminal-document')
 const { mountTerminalWebDocument } = await import('./terminal-web-document-mount')
 const { TerminalWebView } = await import('./TerminalWebView.web')
 
@@ -140,6 +140,36 @@ describe('a stopped document takes its engines with it', () => {
     // `scope.term` and `scope.committedTerm` are the same object here, which is what the set
     // deduplicates: a plain pair of calls would dispose it twice.
     expect(engines[0].disposals()).toBe(1)
+  })
+})
+
+describe('the page keeps its own capture buffer', () => {
+  it('quotes the lines this document captured, and a second mount has none of them', () => {
+    // The buffer is written by the document's own reporter: `startHostNotify` installs it through
+    // `installErrorReporter`, which on the page is a `window` error listener, and every error it
+    // forwards is appended before the report that quotes it. What the page has no use for is the
+    // WebView's head script, which captures what fails before any document exists.
+    const host = plantHost()
+    const posted: Array<Record<string, unknown>> = []
+    const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
+
+    window.dispatchEvent(new ErrorEvent('error', { message: 'first failure' }))
+    window.dispatchEvent(new ErrorEvent('error', { message: 'second failure' }))
+
+    const messages = posted.filter((message) => message.type === 'error').map((m) => m.message)
+    expect(messages[0]).toContain('captured: first failure')
+    expect(messages[1]).toContain('captured: first failure | second failure')
+
+    // A second mount is a second buffer: the first document's lines are not the second's to quote.
+    mounted.dispose()
+    const nextHost = plantHost()
+    const nextPosted: Array<Record<string, unknown>> = []
+    const next = mountTerminalWebDocument(nextHost, (message) => nextPosted.push(message))
+    window.dispatchEvent(new ErrorEvent('error', { message: 'third failure' }))
+    const nextMessages = nextPosted.filter((m) => m.type === 'error').map((m) => m.message)
+    expect(nextMessages[0]).toContain('captured: third failure')
+    expect(nextMessages[0]).not.toContain('first failure')
+    next.dispose()
   })
 })
 

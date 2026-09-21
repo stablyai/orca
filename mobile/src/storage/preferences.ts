@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { noteMirroredWrite } from './mirrored-storage-keys'
+import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 
 const PINS_PREFIX = 'orca:pins:'
 // Consent to the push service is separate from the old socket notification choice.
@@ -71,14 +72,9 @@ export async function saveRemotePushHostRegistrations(
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
-// Why: the mobile terminal fits the desktop's full column count to the phone
-// width with a CSS scale, so xterm's raw fontSize is cancelled out and can't
-// drive apparent size. Instead we persist a baseline zoom multiplier ("text
-// size") that the WebView applies on top of the fit. Discrete presets keep the
-// settings picker simple and bound the value to ones the zoom logic handles;
-// pinch-to-zoom in the terminal snaps to these same presets. Sub-1 steps shrink
-// below fit-to-width (more columns visible with side margins).
-export const TERMINAL_TEXT_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+// Declared beside the terminal that applies them, because the document is bundled for the WebView
+// and must not reach this module's storage import; re-exported here for the settings screen.
+export { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 const DEFAULT_TEXT_SCALE = 1
 
 export async function loadTerminalTextScale(): Promise<number> {

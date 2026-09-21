@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { TerminalDocumentScope } from './document-scope'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
+import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
+import { handleMsg } from './host-message-router'
+import { notify } from './host-notify'
+import { flog } from './viewport-transform'
+import { attachWebglAddon } from './webgl-recovery'
+import type { TerminalDocumentHost } from './document-host-seams'
 
 /**
  * The eight host seams the page sets, and the window reads and writes they default to.
@@ -25,31 +31,37 @@ const SURFACE_MARKUP =
   '<button id="sel-menu-copy"></button><button id="sel-menu-all"></button></div></div>' +
   '<div id="scroll-indicator"><div id="scroll-thumb"></div></div>'
 
-// Imported after the markup exists: ruling 20 leaves the module bodies inert, but the start
-// sequence below reads the elements as the document does, and it has to find them.
-let createTerminalDocumentScope: () => TerminalDocumentScope
-let scope: TerminalDocumentScope
-let handleMsg: typeof import('./host-message-router').handleMsg
-let notify: typeof import('./host-notify').notify
-let flog: typeof import('./viewport-transform').flog
-let attachWebglAddon: typeof import('./webgl-recovery').attachWebglAddon
+/**
+ * Every document a case started, so `afterEach` can stop them.
+ *
+ * A start installs six listeners on `document` and `window` — the dispatcher's four capture-phase
+ * touch handlers, the fit's resize and the recovery's visibilitychange — and they are page-wide by
+ * nature, so a document nobody stopped keeps answering events in the next case with a scope that
+ * case knows nothing about, and calls that case's host hooks.
+ */
+const startedScopes: TerminalDocumentScope[] = []
 
-beforeAll(async () => {
+/**
+ * A started document over a scope the case owns, with the hooks it wants as the host argument.
+ *
+ * The whole sequence, not a hand-picked subset: the elements `surface-swap`, `text-scaling` and
+ * `selection-state-and-eviction` read are read in the one order both hosts run them in, and a
+ * module added to that sequence is covered here without this file being edited.
+ */
+function startedScope(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   document.body.innerHTML = SURFACE_MARKUP
-  // The generator's own sequence, rather than a hand-picked subset: the elements
-  // `runtime-constants`, `surface-swap` and `selection-state-and-eviction` take are read in the one
-  // order both hosts run them in, and a module added to that order is covered here without this
-  // file being edited.
-  const support = await import('./generated-document-region.test-support')
-  await support.startDocumentModulesOverTheSharedScope()
-  const documentScope = await import('./document-scope')
-  createTerminalDocumentScope = documentScope.createTerminalDocumentScope
-  scope = documentScope.scope
-  ;({ handleMsg } = await import('./host-message-router'))
-  ;({ notify } = await import('./host-notify'))
-  ;({ flog } = await import('./viewport-transform'))
-  ;({ attachWebglAddon } = await import('./webgl-recovery'))
-})
+  // The two the sequence itself would otherwise answer with the window: a transport that installs
+  // nothing, because these cases are not the shell's, and an engine that is here, because a case
+  // that has not stubbed `window.Terminal` is not testing readiness.
+  const scope = createTerminalDocumentScope({
+    installHostTransport: () => () => {},
+    hasEngine: () => true,
+    ...host
+  })
+  startTerminalDocument(scope)
+  startedScopes.push(scope)
+  return scope
+}
 
 function terminalDouble() {
   const loaded: unknown[] = []
@@ -58,7 +70,16 @@ function terminalDouble() {
     cols: 80,
     rows: 24,
     options: { theme: {}, minimumContrastRatio: 3, fontSize: 13 },
-    buffer: { active: { baseY: 0, viewportY: 0, cursorY: 0, length: 1, type: 'normal' } },
+    buffer: {
+      active: {
+        baseY: 0,
+        viewportY: 0,
+        cursorY: 0,
+        length: 1,
+        type: 'normal',
+        getLine: () => undefined
+      }
+    },
     get element() {
       return opened
     },
@@ -91,21 +112,12 @@ function terminalDouble() {
   return terminal
 }
 
-/** Restores every field a case assigns, so one of them cannot leave the singleton scope moved. */
-function withSeams(seams: Partial<TerminalDocumentScope>, run: () => void) {
-  const previous: Record<string, unknown> = {}
-  for (const key of Object.keys(seams)) {
-    previous[key] = Object.getOwnPropertyDescriptor(scope, key)?.value
-  }
-  Object.assign(scope, seams)
-  try {
-    run()
-  } finally {
-    Object.assign(scope, previous)
-  }
-}
-
 afterEach(() => {
+  // Before the globals go back: a stop reads the scope's own seams, and one of them is a window
+  // read a case may have stubbed.
+  while (startedScopes.length > 0) {
+    stopTerminalDocument(startedScopes.pop()!)
+  }
   vi.unstubAllGlobals()
 })
 
@@ -190,10 +202,13 @@ describe('the document host seams, once the page sets them', () => {
     const postMessage = vi.fn<(data: string) => void>()
     vi.stubGlobal('ReactNativeWebView', { postMessage })
     const posted: Record<string, unknown>[] = []
-    withSeams({ postToHost: (message) => posted.push(message) }, () => {
-      notify({ type: 'pong', pingId: 7 })
-      flog('probe', { n: 1 })
-    })
+    const scope = startedScope({ postToHost: (message) => posted.push(message) })
+    // The sequence's own `web-ready` is the document reporting itself started; what this case reads
+    // is what the two notify paths send afterwards.
+    expect(posted).toEqual([{ type: 'web-ready' }])
+    posted.length = 0
+    notify(scope, { type: 'pong', pingId: 7 })
+    flog(scope, 'probe', { n: 1 })
     expect(posted).toEqual([
       { type: 'pong', pingId: 7 },
       { type: 'log', tag: '[fit]probe', payload: { n: 1 } }
@@ -208,29 +223,24 @@ describe('the document host seams, once the page sets them', () => {
     const unicodeAddon = { dispose() {} }
     const webglAddon = { dispose() {} }
     const posted: Record<string, unknown>[] = []
-    withSeams(
-      {
-        createTerminal: (created) => {
-          options.push(created)
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member `init` reaches; the calls below are what check it.
-          return terminal as unknown as ReturnType<typeof scope.createTerminal>
-        },
-        createUnicode11Addon: () => unicodeAddon,
-        createWebglAddon: () => webglAddon,
-        postToHost: (message) => posted.push(message)
+    const scope = startedScope({
+      createTerminal: (created) => {
+        options.push(created)
+        return terminal
       },
-      () => {
-        handleMsg({ type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
-        expect(options).toHaveLength(1)
-        expect(options[0]!.cols).toBe(80)
-        expect(terminal.loaded).toContain(webglAddon)
-        expect(terminal.loaded).toContain(unicodeAddon)
-        expect(terminal.unicode.activeVersion).toBe('11')
-        // The other direction: a document-side report reaches the page's sink, not the bridge.
-        handleMsg({ type: 'ping', id: 3 })
-        expect(posted).toContainEqual({ type: 'pong', pingId: 3 })
-      }
-    )
+      createUnicode11Addon: () => unicodeAddon,
+      createWebglAddon: () => webglAddon,
+      postToHost: (message) => posted.push(message)
+    })
+    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+    expect(options).toHaveLength(1)
+    expect(options[0]!.cols).toBe(80)
+    expect(terminal.loaded).toContain(webglAddon)
+    expect(terminal.loaded).toContain(unicodeAddon)
+    expect(terminal.unicode.activeVersion).toBe('11')
+    // The other direction: a document-side report reaches the page's sink, not the bridge.
+    handleMsg(scope, { type: 'ping', id: 3 })
+    expect(posted).toContainEqual({ type: 'pong', pingId: 3 })
   })
 
   it('leaves window.onerror alone when the host installs the reporter its own way', () => {
@@ -256,8 +266,6 @@ describe('the document host seams, once the page sets them', () => {
   })
 
   it('reports no webgl addon as a DOM-renderer fallback rather than as a failure', () => {
-    withSeams({ createWebglAddon: () => null }, () => {
-      expect(attachWebglAddon(true)).toBe(false)
-    })
+    expect(attachWebglAddon(startedScope({ createWebglAddon: () => null }), true)).toBe(false)
   })
 })

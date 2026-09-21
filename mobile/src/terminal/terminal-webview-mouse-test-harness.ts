@@ -1,6 +1,6 @@
 import { runInThisContext } from 'node:vm'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import { generatedDocumentProgram } from './document/generated-document-region.test-support'
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { XTERM_HTML } from './terminal-webview-html'
 
 function bodyMarkup(): string {
@@ -152,7 +152,7 @@ export function useTerminalMouseWebViewHarness() {
 
   function boot(): void {
     document.body.innerHTML = bodyMarkup()
-    runInThisContext(generatedDocumentProgram())
+    runInThisContext(TERMINAL_DOCUMENT_SCRIPT)
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })

@@ -557,6 +557,10 @@ jobs:
           if test "${ENTRY_ADMISSION}" = migration-only; then
             jq -e '.changed == false' <<< "${ISOLATE_RESULT}" >/dev/null
           fi
+          # The director re-places hosts off a cell only when the isolate stamped it, so a
+          # script too old to ask for the stamp produces today's behaviour and the canary
+          # reads as "the fix did nothing" with nothing to tell that from a wrong premise.
+          jq -e '.rollIsolated == true' <<< "${ISOLATE_RESULT}" >/dev/null
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
@@ -907,6 +911,9 @@ jobs:
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
+          # Same reason as the isolate step above: a failed wave leaves this cell isolated
+          # deliberately, and the stamp is what lets its hosts leave.
+          jq -e '.rollIsolated == true' <<< "${ISOLATE_RESULT}" >/dev/null
           # The isolate result carries the authoritative post-isolate generation;
           # fixed offsets are wrong whenever an earlier isolate was a no-op.
           FAILSAFE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"

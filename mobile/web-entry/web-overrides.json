@@ -70,6 +70,14 @@
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
+      "file": "app/h/[hostId]/source-control/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for the source-control hub, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. The tab, name and origin params are parsed here exactly as the native sibling parses them, because the page reads them back out of its own URL the way the native screen reads them out of the router."
+    },
+    {
+      "file": "app/h/[hostId]/review/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for diff review, for the same reason as the source-control hub beside it: no nested shell, and a native file that reaches requireNativeViewManager at import. Shorter than its siblings because the route body is MobileDiffReviewRouteScreen, which reads its own params — the native file had to extract that anyway so the review controller does not subscribe behind the page."
+    },
+    {
       "file": "src/browser/browser-frame-layer-paint.web.ts",
       "reason": "setNativeProps does not exist on React Native Web: an Image or View ref is the DOM node itself, so both native writes throw rather than paint and the pane never shows a frame. This file writes the same two things through the element — the frame as a background-image on the child RN Web sizes, the double buffer as one opacity write per layer — so the pane still never re-renders while it streams. It also answers whenBrowserFrameDisplayable, which is a no-op natively: a background write fires no load event, so the flip to the pending layer is armed from an image decode instead of the Image's onLoad."
     },

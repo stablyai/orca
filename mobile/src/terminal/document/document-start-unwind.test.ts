@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { createTerminalDocument } from '../terminal-webview-document-factory.generated'
+import { createTerminalDocument } from './create-terminal-document'
 
 /**
  * A start sequence that throws leaves nothing of itself behind.

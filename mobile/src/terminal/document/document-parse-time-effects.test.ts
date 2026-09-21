@@ -1,11 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { parseSync } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
-import {
-  TERMINAL_DOCUMENT_HOST_SEAMS_MODULE,
-  TERMINAL_DOCUMENT_MODULE_ORDER,
-  TERMINAL_DOCUMENT_SCOPE_MODULE
-} from '../../../scripts/terminal-document-module-order.mjs'
 
 /**
  * Rulings 20 and 21: no module in the document does work as it is parsed, and none owns state.
@@ -28,20 +23,23 @@ import {
  * would run at the position its module is emitted rather than in the start sequence, so no stop
  * would undo it and every call would leak another one.
  */
-const EMITTED = [
-  TERMINAL_DOCUMENT_HOST_SEAMS_MODULE,
-  TERMINAL_DOCUMENT_SCOPE_MODULE,
-  ...TERMINAL_DOCUMENT_MODULE_ORDER
-]
-
 /**
- * The one module that does build something as it is parsed: the scope object every other module
- * reads. It has to exist before any of them, and on the page it is one object for the life of the
- * tab — which is safe precisely because the rule below holds for everything else. Each start
- * function writes every field it owns, so a remount resets the scope rather than inheriting it.
- * Its parse-time work touches no element, which is asserted rather than asserted-in-prose.
+ * Every module of the document, read from the directory.
+ *
+ * From the directory rather than from a list: the bundler walks imports from the entry, so there is
+ * no order to pin any more, and a module that this census cannot see is a module the rule does not
+ * cover. The entry itself is the one file allowed a statement at its top level — it is the call.
  */
-const BUILDS_THE_SCOPE = TERMINAL_DOCUMENT_SCOPE_MODULE
+const ENTRY = 'native-document-entry'
+
+/** The sequence that calls the starts, which is not a module with a start of its own. */
+const THE_SEQUENCE = 'create-terminal-document'
+
+const MODULES = readdirSync(new URL('.', import.meta.url))
+  .filter((name) => name.endsWith('.ts') && !name.includes('.test'))
+  .map((name) => name.replace(/\.ts$/, ''))
+  .filter((name) => name !== ENTRY)
+  .sort()
 
 /** Statement kinds that only declare. Anything else at the top level is work. */
 const DECLARATION_KINDS = new Set([
@@ -159,27 +157,67 @@ function parseTimeEffectsIn(name: string, source: string): string[] {
   return effects
 }
 
+/**
+ * The names one function of the sequence calls, in the order it calls them.
+ *
+ * Read from the tree rather than the text, because the order is the thing being asserted and a
+ * regex over the file would also match the sequence's own name in `startTerminalDocument`'s catch —
+ * which is the unwind, not a module's start.
+ */
+function sequenceCalls(functionName: string): string[] {
+  const { program } = parseSync(`${THE_SEQUENCE}.ts`, moduleSource(THE_SEQUENCE), { lang: 'ts' })
+  const declaration = program.body
+    .map((statement) =>
+      statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement
+    )
+    .find(
+      (node) =>
+        node?.type === 'FunctionDeclaration' &&
+        stringField(field(node, 'id'), 'name') === functionName
+    )
+  const called: string[] = []
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk)
+      return
+    }
+    if (stringField(node, 'type') === 'CallExpression') {
+      const name = stringField(field(node, 'callee'), 'name')
+      if (name !== '' && name !== 'startTerminalDocument' && name !== 'stopTerminalDocument') {
+        called.push(name)
+      }
+    }
+    fieldsOf(node).forEach(([key, value]) => {
+      if (key !== 'type') {
+        walk(value)
+      }
+    })
+  }
+  walk(declaration)
+  return called
+}
+
 describe('the document modules at parse time', () => {
   it('do no work: every effect is in a start function the hosts call', () => {
-    const modules = EMITTED.filter((name) => name !== BUILDS_THE_SCOPE)
-    expect(modules).toContain('runtime-constants')
-    expect(modules.flatMap(parseTimeEffects)).toEqual([])
+    // Every module, with no exception left: the scope is built by a call now, and the constants the
+    // modules own are declarations rather than the substituted literals a generator wrote.
+    expect(MODULES.length).toBeGreaterThan(30)
+    expect(MODULES.flatMap(parseTimeEffects)).toEqual([])
   })
 
-  it('build the scope, and only the scope, before the rest of them', () => {
-    // The exception, measured. It is one module, it is the one the order list already names as
-    // the scope, and nothing it does at parse time reaches an element — so a remount inherits an
-    // object of fields, never a stale node.
-    expect(parseTimeEffects(BUILDS_THE_SCOPE).length).toBeGreaterThan(0)
-    const source = moduleSource(BUILDS_THE_SCOPE)
-    const { program } = parseSync(`${BUILDS_THE_SCOPE}.ts`, source, { lang: 'ts' })
-    const topLevel = program.body.filter(
-      (statement) =>
-        statement.type === 'VariableDeclaration' ||
-        (statement.type === 'ExportNamedDeclaration' &&
-          statement.declaration?.type === 'VariableDeclaration')
-    )
-    expect(topLevel.some(readsTheDocument)).toBe(false)
+  it('declare nothing that reaches an element', () => {
+    // The stricter half, and the one the remount defect was: a declaration whose initialiser reads
+    // an element is work by effect whatever its shape, so the same reader runs over every module.
+    for (const name of MODULES) {
+      const { program } = parseSync(`${name}.ts`, moduleSource(name), { lang: 'ts' })
+      const topLevel = program.body.filter(
+        (statement) =>
+          statement.type === 'VariableDeclaration' ||
+          (statement.type === 'ExportNamedDeclaration' &&
+            statement.declaration?.type === 'VariableDeclaration')
+      )
+      expect({ name, reaches: topLevel.some(readsTheDocument) }).toEqual({ name, reaches: false })
+    }
   })
 
   it('would report a planted element read, which the statement filter cannot see', () => {
@@ -193,6 +231,9 @@ describe('the document modules at parse time', () => {
     expect(parseTimeEffectsIn('planted', planted)).toEqual([
       "planted: indicator = document.getElementById('scroll-indicator')"
     ])
+    // And the element reader the case above spends on every module: the same plant, seen by it.
+    const { program } = parseSync('planted.ts', planted, { lang: 'ts' })
+    expect(program.body.some(readsTheDocument)).toBe(true)
     // And the other direction, because a reader that flagged every initialiser would agree with
     // the empty list above only by refusing everything: a plain literal is not work.
     const inert =
@@ -215,16 +256,56 @@ describe('the document modules at parse time', () => {
     expect(running.length).toBeGreaterThan(0)
   })
 
-  it('still start and stop: the functions holding what was moved out are exported', () => {
-    // The other half. Moving an effect out is only correct if something calls it, and the caller
-    // is the generator's own sequence, derived from these names by convention rather than listed;
-    // this holds the shape of the names so that derivation keeps working.
-    const declaring = (keyword: string) =>
-      EMITTED.filter((name) =>
-        new RegExp(`^export function ${keyword}[A-Za-z]+\\(\\) \\{$`, 'm').test(moduleSource(name))
+  it('start and stop: the sequence calls every one there is, and undoes them in reverse', () => {
+    // Moving an effect out is only correct if something calls it, and a count cannot say that: a
+    // module could export a start nobody runs and the count would agree as soon as the literal
+    // moved with it. So the two sets are compared by name.
+    //
+    // `stopEdgeScroll` is the one exported stop the sequence does not call, and it is not a
+    // lifecycle undo: it is the overlay's own, for a drag that is over. The sequence reaches it
+    // through `stopSelectionOverlay`, which is asserted here rather than waved through.
+    const exported = (keyword: 'start' | 'stop') =>
+      MODULES.filter((name) => name !== THE_SEQUENCE).flatMap((name) =>
+        [
+          ...moduleSource(name).matchAll(
+            new RegExp(
+              `^export function (${keyword}[A-Za-z]+)\\(scope: TerminalDocumentScope\\) \\{$`,
+              'gm'
+            )
+          )
+        ].map((match) => match[1]!)
       )
-    expect(declaring('start').length).toBe(11)
-    // Ruling 21: a module that schedules a frame, a timer or a retry owes an undo for it.
-    expect(declaring('stop').length).toBe(10)
+    expect(moduleSource('selection-overlay')).toContain(
+      'export function stopSelectionOverlay(scope: TerminalDocumentScope) {\n  stopEdgeScroll(scope)'
+    )
+
+    const started = sequenceCalls('startTerminalDocument')
+    // `cancelDocumentFrames` is the frame registry's undo rather than a module's stop, and it is
+    // asserted below by its position: last, after every stop that might still hold a frame.
+    const stopped = sequenceCalls('stopTerminalDocument').filter(
+      (name) => name !== 'cancelDocumentFrames'
+    )
+    expect([...started].sort()).toEqual(exported('start').sort())
+    expect([...stopped].sort()).toEqual(
+      exported('stop')
+        .filter((name) => name !== 'stopEdgeScroll')
+        .sort()
+    )
+
+    // Ruling 21: nothing is torn down under something still using it. Every module with both is
+    // stopped in the reverse of the order it was started in, and the frames go last of all.
+    const paired = started.filter((name) => stopped.includes(name.replace(/^start/, 'stop')))
+    expect(paired.map((name) => name.replace(/^start/, 'stop'))).toEqual(
+      stopped.filter((name) => paired.includes(name.replace(/^stop/, 'start'))).toReversed()
+    )
+    expect(sequenceCalls('stopTerminalDocument').at(-1)).toBe('cancelDocumentFrames')
+  })
+
+  it('would name a start the sequence forgot, which is what the comparison above is for', () => {
+    // The precondition, planted rather than argued: a module that exports a start nobody calls is
+    // the failure the set comparison exists to catch, and the reader has to say its name.
+    const planted = sequenceCalls('startTerminalDocument')
+    expect(planted).not.toContain('startReflow')
+    expect([...planted, 'startReflow'].sort()).not.toEqual(planted.slice().sort())
   })
 })

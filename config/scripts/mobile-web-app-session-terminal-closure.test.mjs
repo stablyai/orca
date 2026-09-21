@@ -17,16 +17,22 @@ import {
  * the terminal is by far the largest thing in it. Measured here so the trade is a number rather
  * than a claim, and so that a later change cannot quietly put the engine string back.
  *
- * Re-anchored on the merge of main at 5d13a70ea3 and re-measured there. The reading has been
- * re-taken at each merge rather than adjusted, because the arithmetic keeps not working: main has
- * re-pinned this count three times for modules that arrived from three other PRs, and a number
- * carried forward would have been wrong about every one of them.
+ * Re-anchored on main at 4a3a32206d, the squash that landed C7.5b, and re-measured there. The
+ * reading has been re-taken at each merge rather than adjusted, because the arithmetic keeps not
+ * working: main has re-pinned this count three times for modules that arrived from three other PRs,
+ * and a number carried forward would have been wrong about every one of them.
  *
- *   modules        4326 -> 4286   (-40)
- *   local modules   976 ->  936   (-40)
+ *   modules        4286 -> 4328   (+42)
+ *   local modules   936 ->  978   (+42)
  *
- * The -40 is the only part of this that is the lane's, and it has not moved across those three
- * re-pins. What moved is the base.
+ * The +42 is this lane's, and it is 43 modules in and one out. Out:
+ * `terminal-webview-document-factory.generated.ts`, the one emitted file C7.5b's page imported,
+ * which carried the whole document. In: the document's 39 source modules the page imports directly
+ * under ruling 25, the three page modules their tap group reaches — `terminal-webview-url-tap`,
+ * `terminal-path-tap` and `terminal-file-url-tap` — which the generator used to substitute as
+ * literals, and `terminal-text-scales`, the leaf the presets moved to so the WebView's own bundle
+ * cannot reach `storage/preferences` and the AsyncStorage import behind it. Nothing generated is in
+ * this reading now: the phone's script is built from these same modules and is not imported here.
  *
  * The three modules the base gained, none of them this branch's and all of them in its 4286 by
  * main's own route:
@@ -55,9 +61,15 @@ import {
  * `metafile.inputs` and returns no byte total, so a figure produced here would be a different
  * computation rather than a newer reading of that one.
  *
+ * The bytes fall because threading the scope deletes a closure: every function names its state as a
+ * parameter, and a parameter minifies to one character where a shared module-level object could not.
+ * Folding the seventeen never-written fields out of that object takes the rest: a constant read
+ * through `scope.X` is a property access the minifier must keep, and the same constant as a module
+ * `const` is inlined.
+ *
  * What moved is which files carry the document, not whether the page carries it. C7.5 put the
- * document's own source modules in this closure and started them per mount; ruling 23 gives the
- * page the factory the WebView's script is generated from, so the same program arrives as one
+ * document's own source modules in this closure and started them per mount; ruling 23 gave the
+ * page the factory the WebView's script was generated from, so the same program arrived as one
  * emitted file and its 41 inputs leave. The bytes barely move because it is the same program: what
  * goes is the import and export plumbing between the modules, and what the generator substitutes.
  *
@@ -121,7 +133,6 @@ const SHED = [
 /** The component, its mount, the stylesheet and the markup, and the modules the splits made. */
 const GAINED_OUTSIDE_THE_DOCUMENT = [
   'src/terminal/TerminalWebView.web.tsx',
-  'src/terminal/terminal-webview-document-factory.generated.ts',
   'src/terminal/terminal-web-document-mount.ts',
   'src/terminal/terminal-webview-engine-css.generated.ts',
   'src/terminal/terminal-webview-html.web.ts',
@@ -151,10 +162,10 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
 /**
  * The module list on the merge, recorded at the base in the docstring above, which is where every
- * part of it is accounted for: the factory replacing the document's source modules, mermaid's
- * three, and the three bridge modules #21908 and C2.9 pin on main.
+ * part of it is accounted for: the document's own modules replacing the factory that carried them,
+ * mermaid's three, and the three bridge modules #21908 and C2.9 pin on main.
  */
-const SESSION_ROUTE_MODULES = 4286
+const SESSION_ROUTE_MODULES = 4328
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
@@ -179,12 +190,17 @@ describeClosure(
           `${name} is not in the closure`
         ).toBe(true)
       }
-      // The document, whole, and as one file: ruling 23 gives the page the factory the WebView's
-      // own script is generated from, so what the closure carries is that emitted text. The source
-      // modules are not in it at all — they are the factory's inputs, not the page's — and the one
-      // import the generated file makes is a type, which erases.
-      expect(local).toContain('src/terminal/terminal-webview-document-factory.generated.ts')
-      expect(local.filter((module) => module.startsWith('src/terminal/document/'))).toEqual([])
+      // The document, whole, and as modules: ruling 25 makes it ordinary TypeScript that the page
+      // imports and calls, so the closure carries every module — including `message-bridge`, whose
+      // two host facts are seams now — and nothing generated at all.
+      const documentModules = local.filter((module) => module.startsWith('src/terminal/document/'))
+      expect(documentModules).toContain('src/terminal/document/create-terminal-document.ts')
+      expect(documentModules).toContain('src/terminal/document/message-bridge.ts')
+      expect(documentModules.length).toBeGreaterThanOrEqual(36)
+      // The bundle and its entry belong to the phone: a page reaching either would ship the
+      // document twice, once as modules and once as a string.
+      expect(documentModules).not.toContain('src/terminal/document/native-document-entry.ts')
+      expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
     }, 300_000)
 
     it('reaches the engine as one deferred module and never as part of the download', async () => {

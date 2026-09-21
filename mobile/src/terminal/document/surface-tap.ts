@@ -1,3 +1,4 @@
+import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 import {
   buildMouseClickInput,
@@ -8,10 +9,15 @@ import { oscLinkAtViewportPoint, resolveTerminalFileUrlTap } from './osc-link-ta
 import { filePathAtViewportPoint } from './path-tap'
 import { fileUrlAtViewportPoint, urlAtViewportPoint } from './url-tap'
 
-export function notifyTerminalSurfaceTap(originX: number, originY: number, focusKeyboard: boolean) {
-  const tappedOscLink = oscLinkAtViewportPoint(originX, originY)
+export function notifyTerminalSurfaceTap(
+  scope: TerminalDocumentScope,
+  originX: number,
+  originY: number,
+  focusKeyboard: boolean
+) {
+  const tappedOscLink = oscLinkAtViewportPoint(scope, originX, originY)
   if (tappedOscLink && tappedOscLink.kind === 'file') {
-    notify({
+    notify(scope, {
       type: 'terminal-file-tap',
       pathText: tappedOscLink.fileTap.pathText,
       line: tappedOscLink.fileTap.line,
@@ -19,10 +25,10 @@ export function notifyTerminalSurfaceTap(originX: number, originY: number, focus
     })
     return
   }
-  const tappedFileUrl = fileUrlAtViewportPoint(originX, originY)
+  const tappedFileUrl = fileUrlAtViewportPoint(scope, originX, originY)
   const tappedFileUrlPath = tappedFileUrl ? resolveTerminalFileUrlTap(tappedFileUrl) : null
   if (tappedFileUrlPath) {
-    notify({
+    notify(scope, {
       type: 'terminal-file-tap',
       pathText: tappedFileUrlPath.pathText,
       line: tappedFileUrlPath.line,
@@ -33,14 +39,14 @@ export function notifyTerminalSurfaceTap(originX: number, originY: number, focus
   const tappedUrl =
     tappedOscLink && tappedOscLink.kind === 'url'
       ? tappedOscLink.url
-      : urlAtViewportPoint(originX, originY)
+      : urlAtViewportPoint(scope, originX, originY)
   if (tappedUrl) {
-    notify({ type: 'open-url', url: tappedUrl })
+    notify(scope, { type: 'open-url', url: tappedUrl })
     return
   }
-  const tappedPath = filePathAtViewportPoint(originX, originY)
+  const tappedPath = filePathAtViewportPoint(scope, originX, originY)
   if (tappedPath) {
-    notify({
+    notify(scope, {
       type: 'terminal-file-tap',
       pathText: tappedPath.pathText,
       line: tappedPath.line,
@@ -48,12 +54,12 @@ export function notifyTerminalSurfaceTap(originX: number, originY: number, focus
     })
     return
   }
-  const clickInput = buildMouseClickInput(originX, originY)
+  const clickInput = buildMouseClickInput(scope, originX, originY)
   if (clickInput) {
-    notify({ type: 'terminal-input', bytes: clickInput })
+    notify(scope, { type: 'terminal-input', bytes: clickInput })
   }
   // Touch still needs native input focus after the TUI consumes its mouse click.
-  if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode())) {
-    notify({ type: 'terminal-tap' })
+  if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode(scope))) {
+    notify(scope, { type: 'terminal-tap' })
   }
 }

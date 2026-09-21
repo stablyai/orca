@@ -19,6 +19,7 @@ import {
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
+import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
@@ -141,6 +142,12 @@ export async function buildRuntimePtySpawnOptions(
   }
   if (!args.connectionId) {
     ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
+    ctx.spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
+      connectionId: args.connectionId,
+      requestedShellOverride: args.shellOverride,
+      launchCommand: ctx.launchCommand,
+      settings: ctx.deps.getSettings?.()
+    })
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')

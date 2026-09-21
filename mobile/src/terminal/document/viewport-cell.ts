@@ -1,17 +1,17 @@
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { getCellHeight } from './fit-scale'
 import { getCellWidth, getTotalScale } from './viewport-transform'
 
-export function viewportToCell(clientX: number, clientY: number) {
+export function viewportToCell(scope: TerminalDocumentScope, clientX: number, clientY: number) {
   if (!scope.term) {
     return null
   }
-  const cellW = getCellWidth()
-  const cellH = getCellHeight()
+  const cellW = getCellWidth(scope)
+  const cellH = getCellHeight(scope)
   if (cellW <= 0 || cellH <= 0) {
     return null
   }
-  let total = getTotalScale()
+  let total = getTotalScale(scope)
   if (total <= 0) {
     total = 1
   }

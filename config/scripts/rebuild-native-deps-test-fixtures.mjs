@@ -22,7 +22,9 @@ import { peImage } from './windows-pe-image-fixture.mjs'
  * Taken from the gate itself: a re-typed copy agrees with a stale gate by
  * construction, which is the one thing these fixtures must not do.
  */
-const { CYGWIN_BREAKAWAY_MARKER } = createRequire(import.meta.url)('./node-pty-job-ownership.cjs')
+const { CYGWIN_BREAKAWAY_MARKER, CYGWIN_BREAKAWAY_MARKER_TEXT } = createRequire(import.meta.url)(
+  './node-pty-job-ownership.cjs'
+)
 const { CREATION_TIME_FLAG } = createRequire(import.meta.url)(
   './windows-process-tree-creation-time.cjs'
 )
@@ -357,6 +359,18 @@ export function writeFakeNodePtyConptyPayload(
   mkdirSync(sourceDir, { recursive: true })
   writeFileSync(join(sourceDir, 'conpty.dll'), `conpty.dll ${arch}`)
   writeFileSync(join(sourceDir, 'OpenConsole.exe'), `OpenConsole.exe ${arch}`)
+}
+
+/** The C++ a Windows rebuild would compile; only the wide literal the source gate reads has to be real. */
+export function writeFakeNodePtyConptySource(projectDir, { cygwinBreakawayDenied = true } = {}) {
+  const sourceDir = join(projectDir, 'node_modules', 'node-pty', 'src', 'win')
+  mkdirSync(sourceDir, { recursive: true })
+  writeFileSync(
+    join(sourceDir, 'conpty.cc'),
+    cygwinBreakawayDenied
+      ? `for (const wchar_t* dll : {L"${CYGWIN_BREAKAWAY_MARKER_TEXT}", L"cygwin1.dll"}) {}\n`
+      : 'JOB_OBJECT_LIMIT_BREAKAWAY_OK\n'
+  )
 }
 
 function writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied }) {
