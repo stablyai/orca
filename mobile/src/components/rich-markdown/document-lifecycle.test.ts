@@ -157,6 +157,63 @@ describe('an editor document that is stopped', () => {
     }
   })
 
+  it('drops a command whose dialog answered after the host moved on', async () => {
+    // `promptForUrl` is a modal on the page, so it is a task boundary: between the toolbar press
+    // and the URL coming back, the host can replace the content, make the editor read-only or
+    // unmount it. Inside the WebView it is `window.prompt`, which answers within a microtask —
+    // which is why nothing here can happen on native, and everything here can happen on the page.
+    const commands: string[] = []
+    const answer: ((url: string) => void)[] = []
+    plantMarkup()
+    Object.defineProperty(document, 'execCommand', {
+      value: (command: string) => {
+        commands.push(command)
+        return true
+      },
+      configurable: true
+    })
+    try {
+      const posted: MobileRichMarkdownEditorMessage[] = []
+      const document_ = createRichMarkdownEditorDocument({
+        postToHost: (message) => posted.push(message),
+        keyboardInsetSource: () => null,
+        promptForUrl: () => new Promise((resolve) => answer.push(resolve))
+      })
+      started.push(document_)
+      document_.send.setMarkdown('before', 1)
+
+      // The control: nothing moved, so the answer is applied and the change is reported.
+      const applied = document_.send.runCommand('link')
+      answer.pop()!('https://example.com/a')
+      await applied
+      expect(commands).toEqual(['createLink'])
+      expect(posted.at(-1)).toEqual({ type: 'change', markdown: 'before', generation: 1 })
+
+      // Replaced content: the answer belongs to markdown nobody is looking at any more.
+      posted.length = 0
+      const stale = document_.send.runCommand('link')
+      document_.send.setMarkdown('after', 2)
+      answer.pop()!('https://example.com/b')
+      await stale
+      expect(commands).toEqual(['createLink'])
+      expect(posted).toEqual([])
+
+      // Read-only, and then stopped: neither takes the command either.
+      const whileReadOnly = document_.send.runCommand('image')
+      document_.send.setEditable(false)
+      answer.pop()!('https://example.com/c')
+      await whileReadOnly
+      document_.send.setEditable(true)
+      const whileStopped = document_.send.runCommand('image')
+      document_.stop()
+      answer.pop()!('https://example.com/d')
+      await whileStopped
+      expect(commands).toEqual(['createLink'])
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand')
+    }
+  })
+
   it('unwinds a start that throws rather than leaving the listeners it already installed', () => {
     const posted: MobileRichMarkdownEditorMessage[] = []
     const editor = plantMarkup()

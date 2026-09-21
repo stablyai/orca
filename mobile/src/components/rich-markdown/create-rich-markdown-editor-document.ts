@@ -75,6 +75,7 @@ export function startRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) 
  * timer taken back last — after the listeners that could have scheduled another one are gone.
  */
 export function stopRichMarkdownEditorDocument(scope: RichMarkdownEditorScope) {
+  scope.stopped = true
   stopKeyboardInset(scope)
   stopEditorListeners(scope)
   stopEditorContent(scope)

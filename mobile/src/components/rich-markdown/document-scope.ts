@@ -51,6 +51,8 @@ export type RichMarkdownEditorState = {
   removeEditorListeners: (() => void) | null
   /** `keyboard-inset`: takes the viewport's two listeners off again, or null before them. */
   removeKeyboardInset: (() => void) | null
+  /** `create-rich-markdown-editor-document`: whether the host has taken this document down. */
+  stopped: boolean
 }
 
 /** The document's whole scope: its state, and the seams to whatever is hosting it. */
@@ -69,7 +71,8 @@ function createRichMarkdownEditorState(): RichMarkdownEditorState {
     selectionDroppedOnBlur: false,
     lastInset: -1,
     removeEditorListeners: null,
-    removeKeyboardInset: null
+    removeKeyboardInset: null,
+    stopped: false
   }
 }
 

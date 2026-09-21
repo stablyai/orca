@@ -17,18 +17,41 @@ function exec(scope: RichMarkdownEditorScope, command: string, value?: string) {
 }
 
 /**
+ * Whether the document a command started against is still the one in front of the user.
+ *
+ * The generation is the host's own: it bumps it on every content replacement, so a command that
+ * waited while the host replaced the markdown would otherwise act on text nobody chose, under a
+ * caret that belongs to the replaced content.
+ */
+function acceptsCommands(scope: RichMarkdownEditorScope, generation: number): boolean {
+  return (
+    !scope.stopped &&
+    scope.editable &&
+    scope.documentGeneration === generation &&
+    editorElement(scope).getAttribute('contenteditable') === 'true'
+  )
+}
+
+/**
  * The two commands that need a URL the document does not have.
  *
  * A promise because the answer is a dialog: inside the WebView that is `window.prompt`, and on a
- * page it is a modal the host renders, which cannot answer before it has been shown.
+ * page it is a modal the host renders, which cannot answer before it has been shown. The
+ * difference matters — a modal is a task boundary, so while it is open the host can stop the
+ * document, make it read-only or replace its content, and the answer comes back to a document
+ * that is no longer the one the user was pointing at.
+ *
+ * The generation is read before the wait rather than passed in, which is the same instant:
+ * nothing between `runCommand`'s own read and this one yields.
  */
 async function insertUrl(
   scope: RichMarkdownEditorScope,
   kind: RichMarkdownUrlPromptKind,
   command: 'createLink' | 'insertImage'
 ) {
+  const generation = scope.documentGeneration
   const url = await scope.promptForUrl(kind)
-  if (url && isSafeUrl(url)) {
+  if (url && isSafeUrl(url) && acceptsCommands(scope, generation)) {
     exec(scope, command, url)
   }
 }
@@ -74,13 +97,19 @@ export async function runCommand(
   scope: RichMarkdownEditorScope,
   command: MobileRichMarkdownCommand
 ) {
-  if (!scope.editable || editorElement(scope).getAttribute('contenteditable') !== 'true') {
+  const generation = scope.documentGeneration
+  if (!acceptsCommands(scope, generation)) {
     return
   }
   restoreSelectionOrEnd(scope)
   const pending = COMMANDS[command]?.(scope)
   if (pending) {
     await pending
+    // The same question again, because the wait was the host's chance to move: a change emitted
+    // now would carry the new generation over an edit made against the old one.
+    if (!acceptsCommands(scope, generation)) {
+      return
+    }
   }
   syncTaskCheckboxesDisabled(scope)
   emitChange(scope)
