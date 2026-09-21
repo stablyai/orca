@@ -26,6 +26,8 @@ export type ClaudeOAuthCredentialReadResult = {
   hasRefreshableCredentials: boolean
   source: ClaudeOAuthCredentialSource
   keychainUnavailable?: boolean
+  /** Carried through for callers that must not refresh; the usage endpoint ignores it. */
+  expiresAt?: number
 }
 
 type ClaudeOAuthCredentialReadOptions = {
@@ -41,11 +43,12 @@ export function parseClaudeOAuthCredentialsJson(
     const oauth = (JSON.parse(raw) as ClaudeCredentials)?.claudeAiOauth
     const hasRefreshableCredentials =
       typeof oauth?.refreshToken === 'string' && oauth.refreshToken.trim() !== ''
+    const expiresAt = typeof oauth?.expiresAt === 'number' ? oauth.expiresAt : undefined
     if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
-      return { token: null, hasRefreshableCredentials, source }
+      return { token: null, hasRefreshableCredentials, source, expiresAt }
     }
     // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
-    return { token: oauth.accessToken, hasRefreshableCredentials, source }
+    return { token: oauth.accessToken, hasRefreshableCredentials, source, expiresAt }
   } catch {
     return emptyClaudeOAuthCredentialReadResult()
   }
@@ -115,7 +118,7 @@ export async function readClaudeCredentialsFromStrictKeychain(
   }
 }
 
-export async function readFromCredentialsFile(
+export async function readClaudeOAuthCredentialsFile(
   configDir?: string
 ): Promise<ClaudeOAuthCredentialReadResult> {
   const credentialPath = path.join(
@@ -160,7 +163,7 @@ export async function readClaudeConfigDirScopedOAuthCredentials(
     }
     keychainUnavailable = scoped.keychainUnavailable === true
   }
-  const file = await readFromCredentialsFile(configDir)
+  const file = await readClaudeOAuthCredentialsFile(configDir)
   return !file.token && !file.hasRefreshableCredentials && keychainUnavailable
     ? unavailableKeychainResult()
     : file
@@ -188,7 +191,7 @@ export async function readClaudeOAuthCredentials(
     return keychain
   }
 
-  const file = await readFromCredentialsFile(options?.credentialsFileConfigDir)
+  const file = await readClaudeOAuthCredentialsFile(options?.credentialsFileConfigDir)
   if (file.token || file.hasRefreshableCredentials) {
     return file
   }

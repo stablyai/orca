@@ -1,5 +1,5 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
-import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
+import { RateLimitServiceBoundClaudeHomes } from './service-bound-claude-homes'
 import {
   normalizeCodexAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget,
@@ -10,7 +10,7 @@ import {
   type CodexRateLimitResetResult
 } from './service-types'
 
-export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
+export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceBoundClaudeHomes {
   async refresh(): Promise<RateLimitState> {
     // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
     await this.fetchAll({ force: true })

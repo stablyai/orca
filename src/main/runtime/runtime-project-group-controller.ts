@@ -21,6 +21,8 @@ type RuntimeProjectGroupDependencies = {
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
   cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  /** A group's bound CLAUDE_CONFIG_DIR may now resolve elsewhere, or nowhere. */
+  onClaudeHomeBindingChanged: (groupId: string) => void
 }
 
 type FolderWorkspaceUpdates = Partial<
@@ -90,6 +92,9 @@ export class RuntimeProjectGroupController {
     }
     const updated = store.updateProjectGroup(groupId, updates)
     if (updated) {
+      if ('claudeConfigDir' in updates) {
+        this.deps.onClaudeHomeBindingChanged(groupId)
+      }
       this.deps.notifyReposChanged()
     }
     return updated
@@ -102,6 +107,7 @@ export class RuntimeProjectGroupController {
     }
     const deleted = store.deleteProjectGroup(groupId)
     if (deleted) {
+      this.deps.onClaudeHomeBindingChanged(groupId)
       this.deps.notifyReposChanged()
     }
     return { deleted }

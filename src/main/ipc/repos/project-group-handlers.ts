@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import type { NestedRepoScanResult, ProjectGroup } from '../../../shared/project-group-types'
+import { notifyClaudeHomeBindingChanged } from '../../rate-limits/claude-home-binding-change-notification'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   ProjectGroupCancelNestedScanArgs,
@@ -43,6 +44,11 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     )
     const updated = store.updateProjectGroup(args.groupId, args.updates)
     if (updated) {
+      // Why here and not only on the RPC controller: a plain local Orca sends every group edit down
+      // this channel, and it is the only configuration that renders bound-group usage rows at all.
+      if ('claudeConfigDir' in args.updates) {
+        notifyClaudeHomeBindingChanged(args.groupId)
+      }
       notifyReposChanged(mainWindow)
     }
     return updated
@@ -56,6 +62,7 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     )
     const deleted = store.deleteProjectGroup(args.groupId)
     if (deleted) {
+      notifyClaudeHomeBindingChanged(args.groupId)
       notifyReposChanged(mainWindow)
     }
     return deleted
