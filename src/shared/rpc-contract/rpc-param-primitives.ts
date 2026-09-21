@@ -58,19 +58,15 @@ export const TriStateLinkedIssue = z
 // `undefined` ("no update"), which turns a clear into a silent no-op on any handler guarding on
 // `!== undefined` — while an Electron IPC schema that passes `''` through clears. Blank means
 // null here, so both hops agree on what an emptied field did.
+//
+// Why this one rejects a wrong-typed value where `OptionalString` absorbs it: for a field whose
+// point is telling "set", "clear" and "no update" apart, a silently-absorbed fourth state lets a
+// client with a type bug read a success response carrying the old value. An ABSENT field still
+// means "no update", so an older peer that never heard of the field stays tolerated.
 export const ClearableString = z
-  .unknown()
-  .transform((value) => {
-    if (value === null) {
-      return null
-    }
-    if (typeof value !== 'string') {
-      return undefined
-    }
-    return value.trim().length > 0 ? value : null
-  })
-  .pipe(z.union([z.string(), z.null(), z.undefined()]))
+  .union([z.string(), z.null()])
   .optional()
+  .transform((value) => (typeof value === 'string' && value.trim().length === 0 ? null : value))
 
 // Why: the legacy extractBrowserTarget treated worktree as a plain-string
 // passthrough (empty string preserved) but `page` as non-empty-string. The

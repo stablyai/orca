@@ -131,6 +131,29 @@ describe('resolveClaudeHomeBindingForGroup', () => {
     })
   })
 
+  it('refuses a binding stamped for another host instead of falling back to it', () => {
+    const groups = [
+      group({ id: 'g1', executionHostId: 'ssh:build-box', claudeConfigDir: '/home/ci/.claude-ci' })
+    ]
+    expect(resolveClaudeHomeBindingForGroup(groups, 'g1', 'local')).toBeNull()
+    expect(
+      resolveClaudeHomeBindingForWorkspace({
+        groups,
+        repos: [repo({ id: 'repo-1', executionHostId: 'local', projectGroupId: 'g1' })],
+        folderWorkspaces: [],
+        workspaceId: 'local|repo-1::/Users/me/proj'
+      })
+    ).toBeNull()
+  })
+
+  it('still resolves a row whose host is genuinely unknown', () => {
+    const groups = [group({ id: 'g1', claudeConfigDir: '/homes/legacy' })]
+    expect(resolveClaudeHomeBindingForGroup(groups, 'g1', 'ssh:build-box')).toEqual({
+      configDir: '/homes/legacy',
+      groupId: 'g1'
+    })
+  })
+
   it('keeps the ancestor walk on one host', () => {
     const groups = [
       group({ id: 'root', executionHostId: 'local', claudeConfigDir: '/homes/local-root' }),

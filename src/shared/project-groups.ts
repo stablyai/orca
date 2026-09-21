@@ -1,4 +1,4 @@
-import { normalizeClaudeConfigDir } from './claude-home-binding'
+import { parseClaudeConfigDirBinding } from './claude-home-binding'
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from './repo-types'
@@ -82,7 +82,7 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
         typeof raw.tabOrder === 'number' && Number.isFinite(raw.tabOrder) ? raw.tabOrder : 0,
       isCollapsed: raw.isCollapsed === true,
       color: typeof raw.color === 'string' ? raw.color : null,
-      claudeConfigDir: normalizeClaudeConfigDir(raw.claudeConfigDir),
+      claudeConfigDir: parseClaudeConfigDirBinding(raw.claudeConfigDir),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:

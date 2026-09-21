@@ -79,15 +79,51 @@ describe('claudeConfigDir round trip', () => {
     }
   })
 
-  it('discards a relative path at update time instead of persisting it', () => {
-    const { operations, state } = createOperations()
-    const group = operations.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
-    operations.updateProjectGroup(group.id, parseUpdate(group.id, '/homes/platform'))
+  // Why every spelling: an unparseable path must be a rejected write, never the silent clear that
+  // `null` means — `~/.claude-work` is the most natural thing a user types into that field.
+  it.each([
+    ['home-relative', '~/.claude-work'],
+    ['explicitly relative', './claude'],
+    ['bare name', 'claude-work'],
+    ['drive-relative with no slash', 'C:alice'],
+    ['drive-relative with no drive', '\\Users\\alice'],
+    ['plainly relative', 'a/b']
+  ])('rejects an unparseable %s path at both update hops and keeps the binding', (_label, path) => {
+    for (const schema of [ProjectGroupUpdate, ProjectGroupUpdateArgs]) {
+      const { operations, state } = createOperations()
+      const group = operations.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
+      operations.updateProjectGroup(group.id, parseUpdate(group.id, '/homes/platform'))
 
-    const updated = operations.updateProjectGroup(group.id, parseUpdate(group.id, 'a/b'))
+      const parsed = schema.safeParse({
+        groupId: group.id,
+        updates: { claudeConfigDir: path }
+      })
 
-    expect(updated?.claudeConfigDir).toBeNull()
-    expect(normalizeProjectGroups(state.projectGroups)[0].claudeConfigDir).toBeNull()
+      expect(parsed.success).toBe(false)
+      expect(normalizeProjectGroups(state.projectGroups)[0].claudeConfigDir).toBe('/homes/platform')
+    }
+  })
+
+  it.each([
+    ['a number', 42],
+    ['a boolean', true],
+    ['an array', []],
+    ['an object', {}]
+  ])('rejects %s rather than reading it as "no update"', (_label, value) => {
+    for (const schema of [ProjectGroupUpdate, ProjectGroupUpdateArgs]) {
+      expect(schema.safeParse({ groupId: 'g', updates: { claudeConfigDir: value } }).success).toBe(
+        false
+      )
+    }
+  })
+
+  // Mixed-version tolerance: an older client that never heard of the field must stay "no update".
+  it('accepts an update that omits the field on both hops', () => {
+    for (const schema of [ProjectGroupUpdate, ProjectGroupUpdateArgs]) {
+      const parsed = schema.safeParse({ groupId: 'g', updates: { name: 'Core' } })
+      expect(parsed.success).toBe(true)
+      expect(parsed.success && parsed.data.updates.claudeConfigDir).toBe(undefined)
+    }
   })
 
   it('leaves the binding untouched when the update omits the field', () => {

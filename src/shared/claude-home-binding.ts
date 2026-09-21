@@ -18,7 +18,11 @@ export type ResolvedClaudeHomeBinding = {
 }
 
 /**
- * A persisted binding, kept only when it names one fixed directory on some host.
+ * A persisted binding, or null when the value does not name one fixed directory on some host.
+ *
+ * Deliberately not `normalizeClaudeConfigDir`: `src/main/rate-limits/service/service-types.ts`
+ * exports that name for a different contract (it rewrites separators and accepts a relative path),
+ * and both are importable from main, so a wrong auto-import would be silent in either direction.
  *
  * Syntax decides it, never the running platform: groups sync between clients and remote hosts, so
  * a macOS client must keep a Windows host's `C:\…` or `\\server\share` binding intact. Rejected
@@ -26,7 +30,7 @@ export type ResolvedClaudeHomeBinding = {
  * which resolve against the *process's* current drive on Windows and are ordinary relative
  * filenames on POSIX — one binding would then mean a different home per session.
  */
-export function normalizeClaudeConfigDir(value: unknown): string | null {
+export function parseClaudeConfigDirBinding(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
@@ -37,20 +41,26 @@ export function normalizeClaudeConfigDir(value: unknown): string | null {
   return isWindowsAbsolutePathLike(trimmed) || trimmed.startsWith('/') ? trimmed : null
 }
 
+type HostStampedRow = { connectionId?: string | null; executionHostId?: string | null }
+
 /**
  * Why host-scoped: `groups` and `repos` are host-qualified catalogs that hold rows from every
  * execution host at once, so the same id can appear twice. A config dir is a filesystem path on
- * exactly one host (`docs/reference/ssh-execution-boundary.md`), so the row stamped for the
- * workspace's host wins. An unmatched host falls back to the first row by id rather than to
- * "unbound", so an unstamped legacy catalog keeps resolving exactly as before.
+ * exactly one host (`docs/reference/ssh-execution-boundary.md`), so only the row stamped for the
+ * workspace's host may answer.
+ *
+ * The one fallback is a row that states no ownership at all — a legacy row predating host
+ * stamping, which may be on any host. A row stamped for a *different* host is never a fallback:
+ * answering with it hands one host's filesystem path to a session on another, which is the silent
+ * wrong-identity failure this binding exists to prevent.
  */
-function findRowForHost<T>(
+function findRowForHost<T extends HostStampedRow>(
   rows: readonly T[],
   matchesId: (row: T) => boolean,
   hostOf: (row: T) => ExecutionHostId,
   hostId: ExecutionHostId | null | undefined
 ): T | undefined {
-  let fallback: T | undefined
+  let unstamped: T | undefined
   for (const row of rows) {
     if (!matchesId(row)) {
       continue
@@ -58,9 +68,11 @@ function findRowForHost<T>(
     if (hostId && hostOf(row) === hostId) {
       return row
     }
-    fallback ??= row
+    if (!row.executionHostId && !row.connectionId) {
+      unstamped ??= row
+    }
   }
-  return fallback
+  return unstamped
 }
 
 /** Nearest binding walking up `parentGroupId`. Bounded so a cycle that survived normalization ends. */
@@ -86,7 +98,7 @@ export function resolveClaudeHomeBindingForGroup(
     if (!group) {
       return null
     }
-    const configDir = normalizeClaudeConfigDir(group.claudeConfigDir)
+    const configDir = parseClaudeConfigDirBinding(group.claudeConfigDir)
     if (configDir) {
       return { configDir, groupId: group.id }
     }
