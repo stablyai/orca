@@ -899,5 +899,4 @@ describe('agent prompt submission runtime', () => {
     await rejected
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
-
 })
