@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildNodeModulesCandidatePaths,
   resolveInstalledPackageVersion
@@ -103,5 +103,46 @@ describe('resolveInstalledPackageVersion', () => {
     })
 
     expect(result).toEqual({ status: 'installed', version: '1.0.0' })
+  })
+})
+
+describe('walking ancestors terminates on every path shape', () => {
+  // A candidate per ancestor of the deepest fixture below, with headroom; an
+  // unterminated walk blows past this instead of returning.
+  const CANDIDATE_CEILING = 8
+
+  it.each([
+    { label: 'empty path', relativePath: '' },
+    { label: 'root-level file', relativePath: 'package.json' },
+    { label: 'one relative segment', relativePath: 'a/package.json' },
+    { label: 'nested relative segments', relativePath: 'a/b/c/package.json' },
+    { label: 'posix filesystem root', relativePath: '/package.json' },
+    { label: 'absolute posix path', relativePath: '/Users/x/y/package.json' },
+    { label: 'absolute windows path', relativePath: 'C:\\Users\\x\\package.json' }
+  ])('terminates and stays inside the worktree for a $label', ({ relativePath }) => {
+    const candidates = buildNodeModulesCandidatePaths('/repo', relativePath, 'pkg')
+
+    expect(candidates.length).toBeLessThan(CANDIDATE_CEILING)
+    for (const candidate of candidates) {
+      expect(candidate.filePath.startsWith('/repo/')).toBe(true)
+    }
+  })
+
+  it('yields no candidate for a file opened by absolute path from outside the worktree', () => {
+    expect(buildNodeModulesCandidatePaths('/repo', '/Users/x/y/package.json', 'lodash')).toEqual([])
+  })
+
+  it('reports not-installed without reading anything for a file outside the worktree', async () => {
+    const readCandidate = vi.fn(async () => JSON.stringify({ version: '4.17.21' }))
+
+    const result = await resolveInstalledPackageVersion({
+      worktreeRoot: '/repo',
+      relativePath: '/Users/x/other-project/package.json',
+      packageName: 'lodash',
+      readCandidate
+    })
+
+    expect(result).toEqual({ status: 'not-installed' })
+    expect(readCandidate).not.toHaveBeenCalled()
   })
 })

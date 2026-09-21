@@ -1,5 +1,5 @@
 import { dirname } from '@/lib/path'
-import { resolveRuntimePath } from '../../../../shared/cross-platform-path'
+import { isRuntimePathAbsolute, resolveRuntimePath } from '../../../../shared/cross-platform-path'
 
 export type NodeModulesCandidatePath = {
   filePath: string
@@ -11,11 +11,22 @@ export type InstalledPackageVersionResult =
   | { status: 'not-installed' }
 
 function walkRelativeDirsToRoot(relativeDir: string): string[] {
+  // An absolute dir means the file is outside the worktree (tab-create-entry-absolute-file
+  // falls back to the absolute path when relativization fails). Its ancestors would resolve
+  // outside the root, and the root's own node_modules holds an unrelated project's version.
+  if (isRuntimePathAbsolute(relativeDir)) {
+    return []
+  }
   const dirs: string[] = []
   let current = relativeDir === '.' ? '' : relativeDir
   dirs.push(current)
   while (current !== '') {
     const parent = dirname(current)
+    // Stop where dirname stops making progress: every filesystem root ('/', 'C:\') is its
+    // own parent, so a path that never reduces to '' would otherwise loop forever.
+    if (parent === current) {
+      break
+    }
     current = parent === '.' ? '' : parent
     dirs.push(current)
   }
@@ -25,7 +36,8 @@ function walkRelativeDirsToRoot(relativeDir: string): string[] {
 /**
  * Node module resolution, nearest-first: `<dir>/node_modules/<pkg>`, then
  * each ancestor up to (and including) the worktree root. Never walks above
- * the root — the caller stops there per the worktree-safety rule.
+ * the root — the caller stops there per the worktree-safety rule. A file
+ * outside the worktree (absolute `relativePath`) yields no candidate at all.
  */
 export function buildNodeModulesCandidatePaths(
   worktreeRoot: string,

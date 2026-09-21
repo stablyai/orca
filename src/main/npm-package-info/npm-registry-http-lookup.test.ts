@@ -96,6 +96,18 @@ describe('npmRegistryHttpLookup', () => {
     expect(result).toEqual({ status: 'unavailable', reason: 'error' })
   })
 
+  it('maps malformed JSON in a 2xx response to unavailable with reason error', async () => {
+    netFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input'))
+    })
+
+    const result = await npmRegistryHttpLookup('react')
+
+    expect(result).toEqual({ status: 'unavailable', reason: 'error' })
+  })
+
   it('maps an aborted-by-timeout fetch to unavailable with reason timeout', async () => {
     const timeoutError = new Error('The operation timed out.')
     timeoutError.name = 'TimeoutError'

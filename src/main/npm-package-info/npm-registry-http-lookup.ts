@@ -52,7 +52,15 @@ export async function npmRegistryHttpLookup(packageName: string): Promise<NpmPac
     return res.status === 404 ? { status: 'not-found' } : { status: 'unavailable', reason: 'error' }
   }
 
-  const doc: unknown = await res.json()
+  // A 2xx can still carry truncated or invalid JSON; no body to cancel here,
+  // `json()` already drained or errored the stream.
+  let doc: unknown
+  try {
+    doc = await res.json()
+  } catch {
+    return { status: 'unavailable', reason: 'error' }
+  }
+
   const info = isRecord(doc) ? parsePackument(packageName, doc) : null
   return info ? { status: 'ok', info } : { status: 'unavailable', reason: 'error' }
 }
