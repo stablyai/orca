@@ -1,4 +1,5 @@
 import type { createServer } from 'node:http'
+import { CanvasAgentContextStore } from '../../../shared/canvas-agent-context-store'
 import { randomBytes, randomUUID } from 'node:crypto'
 
 import {
@@ -49,6 +50,7 @@ import type {
 
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
+  readonly canvasContexts = new CanvasAgentContextStore()
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,

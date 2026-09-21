@@ -17,9 +17,11 @@ import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
+import { CANVAS_COMMAND_SPECS } from './canvas'
 import { SEARCH_COMMAND_SPECS } from './search'
 
 export const COMMAND_SPECS: CommandSpec[] = [
+  ...CANVAS_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,
   ...ACCOUNT_COMMAND_SPECS,

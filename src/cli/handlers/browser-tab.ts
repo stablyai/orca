@@ -72,7 +72,12 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      {
+        url,
+        worktree,
+        profileId,
+        ...(process.env.ORCA_PANE_KEY ? { originPaneKey: process.env.ORCA_PANE_KEY } : {})
+      },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)

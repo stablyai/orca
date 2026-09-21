@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { createAgentCanvasTab } from '../agent-canvas/create-agent-canvas-tab'
 import { toast } from 'sonner'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
@@ -76,6 +77,7 @@ export function useTabGroupCreationCommands({
   // Why: these stay unmemoized plain lambdas — the original built them inline in the returned commands object.
   return {
     createSplitGroup,
+    newCanvasTab: () => createAgentCanvasTab(worktreeId, groupId),
     newBrowserTab: () => {
       void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))

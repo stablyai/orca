@@ -57,6 +57,7 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   settings: CLAUDE_HOOK_SETTINGS
 }
 
+
 export class ClaudeHookService {
   private readonly options: ClaudeHookServiceOptions
 

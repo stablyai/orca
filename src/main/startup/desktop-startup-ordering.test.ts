@@ -389,6 +389,8 @@ describe('startup ordering', () => {
     expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
     expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
     expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
+    expect(beforeQuit).not.toContain('stopCanvasMessaging')
+    expect(willQuit.indexOf('stopCanvasMessaging(state.runtime)')).toBeGreaterThan(commitIndex)
     expect(commitIndex).toBeGreaterThanOrEqual(0)
     expect(disposeIndex).toBeGreaterThan(commitIndex)
   })

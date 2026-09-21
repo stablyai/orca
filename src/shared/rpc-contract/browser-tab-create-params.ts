@@ -14,6 +14,7 @@ export const BrowserTabCreateParams = z.object({
   // Absent, a paired caller means 'caller' — one device's create must not steer every other UI.
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
   targetGroupId: OptionalString,
+  originPaneKey: z.string().min(1).max(512).optional(),
   placement: BrowserPageCreationPlacement.optional()
 })
 

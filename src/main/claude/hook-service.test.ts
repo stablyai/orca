@@ -264,11 +264,12 @@ describe('ClaudeHookService.install', () => {
       expect(managedScript).toContain('DEVIN_PROJECT_DIR')
       expect(managedScript).toContain('GROK_HOOK_EVENT')
       // Why: guard and Devin-skip paths must still return neutral JSON (#14818).
-      expect(managedScript).toMatch(
+      expect(managedScript).toContain(
         process.platform === 'win32'
-          ? /^@echo off\r\nsetlocal\r\necho \{\}\r\n/
-          : /^#!\/bin\/sh\nprintf "\{\}\\n"\n/
+          ? ':orca_context_fallback\r\necho {}\r\n'
+          : `trap 'printf "%s\\n" "$orca_hook_response"' EXIT`
       )
+      expect(managedScript).toContain('X-Orca-Canvas-Context: 1')
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -714,8 +715,9 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('DEVIN_PROJECT_DIR')
     expect(script).toContain('GROK_HOOK_EVENT')
     // Why: remote guard paths must still return neutral JSON (#14818).
-    expect(script!.indexOf('printf "{}\\n"')).toBe(
-      script!.indexOf('#!/bin/sh') + '#!/bin/sh\n'.length
+    expect(script).toContain(`orca_hook_response='{}'`)
+    expect(script!.indexOf(`trap 'printf "%s\\n" "$orca_hook_response"' EXIT`)).toBeLessThan(
+      script!.indexOf('payload=')
     )
     // Why: payload stays on stdin, while metadata headers avoid URL-encoded IDS signatures.
     expect(script).toContain('printf \'%s\' "$payload" | curl')

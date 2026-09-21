@@ -64,6 +64,21 @@ function simulatorTab(id: string, groupId: string, sortOrder: number): Tab {
   }
 }
 
+function canvasTab(id: string, groupId: string, sortOrder: number): Tab {
+  return {
+    id,
+    entityId: id,
+    groupId,
+    worktreeId: 'wt',
+    contentType: 'canvas',
+    label: 'Canvas',
+    customLabel: null,
+    color: null,
+    sortOrder,
+    createdAt: sortOrder
+  }
+}
+
 function agentSessionTab(id: string, groupId: string, sessionId: string, sortOrder: number): Tab {
   return {
     id,
@@ -223,6 +238,49 @@ describe('getGroupVisibleTabOrder', () => {
       { type: 'simulator', id: 'tab-s1', tabId: 'tab-s1' },
       { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
     ])
+  })
+
+  it('includes canvas tabs keyed by unified tab id in the declared group order', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-c1',
+      tabOrder: ['tab-t1', 'tab-c1', 'tab-e1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      canvasTab('tab-c1', 'g1', 1),
+      editorTab('tab-e1', 'g1', '/repo/file.md', 2)
+    ]
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['term-1']),
+        new Set(['/repo/file.md']),
+        new Set(),
+        new Set(),
+        false,
+        new Set(['tab-c1'])
+      )
+    ).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'canvas', id: 'tab-c1', tabId: 'tab-c1' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
+    ])
+  })
+
+  it('drops canvas tabs that are not in the canvas id set', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t1',
+      tabOrder: ['tab-t1', 'tab-c1']
+    }
+    const tabs: Tab[] = [terminalTab('tab-t1', 'g1', 'term-1', 0), canvasTab('tab-c1', 'g1', 1)]
+    expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
+      [{ type: 'terminal', id: 'term-1', tabId: 'tab-t1' }]
+    )
   })
 
   it('matches the strip lookup when duplicate entities resolve to the last tab copy', () => {
@@ -405,6 +463,44 @@ describe('getActiveTabNavOrder', () => {
       { type: 'simulator', id: 'sim-1' },
       { type: 'editor', id: 'e1' },
       { type: 'terminal', id: 'term-2' }
+    ])
+  })
+
+  it('includes canvas tabs in the active group order in strip sequence', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-c1',
+      tabOrder: ['tab-t1', 'tab-c1']
+    }
+    const tabs: Tab[] = [terminalTab('tab-t1', 'g1', 'term-1', 0), canvasTab('tab-c1', 'g1', 1)]
+    const state = makeState({
+      activeGroupIdByWorktree: { wt: 'g1' },
+      groupsByWorktree: { wt: [group] },
+      unifiedTabsByWorktree: { wt: tabs },
+      tabsByWorktree: {
+        // @ts-expect-error — minimal shape
+        wt: [{ id: 'term-1' }]
+      }
+    })
+    expect(getActiveTabNavOrder(state, 'wt')).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'canvas', id: 'tab-c1', tabId: 'tab-c1' }
+    ])
+  })
+
+  it('includes canvas tabs in the legacy fallback order', () => {
+    const state = makeState({
+      tabBarOrderByWorktree: { wt: ['term-1', 'tab-c1'] },
+      unifiedTabsByWorktree: { wt: [canvasTab('tab-c1', 'g1', 1)] },
+      tabsByWorktree: {
+        // @ts-expect-error — minimal shape
+        wt: [{ id: 'term-1' }]
+      }
+    })
+    expect(getActiveTabNavOrder(state, 'wt')).toEqual([
+      { type: 'terminal', id: 'term-1' },
+      { type: 'canvas', id: 'tab-c1', tabId: 'tab-c1' }
     ])
   })
 })

@@ -39,6 +39,7 @@ export function renderTabBarItems({
     activeFileId,
     activeBrowserTabId,
     activeSimulatorTabId,
+    activeCanvasTabId,
     activeTabType,
     expandedPaneByTabId,
     onActivate,
@@ -186,15 +187,15 @@ export function renderTabBarItems({
         />
       )
     }
-    if (item.type === 'simulator') {
-      const simulatorLabel = item.data.label || 'Mobile Emulator'
+    if (item.type === 'simulator' || item.type === 'canvas') {
+      const simulatorLabel = item.data.customLabel || item.data.label
       const simulatorFile: OpenFile & { tabId: string } = {
         id: item.id,
         tabId: item.id,
         filePath: simulatorLabel,
         relativePath: simulatorLabel,
         worktreeId,
-        language: 'simulator',
+        language: item.type,
         isPreview: false,
         isDirty: false,
         mode: 'edit'
@@ -205,8 +206,8 @@ export function renderTabBarItems({
           file={simulatorFile}
           isActive={
             !clientHostedRowOwnsActiveState &&
-            activeTabType === 'simulator' &&
-            item.id === activeSimulatorTabId
+            activeTabType === item.type &&
+            item.id === (item.type === 'canvas' ? activeCanvasTabId : activeSimulatorTabId)
           }
           isPinned={item.isPinned}
           hasTabsToRight={index < items.length - 1}

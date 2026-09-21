@@ -3,7 +3,7 @@ import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-types'
 
 export function buildPosixAgentHookPostCommand(
   source: AgentHookSource,
-  options: { curlCommand?: string; indent?: string } = {}
+  options: { curlCommand?: string; indent?: string; contextResponse?: boolean } = {}
 ): string[] {
   const curlCommand = options.curlCommand ?? 'curl'
   const indent = options.indent ?? '  '
@@ -16,6 +16,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--noproxy "127.0.0.1" \\`,
     `  ${indent}-H "Content-Type: application/json" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Token: \${ORCA_AGENT_HOOK_TOKEN}" \\`,
+    ...(options.contextResponse ? [`  ${indent}-H "X-Orca-Canvas-Context: 1" --fail \\`] : []),
     `  ${indent}-H "X-Orca-Agent-Hook-Meta-Encoding: base64" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Meta: \${orca_hook_metadata}" \\`,
     `  ${indent}--data-binary @-`,
@@ -25,6 +26,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--noproxy "127.0.0.1" \\`,
     `  ${indent}-H "Content-Type: application/x-www-form-urlencoded" \\`,
     `  ${indent}-H "X-Orca-Agent-Hook-Token: \${ORCA_AGENT_HOOK_TOKEN}" \\`,
+    ...(options.contextResponse ? [`  ${indent}-H "X-Orca-Canvas-Context: 1" --fail \\`] : []),
     `  ${indent}--data-urlencode "paneKey=\${ORCA_PANE_KEY}" \\`,
     `  ${indent}--data-urlencode "tabId=\${ORCA_TAB_ID}" \\`,
     `  ${indent}--data-urlencode "launchToken=\${ORCA_AGENT_LAUNCH_TOKEN}" \\`,

@@ -84,6 +84,11 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('agent-session')
+  } else if (next.type === 'canvas') {
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
+    store.setActiveTabType('canvas')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
     // picks the first matching tab in the active group); `activateTab(tabId)`

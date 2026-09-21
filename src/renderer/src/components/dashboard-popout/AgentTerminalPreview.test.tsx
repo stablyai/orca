@@ -9,6 +9,7 @@ import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-p
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
     write: ReturnType<typeof vi.fn>
+    focus: ReturnType<typeof vi.fn>
     writeCallbacks: (() => void)[]
     onDataListener: ((data: string) => void) | null
     dispose: ReturnType<typeof vi.fn>
@@ -193,6 +194,19 @@ describe('AgentTerminalPreview', () => {
     cleanup()
     vi.clearAllMocks()
   })
+
+  it.each([true, false])(
+    'streams without stealing focus when autoFocus is %s',
+    async (autoFocus) => {
+      render(<AgentTerminalPreview ptyId="pty-1" autoFocus={autoFocus} />)
+      await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+      const terminal = terminalHarness.instances[0]!
+      await waitFor(() => expect(terminal.onDataListener).not.toBeNull())
+      act(() => emitData?.({ type: 'data', ptyId: 'pty-1', data: 'still live', bytes: 10 }))
+      expect(terminal.write).toHaveBeenCalledWith('still live', expect.any(Function))
+      expect(terminal.focus).toHaveBeenCalledTimes(autoFocus ? 1 : 0)
+    }
+  )
 
   it('routes signaled user input while a live write parses and drops parser replies', async () => {
     render(<AgentTerminalPreview ptyId="pty-1" />)

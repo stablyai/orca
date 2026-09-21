@@ -1,4 +1,33 @@
 {
+  "agentCanvas": {
+    "addAgent": "Add existing agent",
+    "board": "Board",
+    "browserHint": "Connect this page to share its URL with an agent.",
+    "canvasHint": "Drag a point to connect · × to remove · Undo to restore",
+    "connect": "Connect to…",
+    "connectCard": "Connect",
+    "connectionHint": "Review the context before sending. This connection does not start an automatic workflow.",
+    "contextOutput": "Context out →",
+    "contextSessionChanged": "Session changed · reconnect the note",
+    "dragPointHint": "Drag to an agent →",
+    "edgeContext": "Context",
+    "interactionHint": "Drag headers to arrange · Connect the side handles",
+    "noAgents": "No more agents to add. Start an agent in a workspace first.",
+    "noDetectedAgents": "No agents detected on this host. Configure an agent in Settings.",
+    "noTargets": "No available targets",
+    "openBrowser": "Open in Orca browser",
+    "project": "Canvas project",
+    "removeAgentHint": "Remove from canvas · terminal stays in workspace",
+    "reviewSend": "Review & send",
+    "savedProject": "Saved canvas",
+    "searchTargets": "Search connected targets…",
+    "selectTerminal": "Select to interact with this terminal.",
+    "share": "Share context",
+    "startHere": "Start in this workspace",
+    "subtitle": "Arrange sessions and share context",
+    "undo": "Undo canvas edit",
+    "view": "Agent view"
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"

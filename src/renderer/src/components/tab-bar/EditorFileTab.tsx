@@ -9,6 +9,7 @@ import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { Network } from 'lucide-react'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
@@ -73,7 +74,7 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const FileIcon = getFileTypeIcon(file.filePath)
+  const FileIcon = file.language === 'canvas' ? Network : getFileTypeIcon(file.filePath)
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -120,7 +121,12 @@ export default function EditorFileTab({
   // combined/virtual views don't point at a single concrete file we can safely
   // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
   // would rewrite the agent-owned artifact's backing path.
-  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
+  const canRename =
+    file.language !== 'canvas' &&
+    file.mode === 'edit' &&
+    !file.diffSource &&
+    !file.conflict &&
+    !file.readOnly
 
   const openRenameInput = (): void => {
     if (!canRename) {

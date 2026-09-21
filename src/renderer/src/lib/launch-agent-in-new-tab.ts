@@ -39,6 +39,8 @@ import {
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
   worktreeId: string
+  /** Canvas sessions require the interactive terminal even when chat is the user's default. */
+  viewMode?: 'terminal'
   /** Tab group the user launched from; keeps split-group launches in that pane instead of the active group. */
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
@@ -101,6 +103,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const {
     agent,
     worktreeId,
+    viewMode,
     groupId,
     prompt,
     agentArgs,
@@ -212,17 +215,20 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     }
   }
 
+  // Why: canvas sessions require the interactive terminal even when chat is the default.
   const plan =
-    agentSessionLaunchPlan ??
-    planAgentSessionLaunch(store, {
-      agent,
-      workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
-      prompt: trimmedPrompt,
-      promptDelivery: viewModePromptDelivery,
-      tuiCustomization: { cwd: initialCwd },
-      initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
-    })
+    viewMode === 'terminal'
+      ? null
+      : (agentSessionLaunchPlan ??
+        planAgentSessionLaunch(store, {
+          agent,
+          workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+          prompt: trimmedPrompt,
+          promptDelivery: viewModePromptDelivery,
+          tuiCustomization: { cwd: initialCwd },
+          initialSessionOptions: startupPlan.sessionOptions,
+          onPromptDelivered
+        }))
   if (plan?.route === 'structured-native-chat') {
     const structured = launchAgentInStructuredNewTab({
       plan,

@@ -9,6 +9,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { stopCanvasMessaging } from '../runtime/canvas/canvas-messaging-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
@@ -150,6 +151,9 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
+    if (state.runtime) {
+      stopCanvasMessaging(state.runtime)
+    }
     agentHookServer.stop()
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.
