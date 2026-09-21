@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
+import type { DaemonGenerationInventory } from './pty-management'
 
 const {
   handleMock,
@@ -41,6 +42,9 @@ vi.mock('../daemon/daemon-pty-router', () => {
     getAllAdapters() {
       return this.allAdapters
     }
+    getCurrentAdapter() {
+      return this.allAdapters[0]
+    }
   }
   return { DaemonPtyRouter }
 })
@@ -64,6 +68,9 @@ vi.mock('../daemon/degraded-daemon-pty-provider', () => {
     }
     getAllAdapters() {
       return this.allAdapters
+    }
+    getCurrentAdapter() {
+      return this.allAdapters[0]
     }
   }
   return { DegradedDaemonPtyProvider }
@@ -121,6 +128,15 @@ function makeAdapter(
   }
 }
 
+type ListSessionsReply = { generations: DaemonGenerationInventory[]; degraded: boolean }
+
+// Why: `vi.fn()` erases the handler's declared return type, so the channel's own contract is the
+// only thing that can restore it. One reader keeps that restatement in a single place.
+async function invokeListSessions(handlers: HandlerMap): Promise<ListSessionsReply> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerDaemonManagementHandlers declares this channel's resolved shape as ListSessionsReply; the mock only erases it.
+  return (await handlers['pty:management:listSessions']({})) as ListSessionsReply
+}
+
 async function importFresh() {
   vi.resetModules()
   handleMock.mockClear()
@@ -163,17 +179,21 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-        degraded: boolean
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toHaveLength(3)
+      const listed = result.generations.flatMap((g) => (g.contact === 'live' ? g.sessions : []))
+      expect(listed).toHaveLength(3)
       expect(result.degraded).toBe(false)
-      const byId = new Map(result.sessions.map((s) => [s.sessionId, s]))
+      const byId = new Map(listed.map((s) => [s.sessionId, s]))
       expect(byId.get('new-1')?.protocolVersion).toBe(5)
       expect(byId.get('new-2')?.protocolVersion).toBe(5)
       expect(byId.get('old-1')?.protocolVersion).toBe(3)
+      // The current adapter is the one the router routes fresh spawns to, and it is the only
+      // generation a user should read as current.
+      expect(result.generations.map((g) => [g.protocolVersion, g.isCurrent])).toEqual([
+        [5, true],
+        [3, false]
+      ])
     })
 
     it('reports degraded mode and still lists sessions when the daemon cannot spawn fresh PTYs', async () => {
@@ -183,13 +203,14 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-        degraded: boolean
-      }
+      const result = await invokeListSessions(handlers)
 
       expect(result.degraded).toBe(true)
-      expect(result.sessions.map((s) => s.sessionId)).toEqual(['preserved-1'])
+      expect(
+        result.generations
+          .flatMap((g) => (g.contact === 'live' ? g.sessions : []))
+          .map((s) => s.sessionId)
+      ).toEqual(['preserved-1'])
     })
 
     it('clears degraded mode after durable fresh-spawn routing recovers', async () => {
@@ -212,14 +233,12 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toEqual([])
+      expect(result.generations).toEqual([])
     })
 
-    it('tolerates a failing adapter by skipping its sessions', async () => {
+    it('reports a generation whose listing failed as unverifiable, never as absent', async () => {
       const current = makeAdapter(5, [makeSession('new-1')])
       const legacy = makeAdapter(3, [])
       legacy.listSessions = vi.fn(async () => {
@@ -230,12 +249,51 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
-      const result = (await handlers['pty:management:listSessions']({})) as {
-        sessions: DaemonSessionInfo[]
-      }
+      const result = await invokeListSessions(handlers)
 
-      expect(result.sessions).toHaveLength(1)
-      expect(result.sessions[0].sessionId).toBe('new-1')
+      const byVersion = new Map(result.generations.map((g) => [g.protocolVersion, g]))
+      expect(byVersion.get(3)?.contact).toBe('unverifiable')
+      expect(byVersion.get(5)?.contact).toBe('live')
+    })
+
+    it('never reports an unreachable generation as exited or as zero sessions', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy socket dead')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await invokeListSessions(handlers)
+
+      const unreachable = result.generations.find((g) => g.protocolVersion === 3)
+      expect(unreachable).toMatchObject({ contact: 'unverifiable', reason: 'listing-failed' })
+      // A generation we could not reach owns no session list at all: an empty
+      // array would read as a counted zero (docs/reference/ssh-execution-boundary.md).
+      expect(unreachable).not.toHaveProperty('sessions')
+      expect(JSON.stringify(unreachable)).not.toContain('exited')
+    })
+
+    it('keeps a reachable generation listable while a sibling generation is unverifiable', async () => {
+      const current = makeAdapter(5, [makeSession('new-1')])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy socket dead')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await invokeListSessions(handlers)
+
+      const live = result.generations.find((g) => g.contact === 'live')
+      expect(live?.contact === 'live' ? live.sessions.map((s) => s.sessionId) : []).toEqual([
+        'new-1'
+      ])
     })
   })
 

@@ -186,6 +186,7 @@ export type {
 } from './api/preflight-api'
 export type {
   PtyManagementApi,
+  PtyManagementGeneration,
   PtyManagementMacTccAttributionHealth,
   PtyManagementSession
 } from './api/pty-management-api'

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { PtyManagementSession } from '../../../../preload/api-types'
+import type { PtyManagementGeneration, PtyManagementSession } from '../../../../preload/api-types'
 import { SearchableSetting } from './SearchableSetting'
 import { getManageSessionsSearchEntries } from './terminal-search'
 import { useAppStore } from '../../store'
@@ -19,13 +19,13 @@ import { translate } from '@/i18n/i18n'
 type ConfirmKind = 'killOne'
 
 export function ManageSessionsSection(): React.JSX.Element {
-  const [sessions, setSessions] = useState<PtyManagementSession[]>([])
+  const [generations, setGenerations] = useState<PtyManagementGeneration[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [pendingKillSession, setPendingKillSession] = useState<PtyManagementSession | null>(null)
   const [busyKind, setBusyKind] = useState<ConfirmKind | null>(null)
   const [attributionRefreshRevision, setAttributionRefreshRevision] = useState(0)
-  const optimisticRollback = useRef<PtyManagementSession[] | null>(null)
+  const optimisticRollback = useRef<PtyManagementGeneration[] | null>(null)
   const isMounted = useRef(true)
   const mutationInFlight = useRef(false)
 
@@ -74,15 +74,15 @@ export function ManageSessionsSection(): React.JSX.Element {
     }
   }, [])
 
-  const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
+  const refresh = useCallback(async (): Promise<PtyManagementGeneration[]> => {
     setIsRefreshing(true)
     try {
       const result = await window.api.pty.management.listSessions()
       if (!isMounted.current || mutationInFlight.current) {
-        return result.sessions
+        return result.generations
       }
-      setSessions(result.sessions)
-      return result.sessions
+      setGenerations(result.generations)
+      return result.generations
     } catch (err) {
       console.error('[manage-sessions] listSessions failed', err)
       if (isMounted.current && !mutationInFlight.current) {
@@ -109,17 +109,21 @@ export function ManageSessionsSection(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
-  const sessionCount = sessions.length
-
   const daemonActions = useDaemonActions({
     onKillAllStart: () => {
       mutationInFlight.current = true
-      optimisticRollback.current = sessions
-      setSessions([])
+      optimisticRollback.current = generations
+      // Why: only generations that answered can be emptied optimistically. One we could not
+      // reach is not cleared by a kill we could not deliver to it.
+      setGenerations((current) =>
+        current.map((generation) =>
+          generation.contact === 'live' ? { ...generation, sessions: [] } : generation
+        )
+      )
     },
     onKillAllError: () => {
       if (isMounted.current && optimisticRollback.current) {
-        setSessions(optimisticRollback.current)
+        setGenerations(optimisticRollback.current)
       }
     },
     onKillAllSettled: () => {
@@ -219,9 +223,8 @@ export function ManageSessionsSection(): React.JSX.Element {
           refreshRevision={attributionRefreshRevision}
         />
         <ManageSessionsTable
-          sessions={sessions}
+          generations={generations}
           hasLoadedOnce={hasLoadedOnce}
-          sessionCount={sessionCount}
           isBusy={isBusy}
           isRefreshing={isRefreshing}
           daemonBusyKind={daemonActions.busyKind}

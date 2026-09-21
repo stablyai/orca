@@ -90,7 +90,9 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearPendingPaneSerializer: () => Promise.resolve(),
     reportRendererSerializerReady: () => Promise.resolve(),
     management: {
-      listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
+      // Why: a web client owns no daemon adapters, so it reports no generations rather than an
+      // empty one — it is not standing in for a generation it never had a route to.
+      listSessions: () => Promise.resolve({ generations: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false }),

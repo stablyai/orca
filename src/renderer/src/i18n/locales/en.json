@@ -12018,6 +12018,13 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "ManageSessionsTable": {
+          "d4ae93e65d": "Current version",
+          "285148ee08": "Previous version",
+          "e6ec9241a4": "Protocol {{value0}}",
+          "3388ec840f": "Orca couldn’t reach this version of the terminal service, so its sessions can’t be listed. They are not known to have stopped.",
+          "2790ddcc1d": "At least {{value0}} — a version Orca couldn’t reach may hold more."
         }
       },
       "right": {

@@ -1,4 +1,4 @@
-import type { PtyManagementSession } from '../../../../preload/api-types'
+import type { PtyManagementGeneration, PtyManagementSession } from '../../../../preload/api-types'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
 export function shortCwd(cwd: string): string {
@@ -22,10 +22,10 @@ export function formatWorkspace(session: { cwd: string | null; sessionId: string
   return 'unknown'
 }
 
+// The daemon drops every non-alive session before it leaves the host
+// (listLiveTerminalHostSessions), so `isAlive` cannot answer for one that never arrived. Only the
+// host-reported `state` may say 'exited'.
 export function formatState(session: PtyManagementSession): string {
-  if (!session.isAlive) {
-    return 'exited'
-  }
   if (session.shellState === 'ready') {
     return 'running'
   }
@@ -33,4 +33,31 @@ export function formatState(session: PtyManagementSession): string {
     return 'starting'
   }
   return session.state
+}
+
+/**
+ * What the generation's session slot reads. An unreachable generation reads `unverifiable`
+ * rather than `0`, because a count we could not take is not a count of zero
+ * (docs/reference/ssh-execution-boundary.md).
+ */
+export function formatGenerationSessionCount(generation: PtyManagementGeneration): string {
+  return generation.contact === 'live' ? String(generation.sessions.length) : 'unverifiable'
+}
+
+/** The total, marked as a lower bound whenever a generation could not be counted. */
+export function formatVisibleSessionCount(generations: PtyManagementGeneration[]): string {
+  const counted = generations.reduce(
+    (total, generation) => total + (generation.contact === 'live' ? generation.sessions.length : 0),
+    0
+  )
+  return generations.some((generation) => generation.contact !== 'live')
+    ? `${counted}+`
+    : String(counted)
+}
+
+/** Flattens only what a generation actually reported; unreachable generations contribute nothing. */
+export function reportedSessions(generations: PtyManagementGeneration[]): PtyManagementSession[] {
+  return generations.flatMap((generation) =>
+    generation.contact === 'live' ? generation.sessions : []
+  )
 }

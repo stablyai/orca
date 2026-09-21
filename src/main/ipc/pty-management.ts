@@ -18,15 +18,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function getDaemonAdapters(): DaemonPtyAdapter[] {
+type DaemonAdapterSet = { adapters: DaemonPtyAdapter[]; current: DaemonPtyAdapter | null }
+
+// Why: the current generation is whichever adapter the router routes fresh spawns to, not
+// whichever one matches PROTOCOL_VERSION — an adopted daemon can be current on an older protocol.
+function getDaemonAdapters(): DaemonAdapterSet {
   const provider = getDaemonProvider()
   if (!provider) {
-    return []
+    return { adapters: [], current: null }
   }
   if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
-    return [...provider.getAllAdapters()]
+    return { adapters: [...provider.getAllAdapters()], current: provider.getCurrentAdapter() }
   }
-  return [provider]
+  return { adapters: [provider], current: provider }
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
@@ -38,17 +42,60 @@ function isDaemonDegraded(): boolean {
   )
 }
 
-async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
-  const results = await Promise.allSettled(
-    adapters.map(async (adapter) => {
-      const sessions = await adapter.listSessions()
-      return sessions.map<DaemonSessionInfo>((s) => ({
-        ...s,
-        protocolVersion: adapter.protocolVersion
-      }))
+/**
+ * One daemon protocol generation and what this process actually knows about it.
+ *
+ * A generation whose adapter did not answer is `unverifiable` and carries no session list at
+ * all: an empty array would read as a counted zero, and absence from a client-side listing is
+ * never evidence that the generation's PTYs exited (docs/reference/ssh-execution-boundary.md).
+ * Only two of that document's contact arms appear here because a daemon adapter either answered
+ * this listing or it did not — this channel has no refuse or retire signal to report.
+ */
+export type DaemonGenerationInventory = { protocolVersion: number; isCurrent: boolean } & (
+  | { contact: 'live'; sessions: DaemonSessionInfo[] }
+  | { contact: 'unverifiable'; reason: 'listing-failed'; detail: string | null }
+)
+
+async function collectGenerations({
+  adapters,
+  current
+}: DaemonAdapterSet): Promise<DaemonGenerationInventory[]> {
+  return Promise.all(
+    adapters.map(async (adapter): Promise<DaemonGenerationInventory> => {
+      const generation = {
+        protocolVersion: adapter.protocolVersion,
+        isCurrent: adapter === current
+      }
+      try {
+        const sessions = await adapter.listSessions()
+        return {
+          ...generation,
+          contact: 'live',
+          sessions: sessions.map<DaemonSessionInfo>((s) => ({
+            ...s,
+            protocolVersion: adapter.protocolVersion
+          }))
+        }
+      } catch (err) {
+        return {
+          ...generation,
+          contact: 'unverifiable',
+          reason: 'listing-failed',
+          detail: err instanceof Error ? err.message : null
+        }
+      }
     })
   )
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+}
+
+// Why named rather than inlined: kill routing can only reach sessions a generation actually
+// reported, so the narrowing is a stated limit of the kill surface, not a dropped error.
+function reachableSessions(generations: DaemonGenerationInventory[]): DaemonSessionInfo[] {
+  return generations.flatMap((g) => (g.contact === 'live' ? g.sessions : []))
+}
+
+async function collectSessions(adapterSet: DaemonAdapterSet): Promise<DaemonSessionInfo[]> {
+  return reachableSessions(await collectGenerations(adapterSet))
 }
 
 export function registerDaemonManagementHandlers(): void {
@@ -72,9 +119,9 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
-      const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions, degraded: isDaemonDegraded() }
+    async (): Promise<{ generations: DaemonGenerationInventory[]; degraded: boolean }> => {
+      const generations = await collectGenerations(getDaemonAdapters())
+      return { generations, degraded: isDaemonDegraded() }
     }
   )
 
@@ -86,9 +133,10 @@ export function registerDaemonManagementHandlers(): void {
       remainingCount: number
       killedSessionIds: string[]
     }> => {
-      const adapters = getDaemonAdapters()
+      const adapterSet = getDaemonAdapters()
+      const adapters = adapterSet.adapters
       // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
-      const initial = await collectSessions(adapters)
+      const initial = await collectSessions(adapterSet)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
 
@@ -114,7 +162,7 @@ export function registerDaemonManagementHandlers(): void {
       let remainingOriginalIds = initialIds
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
         await sleep(POLL_INTERVAL_MS)
-        const current = await collectSessions(adapters)
+        const current = await collectSessions(adapterSet)
         remainingOriginalIds = new Set(
           current
             .filter((session) => initialIds.has(session.sessionId))
@@ -143,13 +191,13 @@ export function registerDaemonManagementHandlers(): void {
       if (typeof args?.sessionId !== 'string' || args.sessionId.length === 0) {
         return { success: false }
       }
-      const adapters = getDaemonAdapters()
-      const sessions = await collectSessions(adapters)
+      const adapterSet = getDaemonAdapters()
+      const sessions = await collectSessions(adapterSet)
       const match = sessions.find((s) => s.sessionId === args.sessionId)
       if (!match) {
         return { success: false }
       }
-      const owner = adapters.find((a) => a.protocolVersion === match.protocolVersion)
+      const owner = adapterSet.adapters.find((a) => a.protocolVersion === match.protocolVersion)
       if (!owner) {
         return { success: false }
       }
