@@ -210,7 +210,9 @@ describe('the census rule itself', () => {
       'app/h/[hostId]/agent-history/[worktreeId].tsx',
       'app/h/[hostId]/tasks.tsx',
       'app/h/[hostId]/files/[worktreeId].tsx',
-      'app/h/[hostId]/files/preview/[worktreeId].tsx'
+      'app/h/[hostId]/files/preview/[worktreeId].tsx',
+      'app/h/[hostId]/source-control/[worktreeId].tsx',
+      'app/h/[hostId]/review/[worktreeId].tsx'
     ])
   })
 
