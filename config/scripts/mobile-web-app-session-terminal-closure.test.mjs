@@ -229,8 +229,16 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * diffed to name the difference: those two leave and nothing joins. The same measurement, taken
  * before #22067 landed, is how this branch read main's pin of 4,330 as three modules stale — the
  * three the paragraph above names.
+ *
+ * Then the two other table parsers gave up their own row splitters and read the editor's
+ * `src/components/rich-markdown/markdown-table-rows.ts` instead, which the session page reaches
+ * through the PR comment renderer. It is the one module that joins, and the only one it can be: it
+ * imports nothing, and no other file under `rich-markdown/` is in the closure beside it.
+ *
+ *   modules        4331 -> 4332   (+1)
+ *   local modules   989 ->  990   (+1)
  */
-const SESSION_ROUTE_MODULES = 4331
+const SESSION_ROUTE_MODULES = 4332
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
