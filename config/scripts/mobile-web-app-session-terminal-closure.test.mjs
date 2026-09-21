@@ -208,8 +208,14 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * declared beside the route-update accept, so `bridge-route-update.ts` and the
  * `shell-screen-route.ts` it reads a route key from now enter through the envelope as well. All
  * four are schema and string constants: the closure grew, the download did not gain a package.
+ *
+ * Main measures 4,333 at `3cfb070294`: #21924 (`2739246058`) turned `agent-session-wire.ts`'s
+ * type-only import of `agent-session-record` into a value import, so `src/shared/agent-session-record.ts`
+ * and the two it reaches, `agent-session-conversation-name.ts` and `surrogate-safe-text-slice.ts`,
+ * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
+ * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
  */
-const SESSION_ROUTE_MODULES = 4330
+const SESSION_ROUTE_MODULES = 4333
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
