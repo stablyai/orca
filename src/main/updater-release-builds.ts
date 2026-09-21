@@ -13,6 +13,89 @@ import { isValidVersion } from './updater-fallback'
 
 const FETCH_TIMEOUT_MS = 8000
 const MAX_LISTED_BUILDS = 100
+const BUILDS_CACHE_TTL_MS = 3 * 60_000
+const TOKEN_CACHE_TTL_MS = 5 * 60_000
+
+type BuildsCacheEntry = {
+  builds: ReleaseBuild[]
+  cachedAt: number
+}
+
+const buildsCache = new Map<string, BuildsCacheEntry>()
+let tokenCache: { token: string | null; cachedAt: number } | null = null
+
+function buildsCacheKey(channel: ReleaseChannel, platform: NodeJS.Platform): string {
+  return `${channel}\0${platform}`
+}
+
+export type ListReleaseBuildsOptions = {
+  force?: boolean
+  nowMs?: number
+}
+
+// Why: resolve user's gh token to draw from the 5,000 req/hr quota instead of unauthenticated IP pool.
+export async function resolveGitHubAuthToken(nowMs = Date.now()): Promise<string | null> {
+  if (tokenCache && nowMs - tokenCache.cachedAt < TOKEN_CACHE_TTL_MS) {
+    return tokenCache.token
+  }
+  const envToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  if (envToken && envToken.trim()) {
+    tokenCache = { token: envToken.trim(), cachedAt: nowMs }
+    return tokenCache.token
+  }
+  try {
+    const { ghExecFileAsync } = await import('./git/runner')
+    const { stdout } = await ghExecFileAsync(['auth', 'token'], {
+      timeout: 3000,
+      env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+    })
+    const token = stdout.replace(/\r?\n/g, '').trim()
+    const resolved = token || null
+    tokenCache = { token: resolved, cachedAt: nowMs }
+    return resolved
+  } catch {
+    // Why: cache failure briefly so an unauthenticated or missing gh binary does not re-spawn on every call.
+    tokenCache = { token: null, cachedAt: nowMs }
+    return null
+  }
+}
+
+export function clearReleaseBuildsCacheForTests(): void {
+  buildsCache.clear()
+  tokenCache = null
+}
+
+function isRateLimitResponse(
+  status: number,
+  res: { headers?: { get?: (name: string) => string | null } }
+): boolean {
+  if (status === 429) {
+    return true
+  }
+  if (status === 403) {
+    const remaining = res.headers?.get?.('x-ratelimit-remaining')
+    return remaining === '0' || remaining === null || remaining === undefined
+  }
+  return false
+}
+
+function formatRateLimitErrorMessage(
+  res: { headers?: { get?: (name: string) => string | null } },
+  nowMs: number
+): string {
+  const resetHeader = res.headers?.get?.('x-ratelimit-reset')
+  if (resetHeader) {
+    const resetEpochSec = Number(resetHeader)
+    if (!Number.isNaN(resetEpochSec) && resetEpochSec > 0) {
+      const diffMs = resetEpochSec * 1000 - nowMs
+      if (diffMs > 0) {
+        const minutes = Math.ceil(diffMs / 60_000)
+        return `GitHub rate limit reached. Resets in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+      }
+    }
+  }
+  return 'GitHub rate limit reached. Try again in a few minutes.'
+}
 
 function getReleasesApiUrl(repo: string): string {
   return `https://api.github.com/repos/${repo}/releases?per_page=${MAX_LISTED_BUILDS}`
@@ -94,19 +177,38 @@ function parseReleaseEntry(
  */
 export async function listReleaseBuilds(
   channel: ReleaseChannel,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options?: ListReleaseBuildsOptions
 ): Promise<ReleaseBuild[]> {
+  const now = options?.nowMs ?? Date.now()
+  const cacheKey = buildsCacheKey(channel, platform)
+  if (!options?.force) {
+    const cached = buildsCache.get(cacheKey)
+    if (cached && now - cached.cachedAt < BUILDS_CACHE_TTL_MS) {
+      return cached.builds
+    }
+  }
+
   const repo = getReleaseRepoForChannel(channel)
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
+  const authToken = await resolveGitHubAuthToken(now)
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`
+  }
+
   const res = await net.fetch(getReleasesApiUrl(repo), {
-    headers: { Accept: 'application/vnd.github+json' },
+    headers,
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error(`No releases repository found at ${repo}.`)
     }
-    if (res.status === 403 || res.status === 429) {
-      throw new Error('GitHub rate limit reached. Try again in a few minutes.')
+    if (isRateLimitResponse(res.status, res)) {
+      throw new Error(formatRateLimitErrorMessage(res, now))
+    }
+    if (res.status === 403) {
+      throw new Error(`Could not list ${channel} builds (HTTP 403 forbidden).`)
     }
     throw new Error(`Could not list ${channel} builds (HTTP ${res.status}).`)
   }
@@ -119,7 +221,9 @@ export async function listReleaseBuilds(
     .filter((build): build is ReleaseBuild => build !== null)
     // Why: the main repo serves both stable and rc, so filter to the asked-for channel.
     .filter((build) => build.channel === channel)
-  return sortReleaseBuildsNewestFirst(builds)
+  const sorted = sortReleaseBuildsNewestFirst(builds)
+  buildsCache.set(cacheKey, { builds: sorted, cachedAt: now })
+  return sorted
 }
 
 export type ResolvedTargetBuild = {

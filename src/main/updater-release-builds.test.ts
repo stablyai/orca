@@ -1,14 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchMock = vi.fn()
+const ghExecFileAsyncMock = vi.fn()
+
 vi.mock('electron', () => ({ net: { fetch: (...args: unknown[]) => fetchMock(...args) } }))
+vi.mock('./git/runner', () => ({
+  ghExecFileAsync: (...args: unknown[]) => ghExecFileAsyncMock(...args)
+}))
 
-const { listReleaseBuilds, resolveTargetBuild } = await import('./updater-release-builds')
+const {
+  clearReleaseBuildsCacheForTests,
+  listReleaseBuilds,
+  resolveTargetBuild
+} = await import('./updater-release-builds')
 
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+function jsonResponse(
+  body: unknown,
+  init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {}
+) {
+  const headersMap = new Map(
+    Object.entries(init.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v])
+  )
   return {
     ok: init.ok ?? true,
     status: init.status ?? 200,
+    headers: {
+      get: (name: string) => headersMap.get(name.toLowerCase()) ?? null
+    },
     json: () => Promise.resolve(body)
   }
 }
@@ -36,6 +54,11 @@ const release = (tag: string, extra: Record<string, unknown> = {}) => ({
 describe('listReleaseBuilds', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    ghExecFileAsyncMock.mockReset()
+    ghExecFileAsyncMock.mockRejectedValue(new Error('no gh binary'))
+    clearReleaseBuildsCacheForTests()
+    delete process.env.GH_TOKEN
+    delete process.env.GITHUB_TOKEN
   })
 
   it('lists hourly builds from the dedicated repo, newest first', async () => {
@@ -212,6 +235,111 @@ describe('listReleaseBuilds', () => {
   it('surfaces a rate limit as an actionable message', async () => {
     fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 403 }))
     await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(/rate limit/i)
+  })
+
+  it('surfaces a rate limit with reset time when header is present', async () => {
+    const resetEpochSec = Math.floor(Date.now() / 1000) + 900
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, {
+        ok: false,
+        status: 403,
+        headers: {
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': String(resetEpochSec)
+        }
+      })
+    )
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+      /GitHub rate limit reached\. Resets in 15 minutes\./
+    )
+  })
+
+  it('distinguishes a generic 403 forbidden from a rate limit', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, {
+        ok: false,
+        status: 403,
+        headers: {
+          'x-ratelimit-remaining': '42'
+        }
+      })
+    )
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+      /Could not list hourly builds \(HTTP 403 forbidden\)\./
+    )
+  })
+
+  it('surfaces a 429 status code as a rate limit with reset message', async () => {
+    const resetEpochSec = Math.floor(Date.now() / 1000) + 60
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, {
+        ok: false,
+        status: 429,
+        headers: {
+          'x-ratelimit-reset': String(resetEpochSec)
+        }
+      })
+    )
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+      /GitHub rate limit reached\. Resets in 1 minute\./
+    )
+  })
+
+  it('attaches Authorization header when gh token is available', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: 'gho_keyring_token\n', stderr: '' })
+    fetchMock.mockResolvedValue(
+      jsonResponse([release('v1.4.160-hourly.202607281400')])
+    )
+
+    await listReleaseBuilds('hourly', 'darwin')
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer gho_keyring_token')
+  })
+
+  it('attaches Authorization header from environment variable without invoking gh', async () => {
+    process.env.GH_TOKEN = 'gho_env_token'
+    fetchMock.mockResolvedValue(
+      jsonResponse([release('v1.4.160-hourly.202607281400')])
+    )
+
+    await listReleaseBuilds('hourly', 'darwin')
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer gho_env_token')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('caches release builds across multiple calls within TTL', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([release('v1.4.160-hourly.202607281400')])
+    )
+
+    const first = await listReleaseBuilds('hourly', 'darwin', { nowMs: 1000 })
+    const second = await listReleaseBuilds('hourly', 'darwin', { nowMs: 2000 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(second).toEqual(first)
+  })
+
+  it('bypasses cache when force option is true', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([release('v1.4.160-hourly.202607281400')])
+    )
+
+    await listReleaseBuilds('hourly', 'darwin', { nowMs: 1000 })
+    await listReleaseBuilds('hourly', 'darwin', { force: true, nowMs: 2000 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refetches when cache TTL expires', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([release('v1.4.160-hourly.202607281400')])
+    )
+
+    await listReleaseBuilds('hourly', 'darwin', { nowMs: 1000 })
+    await listReleaseBuilds('hourly', 'darwin', { nowMs: 1000 + 4 * 60_000 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('reports a missing hourly repo distinctly', async () => {

@@ -20,6 +20,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { UpdateInstallMode } from './updater-state'
+import type { ListReleaseBuildsOptions } from '../updater-release-builds'
 
 export type UpdaterSetupOptions = {
   getLastUpdateCheckAt?: () => number | null
@@ -94,8 +95,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.showLinuxPackage()
   }
 
-  async listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
-    return super.listAvailableReleaseBuilds(channel)
+  async listAvailableReleaseBuilds(
+    channel: ReleaseChannel,
+    options?: ListReleaseBuildsOptions
+  ): Promise<ReleaseBuild[]> {
+    return super.listAvailableReleaseBuilds(channel, options)
   }
 
   dismissNudge(): void {

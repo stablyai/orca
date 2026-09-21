@@ -116,17 +116,21 @@ export function ReleaseChannelSection(): React.JSX.Element {
   // from a channel the picker is no longer showing.
   const latestRequestRef = useRef(0)
 
-  const loadBuilds = useCallback(async (channel: ReleaseChannel): Promise<void> => {
-    const requestId = latestRequestRef.current + 1
-    latestRequestRef.current = requestId
-    const isStale = (): boolean => latestRequestRef.current !== requestId
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const result = await window.api.updater.listBuilds(channel)
-      if (isStale()) {
-        return
-      }
+  const loadBuilds = useCallback(
+    async (channel: ReleaseChannel, force?: boolean): Promise<void> => {
+      const requestId = latestRequestRef.current + 1
+      latestRequestRef.current = requestId
+      const isStale = (): boolean => latestRequestRef.current !== requestId
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const result = await window.api.updater.listBuilds(
+          channel,
+          force ? { force: true } : undefined
+        )
+        if (isStale()) {
+          return
+        }
       if (result.ok) {
         setBuilds(result.builds)
         setSelectedTag(result.builds[0]?.tag ?? null)
@@ -306,7 +310,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
               'Refresh build list'
             )}
             disabled={loading}
-            onClick={() => void loadBuilds(activeChannel)}
+            onClick={() => void loadBuilds(activeChannel, true)}
           >
             {loading ? (
               <Loader2 className="size-3.5 animate-spin" />

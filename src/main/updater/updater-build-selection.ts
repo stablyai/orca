@@ -11,7 +11,11 @@ import {
   type ReleaseChannel
 } from '../../shared/release-channel'
 import { compareVersions } from '../updater-fallback'
-import { listReleaseBuilds, resolveTargetBuild } from '../updater-release-builds'
+import {
+  listReleaseBuilds,
+  resolveTargetBuild,
+  type ListReleaseBuildsOptions
+} from '../updater-release-builds'
 import { UpdaterMenuChecks } from './updater-menu-checks'
 
 /** Handles local-build selection and exact release-channel/tag jumps. */
@@ -67,8 +71,11 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
     }
   }
 
-  protected async listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
-    return listReleaseBuilds(channel)
+  protected async listAvailableReleaseBuilds(
+    channel: ReleaseChannel,
+    options?: ListReleaseBuildsOptions
+  ): Promise<ReleaseBuild[]> {
+    return listReleaseBuilds(channel, process.platform, options)
   }
 
   /** Pins the updater at one exact release tag and checks it, so a dev can move to any published build on any channel — including an older one. */
