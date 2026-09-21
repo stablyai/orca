@@ -24,11 +24,8 @@ const ALLOWED_INSIDE_TERMINAL = new Set([
   'terminal-web-document-mount.ts',
   'terminal-webview-html.ts',
   'terminal-webview-html.web.ts',
-  // Test scaffolding that runs the WebView's own document text; it is not shipped in either build.
-  'terminal-webview-mouse-test-harness.ts',
-  // Generated, and it *is* the document: its body is the modules' own emitted text (ruling 23).
-  // Its one import is the host contract the signature is written against.
-  'terminal-webview-document-factory.generated.ts'
+  // Test scaffolding that drives the document's own modules; it is not shipped in either build.
+  'terminal-webview-mouse-test-harness.ts'
 ])
 
 const FORBIDDEN_ABOVE_THE_CONTRACT = [

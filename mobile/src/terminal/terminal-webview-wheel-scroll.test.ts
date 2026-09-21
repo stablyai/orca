@@ -1,12 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { generatedDocumentProgram } from './document/generated-document-region.test-support'
-import { XTERM_HTML } from './terminal-webview-html'
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 function bodyMarkup(): string {
-  const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script>', start)
-  return XTERM_HTML.slice(start, end)
+  return TERMINAL_DOCUMENT_MARKUP
 }
 
 type BufferState = {
@@ -124,7 +122,8 @@ describe('terminal WebView external pointer wheel scrolling', () => {
 
   function boot(): void {
     document.body.innerHTML = bodyMarkup()
-    new Function(generatedDocumentProgram())()
+    // The bundle the WebView loads, run as the WebView runs it.
+    new Function(TERMINAL_DOCUMENT_SCRIPT)()
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })

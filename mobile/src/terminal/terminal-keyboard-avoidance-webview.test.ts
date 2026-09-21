@@ -1,16 +1,28 @@
-import { Script } from 'node:vm'
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  documentScopePreamble,
-  generatedDocumentModule
-} from './document/generated-document-region.test-support'
+import { createTerminalDocumentScope } from './document/document-scope'
+import { documentModuleSource } from './document/document-module-source.test-support'
+import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
-import { XTERM_HTML } from './terminal-webview-html'
 
-const terminalHtmlSource = XTERM_HTML
 // The scope object plus the metrics block, exactly as the document carries them.
-const keyboardAvoidanceMetricsScript = `${documentScopePreamble()}\nscope.term = term;\n${await generatedDocumentModule('keyboard-avoidance-metrics')}`
+/**
+ * The metrics module over a scope the case owns.
+ *
+ * Imported rather than evaluated: the module reads the terminal and the notify seam off the scope
+ * it is handed, so a case builds one with its own terminal double and reads the notifications back
+ * out of the seam it passed in.
+ */
+function runMetricsOver(term: unknown): Record<string, unknown>[] {
+  const notifications: Record<string, unknown>[] = []
+  const scope = createTerminalDocumentScope({
+    postToHost: (message) => notifications.push(message)
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case's double implements the buffer members the scan reads, which is what the assertions check.
+  scope.term = term as typeof scope.term
+  emitKeyboardAvoidanceMetrics(scope)
+  return notifications
+}
 
 type Cell = { isBgDefault: () => boolean; isInverse: () => number }
 type MetricsNotification = {
@@ -35,7 +47,6 @@ function makeLine(text = '', styledColumns: number[] = []) {
 }
 
 function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScreen = false) {
-  const notifications: Record<string, unknown>[] = []
   const buffer = {
     cursorY: 2,
     viewportY: 3,
@@ -43,24 +54,14 @@ function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScree
     getLine: (index: number) => lines[index - 3],
     getNullCell: () => ({})
   }
-  const context = {
-    notifications,
-    notify: (message: Record<string, unknown>) => notifications.push(message),
-    term: { buffer: { active: buffer }, cols: 10, rows: lines.length }
-  }
-  new Script(`${keyboardAvoidanceMetricsScript}\nemitKeyboardAvoidanceMetrics();`).runInNewContext(
-    context
-  )
-  return notifications[0] as MetricsNotification
+  const notified = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: lines.length })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module emits one keyboard-avoidance notify, whose shape this file declares.
+  return notified[0] as MetricsNotification
 }
 
 function runTerminalMetrics(term: Terminal) {
-  const notifications: Record<string, unknown>[] = []
-  new Script(`${keyboardAvoidanceMetricsScript}\nemitKeyboardAvoidanceMetrics();`).runInNewContext({
-    notify: (message: Record<string, unknown>) => notifications.push(message),
-    term
-  })
-  return notifications[0] as MetricsNotification
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real xterm terminal satisfies the document's own narrower shape, which is what the scope field holds.
+  return runMetricsOver(term)[0] as MetricsNotification
 }
 
 function write(term: Terminal, data: string): Promise<void> {
@@ -190,24 +191,27 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
   })
 
   it('refreshes metrics after every buffer geometry reset', () => {
-    const resizeStart = terminalHtmlSource.indexOf('  function resize(cols, rows)')
-    const resizeEnd = terminalHtmlSource.indexOf('\n  function reflow(', resizeStart)
-    const clearStart = terminalHtmlSource.indexOf('} else if (msg.type === "clear") {')
-    const clearEnd = terminalHtmlSource.indexOf('} else if (msg.type === "measure")', clearStart)
-    const textScaleStart = terminalHtmlSource.indexOf('  function applyTextScale(scale)')
-    const textScaleEnd = terminalHtmlSource.indexOf('\n  scope.panX', textScaleStart)
-    const reflowStart = terminalHtmlSource.indexOf('  function reflow(cols, rows)')
-    const reflowEnd = terminalHtmlSource.indexOf('\n  function notify(', reflowStart)
+    // Four places change the buffer's geometry, and each owes a fresh emit after it: a stale
+    // content-bottom row is what lifts the keyboard over the wrong line. Read from each module's
+    // own source, so a fifth site added in a new module is not silently uncovered.
+    const blocks = [
+      ['terminal-init', 'export function resize('],
+      ['reflow', 'export function reflow('],
+      ['host-message-router', "} else if (msg.type === 'clear') {"],
+      ['text-scaling', 'export function applyTextScale(']
+    ] as const
 
-    for (const block of [
-      terminalHtmlSource.slice(resizeStart, resizeEnd),
-      terminalHtmlSource.slice(clearStart, clearEnd),
-      terminalHtmlSource.slice(textScaleStart, textScaleEnd),
-      terminalHtmlSource.slice(reflowStart, reflowEnd)
-    ]) {
-      expect(block.indexOf('emitKeyboardAvoidanceMetrics()')).toBeGreaterThan(
-        block.includes('term.resize') ? block.indexOf('term.resize') : block.indexOf('term.reset')
-      )
+    for (const [module, opener] of blocks) {
+      const source = documentModuleSource(module)
+      const start = source.indexOf(opener)
+      expect(start, `${module} no longer carries ${opener}`).toBeGreaterThanOrEqual(0)
+      const block = source.slice(start, source.indexOf('\n}', start))
+      const emitAt = block.indexOf('emitKeyboardAvoidanceMetrics(scope)')
+      const geometryAt = block.includes('.resize(')
+        ? block.indexOf('.resize(')
+        : block.indexOf('.reset(')
+      expect(emitAt, `${module} does not emit metrics`).toBeGreaterThanOrEqual(0)
+      expect(emitAt, `${module} emits before it resizes`).toBeGreaterThan(geometryAt)
     }
   })
 })

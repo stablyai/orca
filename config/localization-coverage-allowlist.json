@@ -215,5 +215,194 @@
     "text": ". Switch to System shell or choose an executable on this host.",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "arguments",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "args",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "login",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "wrapper",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:keywords",
+    "text": "rcfile",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-text",
+    "text": "Advanced",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-text",
+    "text": "Shell arguments",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-expression",
+    "text": "Starts the shell as a login shell with -l.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-expression",
+    "text": "Enter one argument per line. Leave it empty to pass no arguments.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:ariaLabel",
+    "text": "Shell argument mode",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:label",
+    "text": "-l (default)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "object-property:label",
+    "text": "Custom args",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "--rcfile /path/to/rcfile",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TerminalPane.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Shell arguments, one per line",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:title",
+    "text": "Terminal shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:description",
+    "text": "Shell and arguments used for new local interactive terminal panes",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "shell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "terminal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "fish",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "zsh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "bash",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "nushell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "arguments",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "args",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "login",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "wrapper",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "rcfile",
+    "dynamic": false,
+    "count": 1
   }
 ]

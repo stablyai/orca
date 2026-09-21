@@ -1,5 +1,6 @@
-import { scope, scheduleDocumentFrame } from './document-scope'
-import { applyFitScale } from './fit-scale'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
+import { applyFitScale, MIN_FIT_COLS } from './fit-scale'
 import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
@@ -21,7 +22,7 @@ export type TerminalHostMessage = {
   cols?: number
   rows?: number
   initialData?: unknown
-  terminalTheme?: Parameters<typeof applyTerminalTheme>[0]
+  terminalTheme?: Parameters<typeof applyTerminalTheme>[1]
   fontScale?: number
   preserveScroll?: boolean
   oscLinks?: unknown
@@ -29,7 +30,11 @@ export type TerminalHostMessage = {
   containerHeight?: number
 }
 
-export function measureFitDimensions(containerHeightPx: unknown, retriesLeft?: number) {
+export function measureFitDimensions(
+  scope: TerminalDocumentScope,
+  containerHeightPx: unknown,
+  retriesLeft?: number
+) {
   if (typeof retriesLeft !== 'number') {
     retriesLeft = 30
   }
@@ -51,21 +56,21 @@ export function measureFitDimensions(containerHeightPx: unknown, retriesLeft?: n
     if (retriesLeft > 0) {
       // Ruling 21: a retry that outlives its mount would answer the next mount's measure.
       const gen = scope.terminalGeneration
-      scheduleDocumentFrame(function () {
+      scheduleDocumentFrame(scope, function () {
         if (gen !== scope.terminalGeneration) {
           return
         }
-        measureFitDimensions(containerHeightPx, retriesLeft - 1)
+        measureFitDimensions(scope, containerHeightPx, retriesLeft - 1)
       })
       return
     }
-    flog('measure-fail', {
+    flog(scope, 'measure-fail', {
       notReady: notReady,
       cellWidth: cellWidth,
       cellHeight: cellHeight,
       retriesLeft: retriesLeft
     })
-    notify({ type: 'measure-result', cols: null, rows: null })
+    notify(scope, { type: 'measure-result', cols: null, rows: null })
     return
   }
   const vpWidth = window.innerWidth
@@ -79,13 +84,13 @@ export function measureFitDimensions(containerHeightPx: unknown, retriesLeft?: n
       ? containerHeightPx
       : window.innerHeight
   const cols = Math.floor(vpWidth / cellWidth)
-  if (cols < scope.MIN_FIT_COLS) {
-    flog('measure-skip-small-width', {
+  if (cols < MIN_FIT_COLS) {
+    flog(scope, 'measure-skip-small-width', {
       vpWidth: vpWidth,
       cellWidth: cellWidth,
       cols: cols
     })
-    notify({ type: 'measure-result', cols: null, rows: null })
+    notify(scope, { type: 'measure-result', cols: null, rows: null })
     return
   }
   // Why: the rows we report become the PTY's actual row count after the
@@ -97,10 +102,10 @@ export function measureFitDimensions(containerHeightPx: unknown, retriesLeft?: n
   // from RN layout (terminalFrame's flex bounds), not from undersizing
   // the PTY.
   const rows = Math.max(8, Math.floor(vpHeight / cellHeight))
-  notify({ type: 'measure-result', cols: cols, rows: rows })
+  notify(scope, { type: 'measure-result', cols: cols, rows: rows })
 }
 
-export function handleMsg(msg: TerminalHostMessage) {
+export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage) {
   if (typeof msg.id === 'number') {
     // oxlint-disable-next-line unicorn/prefer-includes -- the document's text is pinned token for token; rewriting this changes the native program
     if (scope.handledMessageIds.indexOf(msg.id) !== -1) {
@@ -112,9 +117,10 @@ export function handleMsg(msg: TerminalHostMessage) {
     }
   }
   if (msg.type === 'ping') {
-    notify({ type: 'pong', pingId: msg.id })
+    notify(scope, { type: 'pong', pingId: msg.id })
   } else if (msg.type === 'init') {
     init(
+      scope,
       msg.cols!,
       msg.rows!,
       msg.initialData,
@@ -134,18 +140,18 @@ export function handleMsg(msg: TerminalHostMessage) {
       scope.userScale = 1
       scope.panX = 0
       scope.panY = 0
-      applyTextScale(msg.fontScale)
+      applyTextScale(scope, msg.fontScale)
     }
   } else if (msg.type === 'resize') {
-    resize(msg.cols!, msg.rows!)
+    resize(scope, msg.cols!, msg.rows!)
   } else if (msg.type === 'reflow') {
-    reflow(msg.cols!, msg.rows!)
+    reflow(scope, msg.cols!, msg.rows!)
   } else if (msg.type === 'write') {
-    write(msg.data!)
+    write(scope, msg.data!)
   } else if (msg.type === 'clear') {
     scope.terminalGeneration++
-    resetWriteQueue()
-    resumeTerminalDataReplyAuthority() // Why: clear drops the replay boundary.
+    resetWriteQueue(scope)
+    resumeTerminalDataReplyAuthority(scope) // Why: clear drops the replay boundary.
     scope.statusDotPendingSelector = false
     scope.afterDrainCallbacks = []
     scope.writesDraining = false
@@ -160,22 +166,22 @@ export function handleMsg(msg: TerminalHostMessage) {
       scope.term.clear()
       scope.term.reset()
     }
-    emitModesIfChanged()
-    emitKeyboardAvoidanceMetrics()
-    resetEvictionCounter()
+    emitModesIfChanged(scope)
+    emitKeyboardAvoidanceMetrics(scope)
+    resetEvictionCounter(scope)
     if (scope.selMode === 'select') {
-      notify({ type: 'selection-evicted' })
-      cancelSelect()
+      notify(scope, { type: 'selection-evicted' })
+      cancelSelect(scope)
     }
   } else if (msg.type === 'measure') {
-    measureFitDimensions(msg.containerHeight)
+    measureFitDimensions(scope, msg.containerHeight)
   } else if (msg.type === 'reset-zoom') {
-    applyFitScale('reset-zoom-msg')
+    applyFitScale(scope, 'reset-zoom-msg')
   } else if (msg.type === 'set-theme') {
-    applyTerminalTheme(msg.terminalTheme)
+    applyTerminalTheme(scope, msg.terminalTheme)
   } else if (msg.type === 'cancel-select') {
     if (scope.selMode === 'select') {
-      cancelSelect()
+      cancelSelect(scope)
     }
   } else if (msg.type === 'do-select-all') {
     if (scope.term) {
@@ -185,14 +191,14 @@ export function handleMsg(msg: TerminalHostMessage) {
         if (scope.selMode !== 'select') {
           scope.selMode = 'select'
           scope.selectionOverlay!.classList.add('active')
-          notify({ type: 'set-select-mode', enabled: true })
+          notify(scope, { type: 'set-select-mode', enabled: true })
         }
         scope.sel = {
           anchor: { col: 0, row: 0 },
           focus: { col: scope.term.cols - 1, row: b.length - 1 },
           activeHandle: null
         }
-        repositionOverlay()
+        repositionOverlay(scope)
       } catch {}
     }
   }

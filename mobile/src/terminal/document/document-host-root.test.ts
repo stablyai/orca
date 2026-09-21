@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createTerminalDocument } from '../terminal-webview-document-factory.generated'
+import { createTerminalDocument } from './create-terminal-document'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html'
 

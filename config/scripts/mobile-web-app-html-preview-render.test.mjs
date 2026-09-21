@@ -493,7 +493,10 @@ for (const engine of ['chromium', 'webkit']) {
         const inherited = await open(browser(), {
           signal: ctx.signal,
           extra: { body: script() },
-          sandbox: 'allow-scripts allow-top-navigation-by-user-activation'
+          sandbox: 'allow-scripts allow-top-navigation-by-user-activation',
+          // The refusal below is this arm's oracle, and it is queued behind the frame's load, so the
+          // arm waits for it instead of reading whatever the list happens to hold.
+          frameReady: 'refusal'
         })
         expect(inherited.pixel).toBe(ARTIFACT_RGB)
         expect(inherited.inside?.ran).toBe(0)
@@ -503,6 +506,8 @@ for (const engine of ['chromium', 'webkit']) {
         // every line above under a name that says the policy held. A violation raised inside the
         // frame can only happen if the sandbox let the script start, so this is the reading that
         // separates the two -- and it is the frame's own list, since the embedder's never sees it.
+        // Waited for, not hoped for: `frameReady: 'refusal'` above is what makes this line arrive
+        // after the entry rather than beside the image refusal that happened to be first.
         expect(String(inherited.inside?.violations)).toContain('script-src')
         // The sealed arm is the contrast: no policy refused anything there, the sandbox simply never
         // let the script begin.
@@ -729,8 +734,9 @@ describe('the HTML preview needs no policy change', () => {
  * `frameReady` is which of those an arm is waiting for, because the marker is not always the right
  * one. `'script'` waits for what the inline script writes: the marker element exists from parse
  * time, so an arm whose oracle is "the script ran" would otherwise read `window.__ran` before it
- * had. `'load'` is for the one arm whose artifact deliberately navigates the frame somewhere else,
- * where no marker is ever coming.
+ * had. `'refusal'` waits for the frame's own `script-src` violation, which is queued and can land
+ * after `load`. `'load'` is for the one arm whose artifact deliberately navigates the frame
+ * somewhere else, where no marker is ever coming.
  */
 async function waitForLoadedFrame(page, frameReady = 'artifact', signal, browserVersion, arm) {
   const element = await page.waitForSelector('iframe', { timeout: 0 })
@@ -745,6 +751,24 @@ async function waitForLoadedFrame(page, frameReady = 'artifact', signal, browser
       signal,
       async () =>
         `the artifact's script never ran inside the frame: ${arm} | ${await describePreviewFrame(page, frame, browserVersion)}`
+    )
+  }
+  if (frameReady === 'refusal') {
+    // The violation is dispatched as a queued task, so its order against the frame's `load` is not
+    // guaranteed: on the runner's Chrome the list held only the blocked background image when the
+    // reading was taken, and the arm that needs the script-src entry read it before it landed. So
+    // the arm waits for its own evidence rather than hoping to be later than a task queue. A frame
+    // that was never widened never raises it at all, which is what makes this the arm's precondition
+    // and not a convenience: the wait ends in the diagnosis below rather than in a passing read.
+    await untilAborted(
+      frame.waitForFunction(
+        () => (window.__violations ?? []).some((one) => String(one).includes('script-src')),
+        undefined,
+        { timeout: 0 }
+      ),
+      signal,
+      async () =>
+        `the frame never reported a script-src refusal: ${arm} | ${await describePreviewFrame(page, frame, browserVersion)}`
     )
   }
   if (frameReady !== 'load') {
