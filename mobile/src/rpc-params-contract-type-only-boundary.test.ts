@@ -112,20 +112,59 @@ export function contractValueImports(path: string, source: string): string[] {
  * re-export. `export * as ns from '...'` and its `export type * as ns` form are absent from
  * `importedFiles`, while `export *`, `export { X } from`, and `import ns = require()` are all
  * there — so a file re-exporting the contract under a name was dropped before the analyser saw it,
- * which is the one shape the soundness case exists to catch. Anything matching that spelling is
- * handed on as well, and the cost of that is bounded because the shape is rare: over the 2,236
- * files this census reads, the only match is this one, through the fixture strings below. No
- * product file uses it, so widening the filter parses nothing it was not already parsing.
+ * which is the one shape the soundness case exists to catch. Anything holding that shape is handed
+ * on as well. Counted over the 2,236 files this census reads: 1,005 carry an asterisk and so reach
+ * the token scan, which costs 118 ms for all of them together, and exactly one matches — this
+ * file, through the fixture strings below. No product file uses the shape, so the widening hands
+ * the analyser nothing new.
  *
  * A text match for the contract path would be the other way to widen, and is the wrong one: the
  * escaped-specifier case is a real import whose text does not contain the directory name, so a
  * substring fence would miss it while looking thorough.
  */
-/** `export * as ns from '...'`, with or without `type`: the shape `preProcessFile` omits. */
-const NAMESPACE_REEXPORT = /\bexport\s+(?:type\s+)?\*\s+as\b/
+/**
+ * Whether the source holds `export * as`, with or without `type`: the shape `preProcessFile` omits.
+ *
+ * By token, because the tokens can be separated by anything. A block comment between `*` and `as`,
+ * or a line comment splitting them across two lines, still leaves one namespace re-export — and a
+ * text rule reads those characters while the language does not. The scanner skips trivia, which is
+ * exactly the difference.
+ *
+ * The `*` pre-check is sound for this shape — the token is that literal character, so a source
+ * without one cannot hold the sequence — and it keeps the scan off the 1,231 files that have no
+ * asterisk anywhere. It is not a rarity filter: a block comment carries an asterisk, so most files
+ * with any comment at all still reach the scan.
+ */
+function hasNamespaceReExport(source: string): boolean {
+  if (!source.includes('*')) {
+    return false
+  }
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    ts.LanguageVariant.Standard,
+    source
+  )
+  // `export` -> optional `type` -> `*` -> `as`, restarting from any `export` that breaks it.
+  let matched = 0
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (matched === 2 && token === ts.SyntaxKind.AsKeyword) {
+      return true
+    }
+    if (matched === 1 && token === ts.SyntaxKind.AsteriskToken) {
+      matched = 2
+      continue
+    }
+    if (matched === 1 && token === ts.SyntaxKind.TypeKeyword) {
+      continue
+    }
+    matched = token === ts.SyntaxKind.ExportKeyword ? 1 : 0
+  }
+  return false
+}
 
 function referencesContract(path: string, source: string): boolean {
-  if (NAMESPACE_REEXPORT.test(source)) {
+  if (hasNamespaceReExport(source)) {
     return true
   }
   return ts
@@ -195,6 +234,10 @@ describe('RPC params contract boundary', () => {
       // dropped the file before the analyser ever saw it.
       `export * as ns from '${contract}'`,
       `export type * as ns from '${contract}'`,
+      // And with trivia between the tokens, which is still one namespace re-export: a text rule
+      // reads the characters between `*` and `as` and a token rule does not see them at all.
+      `export * /* note */ as ns from '${contract}'`,
+      `export *\n// note\nas ns from '${contract}'`,
       ESCAPED_SPECIFIER
     ]
     expect(contractImportSpellings.filter((source) => !referencesContract(path, source))).toEqual(
