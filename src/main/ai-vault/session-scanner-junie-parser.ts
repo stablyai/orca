@@ -28,6 +28,7 @@ import {
   numberValue,
   parseJsonObject
 } from './session-scanner-values'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 
 // Why a raw-text prefilter before JSON.parse: a real Junie transcript reaches hundreds of
 // megabytes on one session, and ~94% of those bytes are repeated terminal-output snapshots
@@ -56,9 +57,10 @@ type JunieFoldState = {
 // backfills both.
 export async function parseJunieSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const state = createJunieSessionResumeState(file)
+  const state = createJunieSessionResumeState(file, messages)
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
@@ -82,12 +84,16 @@ export async function parseJunieSessionFile(
 }
 
 /** Incremental fold so an active multi-hundred-megabyte transcript is read once, then only appended lines. */
-export function createJunieSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+export function createJunieSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
   return junieResumeState({
     accumulator: createAccumulator({
       agent: 'junie',
       file,
-      sessionId: junieSessionIdFromEventsPath(file.path)
+      sessionId: junieSessionIdFromEventsPath(file.path),
+      messages
     }),
     seenResultStepIds: new Set(),
     outputTokensByModel: new Map()

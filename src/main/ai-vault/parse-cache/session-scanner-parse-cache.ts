@@ -78,7 +78,7 @@ function resumableStateFactoryFor(
     // full re-parse per scan is the exact regression this cache exists to prevent. Its
     // finalize re-reads the (memoized) index.jsonl for title/cwd, which a plain fold cannot.
     case 'junie':
-      return () => createJunieSessionResumeState(candidate.file)
+      return (messages) => createJunieSessionResumeState(candidate.file, messages)
     case 'devin':
     case 'grok':
     case 'hermes':
