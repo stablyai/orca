@@ -18141,7 +18141,9 @@
         "review": "Code review",
         "customer": "Customer",
         "notification": "Notification"
-      }
+      },
+      "openIssue": "Open issue",
+      "executionUnavailable": "Execution association is not available in this view."
     }
   }
 }

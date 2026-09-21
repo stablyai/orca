@@ -1,3 +1,5 @@
+import type { LinearIssue } from '../../../../../shared/linear/issue-types'
+import { AttentionIssueButton } from './AttentionIssueButton'
 import { ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +9,7 @@ import { attentionNotificationLabel } from './attention-notification-label'
 import { useLinearAttentionPage } from './use-linear-attention-page'
 
 export function LinearAttentionList(props: {
+  onOpenIssue: (issue: LinearIssue) => void
   mode: 'inbox' | 'triage'
   workspaceId: string
   teamId: string | null
@@ -54,10 +57,17 @@ export function LinearAttentionList(props: {
           {translate('linear.attention.empty', 'No items in this list.')}
         </p>
       ) : null}
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'linear.attention.executionUnavailable',
+          'Execution association is not available in this view.'
+        )}
+      </p>
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
         <ul className="divide-y divide-border">
           {page?.items.map((item) => {
             const inbox = 'kind' in item
+            const issue = inbox ? item.issue : item
             const safeUrl = item.url.startsWith('https://linear.app/') ? item.url : null
             return (
               <li key={item.id} className="flex items-start justify-between gap-4 py-3">
@@ -90,19 +100,28 @@ export function LinearAttentionList(props: {
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!safeUrl}
-                  onClick={() => {
-                    if (safeUrl) {
-                      void window.api.shell.openUrl(safeUrl)
-                    }
-                  }}
-                >
-                  <ExternalLink />
-                  {translate('linear.attention.open', 'Open in Linear')}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {issue ? (
+                    <AttentionIssueButton
+                      issue={issue}
+                      workspaceId={props.workspaceId}
+                      onOpenIssue={props.onOpenIssue}
+                    />
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!safeUrl}
+                    onClick={() => {
+                      if (safeUrl) {
+                        void window.api.shell.openUrl(safeUrl)
+                      }
+                    }}
+                  >
+                    <ExternalLink />
+                    {translate('linear.attention.open', 'Open in Linear')}
+                  </Button>
+                </div>
               </li>
             )
           })}

@@ -27,7 +27,17 @@ export function TaskPageFrame({
             </Button>
           </div>
         ) : null}
-        {attention ? <LinearAttentionPanel model={model} /> : <TaskPageContent model={model} />}
+        {attention ? (
+          <LinearAttentionPanel
+            model={model}
+            onOpenIssue={(issue) => {
+              model.openRelatedLinearIssue(issue)
+              setAttentionOpen(false)
+            }}
+          />
+        ) : (
+          <TaskPageContent model={model} />
+        )}
       </div>
     </div>
   )

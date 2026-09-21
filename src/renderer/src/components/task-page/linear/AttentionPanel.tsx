@@ -1,3 +1,4 @@
+import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
@@ -9,9 +10,11 @@ import type { LinearPersonalReadScope } from '../../../../../shared/linear/perso
 import { LinearAttentionList } from './AttentionList'
 
 export function LinearAttentionPanel({
-  model
+  model,
+  onOpenIssue
 }: {
   model: TaskPageComposerActionsModel
+  onOpenIssue: (issue: LinearIssue) => void
 }): React.JSX.Element {
   const [mode, setMode] = useState<'inbox' | 'triage'>('inbox')
   const profileId = useAppStore((state) => state.activeOrcaProfileId)
@@ -85,6 +88,7 @@ export function LinearAttentionPanel({
       </div>
       <LinearAttentionList
         key={identity}
+        onOpenIssue={onOpenIssue}
         mode={mode}
         workspaceId={workspaceId}
         teamId={teamId ?? null}

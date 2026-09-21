@@ -39,6 +39,20 @@ test('read-only attention separates union notifications, disabled Triage and pro
       ipcMain.removeHandler(channel)
       ipcMain.handle(channel, () => [])
     }
+    const issue = {
+      id: 'attention-issue',
+      workspaceId: workspace.id,
+      identifier: 'ENG-1',
+      title: 'Review the launch checklist',
+      url: 'https://linear.app/attention-fixture/issue/ENG-1',
+      state: { name: 'Triage', type: 'triage', color: '' },
+      team: { id: 'attention-team', name: 'Engineering', key: 'ENG' },
+      labels: [],
+      priority: 0,
+      updatedAt: '2026-09-21T00:00:00Z'
+    }
+    ipcMain.removeHandler('linear:getIssue')
+    ipcMain.handle('linear:getIssue', () => issue)
     ipcMain.removeHandler('linear:personalInbox')
     ipcMain.handle('linear:personalInbox', (_event, args) => ({
       scope: {
@@ -59,7 +73,7 @@ test('read-only attention separates union notifications, disabled Triage and pro
           readAt: null,
           snoozedUntilAt: args.cursor ? '2026-10-01T00:00:00Z' : null,
           updatedAt: '2026-09-21T00:00:00Z',
-          issue: null
+          issue: args.cursor ? null : issue
         }
       ],
       nextCursor: args.cursor ? null : 'page-two'
@@ -83,6 +97,7 @@ test('read-only attention separates union notifications, disabled Triage and pro
   await expect(orcaPage.getByText('Project update', { exact: true })).toBeVisible()
   await expect(orcaPage.getByText('Project', { exact: true })).toBeVisible()
   await expect(orcaPage.getByRole('button', { name: 'Investigate', exact: true })).toHaveCount(0)
+  await expect(orcaPage.getByRole('button', { name: 'Open issue', exact: true })).toHaveCount(1)
   await orcaPage.screenshot({ path: testInfo.outputPath('linear-inbox.png') })
   await orcaPage.getByRole('button', { name: 'Team Triage', exact: true }).click()
   await expect(
@@ -90,6 +105,12 @@ test('read-only attention separates union notifications, disabled Triage and pro
   ).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('linear-triage-disabled.png') })
   await orcaPage.getByRole('button', { name: 'Personal Inbox', exact: true }).click()
+  await expect(orcaPage.getByText('Review the launch checklist', { exact: true })).toBeVisible()
+  await orcaPage.getByRole('button', { name: 'Open issue', exact: true }).click()
+  await expect(
+    orcaPage.getByRole('button', { name: 'Inbox and Triage', exact: true })
+  ).toBeVisible()
+  await orcaPage.getByRole('button', { name: 'Inbox and Triage', exact: true }).click()
   await expect(orcaPage.getByText('Review the launch checklist', { exact: true })).toBeVisible()
   await orcaPage.evaluate(() => window.__store!.setState({ activeOrcaProfileId: 'other-profile' }))
   await expect(orcaPage.getByText('Review the launch checklist', { exact: true })).toHaveCount(0)
