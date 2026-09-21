@@ -6,14 +6,14 @@ class AuthenticationError extends Error {}
 const mocks = vi.hoisted<{
   profileId: string
   workspace: LinearWorkspace | undefined
-  viewer: ReturnType<typeof vi.fn>
+  viewer: ReturnType<typeof vi.fn<() => Promise<unknown>>>
   clear: ReturnType<typeof vi.fn>
   credentialError: string | undefined
   recordError: ReturnType<typeof vi.fn>
 }>(() => ({
   profileId: 'profile-a',
   workspace: undefined,
-  viewer: vi.fn(),
+  viewer: vi.fn<() => Promise<unknown>>(),
   clear: vi.fn(),
   credentialError: undefined,
   recordError: vi.fn()
