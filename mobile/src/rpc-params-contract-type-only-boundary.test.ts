@@ -107,8 +107,27 @@ export function contractValueImports(path: string, source: string): string[] {
  *
  * Over-approximating on purpose: a type-only import names the contract too, so it reaches the
  * analyser, which is the thing that decides.
+ *
+ * One shape the scanner does not report, so the filter cannot rest on it alone: a namespace
+ * re-export. `export * as ns from '...'` and its `export type * as ns` form are absent from
+ * `importedFiles`, while `export *`, `export { X } from`, and `import ns = require()` are all
+ * there — so a file re-exporting the contract under a name was dropped before the analyser saw it,
+ * which is the one shape the soundness case exists to catch. Anything matching that spelling is
+ * handed on as well, and the cost of that is bounded because the shape is rare: over the 2,236
+ * files this census reads, the only match is this one, through the fixture strings below. No
+ * product file uses it, so widening the filter parses nothing it was not already parsing.
+ *
+ * A text match for the contract path would be the other way to widen, and is the wrong one: the
+ * escaped-specifier case is a real import whose text does not contain the directory name, so a
+ * substring fence would miss it while looking thorough.
  */
+/** `export * as ns from '...'`, with or without `type`: the shape `preProcessFile` omits. */
+const NAMESPACE_REEXPORT = /\bexport\s+(?:type\s+)?\*\s+as\b/
+
 function referencesContract(path: string, source: string): boolean {
+  if (NAMESPACE_REEXPORT.test(source)) {
+    return true
+  }
   return ts
     .preProcessFile(source, true, true)
     .importedFiles.some((reference) => targetsContract(path, reference.fileName))
@@ -172,6 +191,10 @@ describe('RPC params contract boundary', () => {
       `import type { RepoSelector } from '${contract}'`,
       `import { type RepoSelector } from '${contract}'`,
       `export type { RepoSelector } from '${contract}'`,
+      // Namespace re-exports: the shape `ts.preProcessFile` does not report, so the pre-filter
+      // dropped the file before the analyser ever saw it.
+      `export * as ns from '${contract}'`,
+      `export type * as ns from '${contract}'`,
       ESCAPED_SPECIFIER
     ]
     expect(contractImportSpellings.filter((source) => !referencesContract(path, source))).toEqual(
