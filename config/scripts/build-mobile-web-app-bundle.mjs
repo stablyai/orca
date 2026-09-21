@@ -160,7 +160,11 @@ function routeManifestPlugin(manifestSource) {
   }
 }
 
-const lucideBarrelPlugin = {
+/**
+ * Exported so a component-level render check builds the icons the same way the page does, rather
+ * than carrying a second copy of this shim that could drift from it.
+ */
+export const lucideBarrelPlugin = {
   name: LUCIDE_PLUGIN_NAME,
   setup(build) {
     build.onLoad({ filter: /lucide-react-native[\\/].*[\\/]context\.mjs$/ }, async (args) => ({

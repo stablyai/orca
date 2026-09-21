@@ -3,10 +3,14 @@
  *
  * Both native components put their surface inside a `WebView`, which has no browser counterpart:
  * importing it runs a codegen lookup that throws, and the route manifest imports every route, so
- * one such import takes the whole bundle down rather than one editor. Ruling 8 is that each gets
- * the plain state it already degrades to and no second renderer, so what is pinned here is the
- * degradation: the text is still there and still editable, the formatting toolbar and the rendered
- * preview are not, and nothing reaches a WebView.
+ * one such import takes the whole bundle down rather than one editor.
+ *
+ * The two are no longer in the same state. Ruling 26 makes C7.6's fallbacks debt rather than done,
+ * and C7.10's PR A has already paid it for the HTML preview: it renders the artifact in a sealed
+ * `srcdoc` frame with the toggle intact, so what is pinned for it here is the frame's shape and the
+ * toggle's two positions. What a browser does with that frame is not a question this renderer can
+ * answer and is measured in `mobile-web-app-html-preview-render.test.mjs` instead. The rich Markdown
+ * editor is still the plain field, and its degradation is still what is pinned below.
  */
 import { createElement, createRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -27,6 +31,11 @@ vi.mock('react-native', async () => {
     ({ children, ...props }, ref) => React.createElement('TextInput', { ...props, ref }, children)
   )
   return {
+    // The native preview's external-link opener reaches for this at module load, and a named import
+    // missing from a mocked module throws before any case runs.
+    Linking: { openURL: async () => true },
+    Pressable: host('Pressable'),
+    ScrollView: host('ScrollView'),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: host('Text'),
     TextInput,
@@ -34,7 +43,25 @@ vi.mock('react-native', async () => {
   }
 })
 
-import { MobileHtmlPreview } from './MobileHtmlPreview.web'
+// The preview's toggle carries two icons, and `lucide-react-native` imports a `LucideProvider` its
+// own context module does not export, so the real barrel does not load under vitest at all.
+vi.mock('lucide-react-native', () => ({
+  Code: () => null,
+  Eye: () => null
+}))
+
+// Mocked so the native sibling can be rendered beside the web one for the toggle case below: the real
+// import is the codegen lookup this whole file exists because of.
+vi.mock('react-native-webview', async () => {
+  const React = await import('react')
+  return {
+    WebView: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('WebView', props, children)
+  }
+})
+
+import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview.web'
+import { MobileHtmlPreview as PhoneHtmlPreview } from './MobileHtmlPreview'
 import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor.web'
 import type { MobileRichMarkdownEditorHandle } from './MobileRichMarkdownEditor'
 
@@ -156,34 +183,86 @@ describe('the rich markdown editor on the page', () => {
 })
 
 describe('the html preview on the page', () => {
-  it('renders the source the native component already falls back to', () => {
-    const renderSource = vi.fn(() => createElement('SourceView', null))
-    const renderer = render(createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource }))
-    expect(findHosts(renderer, 'SourceView')).toHaveLength(1)
-    expect(renderSource).toHaveBeenCalledTimes(1)
-  })
+  const renderSourceMarker = () => createElement('SourceView', null)
 
-  it('renders no toggle, because there is no preview to flip to', () => {
-    // A control that can only be in one position is a control that lies: the artifact has no
-    // sandbox on the page, so the Preview half of the toggle goes with it.
+  it('renders the artifact in a frame that can run nothing, and keeps the toggle', () => {
     const renderer = render(
-      createElement(MobileHtmlPreview, {
-        html: '<h1>hi</h1>',
-        renderSource: () => createElement('SourceView', null)
-      })
+      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
     )
-    expect(findHosts(renderer, 'Pressable')).toEqual([])
+    const frames = findHosts(renderer, 'iframe')
+    expect(frames).toHaveLength(1)
+    // The artifact reaches the frame as `srcDoc`, which the browser parses inside it. Neither
+    // `allow-scripts` nor `allow-same-origin`, which is the whole of what makes that safe.
+    expect(frames[0]?.props.srcDoc).toBe('<h1>hi</h1>')
+    expect(frames[0]?.props.sandbox).toBe(MOBILE_HTML_PREVIEW_SANDBOX)
+    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-scripts')
+    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-same-origin')
+    // Both positions of the toggle exist, which is what stops it being a control that lies.
+    expect(findHosts(renderer, 'Pressable')).toHaveLength(2)
   })
 
-  it('never renders the html itself, which is the whole of ruling 8', () => {
+  it('shows the source when the toggle is flipped, and takes the frame away with it', () => {
+    const renderSource = vi.fn(renderSourceMarker)
+    const renderer = render(createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource }))
+    expect(findHosts(renderer, 'SourceView')).toHaveLength(0)
+
+    const toSource = findHosts(renderer, 'Pressable').find(
+      (node) => node.props.accessibilityLabel === 'View HTML source'
+    )
+    expect(toSource).toBeDefined()
+    act(() => toSource?.props.onPress())
+
+    expect(findHosts(renderer, 'SourceView')).toHaveLength(1)
+    expect(renderSource).toHaveBeenCalled()
+    // The artifact is not parsed anywhere while Source is showing.
+    expect(findHosts(renderer, 'iframe')).toHaveLength(0)
+  })
+
+  // Both siblings, one case: the toggle is a pair of tabs and a reader has to be told which one is
+  // showing. The two toolbars are the same code in two files, so a change to one that does not reach
+  // the other reds here rather than reaching a phone as a toggle that announces nothing.
+  for (const [surface, Preview] of [
+    ['the page', MobileHtmlPreview],
+    ['a phone', PhoneHtmlPreview]
+  ] as const) {
+    it(`says which side of the toggle is showing, on ${surface}`, () => {
+      const renderer = render(
+        createElement(Preview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
+      )
+      const toggles = () => findHosts(renderer, 'Pressable')
+      expect(toggles()).toHaveLength(2)
+      expect(toggles().map((node) => node.props.accessibilityRole)).toEqual(['tab', 'tab'])
+      // The pair's own container, so the two tabs are a set rather than two loose ones.
+      expect(
+        findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
+      ).toHaveLength(1)
+      // The showing side, which is what a screen reader has no other way to learn: the active
+      // position is styling and styling is not announced.
+      expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([
+        true,
+        false
+      ])
+
+      act(() => toggles()[1]?.props.onPress())
+      expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([
+        false,
+        true
+      ])
+    })
+  }
+
+  it('never puts the artifact anywhere but the frame', () => {
     const renderer = render(
       createElement(MobileHtmlPreview, {
         html: '<script>alert(1)</script>',
-        renderSource: () => createElement('SourceView', null)
+        renderSource: renderSourceMarker
       })
     )
-    // Agent-produced HTML, and the page has no frame to sandbox it in: the policy carries
-    // frame-src 'none' and child-src 'none'.
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('alert(1)')
+    const tree = JSON.stringify(renderer.toJSON())
+    // Once, as the frame's `srcDoc`, and nowhere else: not as a child, not as `dangerouslySetInnerHTML`,
+    // not in a prop of the surrounding view.
+    expect(findHosts(renderer, 'iframe')[0]?.props.srcDoc).toBe('<script>alert(1)</script>')
+    expect(tree.split('alert(1)')).toHaveLength(2)
+    expect(tree).not.toContain('dangerouslySetInnerHTML')
   })
 })
