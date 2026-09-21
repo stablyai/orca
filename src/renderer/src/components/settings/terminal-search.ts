@@ -108,6 +108,27 @@ export function getTerminalPaneSearchEntries(platform: {
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
+    ...(!isWindowsTerminalHost
+      ? [
+          {
+            title: 'Terminal shell',
+            description: 'Shell and arguments used for new local interactive terminal panes',
+            keywords: [
+              'shell',
+              'terminal',
+              'fish',
+              'zsh',
+              'bash',
+              'nushell',
+              'arguments',
+              'args',
+              'login',
+              'wrapper',
+              'rcfile'
+            ]
+          }
+        ]
+      : []),
     ...(isWindowsTerminalHost
       ? [
           ...getTerminalWindowsShellSearchEntry(),

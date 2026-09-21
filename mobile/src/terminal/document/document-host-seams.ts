@@ -47,6 +47,8 @@ export type TerminalDocumentHostSeams = {
   createWebglAddon: () => TerminalDocumentWebglAddon | null
   /** `host-notify`: installs the document's runtime error reporter with the host. */
   installErrorReporter: (report: TerminalDocumentErrorReporter) => () => void
+  /** `host-notify`: the host's capture buffer, which a report quotes and the reporter appends to. */
+  capturedEngineErrors: () => string[]
   /** `terminal-theme`: paints the terminal's background behind the grid. */
   paintDocumentBackground: (background: string) => void
   /** `message-bridge`: installs the host's transport for the frames it sends, handing back its removal. */
@@ -75,7 +77,7 @@ export type TerminalDocumentHostSeams = {
  * What a host may hand the document instead of a window read.
  *
  * Every seam has a default, so a host names only the ones it owns differently: inside the WebView
- * that is none of them, and the page names all eight. Absent and present-but-undefined mean the same
+ * that is none of them, and the page names all nine. Absent and present-but-undefined mean the same
  * thing, which is why the scope's spread filters rather than trusting key order.
  */
 export type TerminalDocumentHost = Partial<TerminalDocumentHostSeams>
@@ -98,6 +100,14 @@ declare global {
     Unicode11Addon?: { Unicode11Addon: new () => TerminalDocumentWebglAddon }
     WebglAddon?: { WebglAddon?: new () => TerminalDocumentWebglAddon }
     Terminal?: unknown
+    /**
+     * The shell's capture buffer, which its `<head>` opens before the engine script runs.
+     *
+     * It stays a global there because it is older than any document: an engine that throws while it
+     * loads has to be captured by something the document has not started yet, and the first report
+     * quotes it. The document reaches it through a seam, so a page's mount holds its own instead.
+     */
+    __engineErrors?: string[]
   }
   const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
 }
@@ -170,6 +180,12 @@ export function installWindowHostTransport(receive: (frame: TerminalDocumentHost
   }
 }
 
+/** The shell's buffer, which its `<head>` has already declared by the time the document runs. */
+export function windowCapturedEngineErrors() {
+  window.__engineErrors = window.__engineErrors ?? []
+  return window.__engineErrors
+}
+
 /**
  * Whether the engine is here, as the WebView can know it: the engine is an IIFE that hangs
  * `Terminal` off `window`, and a script tag that failed to load leaves it undefined, which is the
@@ -177,10 +193,11 @@ export function installWindowHostTransport(receive: (frame: TerminalDocumentHost
  *
  * On the page the engine is an import that already resolved by the time the document is built, so
  * the page answers yes rather than reading a global it never writes.
+ *
+ * `!== undefined` rather than a `typeof` guard: the global is declared optional, so the lint rule
+ * that forbids the guard is right that there is nothing to guard against here.
  */
 export function windowHasEngine() {
-  // `!== undefined` rather than a `typeof` guard: the global is declared optional, so the lint rule
-  // that forbids the guard is right that there is nothing to guard against here.
   return window.Terminal !== undefined
 }
 

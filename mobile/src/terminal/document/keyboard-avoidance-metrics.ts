@@ -1,7 +1,12 @@
 import { notify } from './host-notify'
-import { scope, type TerminalDocumentCell, type TerminalDocumentLine } from './document-scope'
+import type {
+  TerminalDocumentCell,
+  TerminalDocumentLine,
+  TerminalDocumentScope
+} from './document-scope'
 
 export function lineHasVisibleContent(
+  scope: TerminalDocumentScope,
   line: TerminalDocumentLine,
   cell: TerminalDocumentCell | null
 ) {
@@ -33,7 +38,7 @@ export function lineHasVisibleContent(
   return false
 }
 
-export function computeContentBottomRow() {
+export function computeContentBottomRow(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active) {
     return 0
   }
@@ -43,7 +48,7 @@ export function computeContentBottomRow() {
   for (let y = (scope.term.rows || 0) - 1; y >= 0; y--) {
     try {
       const line = buffer.getLine(top + y)
-      if (line && lineHasVisibleContent(line, cell)) {
+      if (line && lineHasVisibleContent(scope, line, cell)) {
         return y
       }
     } catch {}
@@ -51,7 +56,7 @@ export function computeContentBottomRow() {
   return 0
 }
 
-export function emitKeyboardAvoidanceMetrics() {
+export function emitKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
@@ -60,10 +65,10 @@ export function emitKeyboardAvoidanceMetrics() {
     alt =
       scope.term.buffer && scope.term.buffer.active && scope.term.buffer.active.type === 'alternate'
   } catch {}
-  notify({
+  notify(scope, {
     type: 'keyboard-avoidance-metrics',
     cursorY: scope.term.buffer && scope.term.buffer.active ? scope.term.buffer.active.cursorY : 0,
-    contentBottomRow: alt ? 0 : computeContentBottomRow(),
+    contentBottomRow: alt ? 0 : computeContentBottomRow(scope),
     rows: scope.term.rows || 0,
     altScreen: alt
   })

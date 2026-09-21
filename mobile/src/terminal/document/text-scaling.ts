@@ -1,7 +1,8 @@
 import { elementInRoot } from './document-host-seams'
-import { terminalTextScalePresets } from './document-constants'
-import { scheduleDocumentFrame, scope } from './document-scope'
-import { applyFitScale, getCellHeight } from './fit-scale'
+import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
+import { applyFitScale, getCellHeight, MIN_FIT_COLS } from './fit-scale'
 import { getCellWidth } from './viewport-transform'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
@@ -19,7 +20,11 @@ import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 const BASE_FONT_PX = 13
 const MIN_FONT_PX = 6
 
-const TEXT_SCALE_PRESETS = terminalTextScalePresets
+const TEXT_SCALE_PRESETS: readonly number[] = TERMINAL_TEXT_SCALES
+
+/** The ends of the preset range, which a pinch is clamped to. */
+export const MIN_TEXT_SCALE = TEXT_SCALE_PRESETS[0]
+export const MAX_TEXT_SCALE = TEXT_SCALE_PRESETS[TEXT_SCALE_PRESETS.length - 1]
 
 export function snapToTextScalePreset(value: number) {
   let best = TEXT_SCALE_PRESETS[0],
@@ -52,7 +57,7 @@ const TERMINAL_FONT_FALLBACKS =
 // refit (measure → updateViewport) then makes the server reflow the PTY to the
 // same column count so the shell rewraps. cell metrics update on the frame
 // after fontSize changes, so the resize/fit is deferred one rAF.
-export function applyTextScale(scale: number) {
+export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   scope.currentTextScale = scale
   if (!scope.term) {
     return
@@ -65,26 +70,26 @@ export function applyTextScale(scale: number) {
   // Ruling 21: the generation this frame was scheduled under. `scope.term` alone is not enough —
   // a mount that came and went leaves a live terminal here, and this would resize that one.
   const gen = scope.terminalGeneration
-  scheduleDocumentFrame(function () {
+  scheduleDocumentFrame(scope, function () {
     if (!scope.term || gen !== scope.terminalGeneration) {
       return
     }
-    const cellW = getCellWidth()
-    const cellH = getCellHeight()
+    const cellW = getCellWidth(scope)
+    const cellH = getCellHeight(scope)
     if (cellW > 0 && cellH > 0) {
       const cols = Math.floor(window.innerWidth / cellW)
-      if (cols < scope.MIN_FIT_COLS) {
+      if (cols < MIN_FIT_COLS) {
         return
       }
       const rows = Math.max(8, Math.floor(window.innerHeight / cellH))
       scope.term.resize(cols, rows)
-      emitKeyboardAvoidanceMetrics()
+      emitKeyboardAvoidanceMetrics(scope)
     }
-    applyFitScale('text-scale')
+    applyFitScale(scope, 'text-scale')
   })
 }
 
-export function startTextScaling() {
+export function startTextScaling(scope: TerminalDocumentScope) {
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
   scope.terminalFontFamily =

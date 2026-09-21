@@ -1,14 +1,11 @@
 import { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
-import type {
-  TerminalDocumentTerminal,
-  TerminalDocumentWebglAddon
-} from './document/document-terminal-shape'
+import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 import { scopeStyleToHost } from './terminal-webview-html/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
-import { createTerminalDocument } from './terminal-webview-document-factory.generated'
+import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
 /**
@@ -75,8 +72,7 @@ function ensureDocumentStyle() {
  */
 function createPageWebglAddon(onFallback: (reason: string) => void) {
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the addon's public surface is `dispose`, which the document's shape names; the two optional members it also reads are absent here and guarded at every call.
-    return new WebglAddon() as unknown as TerminalDocumentWebglAddon
+    return new WebglAddon()
   } catch (error) {
     onFallback(error instanceof Error ? error.message : String(error))
     return null
@@ -87,8 +83,7 @@ function createPageWebglAddon(onFallback: (reason: string) => void) {
  * The document, mounted: style, markup, one call, and the handle that stops it.
  *
  * Synchronous, because the factory is a static import and building a document is a function call.
- * A caller's cleanup can therefore never arrive before there is something to clean up, which is
- * what the claim, the token and the pending-import paths here used to answer for.
+ * A caller's cleanup can therefore never arrive before there is something to clean up.
  */
 export function mountTerminalWebDocument(
   host: HTMLElement,
@@ -97,14 +92,6 @@ export function mountTerminalWebDocument(
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
-  // The WebView's `<head>` declares this before anything runs, and the document's error reporter
-  // reads it unguarded. Without it the first report throws inside the reporter.
-  //
-  // Assigned rather than emptied, and the one thing two documents on this page still share: it is
-  // a capped diagnostic buffer that the reporter appends the page's own errors to, so a second
-  // mount starting a fresh one costs the first its captured lines and nothing else.
-  window.__engineErrors = window.__engineErrors ?? []
-
   const started = startDocumentOrGiveTheHostBack(host, receive)
 
   return {
@@ -142,9 +129,17 @@ function startDocumentOrGiveTheHostBack(
   }
 }
 
-/** The eight seams, as the page answers them. */
+/** The nine seams, as the page answers them. */
 function startPageDocument(host: HTMLElement, receive: (message: Record<string, unknown>) => void) {
+  // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
+  // which here is a `window` error listener, and every error it forwards is appended before the
+  // report that quotes it. What the page cannot have is the WebView head's half — a buffer open
+  // before the engine script runs — because the engine here is a static import of this module. So
+  // the buffer is per mount, and a second terminal quotes its own lines rather than the first's.
+  const capturedEngineErrors: string[] = []
   return createTerminalDocument({
+    capturedEngineErrors: () => capturedEngineErrors,
+
     // Ruling 24's ninth member: this document's elements are the ones inside this host. Two
     // terminals can be on the page at once — a stack transition keeps the outgoing screen mounted
     // while the incoming one starts — and the markup's ids are the same in both hosts.
@@ -181,10 +176,9 @@ function startPageDocument(host: HTMLElement, receive: (message: Record<string, 
     // fail. Here the engine is the import above, so it is here or this module did not load.
     hasEngine: () => true,
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm's own Terminal is the engine the document was written against; its options are declared optional where the document's shape declares them present, which is the only difference.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
     createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the addon's public surface is `dispose`, which the document's shape names; the two optional members it also reads are absent here and guarded there.
-    createUnicode11Addon: () => new Unicode11Addon() as unknown as TerminalDocumentWebglAddon,
+    createUnicode11Addon: () => new Unicode11Addon(),
     createWebglAddon: () =>
       createPageWebglAddon((reason) =>
         receive({

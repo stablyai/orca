@@ -1,51 +1,53 @@
-import { Script } from 'node:vm'
-import { parse } from 'acorn'
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import {
-  documentDeclaredFunction,
-  documentScopePreamble,
-  generatedDocumentModule
-} from './document/generated-document-region.test-support'
-import type { TerminalDocumentThemeTarget } from './document/terminal-theme'
+import { createTerminalDocumentScope } from './document/document-scope'
+import { applyTerminalTheme, resolveTerminalContrastFloor } from './document/terminal-theme'
+import { documentModuleSource } from './document/document-module-source.test-support'
+import type {
+  TerminalDocumentThemeMessage,
+  TerminalDocumentThemeTarget
+} from './document/terminal-theme'
 
-const themeSource = await generatedDocumentModule('terminal-theme')
+const themeSource = documentModuleSource('terminal-theme')
 
 const DARK_FLOOR = 3
 const LIGHT_FLOOR = 4.5
 
-// Eval the theme block the document carries in a bare context so its declared helpers become
-// callable properties on it (mirrors terminal-webview-engine.test.ts). The terminal it drives is
-// a scope field in the document, so it is handed in through the scope rather than as a global.
-function loadThemeInjected(extra: Record<string, unknown> = {}): Record<string, unknown> {
-  const { term, ...globals } = extra
-  const context: Record<string, unknown> = { ...globals, hostTerm: term ?? null }
-  new Script(
-    `${documentScopePreamble()}
-scope.defaultTheme = { background: "#1a1b26", foreground: "#c0caf5" };
-scope.term = hostTerm;
-${themeSource}`
-  ).runInNewContext(context)
-  return context
+/**
+ * A scope with the theme's two inputs and nothing else.
+ *
+ * The module is imported rather than evaluated: it is ordinary TypeScript, and the state it reads
+ * is the scope handed to it, so a case builds the state it wants and passes it. The paint seam is a
+ * no-op because what these cases read is the contrast decision, not the page's background.
+ */
+function themeScope(term: TerminalDocumentThemeTarget | null = null) {
+  const scope = createTerminalDocumentScope({ paintDocumentBackground: () => {} })
+  scope.defaultTheme = { background: '#1a1b26', foreground: '#c0caf5' }
+  if (term) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target is the members `applyTerminalTheme` writes, which is what each case then reads back.
+    scope.term = term as unknown as typeof scope.term
+  }
+  return scope
 }
 
+/** Pure: the floor is a function of the colour, so no scope reaches it. */
 function loadContrastFloorResolver(): (bg: unknown) => number {
-  return documentDeclaredFunction(loadThemeInjected(), 'resolveTerminalContrastFloor')
+  return (bg: unknown) => resolveTerminalContrastFloor(bg)
 }
 
-function loadThemeApplier(term: TerminalDocumentThemeTarget): (input: unknown) => void {
-  const context = loadThemeInjected({
-    term,
-    document: {
-      documentElement: { style: { background: '' } },
-      body: { style: { background: '' } }
-    }
-  })
-  return documentDeclaredFunction(context, 'applyTerminalTheme')
+function loadThemeApplier(
+  term: TerminalDocumentThemeTarget
+): (input: TerminalDocumentThemeMessage) => void {
+  const scope = themeScope(term)
+  return (input: TerminalDocumentThemeMessage) => applyTerminalTheme(scope, input)
 }
 
 describe('mobile terminal-webview contrast floor gate', () => {
-  it('parses at the Chrome 74 syntax floor', () => {
-    expect(() => parse(themeSource, { ecmaVersion: 2019 })).not.toThrow()
+  it('reads its contrast floors from the scope, not from a global', () => {
+    // The module's own text: what the threading guarantees is that nothing here reaches a shared
+    // object, so two documents can hold two themes.
+    expect(themeSource).toContain('export function resolveTerminalContrastFloor(')
+    expect(themeSource).not.toMatch(/^import \{ scope \}/m)
   })
 
   it('picks the dark floor for dark composed backgrounds', () => {
@@ -92,7 +94,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
   // #10754: the desktop user can lower or disable the floor. Mobile mirrors the desktop gate, so the
   // published value has to win here or the same session renders differently on the phone.
   describe('published desktop override', () => {
-    function applyOn(term: TerminalDocumentThemeTarget, input: unknown): void {
+    function applyOn(term: TerminalDocumentThemeTarget, input: TerminalDocumentThemeMessage): void {
       loadThemeApplier(term)(input)
     }
 

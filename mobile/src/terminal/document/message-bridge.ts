@@ -1,6 +1,6 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
 import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
 
 /**
@@ -10,7 +10,10 @@ import type { TerminalDocumentHostFrame } from './document-host-seams'
  * a bridge hands over JSON text and a host that holds `send` hands over the object, and either way
  * the document reads the same message.
  */
-export function handleIncomingMessage(frame: TerminalDocumentHostFrame) {
+export function handleIncomingMessage(
+  scope: TerminalDocumentScope,
+  frame: TerminalDocumentHostFrame
+) {
   let msg: TerminalHostMessage
   try {
     msg = typeof frame === 'string' ? JSON.parse(frame) : frame
@@ -18,9 +21,10 @@ export function handleIncomingMessage(frame: TerminalDocumentHostFrame) {
     return
   }
   try {
-    handleMsg(msg!)
+    handleMsg(scope, msg!)
   } catch (ex) {
     reportEngineError(
+      scope,
       msg && msg.type === 'init' ? 'terminal init failed' : 'terminal message failed',
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a catch binding is `unknown`; the reporter reads only `message` and falls back to String().
       ex as TerminalEngineError,
@@ -36,16 +40,18 @@ export function handleIncomingMessage(frame: TerminalDocumentHostFrame) {
  * `message` events and loads its engine from a script tag that can fail; the page calls `send`
  * directly and imported the engine before it built this document.
  */
-export function startMessageBridge() {
-  scope.uninstallHostTransport = scope.installHostTransport(handleIncomingMessage)
+export function startMessageBridge(scope: TerminalDocumentScope) {
+  scope.uninstallHostTransport = scope.installHostTransport((frame) =>
+    handleIncomingMessage(scope, frame)
+  )
   if (scope.hasEngine()) {
-    notify({ type: 'web-ready' })
+    notify(scope, { type: 'web-ready' })
   } else {
-    reportEngineError('terminal engine missing', 'xterm failed to load', true)
+    reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
   }
 }
 
-export function stopMessageBridge() {
+export function stopMessageBridge(scope: TerminalDocumentScope) {
   if (scope.uninstallHostTransport) {
     scope.uninstallHostTransport()
     scope.uninstallHostTransport = null
