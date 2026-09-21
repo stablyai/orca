@@ -36,9 +36,10 @@ const CELL_HOST = /^c[1-9][0-9]*\.relay\.onorca\.dev$/
 const PROJECT_ID = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
 const SERVICE_NAME = /^[a-z][a-z0-9-]{0,62}$/
 
-const READ_ATTEMPTS = 3
+export const READ_ATTEMPTS = 3
 const READ_RETRY_DELAY_MS = 5000
 const READ_TIMEOUT_MS = SHADOW_GATE_THRESHOLDS.readTimeoutMs
+const OVERALL_DEADLINE_MS = SHADOW_GATE_THRESHOLDS.overallDeadlineMs
 // json(timestamp) over a busy minute is a few hundred KB; leave room for the widest sub-window.
 const READ_MAX_BUFFER_BYTES = 256 * 1024 * 1024
 
@@ -92,8 +93,15 @@ async function readLogEntries(reader, { filter, projection, limit = ENTRY_LIMIT 
   ]
   let lastError
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
+    // Every remaining read short-circuits once the budget is gone, so the gate always reaches a
+    // verdict instead of being killed part-way through with nothing written.
+    const remainingMs = reader.deadlineAt - reader.now()
+    if (remainingMs <= 0) {
+      return { entries: [], failed: true, error: 'shadow gate read deadline exceeded' }
+    }
     try {
-      const { stdout } = await reader.runGcloud(args, { timeoutMs: reader.readTimeoutMs })
+      const timeoutMs = Math.min(reader.readTimeoutMs, remainingMs)
+      const { stdout } = await reader.runGcloud(args, { timeoutMs })
       return { entries: JSON.parse(stdout || '[]'), failed: false }
     } catch (error) {
       lastError = error
@@ -232,9 +240,18 @@ async function readCloudSqlFatal(reader, { window }) {
 export async function evaluateShadowGate(config, {
   runGcloud,
   retryDelayMs = READ_RETRY_DELAY_MS,
-  readTimeoutMs = READ_TIMEOUT_MS
+  readTimeoutMs = READ_TIMEOUT_MS,
+  overallDeadlineMs = OVERALL_DEADLINE_MS,
+  now = Date.now
 }) {
-  const reader = { runGcloud, retryDelayMs, readTimeoutMs, projectId: config.projectId }
+  const reader = {
+    runGcloud,
+    retryDelayMs,
+    readTimeoutMs,
+    now,
+    deadlineAt: now() + overallDeadlineMs,
+    projectId: config.projectId
+  }
   const window = resolveWindow(config)
   // Everything this roll's instance logged, from the moment the apply could first restart it.
   const searchFrom = config.applyStartedAt
