@@ -304,4 +304,33 @@ describe('useProjectGroupDialogs settings flow', () => {
 
     expect(latest?.settingsTarget).toBeNull()
   })
+
+  // R2: losing contact with a host is normal on SSH, so the dialog going away must be explained
+  // rather than silent — and the open state has to go with it.
+  it('closes the open dialog and says why when the group leaves the catalog', async () => {
+    const rerender = await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('remote-child', 'runtime:env-1')
+    })
+    expect(latest?.settingsDialog).not.toBeNull()
+
+    await rerender([PARENT, UNBOUND_CHILD])
+
+    expect(latest?.settingsDialog).toBeNull()
+    expect(mocks.toastError).toHaveBeenCalled()
+  })
+
+  it('does not re-open the dialog by itself when the host comes back', async () => {
+    const rerender = await renderHookProbe()
+
+    act(() => {
+      latest?.handleOpenProjectGroupSettings('remote-child', 'runtime:env-1')
+    })
+    await rerender([PARENT, UNBOUND_CHILD])
+    await rerender(DEFAULT_GROUPS)
+
+    expect(latest?.settingsDialog).toBeNull()
+    expect(latest?.settingsTarget).toBeNull()
+  })
 })

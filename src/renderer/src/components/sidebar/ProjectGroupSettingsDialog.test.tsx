@@ -79,24 +79,29 @@ type RenderArgs = {
 async function render(args: RenderArgs = {}): Promise<{
   onSubmit: ReturnType<typeof vi.fn>
   onOpenChange: ReturnType<typeof vi.fn>
+  /** Re-renders with a new stored binding, the way a catalog refresh reaches the live prop. */
+  rerenderConfigDir: (configDir: string | null) => Promise<void>
 }> {
   const onSubmit = vi.fn(args.onSubmit ?? (() => Promise.resolve(true)))
   const onOpenChange = vi.fn()
-  await act(async () => {
-    root.render(
-      <ProjectGroupSettingsDialog
-        open
-        groupName="Child"
-        configDir={args.configDir ?? null}
-        inherited={args.inherited ?? null}
-        executionHostId={args.executionHostId ?? 'local'}
-        onOpenChange={onOpenChange}
-        onSubmit={onSubmit}
-      />
-    )
-  })
-  await flushProbe()
-  return { onSubmit, onOpenChange }
+  const paint = async (configDir: string | null): Promise<void> => {
+    await act(async () => {
+      root.render(
+        <ProjectGroupSettingsDialog
+          open
+          groupName="Child"
+          configDir={configDir}
+          inherited={args.inherited ?? null}
+          executionHostId={args.executionHostId ?? 'local'}
+          onOpenChange={onOpenChange}
+          onSubmit={onSubmit}
+        />
+      )
+    })
+    await flushProbe()
+  }
+  await paint(args.configDir ?? null)
+  return { onSubmit, onOpenChange, rerenderConfigDir: paint }
 }
 
 /** Real timers: the probe debounces, so the advisory needs the debounce window to elapse. */
@@ -319,6 +324,48 @@ describe('ProjectGroupSettingsDialog', () => {
     })
 
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  // R1: the draft is the only copy of what the user typed, and N7 made `configDir` a live prop,
+  // so a concurrent edit to this group's binding must not overwrite it.
+  it('keeps an in-progress draft when the stored binding changes elsewhere', async () => {
+    const { rerenderConfigDir } = await render({ configDir: '/home/alice/.claude-client' })
+    await type('/home/alice/.claude-new')
+
+    await rerenderConfigDir('/home/alice/.claude-other')
+
+    expect(getInput().value).toBe('/home/alice/.claude-new')
+    expect(container.textContent).toContain('/home/alice/.claude-other')
+  })
+
+  it('re-seeds a pristine field when the stored binding changes elsewhere', async () => {
+    const { rerenderConfigDir } = await render({ configDir: '/home/alice/.claude-client' })
+
+    await rerenderConfigDir('/home/alice/.claude-other')
+
+    expect(getInput().value).toBe('/home/alice/.claude-other')
+    expect(container.querySelector('[data-claude-config-dir-external]')).toBeNull()
+  })
+
+  it('stops flagging an external change once the draft matches it again', async () => {
+    const { rerenderConfigDir } = await render({ configDir: '/home/alice/.claude-client' })
+    await type('/home/alice/.claude-new')
+    await rerenderConfigDir('/home/alice/.claude-other')
+    expect(container.querySelector('[data-claude-config-dir-external]')).not.toBeNull()
+
+    await type('/home/alice/.claude-other')
+
+    expect(container.querySelector('[data-claude-config-dir-external]')).toBeNull()
+  })
+
+  it('does not flag the dialog’s own saved value as an external change', async () => {
+    const { rerenderConfigDir } = await render({ configDir: null })
+    await type('  /home/alice/.claude-child  ')
+
+    await rerenderConfigDir('/home/alice/.claude-child')
+
+    expect(container.querySelector('[data-claude-config-dir-external]')).toBeNull()
+    expect(getInput().value).toBe('/home/alice/.claude-child')
   })
 
   it('seeds the platform directory picker with the current draft', async () => {

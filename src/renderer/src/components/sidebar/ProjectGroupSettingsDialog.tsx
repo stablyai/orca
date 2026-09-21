@@ -51,6 +51,9 @@ export function ProjectGroupSettingsDialog({
   const [draft, setDraft] = useState(configDir ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, configDir })
+  // What the field was last seeded with; `draft` still equal to it means the user has typed nothing.
+  const [seededDraft, setSeededDraft] = useState(configDir ?? '')
+  const [externalConfigDir, setExternalConfigDir] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
@@ -64,7 +67,17 @@ export function ProjectGroupSettingsDialog({
   if (open !== previousOpenState.open || configDir !== previousOpenState.configDir) {
     setPreviousOpenState({ open, configDir })
     if (open) {
-      setDraft(configDir ?? '')
+      const seed = configDir ?? ''
+      // Why guarded: the binding is a live prop, so an edit from another window would otherwise
+      // replace text the user is still typing. `seed === draft.trim()` is this dialog's own save
+      // arriving in the store, which is not an external change.
+      if (seed === draft.trim() || draft === seededDraft) {
+        setDraft(seed)
+        setSeededDraft(seed)
+        setExternalConfigDir(null)
+      } else {
+        setExternalConfigDir(seed)
+      }
       setSubmitting(false)
     }
   }
@@ -77,6 +90,9 @@ export function ProjectGroupSettingsDialog({
   const advice = evaluateClaudeConfigDirAdvice({ draft, probe })
   const isLocalHost = executionHostId === LOCAL_EXECUTION_HOST_ID
   const trimmedDraft = draft.trim()
+  // Stops flagging once the user's own text has caught up with the external value.
+  const divergedConfigDir =
+    externalConfigDir !== null && externalConfigDir !== trimmedDraft ? externalConfigDir : null
   // Why draft-driven: clearing the field puts the group back under its ancestor, so the hint has to
   // come back the moment the field is empty, not only after the save round-trips.
   const showInherited = !trimmedDraft && inherited !== null
@@ -188,6 +204,7 @@ export function ProjectGroupSettingsDialog({
           </div>
           <ClaudeConfigDirFieldNote
             adviceMessage={advice?.message ?? null}
+            divergedConfigDir={divergedConfigDir}
             inherited={showInherited ? inherited : null}
             remoteHostLabel={isLocalHost ? null : getExecutionHostLabel(executionHostId)}
           />
@@ -230,10 +247,13 @@ export function ProjectGroupSettingsDialog({
 
 function ClaudeConfigDirFieldNote({
   adviceMessage,
+  divergedConfigDir,
   inherited,
   remoteHostLabel
 }: {
   adviceMessage: string | null
+  /** The stored binding after someone else changed it, while the user's own draft says otherwise. */
+  divergedConfigDir: string | null
   inherited: InheritedClaudeConfigDir | null
   remoteHostLabel: string | null
 }): React.JSX.Element {
@@ -260,6 +280,20 @@ function ClaudeConfigDirFieldNote({
       {adviceMessage ? (
         <p data-claude-config-dir-advice="" className="text-muted-foreground">
           {adviceMessage}
+        </p>
+      ) : null}
+      {divergedConfigDir !== null ? (
+        <p data-claude-config-dir-external="" className="text-foreground">
+          {divergedConfigDir
+            ? translate(
+                'auto.components.sidebar.ProjectGroupSettingsDialog.externalChange',
+                'Changed elsewhere to {{value0}}. Your edit is kept — saving replaces it.',
+                { value0: divergedConfigDir }
+              )
+            : translate(
+                'auto.components.sidebar.ProjectGroupSettingsDialog.externalCleared',
+                'Cleared elsewhere. Your edit is kept — saving replaces it.'
+              )}
         </p>
       ) : null}
       {inherited ? (

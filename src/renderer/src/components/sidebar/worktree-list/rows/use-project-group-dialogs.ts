@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -83,6 +83,21 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
+function reportUnresolvedProjectGroupHost(): void {
+  toast.error(
+    translate(
+      'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHost',
+      'Cannot open group settings'
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHostDesc',
+        "Orca could not tell which host owns this group, and a Claude config directory means something different on each one. Reconnect the group's host and try again."
+      )
+    }
+  )
+}
+
 // Create/rename/delete/settings flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
@@ -99,6 +114,7 @@ export function useProjectGroupDialogs(args: {
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
   const [settingsDialog, setSettingsDialog] = useState<ProjectGroupSettingsDialogState | null>(null)
+  const [settingsTargetLost, setSettingsTargetLost] = useState(false)
 
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setNameDialog({ type: 'create-from-repo', repo })
@@ -185,26 +201,31 @@ export function useProjectGroupDialogs(args: {
     }
   }, [projectGroups, settingsDialog])
 
+  // Why close rather than wait: losing contact with a host is routine, and leaving the open state
+  // behind makes the dialog vanish mid-edit and then re-open by itself when the rows come back.
+  // Done during render, so no paint shows a dialog whose row no longer resolves.
+  if (settingsDialog && !settingsTarget) {
+    setSettingsDialog(null)
+    setSettingsTargetLost(true)
+  }
+
+  // The notice for a close the user did not ask for; the same refusal the open path reports.
+  useEffect(() => {
+    if (settingsTargetLost) {
+      reportUnresolvedProjectGroupHost()
+    }
+  }, [settingsTargetLost])
+
   const handleOpenProjectGroupSettings = useCallback(
     (groupId: string, hostId?: ExecutionHostId) => {
       // Why refuse instead of assuming: a config dir is a filesystem path on exactly one host, so
       // a row whose owner cannot be resolved must not open a dialog that probes, browses and saves
       // against this client. Defaulting an unknown host to `local` is the wrong-host failure.
       if (!selectProjectGroupForHost(projectGroups, groupId, hostId)) {
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHost',
-            'Cannot open group settings'
-          ),
-          {
-            description: translate(
-              'auto.components.sidebar.WorktreeList.groupSettingsUnresolvedHostDesc',
-              "Orca could not tell which host owns this group, and a Claude config directory means something different on each one. Reconnect the group's host and try again."
-            )
-          }
-        )
+        reportUnresolvedProjectGroupHost()
         return
       }
+      setSettingsTargetLost(false)
       setSettingsDialog({ groupId, hostId })
     },
     [projectGroups]
