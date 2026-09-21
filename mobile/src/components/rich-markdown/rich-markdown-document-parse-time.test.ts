@@ -78,8 +78,8 @@ describe('the rich Markdown editor document at parse time', () => {
       ]
     ]
     expect(
-      planted.map(([shape, source]) => [shape, moduleLevelMutableBindings('planted', source)])
-    ).toEqual(planted.map(([shape, , named]) => [shape, [named]]))
+      planted.map(([syntax, source]) => [syntax, moduleLevelMutableBindings('planted', source)])
+    ).toEqual(planted.map(([syntax, , named]) => [syntax, [named]]))
   })
 
   it('leaves a const and a function-local let alone, so the empty list is a measurement', () => {
