@@ -108,11 +108,16 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
 
 /**
  * The module list with mermaid on the page, recorded at the base in the docstring above, plus
- * one: `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches
+ * three.
+ *
+ * One is `src/mobile-web-shell/bridge/bridge-haptics-notify.ts`, which `haptics.web.ts` reaches
  * since C7.10 E landed beside this pin (#21864 and #21871 were each green against a main without
- * the other).
+ * the other). The other two are C2.9's: `src/mobile-web-shell/bridge/bridge-page-route-grants.ts`
+ * and the `mobile-web-bundle/manifest-contract.ts` whose grant grammar it imports rather than
+ * restates. Both reach every page closure through `bridge-envelope.ts`, which the page reads to
+ * parse `init`, so this count moves for any route the page serves and not for the session alone.
  */
-const MODULES_WITH_MERMAID = 4324
+const MODULES_WITH_MERMAID = 4326
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
