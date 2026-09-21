@@ -70,5 +70,31 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
+  // The source-control hub. `navigate` because its Back pops the native stack and its changed-file
+  // rows push review; `storage` for the shared components the host layout renders above it;
+  // `externalLink` for the three link openers in the PR segment — the checks list, the comment
+  // markdown and the comment card; `native.clipboard.write` for the conflict section's copy button.
+  //
+  // `pr` and `history` are not listed and never will be. Both are `Redirect`s into this route, so
+  // listing one would put a redirect inside a page whose session stays bound to the pathname it
+  // left; left native they replace into this route and its switch opens the page once. The hop
+  // census sees them as call sites naming `source-control`, never as targets of their own.
+  {
+    pathname: '/h/[hostId]/source-control/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+  },
+  // Diff review. The same five, and the same reasons read off a different screen: `navigate` for
+  // `router.back()` and for the replace into the native session screen; `storage` for the layout;
+  // `externalLink` for the same PR sidebar, reached here through `MobileDiffReviewScreenView`;
+  // `native.clipboard.write` for the send sheet's copy-notes action.
+  //
+  // Equal to the hub's on purpose rather than by coincidence. The two push into each other, and a
+  // target declaring no more than its opener is a hop the handoff keeps inside the document — which
+  // is why registering them together is what buys the cheap hop, and why the census beside this
+  // list would show it the moment either grew a grant the other lacks.
+  {
+    pathname: '/h/[hostId]/review/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   }
 ]

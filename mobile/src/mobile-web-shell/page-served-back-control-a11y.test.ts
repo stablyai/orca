@@ -54,6 +54,14 @@ const PAGE_SERVED_SCREENS = [
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     screen: 'src/files/MobileFilePreviewScreen.tsx'
+  },
+  {
+    pathname: '/h/[hostId]/source-control/[worktreeId]',
+    screen: 'src/source-control/MobileSourceControlHeader.tsx'
+  },
+  {
+    pathname: '/h/[hostId]/review/[worktreeId]',
+    screen: 'src/components/MobileDiffReviewHeader.tsx'
   }
 ]
 
@@ -199,51 +207,6 @@ describe('Back controls in the screens the page serves', () => {
   it('names every one of them in the app’s own wording for Back', () => {
     expect(
       CONTROLS.filter(
-        (control) => !control.label.known || !/^Back\b/.test(control.label.value)
-      ).map(describeControl)
-    ).toEqual([])
-  })
-})
-
-/**
- * The trees a route not yet registered will bring under the rule, held to it before it does.
- *
- * `screenTree` takes a screen's directory, so registering the review route puts the whole of
- * `src/components` under these two rules and the source-control route puts `src/source-control`.
- * Fixing that in the PR that registers would make a route entry carry unrelated accessibility
- * work; fixing it here means C4.4 adds two rows to the table above and nothing else moves.
- *
- * This describe is what the rows replace: once they are in `PAGE_SERVED_SCREENS`, `CONTROLS`
- * covers these trees and the cases below become a second reading of the same thing.
- *
- * The modules, with their trees derived, for the reason the table above gives per screen: a tree
- * holds more than one Back, so presence asserted over the tree lets one answer for another.
- * `src/components` has two, and the review header's could have been renamed into a dismiss with
- * `CustomKeyModal`'s standing in for it.
- */
-const ARRIVING_SCREENS = [
-  'src/source-control/MobileSourceControlHeader.tsx',
-  'src/components/MobileDiffReviewHeader.tsx'
-]
-const ARRIVING_TREES = [...new Set(ARRIVING_SCREENS.map(screenTree))]
-const ARRIVING = ARRIVING_TREES.flatMap((tree) => backControlsUnder(tree))
-
-describe('Back controls in the trees a registered route will add', () => {
-  it('finds a control in each arriving screen, so the rules below cannot pass vacuously', () => {
-    expect(ARRIVING_SCREENS.filter((screen) => backControlsIn(screen).length === 0)).toEqual([])
-  })
-
-  it('gives every one of them the button role', () => {
-    expect(
-      ARRIVING.filter((control) => !control.role.known || control.role.value !== 'button').map(
-        describeControl
-      )
-    ).toEqual([])
-  })
-
-  it('names every one of them in the app’s own wording for Back', () => {
-    expect(
-      ARRIVING.filter(
         (control) => !control.label.known || !/^Back\b/.test(control.label.value)
       ).map(describeControl)
     ).toEqual([])
