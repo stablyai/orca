@@ -107,6 +107,16 @@ $$`}
     expect(markup).toContain('encoding="application/x-tex">2 + 2 = 4</annotation>')
   })
 
+  it('keeps currency prose literal before non-numeric math using the whitespace boundary', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown renderMath content="It costs $5 and takes $x$ hours." />
+    )
+    expect(markup).toContain('It costs $5 and takes')
+    expect(markup).not.toContain('katex-error')
+    expect(markup).toContain('class="katex"')
+    expect(markup).toContain('encoding="application/x-tex">x</annotation>')
+  })
+
   it('preserves parser-recognized unclosed and indented code', () => {
     for (const content of ['```sh\necho $1\n', '~~~sh\necho $1\n', '    echo $1\n']) {
       const markup = renderToStaticMarkup(<CommentMarkdown renderMath content={content} />)
