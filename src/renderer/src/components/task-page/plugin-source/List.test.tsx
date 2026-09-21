@@ -172,13 +172,24 @@ describe('TaskPage contributed source table', () => {
     expect(screen.queryByRole('group', { name: 'Filters' })).not.toBeInTheDocument()
   })
 
-  it('seeds a task with the clicked row', async () => {
+  it('opens the detail panel for the clicked row', async () => {
+    const user = userEvent.setup()
+    const item = taskItem({ id: 'item-2', key: 'BOARD-9' })
+    renderList({ items: [taskItem(), item] })
+
+    await user.click(screen.getByRole('button', { name: 'BOARD-9 Ship the source bar' }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('seeds a workspace from the row action, not from the row itself', async () => {
     const user = userEvent.setup()
     const onUseItem = vi.fn()
     const item = taskItem({ id: 'item-2', key: 'BOARD-9' })
     renderList({ items: [taskItem(), item], onUseItem })
 
-    await user.click(screen.getByRole('button', { name: 'BOARD-9 Ship the source bar' }))
+    await user.click(screen.getByRole('button', { name: 'Start workspace from BOARD-9' }))
+
     expect(onUseItem).toHaveBeenCalledWith(item)
   })
 

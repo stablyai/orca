@@ -3,6 +3,8 @@ import type { AppState } from '../types'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { z } from 'zod'
 import {
+  pluginTaskCommentSchema,
+  pluginTaskItemDetailSchema,
   pluginTaskItemSchema,
   pluginTaskItemTypeSchema,
   pluginTaskPageSchema,
@@ -34,6 +36,7 @@ const ALL_SCOPES: string[] = []
 
 const pluginTaskScopeListSchema = z.array(pluginTaskScopeSchema)
 const pluginTaskItemTypeListSchema = z.array(pluginTaskItemTypeSchema)
+const pluginTaskCommentListSchema = z.array(pluginTaskCommentSchema)
 
 const NO_SELECTION: PluginTaskSourceResult<never> = {
   ok: false,
@@ -277,5 +280,23 @@ export const createPluginTaskSourcesSlice: StateCreator<
       return NO_SELECTION
     }
     return invokePluginTaskSource(selection, 'createItem', pluginTaskItemSchema, input)
+  },
+
+  getPluginTaskSourceItem: async (itemId) => {
+    const selection = get().selectedPluginTaskSource
+    if (!selection) {
+      return NO_SELECTION
+    }
+    return invokePluginTaskSource(selection, 'getItem', pluginTaskItemDetailSchema, { id: itemId })
+  },
+
+  listPluginTaskSourceComments: async (itemId) => {
+    const selection = get().selectedPluginTaskSource
+    if (!selection) {
+      return NO_SELECTION
+    }
+    return invokePluginTaskSource(selection, 'listComments', pluginTaskCommentListSchema, {
+      id: itemId
+    })
   }
 })

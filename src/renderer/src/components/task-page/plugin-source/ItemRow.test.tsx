@@ -29,7 +29,7 @@ function taskItem(overrides: Partial<PluginTaskItem> = {}): PluginTaskItem {
 function renderRow(item: PluginTaskItem): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
-      <TaskPagePluginSourceItemRow item={item} onUseItem={vi.fn()} />
+      <TaskPagePluginSourceItemRow item={item} onOpenItem={vi.fn()} onUseItem={vi.fn()} />
     </TooltipProvider>
   )
 }

@@ -1,8 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  PluginTaskComment,
   PluginTaskCreate,
   PluginTaskItem,
+  PluginTaskItemDetail,
   PluginTaskItemType,
   PluginTaskScope,
   PluginTaskSourceErrorCode,
@@ -90,6 +92,13 @@ export type PluginTaskSourcesSlice = {
   createPluginTaskSourceItem: (
     input: PluginTaskCreate
   ) => Promise<PluginTaskSourceResult<PluginTaskItem>>
+  /** Fetched when the detail panel opens; list rows deliberately carry no body. */
+  getPluginTaskSourceItem: (itemId: string) => Promise<PluginTaskSourceResult<PluginTaskItemDetail>>
+  /** Separate envelope from `getPluginTaskSourceItem` so a source that answers
+   *  the body but not its comments still shows the body. */
+  listPluginTaskSourceComments: (
+    itemId: string
+  ) => Promise<PluginTaskSourceResult<PluginTaskComment[]>>
 }
 
 type PluginTaskSourcesStateCreator = StateCreator<AppState, [], [], PluginTaskSourcesSlice>

@@ -2346,7 +2346,22 @@
         "pluginTaskSourceScopeSearch": "Search projects...",
         "pluginTaskSourceScopesNoMatch": "No projects match your search.",
         "pluginTaskSourceScopesLoading": "Loading projects...",
-        "pluginTaskSourceScopesFailed": "Projects unavailable"
+        "pluginTaskSourceScopesFailed": "Projects unavailable",
+        "pluginTaskSourceDetailTitle": "Task details",
+        "pluginTaskSourceDetailHint": "Read the selected task, its description and its comments.",
+        "pluginTaskSourceDetailClose": "Close task details",
+        "pluginTaskSourceDescription": "Description",
+        "pluginTaskSourceNoDescription": "No description provided.",
+        "pluginTaskSourceNoPriority": "No priority",
+        "pluginTaskSourceComments": "Comments",
+        "pluginTaskSourceNoComments": "No comments yet.",
+        "pluginTaskSourceOpenIn": "Open in {{value0}}",
+        "pluginTaskSourceCopyUrl": "Copy URL",
+        "pluginTaskSourceCopyKey": "Copy key",
+        "pluginTaskSourceCopyUrlLabel": "URL",
+        "pluginTaskSourceCopyKeyLabel": "Key",
+        "pluginTaskSourceCopied": "{{value0}} copied",
+        "pluginTaskSourceCopyFailed": "Failed to copy {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",

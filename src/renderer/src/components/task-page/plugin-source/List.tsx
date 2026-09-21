@@ -16,6 +16,7 @@ import {
   TaskPagePluginSourceCreateButton,
   type PluginTaskSourceCreateControl
 } from './CreateItemDialog'
+import { TaskPagePluginSourceItemDetailPanel } from './ItemDetailPanel'
 import { PLUGIN_TASK_ROW_GRID_CLASS, TaskPagePluginSourceItemRow } from './ItemRow'
 import { TaskPagePluginSourceQueryBar } from './QueryBar'
 import type { PluginTaskSourceScopeFilter } from './ScopePicker'
@@ -82,9 +83,11 @@ function EmptyState(): React.JSX.Element {
 
 function StateSections({
   items,
+  onOpenItem,
   onUseItem
 }: {
   items: PluginTaskItem[]
+  onOpenItem: (item: PluginTaskItem) => void
   onUseItem: (item: PluginTaskItem) => void
 }): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -133,7 +136,12 @@ function StateSections({
             <CollapsibleContent>
               <div className="divide-y divide-border/50 border-t border-border/50">
                 {section.items.map((item) => (
-                  <TaskPagePluginSourceItemRow key={item.id} item={item} onUseItem={onUseItem} />
+                  <TaskPagePluginSourceItemRow
+                    key={item.id}
+                    item={item}
+                    onOpenItem={onOpenItem}
+                    onUseItem={onUseItem}
+                  />
                 ))}
               </div>
             </CollapsibleContent>
@@ -174,6 +182,9 @@ export function TaskPagePluginSourceList({
   create: PluginTaskSourceCreateControl | null
 }): React.JSX.Element {
   const refreshLabel = translate('auto.components.TaskPage.pluginTaskSourceRefresh', 'Refresh')
+  // Held here, not in the page: this list is remounted per source, so an open
+  // panel cannot survive into a source that knows nothing about the item.
+  const [detailItem, setDetailItem] = useState<PluginTaskItem | null>(null)
   return (
     <div className="mt-2 flex max-h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
       <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
@@ -239,8 +250,14 @@ export function TaskPagePluginSourceList({
             whole point of the source's error taxonomy. */}
         {!loading && !error && items.length === 0 ? <EmptyState /> : null}
 
-        <StateSections items={items} onUseItem={onUseItem} />
+        <StateSections items={items} onOpenItem={setDetailItem} onUseItem={onUseItem} />
       </div>
+
+      <TaskPagePluginSourceItemDetailPanel
+        item={detailItem}
+        sourceTitle={title}
+        onClose={() => setDetailItem(null)}
+      />
     </div>
   )
 }

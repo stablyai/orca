@@ -512,6 +512,67 @@ describe('createPluginTaskSourcesSlice', () => {
       expect(store.getState().pluginTaskSourceRefreshing).toBe(false)
     })
   })
+
+  describe('item detail', () => {
+    it('asks the source for one item and its comments by id', async () => {
+      const store = createTestStore()
+      const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'getItem') {
+          return { ok: true, data: { ...taskItem('BOARD-7'), description: 'Body' } }
+        }
+        return {
+          ok: true,
+          data: [
+            {
+              id: 'c1',
+              author: { id: 'u1', displayName: 'Amelia Kato' },
+              body: 'Looks good.',
+              bodyFormat: 'markdown',
+              createdAt: '2026-01-02T03:04:05.000Z'
+            }
+          ]
+        }
+      })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+
+      const detail = await store.getState().getPluginTaskSourceItem('BOARD-7')
+      const comments = await store.getState().listPluginTaskSourceComments('BOARD-7')
+
+      expect(invokeTaskSource).toHaveBeenCalledWith({
+        ...BOARDS_SOURCE,
+        method: 'getItem',
+        params: { id: 'BOARD-7' }
+      })
+      expect(invokeTaskSource).toHaveBeenCalledWith({
+        ...BOARDS_SOURCE,
+        method: 'listComments',
+        params: { id: 'BOARD-7' }
+      })
+      // Defaulted by the contract, so a source that omits it cannot have its
+      // body parsed as markdown by accident.
+      expect(detail.ok && detail.data.descriptionFormat).toBe('text')
+      expect(comments.ok && comments.data).toHaveLength(1)
+    })
+
+    it('returns each failure as its own envelope rather than empty data', async () => {
+      const store = createTestStore()
+      const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'getItem') {
+          return { ok: true, data: taskItem('BOARD-7') }
+        }
+        return { ok: false, code: 'unavailable', message: 'comments are down' }
+      })
+      vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+      store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+
+      const detail = await store.getState().getPluginTaskSourceItem('BOARD-7')
+      const comments = await store.getState().listPluginTaskSourceComments('BOARD-7')
+
+      expect(detail.ok).toBe(true)
+      expect(comments).toEqual({ ok: false, code: 'unavailable', message: 'comments are down' })
+    })
+  })
 })
 
 describe('deriveContributedPluginTaskSources', () => {

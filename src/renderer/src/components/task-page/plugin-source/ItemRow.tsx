@@ -147,9 +147,12 @@ function RowActions({
 
 export function TaskPagePluginSourceItemRow({
   item,
+  onOpenItem,
   onUseItem
 }: {
   item: PluginTaskItem
+  /** Row click and keyboard activation: opens the read-only detail panel. */
+  onOpenItem: (item: PluginTaskItem) => void
   onUseItem: (item: PluginTaskItem) => void
 }): React.JSX.Element {
   const labels = item.labels ?? []
@@ -163,14 +166,14 @@ export function TaskPagePluginSourceItemRow({
       role="button"
       tabIndex={0}
       aria-label={`${item.key} ${item.title}`}
-      onClick={() => onUseItem(item)}
+      onClick={() => onOpenItem(item)}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) {
           return
         }
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          onUseItem(item)
+          onOpenItem(item)
         }
       }}
       className={cn(
