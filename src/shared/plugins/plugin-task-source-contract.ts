@@ -89,6 +89,16 @@ export const pluginTaskPageSchema = z.object({
   nextCursor: z.string().max(4096).nullable()
 })
 
+/** getItem's shape: an item plus its body. Never `'html'` — a plugin that
+ *  owns HTML (e.g. Azure DevOps's System.Description) must convert to
+ *  markdown itself; the renderer only ever trusts text/markdown. */
+export const pluginTaskItemDetailSchema = pluginTaskItemSchema.extend({
+  description: z.string().max(BODY_MAX).nullable().optional(),
+  descriptionFormat: z.enum(['text', 'markdown']).default('text'),
+  /** Work item type name (e.g. 'Bug', 'User Story'), shown in the panel header. */
+  type: z.string().max(256).nullable().optional()
+})
+
 export const pluginTaskCommentSchema = z.object({
   id: z.string().min(1).max(512),
   author: pluginTaskIdentitySchema,
@@ -204,7 +214,7 @@ export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z
   listScopes: z.array(pluginTaskScopeSchema),
   listItemTypes: z.array(pluginTaskItemTypeSchema),
   listItems: pluginTaskPageSchema,
-  getItem: pluginTaskItemSchema,
+  getItem: pluginTaskItemDetailSchema,
   /** The created item, so a caller can show it without a second round trip. */
   createItem: pluginTaskItemSchema,
   listComments: z.array(pluginTaskCommentSchema),
@@ -217,6 +227,7 @@ export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z
 export type PluginTaskScope = z.infer<typeof pluginTaskScopeSchema>
 export type PluginTaskIdentity = z.infer<typeof pluginTaskIdentitySchema>
 export type PluginTaskItem = z.infer<typeof pluginTaskItemSchema>
+export type PluginTaskItemDetail = z.infer<typeof pluginTaskItemDetailSchema>
 export type PluginTaskPage = z.infer<typeof pluginTaskPageSchema>
 export type PluginTaskComment = z.infer<typeof pluginTaskCommentSchema>
 export type PluginTaskTransition = z.infer<typeof pluginTaskTransitionSchema>

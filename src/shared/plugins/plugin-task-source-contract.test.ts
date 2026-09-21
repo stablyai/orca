@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   pluginTaskCreateSchema,
+  pluginTaskItemDetailSchema,
   pluginTaskItemSchema,
   pluginTaskItemTypeQuerySchema,
   pluginTaskQuerySchema,
@@ -247,6 +248,87 @@ describe('plugin task source contract', () => {
       ).toBe(false)
     }
   )
+
+  describe('plugin task item detail schema', () => {
+    const base = {
+      id: '4821',
+      key: '4821',
+      title: 'Crash on resume',
+      state: { name: 'Active', category: 'in-progress' },
+      assignee: null,
+      url: null,
+      updatedAt: null,
+      scopeId: null
+    }
+
+    it('accepts a detail with a markdown description', () => {
+      expect(
+        pluginTaskItemDetailSchema.safeParse({
+          ...base,
+          description: '**Steps**\n1. Open app',
+          descriptionFormat: 'markdown',
+          type: 'Bug'
+        }).success
+      ).toBe(true)
+    })
+
+    it('accepts a detail with no description', () => {
+      expect(pluginTaskItemDetailSchema.safeParse(base).success).toBe(true)
+    })
+
+    it('defaults descriptionFormat to text when omitted', () => {
+      const parsed = pluginTaskItemDetailSchema.safeParse({ ...base, description: 'plain text' })
+
+      expect(parsed.success).toBe(true)
+      if (parsed.success) {
+        expect(parsed.data.descriptionFormat).toBe('text')
+      }
+    })
+
+    it('rejects an html description format', () => {
+      expect(
+        pluginTaskItemDetailSchema.safeParse({
+          ...base,
+          description: '<p>Steps</p>',
+          descriptionFormat: 'html'
+        }).success
+      ).toBe(false)
+    })
+  })
+
+  it('binds getItem to the detail schema, carrying description through', () => {
+    const detail = {
+      id: '4821',
+      key: '4821',
+      title: 'Crash on resume',
+      state: { name: 'Active', category: 'in-progress' },
+      assignee: null,
+      url: null,
+      updatedAt: null,
+      scopeId: null,
+      description: '**Steps**\n1. Open app',
+      descriptionFormat: 'markdown',
+      type: 'Bug'
+    }
+
+    const parsed = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.getItem.safeParse(detail)
+
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data).toMatchObject({
+        description: detail.description,
+        descriptionFormat: 'markdown',
+        type: 'Bug'
+      })
+    }
+  })
+
+  it('keeps listItems bound to the page schema, not the detail shape', () => {
+    const page = { items: [], nextCursor: null }
+
+    expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.listItems.safeParse(page).success).toBe(true)
+    expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.getItem.safeParse(page).success).toBe(false)
+  })
 
   describe('every method is pinned to its own schema, not a neighbor', () => {
     // Methods within a group accept structurally identical data, so no fixture
