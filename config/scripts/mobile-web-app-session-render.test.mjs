@@ -24,23 +24,21 @@ import {
  * cannot say any of it, because they mock react-native away — it is Flow source vitest will not
  * parse.
  *
- * Two defects this file found, both invisible natively and both a console line rather than a crash.
- * One is fixed in the commit beside it and one is reported rather than fixed:
+ * Two defects this file found, both invisible natively and both a console line rather than a crash,
+ * and both now fixed:
  *
- * - **Fixed.** `use-mobile-session-markdown-actions.ts` registered `BackHandler` with no platform
- *   guard, and the effect re-registers whenever the dirty-draft list changes. React Native Web
- *   answers with "BackHandler is not supported on web and should not be used." and an inert
- *   subscription: two lines on the console at mount, and a hardware-back guard never armed anyway.
- * - **Reported.** `use-mobile-session-diff-comments.ts` runs `void loadDiffComments()` in an effect
- *   with no catch. The loader returns on a *refused* `worktree.show` and nothing catches a
- *   *rejected* one, so a host that will not answer raises an unhandled rejection on every session
- *   mount. `.catch` is the fix and it is one line, but the corpus certifies the rejection —
- *   `matrix-session.diff-notes-worktree.show-1` lists it as an effect of the loaded checkpoint — so
- *   fixing it is a golden re-record and a review event rather than something this lane lands.
+ * - `use-mobile-session-markdown-actions.ts` registered `BackHandler` with no platform guard, and
+ *   the effect re-registers whenever the dirty-draft list changes. React Native Web answers with
+ *   "BackHandler is not supported on web and should not be used." and an inert subscription: two
+ *   lines on the console at mount, and a hardware-back guard never armed anyway.
+ * - `use-mobile-session-diff-comments.ts` ran `void loadDiffComments()` in an effect with no catch.
+ *   The loader returns on a *refused* `worktree.show` and nothing caught a *rejected* one, so a
+ *   host that will not answer raised an unhandled rejection on every session mount. `.catch` at the
+ *   effect is the fix, and it moved a golden: the corpus certified the rejection as an effect of the
+ *   loaded checkpoint, so `matrix-session.diff-notes-worktree.show-1` was re-recorded without it.
  *
- * So the error assertion below is an exact list rather than `toEqual([])` or a filter: that one
- * rejection and nothing else. A second error reds it, and so does the rejection going away, which
- * is what makes this file the place the fix is noticed when it lands.
+ * So the error assertion below is an exact empty list rather than a filter: nothing from this
+ * closure reaches the document, and any error at all reds it.
  *
  * **The terminal is not painted here, and this file must not look as though it is.** Putting a
  * terminal on screen needs the host protocol handshake, a tab snapshot, a terminal inventory and a
@@ -198,15 +196,6 @@ async function openRoute(route, awaitText) {
 /** The session header renders it, so the chrome is on screen before this reads the tree. */
 const BACK_LABEL = 'Back to worktrees'
 
-/**
- * The one error this page is expected to produce, named in full.
- *
- * `use-mobile-session-diff-comments.ts`'s uncaught `loadDiffComments()` against a double that
- * answers no RPC. The category is the double's own, so this string is stable for this file and
- * says which refusal reached the document rather than only that something did.
- */
-const KNOWN_UNCAUGHT = 'RenderCheckShellDouble: the render check answers no RPC'
-
 describeRender(
   'the session route in a real browser',
   () => {
@@ -219,10 +208,9 @@ describeRender(
         expect(text).toContain(key)
       }
       expect(text).not.toContain(UNMATCHED)
-      // Exact, because this closure's defects are exactly console lines. The unguarded
-      // `BackHandler` put two here and is fixed; the uncaught diff-notes rejection is the one
-      // entry left and is a golden re-record away from going too.
-      expect(opened.errors).toEqual([KNOWN_UNCAUGHT])
+      // Exact, because this closure's defects are exactly console lines: the unguarded
+      // `BackHandler` put two here and the uncaught diff-notes rejection one, and both are fixed.
+      expect(opened.errors).toEqual([])
       await opened.page.close()
     }, 120_000)
 
@@ -268,8 +256,8 @@ describeRender(
       // Chromium reports a refused subresource as a console error naming the directive, so
       // anything this closure loaded that the policy blocked lands here.
       expect(opened.errors.filter((entry) => entry.includes('Content Security Policy'))).toEqual([])
-      // And nothing else beyond the one rejection above, so this case reads the whole account.
-      expect(opened.errors).toEqual([KNOWN_UNCAUGHT])
+      // And nothing else at all, so this case reads the whole account and not only the policy.
+      expect(opened.errors).toEqual([])
       // Stronger than the line above and independent of it: not one request left the origin, so
       // there is nothing for the policy to have refused. A font, a beacon or a provider image
       // added anywhere in this closure reds this.
@@ -318,9 +306,4 @@ describeRender(
  * **The storage refusals.** A page write needs a control to make it. The refusal's own chain is
  * `mobile/src/session/mobile-structured-send-page-storage-refusal.test.ts` end to end over the
  * real `page-async-storage`.
- *
- * **That the one uncaught rejection is harmless.** It is not reported as a page fault — the shell's
- * `fault` notify is raised by the React boundary, and `__orcaRenderCheckFaults` is empty here — so
- * the generation is not dropped and the screen keeps working. What it costs is a document-level
- * error on every mount, which is a line in a crash report and a red herring in the device proof.
  */
