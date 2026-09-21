@@ -18,6 +18,10 @@ const INITIAL_PROMPT = JSON.stringify({
   ]
 })
 
+const APPROVAL_PROMPT = JSON.stringify({
+  approval: { tool: 'Bash', summary: 'pnpm build > build.log 2>&1' }
+})
+
 const storeState = {
   agentStatusByPaneKey: {
     'tab-1:leaf-1': {
@@ -110,7 +114,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
-    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'waiting'
   })
 
   afterEach(() => {
@@ -243,6 +247,7 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
 
   it('prefers live status over the transcript when both carry a prompt', () => {
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'waiting'
     render(cardElement(true, [askCallMessage('Stale transcript question?')]))
 
     expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
@@ -292,6 +297,79 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
       [{ id: 'clear-1', command: '/clear', sentAt: 200 }]
     )
     render(cardElement(true, trimmed))
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+})
+
+// A status `interactivePrompt` outlives its answer — the host keeps it sticky —
+// so a card derived from it has to follow the agent's state. Mobile's gate lives
+// in `use-mobile-native-chat-prompts.ts`; both call the shared predicate.
+describe('NativeChatInteractiveCard paused gate', () => {
+  const pane = storeState.agentStatusByPaneKey['tab-1:leaf-1']
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    pane.interactivePrompt = undefined
+    pane.toolName = 'AskUserQuestion'
+    pane.state = undefined
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  function approvalCard(): Element | null {
+    return document.querySelector('[data-native-chat-approval-card="true"]')
+  }
+
+  it('renders the approval envelope while the agent is paused on the user', () => {
+    pane.interactivePrompt = APPROVAL_PROMPT
+    pane.state = 'waiting'
+    const waiting = renderCard()
+    expect(approvalCard()).not.toBeNull()
+
+    waiting.unmount()
+    pane.state = 'blocked'
+    renderCard()
+    expect(approvalCard()).not.toBeNull()
+  })
+
+  it('hides the approval envelope once the agent is working or done', () => {
+    pane.interactivePrompt = APPROVAL_PROMPT
+    pane.state = 'working'
+    const working = renderCard()
+    expect(approvalCard()).toBeNull()
+
+    working.unmount()
+    pane.state = 'done'
+    renderCard()
+    expect(approvalCard()).toBeNull()
+  })
+
+  it('renders a status-derived question while the agent is paused on the user', () => {
+    pane.interactivePrompt = INITIAL_PROMPT
+    pane.state = 'blocked'
+    renderCard()
+
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+  })
+
+  it('hides a status-derived question once the agent is working', () => {
+    pane.interactivePrompt = INITIAL_PROMPT
+    pane.state = 'working'
+    renderCard()
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('does not leak a gated-out status question through the transcript fallback', () => {
+    // The post-answer window: the sticky status still carries the prompt while the
+    // state flips to `working`, and the transcript's tool-result row has not landed
+    // yet — both sources describe the same answered question.
+    pane.interactivePrompt = INITIAL_PROMPT
+    pane.state = 'working'
+    render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
 
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })

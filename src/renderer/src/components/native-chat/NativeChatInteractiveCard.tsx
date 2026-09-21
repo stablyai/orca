@@ -2,7 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useAppStore } from '../../store'
 import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { parseInteractivePrompt } from './native-chat-interactive-prompt'
+import { isAgentPausedOnUser } from '../../../../shared/native-chat-paused-gate'
+import {
+  parseInteractivePrompt,
+  type InteractivePromptCard
+} from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
@@ -57,20 +61,25 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
+  // The sibling `state` from the same entry drives the paused gate below.
+  const agentState = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state ?? null)
   const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
-  const card = useMemo(() => {
+  const card = useMemo((): InteractivePromptCard => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
-    if (statusCard?.kind === 'approval') {
-      return statusCard
+    if (statusCard) {
+      // Paused gate (mobile parity, STA-3144): the payload outlives its answer, so
+      // only an agent parked on the user may surface it. A present payload still
+      // suppresses the transcript, which would re-describe the same answered prompt.
+      return isAgentPausedOnUser(agentState) ? statusCard : null
     }
     const prompt = resolveNativeChatAsk({
-      liveAsk: statusCard?.prompt ?? null,
+      liveAsk: null,
       messages: messages ?? [],
       transcriptSettled: transcriptSettled && messages != null
     })
     return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
+  }, [agentState, interactivePrompt, interactiveToolName, messages, transcriptSettled])
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep

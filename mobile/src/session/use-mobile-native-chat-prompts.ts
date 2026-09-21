@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { parseAskFromStatus, resolveNativeChatAsk } from '../../../src/shared/native-chat-ask'
+import { isAgentPausedOnUser } from '../../../src/shared/native-chat-paused-gate'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
@@ -22,7 +23,7 @@ export function useMobileNativeChatPrompts(args: {
   transcriptLoading: boolean
 }): MobileNativeChatPrompts {
   const { enabled, status, messages, transcriptLoading } = args
-  const blocked = status?.state === 'waiting' || status?.state === 'blocked'
+  const blocked = isAgentPausedOnUser(status?.state)
   // Both permission paths sit inside the paused gate: an approval envelope can
   // outlive its answer (the host keeps it sticky), so only a waiting/blocked
   // agent may surface it — never a working or done one (STA-3144).

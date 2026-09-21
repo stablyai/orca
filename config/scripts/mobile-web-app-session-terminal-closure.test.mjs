@@ -214,8 +214,38 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * and the two it reaches, `agent-session-conversation-name.ts` and `surrogate-safe-text-slice.ts`,
  * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
  * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
+ *
+ * Then STA-3259 gave the desktop chat card the paused gate mobile already had, and put the rule
+ * both surfaces apply in one module instead of two copies.
+ *
+ *   modules        4333 -> 4334   (+1)
+ *
+ * One module joins: `src/shared/native-chat-paused-gate.ts`, holding the `waiting || blocked`
+ * predicate `use-mobile-native-chat-prompts.ts` used to restate inline and the desktop card now
+ * calls too. Nothing follows it in: its sole import is `import type { AgentStatusState }`, which is
+ * erased, so the runtime graph gains the one file. That is the same edge the reading above catches
+ * #21924 on from the other side — a type-only import that becomes a value import brings its
+ * closure with it — and it is why this entry reads +1 rather than +2.
+ *
+ * Re-recorded on main's 4,333 rather than carried across. This entry has now been re-read against
+ * three bases: +1 on item D's 4,323, then on ruling 34's 4,330 after C7.7 registered the route,
+ * then here. The +1 is the part that survives each move — the walk reaches
+ * `use-mobile-native-chat-prompts.ts` through `MobileSessionRouteScreen`, the session surface, the
+ * content row, the active content and the native chat overlay's controller, whichever file it
+ * enters through — while the total it attaches to is not, which is the arithmetic every reading
+ * above keeps warning about.
+ *
+ * The trade, recorded rather than waved through: one module on the phone's session route buys a
+ * single definition of what "paused" means for the two chat surfaces that both gate an approval
+ * envelope on it. A second copy is how they drifted apart in the first place, which is the bug
+ * STA-3259 reports. Per ruling 28 above this is a re-recorded census, not a budget breach.
+ *
+ * The local count is deliberately not re-read beside it: this branch cannot walk the closure (the
+ * bundle dependencies are absent outside the `mobile web app bundle` job, where the walk skips),
+ * so a local number here would be one nobody measured — the failure mode the base reading above
+ * calls out. The module total is CI's own reading from that job.
  */
-const SESSION_ROUTE_MODULES = 4333
+const SESSION_ROUTE_MODULES = 4334
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
