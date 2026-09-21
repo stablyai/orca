@@ -12,6 +12,7 @@ import { useLiveDashboardSnapshot } from '../dashboard/useLiveDashboardSnapshot'
 import { revealDashboardAgent } from '../dashboard/reveal-dashboard-agent'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import type { Tab } from '../../../../shared/tab-types'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
@@ -26,8 +27,13 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
   const settings = useAppStore((state) => state.settings)
   const target = useAgentDetectionTargetForWorktree(tab.worktreeId)
   const { detectedIds } = useDetectedAgents(target)
+  // Legacy canvas tabs predate executionHostId; resolve the worktree owner so the
+  // workspace lookup, active-workspace check, and browser context still match.
+  // The persisted storage scope below keeps the raw host so legacy documents stay addressable.
+  const ownerHostId = useAppStore((state) => getExecutionHostIdForWorktree(state, tab.worktreeId))
+  const effectiveHostId = tab.executionHostId ?? ownerHostId
   const workspace = snapshot.workspaces?.find(
-    (item) => item.worktreeId === tab.worktreeId && item.executionHostId === tab.executionHostId
+    (item) => item.worktreeId === tab.worktreeId && item.executionHostId === effectiveHostId
   )
   const cards = useCanvasWorkspaceCards(tab, snapshot)
   const launchOptions = useMemo(
@@ -68,7 +74,7 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
       const state = useAppStore.getState()
       if (
         state.activeWorktreeId !== tab.worktreeId ||
-        getActiveExecutionHostIdForWorktree(state, tab.worktreeId) !== tab.executionHostId
+        getActiveExecutionHostIdForWorktree(state, tab.worktreeId) !== effectiveHostId
       ) {
         throw new Error(
           translate(
@@ -96,15 +102,15 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
       }
       return created.id
     },
-    [tab.worktreeId, tab.executionHostId, tab.groupId]
+    [tab.worktreeId, tab.groupId, effectiveHostId]
   )
   const browserContext = useMemo(
     () => ({
       worktreeId: tab.worktreeId,
-      executionHostId: tab.executionHostId,
+      executionHostId: effectiveHostId,
       create: openBrowser
     }),
-    [tab.worktreeId, tab.executionHostId, openBrowser]
+    [tab.worktreeId, effectiveHostId, openBrowser]
   )
   const scope = JSON.stringify(['workspace-tab', tab.executionHostId, tab.worktreeId, tab.id])
   return (

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   measureEmbeddedBrowserPlacement,
   setEmbeddedBrowserPlacement
@@ -48,7 +49,12 @@ export function AgentCanvasBrowser({
     const owner = state.unifiedTabsByWorktree[context.worktreeId]?.find(
       (tab) => tab.contentType === 'browser' && tab.entityId === node.browserTabId
     )
-    if (!owner || owner.executionHostId !== context.executionHostId) {
+    if (!owner) {
+      return undefined
+    }
+    // Either side can predate executionHostId; resolve both against the worktree owner.
+    const effectiveHost = getExecutionHostIdForWorktree(state, context.worktreeId)
+    if ((owner.executionHostId ?? effectiveHost) !== (context.executionHostId ?? effectiveHost)) {
       return undefined
     }
     return state.browserTabsByWorktree[context.worktreeId]?.find(

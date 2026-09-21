@@ -89,6 +89,63 @@ it('shows opening errors without attaching another page or discarding the addres
   )
 })
 
+it('embeds a hostless page for a legacy canvas without an execution host', () => {
+  mocks.state = {
+    unifiedTabsByWorktree: {
+      worktree: [{ entityId: 'browser', contentType: 'browser' }]
+    },
+    browserTabsByWorktree: {
+      worktree: [{ id: 'browser', url: 'https://legacy.example', title: 'Legacy' }]
+    }
+  }
+  const view = render(
+    <CanvasBrowserContext.Provider
+      value={{ worktreeId: 'worktree', executionHostId: undefined, create: vi.fn() }}
+    >
+      <div data-agent-canvas>
+        <div className="react-flow__node">
+          <AgentCanvasBrowser
+            node={{ ...node, browserTabId: 'browser', content: 'https://legacy.example' }}
+            readOnly={false}
+            connecting={false}
+            onEdit={vi.fn()}
+          />
+        </div>
+      </div>
+    </CanvasBrowserContext.Provider>
+  )
+  expect(view.queryByRole('textbox', { name: 'Browser URL' })).toBeNull()
+})
+
+it('does not embed a hostless page in a remote canvas', () => {
+  mocks.state = {
+    unifiedTabsByWorktree: {
+      worktree: [{ entityId: 'browser', contentType: 'browser' }]
+    },
+    browserTabsByWorktree: {
+      worktree: [{ id: 'browser', url: 'https://legacy.example', title: 'Legacy' }]
+    }
+  }
+  const view = render(
+    <CanvasBrowserContext.Provider
+      value={{ worktreeId: 'worktree', executionHostId: 'ssh:remote', create: vi.fn() }}
+    >
+      <div data-agent-canvas>
+        <div className="react-flow__node">
+          <AgentCanvasBrowser
+            node={{ ...node, browserTabId: 'browser', content: 'https://legacy.example' }}
+            readOnly={false}
+            connecting={false}
+            onEdit={vi.fn()}
+          />
+        </div>
+      </div>
+    </CanvasBrowserContext.Provider>
+  )
+  expect(view.getByRole('textbox', { name: 'Browser URL' })).toBeDefined()
+  expect(mocks.place).not.toHaveBeenCalled()
+})
+
 it('does not embed a page owned by another execution host', () => {
   mocks.state = {
     unifiedTabsByWorktree: {

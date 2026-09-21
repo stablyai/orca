@@ -1,5 +1,4 @@
 import { closeCanvasTab } from '../agent-canvas/close-canvas-tab'
-import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { requestEditorFileClose } from '../editor/editor-autosave'

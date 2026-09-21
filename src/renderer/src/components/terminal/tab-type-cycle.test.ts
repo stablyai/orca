@@ -193,6 +193,24 @@ describe('getNextTabAcrossAllTypes', () => {
     ).toEqual({ type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' })
   })
 
+  it('cycles from an active canvas tab instead of jumping to the first tab', () => {
+    const tabs: TypeCyclableTab[] = [
+      { type: 'terminal', id: 'term-1' },
+      { type: 'canvas', id: 'tab-canvas-1', tabId: 'tab-canvas-1' },
+      { type: 'editor', id: 'file-1', tabId: 'tab-file-1' }
+    ]
+    expect(
+      getNextTabAcrossAllTypes({
+        tabs,
+        activeTabType: 'canvas',
+        activeTabId: 'tab-canvas-1',
+        activeFileId: 'file-1',
+        activeBrowserTabId: null,
+        direction: 1
+      })
+    ).toEqual({ type: 'editor', id: 'file-1', tabId: 'tab-file-1' })
+  })
+
   it('uses direction-aware fallback when the active tab id is missing', () => {
     expect(
       getNextTabAcrossAllTypes({

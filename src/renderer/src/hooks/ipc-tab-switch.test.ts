@@ -422,6 +422,21 @@ describe('handleSwitchTabAcrossAllTypes', () => {
     expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
   })
 
+  it('cycles to a canvas tab via activateTab without touching the editor', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1' },
+      { type: 'canvas', id: 'tab-canvas-1', tabId: 'tab-canvas-1' }
+    ])
+
+    expect(handleSwitchTabAcrossAllTypes(1)).toBe(true)
+    expect(store.activateTab).toHaveBeenCalledWith('tab-canvas-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('canvas')
+    expect(store.setActiveFile).not.toHaveBeenCalled()
+  })
+
   it('returns false when only one tab exists total', () => {
     const store = makeStore('terminal')
     getStateMock.mockReturnValue(store)

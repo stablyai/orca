@@ -5,10 +5,13 @@ import type { Tab } from '../../../../shared/tab-types'
 import AgentCanvasWorkspace from './AgentCanvasWorkspace'
 import { CANVAS_STORAGE_PREFIX, useAgentCanvasDocument } from './use-agent-canvas-document'
 
+const mocks = vi.hoisted(() => ({ snapshot: {} as Record<string, unknown> }))
 vi.mock('@/store', () => ({ useAppStore: (select: (state: unknown) => unknown) => select({}) }))
 vi.mock('@/hooks/useDetectedAgents', () => ({ useDetectedAgents: () => ({ detectedIds: [] }) }))
 vi.mock('@/hooks/useAgentDetectionTarget', () => ({ useAgentDetectionTargetForWorktree: vi.fn() }))
-vi.mock('../dashboard/useLiveDashboardSnapshot', () => ({ useLiveDashboardSnapshot: () => ({}) }))
+vi.mock('../dashboard/useLiveDashboardSnapshot', () => ({
+  useLiveDashboardSnapshot: () => mocks.snapshot
+}))
 vi.mock('../dashboard/reveal-dashboard-agent', () => ({ revealDashboardAgent: vi.fn() }))
 vi.mock('./use-canvas-workspace-cards', () => ({ useCanvasWorkspaceCards: () => [] }))
 vi.mock('./launch-canvas-agent', () => ({ launchCanvasAgent: vi.fn() }))
@@ -35,6 +38,35 @@ vi.mock('./AgentCanvasBoard', () => ({
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  mocks.snapshot = {}
+})
+
+it('resolves the local workspace for a legacy canvas without an execution host', () => {
+  mocks.snapshot = {
+    workspaces: [
+      {
+        worktreeId: 'wt-legacy',
+        executionHostId: 'local',
+        repoName: 'repo',
+        worktreeName: 'wt',
+        hostLabel: 'my-laptop'
+      }
+    ]
+  }
+  const tab = {
+    id: 'canvas-1',
+    worktreeId: 'wt-legacy',
+    executionHostId: undefined
+  } as unknown as Tab
+  const view = render(<AgentCanvasWorkspace tab={tab} />)
+  expect(view.getByText('my-laptop')).toBeDefined()
+  fireEvent.change(view.getByRole('textbox', { name: 'Canvas position' }), {
+    target: { value: '123' }
+  })
+  view.unmount()
+  // The persisted scope keeps the raw host so the legacy document stays addressable.
+  const scope = JSON.stringify(['workspace-tab', undefined, 'wt-legacy', 'canvas-1'])
+  expect(JSON.parse(localStorage.getItem(CANVAS_STORAGE_PREFIX + scope)!).viewport.x).toBe(123)
 })
 
 it.each(['worktreeId', 'executionHostId'] as const)(
