@@ -38,11 +38,11 @@ const SHELL_HOST = {
 }
 /** The manifest's own pairs, as the shell would send them. */
 const PAGE_ROUTE_GRANTS = [
-  { pathname: HOST_PATTERN, grants: ['navigate', 'storage'] },
-  { pathname: FILES_PATTERN, grants: ['navigate', 'storage', 'externalLink'] },
+  { pathname: HOST_PATTERN, grants: ['navigate', 'storage', 'haptics'] },
+  { pathname: FILES_PATTERN, grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   {
     pathname: TASKS_PATTERN,
-    grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   }
 ]
 /** Wide enough for `app/h/_layout.tsx` to render the sidebar beside the route. */
@@ -180,7 +180,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
   it('hands the hop to the shell when the session cannot cover tasks', async () => {
     const opened = await openHostRoute({
       viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage']
+      grants: [faultGrant, 'navigate', 'storage', 'haptics']
     })
     const { page, errors, scripts } = opened
     const loadedBefore = [...scripts]
@@ -203,7 +203,14 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     // page that simply never navigates.
     const opened = await openHostRoute({
       viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'native.clipboard.write']
+      grants: [
+        faultGrant,
+        'navigate',
+        'storage',
+        'externalLink',
+        'haptics',
+        'native.clipboard.write'
+      ]
     })
     const { page, errors } = opened
     const clickedAt = opened.jsResponses.length
@@ -221,7 +228,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     // well: the control the phone actually presses is this one.
     const opened = await openHostRoute({
       viewport: NARROW,
-      grants: [faultGrant, 'navigate', 'storage']
+      grants: [faultGrant, 'navigate', 'storage', 'haptics']
     })
     const { page, errors, scripts } = opened
     const loadedBefore = [...scripts]
@@ -245,7 +252,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     // every hop over on the strength of a field nobody sent.
     const opened = await openHostRoute({
       viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage'],
+      grants: [faultGrant, 'navigate', 'storage', 'haptics'],
       pageRouteGrants: null
     })
     const { page, errors } = opened
@@ -264,7 +271,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     // general case to inference.
     const opened = await openHostRoute({
       viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage', 'externalLink'],
+      grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics'],
       route: FILES_ROUTE,
       awaitText: SHELL_HOST.name
     })
