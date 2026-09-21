@@ -73,10 +73,16 @@ export type AgentLaunchPromptOutcome = AgentLaunchPromptDisposal['outcome']
 
 /** `messageId` hangs off the `journaled` arm rather than sitting optional beside all three: a
  *  producer must not be able to claim the text was committed and then not say where. */
-type AgentLaunchPromptDisposal =
+export type AgentLaunchPromptDisposal =
   /** Committed to the session's transcript, which `messageId` names. */
   | { outcome: 'journaled'; messageId: string }
-  /** Written to a PTY, whose consumption only the pane's owner observes. */
+  /**
+   * Handed to a terminal agent, either on the launch command that started it or as a bracketed
+   * paste into its live PTY. No `messageId`, because a terminal keeps no transcript to name a row
+   * in: what the agent does with the text is observable only in the pane. The caller must NOT
+   * resend — a second paste arrives as a second turn, which is worse than the wasted resend
+   * `not-delivered` costs.
+   */
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. */
   | { outcome: 'not-delivered' }

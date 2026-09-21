@@ -22,6 +22,9 @@ const FILES_ROUTE = 'app/h/[hostId]/files/[worktreeId].tsx'
 const FILES_PREVIEW_ROUTE = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
 const SOURCE_CONTROL_ROUTE = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW_ROUTE = 'app/h/[hostId]/review/[worktreeId].tsx'
+const SESSION_ROUTE = 'app/h/[hostId]/session/[worktreeId].tsx'
+/** The one switch with no native screen behind it; its route file only re-exports this body. */
+const CATCH_ALL_ROUTE = 'src/mobile-web-shell/catch-all-page-route.tsx'
 /** One entry per screen the flag can switch to the page, which is what a review reads. */
 const SWITCHED_ROUTES = [
   HOST_ROUTE,
@@ -30,7 +33,9 @@ const SWITCHED_ROUTES = [
   FILES_ROUTE,
   FILES_PREVIEW_ROUTE,
   SOURCE_CONTROL_ROUTE,
-  REVIEW_ROUTE
+  REVIEW_ROUTE,
+  SESSION_ROUTE,
+  CATCH_ALL_ROUTE
 ]
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
 /** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,

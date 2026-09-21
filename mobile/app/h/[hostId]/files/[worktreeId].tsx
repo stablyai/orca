@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 import {
   shellScreenRoute,
   shellScreenRouteKey

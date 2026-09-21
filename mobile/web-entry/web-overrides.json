@@ -7,7 +7,7 @@
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
-      "reason": "Vendored with the module, not added for Route A. The dictation hook imports @orca/expo-two-way-audio, whose native module is a Swift/Kotlin JSI binding with no browser counterpart; the web file answers the same surface with denied microphone permission and no playback."
+      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
     },
     {
       "file": "src/navigation/route-handoff.web.ts",
@@ -78,6 +78,10 @@
       "reason": "The shell renders this page for diff review, for the same reason as the source-control hub beside it: no nested shell, and a native file that reaches requireNativeViewManager at import. Shorter than its siblings because the route body is MobileDiffReviewRouteScreen, which reads its own params — the native file had to extract that anyway so the review controller does not subscribe behind the page."
     },
     {
+      "file": "app/h/[hostId]/session/[worktreeId].web.tsx",
+      "reason": "The shell renders this page for the session screen, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. Shorter than its siblings because the route body is MobileSessionRouteScreen, which the switch also needs as an element: useMobileSessionController opens the terminal, chat and tab subscriptions, and at the switch's top level it would open them behind the page too."
+    },
+    {
       "file": "src/browser/browser-frame-layer-paint.web.ts",
       "reason": "setNativeProps does not exist on React Native Web: an Image or View ref is the DOM node itself, so both native writes throw rather than paint and the pane never shows a frame. This file writes the same two things through the element — the frame as a background-image on the child RN Web sizes, the double buffer as one opacity write per layer — so the pane still never re-renders while it streams. It also answers whenBrowserFrameDisplayable, which is a no-op natively: a background write fires no load event, so the flip to the pending layer is armed from an image decode instead of the Image's onLoad."
     },
@@ -114,12 +118,16 @@
       "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
     },
     {
+      "file": "src/platform/dictation-capture.web.ts",
+      "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio and the wake tag through expo-keep-awake, neither of which a browser has; this one asks the shell for both over native.audio.start|read|stop and native.wakelock.set, draining the shell's ring on a timer and raising each reply as the events the engine emits directly. The flow above the seam is one file on both hosts."
+    },
+    {
       "file": "src/platform/media-picker.web.ts",
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },
     {
       "file": "src/session/mobile-clipboard-image-resize.web.ts",
-      "reason": "expo-image-manipulator is a native module with no browser counterpart, and the two expo-file-system writes its native path makes exist to work around an iOS loader that cannot decode a large base64 data URI, which a browser does not need. img-src 'self' data: already admits the source, so this file decodes one <img>, draws it into a canvas at the target size and reads the PNG back out of toDataURL, with no file anywhere in it. It reads the size back off the canvas rather than echoing the size asked for; the two are the same number, because a browser reflects the width it was assigned, and reading it back keeps the dimensions and the bytes coming from one element. Measured in a real browser under the shipped header: a 1400x1000 noise PNG of 5,476,032 base64 characters converges in one pass to 368x263 and 397,220 characters, 75.8% of the upload path's 512 KiB chunk."
+      "reason": "expo-image-manipulator is a native module with no browser counterpart, and the two expo-file-system writes its native path makes exist to work around an iOS loader that cannot decode a large base64 data URI, which a browser does not need. img-src 'self' data: https: already admits the source, so this file decodes one <img>, draws it into a canvas at the target size and reads the PNG back out of toDataURL, with no file anywhere in it. It reads the size back off the canvas rather than echoing the size asked for; the two are the same number, because a browser reflects the width it was assigned, and reading it back keeps the dimensions and the bytes coming from one element. Measured in a real browser under the shipped header: a 1400x1000 noise PNG of 5,476,032 base64 characters converges in one pass to 368x263 and 397,220 characters, 75.8% of the upload path's 512 KiB chunk."
     },
     {
       "file": "src/components/MobileRichMarkdownEditor.web.tsx",
@@ -128,6 +136,14 @@
     {
       "file": "src/components/MobileHtmlPreview.web.tsx",
       "reason": "The native preview renders an agent-produced HTML artifact inside a sandboxed WebView with navigation locked to the initial inline document, and react-native-webview throws at import in a browser for the reason above. This one renders the artifact in a sandboxed iframe with no allow-scripts and no allow-same-origin, keeping the Preview/Source toggle. srcdoc rather than a blob: URL and no CSP change at all: a srcdoc frame has no URL for frame-src to match and inherits its embedder's policy instead, so it is admitted under the shipped frame-src 'none' on Chromium and WebKit alike, while a blob: frame is refused by frame-src and refused again in WebKit by the frame-ancestors 'none' it inherits. The inherited policy is also what seals it -- script-src 'self' refuses the artifact's inline script, img-src bounds its images, font-src 'none' its fonts -- and allow-top-navigation-by-user-activation is the one capability granted, so a tapped link becomes a top-frame navigation the shell opens externally (ruling 29) while a meta refresh, a form submit, target=_blank and any script-initiated navigation produce none."
+    },
+    {
+      "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
+      "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
+    },
+    {
+      "file": "src/session/use-notification-pane-navigation.web.ts",
+      "reason": "The native hook reads `paneKey` off the app's route with `useLocalSearchParams` and clears it with `setParams`. Inside the page neither exists: the document is served at `/` with one history entry, so `setParams` would rewrite the page's own URL while the app's route kept the spent tap, and the pane request never reaches the page as a param at all. It arrives as a re-sent `init` for the session this page already holds (ruling 33.1), which this sibling reads off the client's standing route-update listener; the shell clears the native param once the page has been handed one."
     }
   ]
 }

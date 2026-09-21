@@ -19,3 +19,13 @@ export type BridgeRpcClientDiagnostic =
   | { kind: 'state-out-of-order' }
   | { kind: 'binary-frame-dropped' }
   | { kind: 'unknown-id' }
+  /**
+   * A frame the page received and then failed to handle: one of its own listeners threw.
+   *
+   * Not a lost frame, and not the channel's failure. On iOS the host's post is
+   * `callAsyncJavaScript`, so a throw out of the page's synchronous `onmessage` rejects the post
+   * with the document still mounted — which the shell would read as a frame that never arrived,
+   * and the shell tracks nothing about posts (ruling 34). The page had it, so the page says so,
+   * and nothing is retried: the listener would throw on the same frame again.
+   */
+  | { kind: 'inbound-listener-threw'; error: unknown }

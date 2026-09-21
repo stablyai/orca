@@ -188,6 +188,11 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 // advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
 // probe before subscribing or they reconnect forever and never show any status at all.
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
+// Why separate from the status feed: a host can carry the status feed and not this stream, and a
+// decoder drops an unknown stream opcode in silence. A client that subscribed without probing
+// would wait forever for completions the host never sends and report nothing wrong.
+export const AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY =
+  'agent-session.turn-completion.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
@@ -354,6 +359,7 @@ export const RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,

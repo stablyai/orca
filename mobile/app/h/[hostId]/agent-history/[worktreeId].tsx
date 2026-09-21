@@ -3,7 +3,7 @@ import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/Mo
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 /**
  * Agent session history, from the desktop's bundle or from this app.

@@ -205,7 +205,8 @@ describe('NativeChatMessageList turn indicator', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell')
+    // The settled run heads with the command it ran; the live row is separate.
+    const settledTool = screen.getByText('pnpm test')
     const activity = screen.getByText('Working for 0s')
     expect(activity.textContent).not.toBe(settledTool.textContent)
     expect(activity).not.toHaveTextContent('shell')
@@ -248,8 +249,8 @@ describe('NativeChatMessageList turn indicator', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell')
-    expect(settledTool).toHaveTextContent('shell pnpm test')
+    const settledTool = screen.getByText('pnpm test')
+    expect(settledTool).toHaveTextContent('pnpm test')
     expect(settledTool.closest('button')?.querySelector('.animate-pulse')).toBeNull()
     expect(settledTool.closest('button')?.querySelector('.lucide-check')).toBeInTheDocument()
     const activity = screen.getByText('Preparing the answer')
@@ -656,14 +657,13 @@ describe('NativeChatMessageList turn indicator', () => {
 
     const status = screen.getByRole('button', { name: 'Toggle turn details' })
     expect(status).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /1× shell/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /pwd/ })).toBeNull()
     fireEvent.click(status)
     expect(status).toHaveAttribute('aria-expanded', 'true')
-    const tool = screen.getByRole('button', { name: /1× shell/ })
-    expect(tool).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getAllByRole('button', { name: /shell pwd/ })[1]).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    )
+    // Opening the turn status reveals the turn, but does not open its nested
+    // tool-run disclosure. The command remains a separate reader action.
+    const tools = screen.getAllByRole('button', { name: /pwd/ })
+    expect(tools).toHaveLength(1)
+    expect(tools[0]).toHaveAttribute('aria-expanded', 'false')
   })
 })

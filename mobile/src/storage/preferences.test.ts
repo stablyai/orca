@@ -31,10 +31,12 @@ import {
   updateSessionViewOverride
 } from './session-view-preferences'
 
+// A store rather than two bare spies: the mirrored write path reads a key back after writing it,
+// so a `setItem` that answers with nothing is not a store any caller could have (ruling 35).
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(),
-    setItem: vi.fn()
+    setItem: vi.fn(async () => undefined)
   }
 }))
 

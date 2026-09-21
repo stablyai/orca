@@ -107,7 +107,6 @@ export type StoreState = {
     { launchConfig: unknown; identity?: { agentType?: string } }
   >
   getAgentLaunchConfigForStatusEntry: ReturnType<typeof vi.fn>
-  getAgentLaunchConfigForStatusMetadata: ReturnType<typeof vi.fn>
   clearSleepingAgentSession: ReturnType<typeof vi.fn>
   registerAgentLaunchConfig: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>

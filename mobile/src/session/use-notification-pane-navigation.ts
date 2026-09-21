@@ -1,20 +1,8 @@
 import { useEffect } from 'react'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { parsePaneKey } from '../../../src/shared/stable-pane-id'
+import { notificationPaneTab } from './notification-pane-tab'
 import type { MobileSessionTab } from './mobile-session-route-types'
-
-export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: string) {
-  const pane = parsePaneKey(paneKey)
-  if (!pane) {
-    return undefined
-  }
-  return tabs.find((tab) =>
-    tab.type === 'terminal'
-      ? (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
-      : tab.type === 'agent-session' && tab.id === pane.tabId
-  )
-}
 
 export function useNotificationPaneNavigation({
   sessionTabs,

@@ -1,5 +1,5 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { Fragment, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { Check, ChevronRight } from 'lucide-react'
@@ -16,11 +16,12 @@ import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subage
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import { buildEditCards, NO_EDIT_CARDS } from './native-chat-edit-cards'
+import { countToolCalls } from './native-chat-tool-summary'
+import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import {
-  countToolCalls,
-  toolRunSummaryMembers,
-  type ToolRunMember
-} from './native-chat-tool-summary'
+  NO_NATIVE_CHAT_TOOL_PAIRING,
+  pairNativeChatToolResults
+} from '../../../../shared/native-chat-tool-pairing'
 import {
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
@@ -71,7 +72,7 @@ export function NativeChatToolRun({
   backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** Legacy view-level default; production native-chat entry points pass false. */
   expandSignal: boolean
-  /** Per-turn disclosure state controlled by the completed turn status row. */
+  /** Optional external control for callers that intentionally own this run's disclosure. */
   expandOverride?: boolean
   /** Structured lifecycle state, when available, keeps orphaned running calls from spinning. */
   activeTurnIsWorking?: boolean
@@ -116,22 +117,9 @@ export function NativeChatToolRun({
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
   const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
   const callCount = countToolCalls(headerBlocks) || headerBlocks.length
-  // Members stay separate all the way to the markup: joining them into one
-  // string is what made a run read as a single call, because the separator also
-  // occurs inside tool names like `browser.open` and `tools/read`.
-  const summaryMembers = toolRunSummaryMembers(headerBlocks)
-  const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
-  // Same content-signature keying the member rows below use: two identical calls
-  // in one run are distinguished by occurrence, never by list position.
-  const keyedSummaryMembers = ((): (ToolRunMember & { key: string })[] => {
-    const seen = new Map<string, number>()
-    return summaryMembers.map((member) => {
-      const signature = `${member.name}:${member.arg}`
-      const occurrence = seen.get(signature) ?? 0
-      seen.set(signature, occurrence + 1)
-      return { ...member, key: `${signature}:${occurrence}` }
-    })
-  })()
+  // One sentence for the whole run, or the command itself when the run is one
+  // call — the reader recognizes `git push` faster than "Ran 1 command".
+  const runSentence = nativeChatToolRunSentence(headerBlocks)
   const headerActiveCall = structuredActivityUi
     ? selectActiveToolCall(headerBlocks, { activeTurnIsWorking })
     : null
@@ -140,7 +128,8 @@ export function NativeChatToolRun({
   const { succeeded: runSucceeded, failedCallCount } = nativeChatToolRunOutcome(headerBlocks, {
     activeTurnIsWorking
   })
-  // The turn caret opens the activity group while each child tool stays collapsed.
+  // An externally opened run keeps child tools collapsed; normal callers leave
+  // the run's own disclosure independent from the turn status bar.
   const expandToolLines = expandOverride === undefined ? open : false
   // Diffing every edit is the run's most expensive work, so a collapsed run —
   // which renders none of it — never pays for it.
@@ -159,12 +148,16 @@ export function NativeChatToolRun({
     () => (open ? buildEditCards(blocks) : NO_EDIT_CARDS),
     [open, blocks]
   )
-  // Only the settled header reads this. It stands over `summaryMembers`, which speaks
-  // for the run's first calls rather than its last, so a glyph taken from one
-  // call would assert a category the text beside it doesn't describe. A run that
-  // spans categories therefore heads with the generic tool glyph. The glyph is
-  // fixed once settled, so state rides on the trailing mark — a leading glyph
-  // that flipped to a check would read as a change of identity.
+  const { resultByCall, pairedResults } = useMemo(
+    () => (open ? pairNativeChatToolResults(headerBlocks) : NO_NATIVE_CHAT_TOOL_PAIRING),
+    [open, headerBlocks]
+  )
+  // Only the settled header reads this. It stands over a sentence that speaks
+  // for every call in the run, so a glyph taken from one of them would assert a
+  // category the text beside it doesn't describe. A run that spans categories
+  // therefore heads with the generic tool glyph. The glyph is fixed once
+  // settled, so state rides on the trailing mark — a leading glyph that flipped
+  // to a check would read as a change of identity.
   const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
     callCount === 1
@@ -238,55 +231,11 @@ export function NativeChatToolRun({
           {structuredActivityUi && settledHeaderIcon ? (
             <NativeChatToolRunIcon iconName={settledHeaderIcon} className="text-muted-foreground" />
           ) : null}
-          <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
-            {callCount}×
+          {/* The run in words, in the transcript's own type. The calls it counts
+              are one click away, so the header does not have to list them. */}
+          <span className="min-w-0 truncate text-sm leading-relaxed text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
+            {runSentence ?? fallbackLabel}
           </span>
-          {summaryMembers.length > 0 ? (
-            <>
-              {/* Each member is led by its own category glyph, which is what marks
-                  the boundary. A separator character cannot: `·` occurs inside
-                  `browser.open` and `tools/read`. The list stays one line and
-                  truncates as a whole rather than wrapping into a block — a
-                  header that grows to three rows stops reading as a header. */}
-              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
-                {keyedSummaryMembers.map((member, index) => (
-                  <Fragment key={member.key}>
-                    {/* A real space, not just the margin: a CSS gap is invisible to
-                        a copied selection and to the button's accessible name, which
-                        would otherwise run one member's argument into the next
-                        member's name. The margin is trimmed to pay for its width. */}
-                    {index > 0 ? ' ' : null}
-                    <span data-tool-run-member className={cn(index > 0 && 'ml-2')}>
-                      <NativeChatToolIcon
-                        rowWord={member.name}
-                        mcpIdentity={member.mcpIdentity}
-                        className="mr-1 inline-flex size-3.5 align-middle"
-                      />
-                      {member.name}
-                      {member.arg ? (
-                        <span className="text-muted-foreground/70">{` ${member.arg}`}</span>
-                      ) : null}
-                    </span>
-                  </Fragment>
-                ))}
-              </span>
-              {hiddenCallCount > 0 ? (
-                /* Outside the truncating span, so the count of what is not shown
-                   survives a list the pane is too narrow to print. */
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
-                  {translate(
-                    'components.native-chat.tool.moreCalls',
-                    NATIVE_CHAT_TOOL_ACTIVITY_COPY.moreCalls,
-                    { value0: hiddenCallCount }
-                  )}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-run:text-foreground/80">
-              {fallbackLabel}
-            </span>
-          )}
           {failedCallCount > 0 ? (
             /* Outside the truncating member list, so the one thing the reader
                cannot afford to miss survives a pane too narrow to print it.
@@ -362,7 +311,9 @@ export function NativeChatToolRun({
                   </div>
                 )
               }
-              if (consumedResults.has(block)) {
+              // A result its call now owns is drawn by that call's line, not as
+              // a row of its own.
+              if (consumedResults.has(block) || pairedResults.has(block)) {
                 return null
               }
               const signature =
@@ -387,6 +338,7 @@ export function NativeChatToolRun({
                 <NativeChatToolLine
                   key={lineIdentity}
                   block={block}
+                  result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
                   onLinkClick={onLinkClick}
                   initiallyExpanded={expandToolLines}
                   disclosureKey={

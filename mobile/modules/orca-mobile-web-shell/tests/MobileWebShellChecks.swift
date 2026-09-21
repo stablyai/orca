@@ -209,9 +209,9 @@ import Foundation
     precondition(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // A file preview is a `data:<mime>;base64,` URI the page composed from a reply it already
-    // holds; see MobileWebShellCsp.
-    precondition(directives.contains("img-src 'self' data:"))
+    // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
+    // page already renders, and the sealed preview frame. See MobileWebShellCsp.
+    precondition(directives.contains("img-src 'self' data: https:"))
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
     precondition(directives.contains("frame-src 'none'"))
@@ -224,8 +224,12 @@ import Foundation
     precondition(!header.contains("unsafe-eval"))
     // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
     // directive that grew one would fail here instead of passing a blanket absence check.
-    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data:"])
+    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: https:"])
     precondition(!header.contains("blob:"))
+    // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
+    // this still refuses a cleartext source anywhere in the header.
+    precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: https:"])
+    precondition(!header.contains("http:"))
     precondition(!header.contains("\r") && !header.contains("\n"))
   }
 
@@ -320,6 +324,9 @@ import Foundation
     precondition(document["Content-Length"] == "12")
     precondition(document["Cache-Control"] == "no-store")
     precondition(document["X-Content-Type-Options"] == "nosniff")
+    // The document origin is the session id, and `img-src https:` gives the page somewhere to send
+    // it. See MobileWebShellResponseHeaders.
+    precondition(document["Referrer-Policy"] == "no-referrer")
 
     // The policy rides the document alone; on a subresource response it is inert.
     for path in ["/index.html", "/assets/aa.js", "/manifest.json", "/assets/bb.png"] {
@@ -329,6 +336,9 @@ import Foundation
         byteCount: 0
       )
       precondition(headers["Content-Security-Policy"] == nil)
+      // Rides the document with the policy: the referrer of a request is decided by the document
+      // that made it, so on a subresource response this would govern nothing.
+      precondition(headers["Referrer-Policy"] == nil)
       precondition(headers["Cache-Control"] == "no-store")
       precondition(headers["X-Content-Type-Options"] == "nosniff")
     }

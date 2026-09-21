@@ -50,8 +50,10 @@ import {
  * the first time, when main had drifted the haptics module after recording its own number, and a
  * sum would have read 4283 and been wrong about a module neither side of that merge touched.
  *
- * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and the four postinstall
- * generators run first, the before side in a scratch worktree detached at the same sha, and the
+ * Both sides read with `mobileWebAppRouteClosure(SESSION_ROUTE)` and every postinstall generator
+ * `mobile/package.json` names run first — five at this reading, since C7.10 C1 added the rich
+ * Markdown editor's document, and the list is read there rather than counted from here because it
+ * grows. The before side is a scratch worktree detached at the same sha, and the
  * three modules above read out of the after side's list by name rather than inferred from the
  * total. Measured rather than taken from main's pin because the pin covers only the module count,
  * so the local count beside it would otherwise be a number nobody had read.
@@ -164,8 +166,59 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * The module list on the merge, recorded at the base in the docstring above, which is where every
  * part of it is accounted for: the document's own modules replacing the factory that carried them,
  * mermaid's three, and the three bridge modules #21908 and C2.9 pin on main.
+ *
+ * Then C7.10 item D put dictation's capture on the page, and the list moved down rather than up.
+ *
+ *   modules        4328 -> 4323   (-5)
+ *   local modules   978 ->  981   (+3)
+ *
+ * Three local modules join — `src/platform/dictation-capture.web.ts`, its contract
+ * `src/platform/dictation-capture-contract.ts`, and the verb shapes in
+ * `src/mobile-web-shell/bridge/bridge-audio-verbs.ts` — and eight vendored ones leave, because the
+ * capture seam is what stops the page importing a microphone it does not have. Five are
+ * `@orca/expo-two-way-audio` (its web module, `core`, `events`, `hooks` and the index) and three
+ * are `expo-keep-awake`; the page asks the shell for both over `native.audio.start|read|stop` and
+ * `native.wakelock.set` instead. The native halves of the seam resolve out of this closure
+ * entirely, which is the -8 + 3.
+ *
+ * Measured, not derived: `mobile-web-app-session-dictation-capture.test.mjs` moves the web file
+ * aside and walks the closure again, which puts those eight back.
+ *
+ * C7.7 registers the route and adds one more: the walk now enters through
+ * `app/h/[hostId]/session/[worktreeId].web.tsx` rather than the native switch, and reaches
+ * `src/session/MobileSessionRouteScreen.tsx` under it — the route file is one input either way and
+ * the component is the one that is new.
+ *
+ * The number below is re-measured rather than summed, which is what the reading above kept having
+ * to do: C7.7 measured 4,328 -> 4,329 against `23207bfde2` and item D measured 4,328 -> 4,323
+ * against a different base, and neither side's arithmetic survives the other. The merge with main
+ * read 4,324 modules and 982 local — one more than the 4,323 / 981 item D pinned, and that one is
+ * C7.7's route body, read out of `ROUTE_ENTRY` below by name rather than inferred.
+ *
+ * Round 1 re-measured it at 4,326 / 984. The two were named rather than counted:
+ * `notification-pane-tab.ts`, which both siblings of the pane hook read (a `.web.ts` cannot import
+ * its native neighbour by the plain path — the bundler answers with itself), and
+ * `bridge-init-route.ts`, the route half of `init` split out of an envelope that was at its line
+ * cap. The pane hook's own web sibling replaces the native file rather than joining it, so it
+ * costs nothing.
+ *
+ * Ruling 34 measures 4,330 / 988, and the four are named the same way. `bridge-frame-fields.ts`
+ * and `bridge-notify-envelope.ts` are the two halves an envelope back at its line cap was split
+ * into; the page-to-shell union in the second names the param the page may erase, which is
+ * declared beside the route-update accept, so `bridge-route-update.ts` and the
+ * `shell-screen-route.ts` it reads a route key from now enter through the envelope as well. All
+ * four are schema and string constants: the closure grew, the download did not gain a package.
  */
-const SESSION_ROUTE_MODULES = 4328
+const SESSION_ROUTE_MODULES = 4330
+
+/** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
+const ROUTE_ENTRY = [
+  'app/h/[hostId]/session/[worktreeId].web.tsx',
+  'src/session/MobileSessionRouteScreen.tsx',
+  // Round 1's two, named for the reading above rather than left inside the total.
+  'src/session/notification-pane-tab.ts',
+  'src/mobile-web-shell/bridge/bridge-init-route.ts'
+]
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
@@ -201,6 +254,18 @@ describeClosure(
       // document twice, once as modules and once as a string.
       expect(documentModules).not.toContain('src/terminal/document/native-document-entry.ts')
       expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
+    }, 300_000)
+
+    it('enters through the web sibling and the route body, not the switch', async () => {
+      const { local } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      for (const entry of ROUTE_ENTRY) {
+        expect(local, `${entry} is not in the closure`).toContain(entry)
+      }
+      // The switch itself is what the shell renders natively, and it reaches
+      // `MobileWebShellScreen`, whose module calls `requireNativeViewManager` at import. A closure
+      // that carried it would be a bundle that throws when the manifest imports this route.
+      expect(local).not.toContain('app/h/[hostId]/session/[worktreeId].tsx')
+      expect(local).not.toContain('src/mobile-web-shell/MobileWebShellScreen.tsx')
     }, 300_000)
 
     it('reaches the engine as one deferred module and never as part of the download', async () => {

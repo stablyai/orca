@@ -8,10 +8,14 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalSnapshot,
   AgentJournalSubmission,
+  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { activeStructuredAgentSessionTurnIdBySequence } from '../../../shared/structured-agent-session-live-turn'
+import {
+  activeStructuredAgentSessionTurnIdBySequence,
+  newestStructuredAgentSessionTurnBySequence
+} from '../../../shared/structured-agent-session-live-turn'
 import { agentSessionJournalCloseRetries } from './journal-close-retry'
 import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
@@ -176,6 +180,10 @@ export class AgentSessionJournal {
    *  without materialising one. */
   activeTurnId = (): string | null =>
     activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
+
+  /** The newest turn record whatever state it settled in, for readers that need the outcome. */
+  newestTurn = (): AgentJournalTurnLifecycle | null =>
+    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
 
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt

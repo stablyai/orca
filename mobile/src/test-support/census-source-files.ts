@@ -4,15 +4,20 @@ import { join } from 'node:path'
 /**
  * Build output, which a source census reads as source and must not.
  *
- * `mobile/.gitignore` is the list: six `*.generated.ts` files under `mobile/src`, written by the
- * four postinstall generators. Two are vendored engines — 3.7 MB of mermaid for the native WebView
- * and 3.5 MB of it for the page — and 7.9 MB of what a walk over this tree returns is generated. A
- * census that parses them parses minified third-party code looking for call sites nobody in this
- * repo wrote and nobody can move, and pays the whole parse to find them: five of those files is
- * what took `rpc-params-contract-type-only-boundary` from 1.5 s to over its 5 s timeout in CI.
+ * The lists of record are `mobile/package.json`'s postinstall, which names every generator, and
+ * `mobile/.gitignore`, which names every file they write. Both grow — C7.10 C1 added the rich
+ * Markdown editor's document — so the shape is what this rule is about and the count below is a
+ * reading rather than a fence. At this one: five generators, six `*.generated.ts` files under
+ * `mobile/src`.
  *
- * The sixth is the page's copy of the terminal document (C7.5b), which is this repo's own emitted
- * text rather than a vendored bundle — and is walked as source at every one of its 38 modules.
+ * Two of the six are vendored engines — 3.7 MB of mermaid for the native WebView and 3.5 MB of it
+ * for the page — and most of what a walk over this tree returns by weight is generated. A census
+ * that parses them parses minified third-party code looking for call sites nobody in this repo
+ * wrote and nobody can move, and pays the whole parse to find them: five of those files is what
+ * took `rpc-params-contract-type-only-boundary` from 1.5 s to over its 5 s timeout in CI.
+ *
+ * The two document bundles are this repo's own emitted text rather than vendored code, and their
+ * sources are walked as the ordinary TypeScript modules they are built from.
  *
  * The generator that writes each one is ordinary source and is still walked, which is where a real
  * reach into whatever a census is fencing would be.

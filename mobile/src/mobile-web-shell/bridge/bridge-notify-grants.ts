@@ -5,6 +5,7 @@ import {
   type BridgeClientMessage
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
 /** Every `notify` name the envelope accepts, so the table below cannot be asked about another. */
 export type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
@@ -31,6 +32,9 @@ export type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>[
 const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = {
   foreground: null,
   terminalViewport: null,
+  // The protocol's own as well: it spends a request this shell handed the page, on a param closed
+  // to the one the shell hands over, so there is nothing here for a grant to gate.
+  [BRIDGE_ROUTE_PARAM_CLEAR]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',

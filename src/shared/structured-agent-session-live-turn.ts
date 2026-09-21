@@ -22,12 +22,12 @@ export function activeStructuredAgentSessionTurnId(
   return null
 }
 
-/** The same verdict for reduced items a caller holds unordered, so a reader that already has them
+/** The newest turn record for items a caller holds unordered, so a reader that already has them
  *  need not render and sort a whole snapshot to ask. Sequence is the ordering key the render pass
  *  sorts on, and ties resolve to the later-reduced item exactly as that stable sort would. */
-export function activeStructuredAgentSessionTurnIdBySequence(
+export function newestStructuredAgentSessionTurnBySequence(
   items: Iterable<AgentJournalRenderItem>
-): string | null {
+): AgentJournalTurnLifecycle | null {
   let newestSequence = 0
   let newest: AgentJournalTurnLifecycle | null = null
   for (const item of items) {
@@ -40,6 +40,14 @@ export function activeStructuredAgentSessionTurnIdBySequence(
       newest = turn
     }
   }
+  return newest
+}
+
+/** Whether that newest turn is still running, which is all most callers want. */
+export function activeStructuredAgentSessionTurnIdBySequence(
+  items: Iterable<AgentJournalRenderItem>
+): string | null {
+  const newest = newestStructuredAgentSessionTurnBySequence(items)
   return newest?.state === 'running' ? newest.turnId : null
 }
 

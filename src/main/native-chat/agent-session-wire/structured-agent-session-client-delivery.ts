@@ -10,12 +10,17 @@ import {
   createStructuredAgentSessionHostStatusFeed,
   type StructuredAgentSessionStatusSubscriber
 } from './structured-agent-session-status-feed'
+import {
+  StructuredAgentSessionTurnCompletionFeed,
+  type StructuredAgentSessionTurnCompletionSubscriber
+} from './structured-agent-session-turn-completion-feed'
 
 /** Owns every host-to-client publication edge, including compatibility waits. */
 export class StructuredAgentSessionClientDelivery {
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
   private readonly statusFeed
+  private readonly turnCompletionFeed
   private readonly sendSettlement
 
   constructor(
@@ -24,6 +29,7 @@ export class StructuredAgentSessionClientDelivery {
     deps: () => StructuredAgentSessionHostDeps
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
+    this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)
     )
@@ -51,9 +57,15 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
 
+  subscribeTurnCompletions = (
+    subscriber: StructuredAgentSessionTurnCompletionSubscriber
+  ): (() => void) => this.turnCompletionFeed.subscribe(subscriber)
+
   closeSession(sessionId: string): void {
     this.sendSettlement.closeSession(sessionId)
     this.statusFeed.close(sessionId)
+    // The next attach re-baselines rather than announcing the turn it was already holding.
+    this.turnCompletionFeed.forget(sessionId)
   }
 
   closeAll(): void {
@@ -63,6 +75,9 @@ export class StructuredAgentSessionClientDelivery {
   private publishJournal(sessionId: string, journal: AgentSessionJournal): void {
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, journal)
+    // Derived here rather than per-subscriber: this edge runs whether or not anyone is
+    // subscribed, which is the whole reason a backgrounded chat can complete at all.
+    this.turnCompletionFeed.observe(sessionId, journal)
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

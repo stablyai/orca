@@ -88,6 +88,17 @@ let cdp: CDPSession | null = null
  */
 const describeSweep = mobileWebAppDependenciesPresent() ? describe : describe.skip
 
+/**
+ * The floor under real noise, in bytes per pixel.
+ *
+ * It separates noise the encoder saw pixel-for-pixel from noise averaged away by a layout at
+ * Chromium's default width: the averaged arm reads under 0.3, and the sweep's own minimum has read
+ * 0.543986 on the pinned Chromium (2026-09-20) and 0.480898 on the runner's Chrome 152
+ * (2026-09-21). A floor of 0.5 sat inside that encoder spread and failed the runner on a
+ * measurement that was noise; 0.4 keeps a margin on both sides of it.
+ */
+const NOISE_FLOOR_BYTES_PER_PIXEL = 0.4
+
 beforeAll(async () => {
   if (!mobileWebAppDependenciesPresent()) {
     return
@@ -183,10 +194,7 @@ async function screencastNoiseJpegBytes(
     })
     // The noise is painted after the screencast is running, and through this same CDP session, so
     // the reply orders it against the frame events. Two animation frames are awaited inside it, so
-    // when it resolves the paint has been committed to the compositor and every later capture
-    // carries it. `painted` is how many frames had already arrived by then; only what comes after
-    // is a frame of the noise, which is what makes this a measurement of the canvas rather than of
-    // whatever the surface held when the capture began.
+    // when it resolves the paint has been committed to the compositor.
     await session.send('Runtime.evaluate', {
       awaitPromise: true,
       expression: `(async () => {
@@ -205,11 +213,20 @@ async function screencastNoiseJpegBytes(
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       })()`
     })
+
+    // A commit is not a raster. The screencast hands over whatever the compositor has drawn so far,
+    // so after a resize it emits frames at the full size carrying only the tiles rastered yet.
+    // Measured 2026-09-21 under CPU starvation: 87 of 444 post-commit frames at 1400x1600 read
+    // under the noise floor, one of them 447491 bytes against the full frame's 1221117 — bytes the
+    // shell posts inside the cap, which is this sweep reading a budget as fitting when it does not.
+    // `Page.captureScreenshot` returns only once a compositor frame of the current content exists,
+    // so it is the raster this wants rather than a longer wait, and over the same rounds with it
+    // none read under the floor. Quality 0 because nothing reads its bytes; 17 ms a call.
+    await session.send('Page.captureScreenshot', { format: 'jpeg', quality: 0 })
     painted = sizes.length
 
-    // Nudged until a frame lands after that commit. A capture already in flight can still be the
-    // old surface, so two are taken and the larger is used: a blank frame is a fraction of a noise
-    // frame, so the maximum over the post-commit frames is the noise one whichever order they came.
+    // Nudged until a frame lands after that raster. Two are taken and the larger is used, so a
+    // capture already in flight when the barrier returned cannot be the one this measures.
     const deadline = Date.now() + 20_000
     for (let nudge = 0; sizes.length - painted < 2 && Date.now() < deadline; nudge += 1) {
       await session.send('Runtime.evaluate', {
@@ -223,10 +240,10 @@ async function screencastNoiseJpegBytes(
   }
   const afterPaint = sizes.slice(painted)
   if (afterPaint.length === 0) {
-    // Never fall back to a frame from before the paint: that is the understatement this exists to
+    // Never fall back to a frame from before the raster: that is the understatement this exists to
     // rule out, and a silent one would look like a cheaper encoder.
     throw new Error(
-      `no screencast frame after the noise was committed for ${frame.width}x${frame.height}`
+      `no screencast frame after the noise was rastered for ${frame.width}x${frame.height}`
     )
   }
   return Math.max(...afterPaint)
@@ -335,7 +352,7 @@ describeSweep('the frame budget across the viewport range', () => {
     expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
     // The low end too, so a sweep that silently stopped encoding real images is visible: every
     // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
-    expect(bestBytesPerPixel).toBeGreaterThan(0.5)
+    expect(bestBytesPerPixel).toBeGreaterThan(NOISE_FLOOR_BYTES_PER_PIXEL)
   }, 300_000)
 
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
@@ -372,7 +389,7 @@ describeSweep('the frame budget across the viewport range', () => {
 
       expect(bytesPerPixel).toBeLessThan(0.3)
       // And the floor the sweep asserts is above it, so that assertion is what fails first.
-      expect(bytesPerPixel).toBeLessThan(0.5)
+      expect(bytesPerPixel).toBeLessThan(NOISE_FLOOR_BYTES_PER_PIXEL)
     } finally {
       await context.close()
     }

@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDictationCapture } from '../platform/dictation-capture'
 import {
-  addExpoTwoWayAudioEventListener,
-  initialize,
-  requestMicrophonePermissionsAsync,
-  tearDown,
-  toggleRecording
-} from '@orca/expo-two-way-audio'
-import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
+  MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
+  MobileDictationPendingAudioBudget
+} from './mobile-dictation-pending-audio-budget'
 import { enqueueMobileDictationAudioChunk } from './mobile-dictation-audio-chunk'
 import { createMobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import { useMobileDictationForegroundKeepAwake } from './mobile-dictation-foreground-keep-awake'
@@ -31,7 +28,13 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
-  const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])
+  // One seam, two hosts: natively the microphone and `expo-keep-awake`, on the page the shell's
+  // four verbs. Everything below this line is the same flow either way.
+  const capture = useDictationCapture()
+  const keepAwakeOwner = useMemo(
+    () => createMobileDictationKeepAwakeOwner(capture.keepAwake),
+    [capture]
+  )
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -67,7 +70,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
       try {
-        toggleRecording(false)
+        void capture.end()
       } catch (err) {
         // Cleanup must keep going when native recording shutdown throws, or
         // the wake tag and dictation state would leak.
@@ -75,7 +78,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       }
       void keepAwakeOwner.release(dictationId ?? undefined).catch(() => undefined)
     },
-    [keepAwakeOwner]
+    [capture, keepAwakeOwner]
   )
 
   const failActiveDictation = useCallback(
@@ -104,16 +107,23 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         activeIdRef.current === id || finishingIdRef.current === id,
       failActiveDictation
     }
-    const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
+    const sub = capture.onChunk((chunk) => {
       const client = clientRef.current
       const dictationId = activeIdRef.current
       if (!client || !dictationId || !enabledRef.current || !acceptingChunksRef.current) {
         return
       }
-      enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
+      if (chunk.droppedBytes > 0) {
+        // Audio the capture already lost is the condition the budget refuses on by another route —
+        // the page is not keeping up with the microphone — so it reaches the one message the
+        // composer renders for it. Only the page can drop: natively this is always zero.
+        failActiveDictation(dictationId, new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE))
+        return
+      }
+      enqueueMobileDictationAudioChunk(client, dictationId, chunk, audioChunkQueue)
     })
     return () => sub.remove()
-  }, [failActiveDictation, reportError])
+  }, [capture, failActiveDictation, reportError])
 
   const start = useCallback(async () => {
     const client = clientRef.current
@@ -125,29 +135,30 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     generationRef.current = generation
     setError(null)
     setStatus('starting')
-    const permission = await requestMicrophonePermissionsAsync()
+    let opened
+    try {
+      opened = await capture.open()
+    } catch (err) {
+      // A capture the host refused outright, which on the page is a route that was never granted
+      // the audio verbs. Back to idle before it is rethrown: the caller toasts the shell's own
+      // message, and a control left on 'starting' has no way back short of a remount.
+      setStatus('idle')
+      throw err instanceof Error ? err : new Error(String(err))
+    }
     if (generationRef.current !== generation || !enabledRef.current) {
+      capture.release()
       if (generationRef.current === generation) {
         setStatus('idle')
       }
       return
     }
-    if (!permission.granted) {
+    if (!opened.ok) {
       setStatus('idle')
-      throw new Error('Microphone permission denied')
-    }
-
-    const initialized = await initialize()
-    if (generationRef.current !== generation || !enabledRef.current) {
-      void tearDown()
-      if (generationRef.current === generation) {
-        setStatus('idle')
-      }
-      return
-    }
-    if (!initialized) {
-      setStatus('idle')
-      throw new Error('Failed to initialize microphone')
+      throw new Error(
+        opened.reason === 'permission-denied'
+          ? 'Microphone permission denied'
+          : 'Failed to initialize microphone'
+      )
     }
 
     const dictationId = createMobileDictationId()
@@ -171,7 +182,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         acceptingChunksRef.current = true
         pendingChunksRef.current.clear()
         pendingAudioBudgetRef.current.reset()
-        if (!toggleRecording(true)) {
+        if (!capture.begin()) {
           return false
         }
         setStatus('recording')
@@ -181,10 +192,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         acceptingChunksRef.current = false
         pendingChunksRef.current.clear()
         pendingAudioBudgetRef.current.reset()
-        toggleRecording(false)
+        void capture.end()
       }
     })
-  }, [keepAwakeOwner])
+  }, [capture, keepAwakeOwner])
 
   const stop = useCallback(async () => {
     const client = clientRef.current
@@ -197,11 +208,16 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     generationRef.current = generation
     finishingIdRef.current = dictationId
     setStatus('processing')
-    acceptingChunksRef.current = false
     try {
       // Inside the try so a throwing native shutdown still runs the finally
       // release and error cleanup.
-      toggleRecording(false)
+      //
+      // Awaited, and chunks are still accepted while it runs: `end` hands over whatever the
+      // capture is still holding, which on the page is up to one drain interval of the tail of
+      // what the user just said. Refusing chunks first would drop exactly that audio, and taking
+      // the pending set before it would let `finish` overtake the last send.
+      await capture.end()
+      acceptingChunksRef.current = false
       await Promise.allSettled(Array.from(pendingChunksRef.current))
       if (
         !isCurrentMobileDictationFinish(
@@ -256,7 +272,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         finishingIdRef.current = null
       }
     }
-  }, [failActiveDictation, keepAwakeOwner])
+  }, [capture, failActiveDictation, keepAwakeOwner])
 
   const cancel = useCallback(async () => {
     const client = clientRef.current
@@ -272,16 +288,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     setError(null)
   }, [closeDictationAudio])
 
-  useMobileDictationForegroundKeepAwake(keepAwakeOwner, activeIdRef)
+  useMobileDictationForegroundKeepAwake(keepAwakeOwner, activeIdRef, capture.keepAwake)
 
   useEffect(() => {
-    const sub = addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
-      if (event.data === 'began' || event.data === 'blocked') {
-        void cancel()
-      }
+    const sub = capture.onInterruption(() => {
+      void cancel()
     })
     return () => sub.remove()
-  }, [cancel])
+  }, [cancel, capture])
 
   useEffect(() => {
     if (!enabled) {
@@ -296,14 +310,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       finishingIdRef.current = null
       closeDictationAudio(dictationId)
-      void tearDown()
+      capture.release()
       if (clientRef.current && dictationId) {
         void dictationSessionCancel
           .request(clientRef.current, { dictationId })
           .catch(() => undefined)
       }
     }
-  }, [closeDictationAudio])
+  }, [capture, closeDictationAudio])
 
   return {
     status,

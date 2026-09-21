@@ -29,10 +29,15 @@ function harness(options: {
   createSupportThrows?: boolean
   structuredCreateError?: Error
   deliveredMessageId?: string | null
+  terminalPromptDelivered?: boolean
 }) {
   const calls: string[] = []
   const createWorktree = vi.fn(
-    async (args: { create: Record<string, unknown>; startupAgent: string | undefined }) => {
+    async (args: {
+      create: Record<string, unknown>
+      startupAgent: string | undefined
+      startupPrompt?: string
+    }) => {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
         worktreeId: 'wt-new',
@@ -54,13 +59,17 @@ function harness(options: {
     }
     return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
   })
-  const createTerminalAgent = vi.fn(async () => {
+  const createTerminalAgent = vi.fn(async (_args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
     return { handle: 'term_1' }
   })
   const deliverStructuredPrompt = vi.fn(async () => {
     calls.push('deliverStructuredPrompt')
     return options.deliveredMessageId === undefined ? 'msg-1' : options.deliveredMessageId
+  })
+  const deliverTerminalPrompt = vi.fn(async () => {
+    calls.push('deliverTerminalPrompt')
+    return options.terminalPromptDelivered ?? true
   })
   const runtime = {
     getClientSettings: () =>
@@ -73,12 +82,18 @@ function harness(options: {
     createStructuredSession,
     createTerminalAgent,
     deliverStructuredPrompt,
+    deliverTerminalPrompt,
     run: (intent: AgentLaunchIntent) =>
       executeAgentLaunch({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the two runtime methods the executor reaches, and each test asserts the calls made, so an omitted method throws rather than reading a wrong value.
         runtime: runtime as unknown as AgentLaunchExecution['runtime'],
         intent,
-        surfaces: { createStructuredSession, createTerminalAgent, deliverStructuredPrompt },
+        surfaces: {
+          createStructuredSession,
+          createTerminalAgent,
+          deliverStructuredPrompt,
+          deliverTerminalPrompt
+        },
         workspaces: { createWorktree }
       })
   }
@@ -278,15 +293,65 @@ describe('the prompt receipt', () => {
     expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
   })
 
-  it('leaves a terminal launch to the pane owner', async () => {
+  it('omits the receipt when no prompt was requested', async () => {
+    const h = harness({})
+    expect((await h.run(CREATE_INTENT)).prompt).toBeUndefined()
+  })
+})
+
+/**
+ * A terminal takes its prompt one of two ways, and which one is not a preference: an agent whose
+ * CLI accepts a prompt argument must get it on argv, because that is the transport that survives
+ * multi-line and special-character text. Only an agent with no such argument is written to as
+ * keystrokes. `claude` is argv-mode, `aider` is `stdin-after-start` — the two halves of the table.
+ */
+describe('delivering a launch prompt to a terminal agent', () => {
+  const SUBMIT = { text: 'do the thing', delivery: 'submit' } as const
+
+  it('folds an argv agent’s prompt into the command that starts it, never a paste', async () => {
     const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
     expect(result.outcome.kind).toBe('terminal')
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
-    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      startupPrompt: 'do the thing'
+    })
+    // The text was in the process's argv at exec time; a paste on top would be a second copy.
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('leaves a reused terminal to the pane owner', async () => {
+  it('writes a stdin-after-start agent’s prompt into its PTY, because its CLI takes none', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'aider',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      prompt: SUBMIT
+    })
+
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      handle: 'term_1',
+      prompt: SUBMIT
+    })
+    // Folding it into argv would have appended it as an argument the CLI does not accept.
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty('startupPrompt')
+  })
+
+  it('carries an argv prompt through an agent-first create, which builds the startup command', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
+
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_agent_first' })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.createWorktree.mock.calls[0]?.[0]).toMatchObject({
+      startupAgent: 'claude',
+      startupPrompt: 'do the thing'
+    })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
+  })
+
+  it('writes into a reused terminal, whose process started before the launch existed', async () => {
     const h = harness({})
     const result = await h.run({
       agent: 'claude',
@@ -294,13 +359,37 @@ describe('the prompt receipt', () => {
       reuseTerminal: { handle: 'term_existing' },
       prompt: SUBMIT
     })
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
-    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+
+    // Argv is unreachable here however argv-friendly the agent is: the process already exists.
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      handle: 'term_existing',
+      prompt: SUBMIT
+    })
   })
 
-  it('omits the receipt when no prompt was requested', async () => {
-    const h = harness({})
-    expect((await h.run(CREATE_INTENT)).prompt).toBeUndefined()
+  it('under-claims as not delivered when the write did not land', async () => {
+    const h = harness({ terminalPromptDelivered: false })
+    const result = await h.run({
+      agent: 'aider',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      prompt: SUBMIT
+    })
+    // A launch whose agent is running must not fail because its text did not; the caller resends.
+    expect(result.outcome.kind).toBe('terminal')
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
+  })
+
+  it('leaves a terminal draft with the caller, because the TUI composer is not the host’s to fill', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({
+      ...CREATE_INTENT,
+      prompt: { text: 'do the thing', delivery: 'draft' }
+    })
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+    expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
+    // A draft must not be submitted as a turn by riding the launch command either.
+    expect(h.createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupPrompt')
   })
 })
 

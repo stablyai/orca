@@ -1,13 +1,17 @@
 import { resolveSessionSearchLimit, SESSION_SEARCH_LIMIT_MAX } from './ai-vault-search-limit'
 import { z } from 'zod'
-import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from './ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  AI_VAULT_SEARCH_SORTS
+} from './ai-vault-types'
 import { AiVaultSearchScopeIdentitySchema } from './ai-vault-search-scope'
 
 export const AiVaultSearchFiltersSchema = z.object({
   agents: z.array(z.enum(AI_VAULT_AGENTS)).optional(),
   scopePaths: z.array(z.string().min(1).max(4096)).max(AI_VAULT_SCOPE_PATHS_MAX_COUNT).optional(),
   since: z.string().datetime({ offset: true }).optional(),
-  sort: z.enum(['relevance', 'newest']).optional()
+  sort: z.enum(AI_VAULT_SEARCH_SORTS).optional()
 })
 
 // Strip unknown fields so legacy tier/refresh are accepted without affecting the query.

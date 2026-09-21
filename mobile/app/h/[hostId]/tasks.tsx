@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
 import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
-import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
 
 /**

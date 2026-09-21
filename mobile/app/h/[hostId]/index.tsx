@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../src/navigation/route-param-reader'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'

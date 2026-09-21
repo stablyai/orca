@@ -7,7 +7,7 @@ import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
-import type { AiVaultSessionGroup } from './ai-vault-session-filters'
+import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import type {
   AiVaultSessionResumeActions,
@@ -58,7 +58,7 @@ export function AiVaultSessionVirtualList({
   onRequestDelete,
   searchHits
 }: {
-  groups: readonly AiVaultSessionGroup[]
+  groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
   loading: boolean
   sessionsCount: number
@@ -96,8 +96,11 @@ export function AiVaultSessionVirtualList({
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
     for (const sessionGroup of groups) {
-      rows.push({ type: 'group', group: sessionGroup })
-      if (!collapsedGroups.has(sessionGroup.key)) {
+      const label = sessionGroup.label
+      if (label !== null) {
+        rows.push({ type: 'group', group: { ...sessionGroup, label } })
+      }
+      if (label === null || !collapsedGroups.has(sessionGroup.key)) {
         for (const session of sessionGroup.sessions) {
           rows.push({ type: 'session', groupKey: sessionGroup.key, session })
         }

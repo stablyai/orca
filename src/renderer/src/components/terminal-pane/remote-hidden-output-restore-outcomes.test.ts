@@ -516,7 +516,6 @@ describe('remote hidden-output restore outcomes', () => {
         >
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete (mockStoreState.sleepingAgentSessionsByPaneKey as Record<string, unknown>)[paneKey]
       }),

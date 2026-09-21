@@ -18,6 +18,7 @@ export const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 export const NOW = 1_800_000_000_000
 export const REWIND_METHOD = 'agentSession.rewind'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
+export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
 let operations = 0
 
@@ -146,6 +147,13 @@ export const STRUCTURED_CALLS: {
     method: STATUS_FEED_METHOD,
     hostMethod: 'subscribeStatus',
     result: { type: 'snapshot', sessions: [] }
+  },
+  // Opens with nothing for the same reason `agentSession.subscribe` does, and unlike the status
+  // feed above: a completion is an edge that has already passed, not state a late subscriber
+  // needs. Reaching the host is the only signal that the gate opened.
+  {
+    method: TURN_COMPLETION_FEED_METHOD,
+    hostMethod: 'subscribeTurnCompletions'
   },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.

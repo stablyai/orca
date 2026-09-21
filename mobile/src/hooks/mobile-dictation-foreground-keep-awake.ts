@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { AppState, Platform } from 'react-native'
 import { drainMobileDictationKeepAwakeCleanup } from './mobile-dictation-keep-awake'
 import type { RefObject } from 'react'
+import type { DictationKeepAwakeDevice } from '../platform/dictation-capture-contract'
 import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 
 // A transient Activity gap can fail a foreground refresh; retry briefly while
@@ -9,29 +10,36 @@ import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awak
 const REACQUIRE_RETRY_DELAYS_MS = [1_000, 5_000]
 
 let globalStaleTagDrainInstalled = false
+// The drain outlives every owner, so it reads the newest device rather than capturing one: on the
+// page that device is built from a bridge client the screen can replace, and a captured one would
+// deactivate through a port nothing is listening on.
+let latestKeepAwakeDevice: DictationKeepAwakeDevice | null = null
 
 // Failed final deactivations must be retried even after every session screen
 // unmounts, or a stale native tag keeps the screen awake until app restart.
 // Installed once for the app's lifetime; the drain spares still-wanted tags
 // and fast-paths to a no-op when nothing is pending.
-function installGlobalStaleTagForegroundDrain(): void {
+function installGlobalStaleTagForegroundDrain(device: DictationKeepAwakeDevice): void {
+  latestKeepAwakeDevice = device
   if (globalStaleTagDrainInstalled) {
     return
   }
   globalStaleTagDrainInstalled = true
   AppState.addEventListener('change', (state) => {
-    if (state === 'active') {
-      void drainMobileDictationKeepAwakeCleanup().catch(() => undefined)
+    const current = latestKeepAwakeDevice
+    if (state === 'active' && current !== null) {
+      void drainMobileDictationKeepAwakeCleanup(current).catch(() => undefined)
     }
   })
 }
 
 export function useMobileDictationForegroundKeepAwake(
   keepAwakeOwner: MobileDictationKeepAwakeOwner,
-  activeIdRef: RefObject<string | null>
+  activeIdRef: RefObject<string | null>,
+  keepAwakeDevice: DictationKeepAwakeDevice
 ): void {
   useEffect(() => {
-    installGlobalStaleTagForegroundDrain()
+    installGlobalStaleTagForegroundDrain(keepAwakeDevice)
     // Android keeps FLAG_KEEP_SCREEN_ON on the Activity window, so Activity
     // recreation silently drops it mid-dictation; refresh on return to
     // active. iOS re-applies natively on foreground.
@@ -66,5 +74,5 @@ export function useMobileDictationForegroundKeepAwake(
       reacquireRun += 1
       sub.remove()
     }
-  }, [keepAwakeOwner, activeIdRef])
+  }, [keepAwakeOwner, activeIdRef, keepAwakeDevice])
 }

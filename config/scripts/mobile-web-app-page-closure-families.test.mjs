@@ -143,6 +143,32 @@ describeClosure('the browser pane closure', () => {
     await expectClosureFamilies(closure.local, [C6_PIN_TABLE])
   }, 60_000)
 
+  it('adds exactly those families to the session route, which is the route that mounts it', async () => {
+    // C6 ruling 3: a composed table is pinned against a route, and the pane had none — it is
+    // mounted by `MobileSessionActiveContent`, not registered. C7.7 registers that route, so the
+    // half is measured here against the page the shell actually serves rather than against a
+    // module closure read on its own. The difference matters: the session route reaches the whole
+    // of `src/session` around the pane, and a family the pane shares with the screen it sits in
+    // would be invisible in the module reading and present here.
+    const scenarios = JSON.parse(read('mobile/rpc-foundation/pilot-scenarios.json')).scenarios
+    const [layout, route] = await Promise.all([
+      mobileWebAppModuleClosure(['app/h/_layout']),
+      mobileWebAppRouteClosure('app/h/[hostId]/session/[worktreeId].tsx')
+    ])
+    const layoutFamilies = pageClosureFamilies(layout.local, scenarios)
+    const routeFamilies = pageClosureFamilies(route.local, scenarios)
+    // The pane's four are in the route's set, and they are not the layout's, so the route is what
+    // brings them. Asserted as containment rather than as a difference: the session route reaches
+    // far more than the pane, and C7.8 is what pins its whole set.
+    for (const family of pinnedFamilyNames(read(C6_PIN_TABLE))) {
+      expect(routeFamilies, family).toContain(family)
+      expect(layoutFamilies, family).not.toContain(family)
+    }
+    // And the layout is the C1 control it is everywhere else, so the line above is a real
+    // difference rather than a set that happens to contain everything.
+    expect(layoutFamilies).toEqual(pinnedFamilyNames(read(C1_TABLE)).sort())
+  }, 300_000)
+
   it('adds exactly those families to a page, and no other', async () => {
     // The pin is a half: alone it would also pass if the pane dragged in a family C1 already pins
     // and the table happened to list it. This reads the difference the pane makes to the layout.

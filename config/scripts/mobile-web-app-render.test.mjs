@@ -292,10 +292,15 @@ describe('the shell policy this page is tested under', () => {
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
   })
 
-  it('admits data: for images and for nothing else', () => {
+  it('admits data: and https: for images and for nothing else', () => {
     expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
-      "img-src 'self' data:"
+      "img-src 'self' data: https:"
     ])
+    expect(cspHeader.split('; ').filter((entry) => entry.includes('https:'))).toEqual([
+      "img-src 'self' data: https:"
+    ])
+    // `http:` is not a substring of `https:`, so this still refuses a cleartext source.
+    expect(cspHeader).not.toContain('http:')
   })
 })
 
@@ -460,12 +465,16 @@ describeRender('the Route A page in a real browser', () => {
     expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
-  it('renders the unmatched route rather than crashing on a path with no module', async () => {
-    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`, UNMATCHED)
+  it('refuses a host-scoped path with no module rather than crashing', async () => {
+    // The catch-all owns every `/h/<id>/...` pathname the tree has no file for, so this no longer
+    // reaches expo-router's Unmatched: the refusal is what the page paints instead. Both halves are
+    // asserted, so the negative is known to discriminate rather than to pass on a blank screen.
+    const refusal = 'This workspace screen is not available on this host.'
+    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`, refusal)
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
-    // Asserted positively so the two negatives above are known to discriminate.
-    expect(text).toContain(UNMATCHED)
+    expect(text).toContain(refusal)
+    expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
   it('carries the params the shell named into the url the screen reads', async () => {

@@ -35,7 +35,7 @@ export function agentLaunchWorkspaceFactory(
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
   return {
-    createWorktree: async ({ create, startupAgent }) => {
+    createWorktree: async ({ create, startupAgent, startupPrompt }) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
@@ -50,7 +50,14 @@ export function agentLaunchWorkspaceFactory(
       try {
         const result = await runtime.createManagedWorktree({
           ...buildManagedWorktreeCreateArgs(
-            { ...params, ...(startupAgent ? { startupAgent } : {}) },
+            {
+              ...params,
+              ...(startupAgent ? { startupAgent } : {}),
+              // Only ever set alongside `startupAgent`, which is what the create requires; the
+              // executor sends it exclusively for an agent that takes its prompt on argv, so this
+              // is the startup command carrying the text rather than a second delivery path.
+              ...(startupPrompt ? { startupPrompt } : {})
+            },
             {
               automationProvenance,
               cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {

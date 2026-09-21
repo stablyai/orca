@@ -116,9 +116,9 @@ export const PRCommentCard = memo(function PRCommentCard({
   return (
     <View style={[styles.card, isReply && styles.reply, comment.isResolved && styles.cardResolved]}>
       <View style={styles.header}>
-        {/* Skipped inside the shell's page: img-src is 'self' data:, so a provider avatar is one
-            refused request and one console violation per card, and the blank circle is what the
-            user would see either way. */}
+        {/* Skipped inside the shell's page. The reason it was added for has gone: img-src now
+            admits https:, so a provider avatar would load rather than be refused. The skip is now
+            a capability the page is missing, tracked with the other ruling-26 items. */}
         {comment.authorAvatarUrl && Platform.OS !== 'web' ? (
           <Image source={{ uri: comment.authorAvatarUrl }} style={styles.avatar} />
         ) : (

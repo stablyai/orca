@@ -190,11 +190,13 @@ export function NativeChatMessageList({
         turnStatuses,
         turnDiffs,
         showTurnStatus,
+        expandedTurnKeys: expandedTurnIds,
         isWorking,
         lifecycleWorking
       }),
     [
       currentTurnKey,
+      expandedTurnIds,
       isWorking,
       latestUserIndex,
       lifecycleWorking,

@@ -52,24 +52,37 @@ function sameRoute(pushed, declared) {
  * back, and the two declare the same five grants, so both hops stay in the document. Either one
  * landing alone would have put a handoff — a new native screen and a new bridge session — between
  * a changed-file row and its diff.
+ *
+ * The seven C7 rows are the same rule with the arrows all one way: 16 -> 23, every new entry
+ * `X -> session`, one from each other page route. The session screen's fourteen grants are a strict
+ * superset of every other route's, so nothing can reach it under the grants it was opened with —
+ * and nothing it pushes to leaves, because its own seven targets each declare a subset. A row in
+ * the other direction would mean a route had grown a grant the session lacks.
  */
 const HANDED_OFF = [
   '/h/[hostId] -> /h/[hostId]/files/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/files/preview/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId] -> /h/[hostId]/tasks',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/files/preview/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId]/agent-history/[worktreeId] -> /h/[hostId]/tasks',
   '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
   '/h/[hostId]/files/[worktreeId] -> /h/[hostId]/tasks',
   '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/review/[worktreeId]',
+  '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
   '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/source-control/[worktreeId]',
-  '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/tasks'
+  '/h/[hostId]/files/preview/[worktreeId] -> /h/[hostId]/tasks',
+  '/h/[hostId]/review/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
+  '/h/[hostId]/source-control/[worktreeId] -> /h/[hostId]/session/[worktreeId]',
+  '/h/[hostId]/tasks -> /h/[hostId]/session/[worktreeId]'
 ]
 
 describe('in-page hops between page routes', () => {
@@ -118,6 +131,33 @@ describe('in-page hops between page routes', () => {
     }
     expect(preview.grants.length, 'the preview declares something to inherit').toBeGreaterThan(0)
     expect(preview.grants.filter((grant) => !explorer.grants.includes(grant))).toEqual([])
+  })
+
+  it('keeps every hop out of the session local, which is the other half of its seven rows', () => {
+    // Asserted as grant coverage rather than as the absence of seven rows: absent is also what an
+    // unregistered route looks like, and a `session -> tasks` handoff would read the same either
+    // way. Every target the session pushes to declares a subset of what it holds, so a tapped row
+    // stays in this document instead of costing a native frame and a second bridge session.
+    const session = MOBILE_WEB_PAGE_ROUTES.find(
+      (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+    )
+    if (!session) {
+      throw new Error('the manifest lost the session route this census is written against')
+    }
+    const uncovered = MOBILE_WEB_PAGE_ROUTES.filter(
+      (target) => target.pathname !== session.pathname
+    )
+      .filter((target) => target.grants.some((grant) => !session.grants.includes(grant)))
+      .map((target) => target.pathname)
+    expect(uncovered).toEqual([])
+    // And the superset is strict, so the line above is not two equal lists.
+    expect(session.grants.length).toBeGreaterThan(
+      Math.max(
+        ...MOBILE_WEB_PAGE_ROUTES.map((route) => route.grants.length).filter(
+          (length) => length !== session.grants.length
+        )
+      )
+    )
   })
 
   it('keeps the hub and review local to each other, in both directions', () => {

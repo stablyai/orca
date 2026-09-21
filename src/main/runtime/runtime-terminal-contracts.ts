@@ -40,6 +40,13 @@ export type TerminalCreateOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
+  /**
+   * Initial text folded into `startupAgent`'s launch command, for an agent whose CLI takes a prompt
+   * argument. Not a general prompt channel: an agent that takes its text only after start has no
+   * launch command to carry it, and a caller that sets this for one is refused rather than having
+   * the prompt silently dropped. Post-start delivery belongs to whoever owns the live PTY.
+   */
+  startupPrompt?: string
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors

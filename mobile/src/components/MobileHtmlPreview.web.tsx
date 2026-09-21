@@ -36,10 +36,20 @@ export const MOBILE_HTML_PREVIEW_SANDBOX = 'allow-top-navigation-by-user-activat
  *
  * What the inherited policy then governs is everything the artifact tries to fetch: `img-src` bounds
  * its images, `font-src 'none'` refuses a web font, `connect-src 'self'` its XHR, and
- * `script-src 'self'` refuses its inline script even if the sandbox had allowed scripts. The native
- * preview is a separate WebView process with no policy on its document, so it does load a remote
- * image and does run a script; the page is deliberately stricter, because it has no second process
- * to contain either.
+ * `script-src 'self'` refuses its inline script even if the sandbox had allowed scripts.
+ *
+ * Images are the one of those four that is no longer stricter than native. `script-src 'self'`,
+ * `font-src 'none'` and `connect-src 'self'` still are -- the native preview is a separate WebView
+ * process with no policy on its document, so it runs a script, loads a web font and reaches any
+ * host -- but since `img-src` gained `https:` this frame loads a remote image exactly as native
+ * does.
+ *
+ * That image URL is a channel: it fires on view and carries whatever the artifact's author encoded
+ * in it, so a rendered artifact can tell its own author it was opened. Nothing dynamic goes with it
+ * -- no script runs, so the URL is fixed when the artifact is written. What keeps the document's
+ * own origin off that request is the shell's `Referrer-Policy: no-referrer` header and not
+ * `referrerPolicy` below: measured in the render rig, WebKit sends the embedder's URL from a srcdoc
+ * frame's image despite the attribute, where Chromium sends none.
  */
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
@@ -97,7 +107,8 @@ function PreviewFrame({ html }: { html: string }) {
         style={IFRAME_STYLE}
         // The artifact is untrusted, so nothing it navigates to may learn where it came from or
         // reach back through `window.opener`. Belt and braces beside the sandbox, which already
-        // refuses `window.open`.
+        // refuses `window.open` -- and only that: measured, this does not reach a subresource the
+        // frame's document fetches on WebKit, which is why the shell serves `Referrer-Policy`.
         referrerPolicy="no-referrer"
       />
     </View>
