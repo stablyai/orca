@@ -5,6 +5,7 @@ import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
+import { FactoryUsagePane } from './FactoryUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
@@ -52,7 +53,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok' | 'factory'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -84,12 +85,22 @@ const USAGE_ANALYTICS_OPTIONS = [
     get label() {
       return translate('auto.components.stats.StatsPane.grokUsageTab', 'Grok')
     }
+  },
+  {
+    id: 'factory',
+    get label() {
+      return translate('auto.components.stats.StatsPane.factoryUsageTab', 'Factory AI')
+    }
   }
 ] as const satisfies readonly { id: UsageTab; label: string }[]
 
 function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element {
   if (tab === 'overview') {
     return <BarChart3 className="size-3.5 text-muted-foreground" />
+  }
+  // Why: 'factory' is not a TuiAgent; its icon rides the droid CLI like the status bar.
+  if (tab === 'factory') {
+    return <AgentIcon agent="droid" size={14} />
   }
   return <AgentIcon agent={tab} size={14} />
 }
@@ -208,8 +219,10 @@ export function StatsPane(): React.JSX.Element {
             <CodexUsagePane />
           ) : activeUsageTab === 'opencode' ? (
             <OpenCodeUsagePane />
-          ) : (
+          ) : activeUsageTab === 'grok' ? (
             <GrokUsagePane />
+          ) : (
+            <FactoryUsagePane />
           )}
         </div>
       </div>

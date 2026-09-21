@@ -450,6 +450,7 @@ describe('client UI RPC methods', () => {
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
+      _factoryStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
@@ -501,6 +502,7 @@ describe('client UI RPC methods', () => {
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
+      _factoryStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',

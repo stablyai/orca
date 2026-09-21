@@ -212,6 +212,26 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsFactorySearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.a7c3e9f1b2', 'Factory AI Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.c8d2b4e6a0',
+      '5-hour, weekly, and monthly quota usage from a Factory API key.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.d2c6a0e8f1', 'factory'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e1f7a3c5b9', 'droid'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.f3b9c1e7a5', 'api key'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +239,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsFactorySearchEntries()
 ])

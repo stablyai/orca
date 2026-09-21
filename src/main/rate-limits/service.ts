@@ -26,6 +26,8 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchFactoryRateLimits } from './factory-fetcher'
+import { resolveFactoryApiKey } from './factory-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -107,6 +109,7 @@ type InternalRateLimitState = {
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  factory: ProviderRateLimits | null
   grok: ProviderRateLimits | null
 }
 
@@ -174,9 +177,11 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
+    factory: null,
     grok: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  private factoryApiKeyConfigured = false
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -188,6 +193,7 @@ export class RateLimitService {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    factory: 0,
     grok: 0,
     antigravity: 0
   }
@@ -199,6 +205,7 @@ export class RateLimitService {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    factory: 0,
     grok: 0,
     antigravity: 0
   }
@@ -370,6 +377,7 @@ export class RateLimitService {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
+      factoryApiKeyConfigured: this.factoryApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
@@ -408,6 +416,15 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateFactoryCredentialState(): void {
+    this.factoryApiKeyConfigured = resolveFactoryApiKey().status === 'ok'
+    // Why: saving/forgetting the key can race an in-flight fetch; clear the visible snapshot before any old-key result returns.
+    this.updateState({
+      ...this.state,
+      factory: this.withFetchingStatus(null, 'factory')
     })
   }
 
@@ -850,6 +867,7 @@ export class RateLimitService {
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
+      factory: this.state.factory,
       grok: this.state.grok,
       antigravity: this.state.antigravity
     }
@@ -1553,6 +1571,7 @@ export class RateLimitService {
       | 'opencode-go'
       | 'kimi'
       | 'minimax'
+      | 'factory'
       | 'grok'
       | 'antigravity'
   ): ProviderRateLimits {
@@ -1605,6 +1624,8 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const factoryApiKeyReadResult = resolveFactoryApiKey()
+    this.factoryApiKeyConfigured = factoryApiKeyReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1637,6 +1658,7 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
+      factory: this.withFetchingStatus(previousState.factory, 'factory'),
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
@@ -1646,6 +1668,13 @@ export class RateLimitService {
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const factoryResultPromise = fetchFactoryRateLimits({
+      signal,
+      apiKeyReadResult: factoryApiKeyReadResult
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -1685,7 +1714,8 @@ export class RateLimitService {
               cookie: miniMaxCookie,
               groupId: miniMaxGroupId,
               models: miniMaxModels
-            })
+            }),
+        factoryResultPromise
       ])
 
     if (signal.aborted) {
@@ -1857,6 +1887,30 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const factoryResult = await factoryResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const factory: ProviderRateLimits =
+      factoryResult.status === 'fulfilled'
+        ? factoryResult.value
+        : ({
+            provider: 'factory',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              factoryResult.reason instanceof Error
+                ? factoryResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('factory', factory)
+    this.updateState({
+      ...this.state,
+      factory: this.applyStalePolicy(factory, previousState.factory)
     })
   }
 

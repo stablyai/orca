@@ -179,7 +179,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, Grok, and Factory AI.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
@@ -505,7 +505,7 @@ export function buildSettingsNavigationMetadata({
       title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok plus Factory subscription usage.'
       ),
       icon: BarChart3,
       searchEntries: getStatsPaneSearchEntries(),

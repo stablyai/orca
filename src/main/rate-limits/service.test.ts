@@ -13,6 +13,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchFactoryRateLimits } from './factory-fetcher'
+import { resolveFactoryApiKey } from './factory-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
@@ -44,6 +46,14 @@ vi.mock('./minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./factory-fetcher', () => ({
+  fetchFactoryRateLimits: vi.fn()
+}))
+
+vi.mock('./factory-auth', () => ({
+  resolveFactoryApiKey: vi.fn(() => ({ status: 'missing' }))
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -132,6 +142,7 @@ function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchFactoryRateLimits).mockImplementation(async () => unavailableProvider('factory'))
 }
 
 function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
@@ -185,8 +196,17 @@ describe('RateLimitService', () => {
       error: null,
       status: 'unavailable'
     })
+    vi.mocked(fetchFactoryRateLimits).mockResolvedValue({
+      provider: 'factory',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: null,
+      status: 'unavailable'
+    })
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
     vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
+    vi.mocked(resolveFactoryApiKey).mockReturnValue({ status: 'missing' })
   })
 
   it('does not reread Grok auth when callers read state snapshots', () => {
@@ -2310,6 +2330,50 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
     expect(service.getState().minimaxCookieConfigured).toBe(true)
+  })
+
+  it('lands a successful Factory snapshot on state.factory', async () => {
+    const service = new RateLimitService()
+    vi.mocked(resolveFactoryApiKey).mockReturnValue({
+      status: 'ok',
+      apiKey: 'fk-test',
+      source: 'orca'
+    })
+    vi.mocked(fetchFactoryRateLimits).mockResolvedValue({
+      provider: 'factory',
+      session: {
+        usedPercent: 12.5,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 3_600_000,
+        resetDescription: '2:30 PM'
+      },
+      weekly: null,
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.factory?.status).toBe('ok')
+    expect(state.factory?.session?.usedPercent).toBe(12.5)
+    expect(state.factoryApiKeyConfigured).toBe(true)
+    expect(fetchFactoryRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyReadResult: { status: 'ok', apiKey: 'fk-test', source: 'orca' }
+      })
+    )
+  })
+
+  it('reports factoryApiKeyConfigured false when no key resolves', async () => {
+    const service = new RateLimitService()
+    vi.mocked(resolveFactoryApiKey).mockReturnValue({ status: 'missing' })
+
+    await service.refresh()
+
+    expect(service.getState().factoryApiKeyConfigured).toBe(false)
+    expect(service.getState().factory?.status).toBe('unavailable')
   })
 
   it('discards the previous MiniMax snapshot when its config hash changes', async () => {

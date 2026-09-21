@@ -47,12 +47,14 @@ import {
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
+  getAccountsFactorySearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { FactoryAccountsSection } from './FactoryAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1947,6 +1949,9 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsFactorySearchEntries()) ? (
+      <FactoryAccountsSection key="factory" />
     ) : null
   ].filter(Boolean)
 

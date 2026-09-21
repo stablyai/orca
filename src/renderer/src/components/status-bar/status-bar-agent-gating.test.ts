@@ -37,4 +37,11 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
   })
+
+  it('gates the Factory item on droid detection, not its own id', () => {
+    expect(isStatusBarItemAvailable('factory', null)).toBe(true)
+    expect(isStatusBarItemAvailable('factory', ['droid'])).toBe(true)
+    expect(isStatusBarItemAvailable('factory', ['claude'])).toBe(false)
+    expect(isStatusBarItemAvailable('factory', [])).toBe(false)
+  })
 })

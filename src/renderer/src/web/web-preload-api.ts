@@ -866,6 +866,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    factoryAccounts: createFactoryAccountsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
@@ -3107,9 +3108,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     kimi: null,
     antigravity: null,
     minimax: null,
+    factory: null,
     grok: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    factoryApiKeyConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -3138,6 +3141,16 @@ function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimax
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
     clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createFactoryAccountsApi(): NonNullable<Partial<PreloadApi>['factoryAccounts']> {
+  const unsigned = { configured: false, source: null, error: null }
+  const unsupportedError = new Error('Factory API keys are only available in the desktop app.')
+  return {
+    getStatus: () => Promise.resolve(unsigned),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.reject(unsupportedError)
   }
 }
 

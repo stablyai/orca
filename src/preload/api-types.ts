@@ -446,6 +446,7 @@ import type {
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../shared/claude-usage-types'
 import type {
   CodexRateLimitResetResult,
+  FactoryAccountStatus,
   GrokAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
@@ -3421,6 +3422,11 @@ export type PreloadApi = {
     getStatus: () => Promise<{ configured: boolean }>
     saveCookie: (cookie: string) => Promise<{ configured: boolean }>
     clearCookie: () => Promise<{ configured: boolean }>
+  }
+  factoryAccounts: {
+    getStatus: () => Promise<FactoryAccountStatus>
+    saveApiKey: (apiKey: string) => Promise<FactoryAccountStatus>
+    clearApiKey: () => Promise<FactoryAccountStatus>
   }
   grokAccounts: {
     getStatus: () => Promise<GrokAccountStatus>

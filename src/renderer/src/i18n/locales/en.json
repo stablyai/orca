@@ -60,7 +60,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "factoryToggleDescription": "Show Factory AI quota usage when an API key is configured."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3399,7 +3400,8 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
-            "floatingTerminalNewActivity": "{{label}}, new activity"
+            "floatingTerminalNewActivity": "{{label}}, new activity",
+            "factoryUsageMenu": "Factory AI Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3840,7 +3842,8 @@
           "eb6a066185": "claude",
           "eee19cfade": "overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "factoryUsageTab": "Factory AI"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -3964,6 +3967,19 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "FactoryUsagePane": {
+          "g8h9i0j1k2": "Factory AI usage",
+          "b2d3e4f5c6": "5-hour, weekly, and monthly quota usage from a Factory API key. Same source as the status bar.",
+          "c3e4f5a6b7": "Set up in Accounts",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Refresh Factory usage",
+          "d4f5a6b7c8": "Refresh",
+          "e5a6b7c8d9": "5-hour usage",
+          "f6b7c8d9e0": "Weekly usage",
+          "a1b2c3d4e5": "Monthly usage",
+          "b7c8d9e0f1": "Next reset {{when}}",
+          "a7b8c9d0e1": "Factory account settings"
         }
       },
       "sparse": {
@@ -7912,7 +7928,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "a7c3e9f1b2": "Factory AI Usage",
+            "c8d2b4e6a0": "5-hour, weekly, and monthly quota usage from a Factory API key."
           }
         },
         "advanced": {
@@ -8139,7 +8157,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "b3e7c1a9d4": "Factory AI Usage",
+            "e2a9d4c7f1": "Show Factory AI 5-hour, weekly, and monthly usage in the status bar."
           }
         },
         "auto": {
@@ -10586,6 +10606,29 @@
           "on": "On",
           "auto": "Agent",
           "off": "Off"
+        },
+        "FactoryAccountsSection": {
+          "s1a2b3c4d5": "Saved in Orca",
+          "c6d1a8f4e2": "Resets {{when}}",
+          "a1b2c3d4e5": "Factory AI (Droid)",
+          "f6e5d4c3b2": "Shows 5-hour, weekly, and monthly Factory usage from a Factory API key. Orca also reads FACTORY_API_KEY or ~/.factory/.env.",
+          "0d8e77bc40": "Create API key",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "API key ready",
+          "d4e5f6a7b8": "From {{source}}. Orca cannot clear keys set outside the app.",
+          "e5f6a7b8c9": "No Factory API key",
+          "f6a7b8c9d0": "Paste a key below, or set FACTORY_API_KEY / ~/.factory/.env and click Refresh usage.",
+          "3325d996cb": "Refresh usage",
+          "b7e2d9f0a3": "API key",
+          "a9c8e7d6f5": "Stored encrypted in ~/.orca. Env and dotenv sources are read-only here.",
+          "k1e2y3p4a5": "fk-…",
+          "s4v3e2k1e0": "Save",
+          "c1l3e5a7r9": "Clear",
+          "u5s6a7g8e9": "Usage",
+          "m0o1n2t3h4": "Same quota windows as the Factory dashboard.",
+          "h5o0u1r2s3": "5-hour",
+          "w1e2e3k4l5": "Weekly",
+          "m6o7n8t9h0": "Monthly"
         }
       },
       "right": {

@@ -153,6 +153,7 @@ import type {
 } from '../shared/mobile-markdown-document'
 import type {
   CodexRateLimitResetResult,
+  FactoryAccountStatus,
   GrokAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
@@ -4451,6 +4452,14 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
     clearCookie: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
+  },
+
+  factoryAccounts: {
+    getStatus: (): Promise<FactoryAccountStatus> => ipcRenderer.invoke('factoryAccounts:getStatus'),
+    saveApiKey: (apiKey: string): Promise<FactoryAccountStatus> =>
+      ipcRenderer.invoke('factoryAccounts:saveApiKey', apiKey),
+    clearApiKey: (): Promise<FactoryAccountStatus> =>
+      ipcRenderer.invoke('factoryAccounts:clearApiKey')
   },
 
   grokAccounts: {

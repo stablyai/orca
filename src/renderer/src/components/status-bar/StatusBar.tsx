@@ -1159,6 +1159,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'factory':
+      return 'F'
     case 'codex':
       return 'X'
   }
@@ -2067,7 +2069,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, factory, grok } =
+    rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2080,7 +2083,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    factoryApiKeyConfigured: rateLimits.factoryApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -2088,6 +2092,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
+  const visibleFactory = getVisibleUsageProvider('factory', factory, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const showClaude =
     visibleClaude !== null &&
@@ -2111,6 +2116,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
+  const showFactory =
+    visibleFactory !== null &&
+    statusBarItems.includes('factory') &&
+    isStatusBarItemAvailable('factory', detectedAgentIds)
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
@@ -2132,11 +2141,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
+    showFactory ||
     showGrok
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, factory, grok },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -2149,6 +2159,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
+    factory?.status === 'fetching' ||
     grok?.status === 'fetching'
 
   const compact = containerWidth < 900
@@ -2168,6 +2179,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
+    showFactory ? visibleFactory : null,
     showGrok ? visibleGrok : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
@@ -2505,6 +2517,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             >
               <AgentIcon agent="grok" size={14} />
               {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('factory', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('factory')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('factory')
+              }}
+            >
+              <AgentIcon agent="droid" size={14} />
+              {translate(
+                'auto.components.status.bar.StatusBar.factoryUsageMenu',
+                'Factory AI Usage'
+              )}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem

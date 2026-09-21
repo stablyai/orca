@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    factoryApiKeyConfigured: false,
     ...overrides
   }
 }
@@ -128,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ factoryApiKeyConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -202,6 +204,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats factoryApiKeyConfigured as the durable signal for Factory', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'factory',
+        usageSettings({ factoryApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('factory', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('factory', null)).toBe(false)
   })
 })
 
@@ -373,6 +386,7 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
+          factory: null,
           grok: null
         },
         usageSettings()
@@ -391,7 +405,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          factory: undefined
         },
         usageSettings()
       )
@@ -409,7 +424,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          factory: provider('unavailable', { provider: 'factory' })
         },
         usageSettings()
       )
@@ -427,7 +443,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          factory: provider('unavailable', { provider: 'factory' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,6 +473,7 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
+          factory: null,
           grok: null
         },
         null
@@ -474,7 +492,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          factory: provider('unavailable', { provider: 'factory' })
         },
         usageSettings()
       )
@@ -492,7 +511,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          factory: provider('unavailable', { provider: 'factory' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -512,7 +532,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          factory: provider('unavailable', { provider: 'factory' })
         },
         usageSettings({ antigravityUsageConfigured: true })
       )
