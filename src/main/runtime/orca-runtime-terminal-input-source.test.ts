@@ -108,22 +108,22 @@ describe('OrcaRuntimeService terminal input source', () => {
     expect(send.mock.calls[1]?.[2]).toEqual({})
   })
 
-  it('sendTerminalAgentPrompt records the PTY seen by beforeWrite once the prompt is accepted', async () => {
+  it('sendTerminalAgentPrompt records the PTY seen by afterWrite once the prompt is accepted', async () => {
     const { runtime } = makeRuntime()
-    const beforeWrite = vi.fn()
+    const afterWrite = vi.fn()
     vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminalAgentPrompt').mockImplementation(
       async (handle, _prompt, options = {}) => {
-        await options.beforeWrite?.('pty-prompt')
+        await options.afterWrite?.('pty-prompt')
         return { handle, accepted: true, bytesWritten: 5 }
       }
     )
 
     await runtime.sendTerminalAgentPrompt('term-1', 'hello', {
-      beforeWrite,
+      afterWrite,
       inputSource: { pairedDeviceId: 'device-phone', clientKind: 'mobile' }
     })
 
-    expect(beforeWrite).toHaveBeenCalledWith('pty-prompt')
+    expect(afterWrite).toHaveBeenCalledWith('pty-prompt')
     expect(runtime.getTerminalInputSource('pty-prompt')).toMatchObject({
       pairedDeviceId: 'device-phone',
       clientKind: 'mobile'
@@ -134,7 +134,7 @@ describe('OrcaRuntimeService terminal input source', () => {
     const { runtime } = makeRuntime()
     vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminalAgentPrompt').mockImplementation(
       async (handle, _prompt, options = {}) => {
-        await options.beforeWrite?.('pty-prompt')
+        await options.afterWrite?.('pty-prompt')
         return { handle, accepted: false, bytesWritten: 0 }
       }
     )
@@ -237,7 +237,7 @@ describe('OrcaRuntimeService terminal input source on the orchestration checkpoi
     const onInputAccepted = vi.fn()
     vi.spyOn(OrcaRuntimeWithResolveWaiter.prototype, 'sendTerminalAgentPrompt').mockImplementation(
       async (handle, _prompt, options = {}) => {
-        await options.beforeWrite?.('pty-prompt')
+        await options.afterWrite?.('pty-prompt')
         options.onInputAccepted?.({ handle, accepted: true, bytesWritten: 6 })
         throw new Error('agent_prompt_observation_aborted')
       }

@@ -51,7 +51,9 @@ curl -s -H "X-Orca-Agent-Hook-Token: $ORCA_AGENT_HOOK_TOKEN" \
 
 The runtime keeps one record per PTY and overwrites it once a write from `terminal.send`,
 `terminal.multiplex` input frames, legacy `terminal.subscribe` input frames, or the desktop
-renderer's own keystrokes has been accepted in full; a paste refused part-way records nothing. Writes the runtime makes on its own behalf
+renderer's own keystrokes has been accepted in full; a paste refused part-way records nothing.
+"Last" is PTY write order: when two sends overlap, the one whose bytes the PTY accepted last
+wins, even if the other call returned later. Writes the runtime makes on its own behalf
 (orchestration dispatch, worker preambles) do not change it. The record is dropped when the
 PTY exits or the provider generation resets, so a reused PTY id never reports a previous
 process's writer.
