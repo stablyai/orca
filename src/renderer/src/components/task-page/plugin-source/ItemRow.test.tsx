@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { getAssigneeAvatarTone, NEUTRAL_AVATAR_TONE } from '@/lib/assignee-avatar-tone'
 import type { PluginTaskItem } from '../../../../../shared/plugins/plugin-task-source-contract'
 import { TaskPagePluginSourceItemRow } from './ItemRow'
 
@@ -76,5 +77,31 @@ describe('TaskPage contributed source item row assignee avatar', () => {
 
     expect(screen.getAllByText('Unassigned').length).toBeGreaterThan(0)
     expect(screen.getByText('-')).toBeInTheDocument()
+  })
+
+  it('tints the initials badge with the assignee tone', () => {
+    renderRow(taskItem({ assignee: { id: 'u1', displayName: 'David Mugisha', avatarUrl: null } }))
+
+    expect(screen.getByText('DM').className).toContain(
+      getAssigneeAvatarTone({ id: 'u1', displayName: 'David Mugisha' })
+    )
+  })
+
+  it('gives two assignees with different ids different badge tones', () => {
+    renderRow(taskItem({ assignee: { id: 'u1', displayName: 'Amelia Kato', avatarUrl: null } }))
+    renderRow(
+      taskItem({
+        id: 'item-2',
+        assignee: { id: 'u2', displayName: 'Musa Rahman', avatarUrl: null }
+      })
+    )
+
+    expect(screen.getByText('AK').className).not.toBe(screen.getByText('MR').className)
+  })
+
+  it('leaves the unassigned badge on the neutral tone', () => {
+    renderRow(taskItem({ assignee: null }))
+
+    expect(screen.getByText('-').className).toContain(NEUTRAL_AVATAR_TONE)
   })
 })

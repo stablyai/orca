@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { getAssigneeAvatarTone } from '@/lib/assignee-avatar-tone'
 import { cn } from '@/lib/utils'
 import type { PluginTaskItem } from '../../../../../shared/plugins/plugin-task-source-contract'
 import { formatRelativeTime } from '../../task-page-source-context'
@@ -27,21 +28,16 @@ function getAssigneeInitials(displayName: string): string {
   return `${words[0].slice(0, 1)}${words.at(-1)?.slice(0, 1) ?? ''}`.toUpperCase()
 }
 
-function AssigneeAvatar({
-  displayName,
-  avatarUrl
-}: {
-  displayName: string
-  avatarUrl: string | null | undefined
-}): React.JSX.Element {
+function AssigneeAvatar({ assignee }: { assignee: PluginTaskItem['assignee'] }): React.JSX.Element {
   // Some providers (e.g. Azure Boards) send auth-gated avatar URLs the renderer
   // can never load; fall back to initials on load failure, not just when absent.
   const [imageFailed, setImageFailed] = useState(false)
+  const displayName = assignee?.displayName ?? ''
 
-  if (avatarUrl && !imageFailed) {
+  if (assignee?.avatarUrl && !imageFailed) {
     return (
       <img
-        src={avatarUrl}
+        src={assignee.avatarUrl}
         alt={displayName}
         className="size-5 shrink-0 rounded-full"
         onError={() => setImageFailed(true)}
@@ -50,7 +46,12 @@ function AssigneeAvatar({
   }
 
   return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+    <span
+      className={cn(
+        'flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 text-[10px]',
+        getAssigneeAvatarTone(assignee)
+      )}
+    >
       {getAssigneeInitials(displayName)}
     </span>
   )
@@ -60,10 +61,7 @@ function AssigneeCell({ item }: { item: PluginTaskItem }): React.JSX.Element {
   const unassigned = translate('auto.components.TaskPage.pluginTaskSourceUnassigned', 'Unassigned')
   return (
     <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-      <AssigneeAvatar
-        displayName={item.assignee?.displayName ?? ''}
-        avatarUrl={item.assignee?.avatarUrl}
-      />
+      <AssigneeAvatar assignee={item.assignee} />
       <span className="truncate">{item.assignee?.displayName ?? unassigned}</span>
     </div>
   )
