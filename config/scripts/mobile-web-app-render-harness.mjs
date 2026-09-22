@@ -375,6 +375,27 @@ export function installShellDouble({
     channel.onmessage?.({ data: json })
     return 'posted'
   }
+  /**
+   * One JSON stream event from the shell, on the same ledger the binary emitter uses.
+   *
+   * The host serves `session.tabs.subscribe` and `terminal.subscribe` as JSON events — the native
+   * client decodes the terminal's binary frames into `scrollback`/`data` payloads before the bridge
+   * ever sees them — so a check that drives a screen off a live stream needs this and not the
+   * binary arm. No window rule: these payloads are a check's own fixtures and are nowhere near the
+   * cap, and a drop here would read as the page ignoring an event it was never sent.
+   */
+  globalThis.__orcaRenderCheckEmitEvent = (id, payload) => {
+    const stream = openStreams.get(id)
+    if (!stream) {
+      return 'no-stream'
+    }
+    const seq = stream.seq + 1
+    const json = JSON.stringify({ v: version, type: 'event', id, seq, payload })
+    stream.seq = seq
+    stream.unacked.push({ seq, bytes: new TextEncoder().encode(json).length })
+    channel.onmessage?.({ data: json })
+    return 'posted'
+  }
   globalThis.orcaBridge = channel
 }
 

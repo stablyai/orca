@@ -133,6 +133,35 @@ describe('the page provider', () => {
     expect(context.getLastConnectedAt('host-a')).toBe(1700)
   })
 
+  it('identifies the page to the host by its shell session', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      create(render(client))
+    })
+
+    // What `terminal.subscribe` carries as `client.id` and what the send gate reads. The native
+    // provider answers with the pairing credential, which `init` deliberately does not carry; the
+    // host only ever uses this as an opaque key, so the session id is the whole identity. Null was
+    // not a smaller answer — the session route refuses to subscribe without one, so no scrollback
+    // arrives, the terminal document never receives `init`, and live input never opens.
+    expect(readContext().getClientId('host-a')).toBe(INIT.sessionId)
+  })
+
+  it('has no identity to give before the shell has named a session', () => {
+    installChannel()
+    const client = createShellPageClient()
+    if (client === null) {
+      throw new Error('no channel installed')
+    }
+    act(() => {
+      create(render(client))
+    })
+
+    // The precondition for the case above: it reads the session rather than answering a constant.
+    expect(readContext().getClientId('host-a')).toBe(null)
+  })
+
   it('carries a state change from the shell to the screens watching it', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)

@@ -55,7 +55,22 @@ export function RpcClientProvider({
       getState: () => client.getState(),
       // Nothing mounts before `init`, so the page's state is never the unknown this answers null for.
       getKnownState: () => client.getState(),
-      getClientId: () => null,
+      /**
+       * The page's identity to the host, which is its shell session and not the pairing credential.
+       *
+       * The native provider answers with `host.deviceToken`, and the page holds no keychain: `init`
+       * carries the host "minus the credential the bridge already carries for it", and the token is
+       * keychain-only by the same rule that keeps it out of AsyncStorage. But the host only ever
+       * uses `client.id` as an opaque key — the mobile input floor and the viewport claim, both
+       * in-memory and both scoped to a live subscription — so the session id is a whole identity
+       * for it, and one no document has to be trusted with a credential to have.
+       *
+       * Null was not a smaller answer, it was no terminal at all: the session route refuses
+       * `terminal.subscribe` without a client identity, so no scrollback arrived, `init` never
+       * reached the document and the terminal surface stayed 0x0. `canSend` reads the same value,
+       * so live input was dead for the same reason.
+       */
+      getClientId: () => client.getShellSession()?.sessionId ?? null,
       getReconnectAttempt: () => client.getReconnectAttempt(),
       getLastConnectedAt: () => client.getLastConnectedAt(),
       // The page reaches its host through the shell bridge, which rides whatever path the RN
