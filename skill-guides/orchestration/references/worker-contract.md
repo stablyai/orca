@@ -37,13 +37,28 @@ enqueue is durable but does not interrupt you, so nothing arrives unless you
 look:
 
 ```text
-ORCA orchestration check --terminal <worker_handle> --json
+ORCA orchestration check --terminal <worker_handle> --dispatch <dispatch_id> --json
 ```
+
+Name your own Dispatch with `--dispatch`; the preamble carries its id. Without
+it, `check` falls back to the implicit route, which serves a Run this pane is
+bound to ahead of any Dispatch — so a pane that ever coordinated a child Run
+reads that Run's mail forever and never sees its own assignment. The implicit
+route reports the mailbox it is not serving under `unservedMailbox`; that field
+naming a Dispatch means you are reading the wrong one, so re-read with
+`--dispatch`. `--run` and `--dispatch` name different mailboxes and are refused
+together. A host too old to know the flag is refused with
+`dispatch_selector_unsupported` rather than served the Run mailbox silently.
 
 Run it at each natural checkpoint — before starting a new file, after a test
 run — and once more immediately before `worker_done`, so a redirect or a
 cancellation lands before the Task settles. `check` names its caller with
 `--terminal`, never `--from`. Stop checking after `worker_done`.
+
+A replayed batch you have not acknowledged carries `newerMessages` for unread
+mail it does not contain, with `newerCount` and a `newerTruncated` flag when
+there is more behind it than the report can carry. Those messages are shown, not
+handed over: acknowledge the batch you hold and the next Delivery carries them.
 
 If `check` returns `consumer_fenced`, this process no longer owns its Dispatch:
 the Attempt was re-attached to another worker or settled without you. Stop, do

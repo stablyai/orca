@@ -133,6 +133,44 @@ deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 `worker-abandon` fences orchestration while accepting that resources may remain
 live; it performs no remote, process, or filesystem action.
 
+## Resume an idle assigned worker
+
+A worker that is alive, assigned, and holding no turn can be nudged back to its
+mailbox without typing into its pane:
+
+```text
+ORCA orchestration worker-resume --dispatch <dispatch_id> [--note <text>] [--retry-request <id>] --json
+```
+
+It delivers one prompt through the same gated route a dispatch preamble uses and
+tells the worker to read its own Dispatch mailbox. It never creates a Task,
+Dispatch, or Attempt, and never restates the assignment. Never substitute
+`terminal send --text ... --enter`: that types at whatever is on screen, so
+against an agent showing a permission prompt it answers the prompt instead of
+nudging the worker.
+
+It reports exactly one of seven states, each with its own remedy:
+
+| State                     | Meaning                                                    | Next action                                                          |
+| ------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| `resumed`                 | A turn started on the prompt                               | Wait; only this one exits 0                                          |
+| `queued_prompt`           | Accepted, but no turn started; the agent is holding it     | Look at the worker; do not send a fresh prompt                       |
+| `missing_acknowledgement` | Nothing acknowledged the guidance the worker already holds | Wait for its acknowledgement, or stop the Attempt                    |
+| `active_turn`             | The worker is mid-turn                                     | Wait; a prompt now folds into work already in flight                 |
+| `denied_action`           | Behind a human decision, or the route refused the write    | Clear it in the pane; Orca will not write past a guard               |
+| `exited_process`          | The assigned worker process is gone                        | Retry the Task on a new Attempt; do not resume this one              |
+| `unknown_liveness`        | Orca cannot reach the worker to tell whether it is alive   | Preserve as unverifiable; never read it as proof the worker is dead  |
+
+Resending is what these names exist to prevent. A repeat is safe only as the
+same `--retry-request <same id>`, which replays the recorded state instead of
+prompting twice; without that flag a repeat is a second prompt. A retry after a
+restart that left no recorded outcome is refused with `operation_unknown` rather
+than resent, and the same id carrying a changed `--note` is refused with
+`request_mismatch` — mint a new id for a different prompt.
+
+A federated Dispatch is refused with a message naming its execution host; resume
+it from there.
+
 ## Retain and release
 
 ```text

@@ -79,7 +79,9 @@ The injected preamble is authoritative. A dispatched worker must:
    liveness, not completion.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
-   `ORCA orchestration check --terminal <your_handle> --json`.
+   `ORCA orchestration check --terminal <your_handle> --dispatch <dispatch_id> --json`.
+   Naming your own Dispatch is what reaches your assignment's mailbox; the
+   implicit route without `--dispatch` serves a Run this pane is bound to first.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
