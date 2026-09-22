@@ -347,8 +347,15 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4270 -> 4271   (+1)
  *   local modules  1022 -> 1023   (+1)
+ *
+ * Cutting `expo-notifications` out of the page takes 62 vendored modules with it: its own 55, plus
+ * expo-application, badgin, abort-controller and event-target-shim behind them. The three `.web`
+ * siblings replace their native files, so the local +1 is `host-app-version.ts` alone.
+ *
+ *   modules        4271 -> 4210   (-61)
+ *   local modules  1023 -> 1024   (+1)
  */
-const SESSION_ROUTE_MODULES = 4271
+const SESSION_ROUTE_MODULES = 4210
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
