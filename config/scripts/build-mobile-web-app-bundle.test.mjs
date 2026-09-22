@@ -570,7 +570,7 @@ describe('the verifier', () => {
     'accepts a bundle it has just built',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).resolves.toBeDefined()
       })
@@ -582,7 +582,7 @@ describe('the verifier', () => {
     "rejects a buildId the manifest's own asset list does not derive",
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         const manifestPath = join(outDir, 'manifest.json')
         const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
@@ -600,7 +600,7 @@ describe('the verifier', () => {
     'rejects a self-consistent bundle a fresh build does not reproduce',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         const { manifest } = await buildMobileWebAppBundle({ outDir })
         // What a stale out/ actually looks like: every digest agrees with its bytes and the
         // buildId derives from the asset list, but the source has moved on. Only the two fresh
