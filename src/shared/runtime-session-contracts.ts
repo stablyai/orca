@@ -103,6 +103,8 @@ export type CliRuntimeState =
   | 'ready'
   | 'graph_not_ready'
   | 'stale_bootstrap'
+  // Why: the runtime answered but refused the connection at its limit.
+  | 'busy'
 
 export type CliStatusResult = {
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
@@ -123,7 +125,7 @@ export type CliStatusResult = {
     degradations?: RuntimeDegradation[]
   }
   graph: {
-    state: RuntimeGraphStatus | 'not_running' | 'starting'
+    state: RuntimeGraphStatus | 'not_running' | 'starting' | 'unknown'
   }
 }
 

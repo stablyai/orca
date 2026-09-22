@@ -1,16 +1,19 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
 // runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
+// 30s idle timeout, 1MB max message, chmod 0o600 on Unix. Connections over the
+// limit get a runtime_busy reply instead of a silent close.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
+import { replyConnectionLimitBusy } from './unix-socket-busy-reply'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
-const MAX_RUNTIME_RPC_CONNECTIONS = 32
+// Why: matches the WS cap; Electron main runs with a ~1M soft RLIMIT_NOFILE on macOS, so fds don't bind.
+const MAX_RUNTIME_RPC_CONNECTIONS = 128
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
@@ -21,6 +24,7 @@ export type UnixSocketTransportOptions = {
   // the client honours them, the client-side idle timer. Tests override this
   // to avoid waiting 10 s for a frame.
   keepaliveIntervalMs?: number
+  maxConnections?: number
 }
 
 type MessageHandler = (
@@ -35,12 +39,15 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly keepaliveIntervalMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
+  private readonly maxConnections: number
   private readonly activeSockets = new Set<Socket>()
+  private readonly busySockets = new Set<Socket>()
 
-  constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
+  constructor({ endpoint, kind, keepaliveIntervalMs, maxConnections }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
     this.kind = kind
     this.keepaliveIntervalMs = keepaliveIntervalMs ?? DEFAULT_KEEPALIVE_INTERVAL_MS
+    this.maxConnections = maxConnections ?? MAX_RUNTIME_RPC_CONNECTIONS
   }
 
   onMessage(handler: MessageHandler): void {
@@ -57,9 +64,14 @@ export class UnixSocketTransport implements RpcTransport {
     }
 
     const server = createServer((socket) => {
+      if (this.activeSockets.size >= this.maxConnections) {
+        this.rejectBusy(socket)
+        return
+      }
       this.handleConnection(socket)
     })
-    server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
+    // Why: busy replies are bounded too; past this ceiling Node closes sockets unread.
+    server.maxConnections = this.maxConnections * 2
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -93,13 +105,21 @@ export class UnixSocketTransport implements RpcTransport {
     })
     // Why: server.close() stops accepting new connections but waits for
     // existing sockets; long-poll keepalives can otherwise hold shutdown open.
-    for (const socket of Array.from(this.activeSockets)) {
+    for (const socket of [...this.activeSockets, ...this.busySockets]) {
       socket.destroy()
     }
     await closePromise
     if (this.kind === 'unix' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
+  }
+
+  private rejectBusy(socket: Socket): void {
+    this.busySockets.add(socket)
+    socket.once('close', () => {
+      this.busySockets.delete(socket)
+    })
+    replyConnectionLimitBusy(socket)
   }
 
   private handleConnection(socket: Socket): void {

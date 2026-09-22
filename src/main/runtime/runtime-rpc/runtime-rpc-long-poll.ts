@@ -2,7 +2,7 @@ import type { RpcRequest } from '../rpc/core'
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 
-// Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
+// Why: long-polls hold slots for minutes, so keep them to an eighth of the 128-slot socket budget and short RPCs keep the rest; overflow → runtime_busy. See §7 risk #2.
 export const LONG_POLL_CAP = 16
 
 // Why: orchestration.ask blocks on a human/agent reply for minutes, an order of

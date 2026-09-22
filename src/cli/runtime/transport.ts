@@ -5,6 +5,10 @@ import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-enve
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
+import { isUndispatchedRuntimeBusyFailure } from '../../shared/runtime-rpc-connection-limit'
+
+// Why: ~2s of jittered backoff rides out a burst without eating a short caller's whole budget.
+const CONNECTION_LIMIT_RETRY_DELAYS_MS = [250, 600, 1_200]
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -19,6 +23,37 @@ export async function sendRequest<TResult>(
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
+  const deadline = Date.now() + timeoutMs
+  let attemptTimeoutMs = timeoutMs
+  for (const baseDelayMs of CONNECTION_LIMIT_RETRY_DELAYS_MS) {
+    const response = await sendRequestOnce<TResult>(
+      metadata,
+      method,
+      params,
+      attemptTimeoutMs,
+      envelope
+    )
+    // Why: only a connection-limit reply proves the runtime never dispatched, so only it is safe to resend.
+    if (response.ok || !isUndispatchedRuntimeBusyFailure(response.error)) {
+      return response
+    }
+    const delayMs = Math.round(baseDelayMs * (0.5 + Math.random()))
+    attemptTimeoutMs = deadline - Date.now() - delayMs
+    if (attemptTimeoutMs <= 0) {
+      return response
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+  }
+  return await sendRequestOnce<TResult>(metadata, method, params, attemptTimeoutMs, envelope)
+}
+
+async function sendRequestOnce<TResult>(
+  metadata: RuntimeMetadata,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
   return await new Promise((resolve, reject) => {
     const transport = findTransport(metadata, 'unix', 'named-pipe')
     if (!transport) {

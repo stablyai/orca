@@ -8,6 +8,7 @@ import {
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { RUNTIME_RPC_CONNECTION_LIMIT_ERROR_CODE } from '../../shared/runtime-rpc-connection-limit'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -68,7 +69,23 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
+    // Why: a busy reply comes from the live runtime, so it is reachable, not starting.
+    if (
+      error instanceof RuntimeRpcFailureError &&
+      error.response.error.code === RUNTIME_RPC_CONNECTION_LIMIT_ERROR_CODE
+    ) {
+      return buildCliStatusResponse({
+        app: { running: true, pid: metadata.pid },
+        runtime: {
+          state: 'busy',
+          reachable: true,
+          connectionState: 'connected',
+          runtimeId: error.response._meta?.runtimeId ?? metadata.runtimeId
+        },
+        graph: { state: 'unknown' }
+      })
+    }
     const running = isProcessRunning(metadata.pid)
     return buildCliStatusResponse({
       app: {
