@@ -73,6 +73,17 @@ async function readInsideFrame(page) {
     ?.evaluate(() => ({
       marker: document.getElementById('marker')?.textContent ?? null,
       title: document.title,
+      // The two the hidden-link path could change without touching a link (C8.1 round 2). The
+      // rendering mode the engine resolved from the doctype it was handed, and the text a
+      // preformatted block holds -- both read off the frame's own document, because the claim is
+      // about what the engine parsed rather than about the string the page built.
+      compatMode: document.compatMode,
+      // The doctype the frame's own document reports, which is the reading that discriminates:
+      // `compatMode` cannot, because a `srcdoc` document takes its mode from its embedder.
+      doctypePublicId: document.doctype?.publicId ?? null,
+      doctypeSystemId: document.doctype?.systemId ?? null,
+      preText: document.getElementById('pre')?.textContent ?? null,
+      fragmentHref: document.getElementById('fraglink')?.getAttribute('href') ?? null,
       ran: document.documentElement.dataset.ran === '1' ? 1 : 0,
       threw: document.documentElement.dataset.threw ?? null,
       // The two moments the late-listener question turns on: when the page's init script ran in

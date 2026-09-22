@@ -119,20 +119,30 @@ describe('the frame the preview mounts for each answer the shell gives', () => {
     )
   })
 
-  it('shows the source the author wrote, not the rewrite, on either answer', () => {
-    // The rewrite is a rendering decision about this shell. A reader who flipped to Source to read
-    // the markup would otherwise be shown markup that was never in the artifact.
+  /**
+   * Source takes the frame away on either answer, which is the whole of what this can claim.
+   *
+   * The `html` a Source view shows is not the component's to get wrong: `renderSource` is called
+   * with no argument, so what it renders is the caller's own closure over the artifact
+   * (`MobileSessionFileReader` passes `() => renderSourceText(doc.content)`). Asserting that the
+   * rendered markup equals the artifact would be asserting that this file's own closure returned
+   * what this file put in it, which passes whatever the component does. What the component decides
+   * is whether the rewritten frame is still mounted underneath, and that is what is read here.
+   */
+  it('takes the frame away when Source is showing, on either answer', () => {
     for (const opensLinks of [true, false]) {
       shell.opensLinks = opensLinks
-      const renderer = mount(() => createElement('SourceView', { html: ARTIFACT }))
+      const renderer = mount(() => createElement('SourceView', null))
+      // The precondition: a frame was mounted, so its absence below is the toggle's doing.
+      expect(findHosts(renderer, 'iframe'), String(opensLinks)).toHaveLength(1)
       const toSource = findHosts(renderer, 'Pressable').find(
         (node) => node.props.accessibilityLabel === 'View HTML source'
       )
       expect(toSource, String(opensLinks)).toBeDefined()
       act(() => toSource?.props.onPress())
-      const source = findHosts(renderer, 'SourceView')
-      expect(source, String(opensLinks)).toHaveLength(1)
-      expect(source[0]?.props.html, String(opensLinks)).toBe(ARTIFACT)
+      expect(findHosts(renderer, 'SourceView'), String(opensLinks)).toHaveLength(1)
+      // Nothing is parsing the artifact while Source is showing, rewritten or not.
+      expect(findHosts(renderer, 'iframe'), String(opensLinks)).toHaveLength(0)
     }
   })
 })

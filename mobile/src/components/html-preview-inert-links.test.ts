@@ -23,6 +23,9 @@ const ARTIFACT =
   '<a id="top" href="https://example.com/a" target="_top">tap</a>' +
   '<a id="blank" href="https://example.com/b" target="_blank">window</a>' +
   '<a id="root" href="/">root</a>' +
+  '<a id="empty" href="">empty</a>' +
+  '<a id="frag" href="#target" target="_top">contents</a>' +
+  '<h2 id="target">T</h2>' +
   '<a id="named" name="anchor">named</a>' +
   '<img id="mapped" src="x.png" usemap="#m" />' +
   '<map name="m"><area id="area" href="https://example.com/c" shape="rect" coords="0,0,1,1" /></map>' +
@@ -30,10 +33,34 @@ const ARTIFACT =
   '</body></html>'
 
 describe('an artifact rendered for a shell that cannot open a link', () => {
-  it('leaves no element a browser would treat as a link', () => {
+  it('leaves no element a browser would treat as a link out of this document', () => {
     // The whole of "no underline, no pointer, no dead anchor": all three follow from `a:any-link`
-    // not matching, and `href` is what it matches on.
-    expect(inert(ARTIFACT).querySelectorAll('a[href], area[href]')).toHaveLength(0)
+    // not matching, and `href` is what it matches on. Every link but the fragment one, which is the
+    // case below: it leaves this document for nowhere, so nothing about it is the shell's to do.
+    const linked = [...inert(ARTIFACT).querySelectorAll('a[href], area[href]')]
+    expect(linked.map((one) => one.id)).toEqual(['frag'])
+  })
+
+  /**
+   * The one link that must keep working, because nothing about it is the shell's business.
+   *
+   * A same-document fragment scrolls this document and starts no navigation at all, so it works
+   * inside the sealed frame whether or not the shell can open anything. Stripping it would take a
+   * working affordance away over a capability it never needed -- an artifact's own table of
+   * contents is the case -- which is degradation rather than hiding.
+   */
+  it('keeps a same-document fragment link, and takes its target with it', () => {
+    const doc = inert(ARTIFACT)
+    expect(doc.getElementById('frag')?.getAttribute('href')).toBe('#target')
+    // Its `target` goes, though: a fragment aimed at another frame is not a scroll, it is a
+    // navigation of that frame to this document's URL plus the fragment.
+    expect(doc.getElementById('frag')?.hasAttribute('target')).toBe(false)
+  })
+
+  it('does not mistake an empty href for a fragment, which resolves to the frame itself', () => {
+    // `href=""` is this document's own URL, and activating it is a navigation the shell would have
+    // to refuse. Written as its own case because a truthiness test on the attribute passes it.
+    expect(inert(ARTIFACT).getElementById('empty')?.hasAttribute('href')).toBe(false)
   })
 
   it('keeps the text, the headings and the images the author wrote', () => {
@@ -48,6 +75,8 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
       'top',
       'blank',
       'root',
+      'empty',
+      'frag',
       'named',
       'svglink'
     ])
@@ -72,17 +101,55 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(inert(ARTIFACT).getElementById('named')?.getAttribute('name')).toBe('anchor')
   })
 
-  it('keeps the doctype, because quirks mode collapses a full-bleed artifact', () => {
-    // Measured as the string, not the tree: the doctype is what the frame is parsed under, and a
-    // document node exists either way.
-    expect(htmlPreviewWithInertLinks(ARTIFACT).toLowerCase().startsWith('<!doctype html>')).toBe(
-      true
+  /**
+   * The doctype, whole, because rewriting it is a change this pass has no reason to make.
+   *
+   * Not because it moves the frame between layout modes: measured, it cannot. A `srcdoc` document
+   * takes its rendering mode from its embedder whatever its own doctype says, and on Chromium 147
+   * and WebKit 26.4 a quirks doctype, the bare name and no doctype at all all read `CSS1Compat`
+   * inside the frame. The reading that does discriminate is the doctype the frame's own document
+   * reports, and that is the render rig's case; this is the string it is handed.
+   */
+  it('keeps the doctype whole, identifiers and all', () => {
+    const doctypeOf = (html: string) => htmlPreviewWithInertLinks(html).split('>')[0] ?? ''
+    expect(doctypeOf(ARTIFACT).toLowerCase()).toBe('<!doctype html')
+    expect(
+      doctypeOf('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><html><body>x')
+    ).toBe('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"')
+    expect(
+      htmlPreviewWithInertLinks(
+        '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html><body>x'
+      )
+    ).toContain(
+      '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'
     )
     // And an artifact that shipped without one still gets none, rather than being handed a mode it
     // was not written for.
     expect(htmlPreviewWithInertLinks('<html><body>x</body></html>').toLowerCase()).not.toContain(
       '<!doctype'
     )
+  })
+
+  /**
+   * The blank line the next parse will eat, written back before it does.
+   *
+   * A parser drops one newline after a `pre`, `listing` or `textarea` start tag and the serialiser
+   * is specified to put it back; measured, neither engine's does, so a round trip loses a blank
+   * line from every such block. This reads the string the pass produces, because happy-dom's own
+   * parser does not drop that newline and a round-trip assertion here would measure happy-dom
+   * rather than a browser. What an engine renders is the render rig's case.
+   */
+  it('writes back the leading newline the serialiser owes each preformatted block', () => {
+    const out = htmlPreviewWithInertLinks(
+      '<!doctype html><html><body><pre id="p">\n\nkept</pre>' +
+        '<listing>\n\nalso</listing><textarea>\n\nfield</textarea>' +
+        '<pre id="q">no newline</pre></body></html>'
+    )
+    expect(out).toContain('<pre id="p">\n\n\nkept</pre>')
+    expect(out).toContain('<listing>\n\n\nalso</listing>')
+    expect(out).toContain('<textarea>\n\n\nfield</textarea>')
+    // Only a block that starts with one gets one: this is a compensation, not a prefix.
+    expect(out).toContain('<pre id="q">no newline</pre>')
   })
 
   it('does not run or fetch what the artifact carries, because nothing here has a context', () => {
@@ -95,22 +162,47 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect('__ran' in globalThis).toBe(false)
   })
 
-  it('leaves an href inside a comment or a template where a regex pass would have found it', () => {
-    // The reason this is a parser and not a pattern: both of these are text to a browser, and a
-    // pass that rewrote them would be editing the artifact rather than its links.
+  it('leaves an href inside a comment where a regex pass would have found it', () => {
+    // The reason this is a parser and not a pattern: a comment is text to a browser, and a pass
+    // that rewrote it would be editing the artifact rather than its links.
     const doc = inert(
       '<!doctype html><html><body><!-- <a href="https://example.com/x">c</a> -->' +
-        '<template><a id="tpl" href="https://example.com/y">t</a></template>' +
         '<a id="real" href="https://example.com/z">r</a></body></html>'
     )
     expect(doc.body.innerHTML).toContain('href="https://example.com/x"')
-    // A template's content is a fragment `querySelectorAll` does not walk, and nothing in it is
-    // rendered, so its links are markup too. Read off the template rather than the document.
-    const template = doc.querySelector('template')
-    expect(template?.content.getElementById('tpl')?.getAttribute('href')).toBe(
-      'https://example.com/y'
-    )
-    // The control for both: a link that is rendered did lose its href.
+    // The control: a link that is rendered did lose its href.
     expect(doc.getElementById('real')?.hasAttribute('href')).toBe(false)
+  })
+
+  /**
+   * A template is not always inert markup, and that is what this case is about.
+   *
+   * `<template shadowrootmode>` is a declarative shadow root: the frame's parser attaches it and
+   * renders what is inside. Measured, `parseFromString` attaches no such root (Chromium 147,
+   * WebKit 26.4 and happy-dom all leave the template standing), so the links are reachable here --
+   * and `querySelectorAll` does not walk into `template.content`, so a pass over the document alone
+   * hands the frame live links inside a sandbox that refuses their navigation, which is the dead
+   * anchor ruling 37.2 forbids.
+   */
+  it('reaches a link inside a declarative shadow root, and inside one nested in it', () => {
+    const doc = inert(
+      '<!doctype html><html><body><div id="host">' +
+        '<template shadowrootmode="open">' +
+        '<a id="shadow" href="https://example.com/s" target="_top">s</a>' +
+        '<div><template shadowrootmode="open">' +
+        '<a id="deep" href="https://example.com/d">d</a>' +
+        '<a id="deepfrag" href="#inside">f</a>' +
+        '</template></div>' +
+        '</template></div></body></html>'
+    )
+    const outer = doc.querySelector('template')?.content
+    expect(outer?.getElementById('shadow')?.hasAttribute('href')).toBe(false)
+    expect(outer?.getElementById('shadow')?.hasAttribute('target')).toBe(false)
+    // The text is still there, as everywhere else: hidden, not deleted.
+    expect(outer?.getElementById('shadow')?.textContent).toBe('s')
+    const inner = outer?.querySelector('template')?.content
+    expect(inner?.getElementById('deep')?.hasAttribute('href')).toBe(false)
+    // And the same-document rule holds at every depth.
+    expect(inner?.getElementById('deepfrag')?.getAttribute('href')).toBe('#inside')
   })
 })

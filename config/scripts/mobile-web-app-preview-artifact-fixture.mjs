@@ -102,13 +102,17 @@ window.__mount = (html, sandboxOverride, grants) => {
  * `extra.head` and `extra.body` let a case add a `<meta refresh>` or a script without a second
  * fixture, so the thing under test is the only difference between the arms.
  */
-export function artifact({ links, assets, extra = {}, nonce = 'n0' }) {
+export function artifact({ links, assets, extra = {}, nonce = 'n0', doctype = '<!doctype html>' }) {
   // Every foreign URL carries this arm's nonce, because a closed page's requests can still land and
   // a hit list shared across arms would report the previous one's fetches as this one's.
   const tag = `?n=${nonce}`
   // Subresources move to `assets` and the links do not: a case about what the policy fetches should
   // not also change which origin a tapped link navigates to.
-  return `<!doctype html><html><head><title>ARTIFACT</title>
+  //
+  // `doctype` is a parameter for one case's sake (C8.1 round 2): the hidden-link path reparses and
+  // reserialises the artifact, and the doctype is what an engine reads its rendering mode from, so
+  // an arm has to be able to hand the frame one that is not the bare name.
+  return `${doctype}<html><head><title>ARTIFACT</title>
 <style>html,body{margin:0;height:100%;background:rgb(${ARTIFACT_RGB})}
 #bg{background-image:url("${assets}/css-bg.png${tag}")}
 @font-face{font-family:probe;src:url("${assets}/probe.woff2${tag}")}
@@ -119,6 +123,10 @@ export function artifact({ links, assets, extra = {}, nonce = 'n0' }) {
 <a id="blanklink" href="${links}/blank.html${tag}" target="_blank">window</a>
 <a id="rootlink" href="/" target="_top">root</a>
 <a id="emptylink" href="" target="_top">empty</a>
+<a id="fraglink" href="#fragtarget">contents</a><h2 id="fragtarget">F</h2>
+<pre id="pre">
+
+kept</pre>
 <form id="topform" action="${links}/form.html" target="_top" method="get"><button id="submit">go</button></form>
 ${extra.body ?? ''}</body></html>`
 }
