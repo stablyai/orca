@@ -44,7 +44,7 @@ orca orchestration worker-start --task <taskId> --worktree new-child --name bill
 orca orchestration worker-start --task <taskId> --worktree current --agent claude --model <opaque-model-id> --effort high --json
 ```
 
-`--model` accepts opaque provider model IDs for Claude, Codex, and Cursor. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
+`--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, and OpenCode. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show under `launch.requested` / `launch.effective` in the start receipt. Federated starts need a worker host that advertises launch-preference support.
 
 Wait for completions (process every message in a Delivery, then ack):
 
