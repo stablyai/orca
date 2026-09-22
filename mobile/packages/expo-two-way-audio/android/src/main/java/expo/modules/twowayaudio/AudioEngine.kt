@@ -204,6 +204,8 @@ class AudioEngine (context: Context) {
                     } else {
                         stopRecording()
                         stopPlayback()
+                        // Pre-Q stops for good rather than pausing, so the focus goes back too.
+                        abandonAudioFocus()
                     }
                     onAudioInterruptionCallback?.let { it("blocked") }
                 }
