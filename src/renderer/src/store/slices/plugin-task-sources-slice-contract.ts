@@ -3,6 +3,8 @@ import type { AppState } from '../types'
 import type {
   PluginTaskComment,
   PluginTaskCreate,
+  PluginTaskFacet,
+  PluginTaskFacetOption,
   PluginTaskItem,
   PluginTaskItemDetail,
   PluginTaskItemType,
@@ -41,12 +43,24 @@ export type PluginTaskSourceFilter = {
   label: string
 }
 
+/** One declared facet's options for the scope currently on screen. A union, not
+ *  a list plus flags: "still fetching" and "came back empty" must never render
+ *  the same way, and neither may read as "nothing matches". */
+export type PluginTaskSourceFacetOptions =
+  | { status: 'loading' }
+  | { status: 'ready'; options: PluginTaskFacetOption[] }
+  | { status: 'failed'; error: PluginTaskSourceLoadError }
+
 /** What the user has narrowed the list to. Reset whenever the selected source
  *  changes: a filter id is that source's own vocabulary and means nothing to
  *  the next one. */
 export type PluginTaskSourceQuery = {
   search: string | null
   filterId: string | null
+  /** Chosen option ids per declared facet id. A cleared facet drops its key
+   *  rather than holding an empty array, which a source would have to tell
+   *  apart from "every option deselected". */
+  facetSelections: Record<string, string[]>
 }
 
 export type PluginTaskSourcesSlice = {
@@ -58,6 +72,16 @@ export type PluginTaskSourcesSlice = {
   pluginTaskSourceLoading: boolean
   pluginTaskSourceError: PluginTaskSourceLoadError | null
   pluginTaskSourceFilters: PluginTaskSourceFilter[]
+  /** Straight from `status().facets`. Empty for a source that declares none,
+   *  which renders no facet bar at all. */
+  pluginTaskSourceFacets: PluginTaskFacet[]
+  /** Keyed by declared facet id. A facet missing from the record has not been
+   *  asked for yet. */
+  pluginTaskSourceFacetOptions: Record<string, PluginTaskSourceFacetOptions>
+  /** Whether the me-option seed has already been offered for this source, so a
+   *  facet the user deliberately cleared is not re-seeded by the next scope
+   *  change. Reset with the selection. */
+  pluginTaskSourceAssigneeSeeded: boolean
   /** Straight from `status().supports.create`. False until the probe answers,
    *  so a source is never offered a create control it did not declare. */
   pluginTaskSourceSupportsCreate: boolean
@@ -76,19 +100,23 @@ export type PluginTaskSourcesSlice = {
    *  empty `scopeIds`. */
   selectedPluginTaskSourceScopeIds: string[]
   /** Guards the refresh button, not the individual loads: it stays true across
-   *  both the item and scope reload so a second click cannot start a duplicate. */
+   *  every reload the refresh starts, so a second click cannot start a duplicate. */
   pluginTaskSourceRefreshing: boolean
 
   setPluginTaskSources: (sources: ContributedPluginTaskSource[]) => void
   selectPluginTaskSource: (selection: SelectedPluginTaskSource | null) => void
   setPluginTaskSourceQuery: (query: PluginTaskSourceQuery) => void
   setPluginTaskSourceScopeIds: (scopeIds: string[]) => void
-  /** One status probe feeds both the chip row and the create control. */
+  /** One status probe feeds the chip row, the facet bar and the create control. */
   loadPluginTaskSourceStatus: () => Promise<void>
   loadPluginTaskSourceScopes: () => Promise<void>
+  /** Re-run whenever the scope selection changes: a sprint or state belongs to
+   *  the project it came from and means nothing under another. */
+  loadPluginTaskSourceFacetOptions: () => Promise<void>
   loadPluginTaskSourceItems: () => Promise<void>
-  /** Re-runs `listItems` and `listScopes` with the selection already in the
-   *  store, so a chip, a search, or a picked project survives the refresh. */
+  /** Re-runs `listItems`, `listScopes` and the facet options with the selection
+   *  already in the store, so a chip, a search, or a picked project survives the
+   *  refresh while a newly created sprint or state still shows up. */
   refreshPluginTaskSource: () => Promise<void>
   /** Scope-bound, never cached: the creatable types differ per project. */
   listPluginTaskSourceItemTypes: (

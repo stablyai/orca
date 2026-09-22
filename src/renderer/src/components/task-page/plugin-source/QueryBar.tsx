@@ -9,6 +9,7 @@ import type {
   PluginTaskSourceFilter,
   PluginTaskSourceQuery
 } from '@/store/slices/plugin-task-sources-slice-contract'
+import { TaskPagePluginSourceFacetBar, type PluginTaskSourceFacetFilter } from './FacetBar'
 import { TaskPagePluginSourceScopePicker, type PluginTaskSourceScopeFilter } from './ScopePicker'
 
 function normalizeSearch(value: string): string | null {
@@ -21,11 +22,15 @@ export const PLUGIN_TASK_SOURCE_SEARCH_DEBOUNCE_MS = 300
 
 export function TaskPagePluginSourceQueryBar({
   filters,
+  facets,
+  facetOptions,
   query,
   onQueryChange,
   scopeFilter
 }: {
   filters: PluginTaskSourceFilter[]
+  facets: PluginTaskSourceFacetFilter['facets']
+  facetOptions: PluginTaskSourceFacetFilter['facetOptions']
   query: PluginTaskSourceQuery
   onQueryChange: (query: PluginTaskSourceQuery) => void
   scopeFilter: PluginTaskSourceScopeFilter
@@ -64,12 +69,29 @@ export function TaskPagePluginSourceQueryBar({
    *  be overwritten by the pending search a moment later. */
   const applyFilter = (filterId: string | null): void => {
     cancelPendingSearch()
-    onQueryChange({ search: normalizeSearch(searchInput), filterId })
+    onQueryChange({ ...query, search: normalizeSearch(searchInput), filterId })
+  }
+
+  const applyFacetSelections = (facetSelections: Record<string, string[]>): void => {
+    cancelPendingSearch()
+    onQueryChange({ ...query, search: normalizeSearch(searchInput), facetSelections })
   }
 
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-border/50 bg-muted/25 px-3 py-2">
-      {filters.length > 0 ? (
+      {/* Facets supersede the presets rather than joining them: both narrow the
+          same list, and a preset silently fighting a facet reads as a bug. A
+          source that still declares only presets keeps its chip row. */}
+      {facets.length > 0 ? (
+        <TaskPagePluginSourceFacetBar
+          facets={facets}
+          facetOptions={facetOptions}
+          facetSelections={query.facetSelections}
+          onFacetSelectionsChange={applyFacetSelections}
+        />
+      ) : null}
+
+      {facets.length === 0 && filters.length > 0 ? (
         <div
           className="flex flex-wrap gap-2"
           role="group"

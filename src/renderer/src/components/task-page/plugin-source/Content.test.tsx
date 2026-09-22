@@ -70,6 +70,40 @@ function stubSource(
   return invoke
 }
 
+const FACETS = [
+  { id: 'state', label: 'State', kind: 'multi', dynamic: true },
+  { id: 'sprint', label: 'Sprint', kind: 'single', dynamic: true }
+]
+
+const SCOPES = [
+  { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
+  { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+]
+
+/** A source whose facets are all `dynamic`, so every option list is fetched for
+ *  the scope on screen the way a real provider answers. */
+function stubFacetSource(
+  optionsByFacet: Record<string, { id: string; label: string }[]>,
+  facets: unknown[] = FACETS
+): ReturnType<typeof vi.fn> {
+  const invoke = vi
+    .fn()
+    .mockImplementation(async (args: { method: string; params?: { facetId?: string } }) => {
+      if (args.method === 'status') {
+        return { ok: true, data: { ...STATUS, filters: undefined, facets } }
+      }
+      if (args.method === 'listScopes') {
+        return { ok: true, data: SCOPES }
+      }
+      if (args.method === 'listFacetOptions') {
+        return { ok: true, data: optionsByFacet[args.params?.facetId ?? ''] ?? [] }
+      }
+      return { ok: true, data: { items: [ITEM], nextCursor: null } }
+    })
+  stubInvokeTaskSource(invoke)
+  return invoke
+}
+
 function renderContent(): void {
   render(
     <TooltipProvider>
@@ -236,5 +270,171 @@ describe('TaskPage contributed source content', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Board token expired.')
     expect(screen.queryByText('No tasks found')).not.toBeInTheDocument()
+  })
+
+  it('renders a control per declared facet and fetches its options for the current scope', async () => {
+    const invoke = stubFacetSource({ state: [{ id: 'Active', label: 'Active' }], sprint: [] })
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByRole('combobox', { name: 'State' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Sprint' })).toBeInTheDocument()
+    expect(invoke).toHaveBeenCalledWith({
+      ...BOARDS,
+      method: 'listFacetOptions',
+      params: { facetId: 'state', scopeIds: [] }
+    })
+  })
+
+  it('refetches facet options for the scope the user picks', async () => {
+    const user = userEvent.setup()
+    const invoke = stubFacetSource({ state: [{ id: 'Active', label: 'Active' }], sprint: [] })
+    selectBoards()
+
+    renderContent()
+
+    await screen.findByRole('combobox', { name: 'State' })
+    invoke.mockClear()
+
+    await user.click(screen.getByRole('combobox', { name: 'Projects' }))
+    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith({
+          ...BOARDS,
+          method: 'listFacetOptions',
+          params: { facetId: 'state', scopeIds: ['NssfDevOps/dashboards'] }
+        })
+      },
+      { timeout: 5000 }
+    )
+  })
+
+  it('narrows the list on two facets at once', async () => {
+    const user = userEvent.setup()
+    const invoke = stubFacetSource({
+      state: [{ id: 'Active', label: 'Active' }],
+      sprint: [{ id: 'Sprint 1', label: 'Sprint 1' }]
+    })
+    selectBoards()
+
+    renderContent()
+
+    await user.click(await screen.findByRole('combobox', { name: 'State' }))
+    await user.click(await screen.findByRole('option', { name: 'Active' }))
+    await user.keyboard('{Escape}')
+
+    await user.click(screen.getByRole('combobox', { name: 'Sprint' }))
+    await user.click(await screen.findByRole('option', { name: 'Sprint 1' }))
+
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith({
+          ...BOARDS,
+          method: 'listItems',
+          params: {
+            scopeIds: [],
+            search: null,
+            cursor: null,
+            limit: 50,
+            facetSelections: { state: ['Active'], sprint: ['Sprint 1'] }
+          }
+        })
+      },
+      { timeout: 5000 }
+    )
+  })
+
+  it('drops a cleared facet from the request rather than sending an empty array', async () => {
+    const user = userEvent.setup()
+    const invoke = stubFacetSource({
+      state: [{ id: 'Active', label: 'Active' }],
+      sprint: [{ id: 'Sprint 1', label: 'Sprint 1' }]
+    })
+    selectBoards()
+
+    renderContent()
+
+    await user.click(await screen.findByRole('combobox', { name: 'State' }))
+    await user.click(await screen.findByRole('option', { name: 'Active' }))
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith(
+          expect.objectContaining({
+            method: 'listItems',
+            params: expect.objectContaining({ facetSelections: { state: ['Active'] } })
+          })
+        )
+      },
+      { timeout: 5000 }
+    )
+    invoke.mockClear()
+
+    await user.click(await screen.findByRole('option', { name: 'Clear' }))
+
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith({
+          ...BOARDS,
+          method: 'listItems',
+          params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+        })
+      },
+      { timeout: 5000 }
+    )
+  })
+
+  it('opens the assignee facet on the signed-in user when the source offers that option', async () => {
+    const invoke = stubFacetSource(
+      {
+        assignee: [
+          { id: '@me', label: 'Me' },
+          { id: 'ada@example.com', label: 'Ada' }
+        ]
+      },
+      [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
+    )
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByRole('combobox', { name: 'Assignee' })).toHaveTextContent(
+      'Assignee: Me'
+    )
+    await waitFor(
+      () => {
+        expect(invoke).toHaveBeenCalledWith({
+          ...BOARDS,
+          method: 'listItems',
+          params: {
+            scopeIds: [],
+            search: null,
+            cursor: null,
+            limit: 50,
+            facetSelections: { assignee: ['@me'] }
+          }
+        })
+      },
+      { timeout: 5000 }
+    )
+  })
+
+  it('opens unfiltered when the assignee facet offers no signed-in-user option', async () => {
+    const invoke = stubFacetSource({ assignee: [{ id: 'ada@example.com', label: 'Ada' }] }, [
+      { id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }
+    ])
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByRole('combobox', { name: 'Assignee' })).toHaveTextContent('Assignee')
+    expect(invoke).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'listItems',
+        params: expect.objectContaining({ facetSelections: expect.anything() })
+      })
+    )
   })
 })

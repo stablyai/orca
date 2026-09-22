@@ -19,7 +19,7 @@ import type { PluginTaskSourceScopeFilter } from './ScopePicker'
 
 afterEach(cleanup)
 
-const UNFILTERED: PluginTaskSourceQuery = { search: null, filterId: null }
+const UNFILTERED: PluginTaskSourceQuery = { search: null, filterId: null, facetSelections: {} }
 const NO_SCOPES: PluginTaskSourceScopeFilter = {
   scopes: [],
   selectedScopeIds: [],
@@ -65,6 +65,8 @@ function renderList(
         loading={props.loading ?? false}
         error={props.error ?? null}
         filters={props.filters ?? []}
+        facets={[]}
+        facetOptions={{}}
         query={props.query ?? UNFILTERED}
         onQueryChange={props.onQueryChange ?? vi.fn()}
         scopeFilter={props.scopeFilter ?? NO_SCOPES}

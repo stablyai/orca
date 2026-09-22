@@ -11,6 +11,8 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   const loading = useAppStore((state) => state.pluginTaskSourceLoading)
   const error = useAppStore((state) => state.pluginTaskSourceError)
   const filters = useAppStore((state) => state.pluginTaskSourceFilters)
+  const facets = useAppStore((state) => state.pluginTaskSourceFacets)
+  const facetOptions = useAppStore((state) => state.pluginTaskSourceFacetOptions)
   const query = useAppStore((state) => state.pluginTaskSourceQuery)
   const setQuery = useAppStore((state) => state.setPluginTaskSourceQuery)
   const scopes = useAppStore((state) => state.pluginTaskSourceScopes)
@@ -21,6 +23,7 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   const loadStatus = useAppStore((state) => state.loadPluginTaskSourceStatus)
   const loadScopes = useAppStore((state) => state.loadPluginTaskSourceScopes)
   const loadItems = useAppStore((state) => state.loadPluginTaskSourceItems)
+  const loadFacetOptions = useAppStore((state) => state.loadPluginTaskSourceFacetOptions)
   const refreshing = useAppStore((state) => state.pluginTaskSourceRefreshing)
   const refresh = useAppStore((state) => state.refreshPluginTaskSource)
   const supportsCreate = useAppStore((state) => state.pluginTaskSourceSupportsCreate)
@@ -34,6 +37,13 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   useEffect(() => {
     void loadScopes()
   }, [loadScopes, selected])
+
+  // Options are per scope — a sprint or a state belongs to the project it came
+  // from — so a changed scope selection refetches them rather than leaving the
+  // previous project's options on screen.
+  useEffect(() => {
+    void loadFacetOptions()
+  }, [loadFacetOptions, selected, facets, selectedScopeIds])
 
   // The query and the scope selection are both part of the request, so a chip,
   // a debounced search, or a picked project lands here as one reload rather
@@ -69,6 +79,8 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
       loading={loading}
       error={error}
       filters={filters}
+      facets={facets}
+      facetOptions={facetOptions}
       query={query}
       onQueryChange={setQuery}
       scopeFilter={scopeFilter}

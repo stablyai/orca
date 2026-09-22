@@ -16,6 +16,7 @@ import {
   TaskPagePluginSourceCreateButton,
   type PluginTaskSourceCreateControl
 } from './CreateItemDialog'
+import type { PluginTaskSourceFacetFilter } from './FacetBar'
 import { TaskPagePluginSourceItemDetailPanel } from './ItemDetailPanel'
 import { PLUGIN_TASK_ROW_GRID_CLASS, TaskPagePluginSourceItemRow } from './ItemRow'
 import { TaskPagePluginSourceQueryBar } from './QueryBar'
@@ -158,6 +159,8 @@ export function TaskPagePluginSourceList({
   loading,
   error,
   filters,
+  facets,
+  facetOptions,
   query,
   onQueryChange,
   scopeFilter,
@@ -171,6 +174,8 @@ export function TaskPagePluginSourceList({
   loading: boolean
   error: PluginTaskSourceLoadError | null
   filters: PluginTaskSourceFilter[]
+  facets: PluginTaskSourceFacetFilter['facets']
+  facetOptions: PluginTaskSourceFacetFilter['facetOptions']
   query: PluginTaskSourceQuery
   onQueryChange: (query: PluginTaskSourceQuery) => void
   scopeFilter: PluginTaskSourceScopeFilter
@@ -227,6 +232,8 @@ export function TaskPagePluginSourceList({
 
       <TaskPagePluginSourceQueryBar
         filters={filters}
+        facets={facets}
+        facetOptions={facetOptions}
         query={query}
         onQueryChange={onQueryChange}
         scopeFilter={scopeFilter}

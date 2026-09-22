@@ -88,7 +88,9 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    store.getState().setPluginTaskSourceQuery({ search: 'bar', filterId: 'open' })
+    store
+      .getState()
+      .setPluginTaskSourceQuery({ search: 'bar', filterId: 'open', facetSelections: {} })
     await store.getState().loadPluginTaskSourceItems()
 
     expect(invokeTaskSource).toHaveBeenCalledWith({
@@ -110,7 +112,9 @@ describe('createPluginTaskSourcesSlice', () => {
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
     const request = store.getState().loadPluginTaskSourceItems()
-    store.getState().setPluginTaskSourceQuery({ search: 'newer', filterId: null })
+    store
+      .getState()
+      .setPluginTaskSourceQuery({ search: 'newer', filterId: null, facetSelections: {} })
 
     resolveCall({ ok: true, data: { items: [taskItem('stale')], nextCursor: null } })
     await request
@@ -429,7 +433,9 @@ describe('createPluginTaskSourcesSlice', () => {
       vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
       store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-      store.getState().setPluginTaskSourceQuery({ search: 'bar', filterId: 'open' })
+      store
+        .getState()
+        .setPluginTaskSourceQuery({ search: 'bar', filterId: 'open', facetSelections: {} })
       store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
       invokeTaskSource.mockClear()
 
@@ -574,6 +580,182 @@ describe('createPluginTaskSourcesSlice', () => {
       expect(detail.ok).toBe(true)
       expect(comments).toEqual({ ok: false, code: 'unavailable', message: 'comments are down' })
     })
+  })
+})
+
+const FACET_STATUS = {
+  connected: true,
+  accountLabel: 'Boards',
+  notice: null,
+  supports: {
+    create: false,
+    comment: false,
+    transition: false,
+    assign: false,
+    editTitle: false,
+    editDescription: false
+  },
+  facets: [
+    { id: 'state', label: 'State', kind: 'multi', dynamic: true },
+    { id: 'type', label: 'Type', kind: 'multi', options: [{ id: 'Bug', label: 'Bug' }] }
+  ]
+}
+
+describe('contributed task source facets in the store', () => {
+  it('carries the chosen facet options into the list request', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceQuery({
+      search: null,
+      filterId: null,
+      facetSelections: { state: ['Active', 'New'], sprint: ['Sprint 1'] }
+    })
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'listItems',
+      params: {
+        scopeIds: [],
+        search: null,
+        cursor: null,
+        limit: 50,
+        facetSelections: { state: ['Active', 'New'], sprint: ['Sprint 1'] }
+      }
+    })
+  })
+
+  it('asks for a dynamic facet in the selected scope and answers a static one from its declaration', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status') {
+        return { ok: true, data: FACET_STATUS }
+      }
+      return { ok: true, data: [{ id: 'Active', label: 'Active' }] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith({
+      ...BOARDS_SOURCE,
+      method: 'listFacetOptions',
+      params: { facetId: 'state', scopeIds: ['NssfDevOps/dashboards'] }
+    })
+    expect(invokeTaskSource).not.toHaveBeenCalledWith(
+      expect.objectContaining({ params: { facetId: 'type', scopeIds: ['NssfDevOps/dashboards'] } })
+    )
+    expect(store.getState().pluginTaskSourceFacetOptions).toEqual({
+      state: { status: 'ready', options: [{ id: 'Active', label: 'Active' }] },
+      type: { status: 'ready', options: [{ id: 'Bug', label: 'Bug' }] }
+    })
+  })
+
+  it('marks a facet whose options fail as failed rather than as offering none', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status') {
+        return { ok: true, data: FACET_STATUS }
+      }
+      return { ok: false, code: 'rate_limited', message: 'Too many board queries.' }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceFacetOptions.state).toEqual({
+      status: 'failed',
+      error: { code: 'rate_limited', message: 'Too many board queries.' }
+    })
+  })
+
+  it('seeds the assignee facet to the signed-in user only until the user clears it', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status') {
+        return {
+          ok: true,
+          data: {
+            ...FACET_STATUS,
+            facets: [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
+          }
+        }
+      }
+      return { ok: true, data: [{ id: '@me', label: 'Me' }] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ assignee: ['@me'] })
+
+    store.getState().setPluginTaskSourceQuery({ search: null, filterId: null, facetSelections: {} })
+    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})
+  })
+
+  it('retires a chosen option the newly selected scope does not offer', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status') {
+        return { ok: true, data: FACET_STATUS }
+      }
+      if (args.method === 'listFacetOptions') {
+        return { ok: true, data: [{ id: 'Active', label: 'Active' }] }
+      }
+      return { ok: true, data: { items: [], nextCursor: null } }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceStatus()
+    store.getState().setPluginTaskSourceQuery({
+      search: null,
+      filterId: null,
+      facetSelections: { state: ['Active', 'Retired'], type: ['Bug'] }
+    })
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({
+      state: ['Active'],
+      type: ['Bug']
+    })
+  })
+
+  it('leaves the query unfiltered when the assignee facet offers no signed-in-user option', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status') {
+        return {
+          ok: true,
+          data: {
+            ...FACET_STATUS,
+            facets: [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
+          }
+        }
+      }
+      return { ok: true, data: [{ id: 'ada@example.com', label: 'Ada' }] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})
   })
 })
 

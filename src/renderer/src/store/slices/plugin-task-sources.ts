@@ -11,19 +11,26 @@ import {
   pluginTaskScopeSchema,
   pluginTaskSourceStatusSchema,
   type PluginTaskQuery,
-  type PluginTaskSourceMethod,
   type PluginTaskSourceResult
 } from '../../../../shared/plugins/plugin-task-source-contract'
+import {
+  invokePluginTaskSource,
+  isSamePluginTaskSourceSelection
+} from './plugin-task-source-bridge'
+import {
+  createPluginTaskSourceFacetOptionsAction,
+  initialPluginTaskSourceFacetOptions
+} from './plugin-task-source-facet-options'
 import type {
   ContributedPluginTaskSource,
   PluginTaskSourceQuery,
-  PluginTaskSourcesSlice,
-  SelectedPluginTaskSource
+  PluginTaskSourcesSlice
 } from './plugin-task-sources-slice-contract'
 
 export type {
   ContributedPluginTaskSource,
   PluginTaskCommentDraft,
+  PluginTaskSourceFacetOptions,
   PluginTaskSourceFilter,
   PluginTaskSourceLoadError,
   PluginTaskSourceQuery,
@@ -32,7 +39,11 @@ export type {
 } from './plugin-task-sources-slice-contract'
 
 const PLUGIN_TASK_SOURCE_PAGE_SIZE = 50
-const UNFILTERED_QUERY: PluginTaskSourceQuery = { search: null, filterId: null }
+const UNFILTERED_QUERY: PluginTaskSourceQuery = {
+  search: null,
+  filterId: null,
+  facetSelections: {}
+}
 const ALL_SCOPES: string[] = []
 
 const pluginTaskScopeListSchema = z.array(pluginTaskScopeSchema)
@@ -45,15 +56,18 @@ const NO_SELECTION: PluginTaskSourceResult<never> = {
   message: 'No task source is selected.'
 }
 
-/** `filterId` is omitted rather than sent as null so a source that never
- *  declared filters sees the exact request it saw before they existed. */
+/** `filterId` and `facetSelections` are omitted rather than sent empty so a
+ *  source that never declared either sees the exact request it saw before they
+ *  existed. */
 function buildListQuery(query: PluginTaskSourceQuery, scopeIds: string[]): PluginTaskQuery {
+  const hasFacetSelections = Object.keys(query.facetSelections).length > 0
   return {
     scopeIds,
     search: query.search,
     cursor: null,
     limit: PLUGIN_TASK_SOURCE_PAGE_SIZE,
-    ...(query.filterId ? { filterId: query.filterId } : {})
+    ...(query.filterId ? { filterId: query.filterId } : {}),
+    ...(hasFacetSelections ? { facetSelections: query.facetSelections } : {})
   }
 }
 
@@ -80,46 +94,6 @@ export function deriveContributedPluginTaskSources(
     )
 }
 
-function isSameSelection(a: SelectedPluginTaskSource | null, b: SelectedPluginTaskSource): boolean {
-  return a !== null && a.pluginKey === b.pluginKey && a.sourceId === b.sourceId
-}
-
-/** Routes through the sanctioned `plugins:invokeTaskSource` bridge only —
- *  never `PluginService.invokeTaskSource` directly (see plugin-task-source-invoker.ts).
- *  A missing bridge, a thrown call and a payload that fails the contract all
- *  reach the caller as the same envelope, so no failure can be read as data. */
-async function invokePluginTaskSource<Schema extends z.ZodTypeAny>(
-  selection: SelectedPluginTaskSource,
-  method: PluginTaskSourceMethod,
-  schema: Schema,
-  params?: unknown
-): Promise<PluginTaskSourceResult<z.infer<Schema>>> {
-  const invoke = window.api?.plugins?.invokeTaskSource
-  if (!invoke) {
-    return { ok: false, code: 'unavailable', message: 'Plugin bridge is unavailable.' }
-  }
-  try {
-    const result = await invoke({
-      pluginKey: selection.pluginKey,
-      sourceId: selection.sourceId,
-      method,
-      // Omitted rather than sent as undefined: a source that never took params
-      // must see the request it saw before any of them existed.
-      ...(params === undefined ? {} : { params })
-    })
-    if (!result.ok) {
-      return result
-    }
-    return { ok: true, data: schema.parse(result.data) }
-  } catch (error) {
-    return {
-      ok: false,
-      code: 'unavailable',
-      message: error instanceof Error ? error.message : String(error)
-    }
-  }
-}
-
 export const createPluginTaskSourcesSlice: StateCreator<
   AppState,
   [],
@@ -132,6 +106,9 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceLoading: false,
   pluginTaskSourceError: null,
   pluginTaskSourceFilters: [],
+  pluginTaskSourceFacets: [],
+  pluginTaskSourceFacetOptions: {},
+  pluginTaskSourceAssigneeSeeded: false,
   pluginTaskSourceSupportsCreate: false,
   pluginTaskSourceSupportsComment: false,
   pluginTaskSourceQuery: UNFILTERED_QUERY,
@@ -152,6 +129,9 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceError: null,
       pluginTaskSourceLoading: false,
       pluginTaskSourceFilters: [],
+      pluginTaskSourceFacets: [],
+      pluginTaskSourceFacetOptions: {},
+      pluginTaskSourceAssigneeSeeded: false,
       pluginTaskSourceSupportsCreate: false,
       pluginTaskSourceSupportsComment: false,
       pluginTaskSourceQuery: UNFILTERED_QUERY,
@@ -180,15 +160,20 @@ export const createPluginTaskSourcesSlice: StateCreator<
       return
     }
     const result = await invokePluginTaskSource(selection, 'status', pluginTaskSourceStatusSchema)
-    if (!isSameSelection(get().selectedPluginTaskSource, selection)) {
+    if (!isSamePluginTaskSourceSelection(get().selectedPluginTaskSource, selection)) {
       return
     }
+    const facets = result.ok ? (result.data.facets ?? []) : []
     set({
       pluginTaskSourceFilters: result.ok ? (result.data.filters ?? []) : [],
+      pluginTaskSourceFacets: facets,
+      pluginTaskSourceFacetOptions: initialPluginTaskSourceFacetOptions(facets),
       pluginTaskSourceSupportsCreate: result.ok ? result.data.supports.create : false,
       pluginTaskSourceSupportsComment: result.ok ? result.data.supports.comment : false
     })
   },
+
+  ...createPluginTaskSourceFacetOptionsAction(set, get),
 
   loadPluginTaskSourceScopes: async () => {
     const selection = get().selectedPluginTaskSource
@@ -197,7 +182,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
     }
     set({ pluginTaskSourceScopesLoading: true })
     const result = await invokePluginTaskSource(selection, 'listScopes', pluginTaskScopeListSchema)
-    if (!isSameSelection(get().selectedPluginTaskSource, selection)) {
+    if (!isSamePluginTaskSourceSelection(get().selectedPluginTaskSource, selection)) {
       return
     }
     if (result.ok) {
@@ -233,7 +218,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
     // a since-replaced scope selection must never overwrite what the user is
     // looking at by the time it arrives.
     if (
-      !isSameSelection(get().selectedPluginTaskSource, selection) ||
+      !isSamePluginTaskSourceSelection(get().selectedPluginTaskSource, selection) ||
       get().pluginTaskSourceQuery !== query ||
       get().selectedPluginTaskSourceScopeIds !== scopeIds
     ) {
@@ -263,7 +248,11 @@ export const createPluginTaskSourcesSlice: StateCreator<
       // the refresh carries the user's current filter, search and projects
       // rather than resetting to defaults. Each keeps its own stale-response
       // guard, so a selection change or a newer edit mid-refresh still wins.
-      await Promise.all([get().loadPluginTaskSourceItems(), get().loadPluginTaskSourceScopes()])
+      await Promise.all([
+        get().loadPluginTaskSourceItems(),
+        get().loadPluginTaskSourceScopes(),
+        get().loadPluginTaskSourceFacetOptions()
+      ])
     } finally {
       set({ pluginTaskSourceRefreshing: false })
     }
