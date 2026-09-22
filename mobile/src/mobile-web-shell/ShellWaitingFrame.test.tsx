@@ -7,6 +7,7 @@ const fades = vi.hoisted(() => ({ stops: 0, finished: true }))
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Easing: { in: (fn: unknown) => fn, quad: 'quad' },
   Animated: {
     View: 'Animated.View',
     Value: class {

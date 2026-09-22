@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, StyleSheet, Text } from 'react-native'
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 /** What the shell calls the wait from the bytes being on disk to the page having a frame. */
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
-/** Long enough to read as a dissolve rather than a cut, short enough not to delay a tap. */
-export const SHELL_PAGE_COVER_FADE_MS = 140
+/**
+ * Long enough to read as a dissolve rather than a cut, short enough not to delay a tap.
+ *
+ * Eased in, so the cover spends the first half of it near full opacity. The page reports the paint
+ * its own renderer made, and the compositor needs another frame or two to put that on the app's
+ * surface: a linear fade from the report left two frames of bare surface between the two on an
+ * emulator, which is the hole this whole path exists to close.
+ */
+export const SHELL_PAGE_COVER_FADE_MS = 220
 
 /** The shell's neutral frame: one spinner and what it is waiting on. */
 export function ShellWaitingFrame({ label }: { label: string }) {
@@ -42,6 +49,7 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
     const fade = Animated.timing(opacity, {
       toValue: 0,
       duration: SHELL_PAGE_COVER_FADE_MS,
+      easing: Easing.in(Easing.quad),
       useNativeDriver: true
     })
     // Unmounted on the callback rather than on a timer, so a fade the platform cut short does not
