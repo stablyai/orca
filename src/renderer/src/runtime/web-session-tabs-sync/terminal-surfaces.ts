@@ -225,13 +225,15 @@ export function chooseRemoteTerminalLayout(
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
   })
 }
+export const NULL_PTY_PLACEHOLDER_TTL_MS = 30_000
 
 export function shouldReplaceTerminalTab(
   tab: TerminalTab,
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  exactProvisionalHandoffs: ReadonlySet<string>
+  exactProvisionalHandoffs: ReadonlySet<string>,
+  now: number = Date.now()
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
@@ -243,6 +245,15 @@ export function shouldReplaceTerminalTab(
     return true
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
+    return true
+  }
+  // Why: web-created remote tabs get a 30s grace period to receive their host PTY.
+  // Beyond 30s, an unallocated placeholder is an orphaned ghost tab and must be retired.
+  if (
+    tab.ptyId === null &&
+    typeof tab.createdAt === 'number' &&
+    now - tab.createdAt > NULL_PTY_PLACEHOLDER_TTL_MS
+  ) {
     return true
   }
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
