@@ -133,7 +133,7 @@ describe('worker resume delivery verdicts', () => {
 })
 
 describe('the reported vocabulary', () => {
-  it('names the six non-resumed states distinctly, with no synonyms', () => {
+  it('names all seven states, resumed included, distinctly and with no synonyms', () => {
     expect([...WORKER_RESUME_STATES]).toEqual([
       'resumed',
       'queued_prompt',

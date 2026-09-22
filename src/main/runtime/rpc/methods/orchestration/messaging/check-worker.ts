@@ -232,7 +232,7 @@ export async function checkWorkerMailbox(args: {
         messages: exposeMessages(current?.messages ?? []),
         count: current?.messages.length ?? 0,
         replayed: current?.replayed ?? false,
-        ...exposeMessagesBeyondBatch(current?.newerMessages),
+        ...exposeMessagesBeyondBatch(current),
         acknowledged: acknowledged?.delivery.id ?? null,
         timedOut: false,
         cancelled: false,
@@ -285,7 +285,7 @@ export async function checkWorkerMailbox(args: {
     messages: exposeMessages(arrived?.messages ?? []),
     count: arrived?.messages.length ?? 0,
     replayed: arrived?.replayed ?? false,
-    ...exposeMessagesBeyondBatch(arrived?.newerMessages),
+    ...exposeMessagesBeyondBatch(arrived),
     acknowledged: acknowledged?.delivery.id ?? null,
     ...(params.format || params.inject
       ? { formatted: arrived?.messages.map(formatMessageBanner).join('\n\n') ?? '' }

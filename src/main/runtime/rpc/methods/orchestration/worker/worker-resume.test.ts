@@ -4,6 +4,7 @@ import { eraseRpcMethods, type RpcContext, type RpcRequest } from '../../../core
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationMutationExecutor } from '../../../orchestration-mutation-executor'
+import { hashCanonical } from '../../../orchestration-mutation-receipt'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import type {
   RuntimeTerminalPromptDelivery,
@@ -145,8 +146,11 @@ describe('orchestration.workerResume', () => {
   }
 
   /** The same call a client repeats when it never saw the first response. */
-  function resumeWithRequestId(requestId: string): Promise<ResumeReceipt> {
-    const params = { dispatch: dispatchId }
+  function resumeWithRequestId(
+    requestId: string,
+    extra: Record<string, unknown> = {}
+  ): Promise<ResumeReceipt> {
+    const params = { dispatch: dispatchId, ...extra }
     const request: RpcRequest = {
       id: `rpc-${requestId}`,
       authToken: 'token',
@@ -196,15 +200,53 @@ describe('orchestration.workerResume', () => {
     expect(assignmentIds()).toEqual([dispatchId, dispatchId])
   })
 
-  it('shows exactly one prompt execution when the first response never arrived', async () => {
-    // Ambiguous transport: the effect landed, the answer did not. The client repeats the request
-    // with the same id rather than deciding for itself whether to resend.
-    await resumeWithRequestId('resume-ambiguous-1').catch(() => undefined)
-    const replay = await resumeWithRequestId('resume-ambiguous-1')
+  it('refuses to resend after a crash between the write and the recorded receipt', async () => {
+    // What a restart leaves behind: a pending receipt whose outcome nobody recorded, and no
+    // in-process attempt to join. The prompt may already have reached the worker, so the retry
+    // must not write a second one — it must say it does not know.
+    const params = { dispatch: dispatchId }
+    db.beginMutationReceipt({
+      callerFingerprint: db.getOrCreateLocalMutationCallerFingerprint(),
+      requestId: 'resume-crashed-1',
+      method: 'orchestration.workerResume',
+      payloadHash: hashCanonical({ method: 'orchestration.workerResume', params })
+    })
+
+    await expect(resumeWithRequestId('resume-crashed-1')).rejects.toMatchObject({
+      code: 'operation_unknown'
+    })
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(assignmentIds()).toEqual([dispatchId, dispatchId])
+  })
+
+  it('joins a duplicate concurrent request with the same id instead of prompting twice', async () => {
+    let releasePrompt = (): void => undefined
+    const held = new Promise<void>((resolve) => {
+      releasePrompt = () => resolve()
+    })
+    sendPrompt.mockImplementation(async () => {
+      await held
+      return { handle: 'term_worker', accepted: true, bytesWritten: 1, prompt: turnStarted() }
+    })
+
+    const first = resumeWithRequestId('resume-concurrent-1')
+    const duplicate = resumeWithRequestId('resume-concurrent-1')
+    releasePrompt()
+    const [firstReceipt, duplicateReceipt] = await Promise.all([first, duplicate])
 
     expect(sendPrompt).toHaveBeenCalledTimes(1)
-    expect(replay.resumed).toBe(true)
-    expect(replay.mutation?.replayed).toBe(true)
+    expect(firstReceipt.state).toBe('resumed')
+    expect(duplicateReceipt.state).toBe('resumed')
+    expect(duplicateReceipt.mutation?.replayed).toBe(true)
+  })
+
+  it('refuses the same request id carrying a changed note rather than treating it as a retry', async () => {
+    await resumeWithRequestId('resume-mismatch-1')
+
+    await expect(
+      resumeWithRequestId('resume-mismatch-1', { note: 'rebase first' })
+    ).rejects.toMatchObject({ code: 'request_mismatch' })
+    expect(sendPrompt).toHaveBeenCalledTimes(1)
   })
 
   it('reports an active turn without sending a second prompt into it', async () => {

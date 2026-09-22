@@ -173,9 +173,9 @@ export function describeWorkerResumeState(state: WorkerResumeState): string {
     case 'resumed':
       return 'The worker started a turn on the resume prompt.'
     case 'queued_prompt':
-      return 'The resume prompt was accepted but no turn started from it; the agent is holding it. Do not send it again — look at the worker.'
+      return 'The resume prompt was accepted but no turn started from it; the agent is holding it. Do not send it again — look at the worker; a repeat is only safe as the same `--retry-request <same id>`, which replays this answer instead of prompting twice.'
     case 'missing_acknowledgement':
-      return 'Nothing acknowledged the guidance the worker already holds. Wait for it to acknowledge its batch, or stop the Attempt; a second prompt would duplicate it.'
+      return 'Nothing acknowledged the guidance the worker already holds. Wait for it to acknowledge its batch, or stop the Attempt; a second prompt would duplicate it, and only a repeat under the same `--retry-request <same id>` is free of that.'
     case 'active_turn':
       return 'The worker is mid-turn. A prompt sent now folds into the work already in flight.'
     case 'denied_action':

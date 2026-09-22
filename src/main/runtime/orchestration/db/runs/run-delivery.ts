@@ -32,6 +32,7 @@ export function getOrCreateRunDelivery(
       messages: MessageRow[]
       replayed: boolean
       newerMessages: MessageRow[]
+      newerTruncated: boolean
     }
   | undefined {
   return this.getOrCreateMailboxDelivery({

@@ -3,6 +3,7 @@ import type { RpcContext } from '../../../core'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from '../../../../orchestration/db/messages/mailbox-routing-page'
 
 const WORKER_PANE = 'tab_w:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
@@ -13,6 +14,7 @@ type CheckResult = {
   replayed: boolean
   newerMessages?: { subject: string }[]
   newerCount?: number
+  newerTruncated?: boolean
   timedOut?: boolean
 }
 
@@ -67,6 +69,21 @@ describe('orchestration.check on a held, unacknowledged batch', () => {
     expect(replay.messages.map((message) => message.subject)).toEqual(['first instruction'])
     expect(replay.newerMessages?.map((message) => message.subject)).toEqual(['stop and rebase'])
     expect(replay.newerCount).toBe(1)
+    expect(replay.newerTruncated).toBe(false)
+  })
+
+  it('says the report is capped when more unread mail is behind the batch than it can carry', async () => {
+    await workerHoldingABatch()
+    for (let index = 0; index <= ORCHESTRATION_DELIVERY_BATCH_LIMIT; index += 1) {
+      send(`queued ${index}`)
+    }
+
+    const replay = await check()
+
+    // newerCount is what the receipt carries, not the backlog: the flag is the only thing that
+    // distinguishes a mailbox of exactly the limit from one far deeper than it.
+    expect(replay.newerCount).toBe(ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+    expect(replay.newerTruncated).toBe(true)
   })
 
   it('shows it to a worker that is waiting rather than returning an unchanged replay', async () => {
