@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 
 describe('DiffCommentDraftCard', () => {
   let scrollHeight = 60
@@ -136,6 +139,24 @@ describe('DiffCommentDraftCard', () => {
     expect(onCancel).not.toHaveBeenCalled()
 
     await act(async () => resolveSubmit(true))
+  })
+
+  it('reports a rejected save to the user and re-enables the card', async () => {
+    const error = new Error('network down')
+    const onSubmit = vi.fn().mockRejectedValue(error)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const view = render(
+      <DiffCommentDraftCard lineNumber={10} onCancel={vi.fn()} onSubmit={onSubmit} />
+    )
+    fireEvent.change(view.getByRole('textbox'), { target: { value: 'Rejected note' } })
+
+    await act(async () => {
+      fireEvent.click(view.getByRole('button', { name: 'Add note' }))
+    })
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to save comment')
+    expect(consoleError).toHaveBeenCalled()
+    expect(view.getByRole('button', { name: 'Add note' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('seeds and reports draft text so a re-anchored card can carry it', () => {

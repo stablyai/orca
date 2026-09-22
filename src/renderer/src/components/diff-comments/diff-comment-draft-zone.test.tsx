@@ -200,6 +200,38 @@ describe('useDiffCommentDraftZone in-flight submit', () => {
   })
 })
 
+describe('useDiffCommentDraftZone focus handoff', () => {
+  it('returns focus to the editor when a save succeeds while the card holds it', async () => {
+    const fake = createFakeDiffCommentEditor()
+    const { onCreateComment, settle } = deferredCreateComment()
+    const hook = renderDraftZone(fake, onCreateComment)
+    openDraftAt(hook, DRAFT_LINE)
+    draftCard(fake).textarea.focus()
+    submitDraft(fake, BODY)
+
+    await settle(true)
+
+    expect(fake.zones.size).toBe(0)
+    expect(fake.focusCount()).toBe(1)
+  })
+
+  it('leaves focus alone when the save settles after the user clicked away', async () => {
+    const fake = createFakeDiffCommentEditor()
+    const { onCreateComment, settle } = deferredCreateComment()
+    const hook = renderDraftZone(fake, onCreateComment)
+    openDraftAt(hook, DRAFT_LINE)
+    submitDraft(fake, BODY)
+
+    const elsewhere = document.createElement('input')
+    document.body.appendChild(elsewhere)
+    elsewhere.focus()
+    await settle(true)
+
+    expect(fake.zones.size).toBe(0)
+    expect(fake.focusCount()).toBe(0)
+  })
+})
+
 describe('useDiffCommentDraftZone open state', () => {
   it('reports the draft closed again after cancel so the chord is not deadened', () => {
     const fake = createFakeDiffCommentEditor()

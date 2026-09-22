@@ -199,7 +199,9 @@ export function useDiffCommentDraftZone({
               entry.submitting = false
               if (succeeded) {
                 if (draftZoneRef.current === entry) {
-                  disposeDraftZone()
+                  // Hand focus back to Monaco only if the card still holds it: a slow save can
+                  // settle after the user has clicked away, and stealing focus back is worse.
+                  disposeDraftZone(entry.domNode.contains(document.activeElement))
                 }
               } else if (draftZoneRef.current !== entry) {
                 restoreFailedSubmit(draft, body)

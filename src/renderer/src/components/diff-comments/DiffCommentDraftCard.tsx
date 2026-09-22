@@ -157,6 +157,10 @@ export function DiffCommentDraftCard({
       }
     } catch (err) {
       console.error('Failed to submit diff comment draft:', err)
+      // A rejected save never reaches the caller's own failure toast, so report it here.
+      toast.error(
+        translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+      )
       if (mountedRef.current) {
         setSubmitting(false)
       }
