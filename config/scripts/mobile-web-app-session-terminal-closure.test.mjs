@@ -326,14 +326,21 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
  *   local modules  1018 -> 1021   (+3)
  *
+ * The C6.5 follow-up then aliased `zod` in the builder, so the four `src/shared` modules this route
+ * reaches stop pulling the root's second copy in. The only reading here that has ever fallen: both
+ * lists diffed, 94 gone and every one of them vendored `zod@4.5.4`, none added.
+ *
+ *   modules        4363 -> 4269   (-94)
+ *   local modules  1021 -> 1021   (unchanged)
+ *
  * The live-input seam then adds one: the two hooks that write the terminal's hidden field now go
  * through `src/terminal/terminal-live-input-text-write.ts`, and the page resolves its `.web.ts`.
  * One module, not two — the sibling replaces the native file, and both hooks were already here.
  *
- *   modules        4363 -> 4364   (+1)
+ *   modules        4269 -> 4270   (+1)
  *   local modules  1021 -> 1022   (+1)
  */
-const SESSION_ROUTE_MODULES = 4364
+const SESSION_ROUTE_MODULES = 4270
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

@@ -36,7 +36,7 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  * refused asset on a phone. Splitting barely moves it — the same code is emitted in more files —
  * so shrinking this still means cutting code.
  *
- * This head reads 8,055,568 bytes of the 9,437,184 here, 85.4%, leaving 1,381,616. A reading and
+ * This head reads 7,686,714 bytes of the 9,437,184 here, 81.5%, leaving 1,750,470. A reading and
  * not a pin: nothing asserts it, because the number moves with every build. It is here so the
  * generation that spends the rest can see it was already this close.
  */
@@ -56,19 +56,19 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/[...page].tsx', 3],
   ['./h/[hostId]/accounts.tsx', 7],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 12],
-  ['./h/[hostId]/edit.tsx', 17],
-  ['./h/[hostId]/files/[worktreeId].tsx', 20],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 27],
-  ['./h/[hostId]/history/[worktreeId].tsx', 29],
-  ['./h/[hostId]/index.tsx', 34],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 35],
-  ['./h/[hostId]/review/[worktreeId].tsx', 44],
-  ['./h/[hostId]/session/[worktreeId].tsx', 52],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 57],
-  ['./h/[hostId]/tasks.tsx', 64],
-  ['./h/[hostId]/web.tsx', 65],
-  ['./h/_layout.tsx', 67]
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 11],
+  ['./h/[hostId]/edit.tsx', 16],
+  ['./h/[hostId]/files/[worktreeId].tsx', 19],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 26],
+  ['./h/[hostId]/history/[worktreeId].tsx', 28],
+  ['./h/[hostId]/index.tsx', 33],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 34],
+  ['./h/[hostId]/review/[worktreeId].tsx', 43],
+  ['./h/[hostId]/session/[worktreeId].tsx', 51],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 56],
+  ['./h/[hostId]/tasks.tsx', 63],
+  ['./h/[hostId]/web.tsx', 64],
+  ['./h/_layout.tsx', 66]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -81,11 +81,14 @@ export const MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD = sweptScripts
 /**
  * How far above the measurement the envelope sits, and the only slack a refactor gets.
  *
- * Measured, not chosen: the head that wrote the old `4r + 16` swept the same prefix lengths and
- * read 32, 43, 61 and 69 at 8, 10, 12 and 14 routes, where this head reads 34, 44, 57 and 65. So
- * four is the most the count has been seen to move at a fixed route count with no route added,
- * which is what a shared importer set moving between heads costs. A refactor inside that keeps
- * building; anything past it re-measures the sweep.
+ * Measured, not chosen, and per head rather than cumulative: at 8, 10, 12 and 14 routes the head
+ * that wrote the old `4r + 16` read 32, 43, 61 and 69, the head that first swept these prefixes
+ * read 34, 44, 57 and 65, and this one reads 33, 43, 56 and 64. So one head has moved the count by
+ * as much as four at a fixed route count with no route added (61 to 57), and the step that dropped
+ * the page's second Zod moved it by one everywhere. Four is that worst step, which is what a shared
+ * importer set moving between heads costs. Summing the steps instead would grow this number every
+ * head and loosen the fence for free. A refactor inside four keeps building; anything past it
+ * re-measures the sweep.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN = 4
 
@@ -126,16 +129,17 @@ export function mobileWebAppBundleMaxChunks(routeCount) {
 /**
  * What the browser must parse before the first route can paint: the entry plus every chunk it
  * reaches by static import. This is the budget splitting exists to hold — it was 8.16 MB as one
- * chunk and measures 1,612,253 bytes split on this head, 1.54 of the 3 MiB — so a route
+ * chunk and measures 1,244,312 bytes split on this head, 1.19 of the 3 MiB — so a route
  * re-imported statically, or `splitting` dropped, fails the build here instead of arriving as a
  * slow first open on a phone.
  *
- * It is not a per-route escape hatch. Importing one route statically already breaks this bound
- * for 5 of the 14: session at 7.16 MiB, tasks 5.91, source-control 5.78, review 5.77,
- * files/preview 5.21. What keeps the hatch usable at all is that expo-router reads
- * `unstable_settings` off layout nodes only, and the subtree's one layout, `h/_layout.tsx`,
- * measures 2.22 MiB static. Any other route needing a synchronous export needs this number
- * re-measured, not a static import.
+ * It is not a per-route escape hatch. Re-measured here by making one route's manifest entry a
+ * static import and reading this same closure back: session alone breaks the bound at 3.32 MiB,
+ * and tasks at 2.17, source-control 2.04, review 2.03, index 1.89 and files/preview 1.85 each
+ * spend most of a budget that has to cover the entry as well. What keeps the hatch usable at all
+ * is that expo-router reads `unstable_settings` off layout nodes only, and the subtree's one
+ * layout, `h/_layout.tsx`, measures 1.89 MiB static. Any other route needing a synchronous export
+ * needs this number re-measured, not a static import.
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES = 3 * 1024 * 1024
 
