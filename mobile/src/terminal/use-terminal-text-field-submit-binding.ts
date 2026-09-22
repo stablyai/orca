@@ -12,6 +12,11 @@ import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-bindin
  * The listener is attached once per node and reads the handler through a ref, so a caller passing a
  * new closure each render does not cost a rebind. Callers must not freeze that closure; the rule
  * and its reason live in `terminal-field-submit-binding-wiring.test.ts`.
+ *
+ * No dependency list on the ref's effect, rather than one holding `onSubmit`: both of the dock's
+ * field submits are rebuilt every render, because the `handleSend` they read is, so the dependency
+ * would be a new value every time and there is nothing to compare. The ref mirrors the newest
+ * closure after each commit, which is what it is for.
  */
 export function useTerminalTextFieldSubmitBinding(
   fieldRef: RefObject<TextInput | null>,
@@ -20,7 +25,7 @@ export function useTerminalTextFieldSubmitBinding(
   const onSubmitRef = useRef(onSubmit)
   useEffect(() => {
     onSubmitRef.current = onSubmit
-  }, [onSubmit])
+  })
   const unbindRef = useRef<(() => void) | null>(null)
 
   return useCallback(
