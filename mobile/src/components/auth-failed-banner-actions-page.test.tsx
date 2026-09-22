@@ -39,7 +39,7 @@ function labels(tree: ReactTestRenderer): string[] {
 }
 
 /**
- * The page can honour none of the three: `forceReconnect` is inert there, `/pair-scan` is outside
+ * The page can honour none of the three: `forceReconnect` is null there, `/pair-scan` is outside
  * its route root, and removal refuses. So the banner reports the state and names where the
  * controls are, rather than painting three that do nothing.
  */
