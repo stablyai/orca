@@ -23,6 +23,23 @@ const DOM_DELTA_LINE = 1
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
   modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
+  dimensions?: Terminal['dimensions']
+}
+
+type TerminalMouseWheelRefreshCore = {
+  mouseStateService?: {
+    activeProtocol?: string
+  }
+  _charSizeService?: {
+    measure?: () => void
+  }
+  _viewport?: {
+    queueSync?: () => void
+  }
+}
+
+type TerminalMouseWheelRefreshTarget = Terminal & {
+  _core?: TerminalMouseWheelRefreshCore
 }
 
 type TerminalMouseWheelMultiplierOptions = {
@@ -92,6 +109,10 @@ function cloneWheelReportEvent(event: WheelEvent): WheelEvent {
 }
 
 function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number | undefined {
+  const cssHeight = terminal.dimensions?.css?.cell?.height
+  if (typeof cssHeight === 'number' && Number.isFinite(cssHeight) && cssHeight > 0) {
+    return cssHeight
+  }
   if (typeof terminal.element?.querySelector !== 'function') {
     return undefined
   }
@@ -101,6 +122,36 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
     return undefined
   }
   return rect.height / terminal.rows
+}
+
+/** Rebind xterm wheel forwarding after a fit/reveal so TUI mouse mode is not stale. */
+export function refreshTerminalMouseWheelHandling(
+  terminal: TerminalMouseWheelRefreshTarget | null | undefined
+): void {
+  if (!terminal) {
+    return
+  }
+  const core = terminal._core
+  try {
+    core?._charSizeService?.measure?.()
+  } catch {
+    /* ignore — renderer dimensions may be mid-teardown */
+  }
+  const service = core?.mouseStateService
+  const protocol = service?.activeProtocol
+  if (service && typeof protocol === 'string') {
+    try {
+      // Why: the setter always notifies, even when the protocol string is unchanged.
+      service.activeProtocol = protocol
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    core?._viewport?.queueSync?.()
+  } catch {
+    /* ignore */
+  }
 }
 
 export function shouldMultiplyTerminalMouseWheel(
@@ -196,14 +247,13 @@ export function attachTerminalMouseWheelMultiplier(
       return true
     }
 
-    const target =
-      event.currentTarget instanceof EventTarget ? event.currentTarget : terminal.element
+    // Why: xterm dampens small pixel deltas before emitting mouse reports;
+    // line-mode replays let fullscreen TUIs receive one report per resolved row.
+    const target = terminal.element
     if (!target) {
       return true
     }
 
-    // Why: xterm dampens small pixel deltas before emitting mouse reports;
-    // line-mode replays let fullscreen TUIs receive one report per resolved row.
     const reportCount = resolveTerminalTuiMouseWheelReportCount(
       event,
       normalizeTerminalTuiMouseWheelMultiplier(options.getTuiMouseWheelMultiplier?.()),
