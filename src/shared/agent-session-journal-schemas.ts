@@ -237,13 +237,28 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   })
 ])
 
+/** Producer linkage as it rides a render item across the process boundary.
+ *  `producerKind` stays an open string for the reason the header gives: a host
+ *  that learns a third kind must not make its rows unreadable to this client. */
+export const AgentJournalProducerLinkageFields = {
+  // `.min(1)` on every id: an EMPTY string is present, and the reader that
+  // scopes a parent's surfaces tests presence, not truthiness. `agentId: ''`
+  // would read as a subagent and hide the row from its own author for good.
+  agentId: z.string().min(1).optional(),
+  parentAgentId: z.string().min(1).optional(),
+  providerParentRef: z.string().min(1).optional(),
+  producerKind: z.string().min(1).optional(),
+  attempt: z.number().int().optional()
+} as const
+
 export const AgentJournalRenderItemSchema = z.object({
   itemId: z.string().min(1),
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,
   sequence: z.number().int(),
   observedAt: z.number(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  ...AgentJournalProducerLinkageFields
 })
 
 export const AgentJournalSubmissionSchema = z.object({
