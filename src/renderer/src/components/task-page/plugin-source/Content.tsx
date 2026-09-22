@@ -45,12 +45,20 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
     void loadFacetOptions()
   }, [loadFacetOptions, selected, facets, selectedScopeIds])
 
+  // The request carries only facets whose options have settled, so the load
+  // that races a scope change sends none of them. Once they all settle this
+  // flips once and the list reloads with them — without it, a selection that
+  // survives the new scope is never applied, because nothing else changes.
+  const facetsSettled = facets.every(
+    (facet) => (facetOptions[facet.id]?.status ?? 'loading') !== 'loading'
+  )
+
   // The query and the scope selection are both part of the request, so a chip,
   // a debounced search, or a picked project lands here as one reload rather
   // than a second code path.
   useEffect(() => {
     void loadItems()
-  }, [loadItems, selected, query, selectedScopeIds])
+  }, [loadItems, selected, query, selectedScopeIds, facetsSettled])
 
   const scopeFilter = useMemo(
     () => ({

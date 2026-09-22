@@ -455,4 +455,38 @@ describe('TaskPage contributed source content', () => {
       })
     )
   })
+  it('re-sends a surviving facet selection once its options settle', async () => {
+    // Changing scope leaves the query untouched when the selection is still
+    // valid in the new project, so the prune is a no-op. The load racing the
+    // scope change carries no facet selections — nothing else would reload the
+    // list, and it would sit unfiltered while the chip still claims a filter.
+    const user = userEvent.setup()
+    const invoke = stubFacetSource({ state: [{ id: 'Active', label: 'Active' }], sprint: [] })
+    selectBoards()
+
+    renderContent()
+
+    await screen.findByRole('combobox', { name: 'State' })
+    await user.click(screen.getByRole('combobox', { name: 'State' }))
+    await user.click(await screen.findByRole('option', { name: 'Active' }))
+    await screen.findByRole('combobox', { name: 'Projects' })
+
+    invoke.mockClear()
+    await user.click(screen.getByRole('combobox', { name: 'Projects' }))
+    await user.click(await screen.findByRole('option', { name: 'FabrikamOps / Dashboards' }))
+
+    await waitFor(
+      () => {
+        const withState = invoke.mock.calls.filter(
+          ([args]) =>
+            args.method === 'listItems' &&
+            JSON.stringify(args.params?.facetSelections ?? {}) ===
+              JSON.stringify({ state: ['Active'] })
+        )
+        expect(withState.length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 }
+    )
+  })
+
 })

@@ -227,11 +227,15 @@ export const createPluginTaskSourcesSlice: StateCreator<
         // persists, and a drop kept in memory alone is restored on the next
         // launch and dropped again, forever.
         get().setPluginTaskSourceScopeIds(retainedScopeIds)
-        // Dropping a scope strands any facet load already in flight: its
-        // callbacks see a scope set that moved on and discard themselves,
-        // leaving every facet stuck on `loading`. Reload for the scopes that
-        // survived rather than settling the ones that did not.
-        await get().loadPluginTaskSourceFacetOptions()
+        // Dropping a scope strands both loads already in flight: their stale
+        // guards see a scope set that moved on and discard themselves, leaving
+        // every facet on `loading` and — because the items guard returns
+        // without clearing it — the list spinner on too. Reload both for the
+        // scopes that survived rather than settling the ones that did not.
+        await Promise.all([
+          get().loadPluginTaskSourceItems(),
+          get().loadPluginTaskSourceFacetOptions()
+        ])
       }
     } else {
       set({

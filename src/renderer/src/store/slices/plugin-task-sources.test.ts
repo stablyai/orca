@@ -994,4 +994,34 @@ describe('deriveContributedPluginTaskSources', () => {
     })
   })
 
+  it('reloads items and clears the spinner after a scope drop', async () => {
+    // The in-flight items load discards itself on the stale guard, which
+    // returns without clearing pluginTaskSourceLoading — so without a reload
+    // the list spins forever.
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'listScopes') {
+        return { ok: true, data: [{ id: 'org/kept', name: 'org / kept' }] }
+      }
+      if (method === 'listItems') {
+        return { ok: true, data: { items: [], nextCursor: null } }
+      }
+      return { ok: true, data: [] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.setState({
+      selectedPluginTaskSourceScopeIds: ['org/kept', 'org/gone'],
+      pluginTaskSourceLoading: true
+    })
+    await store.getState().loadPluginTaskSourceScopes()
+
+    const itemCalls = invokeTaskSource.mock.calls.filter(
+      ([args]) => args.method === 'listItems'
+    )
+    expect(itemCalls.length).toBeGreaterThan(0)
+    expect(store.getState().pluginTaskSourceLoading).toBe(false)
+  })
+
 })
