@@ -26,10 +26,17 @@ export type RuntimeFileListState = {
   loading: boolean
   loadError: string | null
   truncated?: boolean
-  /** Query that produced `files`; null means a request is still settling. */
-  resolvedQuery?: string | null
   operationOwner?: FileExplorerOperationOwner
 }
+
+/** Files settled for one request key; local listings key without the query, so they answer every query. */
+type RuntimeFileListing = {
+  requestKey: string
+  files: string[]
+  truncated: boolean
+}
+
+const NO_LISTING: RuntimeFileListing = { requestKey: '', files: [], truncated: false }
 
 export function cleanRuntimeFileListError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
@@ -143,15 +150,12 @@ export function useRuntimeFileListForWorktree({
   )
   const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
-  const [files, setFiles] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const [listing, setListing] = useState(NO_LISTING)
+  const [loadingRequest, setLoadingRequest] = useState({ requestKey: '', loading: false })
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [truncated, setTruncated] = useState(false)
-  const [resolvedQuery, setResolvedQuery] = useState<string | null | undefined>(undefined)
   const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
     kind: 'unresolved'
   })
-  const lastRequestKeyRef = useRef('')
 
   const target = useMemo(
     () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
@@ -204,44 +208,44 @@ export function useRuntimeFileListForWorktree({
       worktreePath
     ]
   )
+  // Why: the render between a request change and the effect that starts the next request must
+  // not show the previous listing, so a listing is only visible for the request that produced it.
+  const currentListing = listing.requestKey === requestKey ? listing : NO_LISTING
+  const startsRequest =
+    enabled &&
+    target.canList &&
+    operationRouteAvailable &&
+    !(usesRuntimePathSearch && (remoteQuery.length === 0 || remoteQueryTooLarge))
+  // Why: in that same gap the effect has not flipped loading yet, so fall back to whether this
+  // render is going to start a request — otherwise the empty listing reads as "no results".
+  const loading = loadingRequest.requestKey === requestKey ? loadingRequest.loading : startsRequest
 
   useEffect(() => {
     if (!enabled) {
-      setLoading(false)
-      setResolvedQuery(null)
+      setLoadingRequest({ requestKey, loading: false })
       setListedOperationOwner({ kind: 'unresolved' })
       return
     }
 
     if (!target.canList || !worktreeId || !worktreePath || !operationRouteAvailable) {
-      setFiles([])
+      setListing(NO_LISTING)
       setListedOperationOwner({ kind: 'unresolved' })
       setLoadError(!operationRouteAvailable ? getFileExplorerOwnerUnresolvedMessage() : null)
-      setLoading(false)
-      setTruncated(false)
-      setResolvedQuery(null)
+      setLoadingRequest({ requestKey, loading: false })
       return
     }
 
     let cancelled = false
-    const requestKeyChanged = lastRequestKeyRef.current !== requestKey
-    if (requestKeyChanged) {
-      setFiles([])
-      setResolvedQuery(null)
-    }
-    lastRequestKeyRef.current = requestKey
     setLoadError(null)
-    setTruncated(false)
 
     if (usesRuntimePathSearch && (remoteQuery.length === 0 || remoteQueryTooLarge)) {
-      setFiles([])
-      setLoading(false)
-      setResolvedQuery(remoteQuery)
+      setListing(NO_LISTING)
+      setLoadingRequest({ requestKey, loading: false })
       setListedOperationOwner(operationOwnerRef.current)
       return
     }
 
-    setLoading(true)
+    setLoadingRequest({ requestKey, loading: true })
 
     const excludePaths = excludeRequest.paths.length > 0 ? excludeRequest.paths : undefined
     const requestToken = createBrowserUuid()
@@ -281,23 +285,19 @@ export function useRuntimeFileListForWorktree({
     void request
       .then((result) => {
         if (!cancelled) {
-          setFiles(result.files)
-          setTruncated(result.truncated)
-          setResolvedQuery(usesRuntimePathSearch ? remoteQuery : undefined)
+          setListing({ requestKey, ...result })
           setListedOperationOwner(requestOperationOwner)
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          setFiles([])
-          setTruncated(false)
-          setResolvedQuery(usesRuntimePathSearch ? remoteQuery : null)
+          setListing(NO_LISTING)
           setLoadError(cleanRuntimeFileListError(error))
         }
       })
       .finally(() => {
         if (!cancelled) {
-          setLoading(false)
+          setLoadingRequest({ requestKey, loading: false })
         }
       })
 
@@ -327,11 +327,10 @@ export function useRuntimeFileListForWorktree({
   ])
 
   return {
-    files,
+    files: currentListing.files,
     loading: loading || connectionPending,
     loadError,
-    truncated,
-    resolvedQuery,
+    truncated: currentListing.truncated,
     operationOwner: listedOperationOwner
   }
 }

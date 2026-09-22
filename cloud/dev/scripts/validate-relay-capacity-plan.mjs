@@ -436,10 +436,12 @@ function cellPlan(plan, changes, config) {
   const obsoleteTemplates = changes.filter(
     ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
   )
+  // A failed wave apply leaves its predecessor deposed; the wave must plan its own cleanup.
   const allowsObsoleteTemplates =
-    config.mode === 'same-cap-image' &&
     obsoleteTemplates.length > 0 &&
-    obsoleteTemplates.every((change) => sameActions(change, ['delete']))
+    obsoleteTemplates.every((change) => sameActions(change, ['delete'])) &&
+    (config.mode === 'same-cap-image' ||
+      (config.mode === 'same-cap-cell' && obsoleteTemplates.length === 1))
   if (
     !template ||
     !manager ||
@@ -600,32 +602,36 @@ export function validateCapacityPlan(plan, config) {
       ...(config.mode === 'same-cap-image' ? { changeKind: 'none' } : {})
     }
   }
+  const templateAddress = `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]`
   const replacement = changes.some(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       deposed === undefined &&
       JSON.stringify(change?.actions) === JSON.stringify(['create', 'delete'])
   )
   if (replacement) cellPlan(plan, changes, config)
   else convergenceCellPlan(plan, changes, config)
+  const obsoleteTemplates = changes.filter(
+    ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
+  )
   const obsoleteTemplateOnly = changes.every(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       typeof deposed === 'string' &&
       JSON.stringify(change?.actions) === JSON.stringify(['delete'])
   )
+  // Same as the backend split: `changes` stays the template-and-MIG count the same-cap job gates
+  // on. same-cap-image keeps its own total and names obsolete deletes in changeKind instead.
+  const splitsObsoleteTemplates = config.mode === 'same-cap-cell' && obsoleteTemplates.length > 0
   return {
     mode: config.mode,
-    changes: changes.length,
+    changes: changes.length - (splitsObsoleteTemplates ? obsoleteTemplates.length : 0),
+    ...(splitsObsoleteTemplates ? { obsoleteTemplates: obsoleteTemplates.length } : {}),
     ...backend,
     ...(config.mode === 'same-cap-image'
       ? {
           changeKind: replacement
-            ? changes.some(
-                ({ address, deposed }) =>
-                  address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
-                  typeof deposed === 'string'
-              )
+            ? obsoleteTemplates.length > 0
               ? 'replacement-with-obsolete-template'
               : 'replacement'
             : obsoleteTemplateOnly
