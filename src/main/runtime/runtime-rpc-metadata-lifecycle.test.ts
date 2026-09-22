@@ -249,4 +249,35 @@ describe('OrcaRuntimeRpcServer', () => {
 
     writeMetadataSpy.mockRestore()
   })
+
+  it('records an observable failure when broker endpoint retraction cannot be published', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+    const writeMetadataSpy = vi
+      .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
+      .mockImplementationOnce(() => {
+        throw new Error('retraction write denied')
+      })
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    server['recordWindowsPipeBrokerExit'](
+      { endpoint: '\\\\.\\pipe\\orca-broker-test', code: 1, signal: null },
+      true
+    )
+
+    expect(server.getWindowsPipeBrokerFailure()).toEqual({
+      endpoint: '\\\\.\\pipe\\orca-broker-test',
+      code: 1,
+      signal: null,
+      metadataRetraction: 'failed',
+      metadataError: 'retraction write denied'
+    })
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('retraction write denied'))
+
+    writeMetadataSpy.mockRestore()
+    consoleSpy.mockRestore()
+    await server.stop()
+  })
 })
