@@ -333,8 +333,15 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4363 -> 4269   (-94)
  *   local modules  1021 -> 1021   (unchanged)
+ *
+ * The page's client identity then joins: `src/mobile-web-shell/bridge/bridge-page-client-identity.ts`
+ * declares the placeholder `client-context.web.tsx` claims, so the provider every screen reads
+ * imports it. One local module, nothing vendored. Measured on the merged head, generators first:
+ *
+ *   modules        4269 -> 4270   (+1)
+ *   local modules  1021 -> 1022   (+1)
  */
-const SESSION_ROUTE_MODULES = 4269
+const SESSION_ROUTE_MODULES = 4270
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
