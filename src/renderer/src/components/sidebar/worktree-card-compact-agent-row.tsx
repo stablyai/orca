@@ -6,7 +6,6 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
-import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
@@ -14,19 +13,21 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { agentChildDisclosureLabel } from '@/components/agent-child-disclosure-label'
+import { formatCodexSubagentDisplayLabel } from '@/components/codex-subagent-display-label'
 
-function getCompactAgentPrimary(
-  agent: DashboardAgentRowData,
-  conversationName: string | null
-): string {
-  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+function getCompactAgentPrimary(agent: DashboardAgentRowData, primarySource: string): string {
+  const label = primarySource || agentStateLabel(getAgentDotState(agent))
+  return agent.subagentSession?.provider === 'codex'
+    ? formatCodexSubagentDisplayLabel(label)
+    : label
 }
 
 export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
-  lastAssistantMessageOverride?: string
+  lastAssistantMessageOverride?: string,
+  hasChildAgents = false
 ): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
@@ -40,6 +41,9 @@ export function getCompactAgentSecondary(
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
     return agentStateLabel('monitoring')
   }
+  if (hasChildAgents) {
+    return ''
+  }
   const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
   if (toolPreview) {
     return toolPreview
@@ -50,8 +54,11 @@ export function getCompactAgentSecondary(
     return lastAssistantMessage
   }
   // Why: child rows without descriptions use their role as primary text; repeating its formatted label adds no information.
-  if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
-    return ''
+  if (agent.rowSource === 'subagent') {
+    const agentType = agent.agentType.trim()
+    if (agentType === 'default' || agent.entry.prompt?.trim() === agentType) {
+      return ''
+    }
   }
   return formatAgentTypeLabel(agent.agentType)
 }
@@ -87,6 +94,8 @@ type CompactAgentRowProps = {
   onToggleChildAgents?: () => void
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
+  /** Mark a synthetic child row whose inspector is currently open. */
+  isCurrentAgent?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
 }
@@ -103,6 +112,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onToggleChildAgents,
   reserveDisclosureGutter = false,
   isFocusedPane = false,
+  isCurrentAgent = false,
   hideIdentityIcon = false,
   cacheTimerActive = true
 }: CompactAgentRowProps) {
@@ -116,7 +126,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const dotState = getAgentDotState(agent)
   const conversationName = useAgentRowConversationName(agent)
-  const primary = getCompactAgentPrimary(agent, conversationName)
+  const primarySource = conversationName ?? getAgentRowPrimaryText(agent.entry)
+  const primary = getCompactAgentPrimary(agent, primarySource)
   const isLineageChild = agent.lineage?.depth === 1
   // Keep a live row's last assistant line stable while status/tool payloads
   // briefly omit the hook-only field between updates. Committed in an effect so a
@@ -137,12 +148,18 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage)
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage, hasChildDisclosure)
   // Why: sidebar truncation must preserve the passive-vs-active distinction.
   const leadingText = dotState === 'monitoring' ? secondary : primary
   const trailingText =
     dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  // Why: the tooltip keeps the canonical label — shortened subagent display names hide the full /root path.
+  const canonicalPrimary = primarySource || primary
+  const canonicalTitle =
+    dotState === 'monitoring'
+      ? `${secondary}${canonicalPrimary !== secondary ? ` - ${canonicalPrimary}` : ''}`
+      : `${canonicalPrimary}${secondary ? ` - ${secondary}` : ''}`
+  const isHighlighted = isFocusedPane || isCurrentAgent
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -191,15 +208,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <button
           type="button"
           className="compact-agent-child-disclosure-button flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-          aria-label={translate(
-            'auto.components.sidebar.worktree.card.compact.agents.a128d7006b',
-            '{{value0}} {{value1}} child {{value2}}',
-            {
-              value0: childAgentsExpanded ? 'Hide' : 'Show',
-              value1: childAgentCount,
-              value2: childAgentCount === 1 ? 'agent' : 'agents'
-            }
-          )}
+          aria-label={agentChildDisclosureLabel(childAgentsExpanded, childAgentCount ?? 0)}
           aria-expanded={childAgentsExpanded}
           onClick={handleToggleChildren}
           onKeyDown={stopActivationKeyPropagation}
@@ -229,15 +238,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       )}
       <span
         className="min-w-0 flex-1 truncate"
-        title={sendTargetDisabledReason ? undefined : rowTitle}
+        title={sendTargetDisabledReason ? undefined : canonicalTitle}
       >
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+        <span className={isHighlighted ? 'text-foreground' : 'text-muted-foreground/90'}>
           {leadingText}
         </span>
         {trailingText && (
-          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+          <span className={isHighlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
             - {trailingText}
           </span>
@@ -247,7 +256,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <span
           className={cn(
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+            isHighlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
           title={model}
         >
@@ -258,7 +267,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <span
           className={cn(
             'shrink-0 text-[10px] tabular-nums',
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+            isHighlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
         >
           +{childAgentCount}
@@ -270,7 +279,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           className={cn(
             'shrink-0 text-[10px] tabular-nums',
             // Why: the muted timestamp drops out against the selected-row fill.
-            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/60'
+            isHighlighted ? 'text-foreground/70' : 'text-muted-foreground/60'
           )}
         >
           {shortTime}
@@ -288,7 +297,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
-        isFocusedPane && 'bg-worktree-sidebar-accent',
+        isHighlighted && 'bg-worktree-sidebar-accent',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
@@ -299,8 +308,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onDragStart={(e) => e.stopPropagation()}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      data-current={isCurrentAgent ? 'true' : undefined}
+      data-subagent-id={agent.subagentSession?.id}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
+      aria-selected={agent.lineage ? isCurrentAgent : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
       title={sendTargetDisabledReason}
     >

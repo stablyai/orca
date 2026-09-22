@@ -26,6 +26,8 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
+import { useCodexSubagentProgressPaneKey } from './codex-subagent-progress-selection'
+import { useCodexSubagentRowActivation } from './use-codex-subagent-row-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
 
@@ -89,6 +91,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const selectedSubagentPaneKey = useCodexSubagentProgressPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
   // Why: acknowledgement writes are app-global; project only this card's rows
@@ -189,9 +192,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
-  }, [])
+  // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
+  const handleActivateRetainedAgent = useCallback(() => undefined, [])
+  const handleActivateRow = useCodexSubagentRowActivation({
+    worktreeId,
+    activateTab: handleActivateAgentTab,
+    activateRetained: handleActivateRetainedAgent
+  })
 
   // Why: one 30s tick per non-empty inline list; zero-agent cards never mount this (see WorktreeCardAgents), so idle worktrees pay no timer cost.
   const now = useNow(30_000)
@@ -231,9 +238,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [toggleLineageParentState]
   )
 
-  const stopBubble = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
+  const stopBubble = useCallback((e: React.MouseEvent) => e.stopPropagation(), [])
 
   // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned (descendants already indent).
   const anyRootHasChildren = rootAgents.some(
@@ -266,9 +271,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <DashboardAgentRow
           agent={agent}
           onDismiss={handleDismissAgent}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateRow(agent)}
           now={now}
           // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -284,7 +287,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           // Why: keep leaf rows aligned with parent rows — see anyRootHasChildren above.
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
@@ -327,9 +331,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <CompactAgentRow
           agent={agent}
           now={now}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateRow(agent)}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
@@ -339,7 +341,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (

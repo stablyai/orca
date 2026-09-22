@@ -8,6 +8,7 @@ import {
 } from '../../codex-subagent-roster'
 import {
   createCodexSubagentTranscriptState,
+  hasTrackedCodexParentTranscript,
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
 } from '../../codex-subagent-transcript'
@@ -39,6 +40,10 @@ export function getOrCreateCodexSubagentTranscriptState(
 
 export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: string): boolean {
   return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
+}
+
+export function hasCodexParentTranscript(state: HookListenerState, paneKey: string): boolean {
+  return hasTrackedCodexParentTranscript(state.codexSubagentTranscriptByPaneKey.get(paneKey))
 }
 
 export function seedCodexStateFromSnapshot(

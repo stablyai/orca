@@ -14854,6 +14854,12 @@
         "copySessionIdSuccess": "セッション ID をコピーしました",
         "copySessionIdError": "セッション ID のコピーに失敗しました"
       }
+    },
+    "agent-child-disclosure": {
+      "hide-one": "1 個のサブ Agent を非表示",
+      "hide-other": "{{count}} 個のサブ Agent を非表示",
+      "show-one": "1 個のサブ Agent を表示",
+      "show-other": "{{count}} 個のサブ Agent を表示"
     }
   },
   "dashboardPopout": {

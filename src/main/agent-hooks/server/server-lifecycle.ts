@@ -132,7 +132,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           if (enriched) {
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+            this.scheduleCodexSubagentPoll(source, enriched)
           }
         }
         res.writeHead(204)

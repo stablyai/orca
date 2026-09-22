@@ -21,9 +21,11 @@ export class CodexSubagentPollScheduler<T> {
     private readonly now: () => number = monotonicNow
   ) {}
 
-  schedule(key: string, value: T): void {
+  /** `delayMs` overrides this scheduler's default for one entry — the quiet-roster backoff keeps
+   *  a parked pane's deadline without disturbing siblings or the shared timer. */
+  schedule(key: string, value: T, delayMs: number = this.delayMs): void {
     this.entries.delete(key)
-    this.entries.set(key, { value, dueAt: this.now() + this.delayMs })
+    this.entries.set(key, { value, dueAt: this.now() + delayMs })
     this.arm()
   }
 
@@ -42,6 +44,11 @@ export class CodexSubagentPollScheduler<T> {
   /** Number of pane wakeups currently waiting for a deadline. */
   get size(): number {
     return this.entries.size
+  }
+
+  /** Whether a specific pane has a wakeup pending. */
+  has(key: string): boolean {
+    return this.entries.has(key)
   }
 
   private arm(): void {

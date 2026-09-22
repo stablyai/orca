@@ -217,7 +217,6 @@ export abstract class AgentHookServerState {
   protected abstract clearAllCodexSubagentPolls(): void
   protected abstract scheduleCodexSubagentPoll(
     source: AgentHookSource,
-    body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void
   protected abstract scheduleAssistantMessageRetry(

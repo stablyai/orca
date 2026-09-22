@@ -1,5 +1,8 @@
-import { hasCodexTranscriptSubagents } from '../../../shared/agent-hook-listener/providers/codex-state'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import {
+  hasCodexParentTranscript,
+  hasCodexTranscriptSubagents
+} from '../../../shared/agent-hook-listener/providers/codex-state'
+import { refreshCodexSubagentTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-events'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -12,12 +15,17 @@ import {
   ASSISTANT_MESSAGE_RETRY_MS,
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
+import {
+  advanceCodexSubagentPollPlan,
+  INITIAL_CODEX_SUBAGENT_POLL_PLAN,
+  type CodexSubagentPollPlan
+} from '../codex-subagent-poll-policy'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
 type CodexSubagentPoll = {
   source: AgentHookSource
-  body: unknown
   original: EnrichedAgentHookEventPayload
+  plan: CodexSubagentPollPlan
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -45,22 +53,27 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected scheduleCodexSubagentPoll(
     source: AgentHookSource,
-    body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    plan: CodexSubagentPollPlan = INITIAL_CODEX_SUBAGENT_POLL_PLAN
   ): void {
     // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
     if (source !== 'codex') {
       return
     }
     this.codexSubagentPollScheduler.clear(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    // Why: poll while a parent rollout is tracked even with an empty roster, so late-spawned children are discovered.
+    if (!hasCodexParentTranscript(this.state, original.paneKey)) {
       return
     }
-    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.codexSubagentPollScheduler.schedule(
+      original.paneKey,
+      { source, original, plan },
+      plan.delayMs
+    )
   }
 
   private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
-    const { source, body, original } = poll
+    const { source, original, plan } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
@@ -70,15 +83,29 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = normalizeHookPayload(this.state, source, body, this.env)
-    if (!normalized) {
+    const payload = refreshCodexSubagentTranscriptStatus(this.state, original.paneKey)
+    if (!payload) {
       return
     }
     const subagentsChanged =
-      JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-    const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      JSON.stringify(payload.subagents) !== JSON.stringify(original.payload.subagents)
+    const next = subagentsChanged
+      ? this.applyNormalizedStatus({
+          paneKey: original.paneKey,
+          launchToken: original.launchToken,
+          tabId: original.tabId,
+          worktreeId: original.worktreeId,
+          connectionId: original.connectionId,
+          providerSession: original.providerSession,
+          payload
+        })
+      : original
+    // Why: inactive empty rosters only need late-rollout grace; the next Codex hook restores active polling.
+    const quiet =
+      !hasCodexTranscriptSubagents(this.state, original.paneKey) &&
+      (payload.state !== 'working' || original.hookEventName === 'SessionStart')
     if (next) {
-      this.scheduleCodexSubagentPoll(source, body, next)
+      this.scheduleCodexSubagentPoll(source, next, advanceCodexSubagentPollPlan(plan, quiet))
     }
   }
 

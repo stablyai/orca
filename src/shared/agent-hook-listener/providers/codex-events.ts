@@ -11,7 +11,10 @@ import {
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
-import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
+import {
+  finishTrackedCodexTranscriptSubagent,
+  reconcileCodexSubagentTranscript
+} from '../../codex-subagent-transcript'
 import {
   codexTurnApprovalsAreAutoReviewed,
   reconcileCodexSubagentReviewer
@@ -99,8 +102,30 @@ export function normalizeCodexSubagentLifecycleEvent(
     )
   } else {
     finishCodexSubagent(roster, agentId)
+    finishTrackedCodexTranscriptSubagent(
+      state.codexSubagentTranscriptByPaneKey.get(paneKey),
+      agentId
+    )
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+}
+
+/** Re-reconcile a pane's transcript and rebuild its status without a new hook event; the poll loop's payload source. */
+export function refreshCodexSubagentTranscriptStatus(
+  state: HookListenerState,
+  paneKey: string
+): ParsedAgentStatusPayload | null {
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const transcriptPath = transcriptState?.parent.filePath
+  if (!transcriptState || !transcriptPath) {
+    return null
+  }
+  reconcileCodexSubagentTranscript(
+    transcriptState,
+    getOrCreateCodexSubagentRoster(state, paneKey),
+    transcriptPath
+  )
+  return buildCodexChildDrivenStatusPayload(state, undefined, paneKey, {})
 }
 
 /**

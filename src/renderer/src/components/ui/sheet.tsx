@@ -72,6 +72,7 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  showOverlay = true,
   overlayClassName,
   overlayStyle,
   style,
@@ -79,12 +80,13 @@ function SheetContent({
 }: React.ComponentProps<typeof SheetPrimitive.Content> &
   VariantProps<typeof sheetContentVariants> & {
     showCloseButton?: boolean
+    showOverlay?: boolean
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }) {
   return (
     <SheetPortal>
-      <SheetOverlay className={overlayClassName} style={overlayStyle} />
+      {showOverlay ? <SheetOverlay className={overlayClassName} style={overlayStyle} /> : null}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(sheetContentVariants({ side }), className)}
