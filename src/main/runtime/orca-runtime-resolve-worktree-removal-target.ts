@@ -1,6 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRemoveManagedWorktree } from './orca-runtime-remove-managed-worktree'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  resolveClaudeTerminalConfigDirEnv,
+  resolveClaudeTerminalWslDistro
+} from '../claude/claude-terminal-account-home'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './runtime-worktree-removal-target'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -244,10 +248,35 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
 
     await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
 
+    // A project group may bind this workspace's Claude to its own config dir. Resolved here
+    // because this is the one funnel every terminal create passes through, and resolved by the
+    // same function a structured session uses so the two routes cannot answer differently. An
+    // unusable binding throws, which refuses the create — never a silent fall back to the shared
+    // home, per `claude-bound-home-refusal.ts`.
+    const claudeHomeEnv = await resolveClaudeTerminalConfigDirEnv({
+      agent,
+      store,
+      location: {
+        executionHostId: isRemote ? null : LOCAL_EXECUTION_HOST_ID,
+        wslDistro: resolveClaudeTerminalWslDistro({
+          store,
+          repo: workspace.repo,
+          workspacePath: workspace.path,
+          isLocalHost: !isRemote
+        }),
+        workspaceId: workspace.id
+      },
+      launchEnv: { ...process.env, ...startupPlan.env },
+      readSelectedConfigDir: () =>
+        this.accounts?.getClaudeConfigDirectory({ runtime: 'host' }) ?? undefined,
+      assertBoundHomeUsable: this.assertClaudeBoundHomeUsableFn
+    })
+    const launchEnv = { ...startupPlan.env, ...claudeHomeEnv }
+
     return {
       ...opts,
       command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(Object.keys(launchEnv).length > 0 ? { env: launchEnv } : {}),
       launchConfig: startupPlan.launchConfig,
       launchAgent: agent,
       startupCommandDelivery: startupPlan.startupCommandDelivery
