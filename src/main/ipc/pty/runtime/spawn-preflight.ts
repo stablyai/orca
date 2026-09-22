@@ -44,6 +44,7 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { prepareClaudeTerminalBoundAuth } from '../../../claude/claude-terminal-bound-auth'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -147,10 +148,9 @@ export async function prepareRuntimePtySpawn(
   // Why: the drop still applies here, but this controller's result has no field for
   // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   ctx.launchCommand = codexResumeLaunch.command
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  ctx.claudeAuth = ctx.isClaudeLaunch
+    ? await prepareClaudeTerminalBoundAuth(ctx.deps, args, ctx.codexSelectionTarget)
+    : null
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }

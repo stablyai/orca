@@ -18,6 +18,7 @@ import {
 } from '../host-env/fresh-spawn-routing'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { prepareClaudeTerminalBoundAuth } from '../../../claude/claude-terminal-bound-auth'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -227,9 +228,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(initialSelectionTarget)
-      : null
+  ctx.claudeAuth = ctx.isClaudeLaunch
+    ? await prepareClaudeTerminalBoundAuth(ctx.deps, args, initialSelectionTarget)
+    : null
   ctx.spawnTiming.mark('auth')
 }
