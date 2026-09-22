@@ -197,6 +197,7 @@ export function MobileWebShellScreen({
     updateNotice,
     retry,
     reportShellFailure,
+    reportDocumentStarted,
     reportDocumentLoaded,
     reportPageReady,
     reportPagePainted,
@@ -387,6 +388,12 @@ export function MobileWebShellScreen({
           // the page's own first frame says its code ran, so this is where the wait for it starts.
           if (parsed?.state === 'ready') {
             reportDocumentLoaded()
+            return
+          }
+          // The view is drawing the document it is leaving until the new one paints, so the cover
+          // goes back up here rather than on the `ready` that follows it.
+          if (parsed?.state === 'loading') {
+            reportDocumentStarted()
           }
         }}
       />

@@ -317,6 +317,10 @@ export function reduceMobileWebShellSession(
       return onDownloadFailed(session, event.failure)
     case 'shell-failed':
       return onShellFailed(session, event.reason)
+    case 'document-started':
+      // A replacement document inherits nothing: what the last one declared and painted says
+      // nothing about this one, and leaving its paint latched uncovers the view over a blank tree.
+      return step(session, session.state.kind === 'ready' ? CLEAR_PAGE_DOCUMENT_STATE : {})
     case 'document-loaded':
       // Nothing to wait on outside `ready`, and nothing to wait for once the page has spoken: the
       // two orders this can arrive in are a race, and the latch is what makes either one fine.

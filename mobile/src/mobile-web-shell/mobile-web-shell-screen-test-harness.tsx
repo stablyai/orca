@@ -16,6 +16,7 @@ import type { ShellPageFrame } from './shell-page-frame'
 export type ScreenDependencies = {
   retry: Mock
   reportShellFailure: Mock
+  reportDocumentStarted: Mock
   reportDocumentLoaded: Mock
   reportPageReady: Mock
   reportPagePainted: Mock
@@ -72,6 +73,7 @@ export function createScreenDependencies(): ScreenDependencies {
   return {
     retry: vi.fn(),
     reportShellFailure: vi.fn(),
+    reportDocumentStarted: vi.fn(),
     reportDocumentLoaded: vi.fn(),
     reportPageReady: vi.fn(),
     reportPagePainted: vi.fn(),
@@ -105,6 +107,7 @@ export function createScreenDependencies(): ScreenDependencies {
 export function resetScreenDependencies(dependencies: ScreenDependencies): void {
   dependencies.retry.mockReset()
   dependencies.reportShellFailure.mockReset()
+  dependencies.reportDocumentStarted.mockReset()
   dependencies.reportDocumentLoaded.mockReset()
   dependencies.reportPageReady.mockReset()
   dependencies.reportPagePainted.mockReset()

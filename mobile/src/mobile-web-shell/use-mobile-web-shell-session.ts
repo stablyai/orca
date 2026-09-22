@@ -35,6 +35,8 @@ export type MobileWebShellSessionView = {
   readonly retry: () => void
   /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
   readonly reportShellFailure: (reason: MobileWebShellFailureReason) => void
+  /** The native view began a document; drops what the document it replaces said about itself. */
+  readonly reportDocumentStarted: () => void
   /** The native view finished a document; starts the wait for the page's first word. */
   readonly reportDocumentLoaded: () => void
   /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. Carries
@@ -246,6 +248,10 @@ export function useMobileWebShellSession(args: {
     [dispatch]
   )
 
+  const reportDocumentStarted = useCallback(() => {
+    dispatch(epochRef.current, { type: 'document-started' })
+  }, [dispatch])
+
   const reportDocumentLoaded = useCallback(() => {
     dispatch(epochRef.current, { type: 'document-loaded' })
   }, [dispatch])
@@ -271,6 +277,7 @@ export function useMobileWebShellSession(args: {
     updateNotice: sessionRef.current.updateNotice,
     retry,
     reportShellFailure,
+    reportDocumentStarted,
     reportDocumentLoaded,
     reportPageReady,
     reportPagePainted

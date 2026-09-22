@@ -199,6 +199,9 @@ export type MobileWebShellSessionEvent =
     }
   | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
   | { readonly type: 'retry-pressed' }
+  /** The native view began a document. Unstamped, like the view's failure and for the same
+   *  reason: the view exists only under the generation on screen. */
+  | { readonly type: 'document-started' }
   /** The native view finished a document. Unstamped, like the view's failure and for the same
    *  reason: the view exists only under the generation on screen. */
   | { readonly type: 'document-loaded' }

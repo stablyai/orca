@@ -841,6 +841,36 @@ describe('the page reporting a frame on screen', () => {
     expect(reactivated.session.pageReportsPaint).toBe(false)
   })
 
+  it('makes the document that replaced a painted one inside this mount report its own frame', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' }
+    )
+    expect(shellPageFrame(painted.session)).toBe('painted')
+    // No new session and no new generation: the view reloaded under the one already on screen.
+    const restarted = run(painted.session, { type: 'document-started' })
+    expect(restarted.session.pagePainted).toBe(false)
+    const reasked = run(restarted.session, {
+      type: 'page-ready',
+      reports: [BRIDGE_PAGE_PAINTED]
+    })
+    expect(shellPageFrame(reasked.session)).toBe('unpainted')
+    expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
+  })
+
+  it('keeps the frame of a document that repeats its own handshake', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' },
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] }
+    )
+    // The document never restarted, so its frame is still the one on screen.
+    expect(painted.session.pagePainted).toBe(true)
+    expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+
   it('records nothing from a page whose generation is no longer on screen', () => {
     const failed = run(readySession().session, {
       type: 'shell-failed',

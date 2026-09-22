@@ -160,6 +160,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     updateNotice: dependencies.updateNotice,
     retry: dependencies.retry,
     reportShellFailure: dependencies.reportShellFailure,
+    reportDocumentStarted: dependencies.reportDocumentStarted,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
     reportPageReady: dependencies.reportPageReady,
     reportPagePainted: dependencies.reportPagePainted,
@@ -334,6 +335,8 @@ describe('the hybrid shell screen', () => {
     // Once, for the one finished document, and never for the failure: a view that reported a
     // failure has nothing left to wait for.
     expect(dependencies.reportDocumentLoaded).toHaveBeenCalledTimes(1)
+    // The document that started is what drops the previous one's paint, so it is reported too.
+    expect(dependencies.reportDocumentStarted).toHaveBeenCalledTimes(1)
   })
 
   it('fails the session when this host could not be read from the app store', async () => {
