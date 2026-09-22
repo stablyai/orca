@@ -6,27 +6,54 @@ import {
   readRelayCloudSqlConnectionBudget
 } from './relay-cloud-sql-connection-budget.mjs'
 
-test('production shared consumers keep allowance and reserve below the ceiling', () => {
+const arithmetic = (report) =>
+  [
+    `cells ${report.consumers.cells}`,
+    `directors ${report.consumers.directors}`,
+    `auth ${report.consumers.auth}`,
+    `api ${report.consumers.api}`,
+    `= ${report.configuredMaximum} configured`,
+    `+ ${report.rolloutOverlap.maximum} rollout overlap`,
+    `+ ${report.maintenanceAdminAllowance} admin allowance`,
+    `= ${report.operatingMaximum} operating`,
+    `against ${report.maxConnections} max_connections less a ${report.explicitReserve} reserve`
+  ].join(', ')
+
+test('the production budget reads the committed pools and the measured ceiling', () => {
   // cells: 20 pools at 10 (200) + the three asia-east2 pools at 16 (48).
   const report = readRelayCloudSqlConnectionBudget()
 
-  assert.deepEqual(report.consumers, { cells: 248, directors: 15, auth: 20, api: 50 })
+  assert.equal(report.maxConnections, 500)
+  assert.deepEqual(report.consumers, { cells: 248, directors: 15, auth: 200, api: 50 })
   assert.deepEqual(report.asia, { cells: 3, poolMax: 16 })
-  assert.equal(report.configuredMaximum, 333)
+  assert.equal(report.configuredMaximum, 513)
+  // The director candidate inherits a floor of 5 and dual-serves; auth and API candidates hold
+  // one instance each until their traffic flip, so the director roll is now the widest overlap.
   assert.equal(report.rolloutOverlap.relayDirectorCandidate, 30)
-  assert.equal(report.rolloutOverlap.apiCandidate, 65)
-  assert.equal(report.rolloutOverlap.authCandidate, 35)
+  assert.equal(report.rolloutOverlap.apiCandidate, 20)
+  assert.equal(report.rolloutOverlap.authCandidate, 25)
   assert.equal(report.rolloutOverlap.relayCells, 15)
   assert.equal(report.rolloutOverlap.retainedDirectorRollback, 15)
-  assert.equal(report.rolloutOverlap.maximum, 65)
+  assert.equal(report.rolloutOverlap.maximum, 30)
   assert.equal(report.maintenanceAdminAllowance, 5)
   assert.equal(report.explicitReserve, 10)
   assert.equal(report.usableCeiling, 490)
-  assert.equal(report.operatingMaximum, 403)
-  assert.equal(report.remainingWithinUsableCeiling, 87)
-  assert.equal(report.budgetedTotal, 413)
-  assert.equal(report.unallocated, 87)
-  assert.equal(report.withinBudget, true)
+  assert.equal(report.operatingMaximum, 548)
+})
+
+test('configured pools fit under the ceiling less the stated reserve', () => {
+  const report = readRelayCloudSqlConnectionBudget()
+
+  assert.ok(
+    report.configuredMaximum <= report.usableCeiling,
+    `configured pools exceed the usable ceiling: ${arithmetic(report)}`
+  )
+})
+
+test('a serialized rollout still fits under the ceiling less the stated reserve', () => {
+  const report = readRelayCloudSqlConnectionBudget()
+
+  assert.ok(report.withinBudget, `the operating maximum exceeds the usable ceiling: ${arithmetic(report)}`)
 })
 
 test('fails closed when pool growth consumes the explicit reserve', () => {
@@ -38,8 +65,10 @@ test('fails closed when pool growth consumes the explicit reserve', () => {
     directorPoolMax: 3,
     authInstances: 2,
     authPoolMax: 10,
+    authCandidateMinInstances: 2,
     apiInstances: 20,
     apiPoolMax: 5,
+    apiCandidateMinInstances: 20,
     maxConnections: 400,
     maintenanceAdminAllowance: 5,
     explicitReserve: 10
@@ -52,7 +81,15 @@ test('fails closed when pool growth consumes the explicit reserve', () => {
 test('excludes fenced cell pools and reads per-cell pool overrides', () => {
   const report = readRelayCloudSqlConnectionBudget({
     proposedAsiaCellCount: 1,
-    appConsumers: { authInstances: 1, authPoolMax: 10, apiInstances: 1, apiPoolMax: 5, maxConnections: 100 },
+    appConsumers: {
+        authInstances: 1,
+        authPoolMax: 10,
+        authCandidateMinInstances: 1,
+        apiInstances: 1,
+        apiPoolMax: 5,
+        apiCandidateMinInstances: 1,
+        maxConnections: 100
+      },
     sources: {
       productionTfvars: `
         relay_max_instances = 1
@@ -84,7 +121,15 @@ test('excludes fenced cell pools and reads per-cell pool overrides', () => {
 test('dedicated push scaling does not consume shared capacity', () => {
   const report = readRelayCloudSqlConnectionBudget({
     proposedAsiaCellCount: 1,
-    appConsumers: { authInstances: 1, authPoolMax: 10, apiInstances: 1, apiPoolMax: 5, maxConnections: 100 },
+    appConsumers: {
+        authInstances: 1,
+        authPoolMax: 10,
+        authCandidateMinInstances: 1,
+        apiInstances: 1,
+        apiPoolMax: 5,
+        apiCandidateMinInstances: 1,
+        maxConnections: 100
+      },
     sources: {
       productionTfvars: `
         relay_max_instances = 1
@@ -121,8 +166,10 @@ test('requires strict headroom below the physical ceiling', () => {
     directorPoolMax: 3,
     authInstances: 1,
     authPoolMax: 10,
+    authCandidateMinInstances: 1,
     apiInstances: 1,
     apiPoolMax: 5,
+    apiCandidateMinInstances: 1,
     maxConnections: 50,
     maintenanceAdminAllowance: 9,
     explicitReserve: 3

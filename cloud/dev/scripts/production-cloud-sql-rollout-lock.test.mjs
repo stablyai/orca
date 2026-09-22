@@ -186,7 +186,7 @@ test('census: no workflow rolls out against the shared instance outside the leas
 // The API and auth deploy scripts share this contract but stay in the private repository.
 const serviceCapScripts = ['dev/scripts/deploy-relay-blue-green.mjs']
 
-test('budgets tagged Cloud Run candidates outside the service-wide instance cap', () => {
+test('budgets tagged Cloud Run candidates at their pre-flip instance floor', () => {
   for (const file of serviceCapScripts) {
     const script = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8')
     assert.match(script, /'--no-traffic'/, file)
@@ -196,15 +196,26 @@ test('budgets tagged Cloud Run candidates outside the service-wide instance cap'
     new URL('../../dev/scripts/relay-cloud-sql-connection-budget.mjs', import.meta.url),
     'utf8'
   )
-  assert.match(budget, /directly addressable tagged revisions outside service-level caps/)
+  assert.match(budget, /the candidate revision at its pre-flip instance floor/)
+  // Auth and API tag a --no-traffic candidate without --min, so each costs its service floor.
   assert.match(
     budget,
-    /apiCandidate: retainedDirectorRollback \+ inputs\.apiInstances \* inputs\.apiPoolMax/
+    /apiCandidate: retainedDirectorRollback \+ inputs\.apiCandidateMinInstances \* inputs\.apiPoolMax/
   )
+  assert.match(
+    budget,
+    /authCandidate: retainedDirectorRollback \+ inputs\.authCandidateMinInstances \* inputs\.authPoolMax/
+  )
+  // The director candidate is the exception: it inherits the Terraform floor and dual-serves.
+  assert.match(budget, /relayDirectorCandidate: retainedDirectorRollback \* 2/)
   const director = readWorkflow(relayWorkflowFile('deploy-relay-production-director.yml'))
   const capacity = readWorkflow(relayWorkflowFile('deploy-relay-production-capacity-job.yml'))
   const asia = readWorkflow(relayWorkflowFile('operate-relay-asia-admission.yml'))
   assert.match(director, /--max-instances "\$\{DIRECTOR_MAX_INSTANCES\}"/)
   assert.match(capacity, /--max-instances 5/)
   assert.match(asia, /--max-instances "\$\{DIRECTOR_MAX_INSTANCES\}"/)
+  // No --min-instances on the blue/green call is what makes the director candidate inherit 5.
+  const blueGreenCall = director.match(/node dev\/scripts\/deploy-relay-blue-green\.mjs[\s\S]*?\n\n/)
+  assert.ok(blueGreenCall)
+  assert.doesNotMatch(blueGreenCall[0], /--min-instances/)
 })
