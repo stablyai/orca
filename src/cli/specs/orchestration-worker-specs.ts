@@ -102,6 +102,20 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'worker-resume'],
+    summary: 'Resume one idle assigned worker through a supported route',
+    usage:
+      'orca orchestration worker-resume --dispatch <dispatch_id> [--note <text>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'note', 'retry-request'],
+    notes: [
+      'Delivers one prompt telling the worker to read its own Dispatch mailbox. It never creates a Task, a Dispatch or an Attempt, and never restates the assignment.',
+      'Reports exactly one state: resumed, queued_prompt, missing_acknowledgement, active_turn, denied_action, exited_process or unknown_liveness. Only resumed proves a turn started.',
+      'Never writes past a guard: an agent showing a permission prompt reports denied_action rather than receiving keystrokes.',
+      'Repeating the call with the same --retry-request replays the recorded state instead of sending a second prompt; without it, a retry is a second prompt.',
+      'exited_process is a verdict; unknown_liveness is lost contact and is never evidence the worker is dead.'
+    ]
+  },
+  {
     path: ['orchestration', 'worker-retain'],
     summary: 'Keep one supervised worker terminal live for debugging',
     usage:

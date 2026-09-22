@@ -87,6 +87,31 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     printResult(result, json, formatWorkerRelease)
   },
 
+  'orchestration worker-resume': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<{
+      dispatchId: string
+      state: string
+      resumed: boolean
+      route: string
+      observation: string
+      detail: string
+    }>(client, flags, 'orchestration.workerResume', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      note: getOptionalStringFlag(flags, 'note')
+    })
+    // Why: only a proven turn is success. Every other state is a real answer the coordinator has
+    // to read and act on, so it must not be reported as a completed resume.
+    if (!result.result.resumed) {
+      process.exitCode = 1
+    }
+    printResult(
+      result,
+      json,
+      (value) =>
+        `Worker ${value.dispatchId} [${value.state}] route=${value.route} observation=${value.observation}\n${value.detail}`
+    )
+  },
+
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')
     if (

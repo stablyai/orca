@@ -396,6 +396,7 @@ import {
   WorkerListParams,
   WorkerRetainParams
 } from './orchestration-worker-release-schemas-params'
+import { WorkerResumeParams } from './orchestration-worker-resume-params'
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
@@ -1008,6 +1009,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
+  'orchestration.workerResume': WorkerResumeParams,
   'orchestration.workerRetain': WorkerRetainParams,
   'orchestration.workerShow': WorkerDispatchParams,
   'orchestration.workerStart': WorkerStartParams,

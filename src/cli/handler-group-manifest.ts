@@ -122,6 +122,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-abandon',
       'orchestration worker-release',
       'orchestration worker-retain',
+      'orchestration worker-resume',
       'orchestration worker-list',
       'orchestration dispatch',
       'orchestration ask',
