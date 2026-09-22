@@ -124,9 +124,14 @@ describe('workspace source policy', () => {
       pluginKey: 'nssf.azure-boards',
       sourceId: 'boards'
     })
-    expect(buildWorkspaceSourceSelection({ linkedWorkItem: contributed })).toMatchObject({
+    // The identity travels with the selection: the composer resolves the
+    // contributing plugin's own icon from it.
+    expect(buildWorkspaceSourceSelection({ linkedWorkItem: contributed })).toEqual({
       kind: 'plugin',
-      label: 'AB-41 Ship the detail panel'
+      label: 'AB-41 Ship the detail panel',
+      url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+      pluginKey: 'nssf.azure-boards',
+      sourceId: 'boards'
     })
     expect(getWorkspaceSourceName(contributed)).toEqual({
       seedName: 'ab-41-ship-the-detail-panel',

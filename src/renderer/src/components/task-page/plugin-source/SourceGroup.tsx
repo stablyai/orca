@@ -1,5 +1,6 @@
 import { Bug, Kanban, ListTodo, Puzzle, Ticket, type LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { PluginTaskSourceAssetIcon } from '@/components/plugin-task-source-icon'
 import { cn } from '@/lib/utils'
 import type {
   ContributedPluginTaskSource,
@@ -16,25 +17,9 @@ const LUCIDE_ICONS: Record<string, LucideIcon | undefined> = {
   ticket: Ticket
 }
 
-/** A plugin ships the shape only; `bg-current` paints every pixel from the
- *  button's own `text-*` class, so the icon tracks the theme like the Lucide
- *  glyphs beside it. An `<img>` would paint the plugin's colours instead. */
-function AssetIcon({ dataUrl }: { dataUrl: string }): React.JSX.Element {
-  const style: React.CSSProperties & { '--plugin-task-source-icon': string } = {
-    '--plugin-task-source-icon': `url("${dataUrl}")`
-  }
-  return (
-    <span
-      aria-hidden
-      className="plugin-task-source-icon size-3.5 shrink-0 bg-current"
-      style={style}
-    />
-  )
-}
-
 function SourceIcon({ source }: { source: ContributedPluginTaskSource }): React.JSX.Element {
   if (source.iconDataUrl) {
-    return <AssetIcon dataUrl={source.iconDataUrl} />
+    return <PluginTaskSourceAssetIcon dataUrl={source.iconDataUrl} />
   }
   const Glyph = (source.icon ? LUCIDE_ICONS[source.icon] : undefined) ?? Puzzle
   return <Glyph className="size-3.5 shrink-0" />

@@ -110,7 +110,7 @@ export function renderSmartWorkspaceNameInput(
         }}
         className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-sm shadow-xs outline-none focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
       >
-        <SelectionIcon kind={selectedSource.kind} />
+        <SelectionIcon selection={selectedSource} />
         <span className="min-w-0 flex-1 truncate font-medium leading-none text-foreground">
           {selectedSource.label}
         </span>

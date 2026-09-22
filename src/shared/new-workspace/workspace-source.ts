@@ -60,6 +60,10 @@ export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
   label: string
   url?: string
+  /** Which contributed source produced a `plugin` selection. The renderer needs
+   *  it to draw that plugin's own icon rather than a generic one. */
+  pluginKey?: string
+  sourceId?: string
 }
 
 const GITLAB_ISSUE_PATH_RE = /\/-\/(?:issues|work_items)\//i
@@ -249,7 +253,10 @@ export function buildWorkspaceSourceSelection(args: {
       linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
-    url: linkedWorkItem.url
+    url: linkedWorkItem.url,
+    ...(provider === 'plugin'
+      ? { pluginKey: linkedWorkItem.pluginKey, sourceId: linkedWorkItem.sourceId }
+      : {})
   }
 }
 
