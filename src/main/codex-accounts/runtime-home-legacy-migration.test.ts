@@ -30,6 +30,11 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  return { ...actual, readFileSync: vi.fn(actual.readFileSync) }
+})
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
@@ -185,44 +190,62 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).not.toContain('legacy-2')
   })
 
-  it('preserves conflicting legacy session files under deterministic names', async () => {
-    const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
-    mkdirSync(runtimeSessionsDir, { recursive: true })
-    writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"turns":[1]}', 'utf-8')
-    mkdirSync(join(runtimeSessionsDir, 'nested'), { recursive: true })
-    writeFileSync(join(runtimeSessionsDir, 'nested', 'session.json'), '{"turns":[2]}', 'utf-8')
-    const managedHomePath = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      '{"account":"managed"}\n'
-    )
-    const legacySessionsDir = join(managedHomePath, 'sessions')
-    mkdirSync(legacySessionsDir, { recursive: true })
-    writeFileSync(join(legacySessionsDir, 'session.json'), '{"turns":[1,2]}', 'utf-8')
-    mkdirSync(join(legacySessionsDir, 'nested'), { recursive: true })
-    writeFileSync(join(legacySessionsDir, 'nested', 'session.json'), '{"turns":[2,3]}', 'utf-8')
-    const store = createStore(createSettings())
+  it.each([0, 256 * 1024])(
+    'compares and preserves legacy session files with %i padding bytes',
+    async (paddingBytes) => {
+      const padding = ' '.repeat(paddingBytes)
+      const currentContents = `${padding}{"turns":[1]}`
+      const legacyContents = `${padding}{"turns":[2]}`
+      const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
+      mkdirSync(runtimeSessionsDir, { recursive: true })
+      writeFileSync(join(runtimeSessionsDir, 'session.json'), currentContents, 'utf-8')
+      writeFileSync(join(runtimeSessionsDir, 'same.json'), currentContents, 'utf-8')
+      mkdirSync(join(runtimeSessionsDir, 'nested'), { recursive: true })
+      writeFileSync(join(runtimeSessionsDir, 'nested', 'session.json'), '{"turns":[2]}', 'utf-8')
+      const managedHomePath = createManagedAuth(
+        testState.userDataDir,
+        'account-1',
+        '{"account":"managed"}\n'
+      )
+      const legacySessionsDir = join(managedHomePath, 'sessions')
+      mkdirSync(legacySessionsDir, { recursive: true })
+      writeFileSync(join(legacySessionsDir, 'session.json'), legacyContents, 'utf-8')
+      writeFileSync(join(legacySessionsDir, 'same.json'), currentContents, 'utf-8')
+      mkdirSync(join(legacySessionsDir, 'nested'), { recursive: true })
+      writeFileSync(join(legacySessionsDir, 'nested', 'session.json'), '{"turns":[2,3]}', 'utf-8')
+      const store = createStore(createSettings())
 
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    new CodexRuntimeHomeService(store as never)
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      new CodexRuntimeHomeService(store as never)
 
-    expect(readFileSync(join(runtimeSessionsDir, 'session.json'), 'utf-8')).toBe('{"turns":[1]}')
-    expect(
-      readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1.json'), 'utf-8')
-    ).toBe('{"turns":[1,2]}')
-    expect(
-      readFileSync(
-        join(runtimeSessionsDir, 'nested', 'session.orca-legacy-account-1.json'),
+      expect(
+        vi
+          .mocked(readFileSync)
+          .mock.calls.filter(
+            ([filePath]) =>
+              typeof filePath === 'string' &&
+              (filePath.startsWith(runtimeSessionsDir) || filePath.startsWith(legacySessionsDir))
+          )
+      ).toEqual([])
+      expect(existsSync(join(runtimeSessionsDir, 'same.orca-legacy-account-1.json'))).toBe(false)
+      expect(readFileSync(join(runtimeSessionsDir, 'session.json'), 'utf-8')).toBe(currentContents)
+      expect(
+        readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1.json'), 'utf-8')
+      ).toBe(legacyContents)
+      expect(
+        readFileSync(
+          join(runtimeSessionsDir, 'nested', 'session.orca-legacy-account-1.json'),
+          'utf-8'
+        )
+      ).toBe('{"turns":[2,3]}')
+      const diagnostics = readFileSync(
+        join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
         'utf-8'
       )
-    ).toBe('{"turns":[2,3]}')
-    const diagnostics = readFileSync(
-      join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
-      'utf-8'
-    )
-      .trim()
-      .split('\n')
-    expect(diagnostics).toHaveLength(2)
-    expect(diagnostics[0]).toContain('"type":"session-conflict"')
-  })
+        .trim()
+        .split('\n')
+      expect(diagnostics).toHaveLength(2)
+      expect(diagnostics[0]).toContain('"type":"session-conflict"')
+    }
+  )
 })

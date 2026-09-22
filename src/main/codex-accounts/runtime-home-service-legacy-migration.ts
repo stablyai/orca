@@ -12,6 +12,7 @@ import { writeFileAtomically } from './fs-utils'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from './runtime-selection'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { nodeFilesEqualSync } from '../../shared/node-file-content-equality'
 import { CodexRuntimeHomePaths } from './runtime-home-service-paths'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
@@ -142,9 +143,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         continue
       }
 
-      const legacyContents = readFileSync(legacyFilePath)
-      const runtimeContents = readFileSync(runtimeFilePath)
-      if (runtimeContents.equals(legacyContents)) {
+      if (nodeFilesEqualSync(legacyFilePath, runtimeFilePath)) {
         continue
       }
 
