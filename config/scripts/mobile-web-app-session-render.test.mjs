@@ -119,8 +119,16 @@ afterAll(async () => {
 })
 
 /** A page carrying every signal these cases read: uncaught errors, console errors, request paths. */
-async function openPage(route, replies = {}) {
+async function openPage(route, replies = {}, { domStorageOff = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  if (domStorageOff) {
+    // What the Android shell serves: DOM storage is off on its WebView, and a WebView with it off
+    // answers `window.localStorage` with `null` rather than leaving it undefined. Read off the
+    // device rather than assumed — the emulator run's own error names `null` (reading 'getItem').
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', { configurable: true, get: () => null })
+    })
+  }
   // At document start, where the native shell installs the real channel: the entry reads it while
   // its own script runs, so a channel added after `load` would already be too late.
   await page.addInitScript(installShellDouble, {
@@ -192,8 +200,8 @@ async function waitForRoute({ page, errors }, route, awaitText) {
   }
 }
 
-async function openRoute(route, awaitText, replies = {}) {
-  const opened = await openPage(route, replies)
+async function openRoute(route, awaitText, replies = {}, options = {}) {
+  const opened = await openPage(route, replies, options)
   await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
   await waitForRoute(opened, route, awaitText)
   return opened
@@ -268,6 +276,20 @@ describeRender(
       // there is nothing for the policy to have refused. A font, a beacon or a provider image
       // added anywhere in this closure reds this.
       expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
+      await opened.page.close()
+    }, 120_000)
+
+    it('paints with DOM storage off, which is how the Android shell serves it', async () => {
+      // Every other case here runs against a real `localStorage`, which the page never has. The
+      // one module that needed it was `expo-notifications`: `push-registration.ts` reached it and
+      // its `DevicePushTokenAutoRegistration.fx` reads the persisted registration at import behind
+      // a `typeof localStorage === 'undefined'` guard, which `null` walks straight through. That
+      // put "Cannot read properties of null (reading 'getItem')" at error level on every page load
+      // on the device. The page has no push registration; the shell owns it.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal', {}, { domStorageOff: true })
+      // Exact and not a filter, like the case above it: a module reaching browser storage the page
+      // does not have is a defect wherever it comes from.
+      expect(opened.errors).toEqual([])
       await opened.page.close()
     }, 120_000)
 

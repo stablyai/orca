@@ -160,6 +160,14 @@
     {
       "file": "src/transport/host-app-version-store.web.ts",
       "reason": "Not an RN Web API gap but a store the page has no reader for. The native file records the host's status.get app version under orca:host-app-version:v1:<hostId> so the native troubleshoot screen can name a version with no live host; that screen's module, diagnostics/native-diagnostics-operations.ts, is not in the page's bundle. Inside the page AsyncStorage is the bridge's adapter and this key is not one the route was handed, so every mount that read status.get posted a write the shell refused and logged as storage-write-dropped. A key the page only writes is not page state, so it is not admitted through page-storage-keys.ts; the page keeps no record instead."
+    },
+    {
+      "file": "src/notifications/push-token.web.ts",
+      "reason": "expo-notifications is not a module a browser can merely import. DevicePushTokenAutoRegistration.fx runs at import: it adds a push-token listener React Native Web answers with a warning and an inert subscription, and it reads the persisted server registration out of window.localStorage behind a typeof === 'undefined' guard. Android's WebView with DOM storage off answers null rather than undefined, so the guard passes and the read raised \"Cannot read properties of null (reading 'getItem')\" at error level on every page load. The page holds no device push token and has no gateway to register one with; push registration is the app's. The native file's own calls are already inert on web, so the sibling changes the import and not a behaviour."
+    },
+    {
+      "file": "src/notifications/desktop-notification-channel.web.ts",
+      "reason": "The page creates no Android notification channel: the native file already returns early off Android, so what this sibling changes is the import of expo-notifications, which runs its auto-registration side effect at import inside the shell's WebView. See push-token.web.ts beside it."
     }
   ]
 }
