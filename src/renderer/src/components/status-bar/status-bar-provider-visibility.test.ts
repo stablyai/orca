@@ -76,6 +76,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
     grokAuthConfigured: false,
+    antigravityAuthConfigured: false,
     ...overrides
   }
 }
@@ -123,11 +124,8 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    expect(hasUsageProviderSettings(usageSettings({ antigravityAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
@@ -163,21 +161,19 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+  it('treats native Antigravity sign-in or a checked item as the durable signal', () => {
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
     ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -359,26 +355,23 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
+  it('keeps Antigravity visible from a checked item without Gemini OAuth', () => {
+    const visible = getVisibleUsageProvider(
+      'antigravity',
+      null,
+      usageSettings({ antigravityUsageConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'antigravity',
+      status: 'fetching'
+    })
     expect(
       getVisibleUsageProvider(
         'antigravity',
         null,
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
-    ).toBe(null)
-    expect(
-      getVisibleUsageProvider(
-        'antigravity',
-        provider('unavailable', {
-          provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
-        }),
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(null)
+    ).toMatchObject({ provider: 'antigravity', status: 'fetching' })
   })
 })
 
@@ -492,9 +485,7 @@ describe('isUsageEmptyState', () => {
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
-    // it must not hide the teaching CTA from users who set nothing up.
+  it('does not show the setup CTA when Antigravity is signed in natively', () => {
     expect(
       isUsageEmptyState(
         {
@@ -507,8 +498,8 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 })
