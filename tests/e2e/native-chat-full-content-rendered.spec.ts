@@ -8,9 +8,7 @@ import {
   boundInlineText,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../../src/main/native-chat/agent-session-journal/journal-payload-bounds'
-import {
-  readOwnedPayloadRange
-} from '../../src/main/native-chat/agent-session-journal/journal-payload-read'
+import { readOwnedPayloadRange } from '../../src/main/native-chat/agent-session-journal/journal-payload-read'
 import {
   JournalPayloadStore,
   PAYLOAD_STORE_DIR_NAME
@@ -50,12 +48,16 @@ function buildHarnessBundle(): void {
   try {
     // The vite entry is invoked through node directly: no shell, so the path
     // needs no quoting on any platform.
-    execFileSync(process.execPath, [
-      path.join(repoRoot, 'node_modules', 'vite', 'bin', 'vite.js'),
-      'build',
-      '--config',
-      HARNESS_CONFIG
-    ], { cwd: repoRoot, stdio: 'inherit', timeout: HARNESS_BUILD_TIMEOUT_MS })
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules', 'vite', 'bin', 'vite.js'),
+        'build',
+        '--config',
+        HARNESS_CONFIG
+      ],
+      { cwd: repoRoot, stdio: 'inherit', timeout: HARNESS_BUILD_TIMEOUT_MS }
+    )
   } catch (error) {
     throw new Error(
       `The full-content harness bundle could not be built. Run \`pnpm run ${HARNESS_BUILD_SCRIPT}\` and retry. Underlying failure: ${error instanceof Error ? error.message : String(error)}`
@@ -72,11 +74,12 @@ function filler(prefix: string, bytes: number): string {
   const lines: string[] = []
   let index = 0
   while (lines.join('\n').length < bytes) {
-    lines.push(`${prefix} line ${index++}: ordinary text that pushes the sentinel past the bounded head`)
+    lines.push(
+      `${prefix} line ${index++}: ordinary text that pushes the sentinel past the bounded head`
+    )
   }
   return lines.join('\n')
 }
-
 
 /** Scrolls the element and every scrollable ancestor to its end. */
 async function scrollToEnd(locator: Locator): Promise<void> {
@@ -91,10 +94,7 @@ async function scrollToEnd(locator: Locator): Promise<void> {
 
 /** Serves the built harness bundle plus a `/payload` endpoint backed by the real
  *  owner-checked range reader, so the page fetches through production code. */
-function serveHarness(args: {
-  store: JournalPayloadStore
-  config: unknown
-}): Promise<Server> {
+function serveHarness(args: { store: JournalPayloadStore; config: unknown }): Promise<Server> {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (url.pathname === '/config.json') {
@@ -194,7 +194,12 @@ test('rendered: clipped prose and tool output open the complete original in real
       timestamp: 0,
       source: 'transcript',
       blocks: [
-        { type: 'tool-call', name: 'Bash', input: { command: 'cat artifact.md' }, state: 'completed' },
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: { command: 'cat artifact.md' },
+          state: 'completed'
+        },
         {
           type: 'tool-result',
           output: boundedTool.text,
@@ -226,11 +231,14 @@ test('rendered: clipped prose and tool output open the complete original in real
   // The app's own Electron/Chromium, in a hidden offscreen window: nothing is
   // shown or focused on the host while this renders.
   const harnessUrl = `${origin}/index.html?config=${encodeURIComponent(`${origin}/config.json`)}`
-  const electronApp = await electron.launch({
-    args: [HARNESS_MAIN],
-    env: { ...process.env, HARNESS_URL: harnessUrl, ELECTRON_ENABLE_LOGGING: '0' }
-  })
+  // Started inside the try: a rejected `launch` must still hit `finally` below,
+  // or the listening `server` and `root` temp dir outlive this test.
+  let electronApp: Awaited<ReturnType<typeof electron.launch>> | null = null
   try {
+    electronApp = await electron.launch({
+      args: [HARNESS_MAIN],
+      env: { ...process.env, HARNESS_URL: harnessUrl, ELECTRON_ENABLE_LOGGING: '0' }
+    })
     const page = await electronApp.firstWindow()
     await expect(page.getByTestId('harness-root')).toBeVisible()
     // Both heads render honestly clipped: neither sentinel is on screen yet.
@@ -242,7 +250,9 @@ test('rendered: clipped prose and tool output open the complete original in real
     await expect(buttons).toHaveCount(2)
     await page.screenshot({ path: path.join(evidenceDir, '01-clipped-heads.png'), fullPage: true })
     // The visible marker names the size and digest so the head never poses as complete.
-    await expect(page.getByText(/output truncated — \d+ bytes total, digest [0-9a-f]{12}/).first()).toBeVisible()
+    await expect(
+      page.getByText(/output truncated — \d+ bytes total, digest [0-9a-f]{12}/).first()
+    ).toBeVisible()
 
     // Prose: the complete original, with the sentinel that lived past the head.
     await buttons.nth(0).click()
@@ -284,7 +294,7 @@ test('rendered: clipped prose and tool output open the complete original in real
     expect(refused.status).toBe(403)
     expect(refused.text).toMatch(/not referenced/)
   } finally {
-    await electronApp.close()
+    await electronApp?.close()
     server.close()
     rmSync(root, { recursive: true, force: true })
   }

@@ -74,7 +74,9 @@ export class JournalPayloadIntegrityError extends Error {
   readonly actualDigest: string
   /** Names both digests so a caller can tell a tampered file from a missing one. */
   constructor(digest: string, actualDigest: string) {
-    super(`Retained payload for digest ${digest.slice(0, 12)} hashes to ${actualDigest.slice(0, 12)}; refusing to return mismatched content.`)
+    super(
+      `Retained payload for digest ${digest.slice(0, 12)} hashes to ${actualDigest.slice(0, 12)}; refusing to return mismatched content.`
+    )
     this.name = 'JournalPayloadIntegrityError'
     this.digest = digest
     this.actualDigest = actualDigest
@@ -207,7 +209,9 @@ export class JournalPayloadStore implements JournalPayloadRetention {
   }
 
   /** True when this exact file — same inode, size and mtime — already hashed to
-   *  `digest`. Any rewrite moves the mtime or the inode, so the entry lapses. */
+   *  `digest`. An ordinary rewrite moves the mtime or the inode, so the entry
+   *  lapses; a same-uid writer that restores the mtime after an in-place
+   *  rewrite is not covered — see `VerifiedFileIdentity`. */
   private isVerified(digest: string, identity: VerifiedFileIdentity): boolean {
     const known = this.verified.get(digest)
     return (
@@ -298,7 +302,9 @@ export class JournalPayloadStore implements JournalPayloadRetention {
       return null
     }
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
-      throw new Error('Payload range offset must be a non-negative integer and limit a positive integer.')
+      throw new Error(
+        'Payload range offset must be a non-negative integer and limit a positive integer.'
+      )
     }
     // Verify the whole file before serving any of it: a range from a tampered
     // file must never be returned even when the requested bytes happen to be

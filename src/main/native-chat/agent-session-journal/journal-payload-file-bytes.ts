@@ -6,9 +6,13 @@
 import { createHash } from 'node:crypto'
 import { readSync, statSync } from 'node:fs'
 
-/** The file identity a successful verification is pinned to. Any write — even
- *  one that preserves the size — changes the mtime or the inode, so a stale
- *  entry cannot survive a tampered file. */
+/** The file identity a successful verification is pinned to. An ordinary write
+ *  — even one that preserves the size — changes the mtime or the inode, so a
+ *  stale entry cannot survive it. This is not a guarantee against a same-uid
+ *  writer: an in-place rewrite keeps the inode, and `utimes` can restore the
+ *  mtime, so that attacker (who already runs as the store's owner) can make a
+ *  tampered file match a cached identity. The store directory is 0700/0600,
+ *  so this cache defends against ordinary corruption, not that attacker. */
 export type VerifiedFileIdentity = { size: number; mtimeMs: number; ino: number; dev: number }
 
 /** sha256 of the first `size` bytes behind `descriptor`, streamed so a large
