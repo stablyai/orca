@@ -148,6 +148,10 @@
     {
       "file": "src/session/use-notification-pane-navigation.web.ts",
       "reason": "The native hook reads `paneKey` off the app's route with `useLocalSearchParams` and clears it with `setParams`. Inside the page neither exists: the document is served at `/` with one history entry, so `setParams` would rewrite the page's own URL while the app's route kept the spent tap, and the pane request never reaches the page as a param at all. It arrives as a re-sent `init` for the session this page already holds (ruling 33.1), which this sibling reads off the client's standing route-update listener; the shell clears the native param once the page has been handed one."
+    },
+    {
+      "file": "src/terminal/terminal-live-input-text-write.web.ts",
+      "reason": "setNativeProps does not exist on React Native Web: a TextInput ref is the DOM node itself, so the native write throws out of the session route's mount effect and faults the whole page rather than clearing the field. This file writes the same text through the node's own value, checked for the <input> or <textarea> RN Web renders, so an interrupted IME composition is still cleared in the case React has no commit to make."
     }
   ]
 }
