@@ -2,6 +2,7 @@ import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
+import { findPage } from '../../store/slices/browser-page-records'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 
 /**
@@ -55,6 +56,10 @@ export function registerBrowserStateIpcBridge(
         return
       }
       const store = useAppStore.getState()
+      // A queued automation update can arrive after page teardown cleared its URL.
+      if (!findPage(store.browserPagesByWorkspace, browserPageId)) {
+        return
+      }
       // The redacted live registry must precede the raw persisted store update.
       rememberLiveBrowserUrl(browserPageId, redactKagiSessionToken(url))
       store.setBrowserPageUrl(browserPageId, url)

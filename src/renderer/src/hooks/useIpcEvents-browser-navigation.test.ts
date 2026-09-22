@@ -12,6 +12,7 @@ describe('browser navigation updates', () => {
     const updateBrowserPageState = vi.fn()
     const storeState = createHarnessStoreState({
       tabsByWorktree: {},
+      browserPagesByWorkspace: { 'workspace-1': [{ id: 'page-1' }] },
       setBrowserPageUrl,
       updateBrowserPageState
     })
@@ -38,6 +39,40 @@ describe('browser navigation updates', () => {
       loading: false
     })
     clearLiveBrowserUrl('page-1')
+  })
+
+  it('does not restore closed-page URLs when delayed navigation updates arrive', async () => {
+    const storeState = createHarnessStoreState({
+      tabsByWorktree: {},
+      browserPagesByWorkspace: {},
+      setBrowserPageUrl: vi.fn(),
+      updateBrowserPageState: vi.fn()
+    })
+    const harness = await loadIpcEventsHarness(storeState)
+    const { clearLiveBrowserUrl, getLiveBrowserUrl } =
+      await import('@/components/browser-pane/describe-page/live-browser-url-registry')
+    harness.useIpcEvents()
+    const pageIds = Array.from({ length: 32 }, (_, index) => `closed-page-${index}`)
+
+    try {
+      for (const pageId of pageIds) {
+        storeState.browserPagesByWorkspace = { workspace: [{ id: pageId }] }
+        harness.navigationUpdate({ browserPageId: pageId, url: 'https://example.com/', title: '' })
+        expect(getLiveBrowserUrl(pageId)).toBe('https://example.com/')
+
+        storeState.browserPagesByWorkspace = {}
+        clearLiveBrowserUrl(pageId)
+        harness.navigationUpdate({
+          browserPageId: pageId,
+          url: `https://example.com/late/${pageId}`,
+          title: ''
+        })
+      }
+
+      expect(pageIds.filter((pageId) => getLiveBrowserUrl(pageId) !== null)).toEqual([])
+    } finally {
+      pageIds.forEach(clearLiveBrowserUrl)
+    }
   })
 })
 
