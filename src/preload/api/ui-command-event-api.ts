@@ -108,13 +108,15 @@ export type UiCommandEventApi = {
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: () => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
-  onReloadBrowserPage: (callback: () => void) => () => void
-  onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
+  onReloadBrowserPage: (callback: (target: { browserPageId: string }) => void) => () => void
+  onBrowserHistoryNavigate: (
+    callback: (target: { browserPageId: string; direction: 'back' | 'forward' }) => void
+  ) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onScrollBrowserPage?: (
     callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
   ) => () => void
-  onHardReloadBrowserPage: (callback: () => void) => () => void
+  onHardReloadBrowserPage: (callback: (target: { browserPageId: string }) => void) => () => void
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void

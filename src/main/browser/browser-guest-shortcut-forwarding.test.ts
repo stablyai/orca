@@ -566,8 +566,14 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(backPreventDefault).toHaveBeenCalledTimes(1)
     expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', {
+      browserPageId: browserTabId,
+      direction: 'back'
+    })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', {
+      browserPageId: browserTabId,
+      direction: 'forward'
+    })
   })
 
   it('forwards browser Find with its registered page and workspace owner', () => {
