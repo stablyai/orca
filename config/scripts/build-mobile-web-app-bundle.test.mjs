@@ -465,14 +465,8 @@ describe('the Phase C budget', () => {
     expect(note).toContain('unstable_settings')
   })
 
-  /**
-   * The one count above that has to follow the tree, spelled so the census can read it.
-   *
-   * The sweep carries a row per route plus `h/_layout.tsx`, which is not a screen anyone navigates
-   * to, so the route count is its length less one -- and it is the number a route added to the
-   * tree moves. The static-import readings beside it are measurements rather than table counts and
-   * the two frozen mermaid builds must not move at all, so neither is spelled.
-   */
+  /** The one count above that must follow the tree, spelled so the census reads it. The sweep is
+   *  a row per route plus `h/_layout.tsx`, which is no screen, so it is that length less one. */
   it('spells the route count off the sweep it is a count of', async () => {
     const source = await readFile(
       join(projectDir, 'config', 'scripts', 'build-mobile-web-app-bundle.test.mjs'),
@@ -534,24 +528,12 @@ describe('the Phase C budget', () => {
   })
 
   it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
-    // The two builds this ceiling has to tell apart, both measured at 14 routes on the head that
-    // first read them, and both still told apart by the envelope, which is tighter than the
-    // 4r + 16 they were first read against.
+    // The two builds the ceiling must tell apart: mermaid through one pre-bundled artifact
+    // emitted 69 scripts, importing the package emitted 172, esbuild splitting along the diagram
+    // types mermaid lazily imports. Both frozen at the head that measured them, because this case
+    // pins the discrimination and not either build's size.
     //
-    // Reaching mermaid through one pre-bundled artifact emitted 69 scripts there, one of them the
-    // deferred engine; importing the package instead emitted 172, because mermaid lazily imports
-    // each of its own diagram types and esbuild splits along those boundaries, all of it inside
-    // the generation the phone has already downloaded. Both are held at what that head measured
-    // rather than re-read here -- what this case pins is the discrimination, not either build's
-    // size, and this head's own fourteen-route prefix reads 64. Left in digits for that reason:
-    // the census below spells the counts that must follow the tree, and these two must not.
-    //
-    // 69 now sits just under the envelope, so a sweep that falls further fails this case on a
-    // frozen measurement rather than on a build. That is a signal to re-measure the pair against
-    // a mermaid the page imports as a package, not to raise the ceiling.
-    //
-    // The route term is the only term precisely so that the second of those fails here -- a
-    // ceiling raised to admit 172 would have admitted any split at all.
+    // 69 now sits just under the envelope: a sweep that falls further means re-measure, not raise.
     const ROUTES = 14
     const WITH_ONE_ARTIFACT = 69
     const CHUNKED_ALONG_THE_ENGINE = 172
