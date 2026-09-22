@@ -18,6 +18,10 @@
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },
     {
+      "file": "src/transport/host-removal-lifecycle.web.ts",
+      "reason": "Removing a host is pairing work and the page holds neither the host list nor the credential, so the real lifecycle's removeHost resolved without doing anything and the screen reported success for a host that was still paired. This one refuses with PageHostRemovalUnavailableError, whose message names the app's host list. It is also the fence that keeps push-registration.ts out of the page bundle: the native file's import of it was that subsystem's only path into a page route, and the page has neither the device token nor the gateway client push needs."
+    },
+    {
       "file": "src/transport/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
@@ -55,7 +59,7 @@
     },
     {
       "file": "src/platform/keyboard-occlusion.web.ts",
-      "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+      "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document — the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
     },
     {
       "file": "src/platform/clipboard.web.ts",
@@ -132,6 +136,10 @@
     {
       "file": "src/components/MobileRichMarkdownEditor.web.tsx",
       "reason": "The native editor is a rich document inside a WebView, and react-native-webview is a native component with no browser counterpart: importing it runs a codegen lookup that throws, and the route manifest imports every route, so one such import takes the whole page down rather than one editor. This one renders the Markdown source in a plain field on the text-input seam, which is the state the screen around it already handles — the text, every edit through onChange, and Save, Discard, Copy and Refresh unchanged. The degradation is the formatting toolbar and the rendered view: the toolbar's fifteen commands are the rich document's, and a contenteditable reimplementation is a different surface with its own escaping and its own proof rather than a smaller version of this one (rulings-ota-c7.md ruling 8). onKeyboardInsetChange is never called, which is correct rather than missing: it exists because native Keyboard events under-report a WebView's covered area, and on the page keyboard-occlusion.web.ts is the only measurement there is."
+    },
+    {
+      "file": "src/components/AuthFailedRemoveAction.web.tsx",
+      "reason": "The auth-failed banner's Remove is the one page surface that opens the remove-host confirm, and on the page removal can only refuse. This one renders nothing, so the control is absent rather than present and failing; Retry and Re-pair stay, because both still do something in this document."
     },
     {
       "file": "src/components/MobileHtmlPreview.web.tsx",
