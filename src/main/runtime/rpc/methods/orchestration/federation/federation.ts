@@ -154,7 +154,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             )
           })
           effects.push(
-            { kind: 'worktree', action: 'reused', id: worktree.id },
+            { kind: 'worktree', action: 'reused', id: worktree.id, branch: worktree.git.branch },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
           )
           if (terminalHandle) {
