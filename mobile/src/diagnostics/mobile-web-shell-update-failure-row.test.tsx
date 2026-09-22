@@ -7,10 +7,12 @@ import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web
  * The row is the only place a release build shows why an update failed, so it reads exactly what
  * was recorded: the newest failure per paired host, and nothing at all until there is one.
  */
-const doubles = vi.hoisted(() => ({
-  failures: [] as MobileWebShellUpdateFailure[],
-  hosts: [] as { id: string; name: string }[]
-}))
+type Doubles = {
+  failures: MobileWebShellUpdateFailure[]
+  hosts: { id: string; name: string }[]
+}
+
+const doubles = vi.hoisted((): Doubles => ({ failures: [], hosts: [] }))
 
 vi.mock('react-native', () => ({ Text: 'Text', View: 'View' }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
