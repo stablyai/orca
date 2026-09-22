@@ -1,19 +1,22 @@
 // @vitest-environment happy-dom
-import { createElement } from 'react'
+import { createElement, type Dispatch, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SoftKeyboardState } from '../platform/keyboard-occlusion'
+import type { RouteHandoff } from '../navigation/route-handoff'
 
-type SoftKeyboard = { height: number; visible: boolean }
-
-const harness = vi.hoisted(() => ({
-  keyboard: { height: 0, visible: false } as SoftKeyboard,
-  notifyKeyboardVisibility: vi.fn(),
-  notifyTerminalFrameHeight: vi.fn(),
-  setKeyboardHeight: vi.fn()
-}))
+const harness = vi.hoisted(() => {
+  const keyboard: SoftKeyboardState = { height: 0, visible: false }
+  return {
+    keyboard,
+    notifyKeyboardVisibility: vi.fn<(visible: boolean) => void>(),
+    notifyTerminalFrameHeight: vi.fn<(height: number) => void>(),
+    setKeyboardHeight: vi.fn<Dispatch<SetStateAction<number>>>()
+  }
+})
 
 vi.mock('../platform/keyboard-occlusion', () => ({
-  useSoftKeyboard: (): SoftKeyboard => harness.keyboard
+  useSoftKeyboard: (): SoftKeyboardState => harness.keyboard
 }))
 // The refit hook reaches the RPC client and the terminal handles; what this file measures is what
 // the screen tells it about the keyboard, which is the two notifications above it.
@@ -28,11 +31,28 @@ vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorkt
 
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
 
+/** Every member the type carries, because this file is typechecked; only `push` is reached here,
+ *  from the shortcuts sheet's "Manage shortcuts". */
+const router: RouteHandoff = {
+  back: () => {},
+  canDismiss: () => false,
+  canGoBack: () => false,
+  dismiss: () => {},
+  dismissAll: () => {},
+  dismissTo: () => {},
+  navigate: () => {},
+  prefetch: () => {},
+  push: () => {},
+  reload: () => {},
+  replace: () => {},
+  setParams: () => {}
+}
+
 function Harness(): null {
   useMobileSessionKeyboardState({
     hostId: 'host-1',
     worktreeId: 'wt-1',
-    router: { push: () => {} },
+    router,
     connState: 'connected',
     terminals: [],
     terminalTextScale: 1,
@@ -45,7 +65,20 @@ function Harness(): null {
     customKeys: [],
     setCustomKeys: () => {},
     setShowCustomKeyModal: () => {},
-    setKeyboardHeight: harness.setKeyboardHeight
+    setKeyboardHeight: harness.setKeyboardHeight,
+    // Read only by the viewport refit, which is mocked above; present because the scope names them.
+    activeHandleRef: { current: null },
+    clientRef: { current: null },
+    deviceTokenRef: { current: null },
+    initializedHandlesRef: { current: new Set() },
+    showNativeChatRef: { current: false },
+    subscribeToTerminal: () => {},
+    terminalFrameHeightRef: { current: 0 },
+    terminalFrameWidth: 0,
+    terminalRefs: { current: new Map() },
+    unsubscribeTerminal: () => {},
+    viewportMeasuredRef: { current: false },
+    viewportRef: { current: null }
   })
   return null
 }

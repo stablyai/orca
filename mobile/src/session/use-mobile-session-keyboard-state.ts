@@ -6,7 +6,43 @@ import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
-export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel) {
+/**
+ * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
+ * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
+ */
+export type MobileSessionKeyboardScope = Pick<
+  MobileSessionLifecycleModel,
+  | 'activeHandleRef'
+  | 'activeSessionTabId'
+  | 'clientRef'
+  | 'connState'
+  | 'customKeys'
+  | 'deviceTokenRef'
+  | 'hostId'
+  | 'initializedHandlesRef'
+  | 'router'
+  | 'setCustomKeys'
+  | 'setKeyboardHeight'
+  | 'setShowCustomKeyModal'
+  | 'showNativeChatRef'
+  | 'subscribeToTerminal'
+  | 'tabLayoutsRef'
+  | 'tabStripContentWidthRef'
+  | 'tabStripOffsetRef'
+  | 'tabStripRef'
+  | 'tabStripViewportWidthRef'
+  | 'terminalFrameHeightRef'
+  | 'terminalFrameWidth'
+  | 'terminalRefs'
+  | 'terminals'
+  | 'terminalTextScale'
+  | 'unsubscribeTerminal'
+  | 'viewportMeasuredRef'
+  | 'viewportRef'
+  | 'worktreeId'
+>
+
+export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
