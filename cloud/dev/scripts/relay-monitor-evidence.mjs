@@ -345,7 +345,10 @@ export async function verifyMutationEvidence(
     body: JSON.stringify({ v: 1 }),
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error('relay monitor live selector verification failed')
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error('relay monitor live selector verification failed')
+  }
   const current = (await response.json()).selector
   if (!exactSelector(current, state.expectedSelector)) {
     throw new Error('relay admission selector changed after the dry run')
