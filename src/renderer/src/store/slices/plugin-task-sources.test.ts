@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { AppState } from '../types'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import type { PluginTaskItem } from '../../../../shared/plugins/plugin-task-source-contract'
@@ -643,6 +644,13 @@ describe('contributed task source facets in the store', () => {
       filterId: null,
       facetSelections: { state: ['Active', 'New'], sprint: ['Sprint 1'] }
     })
+    // Only facets whose options have settled for this scope are sent.
+    store.setState({
+      pluginTaskSourceFacetOptions: {
+        state: { status: 'ready', options: [] },
+        sprint: { status: 'ready', options: [] }
+      }
+    })
     await store.getState().loadPluginTaskSourceItems()
 
     expect(invokeTaskSource).toHaveBeenCalledWith({
@@ -879,6 +887,111 @@ describe('deriveContributedPluginTaskSources', () => {
         ([args]) => args.method === 'listFacetOptions'
       )
     ).toEqual([])
+  })
+
+  it('omits a facet whose options have not settled for the scope on screen', async () => {
+    // A scope change loads items and facet options in the same commit, so an
+    // unsettled facet still holds the previous project's option ids. The source
+    // refuses an id it cannot resolve, so sending one fails the whole list.
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceQuery({
+      search: null,
+      filterId: null,
+      facetSelections: { state: ['Active'], sprint: ['org/proj\u0000Sprint 1'] }
+    })
+    store.setState({
+      pluginTaskSourceFacetOptions: {
+        state: { status: 'ready', options: [] },
+        sprint: { status: 'loading' }
+      }
+    })
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(invokeTaskSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ facetSelections: { state: ['Active'] } })
+      })
+    )
+  })
+
+  it('sends no facetSelections at all when none have settled', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceQuery({
+      search: null,
+      filterId: null,
+      facetSelections: { state: ['Active'] }
+    })
+    store.setState({ pluginTaskSourceFacetOptions: { state: { status: 'loading' } } })
+    await store.getState().loadPluginTaskSourceItems()
+
+    const params = invokeTaskSource.mock.calls[0][0].params
+    expect('facetSelections' in params).toBe(false)
+  })
+
+  it('keeps a selection whose options failed rather than discarding it', async () => {
+    // Not sending it is a widened response; dropping it loses the user's filter
+    // to a transient error, which they never asked for.
+    const store = createTestStore()
+    const invokeTaskSource = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.getState().setPluginTaskSourceQuery({
+      search: null,
+      filterId: null,
+      facetSelections: { state: ['Active'] }
+    })
+    store.setState({
+      pluginTaskSourceFacetOptions: {
+        state: { status: 'failed', error: { code: 'unavailable', message: 'nope' } }
+      }
+    })
+    await store.getState().loadPluginTaskSourceItems()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ state: ['Active'] })
+  })
+
+  it('persists a scope drop so the next launch does not restore it', async () => {
+    // Kept in memory only, the retired scope comes back from settings on the
+    // next launch, reaches listItems again, and is dropped again — forever.
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'listScopes') {
+        return { ok: true, data: [{ id: 'org/kept', name: 'org / kept' }] }
+      }
+      return { ok: true, data: [] }
+    })
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.setState({
+      selectedPluginTaskSourceScopeIds: ['org/kept', 'org/gone'],
+      settings: createGlobalSettingsFixture({ pluginTaskSourceSelections: {} }),
+      updateSettings
+    })
+    await store.getState().loadPluginTaskSourceScopes()
+    await Promise.resolve()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      pluginTaskSourceSelections: {
+        'orca-samples.issues:boards': expect.objectContaining({ scopeIds: ['org/kept'] })
+      }
+    })
   })
 
 })

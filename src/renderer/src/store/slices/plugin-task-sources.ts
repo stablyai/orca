@@ -28,6 +28,7 @@ import {
 } from './plugin-task-source-selection-persistence'
 import type {
   ContributedPluginTaskSource,
+  PluginTaskSourceFacetOptions,
   PluginTaskSourceQuery,
   PluginTaskSourcesSlice
 } from './plugin-task-sources-slice-contract'
@@ -65,15 +66,29 @@ const NO_SELECTION: PluginTaskSourceResult<never> = {
 /** `filterId` and `facetSelections` are omitted rather than sent empty so a
  *  source that never declared either sees the exact request it saw before they
  *  existed. */
-function buildListQuery(query: PluginTaskSourceQuery, scopeIds: string[]): PluginTaskQuery {
-  const hasFacetSelections = Object.keys(query.facetSelections).length > 0
+function buildListQuery(
+  query: PluginTaskSourceQuery,
+  scopeIds: string[],
+  facetOptions: Record<string, PluginTaskSourceFacetOptions>
+): PluginTaskQuery {
+  // Only facets whose options have settled for the scope on screen are sent.
+  // A scope change runs the items load in the same commit as the options load,
+  // so an unsettled facet still holds the previous project's option ids, which
+  // the source refuses outright rather than ignoring. Sending fewer facets
+  // widens this one response; sending a retired id fails the whole list.
+  const facetSelections = Object.fromEntries(
+    Object.entries(query.facetSelections).filter(
+      ([facetId]) => facetOptions[facetId]?.status === 'ready'
+    )
+  )
+  const hasFacetSelections = Object.keys(facetSelections).length > 0
   return {
     scopeIds,
     search: query.search,
     cursor: null,
     limit: PLUGIN_TASK_SOURCE_PAGE_SIZE,
     ...(query.filterId ? { filterId: query.filterId } : {}),
-    ...(hasFacetSelections ? { facetSelections: query.facetSelections } : {})
+    ...(hasFacetSelections ? { facetSelections } : {})
   }
 }
 
@@ -205,10 +220,13 @@ export const createPluginTaskSourcesSlice: StateCreator<
       set({
         pluginTaskSourceScopes: result.data,
         pluginTaskSourceScopesError: null,
-        pluginTaskSourceScopesLoading: false,
-        ...(retainedScopeIds ? { selectedPluginTaskSourceScopeIds: retainedScopeIds } : {})
+        pluginTaskSourceScopesLoading: false
       })
       if (retainedScopeIds) {
+        // Through the setter, not a raw set: it is the only writer that
+        // persists, and a drop kept in memory alone is restored on the next
+        // launch and dropped again, forever.
+        get().setPluginTaskSourceScopeIds(retainedScopeIds)
         // Dropping a scope strands any facet load already in flight: its
         // callbacks see a scope set that moved on and discard themselves,
         // leaving every facet stuck on `loading`. Reload for the scopes that
@@ -236,7 +254,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
       selection,
       'listItems',
       pluginTaskPageSchema,
-      buildListQuery(query, scopeIds)
+      buildListQuery(query, scopeIds, get().pluginTaskSourceFacetOptions)
     )
     // A stale response from a since-abandoned source, a since-replaced query, or
     // a since-replaced scope selection must never overwrite what the user is
