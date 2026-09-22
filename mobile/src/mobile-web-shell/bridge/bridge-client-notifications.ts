@@ -42,6 +42,8 @@ export type BridgeClientNotificationDeps = {
   isClosed: () => boolean
   /** What `init.grants.native` named. A grant the shell did not give is a frame it would refuse. */
   hasGrant: (name: string) => boolean
+  /** What `init.accepts` named. The other half of the same read: a capability rather than a grant. */
+  shellAccepts: (name: string) => boolean
 }
 
 export type BridgeClientNotifications = {
@@ -136,10 +138,13 @@ export function createBridgeClientNotifications(
         error: captureBridgeError(error)
       })
     },
-    // Through the guard like the rest, and answering nothing: the shell uncovers on the frame, and
-    // a page that learned its post was refused has nothing else to do about a frame it has painted.
+    // Gated on the shell saying it takes one, not on a grant: `notify` is a closed union, so an
+    // older shell answers an unknown name with an error frame per mount. Answering nothing, because
+    // a page that has painted has nothing else to do about a shell that will not hear it.
     notifyPagePainted: () => {
-      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
+      if (deps.shellAccepts(BRIDGE_PAGE_PAINTED)) {
+        post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
+      }
     }
   }
 }

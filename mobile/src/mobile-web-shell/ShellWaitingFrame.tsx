@@ -6,12 +6,9 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
 /**
- * Long enough to read as a dissolve rather than a cut, short enough not to delay a tap.
- *
- * Eased in, so the cover spends the first half of it near full opacity. The page reports the paint
- * its own renderer made, and the compositor needs another frame or two to put that on the app's
- * surface: a linear fade from the report left two frames of bare surface between the two on an
- * emulator, which is the hole this whole path exists to close.
+ * Eased in, so the cover holds near full opacity through the handover: the page reports its own
+ * renderer's paint, and the compositor needs a frame or two more to put that on the app's surface.
+ * A linear fade left two frames of bare surface between the two on an emulator.
  */
 export const SHELL_PAGE_COVER_FADE_MS = 220
 
@@ -26,15 +23,10 @@ export function ShellWaitingFrame({ label }: { label: string }) {
 }
 
 /**
- * That same frame, held over a mounted view until the page reports one of its own.
- *
- * Held across the state change rather than torn down at it: a WebView that has not painted draws
- * nothing, so uncovering when the generation opens shows the surface behind it and nothing else
- * for the whole of the page's boot.
- *
- * Never interactive, even while it is opaque. A tap in this window has nothing under it to reach,
- * and a report that never arrives — an older page, a frame the view refused — would otherwise
- * leave a working workspace visible and dead. Stranded, this is a spinner over a usable page.
+ * That same frame, held over a mounted view until the page reports one of its own: a WebView that
+ * has not painted draws nothing, so uncovering at `ready` shows the surface behind it and nothing
+ * else for the whole of the page's boot. Never interactive even while opaque, so a report that
+ * never arrives strands a spinner over a usable page rather than a dead one.
  */
 export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
   const opacity = useRef(new Animated.Value(1)).current

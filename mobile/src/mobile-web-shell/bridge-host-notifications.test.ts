@@ -466,9 +466,12 @@ describe('the page erasing a one-shot route param', () => {
     const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     const init = bridge.last()
+    // Written out rather than compared against `BRIDGE_SHELL_ACCEPTS`: a list that pins itself
+    // pins nothing, and this is the frame an older page reads to decide what it may post.
     expect(init.type === 'init' && init.accepts).toEqual([
       BRIDGE_ROUTE_PARAM_CLEAR,
-      BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
+      BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+      BRIDGE_PAGE_PAINTED
     ])
   })
 })

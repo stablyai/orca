@@ -48,11 +48,11 @@ describe('how long the shell keeps its own frame up', () => {
     expect(frame({ pageReady: true, pageReportsPaint: true })).toBe('unpainted')
   })
 
-  it('uncovers on the page reporting a frame', () => {
+  it('new shell, new page: uncovers on the page reporting a frame', () => {
     expect(frame({ pageReady: true, pageReportsPaint: true, pagePainted: true })).toBe('painted')
   })
 
-  it('uncovers a page too old to report one, on the newest word it will ever say', () => {
+  it('new shell, old page: uncovers on ready, the newest word that page will ever say', () => {
     // A generation served by a desktop built before the report exists. Waiting on a frame it
     // cannot send would hide a working workspace for the life of the document.
     expect(frame({ pageReady: true, pageReportsPaint: false })).toBe('painted')

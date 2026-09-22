@@ -18,9 +18,8 @@ export type PageDocumentEvent = Extract<
 >
 
 /**
- * What one of those events leaves on the session, and nothing outside `ready` changes anything:
- * the view exists only under the generation on screen, so a frame from a retired document is a
- * frame about a document this session is no longer showing.
+ * What one of those events leaves on the session. Nothing outside `ready` changes anything: the
+ * view exists only under the generation on screen.
  */
 export function pageDocumentStatePatch(
   session: Pick<MobileWebShellSession, 'state' | 'pageReportsPaint'>,

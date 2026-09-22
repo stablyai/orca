@@ -402,7 +402,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     send: posted,
     requireSession,
     isClosed: () => closed,
-    hasGrant: (name) => shellSession.current()?.grants.native.includes(name) === true
+    hasGrant: (name) => shellSession.current()?.grants.native.includes(name) === true,
+    shellAccepts: (name) => shellSession.current()?.accepts.includes(name) === true
   })
 
   const unsubscribeFromMessages = options.onMessage(receive)

@@ -799,7 +799,7 @@ describe('the page reporting a frame on screen', () => {
     expect(shellPageFrame(painted.session)).toBe('painted')
   })
 
-  it('ignores a report from a page that never said one was coming', () => {
+  it('new shell, old page: ignores an undeclared report and uncovers on ready', () => {
     const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
     const step = run(spoken.session, { type: 'page-painted' })
     expect(step.session.pagePainted).toBe(false)

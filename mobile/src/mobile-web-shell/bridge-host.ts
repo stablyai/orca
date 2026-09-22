@@ -15,10 +15,9 @@ import {
   type BridgeConnectionSnapshot,
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
-import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
-import { createBridgeInitFrame } from './bridge/bridge-init-frame'
+import { BRIDGE_SHELL_ACCEPTS, createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
@@ -160,9 +159,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
             ? { pageRouteGrants: parsedRouteGrants.data }
             : {}),
           granted,
-          // Both are additive names on an optional list, so no version moves: a page that knows
-          // neither posts neither, and one told nothing claims no identity and sends none.
-          accepts: [BRIDGE_ROUTE_PARAM_CLEAR, BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT],
+          accepts: BRIDGE_SHELL_ACCEPTS,
           host,
           ...options.readStorage()
         })
