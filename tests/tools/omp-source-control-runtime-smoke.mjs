@@ -4,7 +4,9 @@ import { join, resolve } from 'node:path'
 import { getCommitMessageAgentSpec } from '../../src/shared/commit-message-agent-spec.ts'
 const reference = process.argv[2]
 assert.ok(reference, 'Pass the read-only source checkout path')
-const { parseArgs } = await import(pathToFileURL(join(resolve(reference), 'packages/coding-agent/src/cli/args.ts')).href)
+const { parseArgs } = await import(
+  pathToFileURL(join(resolve(reference), 'packages/coding-agent/src/cli/args.ts')).href
+)
 const spec = getCommitMessageAgentSpec('omp')
 assert.ok(spec)
 for (const model of ['default', 'provider/model']) {
@@ -20,4 +22,12 @@ for (const model of ['default', 'provider/model']) {
   assert.equal(parsed.model, model === 'default' ? undefined : model)
   assert.deepEqual(parsed.messages, [])
 }
-console.log(JSON.stringify({ actualArgumentParser: true, promptDelivery: spec.promptDelivery, configDefault: true, explicitModel: true, modelCalls: 0 }))
+console.log(
+  JSON.stringify({
+    actualArgumentParser: true,
+    promptDelivery: spec.promptDelivery,
+    configDefault: true,
+    explicitModel: true,
+    modelCalls: 0
+  })
+)
