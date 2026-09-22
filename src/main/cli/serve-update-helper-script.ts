@@ -341,6 +341,9 @@ if ! wait_for_ready; then
 fi
 
 rm -f "$BACKUP"
+# Why here too: the contract above says every terminal verdict consumes the request,
+# but only reject/fail did, so a successful update left one behind in the spool.
+rm -f "$REQUEST"
 write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" '{phase: "ok", attemptId: $attemptId, targetVersion: $targetVersion}')"
 log "update to $TARGET_VERSION applied"
 `
