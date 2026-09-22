@@ -23,6 +23,8 @@ import {
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
+import { selectSparseCheckoutProbeIndexes } from './sparse-checkout-probe-budget'
+import { noteStartupWorktreeListCount } from './startup-worktree-hydration-census'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -123,15 +125,17 @@ export async function annotateSparseCheckoutStatus(
   worktrees: GitWorktreeInfo[],
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
+  noteStartupWorktreeListCount(worktrees.length)
   const annotated = [...worktrees]
-  let nextIndex = 0
+  const probeIndexes = selectSparseCheckoutProbeIndexes(worktrees)
+  let nextProbe = 0
 
   async function detectNext(): Promise<void> {
-    while (nextIndex < worktrees.length) {
-      const index = nextIndex
-      nextIndex += 1
+    while (nextProbe < probeIndexes.length) {
+      const index = probeIndexes[nextProbe]
+      nextProbe += 1
       const worktree = worktrees[index]
-      if (!worktree || worktree.isBare || worktree.isSparse) {
+      if (!worktree) {
         continue
       }
       const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
@@ -142,7 +146,7 @@ export async function annotateSparseCheckoutStatus(
   }
 
   // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
-  const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
+  const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, probeIndexes.length)
   await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
   return annotated
 }

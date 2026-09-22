@@ -1,6 +1,11 @@
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  planStartupWorktreeHydration,
+  startupHydrationCandidate
+} from '../../../../shared/startup-worktree-hydration-budget'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 
 export type WorkspaceTerminalReconnectPlan = {
@@ -32,7 +37,30 @@ export function buildWorkspaceTerminalReconnectPlan({
     Object.entries(session.tabsByWorktree)
       .filter(([, tabs]) => tabs.some((tab) => tab.ptyId))
       .map(([worktreeId]) => worktreeId)
-  const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
+  const worktreeByIdForBudget = buildWorktreeByIdIndex(worktreesByRepo)
+  const eagerStartupWorktreeIds = new Set(
+    planStartupWorktreeHydration(
+      shutdownIds
+        .filter((worktreeId) => parseWorkspaceKey(worktreeId)?.type !== 'folder')
+        .map((worktreeId) => {
+          const worktree = worktreeByIdForBudget.get(worktreeId)
+          return startupHydrationCandidate({
+            worktreeId,
+            isActive:
+              worktreeId === session.activeWorktreeId || worktreeId === session.activeWorkspaceKey,
+            tabs: session.tabsByWorktree[worktreeId] ?? [],
+            automationKind: worktree?.automationProvenance?.kind,
+            workspaceStatus: worktree?.workspaceStatus,
+            lastVisitedAt: session.lastVisitedAtByWorktreeId?.[worktreeId]
+          })
+        })
+    ).eagerWorktreeIds
+  )
+  const pendingReconnectWorktreeIds = shutdownIds.filter(
+    (id) =>
+      validWorktreeIds.has(id) &&
+      (parseWorkspaceKey(id)?.type === 'folder' || eagerStartupWorktreeIds.has(id))
+  )
   const remoteSessionIds = session.remoteSessionIdsByTabId ?? {}
   const pendingReconnectTabByWorktree: Record<string, string[]> = {}
   for (const worktreeId of pendingReconnectWorktreeIds) {

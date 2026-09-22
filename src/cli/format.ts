@@ -125,7 +125,8 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    ...(status.runtime.worktreeHydration ? [status.runtime.worktreeHydration.message] : [])
   ].join('\n')
 }
 

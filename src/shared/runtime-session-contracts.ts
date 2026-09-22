@@ -85,6 +85,8 @@ export type RuntimeStatus = {
    * degradation reporting, not that the host proved every optional feature available.
    */
   degradations?: RuntimeDegradation[]
+  /** Present when startup refused to hydrate every registered worktree into the live graph. */
+  worktreeHydration?: WorktreeHydrationCensus
   appVersion?: string
   remoteUpdateSupport?: RemoteServerUpdateSupport
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
@@ -103,6 +105,14 @@ export type CliRuntimeState =
   | 'ready'
   | 'graph_not_ready'
   | 'stale_bootstrap'
+  /** Process is alive and past the boot window, but status.get is not answering. */
+  | 'unresponsive'
+
+export type WorktreeHydrationCensus = {
+  worktreeCount: number
+  limit: number
+  message: string
+}
 
 export type CliStatusResult = {
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
@@ -121,6 +131,7 @@ export type CliStatusResult = {
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
+    worktreeHydration?: WorktreeHydrationCensus
   }
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'

@@ -126,6 +126,32 @@ describe.skipIf(process.platform === 'win32')('CLI status pid fallback', () => {
     expect(status.result.graph.state).toBe('starting')
   })
 
+  it('stops calling a long-lived unreachable process starting', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-unresponsive-'))
+    writeFileSync(
+      getRuntimeMetadataPath(userDataPath),
+      JSON.stringify({
+        runtimeId: 'runtime-unreachable',
+        pid: 424242,
+        transport: { kind: 'unix', endpoint: join(userDataPath, 'absent.sock') },
+        authToken: 'token',
+        startedAt: Date.now() - 60_000
+      })
+    )
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+    })
+    try {
+      const status = await new RuntimeClient(userDataPath).getCliStatus()
+      expect(status.result.app).toMatchObject({ running: true, pid: 424242 })
+      expect(status.result.runtime.state).toBe('unresponsive')
+      expect(status.result.runtime.reachable).toBe(false)
+      expect(status.result.graph.state).toBe('unavailable')
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
   it('still reports a stale bootstrap when the host proves the pid is gone', async () => {
     const status = await statusWithUnreachableRuntime(
       Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })

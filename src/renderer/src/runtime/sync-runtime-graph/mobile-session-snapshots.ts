@@ -4,6 +4,10 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
+import {
+  planStartupWorktreeHydration,
+  startupHydrationCandidate
+} from '../../../../shared/startup-worktree-hydration-budget'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
@@ -64,6 +68,32 @@ export function buildMobileSessionTabSnapshots(
     ...Object.keys(browserTabsByWorktree),
     ...state.openFiles.map((file) => file.worktreeId)
   ])
+  const worktreeById = new Map(
+    Object.values(state.worktreesByRepo ?? {}).flatMap((worktrees) =>
+      worktrees.map((worktree) => [worktree.id, worktree] as const)
+    )
+  )
+  const deferredStartupWorktreeIds = new Set(
+    planStartupWorktreeHydration(
+      [...worktreeIds]
+        .filter((worktreeId) => parseWorkspaceKey(worktreeId)?.type !== 'folder')
+        .map((worktreeId) => {
+          const worktree = worktreeById.get(worktreeId)
+          return startupHydrationCandidate({
+            worktreeId,
+            isActive:
+              worktreeId === state.activeWorktreeId || worktreeId === state.activeWorkspaceKey,
+            tabs: state.tabsByWorktree[worktreeId] ?? [],
+            automationKind: worktree?.automationProvenance?.kind,
+            workspaceStatus: worktree?.workspaceStatus,
+            lastVisitedAt: state.lastVisitedAtByWorktreeId?.[worktreeId]
+          })
+        })
+    ).deferredWorktreeIds
+  )
+  const mountedWorktreeIds = new Set(
+    [...graphState.registeredTabs.values()].map((tab) => tab.worktreeId)
+  )
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
 
   for (const worktreeId of worktreeIds) {
@@ -72,6 +102,10 @@ export function buildMobileSessionTabSnapshots(
       workspaceScope?.type === 'folder' &&
       !liveFolderWorkspaceIds.has(workspaceScope.folderWorkspaceId)
     ) {
+      graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+      continue
+    }
+    if (deferredStartupWorktreeIds.has(worktreeId) && !mountedWorktreeIds.has(worktreeId)) {
       graphState.mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
       continue
     }

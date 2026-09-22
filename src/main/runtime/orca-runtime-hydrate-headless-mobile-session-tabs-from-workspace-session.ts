@@ -2,7 +2,9 @@
 import { OrcaRuntimeWithWaitForSessionTabsInventoryPublication } from './orca-runtime-wait-for-session-tabs-inventory-publication'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { eagerWorkspaceSessionHydrationEntries } from '../../shared/startup-worktree-hydration-budget'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
+import { noteStartupWorktreeListCount } from '../git/startup-worktree-hydration-census'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import type {
   RuntimeMobileSessionBrowserTab,
@@ -72,10 +74,20 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
     ) {
       return reconciledWorktreeIds
     }
-    const entries =
+    const listedEntries =
       worktreeId !== undefined
         ? ([[worktreeId, session.tabsByWorktree[worktreeId] ?? []]] as const)
         : Object.entries(session.tabsByWorktree ?? {})
+    const selectedEntries =
+      worktreeId !== undefined
+        ? { entries: listedEntries, worktreeCount: listedEntries.length, overrunMessage: null }
+        : eagerWorkspaceSessionHydrationEntries(session, listedEntries, (entryWorktreeId) =>
+            this.store?.getWorktreeMeta?.(entryWorktreeId)
+          )
+    if (worktreeId === undefined) {
+      noteStartupWorktreeListCount(selectedEntries.worktreeCount)
+    }
+    const entries = selectedEntries.entries
     // Why: workspaceSession keys are `${repoId}::${path}` and are not pruned when
     // a repo disappears from this client's view (e.g. removed on another client,
     // or a stale browser-persisted session). Hydrating such a key would surface a
