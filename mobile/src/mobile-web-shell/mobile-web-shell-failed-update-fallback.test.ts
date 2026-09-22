@@ -111,12 +111,15 @@ const NEWER_BUILD_ID = computeMobileWebBundleId(NEWER_ASSETS)
 
 /** Through the phone's own reader, so a fixture these tests could not have received is refused
  *  here rather than measured. */
-function manifestOf(assets: readonly MobileWebBundleAsset[]): MobileWebBundleManifestRead {
+function manifestOf(
+  assets: readonly MobileWebBundleAsset[],
+  runtimeProtocolVersion = 5
+): MobileWebBundleManifestRead {
   return MobileWebBundleManifestReadSchema.parse({
     schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
     buildId: computeMobileWebBundleId(assets),
     minCompatibleRuntimeProtocolVersion: 2,
-    runtimeProtocolVersion: 5,
+    runtimeProtocolVersion,
     entrypoint: 'index.html',
     totalBytes: TOTAL_BYTES,
     assets,
@@ -126,6 +129,9 @@ function manifestOf(assets: readonly MobileWebBundleAsset[]): MobileWebBundleMan
 
 const GOOD_MANIFEST = manifestOf(GOOD_ASSETS)
 const NEWER_MANIFEST = manifestOf(NEWER_ASSETS)
+/** The same assets under a manifest the host's stated floor has moved past: the doubles answer
+ *  `minCompatibleMobileVersion: 1`, so a bundle runtime of 0 is below it. */
+const STALE_MANIFEST = manifestOf(GOOD_ASSETS, 0)
 
 function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleFetchResult {
   return {
@@ -140,9 +146,12 @@ function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleF
 
 /** Generation N on disk, written by the store's own stage-and-commit rather than seeded as files:
  *  what a fallback opens has to be a tree the download path really leaves. */
-async function cacheGeneration(fileSystem: FakeGenerationFileSystem): Promise<void> {
+async function cacheGeneration(
+  fileSystem: FakeGenerationFileSystem,
+  manifest: MobileWebBundleManifestRead = GOOD_MANIFEST
+): Promise<void> {
   const store = createGenerationStore({ fileSystem })
-  await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetchResultFor(GOOD_MANIFEST)))
+  await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetchResultFor(manifest)))
 }
 
 /** What a truncated asset really produces: the fetch hashes each one, and a plain rejection is what
@@ -257,6 +266,39 @@ describe('an update the shell refuses while the host is reachable', () => {
       retriedOnce: false
     })
     expect(mounted.updateNotice()).toBeNull()
+  })
+
+  it('walls a generation whose declared runtime the host has moved past', async () => {
+    // Read back off the disk, not handed in: the manifest the wall is decided from is the one the
+    // commit really left beside the assets, which is the only record of what these bytes declare.
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem, STALE_MANIFEST)
+
+    const mounted = await mountRoute(fileSystem)
+
+    expect(mounted.state()).toEqual({
+      kind: 'wall',
+      verdict: {
+        kind: 'blocked',
+        reason: 'bundle-incompatible',
+        side: 'mobile',
+        bundleRuntimeProtocolVersion: 0,
+        requiredBundleRuntimeProtocolVersion: 1
+      }
+    })
+    expect(mounted.updateNotice()).toBeNull()
+    // Walled, not deleted: the bytes are intact and a newer host is not what makes them wrong.
+    expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID])
+  })
+
+  it('serves the generation still inside that window, which is the same disk one field apart', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem, GOOD_MANIFEST)
+
+    const mounted = await mountRoute(fileSystem)
+
+    expect(mounted.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
+    expect(mounted.updateNotice()).toBe('update-failed')
   })
 
   it('asks the host again on the next launch rather than living under the fallback', async () => {

@@ -1,4 +1,7 @@
-import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
+import {
+  evaluateMobileWebBundleCompat,
+  type MobileWebBundleCompatManifest
+} from '../transport/mobile-web-bundle-compat'
 import type {
   MobileWebShellBlockedVerdict,
   MobileWebShellGates,
@@ -75,6 +78,35 @@ export function gateVerdict(gates: MobileWebShellGates): MobileWebShellGateVerdi
   return verdict.reason === 'bundle-unavailable'
     ? { kind: 'native-route' }
     : { kind: 'wall', verdict }
+}
+
+/**
+ * The wall a generation already on disk earns against a host that can still be reached, or null
+ * when it may be opened.
+ *
+ * The offline rule does not reach here. That one skips the compat check because a host nobody can
+ * reach cannot have changed; this host has just answered, and an update exists precisely because it
+ * moved — so bytes that were inside the window when they were written may be outside it now.
+ *
+ * Only an `open` gate is judged further, and that is the whole of why this lives beside
+ * `gateVerdict` rather than beside the transition that calls it. The other verdicts are already
+ * answered above: an absent capability is the native-route rule, not a wall, and an unreadable
+ * status leaves that same empty list — walling on either would be the `bundle-unavailable` wall
+ * this file exists to keep off a host that simply did not reply.
+ */
+export function cachedGenerationWall(
+  gates: MobileWebShellGates,
+  manifest: MobileWebBundleCompatManifest
+): MobileWebShellBlockedVerdict | null {
+  if (gateVerdict(gates).kind !== 'open') {
+    return null
+  }
+  const verdict = evaluateMobileWebBundleCompat({
+    hostCapabilities: gates.hostCapabilities,
+    hostStatus: gates.hostStatus,
+    manifest
+  })
+  return verdict.kind === 'blocked' ? verdict : null
 }
 
 /**

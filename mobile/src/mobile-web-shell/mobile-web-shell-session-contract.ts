@@ -52,6 +52,11 @@ export type CachedGeneration = {
   readonly totalBytes: number
   /** The routes the cached bundle declared, which is what an unreachable host is judged by. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
+  /** What these bytes declare, read off the manifest stored beside them, so a generation served
+   *  while the host is reachable can be judged against it. Never absent: `readActiveGeneration`
+   *  answers null for a generation whose manifest did not parse, and the schema requires all
+   *  three. */
+  readonly compat: MobileWebBundleCompatManifest
 }
 
 export type MobileWebShellBlockedVerdict = Extract<

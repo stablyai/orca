@@ -11,7 +11,7 @@ import type {
   MobileWebShellSessionState,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import { awaitsGates, gateKey, gateVerdict } from './mobile-web-shell-gates'
+import { awaitsGates, cachedGenerationWall, gateKey, gateVerdict } from './mobile-web-shell-gates'
 import { matchesRoutePattern, routeViewOf } from './page-route-policy'
 
 const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
@@ -129,12 +129,10 @@ function onCacheRead(
   generation: CachedGeneration | null
 ): MobileWebShellStep {
   const gates = session.gates
-  if (gates === null) {
-    return step(session, { cached: generation })
-  }
-  if (gates.reachability === 'connecting') {
-    // A dial in progress is not a host that cannot be reached: opening the cache here would skip a
-    // compat check the connection about to land is what makes answerable.
+  // Neither says the host cannot be reached: a dial in progress is a connection about to land, and
+  // gates that have not arrived have said nothing yet. Opening the cache on either would skip a
+  // compat check that the settled answer is what makes answerable.
+  if (gates === null || gates.reachability === 'connecting') {
     return step(session, { cached: generation })
   }
   if (gates.reachability === 'unreachable') {
@@ -168,12 +166,13 @@ function onManifestRead(
   // because that verdict is about this route while the manifest is the truth about the whole
   // generation — a list that takes this screen native, or names a bundle this shell cannot open,
   // still grants or revokes the other routes those assets serve, and what is stored beside them is
-  // the whole of the next offline verdict.
+  // the whole of the next offline verdict. The compat facts come across with the routes, so what
+  // the held generation records and what the persist writes to disk stay the one manifest.
   const cached = session.cached
   const same: CachedGeneration | null =
     cached === null || cached.buildId !== manifest.buildId
       ? null
-      : { ...cached, routes: manifest.routes }
+      : { ...cached, routes: manifest.routes, compat: manifest }
   const persist: readonly MobileWebShellSessionEffect[] =
     same === null ? [] : [{ kind: 'persist-manifest', manifest: manifest.wire }]
   if (!rendersRoute(pageRoutes, session.routePathname)) {
@@ -268,11 +267,15 @@ function onShellFailed(
  * The read did not produce a generation, and what follows is decided by what is already on disk.
  *
  * With nothing cached there is nothing to show, so the refusal is the screen. With a generation
- * cached there is: it was compatible when it was written, and it is the same one the offline gate
- * opens without being asked. Refusing the new bytes was right — a truncated asset does not hash,
- * and a host that will not answer has not been read — but a wall over an intact workspace refuses a
- * screen twice. The same branch either way, because the link going and the bundle being refused
- * leave the phone holding exactly the same thing.
+ * cached there is: it is the same one the offline gate opens without being asked. Refusing the new
+ * bytes was right — a truncated asset does not hash, and a host that will not answer has not been
+ * read — but a wall over an intact workspace refuses a screen twice. The same branch either way,
+ * because the link going and the bundle being refused leave the phone holding exactly the same
+ * thing.
+ *
+ * Judged against the host first, unlike the offline branch: it was compatible when it was written,
+ * and this host can be reached and may have moved since — which is usually why an update was there
+ * to fail. A generation outside its window earns the wall, not the download-failed screen.
  *
  * Only the bundle-side refusal is named: a link that went says nothing about an update having been
  * there to fail, and the notice would be claiming a generation this phone never heard of.
@@ -286,6 +289,10 @@ function onDownloadFailed(
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
+  }
+  const wall = session.gates === null ? null : cachedGenerationWall(session.gates, cached.compat)
+  if (wall !== null) {
+    return step(session, { state: { kind: 'wall', verdict: wall } })
   }
   return openByOwnRoutes(session, cached, {
     updateNotice: failure === 'bundle' ? 'update-failed' : null
