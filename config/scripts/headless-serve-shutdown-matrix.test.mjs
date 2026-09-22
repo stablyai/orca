@@ -124,6 +124,72 @@ describe('packaged shutdown matrix', () => {
     ])
   })
 
+  it.each(['desktop', 'extraction', 'signal'])(
+    'removes containers before shared resources when %s output capture fails',
+    async (stage) => {
+      const runningContainers = new Set()
+      const blockedRemovals = []
+      spawnSync.mockImplementation((_, args) => {
+        if (args[0] === 'run') {
+          const nameIndex = args.indexOf('--name')
+          const name = nameIndex === -1 ? 'anonymous' : args[nameIndex + 1]
+          runningContainers.add(name)
+          const fails =
+            (stage === 'desktop' &&
+              args.includes('/usr/local/bin/run-appimage-desktop-startup-case')) ||
+            (stage === 'extraction' &&
+              args.some((arg) => arg.includes('120s /input/orca.AppImage --appimage-extract'))) ||
+            (stage === 'signal' && args.at(-1) === 'INT')
+          if (fails) {
+            return {
+              ...succeeded,
+              status: null,
+              error: Object.assign(new Error('output capture failed'), { code: 'ENOBUFS' })
+            }
+          }
+          runningContainers.delete(name)
+        }
+        if (args[0] === 'rm' && args.includes('-f')) {
+          runningContainers.delete(args.at(-1))
+        }
+        if (['volume', 'image'].includes(args[0]) && args[1] === 'rm' && runningContainers.size) {
+          blockedRemovals.push(args)
+          return { ...succeeded, status: 1 }
+        }
+        return succeeded
+      })
+
+      await expect(run('--all-entrypoints')).rejects.toThrow('output capture failed')
+      expect([...runningContainers]).toEqual([])
+      expect(blockedRemovals).toEqual([])
+    }
+  )
+
+  it('continues final cleanup when a removal command cannot start', async () => {
+    let failedRemoval = false
+    spawnSync.mockImplementation((_, args) => {
+      if (args[0] === 'rm' && !failedRemoval) {
+        failedRemoval = true
+        return { ...succeeded, error: new Error('removal spawn failed') }
+      }
+      return succeeded
+    })
+
+    await run('--all-entrypoints')
+    const removals = commands().filter((args) => args[0] === 'rm')
+    expect(failedRemoval).toBe(true)
+    expect(removals).toHaveLength(8)
+    expect(
+      commands()
+        .slice(-2)
+        .map((args) => args.slice(0, 2))
+    ).toEqual([
+      ['volume', 'rm'],
+      ['image', 'rm']
+    ])
+    expect(console.error).toHaveBeenCalledWith('removal spawn failed')
+  })
+
   it('preserves individual launcher overlay invocations', async () => {
     await run('--entrypoint', 'launcher', '--launcher-exec-overlay')
     expect(signalRuns()).toHaveLength(2)

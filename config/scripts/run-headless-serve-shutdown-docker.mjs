@@ -56,6 +56,7 @@ if (!existsSync(appImage)) {
 const suffix = `${process.pid}-${Date.now()}`
 const image = `orca-headless-serve-shutdown:${suffix}`
 const artifactVolume = `orca-headless-serve-shutdown-${suffix}`
+const containers = new Set()
 const sha256 = createHash('sha256').update(readFileSync(appImage)).digest('hex')
 
 try {
@@ -82,6 +83,8 @@ try {
   docker([
     'run',
     '--rm',
+    '--name',
+    reserveContainerName('extraction'),
     '--platform',
     platform,
     '--network',
@@ -139,7 +142,7 @@ try {
           '--shm-size',
           '256m',
           '--name',
-          `orca-headless-serve-shutdown-${entrypoint}-${signal.toLowerCase()}-${suffix}`,
+          reserveContainerName(`${entrypoint}-${signal.toLowerCase()}`),
           '-e',
           `ORCA_SIGNAL_TARGET=${signalTarget}`,
           '-e',
@@ -167,8 +170,11 @@ try {
   }
   console.log('Headless serve packaged shutdown Docker validation passed.')
 } finally {
-  docker(['volume', 'rm', artifactVolume], { allowFailure: true })
-  docker(['image', 'rm', image], { allowFailure: true })
+  for (const container of containers) {
+    cleanupDocker(['rm', '-f', container])
+  }
+  cleanupDocker(['volume', 'rm', artifactVolume])
+  cleanupDocker(['image', 'rm', image])
 }
 
 function runDesktopStartupOracle({ image, appImage, platform }) {
@@ -176,6 +182,8 @@ function runDesktopStartupOracle({ image, appImage, platform }) {
   docker([
     'run',
     '--rm',
+    '--name',
+    reserveContainerName('desktop-startup'),
     '--init',
     '--platform',
     platform,
@@ -206,6 +214,20 @@ function runDesktopStartupOracle({ image, appImage, platform }) {
 function valueAfter(flag) {
   const index = args.indexOf(flag)
   return index === -1 ? null : (args[index + 1] ?? null)
+}
+
+function reserveContainerName(stage) {
+  const name = `orca-headless-serve-shutdown-${stage}-${suffix}`
+  containers.add(name)
+  return name
+}
+
+function cleanupDocker(args) {
+  try {
+    docker(args, { allowFailure: true })
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+  }
 }
 
 function docker(dockerArgs, options = {}) {
