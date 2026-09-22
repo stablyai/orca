@@ -93,7 +93,7 @@ describe('useMobileDictation source invariants', () => {
     expect(closeAudio).toContain('capture.end()')
     const cleanupSlices = [
       sliceBetween('const failActiveDictation = useCallback(', 'useEffect(() => {'),
-      sliceBetween('const cancel = useCallback(async () => {', 'useEffect(() => {\n    const sub'),
+      sliceBetween('const abandonDictation = useCallback(', 'const cancel ='),
       sliceBetween('return () => {\n      const dictationId = activeIdRef.current', '  return {')
     ]
     for (const cleanupSlice of cleanupSlices) {
@@ -101,7 +101,10 @@ describe('useMobileDictation source invariants', () => {
     }
     // The capture hands over its tail before the pending sends are taken, or the finish overtakes
     // the last chunk. `mobile-dictation-stop-tail.test.tsx` drives the order this pins.
-    const stopBody = sliceBetween('const stop = useCallback(async () => {', 'const cancel =')
+    const stopBody = sliceBetween(
+      'const stop = useCallback(async () => {',
+      'const abandonDictation ='
+    )
     expect(stopBody.indexOf('capture.end()')).toBeLessThan(
       stopBody.indexOf('await Promise.allSettled')
     )
@@ -127,20 +130,29 @@ describe('useMobileDictation source invariants', () => {
 
     // stop()'s recording shutdown sits inside the try so a native throw still
     // runs the finally release and error cleanup.
-    const stopBody = sliceBetween('const stop = useCallback(async () => {', 'const cancel =')
+    const stopBody = sliceBetween(
+      'const stop = useCallback(async () => {',
+      'const abandonDictation ='
+    )
     expect(stopBody.indexOf('try {')).toBeGreaterThanOrEqual(0)
     expect(stopBody.indexOf('try {')).toBeLessThan(stopBody.indexOf('capture.end()'))
   })
 
-  it('routes disabled state and audio interruptions through cancel cleanup', () => {
+  it('routes an audio interruption through cancel and a disable through the reporting abort', () => {
     const interruptionEffect = sliceBetween('capture.onInterruption(', 'return () => sub.remove()')
     const disabledEffect = sliceBetween(
       'useEffect(() => {\n    if (!enabled) {',
-      '  }, [cancel, enabled])'
+      '  }, [abandonDictation, enabled])'
     )
 
     expect(interruptionEffect).toContain('void cancel()')
-    expect(disabledEffect).toContain('void cancel()')
+    // A disable is not the user's cancel, so it carries the reason the composer shows; the user's
+    // own cancel is the one end that passes none. `mobile-dictation-input-closed-mid-start.test.tsx`
+    // drives both halves.
+    expect(disabledEffect).toContain(
+      'void abandonDictation(MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE)'
+    )
+    expect(source).toContain('const cancel = useCallback(() => abandonDictation(null)')
     // Which interruptions end a capture is one predicate both seams read, so a page cannot cancel
     // on a kind the device ignores. `dictation-capture.test.ts` drives the rule itself.
     expect(nativeCaptureSource).toContain('bridgeAudioInterruptionEndsCapture(event.data)')
