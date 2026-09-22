@@ -105,6 +105,23 @@ describe('a route that leaves before its frame lands', () => {
     expect(clock.pending()).toBe(0)
   })
 
+  it('hands the report to the screen that arrived while the last one was still owed a frame', () => {
+    const clock = frames()
+    let posted = 0
+    const report = createRouteScreenPaintReporter(clock.scheduler, () => {
+      posted += 1
+    })
+    const leaving = report()
+    // The replacement commits inside the two frames the first screen is owed, then that one goes.
+    report()
+    leaving()
+    clock.tick()
+    clock.tick()
+    // Exactly one, and from the screen still on screen: the first one's frame would have left the
+    // cover up for good once its own take-back freed the latch nobody was going to use again.
+    expect(posted).toBe(1)
+  })
+
   it('leaves the next screen free to report, because a frame taken back was never spent', () => {
     const clock = frames()
     let posted = 0

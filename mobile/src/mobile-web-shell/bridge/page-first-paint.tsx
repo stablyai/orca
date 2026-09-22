@@ -52,25 +52,31 @@ const RouteScreenPaintContext = createContext<RouteScreenPaintReporter>(() => ()
 export type RouteScreenPaintReporter = () => () => void
 
 /**
- * The page's one reporter. Once per document, because the shell latches the first frame and a
- * navigation to a second screen is not a new thing to uncover — but a report taken back before it
- * landed was never spent, so the screen that arrives next still gets to make it.
+ * The page's one reporter. Once per document, because the shell latches the first frame — but only
+ * a report actually posted spends that one, so a screen unmounted or replaced before its frame
+ * landed leaves the cover up for whichever screen the document settles on.
  */
 export function createRouteScreenPaintReporter(
   scheduler: PageFrameScheduler,
   post: () => void
 ): RouteScreenPaintReporter {
-  let reported = false
+  let posted = false
+  let owed: (() => boolean) | null = null
   return () => {
-    if (reported) {
+    if (posted) {
       return () => undefined
     }
-    reported = true
-    const cancel = reportAfterFirstPaint(scheduler, post)
+    // The newest commit is the one the view is about to show, so it takes over the frame an
+    // earlier screen is still owed.
+    owed?.()
+    const cancel = reportAfterFirstPaint(scheduler, () => {
+      owed = null
+      posted = true
+      post()
+    })
+    owed = cancel
     return () => {
-      if (cancel()) {
-        reported = false
-      }
+      cancel()
     }
   }
 }
