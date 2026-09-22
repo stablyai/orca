@@ -1,5 +1,6 @@
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
+import type { DevinUsageBreakdownKind, DevinUsageSnapshot } from '../../shared/devin-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageSnapshot
@@ -43,6 +44,8 @@ export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBr
 export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreakdownKind>
 
 export type OpenCodeUsageApi = UsageProviderApi<OpenCodeUsageSnapshot, OpenCodeUsageBreakdownKind>
+
+export type DevinUsageApi = UsageProviderApi<DevinUsageSnapshot, DevinUsageBreakdownKind>
 
 export type RateLimitsApi = {
   get: () => Promise<RateLimitState>

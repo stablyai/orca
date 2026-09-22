@@ -1,6 +1,7 @@
 import { parentPort } from 'node:worker_threads'
 import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
+import { scanDevinUsageFiles } from '../devin-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import type {
   UsageScanWorkerProgress,
@@ -88,6 +89,15 @@ async function runScan(
       return {
         providerId: 'opencode',
         source: result.processedDatabases,
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'devin': {
+      const result = await scanDevinUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      return {
+        providerId: 'devin',
+        source: result.processedFiles,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

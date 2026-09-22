@@ -85,7 +85,9 @@ describe('parseDevinSessionFile', () => {
     })
 
     expect(session?.model).toBe('swe-1-6')
-    expect(session?.totalTokens).toBe(19)
+    // total_input_tokens already includes cache; the split buckets do not
+    // add on top. total = 10 input + 4 output.
+    expect(session?.totalTokens).toBe(14)
     expect(session?.messageCount).toBe(1)
     expect(session?.previewMessages[0]).toMatchObject({
       role: 'assistant',
@@ -125,6 +127,69 @@ describe('parseDevinSessionFile', () => {
       role: 'user',
       text: 'First part second part'
     })
+  })
+
+  it('adds cache buckets on top of the legacy input_tokens split', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-devin-parser-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'legacy.json')
+    const mtimeMs = Date.now()
+    await writeFile(
+      path,
+      JSON.stringify({
+        session_id: 'legacy',
+        steps: [
+          {
+            metadata: {
+              created_at: '2026-05-26T00:00:00Z',
+              metrics: {
+                input_tokens: 10,
+                output_tokens: 4,
+                cache_read_tokens: 3,
+                cache_creation_tokens: 2
+              }
+            }
+          }
+        ]
+      })
+    )
+
+    const session = await parseDevinSessionFile({
+      path,
+      mtimeMs,
+      modifiedAt: new Date(mtimeMs).toISOString()
+    })
+
+    // Legacy input_tokens excludes cache: 10 + 3 read + 2 creation + 4 out.
+    expect(session?.totalTokens).toBe(19)
+  })
+
+  it('lets a positive metric win over an explicit zero in an earlier source', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-devin-parser-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'zero.json')
+    const mtimeMs = Date.now()
+    await writeFile(
+      path,
+      JSON.stringify({
+        session_id: 'zero',
+        steps: [
+          {
+            timestamp: '2026-05-26T00:00:00Z',
+            metadata: { metrics: { prompt_tokens: 0, completion_tokens: 0 } },
+            metrics: { prompt_tokens: 50, completion_tokens: 8 }
+          }
+        ]
+      })
+    )
+
+    const session = await parseDevinSessionFile({
+      path,
+      mtimeMs,
+      modifiedAt: new Date(mtimeMs).toISOString()
+    })
+
+    expect(session?.totalTokens).toBe(58)
   })
 
   it('parses a real ATIF-v1.7 transcript', async () => {

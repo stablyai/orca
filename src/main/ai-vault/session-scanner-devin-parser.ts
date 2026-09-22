@@ -91,27 +91,44 @@ function extractDevinStepText(step: Record<string, unknown>): string | null {
   return extractContentText(step.message) ?? extractString(step.text)
 }
 
-// Each bucket resolves from the first source that reports it. ATIF
-// `prompt_tokens` already includes `cached_tokens`, so only the Claude-style
-// cache keys (which sit outside input_tokens) are summed.
+// Each bucket resolves from the first source that reports a positive value
+// (an explicit zero only counts when nothing positive exists). ATIF
+// `prompt_tokens`/`total_input_tokens` already include the cache buckets —
+// real transcripts show prompt ≈ cached + cache_creation + uncached — so the
+// Claude-style cache keys add on top only for the legacy `input_tokens`
+// split, where input is uncached.
 function devinStepTokenTotal(
   metadata: Record<string, unknown> | null,
   metrics: Record<string, unknown> | null,
   stepMetrics: Record<string, unknown> | null
 ): number {
   const sources = [metadata, metrics, stepMetrics]
+  const input = firstDevinMetricValue(sources, [
+    'total_input_tokens',
+    'input_tokens',
+    'prompt_tokens'
+  ])
+  const inputIncludesCache = input.key === 'prompt_tokens' || input.key === 'total_input_tokens'
   return (
-    firstDevinMetricValue(sources, ['total_input_tokens', 'input_tokens', 'prompt_tokens']) +
-    firstDevinMetricValue(sources, ['output_tokens', 'completion_tokens']) +
-    firstDevinMetricValue(sources, ['cache_read_tokens', 'cache_read_input_tokens']) +
-    firstDevinMetricValue(sources, ['cache_creation_tokens', 'cache_creation_input_tokens'])
+    input.value +
+    firstDevinMetricValue(sources, ['output_tokens', 'completion_tokens']).value +
+    (inputIncludesCache
+      ? 0
+      : firstDevinMetricValue(sources, [
+          'cache_read_tokens',
+          'cache_read_input_tokens',
+          'cached_tokens'
+        ]).value +
+        firstDevinMetricValue(sources, ['cache_creation_tokens', 'cache_creation_input_tokens'])
+          .value)
   )
 }
 
 function firstDevinMetricValue(
   sources: readonly (Record<string, unknown> | null)[],
   keys: readonly string[]
-): number {
+): { value: number; key: string | null } {
+  let explicitZero: { value: number; key: string } | null = null
   for (const source of sources) {
     if (!source) {
       continue
@@ -119,12 +136,20 @@ function firstDevinMetricValue(
     for (const key of keys) {
       const rawValue = source[key]
       const value = numberValue(rawValue)
-      if (value > 0 || (value === 0 && typeof rawValue === 'number' && Number.isFinite(rawValue))) {
-        return value
+      if (value > 0) {
+        return { value, key }
+      }
+      if (
+        !explicitZero &&
+        value === 0 &&
+        typeof rawValue === 'number' &&
+        Number.isFinite(rawValue)
+      ) {
+        explicitZero = { value: 0, key }
       }
     }
   }
-  return 0
+  return explicitZero ?? { value: 0, key: null }
 }
 
 export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: unknown): void {
