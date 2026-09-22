@@ -84,7 +84,8 @@ function createRichMarkdownEditorHostSeams(): RichMarkdownEditorHostSeams {
     keyboardInsetSource: windowVisualViewportInset,
     clearTimer: clearWindowTimer,
     getSelection: windowSelection,
-    getDocument: windowDocument
+    getDocument: windowDocument,
+    root: null
   }
 }
 

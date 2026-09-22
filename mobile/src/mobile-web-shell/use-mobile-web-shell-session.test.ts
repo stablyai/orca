@@ -120,6 +120,7 @@ function createFakeStore(): {
   staged: () => number
   committed: () => number
   aborted: () => number
+  persisted: () => readonly MobileWebBundleManifestRead[]
 } {
   let settleCacheRead: Settle<ActiveGeneration | null> = () => {}
   let releaseStage: () => void = () => {}
@@ -127,6 +128,7 @@ function createFakeStore(): {
   let staged = 0
   let committed = 0
   let aborted = 0
+  const persisted: MobileWebBundleManifestRead[] = []
   const store: GenerationStore = {
     readActiveGeneration: () =>
       new Promise<ActiveGeneration | null>((resolve) => {
@@ -149,7 +151,11 @@ function createFakeStore(): {
       aborted += 1
     },
     sweepStagedGenerations: async () => undefined,
-    deleteHostCache: async () => undefined
+    deleteHostCache: async () => undefined,
+    persistActiveManifest: async (_hostKey, manifest) => {
+      persisted.push(manifest)
+      return 'persisted'
+    }
   }
   return {
     store,
@@ -160,7 +166,8 @@ function createFakeStore(): {
     settleStage: () => releaseStage(),
     staged: () => staged,
     committed: () => committed,
-    aborted: () => aborted
+    aborted: () => aborted,
+    persisted: () => persisted
   }
 }
 
@@ -321,6 +328,22 @@ describe('the hybrid shell runner', () => {
     expect(doubles.manifestReads).toBe(1)
     expect(doubles.fetches).toHaveLength(0)
     expect(mounted.states().map((state) => state.kind)).toContain('ready')
+    await act(async () => {
+      mounted.tree.unmount()
+    })
+  })
+
+  it('writes the fresh manifest onto the generation a same-build cache hit opened', async () => {
+    // Nothing is downloaded on this path, so this call is the only thing that moves the manifest
+    // beside those assets — and that manifest is the whole of the next offline verdict.
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+
+    expect(doubles.fetches).toHaveLength(0)
+    expect(fake.persisted()).toEqual([doubles.manifest])
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
     await act(async () => {
       mounted.tree.unmount()
     })

@@ -135,13 +135,16 @@ describe('the connected flow', () => {
   it('opens the cached generation without paging when the build ids match', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.session.state).toEqual({ kind: 'activating' })
+    // And it writes the manifest it just matched: the routes are the only thing a same-build read
+    // can have changed, and nothing else on this path touches the disk.
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
-      }
+      },
+      { kind: 'persist-manifest', manifest: MANIFEST.wire }
     ])
   })
 

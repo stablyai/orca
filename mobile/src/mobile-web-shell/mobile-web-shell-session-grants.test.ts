@@ -6,8 +6,10 @@ import type {
 import {
   CACHED,
   MANIFEST,
+  MANIFEST_WIRE,
   PAGE_ROUTES,
   afterCacheRead,
+  manifestFacts,
   run
 } from './mobile-web-shell-session-test-fixtures'
 
@@ -21,10 +23,13 @@ import {
  */
 describe('falling back to the cached generation after a failed download', () => {
   const cachedOnlyNavigate: CachedGeneration = { ...CACHED, routes: PAGE_ROUTES }
-  const manifestWithClipboard: MobileWebShellManifestFacts = {
-    ...MANIFEST,
+  // A build of its own, because that is what makes the download happen: a manifest under the id
+  // the cache already holds is the same assets, and the session opens them without paging.
+  const manifestWithClipboard: MobileWebShellManifestFacts = manifestFacts({
+    ...MANIFEST_WIRE,
+    buildId: 'd'.repeat(64),
     routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.read'] }]
-  }
+  })
 
   it('opens it under its own grants, not the ones the newer manifest declared', () => {
     const step = run(
@@ -42,10 +47,10 @@ describe('falling back to the cached generation after a failed download', () => 
     // build implements it.
     const step = run(afterCacheRead(null).session, {
       type: 'manifest-read',
-      manifest: {
-        ...MANIFEST,
+      manifest: manifestFacts({
+        ...MANIFEST_WIRE,
         routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.write'] }]
-      }
+      })
     })
     expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.write'])
   })
@@ -73,11 +78,11 @@ describe('the route grants a downloaded generation is activated under', () => {
     { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
     { pathname: '/h/[hostId]/tasks', grants: ['navigate', 'native.clipboard.write'] }
   ]
-  const DOWNLOADED: MobileWebShellManifestFacts = {
-    ...MANIFEST,
+  const DOWNLOADED: MobileWebShellManifestFacts = manifestFacts({
+    ...MANIFEST_WIRE,
     buildId: 'c'.repeat(64),
     routes: TWO_ROUTES
-  }
+  })
 
   function activate(session: Parameters<typeof run>[0], manifest: MobileWebShellManifestFacts) {
     return run(

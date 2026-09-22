@@ -56,9 +56,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   // The relaxation is only safe if the reviewed validator actually runs on
   // the NON-converged branch, in same-cap-cell mode, with the trust config
-  // the validator requires, restricted to the template-and-MIG change pair or,
-  // when only the reviewed backend attributes are left, to those alone — and
-  // that last case then has to be applied, not waved through as converged.
+  // the validator requires, restricted to the template-and-MIG change pair.
   assert.match(
     job,
     /if ! terraform -chdir=infra\/terraform show -json[\s\S]{0,220}\| length == 0' >\/dev\/null\n          then\n/
@@ -77,20 +75,15 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   )
   assert.match(
     job,
-    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}"\)"\n {12}echo "\$\{RESUME_REVIEW\}"\n {12}jq -e '\.changes == 2\n {16}or \(\.changes == 0 and \(\(\.backendUpdate \/\/ \[\]\) \| length\) > 0\)' \\\n {14}<<< "\$\{RESUME_REVIEW\}" >\/dev\/null/
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {16}"\$\{POOL_ARGUMENTS\[@\]\}"\)"\n {12}echo "\$\{RESUME_REVIEW\}"\n {12}jq -e '\.changes == 2' <<< "\$\{RESUME_REVIEW\}" >\/dev\/null/
   )
-  // A resume whose only unapplied change is the reviewed backend update must apply it. Leaving
-  // it is how a cell keeps the 300-second drain and no request logging behind a green resume.
-  assert.match(
-    job,
-    /if test "\$\(jq -er '\.changes' <<< "\$\{RESUME_REVIEW\}"\)" = 0; then\n {14}terraform -chdir=infra\/terraform apply -auto-approve \\\n {16}"\$\{RUNNER_TEMP\}\/relay-same-cap-resume\.tfplan"\n {12}fi\n/
-  )
-  // Template-and-MIG drift still applies nothing on resume, which is what a resume means.
+  // A resume applies nothing at all, which is what a resume means: the only accepted
+  // unconverged plan is the template-and-MIG rollback-image drift, and it is left pending.
   const resumeStep = job.slice(
     job.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
     job.indexOf('- name: Apply only the selected same-cap template and MIG')
   )
-  assert.equal(resumeStep.split('terraform -chdir=infra/terraform apply').length, 2)
+  assert.equal(resumeStep.split('terraform -chdir=infra/terraform apply').length, 1)
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)
   assert.match(job, /\(.regionalRehomeProtocol \/\/ 0\) == \$protocol/)

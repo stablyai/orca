@@ -5,7 +5,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
-const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
+const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['antigravity', 'codex', 'kimi'])
 
 /** The prompt bytes are written before verification, so this only ever means "not observed". */
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
@@ -53,8 +53,8 @@ export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undef
 /** Only these providers expose a turn-start signal Orca can settle a prompt receipt against. */
 export function isTerminalSendSettlementAgent(
   agent: TuiAgent | null | undefined
-): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+): agent is 'antigravity' | 'claude' | 'codex' {
+  return agent === 'antigravity' || agent === 'claude' || agent === 'codex'
 }
 
 export function isAgentPromptStalledError(error: unknown): boolean {

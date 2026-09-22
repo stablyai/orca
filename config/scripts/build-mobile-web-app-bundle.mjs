@@ -62,6 +62,14 @@ export const MOBILE_WEB_APP_SHIMS = [
     appliesTo: (options) => options.banner?.js?.includes('__zod_globalConfig') === true
   },
   {
+    // Four modules under src/shared resolve `zod` upward to the root's copy, so the page bundled
+    // two Zods and built salvage combinators with one instance to nest inside schemas built by the
+    // other. mobile/tsconfig.json already maps `zod` to mobile's for the whole mobile program,
+    // those shared modules included; this is the bundler catching up to that contract.
+    name: 'one-zod',
+    appliesTo: (options) => options.alias?.zod === MOBILE_ZOD_PACKAGE
+  },
+  {
     // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does
     // not export it. Metro's loose CJS interop tolerates it; esbuild's strict ESM does not.
     // Web-build only: patching the package would change what the shipped native app consumes.
@@ -117,6 +125,24 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'bridge',
   'page-async-storage.ts'
 )
+
+/**
+ * The one Zod the page runs.
+ *
+ * `nodePaths` is a fallback, consulted only where normal resolution fails, so it never reached
+ * `src/shared/zod-salvage.ts`: that file sits above `mobile/`, its bare `zod` resolves upward to
+ * the root's 4.5.4, and the 58 mobile modules beside it resolved to mobile's 4.4.3. Both shipped.
+ *
+ * Mobile's copy and not the root's, because the mobile app already says so: `mobile/tsconfig.json`
+ * maps `zod` to `./node_modules/zod`, and a shared module joins that program as an imported file,
+ * so tsc holds `zod-salvage.ts` to 4.4.3 today. The composition says the same thing from the other
+ * side — `salvagingArray` and friends are leaves nested inside `z.object(...)` built by mobile's
+ * Zod, so the leaves belong to the container's instance.
+ *
+ * The package directory rather than a file: nothing imports a `zod/...` subpath, and esbuild reads
+ * the `module` field here, which is the same ESM entry the package's `import` condition names.
+ */
+const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
 
 /**
  * Zod's compiled path, off before any module runs.
@@ -207,10 +233,13 @@ export function mobileWebAppBuildOptions(routes) {
     logLevel: 'silent',
     jsx: 'automatic',
     // One React: resolve everything from mobile/node_modules, which is where the entry lives.
+    // A fallback only, so it settles nothing for a module that resolves on its own — see
+    // MOBILE_ZOD_PACKAGE, which is a repo-root import this never reached.
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: {
       'react-native': 'react-native-web',
-      '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE
+      '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE,
+      zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [routeManifestPlugin(renderMobileWebAppRouteManifest(routes)), lucideBarrelPlugin],
     resolveExtensions: [
@@ -477,7 +506,18 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
       )
     }
   }
-  return declared.map((route) => ({ pathname: route.pathname, grants: [...route.grants] }))
+  // Mapped member by member rather than spread: the manifest is `.strict()`, so a field this
+  // declaration grows and this map does not name is dropped in silence -- which is how
+  // `optionalGrants` would have reached a phone as a route that declared nothing optional.
+  // `optionalGrants` is omitted when the route declares none, because absent and empty are the same
+  // answer to a shell and a key written empty would be a manifest field with no reader.
+  return declared.map((route) => ({
+    pathname: route.pathname,
+    grants: [...route.grants],
+    ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
+      ? {}
+      : { optionalGrants: [...route.optionalGrants] })
+  }))
 }
 
 /**

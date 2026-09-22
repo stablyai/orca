@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { documentLevelRules, scopeStyleToHost } from '../../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
 import {
   TERMINAL_DOCUMENT_ELEMENT_STYLE,
   TERMINAL_DOCUMENT_ROOT_STYLE,
   TERMINAL_DOCUMENT_STYLE
 } from './document-style'
-import {
-  documentLevelRules,
-  isDocumentLevelSelector,
-  scopeStyleToHost
-} from './document-style-scoping'
 
 /**
  * What the page is allowed to inject, and what the split leaves the WebView.
@@ -19,6 +15,9 @@ import {
  * including after the terminal is gone. So the page takes the element half and holds every
  * selector under its host; these are the two halves of that claim, measured rather than asserted
  * in prose.
+ *
+ * The rewrite's own contract — which selectors read as the document's, and the sheet shapes it
+ * refuses — is held beside it in `style-scoping/document-style-scoping.test.ts`.
  */
 const PREFIX = '.orca-terminal-document-host'
 
@@ -38,14 +37,10 @@ describe('the terminal document stylesheet', () => {
   })
 
   it('keeps every document-level rule out of the half the page takes', () => {
+    // The root half is the precondition for the empty list beside it: the reader does find these
+    // rules when a sheet has them.
     expect(documentLevelRules(TERMINAL_DOCUMENT_ROOT_STYLE)).toEqual(['*', 'html, body'])
     expect(documentLevelRules(TERMINAL_DOCUMENT_ELEMENT_STYLE)).toEqual([])
-    // The precondition for the empty list: the reader does find them when they are there.
-    expect(isDocumentLevelSelector('body')).toBe(true)
-    expect(isDocumentLevelSelector('html, body')).toBe(true)
-    expect(isDocumentLevelSelector('*')).toBe(true)
-    expect(isDocumentLevelSelector('#terminal-container')).toBe(false)
-    expect(isDocumentLevelSelector('.xterm .xterm-viewport')).toBe(false)
   })
 
   it('holds every selector of both injected sheets under the host', () => {
@@ -61,14 +56,5 @@ describe('the terminal document stylesheet', () => {
     // `.host *` is not what `*` meant, and a page has no use for either reading.
     const scoped = scopeStyleToHost(TERMINAL_DOCUMENT_ROOT_STYLE, PREFIX)
     expect(scoped.trim()).toBe('')
-  })
-
-  it('refuses a sheet whose shape it cannot rewrite', () => {
-    // The rewrite is textual because the input is flat. A sheet that grew an at-rule would have
-    // its inner selectors passed through unscoped, so it throws instead.
-    expect(() =>
-      scopeStyleToHost('@media (min-width: 1px) { .a { color: red; } }', PREFIX)
-    ).toThrow('at-rules cannot be scoped')
-    expect(() => scopeStyleToHost('.a { color: red;', PREFIX)).toThrow('never closes')
   })
 })

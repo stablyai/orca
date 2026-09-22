@@ -27,6 +27,40 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
+  it('passes an account-scoped Antigravity model and supported effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'antigravity',
+        model: 'gemini-3.1-pro-high',
+        effort: 'high'
+      })
+    ).toEqual({
+      preferences: { model: 'gemini-3.1-pro-high', effort: 'high' },
+      receipt: {
+        requested: {
+          agent: 'antigravity',
+          model: 'gemini-3.1-pro-high',
+          effort: 'high'
+        },
+        effective: {
+          agent: 'antigravity',
+          model: 'gemini-3.1-pro-high',
+          effort: 'high'
+        }
+      }
+    })
+  })
+
+  it('rejects unsupported Antigravity effort values', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'antigravity',
+        model: 'gemini-3.1-pro-high',
+        effort: 'xhigh'
+      })
+    ).toThrow('does not support effort xhigh')
+  })
+
   it('does not invent an effort when only a model is requested', () => {
     expect(
       resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.6-sol' }).preferences

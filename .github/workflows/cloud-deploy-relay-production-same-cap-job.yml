@@ -598,16 +598,15 @@ jobs:
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
-          # The backend service is targeted too, so its reviewed drain timeout
-          # and request logging can be the only thing left here; neither
-          # restarts an instance, so the validator below clears that on its
-          # own, without the template-and-MIG pair.
+          # The cell backend service is deliberately not targeted: the capacity role has no
+          # compute.backendServices.update, so naming it fails the apply after the MIG has
+          # rolled. Its drain and log_config settings ship in a root apply by a principal
+          # that holds the permission.
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
-            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
           if ! terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
@@ -644,21 +643,7 @@ jobs:
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
                 "${POOL_ARGUMENTS[@]}")"
             echo "${RESUME_REVIEW}"
-            jq -e '.changes == 2
-                or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' \
-              <<< "${RESUME_REVIEW}" >/dev/null
-            # changes == 0 here means the template and MIG are converged and this cell's
-            # reviewed backend update is the only thing left, so the resume is not complete:
-            # apply it, or the cell silently keeps the 300-second drain and no request
-            # logging and the operator reads that as a finished roll. The plan holds nothing
-            # else (the validator bounded it to this cell's backend, and the template and MIG
-            # are no-ops in it), and neither attribute restarts an instance, so the
-            # incarnation check downstream stays honest. Template-and-MIG drift still applies
-            # nothing, which is what a resume means.
-            if test "$(jq -er '.changes' <<< "${RESUME_REVIEW}")" = 0; then
-              terraform -chdir=infra/terraform apply -auto-approve \
-                "${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
-            fi
+            jq -e '.changes == 2' <<< "${RESUME_REVIEW}" >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
@@ -681,7 +666,6 @@ jobs:
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
-            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
           PLAN_REVIEW="$(terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap.tfplan" \

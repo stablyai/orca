@@ -6,6 +6,7 @@ import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type {
   CachedGeneration,
   MobileWebShellGates,
@@ -30,15 +31,49 @@ export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebSh
 export const ROUTE = '/h/host-1'
 export const PAGE_ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
 
-export const MANIFEST: MobileWebShellManifestFacts = {
-  buildId: 'b'.repeat(64),
+/** The manifest as the host sends it. Every facts object below is projected from one of these, so a
+ *  test that edits the routes cannot leave the projection and the manifest it came from disagreeing
+ *  — which is exactly what a same-build persist would then write. */
+export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
   schemaVersion: 1,
-  runtimeProtocolVersion: 5,
+  buildId: 'b'.repeat(64),
   minCompatibleRuntimeProtocolVersion: 2,
+  runtimeProtocolVersion: 5,
+  entrypoint: 'index.html',
   totalBytes: 4096,
-  totalAssets: 4,
+  assets: [
+    {
+      path: 'assets/app.js',
+      sha256: '1'.repeat(64),
+      byteLength: 1024,
+      contentType: 'text/javascript'
+    },
+    { path: 'assets/app.css', sha256: '2'.repeat(64), byteLength: 1024, contentType: 'text/css' },
+    {
+      path: 'assets/logo.svg',
+      sha256: '3'.repeat(64),
+      byteLength: 1024,
+      contentType: 'image/svg+xml'
+    },
+    { path: 'index.html', sha256: '4'.repeat(64), byteLength: 1024, contentType: 'text/html' }
+  ],
   routes: PAGE_ROUTES
 }
+
+export function manifestFacts(wire: MobileWebBundleManifestRead): MobileWebShellManifestFacts {
+  return {
+    buildId: wire.buildId,
+    schemaVersion: wire.schemaVersion,
+    runtimeProtocolVersion: wire.runtimeProtocolVersion,
+    minCompatibleRuntimeProtocolVersion: wire.minCompatibleRuntimeProtocolVersion,
+    totalBytes: wire.totalBytes,
+    totalAssets: wire.assets.length,
+    routes: wire.routes,
+    wire
+  }
+}
+
+export const MANIFEST: MobileWebShellManifestFacts = manifestFacts(MANIFEST_WIRE)
 
 export const CACHED: CachedGeneration = {
   buildId: MANIFEST.buildId,

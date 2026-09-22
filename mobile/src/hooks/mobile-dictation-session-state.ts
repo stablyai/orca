@@ -26,6 +26,11 @@ export type UseMobileDictationResult = {
 
 export const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
+/** Shown when the composer stops accepting input under a start the user tapped: the tap has to end
+ *  in something the composer can render, and only the user's own cancel may end in silence. */
+export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
+  'Voice dictation stopped because this session is no longer accepting input. Try again.'
+
 export function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64')
 }

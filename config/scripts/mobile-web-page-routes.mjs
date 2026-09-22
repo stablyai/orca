@@ -17,6 +17,12 @@
  * row is in all five closures and calls the seam, so a route without the grant is a page whose taps
  * stop buzzing. mobile-web-app-haptics-seam.test.mjs derives that list from the closures and fails
  * on a route that imports the seam and declares nothing.
+ *
+ * `optionalGrants` names what a screen is better with and complete without (ruling 37). A shell that
+ * implements fewer than an entry's `grants` renders the native screen; a shell that implements fewer
+ * than its `optionalGrants` renders the page and the page hides that one affordance. So the two
+ * lanes are a product decision about the screen: a capability the screen cannot be shown without
+ * goes above, and one an author can point at a complete screen without goes below.
  */
 export const MOBILE_WEB_PAGE_ROUTES = [
   // The worktree list. `navigate` because every row opens a session screen that is still native.
@@ -96,7 +102,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
-  // The session screen: terminal and chat. Fourteen grants, every one of them read off a call site
+  // The session screen: terminal and chat. Thirteen grants, every one of them read off a call site
   // in this route's own closure rather than carried from the design, and it is the only route that
   // asks for the media verbs, the audio verbs or the screencast lane.
   //
@@ -121,12 +127,22 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // asks the shell through the grants `init` carried. Without it the pane subscribes without
   // `wantsBinary` against a shell that would have encoded the frames.
   //
-  // The four audio verbs are dictation's, and they are this route's alone: C7.10 PR D put the
+  // The three audio verbs are dictation's, and they are this route's alone: C7.10 PR D put the
   // capture seam on the page and `mobile-web-app-session-dictation-capture.test.mjs` derives the
-  // list from the closure, which reaches `dictation-capture.web.ts` from the composer. All four or
-  // none — a route granted three records with the screen free to lock, and a lock mid-processing
-  // suspends the app and loses the transcript. Ruling 4's degradation is retired with them: the
-  // page no longer falls back to the vendored module's denied microphone.
+  // list from the closure, which reaches `dictation-capture.web.ts` from the composer. All three or
+  // none — a route granted two opens a microphone it has no verb to close, and the device side
+  // holds the screen awake for as long as one is open (#22072 moved that lock off the page, which
+  // is why the fourth verb this list carried is gone). Ruling 4's degradation is retired with them:
+  // the page no longer falls back to the vendored module's denied microphone.
+  //
+  // `externalNavigation` is the one optional grant in this list, and it is C8.1's. The HTML preview
+  // renders an agent's artifact in a sealed frame, and a tap on a link inside it becomes a top-frame
+  // navigation only the shell can cancel and open. Without the grant the preview renders the
+  // artifact with its links as text: the document paints, the Preview/Source toggle works, and
+  // nothing offers a tap that does nothing (ruling 37.2). Required would have taken this whole
+  // screen native on every shell built before the cancelled-navigation event, which is the trade the
+  // optional lane exists to avoid. `mobile-web-app-external-navigation-grant.test.mjs` derives the
+  // route list from the closure that calls the hook.
   {
     pathname: '/h/[hostId]/session/[worktreeId]',
     grants: [
@@ -143,6 +159,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.start',
       'native.audio.read',
       'native.audio.stop'
-    ]
+    ],
+    optionalGrants: ['externalNavigation']
   }
 ]

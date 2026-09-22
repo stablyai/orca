@@ -5,6 +5,11 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { mobileWebAppRouteChunkClosure } from './mobile-web-app-route-chunk-closure.mjs'
 import {
+  editableHostFontSizeOffenders,
+  editableHostsIn,
+  unresolvedEditableHostStyles
+} from './mobile-web-app-editable-host-font-size.mjs'
+import {
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
 } from './mobile-web-app-text-input-font-size-seam.mjs'
@@ -140,11 +145,12 @@ const GAINED_OUTSIDE_THE_DOCUMENT = [
   'src/terminal/terminal-webview-html.web.ts',
   'src/terminal/terminal-webview-html/document-markup.ts',
   'src/terminal/terminal-webview-html/document-style.ts',
-  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
-  // under the host, so what the page injects can only reach what the terminal owns.
-  'src/terminal/terminal-webview-html/document-style-scoping.ts',
   'src/terminal/terminal-webview-ready-promises.ts',
-  'src/terminal/use-terminal-webview-controller.ts'
+  'src/terminal/use-terminal-webview-controller.ts',
+  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
+  // under the host, so what the page injects can only reach what the terminal owns. It sits
+  // outside `src/terminal/` because the rich Markdown editor's mount reads the same rewrite.
+  'src/style-scoping/document-style-scoping.ts'
 ]
 
 const XTERM_PACKAGES = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
@@ -216,7 +222,33 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
  * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
  *
- * Then ruling 36 gave the screen to the microphone and two local modules left:
+ * Then C7.10 item C put the rich Markdown editor on the page, and the list moved again. Its own
+ * reading, both sides measured with `mobileWebAppRouteClosure(SESSION_ROUTE)` at base `9267423f22`
+ * with all five postinstall generators run first:
+ *
+ *   modules        4333 -> 4360   (+27)
+ *   local modules   991 -> 1018   (+27)
+ *
+ * Every one of the 27 is local and none is vendored, because the editor is the app's own code
+ * rather than a library: the document's 24 modules under `src/components/rich-markdown/` — which
+ * C7.6's plain field did not reach at all — plus the page's mount, the toolbar both siblings render,
+ * and the controller and keyboard-inset module the native component already had. Nothing leaves:
+ * the web sibling replaces its own native file, which was never in this closure. Named by diffing
+ * the two `local` lists rather than inferred from the total.
+ *
+ * `style-scoping/document-style-scoping.ts` is in the reading on both sides and costs
+ * nothing: the terminal's own mount already brings it, and the editor's mount imports the second
+ * export it grew rather than a module of its own.
+ *
+ * What the generation weighs, measured the same way on both sides: 8,028,418 -> 8,056,166 bytes
+ * (+27,748) across 109 assets, against the 9 MiB ceiling in `verify-mobile-web-app-bundle.mjs` —
+ * 85.1% of it before and 85.4% after. The script count does not move at all (67, against the
+ * 76 the chunk fence allows for 15 routes) and neither does the entry's static closure
+ * (1,612,052 bytes against a 3 MiB bound): the editor is code the session route already reached
+ * for, not a new chunk boundary.
+ *
+ * Main's own paragraph for the same pin, kept because the two provenances are independent: ruling
+ * 36 gave the screen to the microphone and two local modules left,
  * `src/hooks/mobile-dictation-keep-awake.ts` and
  * `src/hooks/mobile-dictation-foreground-keep-awake.ts`, the page's wake-tag owner and its Android
  * foreground re-acquire. Both are deleted rather than moved — the device module that opens the
@@ -224,11 +256,6 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4333 -> 4331   (-2)
  *   local modules   991 ->  989   (-2)
- *
- * Measured on this merge rather than subtracted from the line above, and the two local lists
- * diffed to name the difference: those two leave and nothing joins. The same measurement, taken
- * before #22067 landed, is how this branch read main's pin of 4,330 as three modules stale — the
- * three the paragraph above names.
  *
  * Then the two other table parsers gave up their own row splitters and read the editor's
  * `src/components/rich-markdown/markdown-table-rows.ts` instead, which the session page reaches
@@ -246,8 +273,68 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4332 -> 4333   (+1)
  *   local modules   990 ->  991   (+1)
+ *
+ * C7.10 item C then put the whole of that directory on the page, and the merge of the two is
+ * measured rather than summed — which is what this reading keeps having to do. The arithmetic of
+ * 4,358 on this branch and 4,332 on main double-counts `markdown-table-rows.ts`: main reached it
+ * first through the comment renderer, and it is also one of the 27 the editor brings. Measured on
+ * the merged head with every generator run first:
+ *
+ *   modules        4333 -> 4359   (+26)
+ *   local modules   991 -> 1017   (+26)
+ *
+ * and the two local lists diffed against main's, which names the difference module by module: the
+ * editor's own 26, with `markdown-table-rows.ts` already on both sides and the dictation pair
+ * already gone from both. 26 rather than 27 for exactly that reason — main reached the row splitter
+ * first, so it is not this branch's to add twice.
+ *
+ * The 4,333 the merge is measured against is main's corrected reading, not the 4,332 it pinned at
+ * `059ee59a48`: that census failed, `expected [ …(4333) ] to have a length of 4332`, because the
+ * icon above joined beside the row splitter and was not counted. #22119 (`197550c952`) repinned
+ * main to 4,333 with the paragraph above, and folding it here moves nothing — the icon was already
+ * on both sides of the +26, so the pin below is this merge's own measurement, unchanged.
+ *
+ * Then #21705 (`eb92222e7f`) taught the agent option catalog Antigravity, and
+ * `src/shared/agent-session-option-catalog-antigravity.ts` entered through the catalog the session
+ * page already reaches. One module, string constants, no package; the one line that differs between
+ * the closure at `841d06a969` and at `eb92222e7f`. It landed beside C2's merge, so main read one
+ * short again.
+ *
+ *   modules        4359 -> 4360   (+1)
+ *   local modules  1017 -> 1018   (+1)
+ *
+ * C8.1 then gave the HTML preview a capability to ask about, and three local modules join. Both
+ * sides measured with `mobileWebAppRouteClosure(SESSION_ROUTE)` at base `841d06a969` with all five
+ * postinstall generators run first, and the two `local` lists diffed rather than the total inferred:
+ *
+ *   modules        4359 -> 4362   (+3)
+ *   local modules  1017 -> 1020   (+3)
+ *
+ * Named, and all three local: `src/components/use-html-preview-link-grant.web.ts`, the page's read
+ * of `init.grants.native`; `src/components/html-preview-inert-links.ts`, the pass that turns the
+ * artifact's links back into text without it; and
+ * `src/mobile-web-shell/cancelled-navigation-target.ts`, which declares the grant token beside the
+ * rule that acts on it and is reached both by that hook and by `page-route-policy.ts`. The
+ * `bridge-caps.ts` it imports was already in this closure, and the hook's native sibling is
+ * replaced rather than joined. Nothing vendored: three source modules, no package.
+ *
+ * The merge of the two is measured rather than summed, which is what this reading keeps having to
+ * do. It agrees with the arithmetic this once, and only because the two additions are disjoint:
+ * main's one module is the option catalog and this branch's three are the preview's, so neither
+ * side counts the other's. Measured on the merged head with all five generators run first:
+ *
+ *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
+ *   local modules  1018 -> 1021   (+3)
+ *
+ * The C6.5 follow-up then aliased `zod` in the builder, so the four modules under `src/shared` that
+ * this route reaches stop pulling the root's second copy in. The only reading here that has ever
+ * fallen, and the only one where the two lists were diffed and every entry on the difference was
+ * vendored: 94 gone, all of them `zod@4.5.4`, none added, because mobile's 79 were already here.
+ *
+ *   modules        4363 -> 4269   (-94)
+ *   local modules  1021 -> 1021   (unchanged)
  */
-const SESSION_ROUTE_MODULES = 4333
+const SESSION_ROUTE_MODULES = 4269
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
@@ -334,6 +421,19 @@ describeClosure(
       expect(closure.local).toContain('src/platform/text-input-font-size.web.ts')
       expect(unresolvedTextInputStyles(mobileDir, closure)).toEqual([])
       expect(textInputFontSizeOffenders(mobileDir, closure)).toHaveLength(EXPECTED_OFFENDERS)
+    }, 300_000)
+
+    it('holds the editables the TextInput census cannot see to the same floor', async () => {
+      const closure = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      // The rich Markdown editor's surface is a `contenteditable` in a markup string, sized by a
+      // rule in a stylesheet: `modulesDeclaringTextInput` matches JSX tags and never sees it, so it
+      // shipped at 14 px and was measured at 14 px in both engines. The same floor, read by a rule
+      // that starts from the markup instead of from a prop.
+      expect(editableHostsIn(mobileDir, closure)).toEqual([
+        { file: 'src/components/rich-markdown/document-markup.ts', id: 'editor' }
+      ])
+      expect(unresolvedEditableHostStyles(mobileDir, closure)).toEqual([])
+      expect(editableHostFontSizeOffenders(mobileDir, closure)).toEqual([])
     }, 300_000)
   },
   900_000

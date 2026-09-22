@@ -7,9 +7,10 @@ import ts from 'typescript-api'
  *
  * Grants are resolved once, from the route the shell opened, and carried for the life of the
  * session: a route that reaches a seam it did not declare is a page whose action is refused at the
- * host with nothing on screen to say why. Six of the session route's fourteen grants were pinned
- * only by the list they were copied from (ruling 33.3); this is the rule the other eight already
- * had, written once and driven over every row.
+ * host with nothing on screen to say why. Ruling 33.3 wrote that rule once and drove it over every
+ * row rather than leaving a grant pinned by the list it was copied from. Six rows pin eight of the
+ * session route's thirteen grants here; the other five have censuses of their own, as does the
+ * optional grant declared beside them.
  *
  * Parsed, not matched. A regex over source text finds the seam named in a comment, in a string and
  * in an import it does not call, and the first two are exactly what a census must not count.
@@ -24,10 +25,16 @@ const importRow = (grants, specifier, why) => ({ kind: 'import', grants, specifi
  * One row per grant the page can ask for through a call site of its own.
  *
  * `haptics` and `screencastBinary` have their own files (`mobile-web-app-haptics-seam.test.mjs`,
- * `mobile-web-app-screencast-lane-grant.test.mjs`) and the four audio grants have
- * `mobile-web-app-session-dictation-capture.test.mjs`, so those eight are not repeated here. The
+ * `mobile-web-app-screencast-lane-grant.test.mjs`), the three audio grants have
+ * `mobile-web-app-session-dictation-capture.test.mjs` and `externalNavigation` has
+ * `mobile-web-app-external-navigation-grant.test.mjs`, so those six are not repeated here. The
  * media three share one seam and one row: `useMediaPicker` is the only way in, and `canPickMedia`
  * is `pick && read && release`, so a route reaching it needs all three or none of them.
+ *
+ * `externalNavigation` could not be a row here whatever it owned, and that is the rule rather than a
+ * detail: a row is a call site the walk can find, and the shell's cancelled-navigation behaviour has
+ * none. Nothing is requested and nothing is answered, so the only thing a closure holds is a read of
+ * `init.grants.native` -- which is what its own census walks for.
  */
 export const PAGE_GRANT_CALL_SITES = [
   callRow(

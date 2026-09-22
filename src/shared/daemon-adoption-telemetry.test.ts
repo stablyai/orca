@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { classifyDaemonPtyCwd, classifyDaemonSpawnerPath } from './daemon-adoption-telemetry'
+import {
+  classifyDaemonPtyCwd,
+  classifyDaemonSpawnerPath,
+  DAEMON_PTY_CWD_CLASSES,
+  isMacTccFolderClass,
+  MAC_TCC_FOLDER_CLASSES
+} from './daemon-adoption-telemetry'
 import { eventSchemas } from './telemetry-event-registry'
 
 describe('classifyDaemonSpawnerPath', () => {
@@ -47,6 +53,16 @@ describe('classifyDaemonPtyCwd', () => {
   })
 })
 
+// The reset remedy is offered for exactly these classes, so main and the fix dialog must agree.
+describe('isMacTccFolderClass', () => {
+  it('admits the three folders with a per-app TCC row and no others', () => {
+    for (const cwdClass of DAEMON_PTY_CWD_CLASSES) {
+      expect(isMacTccFolderClass(cwdClass)).toBe(MAC_TCC_FOLDER_CLASSES.some((c) => c === cwdClass))
+    }
+    expect([...MAC_TCC_FOLDER_CLASSES]).toEqual(['documents', 'desktop', 'downloads'])
+  })
+})
+
 // Privacy invariant: enum-only. A raw path, version, or exact count must be rejected by .strict().
 describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
   const adopted = {
@@ -85,5 +101,50 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     expect(
       eventSchemas.daemon_pty_cwd_denied.safeParse({ ...denied, cwd_class: 'Documents' }).success
     ).toBe(false)
+  })
+})
+
+// The notice is read against `daemon_pty_cwd_denied`, so it carries the same enum-only budget:
+// no daemon scope, no path, no folder name.
+describe('daemon_folder_access_notice schema', () => {
+  const shown = { action: 'shown', cwd_class: 'documents' }
+
+  it('accepts each action against a protected folder class', () => {
+    for (const action of [
+      'shown',
+      'fix_opened',
+      'settings_opened',
+      'restart_clicked',
+      'dismissed',
+      'restart_outcome_fixed',
+      'restart_outcome_still_denied',
+      'reset_clicked',
+      'reset_outcome_allowed',
+      'reset_outcome_still_denied',
+      'reset_outcome_unknown'
+    ]) {
+      expect(eventSchemas.daemon_folder_access_notice.safeParse({ ...shown, action }).success).toBe(
+        true
+      )
+    }
+    for (const cwdClass of DAEMON_PTY_CWD_CLASSES) {
+      expect(
+        eventSchemas.daemon_folder_access_notice.safeParse({ ...shown, cwd_class: cwdClass })
+          .success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects an unknown action, an unknown class, and any extra field', () => {
+    for (const bad of [
+      { action: 'open_manage_sessions' },
+      { cwd_class: 'Documents' },
+      { daemon_scope: 'aaaa111122223333' },
+      { cwd: '/Users/alice/Documents' }
+    ]) {
+      expect(eventSchemas.daemon_folder_access_notice.safeParse({ ...shown, ...bad }).success).toBe(
+        false
+      )
+    }
   })
 })
