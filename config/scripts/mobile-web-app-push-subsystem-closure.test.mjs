@@ -9,10 +9,13 @@ import { collectMobileWebAppRoutes } from './mobile-web-app-route-manifest.mjs'
 /**
  * The push subsystem, and why no page route may reach any part of it.
  *
- * Not `runtime-capability-probe.ts`, which `push-registration.ts` also imported: the session
- * route reaches it through `use-mobile-session-tab-reconciliation.ts` and the host screen through
- * `codex-reset-credit-capability.ts`, and both of those run on the page. It left the C1 layout
- * closure with push and stayed in the bundle, which is why it is pinned nowhere here.
+ * Not `runtime-capability-probe.ts`, which `push-registration.ts` also imported. The session route
+ * reaches it through `use-mobile-session-tab-reconciliation.ts`, and there it works: it sends
+ * `status.get`, a read with no client identity that the shell forwards like any non-`native.`
+ * request (`bridge-host-requests.ts`) and the desktop's mobile allowlist admits. Its other importer,
+ * `codex-reset-credit-capability.ts`, hangs off `app/h/[hostId]/accounts.tsx`, which the bundle
+ * carries and the page never serves: it hands `/accounts` to the native screen. It left the C1
+ * layout closure with push and stayed in the bundle, which is why it is pinned nowhere here.
  *
  * `expo-notifications` first, and why no page route may import it.
  *
