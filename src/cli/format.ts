@@ -75,6 +75,13 @@ export function printResult<TResult>(
   console.log(formatter(response.result))
 }
 
+/** The other row that names this same machine, when Orca can reach it two ways. */
+export type HostListSameMachine = {
+  kind: 'ssh' | 'environment'
+  name: string
+  selector: string
+}
+
 export type HostListEntry = {
   kind: 'local' | 'ssh' | 'environment'
   name: string
@@ -83,6 +90,7 @@ export type HostListEntry = {
   platform?: string
   connected?: boolean
   connectionStatus?: string
+  sameMachineAs?: HostListSameMachine
 }
 
 // Why: the selector column is the point of this command — the name alone is what callers already
@@ -96,9 +104,22 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
   return result.hosts
     .map(
       (host) =>
-        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}${formatSameMachine(host)}`
     )
     .join('\n')
+}
+
+// Why: the same box listed twice reads as two machines, and the SSH row is the one callers reach
+// for first. Naming the twin on both rows, and saying which to prefer, is what stops that.
+function formatSameMachine(host: HostListEntry): string {
+  const twin = host.sameMachineAs
+  if (!twin) {
+    return ''
+  }
+  if (twin.kind === 'environment') {
+    return `  (same machine as orca server "${twin.name}"; prefer ${twin.selector} — agents there keep running when this client disconnects)`
+  }
+  return `  (same machine as ssh target "${twin.name}")`
 }
 
 function formatHostConnection(host: HostListEntry): string {
