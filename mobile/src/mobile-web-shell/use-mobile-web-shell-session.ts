@@ -156,6 +156,9 @@ export function useMobileWebShellSession(args: {
           // runtime's. Reports nothing, and the store swallows its own failure.
           await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
           return
+        case 'forget-update-failures':
+          await store.forgetHostUpdateFailures(hostId)
+          return
         case 'open-cache':
           send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
           return

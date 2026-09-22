@@ -153,6 +153,9 @@ export type MobileWebShellSessionEffect =
   /** Write down why an update read failed, on the device, for Troubleshoot to show: a release
    *  build forwards no console output, so without it the banner is the only evidence. */
   | { readonly kind: 'record-update-failure'; readonly failure: MobileWebShellUpdateFailureFacts }
+  /** Clear this host's recorded failures: a newer generation committed, so "last update failed"
+   *  would no longer be true. */
+  | { readonly kind: 'forget-update-failures' }
 
 /**
  * Events, in two kinds.

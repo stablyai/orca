@@ -342,6 +342,32 @@ describe('an update the shell refuses while the host is reachable', () => {
     expect(log).not.toMatch(/SECRET|token|\?|:\/\/|relay/)
   })
 
+  it("forgets this host's failures once a newer generation commits, and no other host's", async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem)
+    const other = {
+      hostId: 'host-2',
+      at: 0,
+      reason: 'connection-lost',
+      hostCode: null,
+      offeredBuildId: null,
+      cachedBuildId: null,
+      outcome: 'opened-cached',
+      wall: null
+    } as const
+    await createGenerationStore({ fileSystem }).recordUpdateFailure(other)
+
+    await (await mountRoute(fileSystem)).unmount()
+    const afterRefusal = await createGenerationStore({ fileSystem }).readUpdateFailures()
+    expect(afterRefusal.map((entry) => entry.hostId)).toEqual(['host-2', HOST_ID])
+
+    doubles.fetch = () => Promise.resolve(fetchResultFor(NEWER_MANIFEST))
+    const updated = await mountRoute(fileSystem)
+    expect(updated.state()).toMatchObject({ kind: 'ready', buildId: NEWER_BUILD_ID })
+
+    expect(await createGenerationStore({ fileSystem }).readUpdateFailures()).toEqual([other])
+  })
+
   it('asks the host again on the next launch rather than living under the fallback', async () => {
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem)

@@ -320,17 +320,23 @@ export function reduceMobileWebShellSession(
         ? step(session, { state: { kind: 'activating' } })
         : step(session, {})
     case 'activated':
-      return step(session, {
-        ...CLEAR_PAGE_DOCUMENT_STATE,
-        state: {
-          kind: 'ready',
-          generationDirectory: event.generationDirectory,
-          sessionId: event.sessionId,
-          buildId: event.buildId,
-          totalBytes: event.totalBytes,
-          elapsedMs: event.elapsedMs
-        }
-      })
+      // Only the build this flow downloaded is a commit: a cache or offline open activates a build
+      // it never requested, and a same-build hit requested none.
+      return step(
+        session,
+        {
+          ...CLEAR_PAGE_DOCUMENT_STATE,
+          state: {
+            kind: 'ready',
+            generationDirectory: event.generationDirectory,
+            sessionId: event.sessionId,
+            buildId: event.buildId,
+            totalBytes: event.totalBytes,
+            elapsedMs: event.elapsedMs
+          }
+        },
+        event.buildId === session.requestedBuildId ? [{ kind: 'forget-update-failures' }] : []
+      )
     case 'remounted':
       // Only the session id changes, so the view remounts against the same verified bytes. A new
       // key is a new document, so whatever the last one said is no longer evidence about this one.

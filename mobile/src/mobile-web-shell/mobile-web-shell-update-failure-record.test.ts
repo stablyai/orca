@@ -159,3 +159,52 @@ describe('every exit from a failed update read leaves one record', () => {
     expect(recorded(step)).toMatchObject([{ offeredBuildId: null }])
   })
 })
+
+describe('a newer generation committed clears the record, and nothing else does', () => {
+  function forgets(step: MobileWebShellStep): boolean {
+    return step.effects.some((effect) => effect.kind === 'forget-update-failures')
+  }
+
+  function activated(buildId: string) {
+    return {
+      type: 'activated',
+      generationDirectory: '/cache/gen',
+      sessionId: 'session-one',
+      buildId,
+      totalBytes: 1,
+      elapsedMs: 1
+    } as const
+  }
+
+  it('forgets once the offered generation lands', () => {
+    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const step = run(fetching.session, { type: 'download-staged' }, activated(NEWER.buildId))
+    expect(step.session.state).toMatchObject({ kind: 'ready', buildId: NEWER.buildId })
+    expect(forgets(step)).toBe(true)
+  })
+
+  it('keeps the record when the fallback opens the cached generation', () => {
+    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const failed = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
+    expect(forgets(run(failed.session, activated(CACHED.buildId)))).toBe(false)
+  })
+
+  it('keeps it for a same-build cache hit, which committed nothing', () => {
+    const hit = run(afterCacheRead(CACHED).session, {
+      type: 'manifest-read',
+      manifest: manifestFacts(MANIFEST_WIRE)
+    })
+    expect(forgets(run(hit.session, activated(CACHED.buildId)))).toBe(false)
+  })
+
+  it('keeps it for an offline open', () => {
+    const offline = run(
+      afterCacheRead(null).session,
+      { type: 'gates-changed', gates: gates({ reachability: 'unreachable' }) },
+      { type: 'retry-pressed' },
+      { type: 'cache-read', generation: CACHED }
+    )
+    expect(offline.session.state).toEqual({ kind: 'activating' })
+    expect(forgets(run(offline.session, activated(CACHED.buildId)))).toBe(false)
+  })
+})
