@@ -10,6 +10,7 @@ import {
   wrapReadablePosixHookCommand
 } from '../codex/codex-hook-definition'
 import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from '../antigravity/hook-events'
+import { getManagedCommand as getAntigravityCommand } from '../antigravity/hook-service'
 import { CURSOR_EVENTS } from '../cursor/hook-events'
 import {
   getManagedCommand as getCursorCommand,
@@ -21,11 +22,7 @@ import {
 } from '../copilot/copilot-managed-hook-definitions'
 import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/hook-settings'
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
+import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 import {
@@ -90,14 +87,9 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'antigravity',
     {
-      local: (path) =>
-        process.platform === 'win32'
-          ? ANTIGRAVITY_EVENTS.map((event) =>
-              wrapWindowsCmdHookCommand(
-                path.replace('antigravity-hook.cmd', event.windowsWrapperFileName)
-              )
-            )
-          : antigravityPosixCommands(path),
+      // Why: drive the installer's own builder rather than re-deriving it here; a private copy
+      // of the Windows branch stopped reflecting what Antigravity actually registers.
+      local: (path) => ANTIGRAVITY_EVENTS.map((event) => getAntigravityCommand(path, event)),
       remote: antigravityPosixCommands
     }
   ],

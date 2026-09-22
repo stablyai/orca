@@ -1,12 +1,11 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   getSharedManagedScriptPath,
   readHooksJson,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -46,8 +45,9 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
-  return getSharedManagedScriptPath(event.windowsWrapperFileName)
+// Why: the wrapper reaches the core through `%~dp0`, so it only works from the core's own directory.
+function getWindowsWrapperScriptPath(scriptPath: string, event: AntigravityEvent): string {
+  return join(dirname(scriptPath), event.windowsWrapperFileName)
 }
 
 function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): string {
@@ -59,9 +59,16 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
   )
 }
 
-function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
+export function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
+    // Why (#8737): Antigravity starts a hook `command` as a program, so the entry has to name a
+    // file. The shared cmd wrapper swaps any path cmd.exe could not carry bare — a profile with a
+    // space, the ordinary `C:\Users\First Last` — for a multi-token PowerShell launcher, which is
+    // not a program name and so never starts. That produces no stdout, and Antigravity reads
+    // silence on PreToolUse as deny (hook-events.ts), denying every tool call on a clean install.
+    // The per-event wrapper is the Windows half of the POSIX fallbackStdout above: it answers the
+    // gate itself when the core script is missing, so the startable path is also the answering one.
+    return getWindowsWrapperScriptPath(scriptPath, event)
   }
   return getPosixManagedCommand(scriptPath, event)
 }
@@ -72,7 +79,7 @@ export class AntigravityHookService {
     if (process.platform === 'win32') {
       for (const event of ANTIGRAVITY_EVENTS) {
         await refreshManagedScriptIfPresent(
-          getWindowsWrapperScriptPath(event),
+          getWindowsWrapperScriptPath(getManagedScriptPath(), event),
           getWindowsWrapperScript(event.eventName)
         )
       }
@@ -156,11 +163,11 @@ export class AntigravityHookService {
     )
     writeManagedScript(scriptPath, getManagedScript())
     if (process.platform === 'win32') {
-      // Why: Antigravity wraps hook commands in cmd.exe. Keeping event env
-      // setup inside event-specific .cmd files avoids nested hooks.json quotes.
+      // Why: the entry stays a bare path, so per-event env has to live inside the wrapper .cmd
+      // rather than in a hooks.json command line that would need nested quoting.
       for (const event of ANTIGRAVITY_EVENTS) {
         writeManagedScript(
-          getWindowsWrapperScriptPath(event),
+          getWindowsWrapperScriptPath(scriptPath, event),
           getWindowsWrapperScript(event.eventName)
         )
       }
