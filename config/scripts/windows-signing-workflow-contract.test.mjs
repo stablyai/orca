@@ -184,19 +184,35 @@ describe('Windows signing workflow contract', () => {
     )
   })
 
-  it('verifies Windows inner binary signatures fail-open before publishing', () => {
+  it('requires the final packaged broker signature before the fail-open general gate and publishing', () => {
     const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
+    const brokerVerifyIndex = stepNames.indexOf('Require signed broker in final Windows payload')
     const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
     const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
     const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
+    expect(brokerVerifyIndex).toBe(outerVerifyIndex + 1)
+    expect(innerVerifyIndex).toBe(brokerVerifyIndex + 1)
     expect(evidenceIndex).toBe(innerVerifyIndex + 1)
     expect(publishIndex).toBe(evidenceIndex + 1)
+
+    const brokerGate = steps[brokerVerifyIndex]
+    expect(brokerGate['continue-on-error']).toBeUndefined()
+    expect(brokerGate.run).toContain('dist/orca-windows-setup.exe')
+    expect(brokerGate.run).toContain(
+      "verify-packaged-windows-runtime-pipe-broker-signature.mjs 'broker-signature-extract/resources'"
+    )
+    expect(brokerGate.run).toContain('failed its mandatory signature gate')
+
+    const windowsBuild = parsedWorkflow.jobs.build.strategy.matrix.include.find(
+      (entry) => entry.platform === 'win'
+    )
+    expect(windowsBuild.release_command).toContain('--publish never')
+    expect(steps[publishIndex].with.command).toContain('gh release upload')
 
     // Why fail-open: unsigned inner binaries must warn, not block, until the
     // flow is proven on a real release (issue #7785). Flip this to 'true'

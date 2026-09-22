@@ -25,6 +25,13 @@ const {
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
+const {
+  verifyPackagedWindowsRuntimePipeBroker
+} = require('./scripts/verify-packaged-windows-runtime-pipe-broker.cjs')
+const {
+  assertWindowsRuntimePipeBrokerAbsent,
+  windowsRuntimePipeBrokerResourcesForChannel
+} = require('./scripts/windows-runtime-pipe-broker-package-policy.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -41,6 +48,13 @@ const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
 const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
 const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
 const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
+const windowsPackageChannel = isWinHourly
+  ? 'hourly'
+  : isWinDaily
+    ? 'daily'
+    : isWinAdhoc
+      ? 'adhoc'
+      : 'release'
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion =
@@ -361,6 +375,11 @@ module.exports = {
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
       verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
+      if (isWinDevChannel) {
+        assertWindowsRuntimePipeBrokerAbsent(resourcesDir)
+      } else {
+        verifyPackagedWindowsRuntimePipeBroker(resourcesDir, { execute: canExecuteTargetArch })
+      }
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
@@ -445,6 +464,7 @@ module.exports = {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
       },
+      ...windowsRuntimePipeBrokerResourcesForChannel(windowsPackageChannel),
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
         to: 'agent-browser-win32-x64.exe'

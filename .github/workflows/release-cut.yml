@@ -2024,6 +2024,23 @@ jobs:
           }
           $signature.SignerCertificate | Format-List Subject,Issuer,NotBefore,NotAfter,Thumbprint
 
+      - name: Require signed broker in final Windows payload
+        if: matrix.platform == 'win' && github.run_attempt == 1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $7zaOutput = node config/scripts/resolve-7za-path.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Could not resolve 7za for the broker signature gate.' }
+          $7za = ($7zaOutput | Out-String).Trim()
+          if (-not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+            throw "Invalid 7za path for the broker signature gate: $7za"
+          }
+          New-Item -ItemType Directory -Path broker-signature-extract -Force | Out-Null
+          & $7za x 'dist/orca-windows-setup.exe' '-obroker-signature-extract' -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract the final NSIS payload for the broker signature gate.' }
+          node config/scripts/verify-packaged-windows-runtime-pipe-broker-signature.mjs 'broker-signature-extract/resources'
+          if ($LASTEXITCODE -ne 0) { throw 'The final packaged broker failed its mandatory signature gate.' }
+
       # Why: evidence gate for inner-binary signing (issue #7785, supersedes
       # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
       # by extracting the shipped installer). Warn-only until the flow has been

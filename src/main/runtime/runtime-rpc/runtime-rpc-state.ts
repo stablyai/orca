@@ -29,6 +29,14 @@ import type {
 } from './runtime-rpc-pairing-types'
 import { DEFAULT_WS_PORT } from './runtime-rpc-pairing-types'
 
+export type WindowsPipeBrokerFailureState = {
+  endpoint: string
+  code: number | null
+  signal: NodeJS.Signals | null
+  metadataRetraction: 'not-published' | 'succeeded' | 'failed'
+  metadataError: string | null
+}
+
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
   protected readonly dispatcher: RpcDispatcher
@@ -65,6 +73,7 @@ export class RuntimeRpcState {
   protected activeTransports: RpcTransport[] = []
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
+  protected windowsPipeBrokerFailure: WindowsPipeBrokerFailureState | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
   // Why: detaches the current WebSocketTransport from the session wiring so a pairing rebind can swap
   // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.

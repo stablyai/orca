@@ -6,6 +6,9 @@ import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 
+const PIPE_BUSY_RETRY_BASE_MS = 25
+const PIPE_BUSY_RETRY_MAX_MS = 250
+
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
@@ -30,10 +33,12 @@ export async function sendRequest<TResult>(
       )
       return
     }
-    const socket = createConnection(transport.endpoint)
+    let socket: ReturnType<typeof createConnection> | null = null
+    let retryTimer: NodeJS.Timeout | null = null
     let lineSegments: string[] = []
     let settled = false
     const requestId = randomUUID()
+    const openingDeadline = Date.now() + timeoutMs
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -41,7 +46,10 @@ export async function sendRequest<TResult>(
       }
       settled = true
       lineSegments = []
-      socket.destroy()
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+      }
+      socket?.destroy()
       reject(
         new RuntimeClientError(
           'runtime_timeout',
@@ -59,7 +67,10 @@ export async function sendRequest<TResult>(
       settled = true
       lineSegments = []
       clearTimeout(timeout)
-      socket.end()
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+      }
+      socket?.end()
       if (result.ok === false) {
         reject(result.error)
       } else {
@@ -67,30 +78,7 @@ export async function sendRequest<TResult>(
       }
     }
 
-    socket.setEncoding('utf8')
-    socket.once('error', () => {
-      finish({
-        ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
-        )
-      })
-    })
-    // Why: a clean peer close (FIN, no 'error') before a terminal frame never
-    // settles the promise, so the call would otherwise hang until the full
-    // timeout fires. Reject promptly. finish() guards double-settle, so this
-    // no-ops on the normal success/error paths that already called socket.end().
-    socket.once('close', () => {
-      finish({
-        ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
-        )
-      })
-    })
-    socket.on('data', (chunk: string) => {
+    const onData = (chunk: string): void => {
       // Why: the server may interleave `{"_keepalive":true}\n` frames with the
       // final success/failure frame to keep both idle timers alive during a
       // long-poll (see design doc §3.1). Read frames in a loop until we see a
@@ -187,21 +175,98 @@ export async function sendRequest<TResult>(
         finish({ ok: true, response })
         return
       }
-    })
-    socket.on('connect', () => {
-      socket.write(
-        `${JSON.stringify({
-          id: requestId,
-          authToken: metadata.authToken,
-          method,
-          params,
-          orchestrationCapability: envelope?.orchestrationCapability,
-          orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
-        })}\n`
-      )
-    })
+    }
+
+    const open = (attempt: number): void => {
+      if (settled) {
+        return
+      }
+      const attemptSocket = createConnection(transport.endpoint)
+      socket = attemptSocket
+      let requestSent = false
+      let retired = false
+      attemptSocket.setEncoding('utf8')
+      attemptSocket.once('error', (error: NodeJS.ErrnoException) => {
+        if (retired || settled) {
+          return
+        }
+        if (!requestSent && error.code === 'EBUSY') {
+          retired = true
+          attemptSocket.destroy()
+          const remaining = openingDeadline - Date.now()
+          const delay = Math.min(
+            PIPE_BUSY_RETRY_BASE_MS * 2 ** attempt,
+            PIPE_BUSY_RETRY_MAX_MS,
+            remaining
+          )
+          if (delay > 0) {
+            retryTimer = setTimeout(() => {
+              retryTimer = null
+              if (Date.now() < openingDeadline) {
+                open(attempt + 1)
+              }
+            }, delay)
+          }
+          return
+        }
+        finish({
+          ok: false,
+          error: connectionError(error)
+        })
+      })
+      // Why: a clean peer close (FIN, no 'error') before a terminal frame never
+      // settles the promise, so the call would otherwise hang until the full
+      // timeout fires. A retired EBUSY attempt is excluded from this terminal path.
+      attemptSocket.once('close', () => {
+        if (retired) {
+          return
+        }
+        finish({
+          ok: false,
+          error: new RuntimeClientError(
+            'runtime_unavailable',
+            'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          )
+        })
+      })
+      attemptSocket.on('data', onData)
+      attemptSocket.once('connect', () => {
+        if (settled || retired) {
+          return
+        }
+        // The retry boundary ends here. Once any request byte may have been
+        // handed to the socket, replaying it could execute an operation twice.
+        requestSent = true
+        attemptSocket.write(
+          `${JSON.stringify({
+            id: requestId,
+            authToken: metadata.authToken,
+            method,
+            params,
+            orchestrationCapability: envelope?.orchestrationCapability,
+            orchestrationContractVersion: envelope?.orchestrationContractVersion,
+            orchestrationRequestId: envelope?.orchestrationRequestId,
+            compatibilityInvocationId: envelope?.compatibilityInvocationId,
+            orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          })}\n`
+        )
+      })
+    }
+
+    open(0)
   })
+}
+
+function connectionError(error: NodeJS.ErrnoException): RuntimeClientError {
+  return new RuntimeClientError(
+    'runtime_unavailable',
+    'Could not connect to the running Orca app. Restart Orca and try again.',
+    {
+      connectionError: {
+        code: error.code ?? null,
+        errno: error.errno ?? null,
+        syscall: error.syscall ?? null
+      }
+    }
+  )
 }

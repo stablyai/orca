@@ -18,12 +18,32 @@ import {
   createRuntimeTransportMetadata,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import {
+  isWindowsRuntimePipeBrokerEnabled,
+  readWindowsRuntimePipeBrokerSandboxAccount,
+  WindowsRuntimePipeBrokerTransport
+} from '../rpc/windows-runtime-pipe-broker-transport'
+import type { WindowsPipeBrokerFailureState } from './runtime-rpc-state'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
+  getWindowsPipeBrokerFailure(): WindowsPipeBrokerFailureState | null {
+    return this.windowsPipeBrokerFailure ? { ...this.windowsPipeBrokerFailure } : null
+  }
+
+  /** Test-only seam: proves that a post-READY broker death retracts its advertised endpoint. */
+  terminateWindowsPipeBrokerForTest(): boolean {
+    const broker = this.activeTransports.find(
+      (transport): transport is WindowsRuntimePipeBrokerTransport =>
+        transport instanceof WindowsRuntimePipeBrokerTransport
+    )
+    return broker?.terminateForTest() ?? false
+  }
+
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
     }
+    this.windowsPipeBrokerFailure = null
 
     // Why: SIGKILL/OOM skip stop(), orphaning `o-<pid>-*.sock` files; sweep them. Skipped on Windows: named pipes leave no filesystem entries.
     if (this.platform !== 'win32') {
@@ -69,6 +89,46 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
 
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
+    let metadataPublished = false
+
+    if (this.platform === 'win32' && isWindowsRuntimePipeBrokerEnabled()) {
+      const broker = new WindowsRuntimePipeBrokerTransport({
+        serverPid: this.pid,
+        runtimeId: this.runtime.getRuntimeId(),
+        authorizedSandboxAccount: readWindowsRuntimePipeBrokerSandboxAccount(),
+        onUnexpectedExit: ({ endpoint, code, signal }) => {
+          const transportIndex = activeTransports.indexOf(broker)
+          if (transportIndex !== -1) {
+            activeTransports.splice(transportIndex, 1)
+          }
+          const metadataIndex = transportsMeta.findIndex(
+            (transport) => transport.endpoint === endpoint
+          )
+          if (metadataIndex !== -1) {
+            transportsMeta.splice(metadataIndex, 1)
+          }
+          this.recordWindowsPipeBrokerExit({ endpoint, code, signal }, metadataPublished)
+        }
+      })
+      activeTransports.push(broker)
+      transportsMeta.unshift({ kind: 'named-pipe', endpoint: broker.endpoint })
+      try {
+        await broker.start()
+      } catch (error) {
+        const transportIndex = activeTransports.indexOf(broker)
+        if (transportIndex !== -1) {
+          activeTransports.splice(transportIndex, 1)
+        }
+        const metadataIndex = transportsMeta.findIndex(
+          (transport) => transport.endpoint === broker.endpoint
+        )
+        if (metadataIndex !== -1) {
+          transportsMeta.splice(metadataIndex, 1)
+        }
+        await socketTransport.stop().catch(() => {})
+        throw error
+      }
+    }
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
@@ -111,6 +171,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
 
     try {
       this.writeMetadata()
+      metadataPublished = true
     } catch (error) {
       // Why: a runtime that can't publish metadata is invisible to the CLI — close transports rather than run undiscoverable.
       this.activeTransports = []
@@ -137,6 +198,27 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         )
       }
     })
+  }
+
+  protected recordWindowsPipeBrokerExit(
+    details: { endpoint: string; code: number | null; signal: NodeJS.Signals | null },
+    metadataPublished: boolean
+  ): void {
+    let metadataRetraction: WindowsPipeBrokerFailureState['metadataRetraction'] = 'not-published'
+    let metadataError: string | null = null
+    if (metadataPublished && !this.stopping) {
+      try {
+        this.writeMetadata()
+        metadataRetraction = 'succeeded'
+      } catch (error) {
+        metadataRetraction = 'failed'
+        metadataError = error instanceof Error ? error.message : String(error)
+      }
+    }
+    this.windowsPipeBrokerFailure = { ...details, metadataRetraction, metadataError }
+    console.error(
+      `[runtime] Windows pipe broker exited unexpectedly (code ${details.code ?? 'none'}, signal ${details.signal ?? 'none'}); metadata retraction ${metadataRetraction}${metadataError ? `: ${metadataError}` : '.'}`
+    )
   }
 
   // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
