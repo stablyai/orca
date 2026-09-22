@@ -62,22 +62,15 @@ function DetailHeader({
             {displayed.title}
           </h2>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="shrink-0"
-              onClick={onStartWorkspace}
-              aria-label={startLabel}
-            >
-              <ArrowRight className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
-          </TooltipContent>
-        </Tooltip>
+        <Button
+          size="sm"
+          className="shrink-0"
+          onClick={onStartWorkspace}
+          aria-label={startLabel}
+        >
+          {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+          <ArrowRight className="size-4" />
+        </Button>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
