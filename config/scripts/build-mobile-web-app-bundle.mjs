@@ -560,6 +560,10 @@ export async function buildMobileWebAppBundle({
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
+    // Undeclared, a browser asks the origin for /favicon.ico itself and the shell's asset server
+    // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
+    // has no tab for an icon, and the bundle's images are route assets named by their own bytes.
+    '<link rel="icon" href="data:," />\n' +
     `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')

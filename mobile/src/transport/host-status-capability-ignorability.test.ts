@@ -21,7 +21,6 @@ import type { RpcResponse } from './types'
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('./host-app-version-store', () => ({
-  normalizeHostAppVersion: (value: unknown) => (typeof value === 'string' ? value : null),
   recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
 }))
 

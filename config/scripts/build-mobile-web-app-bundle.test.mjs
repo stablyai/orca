@@ -368,6 +368,20 @@ describeBundling('the app bundle', () => {
     })
   }, 120_000)
 
+  it('declares an icon, so no browser asks the shell for one', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'icon')
+      const { manifest } = await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      // Undeclared, a browser asks the origin for /favicon.ico on its own, and the shell's asset
+      // server answers 403 because the path is in no manifest — repeatedly, on the emulator run.
+      expect(html).toContain('<link rel="icon" href="data:," />')
+      // And the empty URI rather than an asset: the bundle carries no icon, so a declaration
+      // naming one would point at a route image whose name changes with its bytes.
+      expect(manifest.assets.map((asset) => asset.path)).not.toContain('favicon.ico')
+    })
+  }, 120_000)
+
   it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
     await withScratch(async (scratch) => {
       const outDir = join(scratch, 'root-reset')
