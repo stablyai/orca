@@ -59,6 +59,12 @@ describe('how long the shell keeps its own frame up', () => {
   })
 
   it('reads the declaration off the list the page sent, not off the shell', () => {
-    expect([BRIDGE_PAGE_PAINTED]).toContain('painted')
+    // The name is what the page puts in `ready.reports`, so the frame follows that list and not a
+    // flag the shell set: a list without it is a page whose newest word is `ready`.
+    const declared = [BRIDGE_PAGE_PAINTED].includes(BRIDGE_PAGE_PAINTED)
+    expect(frame({ pageReady: true, pageReportsPaint: declared })).toBe('unpainted')
+    expect(
+      frame({ pageReady: true, pageReportsPaint: ['other'].includes(BRIDGE_PAGE_PAINTED) })
+    ).toBe('painted')
   })
 })
