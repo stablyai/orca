@@ -194,6 +194,7 @@ export function buildDefaultSettings(args: {
     disabledPlugins: [],
     pluginConsents: {},
     devPluginPaths: [],
+    pluginTaskSourceSelections: {},
     claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,

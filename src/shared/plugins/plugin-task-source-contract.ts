@@ -32,7 +32,7 @@ const FILTER_LABEL_MAX = 256
 const FILTERS_MAX = 16
 /** A facet is a control the user reads before filtering, not a chip they skim,
  *  so the bar holds fewer of them than `filters` holds presets. */
-const FACETS_MAX = 8
+export const PLUGIN_TASK_FACETS_MAX = 8
 /** A pick list is not a paged surface: one facet's options are bounded by the
  *  same budget core already accepts from a source for one page of items. A
  *  selection can never name more options than a facet may declare, so the same
@@ -192,7 +192,7 @@ export const pluginTaskSourceStatusSchema = z.object({
     .optional(),
   /** Composable dimensions, independent of `filters`: a host that predates
    *  facets keeps sending only presets, and a source may declare both. */
-  facets: z.array(pluginTaskFacetSchema).max(FACETS_MAX).optional()
+  facets: z.array(pluginTaskFacetSchema).max(PLUGIN_TASK_FACETS_MAX).optional()
 })
 
 export const pluginTaskQuerySchema = z.object({
@@ -209,8 +209,8 @@ export const pluginTaskQuerySchema = z.object({
    *  on its own. */
   facetSelections: z
     .record(z.string().min(1).max(512), z.array(z.string().min(1).max(512)).max(FACET_OPTIONS_MAX))
-    .refine((selections) => Object.keys(selections).length <= FACETS_MAX, {
-      message: `no more than ${FACETS_MAX} facets`
+    .refine((selections) => Object.keys(selections).length <= PLUGIN_TASK_FACETS_MAX, {
+      message: `no more than ${PLUGIN_TASK_FACETS_MAX} facets`
     })
     .optional()
 })

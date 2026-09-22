@@ -118,6 +118,12 @@ export function createPluginTaskSourceFacetOptionsAction(
           if (pruned) {
             set({ pluginTaskSourceQuery: pruned })
           }
+          // Deliberately after the prune: a saved selection outranks every
+          // declared default, so a facet the prune just emptied stays empty
+          // rather than reading as one that was never seeded.
+          if (get().pluginTaskSourceSelectionRestored) {
+            return
+          }
           const seededFacetIds = get().pluginTaskSourceSeededFacetIds
           if (seededFacetIds.includes(facet.id)) {
             return

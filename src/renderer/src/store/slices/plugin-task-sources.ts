@@ -21,6 +21,11 @@ import {
   createPluginTaskSourceFacetOptionsAction,
   initialPluginTaskSourceFacetOptions
 } from './plugin-task-source-facet-options'
+import {
+  createPluginTaskSourceSelectionActions,
+  readPersistedPluginTaskSourceSelection,
+  retainOfferedScopeIds
+} from './plugin-task-source-selection-persistence'
 import type {
   ContributedPluginTaskSource,
   PluginTaskSourceQuery,
@@ -117,13 +122,20 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceScopesLoading: false,
   pluginTaskSourceScopesError: null,
   selectedPluginTaskSourceScopeIds: ALL_SCOPES,
+  pluginTaskSourceSelectionRestored: false,
   pluginTaskSourceRefreshing: false,
 
   setPluginTaskSources: (sources) => {
     set({ pluginTaskSources: sources })
   },
 
+  // The saved selection is restored here rather than after the status probe, so
+  // the first list request already carries it instead of loading the unfiltered
+  // list and then reshuffling it.
   selectPluginTaskSource: (selection) => {
+    const restored = selection
+      ? readPersistedPluginTaskSourceSelection(get().settings, selection)
+      : null
     set({
       selectedPluginTaskSource: selection,
       pluginTaskSourceItems: [],
@@ -135,22 +147,19 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceSeededFacetIds: NO_SEEDED_FACETS,
       pluginTaskSourceSupportsCreate: false,
       pluginTaskSourceSupportsComment: false,
-      pluginTaskSourceQuery: UNFILTERED_QUERY,
+      pluginTaskSourceQuery: restored
+        ? { ...UNFILTERED_QUERY, facetSelections: restored.facetSelections }
+        : UNFILTERED_QUERY,
       pluginTaskSourceScopes: [],
       pluginTaskSourceScopesLoading: false,
       pluginTaskSourceScopesError: null,
-      selectedPluginTaskSourceScopeIds: ALL_SCOPES,
+      selectedPluginTaskSourceScopeIds: restored ? restored.scopeIds : ALL_SCOPES,
+      pluginTaskSourceSelectionRestored: restored !== null,
       pluginTaskSourceRefreshing: false
     })
   },
 
-  setPluginTaskSourceQuery: (query) => {
-    set({ pluginTaskSourceQuery: query })
-  },
-
-  setPluginTaskSourceScopeIds: (scopeIds) => {
-    set({ selectedPluginTaskSourceScopeIds: scopeIds })
-  },
+  ...createPluginTaskSourceSelectionActions(set, get),
 
   // A status failure yields no chips and no create control rather than an error
   // banner: the item load reports the same outage with its own code, and one
@@ -187,10 +196,17 @@ export const createPluginTaskSourcesSlice: StateCreator<
       return
     }
     if (result.ok) {
+      // The settled scope list is the first chance to tell a restored project
+      // that still exists from one this account can no longer see.
+      const retainedScopeIds = retainOfferedScopeIds(
+        get().selectedPluginTaskSourceScopeIds,
+        result.data
+      )
       set({
         pluginTaskSourceScopes: result.data,
         pluginTaskSourceScopesError: null,
-        pluginTaskSourceScopesLoading: false
+        pluginTaskSourceScopesLoading: false,
+        ...(retainedScopeIds ? { selectedPluginTaskSourceScopeIds: retainedScopeIds } : {})
       })
     } else {
       set({

@@ -101,6 +101,11 @@ export type PluginTaskSourcesSlice = {
   /** Empty means every scope, which is also what the wire contract means by an
    *  empty `scopeIds`. */
   selectedPluginTaskSourceScopeIds: string[]
+  /** Whether this source's selection came from settings rather than from a first
+   *  open. A saved selection is the user's own answer, so no facet's declared
+   *  default may seed over it — not even a facet left empty because pruning
+   *  retired every saved option, which must not read as never seeded. */
+  pluginTaskSourceSelectionRestored: boolean
   /** Guards the refresh button, not the individual loads: it stays true across
    *  every reload the refresh starts, so a second click cannot start a duplicate. */
   pluginTaskSourceRefreshing: boolean
