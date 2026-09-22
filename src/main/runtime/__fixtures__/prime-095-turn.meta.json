@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-22T05:12:02.808Z",
+  "platform": "darwin",
+  "command": [
+    "prime-agent",
+    "--daemon-socket",
+    "/tmp/prime-patch-capture-turn.sock",
+    "--provider",
+    "bifrost",
+    "--model",
+    "deepseek-v4.1-flash"
+  ],
+  "cols": 120,
+  "rows": 35,
+  "note": "Prime 0.9.5 bifrost deepseek-v4.1-flash harmless turn",
+  "exitCode": 129
+}

@@ -32,12 +32,28 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
    *  readiness metadata was lost. Deliberately single-shot: it answers "is the
    *  screen already showing a settled prompt", and the poll above owns every
    *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+   *  resolves through the poll, not here. Prime redraws outside the retained tail,
+   *  so its screen probe retries within the original waiter lifetime. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void {
+    const startedAt = Date.now()
+    const primePtyId = this.getTerminalAgentStatusPtyId(waiter.handle)
+    const isPrime = agent === 'prime-agent'
+    const retryPrimeProbe = (): void => {
+      const remaining = waiterTimeoutMs - (Date.now() - startedAt) - 500
+      if (!isPrime || remaining <= 0 || !this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+        return
+      }
+      const timer = setTimeout(() => {
+        if (this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+          this.startTuiIdleVisibleReadProbe(waiter, remaining, agent)
+        }
+      }, 500)
+      timer.unref?.()
+    }
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
@@ -70,6 +86,7 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
           projection.source !== 'screen' ||
           !this.terminalWaiters.get(waiter.handle)?.has(waiter)
         ) {
+          retryPrimeProbe()
           return
         }
         const snapshotText =
@@ -81,7 +98,11 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
           agent === 'antigravity'
             ? isAntigravityReadyPromptSnapshot(snapshotText)
             : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
+        if (
+          !blockedReason &&
+          (!ready || (isPrime && this.ptysById.get(primePtyId)?.lastAgentStatus === 'working'))
+        ) {
+          retryPrimeProbe()
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
@@ -90,7 +111,7 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         }
         this.terminalWaiters.resolve(waiter, result)
       })
-      .catch(() => {})
+      .catch(() => retryPrimeProbe())
   }
 
   protected buildTuiIdleProbeResult(

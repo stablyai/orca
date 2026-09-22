@@ -18,10 +18,16 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'omp',
   'droid',
   'hermes',
-  'devin'
+  'devin',
+  'prime-agent'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
+  'prime-agent': {
+    workingLabel: 'Prime Agent',
+    permissionLabel: 'Prime Agent - action required',
+    idleLabel: 'Prime Agent ready'
+  },
   codex: {
     workingLabel: 'Codex',
     permissionLabel: 'Codex - action required',
