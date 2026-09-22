@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Expand } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,10 @@ import {
 } from '@/components/ui/dialog'
 import type { NativeChatClippedPayload } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
-import { useNativeChatPayloadReader } from './native-chat-payload-reader'
+import {
+  useNativeChatPayloadReader,
+  type NativeChatPayloadReader
+} from './native-chat-payload-reader'
 
 type LoadState =
   | { kind: 'idle' }
@@ -47,19 +50,45 @@ export function NativeChatFullContentButton({
   const reader = useNativeChatPayloadReader()
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<LoadState>({ kind: 'idle' })
+  const identity = clipped ? `${clipped.digest}:${clipped.byteLength}` : null
+  // Reflects the identity of the render currently committed, independent of
+  // effect timing, so a `load()` closure captured before an identity change
+  // can tell a stale completion apart from the one it started for.
+  const identityRef = useRef(identity)
+  identityRef.current = identity
+
+  // The transcript keys this row by message id, not by payload identity, so a
+  // changed clip (or reader) reuses this same component instance. Adjusted
+  // during render, not in an effect, so a stale `state` from a different clip
+  // is never painted even for one frame.
+  const [renderedFor, setRenderedFor] = useState<{
+    identity: string | null
+    reader: NativeChatPayloadReader | null
+  }>({ identity, reader })
+  if (renderedFor.identity !== identity || renderedFor.reader !== reader) {
+    setRenderedFor({ identity, reader })
+    setState({ kind: 'idle' })
+  }
 
   const load = useCallback(async () => {
     if (!reader || !clipped) {
       return
     }
+    const requestedIdentity = identity
     setState({ kind: 'loading' })
     try {
       const text = await reader.readFullPayload(clipped.digest, clipped.byteLength)
+      if (identityRef.current !== requestedIdentity) {
+        return
+      }
       setState({ kind: 'loaded', text })
     } catch (error) {
+      if (identityRef.current !== requestedIdentity) {
+        return
+      }
       setState({ kind: 'failed', code: errorCode(error) })
     }
-  }, [reader, clipped])
+  }, [reader, clipped, identity])
 
   if (!reader || !clipped?.retrievable) {
     return null

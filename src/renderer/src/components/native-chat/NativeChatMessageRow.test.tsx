@@ -1,9 +1,29 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
+import {
+  NativeChatPayloadReaderContext,
+  type NativeChatPayloadReader
+} from './native-chat-payload-reader'
+
+/** Test-only provider: the reader is a fixed test double, never rebuilt per render. */
+function WithReader({
+  reader,
+  children
+}: {
+  reader: NativeChatPayloadReader
+  children: ReactNode
+}) {
+  return (
+    <NativeChatPayloadReaderContext.Provider value={reader}>
+      {children}
+    </NativeChatPayloadReaderContext.Provider>
+  )
+}
 
 afterEach(cleanup)
 
@@ -99,5 +119,42 @@ describe('MessageRow control visibility', () => {
     renderMessage(role)
     expect(screen.queryByRole('time')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
+  })
+})
+
+describe('MessageRow clipped prose', () => {
+  const digestA = 'a'.repeat(64)
+  const digestB = 'b'.repeat(64)
+  const reader: NativeChatPayloadReader = { readFullPayload: vi.fn() }
+
+  it('offers a full-content control for every clipped prose block, not only the first', () => {
+    render(
+      <WithReader reader={reader}>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [
+              {
+                type: 'text',
+                text: 'first head…',
+                clipped: { digest: digestA, byteLength: 999, retrievable: true }
+              },
+              {
+                type: 'text',
+                text: 'second head…',
+                clipped: { digest: digestB, byteLength: 888, retrievable: true }
+              }
+            ]
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={vi.fn()}
+        />
+      </WithReader>
+    )
+
+    expect(screen.getAllByRole('button', { name: 'Show full content' })).toHaveLength(2)
   })
 })

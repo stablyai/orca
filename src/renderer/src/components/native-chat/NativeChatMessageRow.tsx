@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type {
   NativeChatMessage,
+  NativeChatTextBlock,
   NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
@@ -67,9 +68,14 @@ export const MessageRow = memo(function MessageRow({
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
   const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
-  // A prose block the host bounded to a head; the rest is fetched on demand.
-  const clippedProse = prose.find((block) => block.type === 'text' && block.clipped !== undefined)
-  const clipped = clippedProse?.type === 'text' ? clippedProse.clipped : undefined
+  // Every prose block the host bounded to a head; `splitNativeChatBlocks`
+  // keeps each one, so a message can carry more than one clipped block.
+  const clippedProseBlocks = prose.filter(
+    (
+      block
+    ): block is NativeChatTextBlock & { clipped: NonNullable<NativeChatTextBlock['clipped']> } =>
+      block.type === 'text' && block.clipped !== undefined
+  )
   // `message.role` is an identifier, never display text.
   const fullContentTitle = translate('components.native-chat.fullContent.title', 'Message')
 
@@ -145,9 +151,13 @@ export const MessageRow = memo(function MessageRow({
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
-              {clipped ? (
-                <NativeChatFullContentButton clipped={clipped} title={fullContentTitle} />
-              ) : null}
+              {clippedProseBlocks.map((block) => (
+                <NativeChatFullContentButton
+                  key={block.clipped.digest}
+                  clipped={block.clipped}
+                  title={fullContentTitle}
+                />
+              ))}
             </>
           ) : (
             <NativeChatImageAttachments
@@ -204,7 +214,13 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {clipped ? <NativeChatFullContentButton clipped={clipped} title={fullContentTitle} /> : null}
+      {clippedProseBlocks.map((block) => (
+        <NativeChatFullContentButton
+          key={block.clipped.digest}
+          clipped={block.clipped}
+          title={fullContentTitle}
+        />
+      ))}
       {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}

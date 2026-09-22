@@ -3,11 +3,15 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatClippedPayload
+} from '../../../../shared/native-chat-types'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { MessageRow } from './NativeChatMessageRow'
+import { NativeChatFullContentButton } from './NativeChatFullContentButton'
 import {
   NativeChatPayloadReaderContext,
   type NativeChatPayloadReader
@@ -155,6 +159,51 @@ describe('NativeChatFullContentButton', () => {
       expect(screen.getByTestId('native-chat-full-content')).toHaveTextContent('END OF ARTIFACT')
     )
     expect(reader.readFullPayload).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a stale completion after the payload identity changes underneath it', async () => {
+    let resolveFirst: (text: string) => void = () => {}
+    const first = new Promise<string>((resolve) => {
+      resolveFirst = resolve
+    })
+    const digestB = 'b'.repeat(64)
+    const reader: NativeChatPayloadReader = {
+      readFullPayload: vi.fn(async (requested: string) => (requested === digest ? first : 'TEXT B'))
+    }
+
+    function Harness(): React.JSX.Element {
+      const [clipped, setClipped] = useState<NativeChatClippedPayload>({
+        digest,
+        byteLength: 36975,
+        retrievable: true
+      })
+      return (
+        <>
+          <button
+            onClick={() => setClipped({ digest: digestB, byteLength: 10, retrievable: true })}
+          >
+            switch clip
+          </button>
+          <NativeChatFullContentButton clipped={clipped} title="Full content" />
+        </>
+      )
+    }
+
+    render(
+      <WithReader reader={reader}>
+        <Harness />
+      </WithReader>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show full content' }))
+    await waitFor(() => expect(reader.readFullPayload).toHaveBeenCalledWith(digest, 36975))
+
+    // The row's clip changes (e.g. a re-clipped transcript projection) while
+    // clip A's read is still in flight.
+    fireEvent.click(screen.getByText('switch clip'))
+    resolveFirst('STALE TEXT FOR A')
+    await waitFor(() => expect(screen.queryByTestId('native-chat-full-content')).toBeNull())
+    expect(screen.queryByText('STALE TEXT FOR A')).toBeNull()
   })
 
   it('renders no affordance for a block the host did not retain, or outside a session pane', () => {
