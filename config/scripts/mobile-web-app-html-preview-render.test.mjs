@@ -470,10 +470,10 @@ for (const engine of ['chromium', 'webkit']) {
         expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
         // The toggle is still a toggle: this is the whole of "the screen that remains is complete".
         expect(hidden.toggles?.map((one) => one.selected)).toEqual(['true', 'false'])
-        // No anchor left that leaves this document: the elements and their text survive, the links
-        // do not. One href remains and it is the same-document fragment, which the case below is
-        // about -- it starts no navigation, so nothing about it was ever the shell's to do.
-        expect(hidden.links?.linked).toBe(1)
+        // No anchor left at all: the elements and their text survive, the links do not. The
+        // fragment link is in that count too -- inside this frame a fragment resolves against the
+        // embedder's base URL, so activating it navigates rather than scrolls (round 3).
+        expect(hidden.links?.linked).toBe(0)
         expect(hidden.links?.anchors).toBe(5)
         expect(hidden.links?.text).toBe('tap')
         // No underline, as the browser resolves it, and not in the tab order either.
@@ -578,13 +578,63 @@ for (const engine of ['chromium', 'webkit']) {
         expect(shown.inside?.preText).toBe('\nkept')
         expect(hidden.inside?.preText).toBe(shown.inside?.preText)
 
-        // The link that must go on working: a same-document fragment starts no navigation, so
-        // nothing about it is the shell's to do and taking it away would be degradation.
+        // The fragment link, which the granted arm keeps and the hidden arm does not. Round 3
+        // measured why that is the right way round: a fragment is a frame navigation here, not a
+        // scroll, so there was no working affordance to preserve. The case below taps one.
         expect(shown.inside?.fragmentHref).toBe('#fragtarget')
-        expect(hidden.inside?.fragmentHref).toBe('#fragtarget')
-        // And it is the only href left, which is the other half of the same reading.
-        expect(hidden.links?.linked).toBe(1)
+        expect(hidden.inside?.fragmentHref).toBeNull()
+        expect(hidden.links?.linked).toBe(0)
         expect(shown.links?.linked).toBe(5)
+      }, 240_000)
+
+      /**
+       * A tap on a table-of-contents link, which is not the scroll it looks like (round 3).
+       *
+       * The frame's document URL is `about:srcdoc` and its base URL is inherited from the embedder,
+       * so `#fragtarget` resolves against the shell's own URL: the destination differs from the
+       * document's by more than a fragment, which makes activating it a frame navigation and the
+       * shipped `frame-src \'none\'` refuses it. Nothing scrolls on either engine, and on Chromium
+       * the frame is replaced by an error page, so the artifact is gone.
+       *
+       * The granted arm is the presence precondition and it is also a bug: the pass does not run
+       * there, so the artifact keeps its fragment links and the same tap does the same damage. That
+       * has been true since the preview shipped and is not this change\'s to fix -- it is recorded
+       * in `followup-html-preview-fragment-links.md`. What it buys here is that the counters can
+       * see the navigation at all, so the hidden arm\'s silence is the missing href and not a rig
+       * that cannot watch.
+       */
+      it('taps a fragment link, which navigates this frame rather than scrolling it', async (ctx) => {
+        // Something to scroll, so "did not scroll" is a reading rather than a document that had
+        // nowhere to go.
+        const tall = { body: '<div style="height:1600px">spacer</div>' }
+        const tapFragment = async ({ frame }) => {
+          await frame?.click('#fraglink', { timeout: 2000 })
+        }
+
+        const shown = await open(browser(), { signal: ctx.signal, extra: tall, act: tapFragment })
+        // The precondition the whole case rests on: the base URL is the embedder's, which is what
+        // makes a fragment resolve off-document here.
+        expect(shown.inside?.baseUri ?? shown.mountedSrcDoc).toBeTruthy()
+        // The navigation the shipped policy refused, which is what the hidden arm must not produce.
+        expect(shown.reported).toContain('frame-src')
+
+        const hidden = await open(browser(), {
+          signal: ctx.signal,
+          extra: tall,
+          grants: ['navigate', 'storage'],
+          act: tapFragment
+        })
+        // The tap landed on the element and produced nothing at all.
+        expect(hidden.actError).toBeNull()
+        expect(hidden.reported).not.toContain('frame-src')
+        // The artifact is still the frame's document, which is the damage this avoids.
+        expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
+        expect(hidden.inside?.fragmentHref).toBeNull()
+        // And it did not scroll either, because there is nothing left to activate.
+        expect(hidden.inside?.scrollY).toBe(0)
+        // Nothing went to the top frame or a new window on the way, either.
+        expect(hidden.topNavigations).toBe(0)
+        expect(hidden.popups).toBe(0)
       }, 240_000)
 
       it("hands a user's tap on a link to the top frame, exactly once", async (ctx) => {

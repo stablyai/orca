@@ -33,34 +33,33 @@ const ARTIFACT =
   '</body></html>'
 
 describe('an artifact rendered for a shell that cannot open a link', () => {
-  it('leaves no element a browser would treat as a link out of this document', () => {
+  it('leaves no element a browser would treat as a link', () => {
     // The whole of "no underline, no pointer, no dead anchor": all three follow from `a:any-link`
-    // not matching, and `href` is what it matches on. Every link but the fragment one, which is the
-    // case below: it leaves this document for nowhere, so nothing about it is the shell's to do.
-    const linked = [...inert(ARTIFACT).querySelectorAll('a[href], area[href]')]
-    expect(linked.map((one) => one.id)).toEqual(['frag'])
+    // not matching, and `href` is what it matches on.
+    expect(inert(ARTIFACT).querySelectorAll('a[href], area[href]')).toHaveLength(0)
   })
 
   /**
-   * The one link that must keep working, because nothing about it is the shell's business.
+   * The fragment link goes too, and round 3 is why: in this frame a fragment is not a scroll.
    *
-   * A same-document fragment scrolls this document and starts no navigation at all, so it works
-   * inside the sealed frame whether or not the shell can open anything. Stripping it would take a
-   * working affordance away over a capability it never needed -- an artifact's own table of
-   * contents is the case -- which is degradation rather than hiding.
+   * The document's URL is `about:srcdoc` while its base URL is inherited from the embedder, so
+   * `#target` resolves against the shell's own URL and the destination differs from the document's
+   * by more than a fragment -- which makes activating it a frame navigation. Measured on Chromium
+   * 147 and WebKit 26.4 under the shipped policy: nothing scrolls, the embedder reports
+   * `frame-src`, and on Chromium the frame is replaced by an error page and the artifact is gone.
+   *
+   * So there was no working affordance to carve out for. The render rig taps one and reads what
+   * the engines do; this is the attribute that decides it.
    */
-  it('keeps a same-document fragment link, and takes its target with it', () => {
+  it('inerts a fragment link too, because a fragment is not a scroll in this frame', () => {
     const doc = inert(ARTIFACT)
-    expect(doc.getElementById('frag')?.getAttribute('href')).toBe('#target')
-    // Its `target` goes, though: a fragment aimed at another frame is not a scroll, it is a
-    // navigation of that frame to this document's URL plus the fragment.
+    expect(doc.getElementById('frag')?.hasAttribute('href')).toBe(false)
     expect(doc.getElementById('frag')?.hasAttribute('target')).toBe(false)
-  })
-
-  it('does not mistake an empty href for a fragment, which resolves to the frame itself', () => {
-    // `href=""` is this document's own URL, and activating it is a navigation the shell would have
-    // to refuse. Written as its own case because a truthiness test on the attribute passes it.
-    expect(inert(ARTIFACT).getElementById('empty')?.hasAttribute('href')).toBe(false)
+    // The text and the target it named both stay, as everywhere else: hidden, not deleted.
+    expect(doc.getElementById('frag')?.textContent).toBe('contents')
+    expect(doc.getElementById('target')?.textContent).toBe('T')
+    // And the empty href, which resolves to the frame's own URL rather than to a fragment at all.
+    expect(doc.getElementById('empty')?.hasAttribute('href')).toBe(false)
   })
 
   it('keeps the text, the headings and the images the author wrote', () => {
@@ -202,7 +201,7 @@ describe('an artifact rendered for a shell that cannot open a link', () => {
     expect(outer?.getElementById('shadow')?.textContent).toBe('s')
     const inner = outer?.querySelector('template')?.content
     expect(inner?.getElementById('deep')?.hasAttribute('href')).toBe(false)
-    // And the same-document rule holds at every depth.
-    expect(inner?.getElementById('deepfrag')?.getAttribute('href')).toBe('#inside')
+    // Including the fragment one, at every depth.
+    expect(inner?.getElementById('deepfrag')?.hasAttribute('href')).toBe(false)
   })
 })

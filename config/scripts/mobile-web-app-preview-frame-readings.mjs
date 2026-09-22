@@ -84,6 +84,11 @@ async function readInsideFrame(page) {
       doctypeSystemId: document.doctype?.systemId ?? null,
       preText: document.getElementById('pre')?.textContent ?? null,
       fragmentHref: document.getElementById('fraglink')?.getAttribute('href') ?? null,
+      // Where the frame is aimed and where it has scrolled to, which is how a tap on a fragment is
+      // told apart from a same-document scroll: inside this frame the base URL is the embedder's,
+      // so a fragment resolves off-document and activating it navigates rather than scrolls.
+      baseUri: document.baseURI,
+      scrollY: Math.round(window.scrollY),
       ran: document.documentElement.dataset.ran === '1' ? 1 : 0,
       threw: document.documentElement.dataset.threw ?? null,
       // The two moments the late-listener question turns on: when the page's init script ran in

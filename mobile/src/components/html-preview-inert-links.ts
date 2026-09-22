@@ -14,6 +14,21 @@
  * and pinned in two suites -- the shapes in `html-preview-inert-links.test.ts`, and what an engine
  * then renders in `config/scripts/mobile-web-app-html-preview-render.test.mjs`.
  *
+ * A `#`-prefixed link is not an exception to that, and round 3 measured why. Inside this frame a
+ * fragment is not a scroll: the document's URL is `about:srcdoc` while its base URL is inherited
+ * from the embedder, so `#section` resolves against the shell's own URL and the destination differs
+ * from the document's URL by more than a fragment -- which makes activating it a frame navigation
+ * rather than a same-document one. Measured on Chromium 147 and WebKit 26.4 under the shipped
+ * policy: the tap scrolls nothing (`scrollY` stays 0), the embedder reports
+ * `frame-src http://<origin>/preview`, and on Chromium the frame is replaced by
+ * `chrome-error://chromewebdata/` -- the artifact is gone. So there is no working affordance to
+ * preserve, and keeping the href would have left a live link that destroys the preview, which is
+ * worse than the inert text it was carved out to avoid.
+ *
+ * The same tap does the same thing on the granted path, where this pass does not run at all. That
+ * is a bug the preview has always had and it is not this one's to fix; it is recorded in
+ * `followup-html-preview-fragment-links.md`.
+ *
  * Done with the browser's own parser rather than over the string, and this is the one mechanism
  * available. The frame has no `allow-scripts` and inherits `script-src 'self'`, so nothing runs
  * inside it and there is no injection to do the work there; a regex over the source would have to
@@ -32,12 +47,10 @@
 /** `Node.TEXT_NODE`, named here so this module reads one global fewer. */
 const TEXT_NODE = 3
 
+/** `<area>` as well as `<a>`, because an image map is a link with a shape instead of a box, and
+ *  this namespace as well as the plain attribute, because that is how an `<a>` inside inline SVG
+ *  spells its target. */
 const XLINK_NAMESPACE = 'http://www.w3.org/1999/xlink'
-
-/** Both spellings, because an `<a>` inside inline SVG carries the second one. */
-function hrefOf(link: Element): string | null {
-  return link.getAttribute('href') ?? link.getAttributeNS(XLINK_NAMESPACE, 'href')
-}
 
 /**
  * The doctype as it was written, identifiers and all.
@@ -111,16 +124,8 @@ function restoreLeadingNewlines(root: Document | DocumentFragment): void {
  */
 function inertLinksIn(root: Document | DocumentFragment): void {
   for (const link of root.querySelectorAll('a, area')) {
-    // A same-document fragment link is kept, and it is the one kind that must be: it scrolls this
-    // document and starts no navigation at all, so it goes on working inside the sealed frame
-    // whatever the shell can do. `href=""` is not one of these -- it resolves to the frame's own
-    // URL and activating it is a navigation, which is why the test matters rather than truthiness.
-    if (hrefOf(link)?.startsWith('#') !== true) {
-      link.removeAttribute('href')
-      link.removeAttributeNS(XLINK_NAMESPACE, 'href')
-    }
-    // Removed from every link, kept ones included: a fragment with a `target` is not a scroll, it is
-    // a navigation of the named frame to this document's URL plus the fragment.
+    link.removeAttribute('href')
+    link.removeAttributeNS(XLINK_NAMESPACE, 'href')
     link.removeAttribute('target')
   }
   restoreLeadingNewlines(root)
