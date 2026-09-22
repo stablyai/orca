@@ -8,6 +8,18 @@ export const ORCHESTRATION_FEDERATION_ATTACH_GRACE_MS = AGENT_PROMPT_EFFECT_TIME
 export const ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 20_000
 export const SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 30_000
 
+/**
+ * How long a Dispatch whose lifecycle outcome was never observed (`start_unknown`,
+ * `stop_unknown`) may sit at `unverifiable` before the fleet projection owes the coordinator an
+ * explicit reconciliation action instead of `none`.
+ *
+ * Sized past the one-shot swallowed-Enter recovery window so a recovery that actually works
+ * settles the row on its own evidence and never reaches this deadline. Passing it proves only
+ * that in-band evidence is exhausted — never that the worker exited.
+ */
+export const WORKER_UNPROVEN_LIFECYCLE_RECONCILE_AFTER_MS =
+  SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS + 60_000
+
 export function resolveWorkerStartReadinessTimeoutMs(timeoutMs: number | undefined): number {
   return typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
     ? timeoutMs

@@ -25,6 +25,9 @@ export type FleetDurableWorker = {
   workerState: string
   dispatchStatus: string
   workerStage: string | null
+  /** `worker_dispatches.updated_at`; for an unproven lifecycle state this is when that
+   *  state was entered, which is what bounds its reconciliation deadline. */
+  workerUpdatedAt?: string | null
   agentTerminalHandle: string | null
   paneKey: string | null
   worktreeId: string | null
@@ -83,8 +86,13 @@ export type FleetResourceProjection =
   | { state: 'absent'; reason: 'unsupervised' | 'not_materialized' }
 
 export type FleetNextAction = {
-  /** `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon. */
-  kind: 'inspect' | 'release' | 'recover' | 'none'
+  /**
+   * `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon.
+   * `reconcile` = an unproven lifecycle outcome whose in-band evidence is exhausted. It claims
+   * no exit: it names the one command that revokes this Dispatch's ownership atomically, so the
+   * Task can be dispatched again without two workers ever owning it at once.
+   */
+  kind: 'inspect' | 'release' | 'recover' | 'reconcile' | 'none'
   argv: string[]
 }
 
