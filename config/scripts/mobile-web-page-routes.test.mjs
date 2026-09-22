@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -91,6 +91,58 @@ const EXPECTED_PAGE_ROUTES = [
   }
 ]
 
+const NUMBER_WORDS = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen'
+]
+
+const sessionGrants = EXPECTED_PAGE_ROUTES.filter(
+  (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+).flatMap((route) => route.grants)
+
+const withPrefix = (prefix) => sessionGrants.filter((grant) => grant.startsWith(prefix))
+
+/**
+ * Every count the route table spells out in prose, beside the list it is a count of.
+ *
+ * #22072 removed the wake-lock verb and left "Fourteen grants" and "the four audio verbs" behind,
+ * which a reader has no way to tell from a count. `precedes` is read as "which number words appear
+ * before these words anywhere in the file", so a second spelling left in place fails too rather
+ * than passing on the first correct hit.
+ */
+const SPELLED_COUNTS = [
+  { precedes: 'grants', counted: () => sessionGrants },
+  { precedes: 'audio verbs', counted: () => withPrefix('native.audio.') },
+  { precedes: 'media verbs', counted: () => withPrefix('native.media.') },
+  // "All three or none": the audio verbs again, as the rule that they are declared together.
+  { precedes: 'or none', counted: () => withPrefix('native.audio.') }
+]
+
+/** Comment markers and their wrapping dropped, so a phrase is found wherever the line broke. */
+function unwrapped(source) {
+  return source.replace(/\n\s*(\/\/|\*)/g, ' ').replace(/\s+/g, ' ')
+}
+
+function numberWordsBefore(source, words) {
+  return [...unwrapped(source).matchAll(new RegExp(`\\b([A-Za-z]+) ${words}\\b`, 'g'))]
+    .map((match) => match[1].toLowerCase())
+    .filter((word) => NUMBER_WORDS.includes(word))
+}
+
 describe('the page routes the manifest declares', () => {
   it('turns a route key into the URL pattern expo-router gives it', () => {
     expect(routePathnameFromKey('./h/[hostId]/index.tsx')).toBe('/h/[hostId]')
@@ -103,6 +155,18 @@ describe('the page routes the manifest declares', () => {
   it('answers null for a layout, which is not a screen anyone navigates to', () => {
     expect(routePathnameFromKey('./h/_layout.tsx')).toBeNull()
     expect(routePathnameFromKey('./h/[hostId]/_layout.tsx')).toBeNull()
+  })
+
+  it("spells the session route's own counts off the table it comments", async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'mobile-web-page-routes.mjs'),
+      'utf8'
+    )
+    for (const { precedes, counted } of SPELLED_COUNTS) {
+      const spelled = NUMBER_WORDS[counted().length]
+      expect(spelled, `no number word for ${String(counted().length)}`).toBeTypeOf('string')
+      expect(numberWordsBefore(source, precedes), precedes).toEqual([spelled])
+    }
   })
 
   it('declares only routes the bundle has a module for', async () => {
