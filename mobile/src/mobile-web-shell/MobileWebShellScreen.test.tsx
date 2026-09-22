@@ -832,6 +832,16 @@ describe('a refused update is said beside the page, not in front of it', () => {
     expect(text).not.toContain('Try again')
   })
 
+  it('carries the notice to a reader who never arrives at the top of the page', async () => {
+    // The banner is inserted into a screen already on screen. Assertive because the shell passes
+    // the failure tone: what it reports is an update that did not happen.
+    dependencies.updateNotice = 'update-failed'
+    const tree = await render(readyState('session-one'))
+    const alert = byName(tree, 'View').find((node) => node.props.accessibilityRole === 'alert')
+    expect(alert).toBeDefined()
+    expect(alert?.props.accessibilityLiveRegion).toBe('assertive')
+  })
+
   it('says nothing when the generation on screen is the one the host serves', async () => {
     const tree = await render(readyState('session-one'))
     expect(dismissControl(tree)).toBeUndefined()
