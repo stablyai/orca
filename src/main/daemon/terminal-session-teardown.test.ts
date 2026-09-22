@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
+import type { DescendantSnapshot } from '../pty-descendant-termination'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const terminateShutdownDescendantsMock = vi.hoisted(() => vi.fn())
+vi.mock('./terminal-descendant-shutdown', () => ({
+  terminateShutdownDescendants: terminateShutdownDescendantsMock
+}))
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -116,6 +121,58 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
       expect.objectContaining({ ownsRoot: expect.any(Function) })
     )
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
+  })
+
+  it('waits for a late immediate escalation after graceful descendant verification settles', async () => {
+    let finishDescendants = (): void => {}
+    let finishRoot = (): void => {}
+    const descendantVerification = new Promise<void>((resolve) => {
+      finishDescendants = resolve
+    })
+    const rootCompletion = new Promise<void>((resolve) => {
+      finishRoot = resolve
+    })
+    terminateShutdownDescendantsMock.mockReturnValueOnce(descendantVerification)
+    const snapshot: DescendantSnapshot = {
+      rootPgid: 4242,
+      descendants: [],
+      capturedAtMs: Date.now()
+    }
+    killWithDescendantSweepMock.mockImplementationOnce(
+      async (
+        _pid: number,
+        killRoot: () => void,
+        deps: {
+          terminateDescendants?: (value: DescendantSnapshot) => Promise<unknown>
+        }
+      ) => {
+        deps.terminateDescendants?.(snapshot)
+        killRoot()
+      }
+    )
+    const session = createPlainShellSession({
+      launchAgent: 'claude',
+      forceKillAndWaitForExit: vi.fn(() => rootCompletion)
+    })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+    const graceful = teardown.killSession('s1', session, false)
+    await Promise.resolve()
+    const immediate = teardown.requestImmediate('s1')
+
+    expect(immediate).not.toBe(graceful)
+    let settled = false
+    void immediate?.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishDescendants()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishRoot()
+    await immediate
+    expect(settled).toBe(true)
   })
 
   it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
