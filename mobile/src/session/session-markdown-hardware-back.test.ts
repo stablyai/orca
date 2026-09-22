@@ -36,18 +36,20 @@ import {
 } from './use-mobile-session-markdown-actions'
 import type { MarkdownDocState } from './mobile-session-route-types'
 
-const leaves: { back: (() => void) | null } = { back: null }
+const leaves: { back: (() => void) | null; replaced: string[] } = { back: null, replaced: [] }
 
 /** The three members the hook calls, which is all a probe of it can honestly stand behind. */
-const probeRouter = {
-  canGoBack: () => true,
-  back: () => {
-    leaves.back?.()
-  },
-  replace: () => {}
-}
+const probeRouter: { canGoBack: () => boolean; back: () => void; replace: (href: string) => void } =
+  {
+    canGoBack: () => true,
+    back: () => {
+      leaves.back?.()
+    },
+    replace: (href: string) => {
+      leaves.replaced.push(href)
+    }
+  }
 
-/** A dirty draft is what makes the gate's effect re-register, which is the second half of the gate. */
 function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMarkdownActionsScope {
   return {
     hostId: 'host-1',
@@ -106,28 +108,25 @@ beforeEach(() => {
   native.remove.mockClear()
   native.dismiss.mockClear()
   leaves.back = null
+  leaves.replaced = []
 })
 
 /**
- * The session's own hardware-back registration, which had no unit test of its own (ruling 33.2).
- *
- * Two things were wrong before C7.7 and both are asserted here. React Native Web answers
- * `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be used."
- * and an inert subscription, so inside the shell's page every session mount put that line on the
- * console and armed nothing — and the effect re-registers whenever the dirty-draft list changes,
- * which is why it was two lines and not one.
+ * The session's native claim on the device Back key, which had no unit test of its own (ruling
+ * 33.2). Held always natively, dirty or not: the page half, claimed only while a draft is dirty, is
+ * `session-markdown-page-back.test.ts`.
  */
 describe("the session's hardware back gate", () => {
-  it('arms the hardware back press natively', () => {
+  it('arms the hardware back press natively, with nothing dirty', () => {
     render(new Map())
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
   })
 
-  it('never arms it on the web, where it is inert and says so on the console', () => {
-    native.platform.os = 'web'
+  it('arms it on Android too', () => {
+    native.platform.os = 'android'
     render(new Map())
-    expect(native.addEventListener).not.toHaveBeenCalled()
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
   })
 
   it('leaves through the router when nothing is dirty', () => {
@@ -142,6 +141,21 @@ describe("the session's hardware back gate", () => {
     expect(native.dismiss).not.toHaveBeenCalled()
   })
 
+  // Why the claim is held while clean: unclaimed at the root, the key would exit the app.
+  it('replaces to the host at the root rather than handing the key on', () => {
+    probeRouter.canGoBack = () => false
+    try {
+      render(new Map())
+      const handler = native.addEventListener.mock.calls[0]?.[1]
+      act(() => {
+        expect(handler?.()).toBe(true)
+      })
+      expect(leaves.replaced).toEqual(['/h/host-1'])
+    } finally {
+      probeRouter.canGoBack = () => true
+    }
+  })
+
   it('asks instead of leaving when a draft is dirty, and dismisses the keyboard to ask', () => {
     render(new Map([['tab-1', readyDoc('saved', 'edited')]]))
     const handler = native.addEventListener.mock.calls[0]?.[1]
@@ -154,27 +168,27 @@ describe("the session's hardware back gate", () => {
     expect(native.dismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('re-registers when the dirty-draft list changes, and removes what it replaced', () => {
+  it('registers once as the drafts change, and the newest drafts are what a press reads', () => {
     const renderer = render(new Map())
-    expect(native.addEventListener).toHaveBeenCalledTimes(1)
     act(() => {
       renderer.update(
         createElement(Probe, { docs: new Map([['tab-1', readyDoc('saved', 'edited')]]) })
       )
     })
-    expect(native.addEventListener).toHaveBeenCalledTimes(2)
-    expect(native.remove).toHaveBeenCalledTimes(1)
+    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    expect(native.remove).not.toHaveBeenCalled()
+    const left = vi.fn()
+    leaves.back = left
+    act(() => {
+      expect(native.addEventListener.mock.calls[0]?.[1]?.()).toBe(true)
+    })
+    expect(left).not.toHaveBeenCalled()
+    expect(native.dismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('never re-registers on the web, however many times the drafts change', () => {
-    native.platform.os = 'web'
+  it('lets the key go on unmount', () => {
     const renderer = render(new Map())
-    act(() => {
-      renderer.update(
-        createElement(Probe, { docs: new Map([['tab-1', readyDoc('saved', 'edited')]]) })
-      )
-    })
-    expect(native.addEventListener).not.toHaveBeenCalled()
-    expect(native.remove).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+    expect(native.remove).toHaveBeenCalledTimes(1)
   })
 })
