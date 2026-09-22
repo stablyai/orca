@@ -9,11 +9,9 @@ import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-bindin
  * the mode it belongs to, and no prop or dependency marks that, so an effect would keep a listener
  * on a detached node. React reports both edges here.
  *
- * The handler ref is refreshed on every commit rather than when the callback identity changes.
- * That is the whole reason it exists: callers pass per-render closures — the buffered field's
- * submit reads `client` and `activeHandle`, which arrive in effects — and a binding that trusted a
- * caller's memoization held a handler whose guard could never pass. An effect rather than a render
- * assignment, because an uncommitted render must not move it.
+ * The listener is attached once per node and reads the handler through a ref, so a caller passing a
+ * new closure each render does not cost a rebind. Callers must not freeze that closure; the rule
+ * and its reason live in `terminal-field-submit-binding-wiring.test.ts`.
  */
 export function useTerminalTextFieldSubmitBinding(
   fieldRef: RefObject<TextInput | null>,
@@ -22,7 +20,7 @@ export function useTerminalTextFieldSubmitBinding(
   const onSubmitRef = useRef(onSubmit)
   useEffect(() => {
     onSubmitRef.current = onSubmit
-  })
+  }, [onSubmit])
   const unbindRef = useRef<(() => void) | null>(null)
 
   return useCallback(

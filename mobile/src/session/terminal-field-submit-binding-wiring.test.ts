@@ -23,17 +23,18 @@ function readBoundSubmitNames(source: string): string[] {
 }
 
 /**
- * Why a source rule and not a render: the defect is the identity of the closure a caller hands the
- * binding, and every check that mounts its own submit writes that identity itself. The render rig's
- * probe route is the case in point — it caught neither the stale handler nor the fix, because its
- * route supplies its own handler.
+ * The rule: a handler bound through `useTerminalTextFieldSubmitBinding` must not be frozen on an
+ * empty dependency list.
  *
- * A handler frozen on an empty dependency list is the failure. `handleSend` is a per-render
- * function whose guard reads `client`, `activeHandle` and `canSend`, all absent on the first
- * render, so a submit memoized on `[]` hands the binding one closure forever and the field's
- * line-break submit can never pass that guard. The field's own `onSubmitEditing` prop keeps
- * working, which is what hid it. Nothing inside the binding can undo this: a `useCallback` with
- * `[]` returns the same function object for the life of the component.
+ * `handleSend` is a per-render function whose guard reads `client`, `activeHandle` and `canSend`,
+ * all absent on the first render, so a submit memoized on `[]` is one closure for the life of the
+ * component and the field's line-break submit can never pass that guard. The field's own
+ * `onSubmitEditing` prop keeps working, which is what hid it.
+ *
+ * Why a source rule and not a render: every check that mounts its own submit writes the identity
+ * under test itself, so the render rig's probe route could catch neither the defect nor the fix.
+ * `terminal-field-submit-binding-send.test.tsx` reads the behaviour instead and catches spellings
+ * this cannot; this one is the cheap guard beside it.
  */
 describe('the submit handlers the terminal fields bind', () => {
   it('names one handler per bound field', () => {

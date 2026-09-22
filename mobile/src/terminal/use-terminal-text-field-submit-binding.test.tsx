@@ -50,12 +50,8 @@ function reset(): void {
 }
 
 describe('the terminal text field submit binding', () => {
-  /**
-   * The rule the fix rests on. What it cannot reach, and what the source census in
-   * `terminal-field-submit-binding-wiring.test.ts` exists for: a caller that freezes its closure in
-   * a `useCallback` with an empty dependency list hands this hook one function object for the life
-   * of the component, so there is no newer handler for any ref to find.
-   */
+  // The listener is attached once, so this says the ref behind it follows the caller's newest
+  // closure rather than pinning the one the first render was given.
   it('calls the handler the newest commit supplied, not the first', () => {
     reset()
     let renderer: ReactTestRenderer | null = null
