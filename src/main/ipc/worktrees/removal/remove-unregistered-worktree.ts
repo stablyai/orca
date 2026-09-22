@@ -39,6 +39,31 @@ import {
 } from './worktree-removal-ownership'
 import { isAlreadyRemovedWorktreePath, isLocalGitRepository } from './worktree-removal-filesystem'
 
+function finalizeUnregisteredWorktreePurge(
+  context: WorktreeIpcContext,
+  args: RemoveWorktreeArgs,
+  repoId: string,
+  removalHostId: ExecutionHostId
+): RemoveWorktreeResult {
+  const { mainWindow, store, runtime } = context
+  runtime.clearOptimisticReconcileToken(args.worktreeId)
+  removeWorktreeMetadataAndTransientState(
+    store,
+    args.worktreeId,
+    removalHostId,
+    args.snapshotPruneBatchId
+  )
+  preservedBranchCleanupByScope.delete(
+    preservedBranchCleanupScopeKey({
+      worktreeId: args.worktreeId,
+      hostId: removalHostId
+    })
+  )
+  invalidateAuthorizedRootsCache()
+  notifyWorktreesChanged(mainWindow, repoId)
+  return {}
+}
+
 export async function removeUnregisteredWorktree(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,
@@ -52,7 +77,7 @@ export async function removeUnregisteredWorktree(
   localWorktreeGitOptions: LocalProjectWorktreeGitOptions,
   provider: SshGitProvider | null
 ): Promise<RemoveWorktreeResult> {
-  const { mainWindow, store, runtime } = context
+  const { store, runtime } = context
   const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
   const removalHome = resolveWorktreeRemovalHomeForHost(removalHostId)
   let canCleanOrphanedDirectory = false
@@ -88,7 +113,39 @@ export async function removeUnregisteredWorktree(
         ))
     }
   }
-  if (canCleanOrphanedDirectory) {
+  let canCleanLeftoverDirectory = false
+  if (!canCleanOrphanedDirectory) {
+    if (repo.connectionId) {
+      if (fsProvider?.lstat) {
+        canCleanLeftoverDirectory = await canCleanupUnregisteredOrcaLeftoverDirectory({
+          meta: removedMeta,
+          worktreePath,
+          runtimeWorktreePath: worktreePath,
+          repo,
+          runtimeRepoPath: repo.path,
+          registeredWorktrees,
+          statPath: (path) => fsProvider.lstat!(path),
+          home: removalHome,
+          isGitRepository: async () => false
+        })
+      }
+    } else {
+      const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+      const runtimeWorktreePath = toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions)
+      canCleanLeftoverDirectory = await canCleanupUnregisteredOrcaLeftoverDirectory({
+        meta: removedMeta,
+        worktreePath,
+        runtimeWorktreePath,
+        repo,
+        runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+        registeredWorktrees,
+        statPath: access.statPath,
+        home: removalHome,
+        isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)
+      })
+    }
+  }
+  if (canCleanOrphanedDirectory || canCleanLeftoverDirectory) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
     if (!args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
@@ -101,7 +158,11 @@ export async function removeUnregisteredWorktree(
           connectionId: repo.connectionId,
           allowUnverifiedStop: args.allowUnverifiedPtyStop
         })
-        await fsProvider!.deletePath(worktreePath, true)
+        try {
+          await fsProvider!.deletePath(worktreePath, true)
+        } catch (fsError) {
+          console.warn(`[worktrees] Remote directory cleanup failed for ${worktreePath}:`, fsError)
+        }
         removalCompleted = true
       } finally {
         await removalGate.finish(removalCompleted)
@@ -125,7 +186,11 @@ export async function removeUnregisteredWorktree(
         await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
           allowUnverifiedStop: args.allowUnverifiedPtyStop
         })
-        await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+        try {
+          await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+        } catch (fsError) {
+          console.warn(`[worktrees] Local directory cleanup failed for ${worktreePath}:`, fsError)
+        }
         removalCompleted = true
       } finally {
         await removalGate.finish(removalCompleted)
@@ -137,78 +202,8 @@ export async function removeUnregisteredWorktree(
         store,
         localWorktreeGitOptions
       )
-      invalidateAuthorizedRootsCache()
     }
-    runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
-      store,
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
-    )
-    preservedBranchCleanupByScope.delete(
-      preservedBranchCleanupScopeKey({
-        worktreeId: args.worktreeId,
-        hostId: removalHostId
-      })
-    )
-    notifyWorktreesChanged(mainWindow, repoId)
-    return {}
-  }
-  if (!repo.connectionId) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    const runtimeWorktreePath = toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions)
-    if (
-      await canCleanupUnregisteredOrcaLeftoverDirectory({
-        meta: removedMeta,
-        worktreePath,
-        runtimeWorktreePath,
-        repo,
-        runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-        registeredWorktrees,
-        statPath: access.statPath,
-        home: removalHome,
-        isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)
-      })
-    ) {
-      if (!args.force) {
-        throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
-      }
-      const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
-      let removalCompleted = false
-      try {
-        await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
-          allowUnverifiedStop: args.allowUnverifiedPtyStop
-        })
-        await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
-        removalCompleted = true
-      } finally {
-        await removalGate.finish(removalCompleted)
-      }
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        args.worktreeId,
-        removedPushTarget,
-        store,
-        localWorktreeGitOptions
-      )
-      runtime.clearOptimisticReconcileToken(args.worktreeId)
-      removeWorktreeMetadataAndTransientState(
-        store,
-        args.worktreeId,
-        removalHostId,
-        args.snapshotPruneBatchId
-      )
-      preservedBranchCleanupByScope.delete(
-        preservedBranchCleanupScopeKey({
-          worktreeId: args.worktreeId,
-          hostId: removalHostId
-        })
-      )
-      invalidateAuthorizedRootsCache()
-      notifyWorktreesChanged(mainWindow, repoId)
-      return {}
-    }
+    return finalizeUnregisteredWorktreePurge(context, args, repoId, removalHostId)
   }
   if (await isAlreadyRemovedWorktreePath(repo, worktreePath, localWorktreeGitOptions)) {
     if (!args.force && !removedMeta) {
@@ -237,23 +232,8 @@ export async function removeUnregisteredWorktree(
         store,
         localWorktreeGitOptions
       )
-      invalidateAuthorizedRootsCache()
     }
-    runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
-      store,
-      args.worktreeId,
-      removalHostId,
-      args.snapshotPruneBatchId
-    )
-    preservedBranchCleanupByScope.delete(
-      preservedBranchCleanupScopeKey({
-        worktreeId: args.worktreeId,
-        hostId: removalHostId
-      })
-    )
-    notifyWorktreesChanged(mainWindow, repoId)
-    return {}
+    return finalizeUnregisteredWorktreePurge(context, args, repoId, removalHostId)
   }
   throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
 }

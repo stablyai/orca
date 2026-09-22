@@ -33,6 +33,7 @@ import {
 } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
 import {
+  areWorktreePathsEqual,
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
@@ -210,9 +211,25 @@ export async function removeRegisteredLocalWorktree(
         removalCompleted = true
         return {}
       } else {
-        throw new Error(
-          formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
-        )
+        // If git registration was already dropped, treat as partial success and continue to metadata purge.
+        const remainingWorktrees = await (hasLocalWorktreeGitOptions
+          ? listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+          : listGitWorktreesStrict(repo.path)
+        ).catch(() => null)
+        if (
+          remainingWorktrees &&
+          !remainingWorktrees.some((w) => areWorktreePathsEqual(w.path, canonicalWorktreePath))
+        ) {
+          console.warn(
+            `[worktrees] Local git worktree registration was removed but filesystem removal failed: ${canonicalWorktreePath}`,
+            error
+          )
+          removalCompleted = true
+        } else {
+          throw new Error(
+            formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+          )
+        }
       }
     }
     removalCompleted = true

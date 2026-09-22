@@ -10,6 +10,7 @@ import {
   cleanupUnusedWorktreePushTargetRemoteSsh,
   notifyWorktreesChanged
 } from '../../worktree-remote'
+import { areWorktreePathsEqual } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -64,6 +65,21 @@ export async function removeRegisteredRemoteWorktree(
         : provider!.removeWorktree(canonicalWorktreePath, args.force)
     )
     removalCompleted = true
+  } catch (error) {
+    // Treat partial success as successful removal when git registration was already dropped.
+    const remainingWorktrees = await provider!.listWorktrees(repo.path).catch(() => null)
+    if (
+      remainingWorktrees &&
+      !remainingWorktrees.some((w) => areWorktreePathsEqual(w.path, canonicalWorktreePath))
+    ) {
+      console.warn(
+        `[worktrees] Remote git worktree registration was removed but filesystem removal failed: ${canonicalWorktreePath}`,
+        error
+      )
+      removalCompleted = true
+    } else {
+      throw error
+    }
   } finally {
     await removalGate.finish(removalCompleted)
   }
