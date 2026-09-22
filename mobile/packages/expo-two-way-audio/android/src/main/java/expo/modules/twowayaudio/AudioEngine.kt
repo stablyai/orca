@@ -408,7 +408,11 @@ class AudioEngine (context: Context) {
         // Consume the flag: a second resume without an intervening pause must not reopen the microphone.
         val shouldResumeRecording = isRecordingBeforePause
         isRecordingBeforePause = false
-        isRecording = toggleRecording(shouldResumeRecording)
+        // Only ever reopens: a false flag means the pause closed the mic, so no stop is owed, and a
+        // recording JS started while paused (a start straddling the permission activity) stays live.
+        if (shouldResumeRecording) {
+            isRecording = toggleRecording(true)
+        }
         audioTrack.play()
     }
 
