@@ -40,7 +40,9 @@ describe('buildMarkdownExportHtml', () => {
   // heading bound to it by page-break-after — onto a new page, blanking the one they left.
   it('caps printed diagram height so a tall one cannot blank the page it leaves', () => {
     const html = buildMarkdownExportHtml({ title: 'Notes', renderedHtml: '<p>x</p>' })
-    expect(html).toContain('max-height: 90vh')
-    expect(html.indexOf('max-height: 90vh')).toBeGreaterThan(html.indexOf('@media print'))
+    const printBlockMatch = html.match(/@media print\s*\{([\s\S]*?)\n\}/)
+    expect(printBlockMatch).not.toBeNull()
+    expect(printBlockMatch?.[1]).toContain('max-height: 90vh')
+    expect(printBlockMatch?.[1]).toContain('object-fit: contain')
   })
 })
