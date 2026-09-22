@@ -11,8 +11,10 @@ import { loadMobileWebShellEnabled, mobileWebShellFlagCanBeOn } from '../storage
  * That frame is worth a native mount only where the flag could resolve on, so a build that cannot
  * have it on starts at `false` rather than `null`: `mobileWebShellFlagCanBeOn` is the same fact
  * `loadMobileWebShellEnabled` would answer with, one render earlier, and it makes `null`
- * unreachable on every store build. The effect still runs there and still answers `false`, because
- * the initialiser is a starting point and the read is what decides.
+ * unreachable on a native store build — one built without `EXPO_PUBLIC_MOBILE_SHELL=ota`, which is
+ * every default build. A build made with it reaches the neutral frame like a development build
+ * does. The effect still runs either way, because the initialiser is a starting point and the read
+ * is what decides.
  */
 export function useMobileWebShellEnabled(): boolean | null {
   const [enabled, setEnabled] = useState<boolean | null>(() =>

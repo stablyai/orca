@@ -35,7 +35,7 @@ import {
 import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
-} from './verify-mobile-web-bundle.mjs'
+} from './mobile-web-source-line-endings.mjs'
 import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   hashedAsset,
@@ -43,7 +43,7 @@ import {
   readProtocolWindow,
   sha256Hex,
   writeMobileWebBundleTree
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ASSETS
@@ -323,18 +323,6 @@ describeBundling('the app bundle', () => {
     expect(MOBILE_WEB_APP_SHIMS.filter((shim) => shim.appliesTo(stripped))).toEqual([])
   })
 
-  it('keeps the shims out of the shipped Phase A bootstrap builder', async () => {
-    const shipped = await readFile(
-      join(projectDir, 'config', 'scripts', 'build-mobile-web-bundle.mjs'),
-      'utf8'
-    )
-    for (const { name } of MOBILE_WEB_APP_SHIMS) {
-      expect(shipped, `the Phase A bootstrap builder mentions ${name}`).not.toContain(name)
-    }
-    expect(shipped).not.toContain('react-native-web')
-    expect(shipped).not.toContain('lucide')
-  })
-
   it('ships no haptic that reaches for the DOM', async () => {
     // expo-haptics' web build fakes an iOS haptic by appending a hidden
     // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
@@ -598,7 +586,7 @@ describe('the verifier', () => {
     'accepts a bundle it has just built',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).resolves.toBeDefined()
       })
@@ -610,7 +598,7 @@ describe('the verifier', () => {
     "rejects a buildId the manifest's own asset list does not derive",
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         const manifestPath = join(outDir, 'manifest.json')
         const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
@@ -628,7 +616,7 @@ describe('the verifier', () => {
     'rejects a self-consistent bundle a fresh build does not reproduce',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         const { manifest } = await buildMobileWebAppBundle({ outDir })
         // What a stale out/ actually looks like: every digest agrees with its bytes and the
         // buildId derives from the asset list, but the source has moved on. Only the two fresh
