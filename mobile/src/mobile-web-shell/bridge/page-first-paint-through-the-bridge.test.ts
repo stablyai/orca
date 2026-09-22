@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
-import { reportAfterFirstPaint } from './page-first-paint'
+import { createRouteScreenPaintReporter } from './page-first-paint'
 
 /** One `init` frame with one name taken out of `accepts`, which is what an older shell sends. */
 function stripAccept(json: string, name: string): string {
@@ -36,14 +36,15 @@ describe('the page telling the shell it has a frame', () => {
 
     // The two frames the entry waits out, drained by hand so "after the paint" is a step.
     const frames: (() => void)[] = []
-    reportAfterFirstPaint(
-      (callback) => {
-        frames.push(callback)
+    createRouteScreenPaintReporter(
+      {
+        requestFrame: (callback) => frames.push(callback),
+        cancelFrame: () => undefined
       },
       () => {
         pair.client.notifyPagePainted()
       }
-    )
+    )()
     while (frames.length > 0) {
       frames.shift()?.()
     }
@@ -83,13 +84,13 @@ describe('the page telling the shell it has a frame', () => {
       join(import.meta.dirname, '..', '..', '..', 'web-entry', 'index.tsx'),
       'utf8'
     )
-    expect(entry).toContain('reportAfterFirstPaint(')
+    expect(entry).toContain('createRouteScreenPaintReporter(')
     expect(entry).toContain('client.notifyPagePainted()')
     // Handed to the route screen rather than called from the wrapper's own effect, which commits
     // while the route's chunk is still arriving and the body is empty.
     expect(entry).toContain('RouteScreenPaintProvider')
     expect(entry).not.toMatch(
-      /stampPageMountState\(target, 'mounted'\)\s*\n\s*reportAfterFirstPaint/
+      /stampPageMountState\(target, 'mounted'\)\s*\n\s*reportRouteScreenPaint/
     )
   })
 

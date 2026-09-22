@@ -14,7 +14,7 @@ import {
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   RouteScreenPaintProvider,
-  reportAfterFirstPaint
+  createRouteScreenPaintReporter
 } from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
@@ -34,25 +34,19 @@ import routeContext from './route-manifest'
 // and that is the boundary below's, not suspense's.
 // A factory because the client is not in scope until `init` lands, and ExpoRoot takes a component.
 function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
-  // Once per document: the shell latches the first frame, and a navigation to a second screen is
-  // not a new thing to uncover.
-  let reported = false
-  const reportRouteScreenPaint = () => {
-    if (reported) {
-      return
-    }
-    reported = true
-    // A commit is not a paint, and an unpainted WebView shows the surface behind it and nothing
-    // else, so the shell keeps its own frame over this document until the second frame lands.
-    reportAfterFirstPaint(
-      (callback) => {
-        requestAnimationFrame(callback)
-      },
-      () => {
-        client.notifyPagePainted()
+  // A commit is not a paint, and an unpainted WebView shows the surface behind it and nothing else,
+  // so the shell keeps its own frame over this document until the second frame lands.
+  const reportRouteScreenPaint = createRouteScreenPaintReporter(
+    {
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        cancelAnimationFrame(handle)
       }
-    )
-  }
+    },
+    () => {
+      client.notifyPagePainted()
+    }
+  )
   return function RootProviders({ children }: PropsWithChildren) {
     // Effects run child-first, so 'mounted' lands only after the router tree below this wrapper
     // has committed. That commit can be the suspense fallback of a route chunk still arriving,
