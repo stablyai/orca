@@ -1,12 +1,17 @@
+import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import {
   errorProvider,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -21,6 +26,10 @@ vi.mock('./codex-fetcher', () => ({
 
 vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./kimi-fetcher', () => ({
@@ -54,9 +63,26 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
-  it('does not republish a Gemini failure as an Antigravity refresh failure', async () => {
+  it('does not copy a Gemini failure onto Antigravity', async () => {
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
       errorProvider('gemini', 'Gemini project ID not found')
+    )
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 18))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.session?.usedPercent).toBe(18)
+    expect(state.gemini?.status).toBe('error')
+    expect(state.gemini?.error).toBe('Gemini project ID not found')
+  })
+
+  it('keeps Antigravity unavailable when the local LanguageServer is not running', async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
+      unavailableProvider('antigravity', 'Antigravity usage is not available')
     )
     const service = new RateLimitService()
 
@@ -64,37 +90,26 @@ describe('RateLimitService Antigravity usage', () => {
 
     const state = service.getState()
     expect(state.antigravity?.status).toBe('unavailable')
-    expect(state.antigravity?.error).not.toContain('Gemini project ID not found')
     expect(state.antigravity?.session).toBeNull()
-    // Why: the real Gemini failure must still surface under its own provider.
-    expect(state.gemini?.status).toBe('error')
-    expect(state.gemini?.error).toBe('Gemini project ID not found')
+    expect(state.gemini?.status).toBe('ok')
+    expect(state.gemini?.session?.usedPercent).toBe(42)
   })
 
-  it('keeps mirroring a successful Gemini read under the Antigravity provider', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
-    const service = new RateLimitService()
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.antigravity?.status).toBe('ok')
-    expect(state.antigravity?.provider).toBe('antigravity')
-    expect(state.antigravity?.session?.usedPercent).toBe(42)
-  })
-
-  it('never leaves a cached Antigravity snapshot in the error retry lane', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 42, Date.now()))
-    const service = new RateLimitService()
-    await service.refresh()
-
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
-      errorProvider('gemini', 'Token refresh failed')
-    )
-    await service.refresh()
-
-    // Why: stale-retention would otherwise show Gemini numbers as "Refresh failed" Antigravity usage.
-    expect(service.getState().antigravity?.status).toBe('unavailable')
-    expect(service.getState().antigravity?.session).toBeNull()
+  it('shared harness stub prevents LanguageServer discovery and loopback probes', async () => {
+    const readdir = vi.spyOn(fs, 'readdirSync')
+    const httpRequest = vi.spyOn(http, 'request')
+    const httpsRequest = vi.spyOn(https, 'request')
+    try {
+      const service = new RateLimitService()
+      await service.refresh()
+      expect(vi.mocked(fetchAntigravityRateLimits)).toHaveBeenCalled()
+      expect(readdir).not.toHaveBeenCalled()
+      expect(httpRequest).not.toHaveBeenCalled()
+      expect(httpsRequest).not.toHaveBeenCalled()
+    } finally {
+      readdir.mockRestore()
+      httpRequest.mockRestore()
+      httpsRequest.mockRestore()
+    }
   })
 })
