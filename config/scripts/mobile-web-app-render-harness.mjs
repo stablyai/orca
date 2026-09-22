@@ -453,8 +453,13 @@ export async function createBundleServer({
   transformChunk,
   handleRequest
 }) {
+  const requestedPaths = []
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
+    // Every path this origin was asked for, the browser's own fetches included. A favicon request
+    // is made by the browser process rather than the page, and Playwright's `page.on('request')`
+    // never reports one, so the server is the only place a check can see it.
+    requestedPaths.push(path)
     // An endpoint of the check's own, answered before anything is looked for on disk: a policy's
     // `report-uri` has to name a real server, and naming this one keeps it on the page's origin.
     if (handleRequest?.(request, response, path)) {
@@ -462,7 +467,10 @@ export async function createBundleServer({
     }
     // A browser asks for this on its own and the shell's WebView never does. The bundle carries
     // no icon, so a 404 would put a console error in every check that runs against a full Chrome
-    // -- which is what CI resolves -- and none against the bundled headless shell.
+    // -- which is what CI resolves -- and none against the bundled headless shell. Kept for the
+    // probe documents the checks compose themselves, which declare no icon; the page's own
+    // document does declare one, and answering 204 hides nothing from a check that reads the
+    // request rather than the response (`mobile-web-app-session-render.test.mjs`).
     if (path === '/favicon.ico') {
       response.writeHead(204)
       response.end()
@@ -502,7 +510,7 @@ export async function createBundleServer({
     )
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return { server, origin: `http://127.0.0.1:${String(server.address().port)}` }
+  return { server, origin: `http://127.0.0.1:${String(server.address().port)}`, requestedPaths }
 }
 
 /**
