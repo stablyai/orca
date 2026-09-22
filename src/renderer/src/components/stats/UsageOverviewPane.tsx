@@ -8,16 +8,10 @@ import { StatCard } from './StatCard'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
+import { formatPercent } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RECENT_DAY_COUNT = 42
-
-function formatPercent(value: number | null): string {
-  if (value === null) {
-    return 'n/a'
-  }
-  return `${Math.round(value * 100)}%`
-}
 
 function formatUpdatedAt(timestamp: number | null): string {
   if (!timestamp) {
@@ -36,22 +30,29 @@ export function UsageOverviewPane(): React.JSX.Element {
   const openCodeScanState = useAppStore((state) => state.openCodeUsageScanState)
   const openCodeSummary = useAppStore((state) => state.openCodeUsageSummary)
   const openCodeDaily = useAppStore((state) => state.openCodeUsageDaily)
+  const devinScanState = useAppStore((state) => state.devinUsageScanState)
+  const devinSummary = useAppStore((state) => state.devinUsageSummary)
+  const devinDaily = useAppStore((state) => state.devinUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
+  const fetchDevinUsage = useAppStore((state) => state.fetchDevinUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
+  const refreshDevinUsage = useAppStore((state) => state.refreshDevinUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
+  const enableDevinUsage = useAppStore((state) => state.enableDevinUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchClaudeUsage()
     void fetchCodexUsage()
     void fetchOpenCodeUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage])
+    void fetchDevinUsage()
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchDevinUsage])
 
   const overview = useMemo(
     () =>
@@ -70,6 +71,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           scanState: openCodeScanState,
           summary: openCodeSummary,
           daily: openCodeDaily
+        },
+        devin: {
+          scanState: devinScanState,
+          summary: devinSummary,
+          daily: devinDaily
         }
       }),
     [
@@ -81,7 +87,10 @@ export function UsageOverviewPane(): React.JSX.Element {
       codexSummary,
       openCodeDaily,
       openCodeScanState,
-      openCodeSummary
+      openCodeSummary,
+      devinDaily,
+      devinScanState,
+      devinSummary
     ]
   )
   const recentDays = useMemo(
@@ -94,7 +103,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     void Promise.all([
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
-      openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve()
+      openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve(),
+      devinScanState?.enabled ? refreshDevinUsage() : Promise.resolve()
     ])
   }
 
@@ -187,6 +197,19 @@ export function UsageOverviewPane(): React.JSX.Element {
                     'Enable OpenCode'
                   )}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableDevinUsage()
+                  }}
+                >
+                  {translate(
+                    'auto.components.stats.UsageOverviewPane.devin.enable',
+                    'Enable Devin'
+                  )}
+                </Button>
               </div>
             </div>
           </div>
@@ -228,7 +251,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {translate(
                   'auto.components.stats.UsageOverviewPane.60002bb22f',
-                  'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.'
+                  'No local Claude, Codex, OpenCode, or Devin usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
             ) : (
@@ -272,6 +295,8 @@ export function UsageOverviewPane(): React.JSX.Element {
                   void enableClaudeUsage()
                 } else if (provider.id === 'codex') {
                   void enableCodexUsage()
+                } else if (provider.id === 'devin') {
+                  void enableDevinUsage()
                 } else {
                   void enableOpenCodeUsage()
                 }

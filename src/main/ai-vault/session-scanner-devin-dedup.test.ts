@@ -30,11 +30,11 @@ it('lists a session in both default directories once and still fills the scan li
   vi.stubEnv('DEVIN_HOME', root)
   vi.resetModules()
   for (const dir of ['transcripts', 'agent_logs']) {
-    await mkdir(join(root, dir))
-    await writeFile(join(root, dir, `${dir}-same.json`), transcript('same'))
+    await mkdir(join(root, 'cli', dir), { recursive: true })
+    await writeFile(join(root, 'cli', dir, `${dir}-same.json`), transcript('same'))
   }
   await writeFile(
-    join(root, 'transcripts', 'other.json'),
+    join(root, 'cli', 'transcripts', 'other.json'),
     transcript('other', '2026-09-18T00:00:00Z')
   )
   const { scanAiVaultSessions } = await import('./session-scanner')

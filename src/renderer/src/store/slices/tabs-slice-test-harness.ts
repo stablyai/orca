@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 
-/** Shape shared by the Claude/Codex/OpenCode usage-scanner namespaces. */
+/** Shape shared by the Claude/Codex/OpenCode/Devin usage-scanner namespaces. */
 export type UsageScannerMocks = {
   getScanState: Mock
   setEnabled: Mock
@@ -22,6 +22,7 @@ export type TabsSliceMockApi = {
   claudeUsage: UsageScannerMocks
   codexUsage: UsageScannerMocks
   openCodeUsage: UsageScannerMocks
+  devinUsage: UsageScannerMocks
 }
 
 /** window.api double shared by the TabsSlice suites; installs itself on globalThis. */
@@ -99,6 +100,22 @@ export function createTabsSliceMockApi(): TabsSliceMockApi {
         lastScanCompletedAt: null,
         lastScanError: null,
         hasAnyOpenCodeData: false
+      }),
+      setEnabled: vi.fn().mockResolvedValue({}),
+      refresh: vi.fn().mockResolvedValue({}),
+      getSummary: vi.fn().mockResolvedValue(null),
+      getDaily: vi.fn().mockResolvedValue([]),
+      getBreakdown: vi.fn().mockResolvedValue([]),
+      getRecentSessions: vi.fn().mockResolvedValue([])
+    },
+    devinUsage: {
+      getScanState: vi.fn().mockResolvedValue({
+        enabled: false,
+        isScanning: false,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null,
+        hasAnyDevinData: false
       }),
       setEnabled: vi.fn().mockResolvedValue({}),
       refresh: vi.fn().mockResolvedValue({}),

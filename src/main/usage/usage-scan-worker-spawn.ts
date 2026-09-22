@@ -12,6 +12,11 @@ import type {
   CodexUsageSession
 } from '../codex-usage/types'
 import type {
+  DevinUsageDailyAggregate,
+  DevinUsagePersistedFile,
+  DevinUsageSession
+} from '../devin-usage/types'
+import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
@@ -20,6 +25,7 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
+  scanDevinUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
@@ -123,6 +129,32 @@ export async function scanOpenCodeUsageDatabasesViaWorker(
   )
   return {
     processedDatabases: value.source,
+    sessions: value.sessions,
+    dailyAggregates: value.dailyAggregates
+  }
+}
+
+/**
+ * Scan Devin usage transcripts through the shared worker client.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param previous - Last scan's per-file cache.
+ * @returns The same projection `scanDevinUsageFiles` returns, computed off the main thread.
+ */
+export async function scanDevinUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  previous: DevinUsagePersistedFile[] = []
+): Promise<{
+  processedFiles: DevinUsagePersistedFile[]
+  sessions: DevinUsageSession[]
+  dailyAggregates: DevinUsageDailyAggregate[]
+}> {
+  const value = await scanDevinUsageOnWorker(
+    (body) => getSharedClient().scan(body),
+    worktrees,
+    previous
+  )
+  return {
+    processedFiles: value.source,
     sessions: value.sessions,
     dailyAggregates: value.dailyAggregates
   }

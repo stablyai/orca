@@ -52,7 +52,7 @@ const CASES = [
     agent: 'devin',
     envVar: 'DEVIN_HOME',
     absolute: '/srv/devin',
-    absoluteRoot: join('/srv/devin', 'transcripts'),
+    absoluteRoot: join('/srv/devin', 'cli', 'transcripts'),
     // Mirrors the platform-aware default in session-scanner-agent-sources.ts:
     // %APPDATA%\devin\cli on Windows, $XDG_DATA_HOME/devin/cli elsewhere.
     defaultRoot: () =>

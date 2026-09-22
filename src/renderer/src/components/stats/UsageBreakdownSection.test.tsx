@@ -32,4 +32,32 @@ describe('UsageBreakdownSection', () => {
       expect(label).not.toHaveClass('truncate')
     }
   })
+
+  it('shows per-dimension token counts when a row provides them', () => {
+    render(
+      <UsageBreakdownSection
+        title="By model"
+        topLabel="Top model:"
+        topValue="swe-2"
+        eventsOrTurns="events"
+        rows={[
+          {
+            key: 'swe-2',
+            label: 'swe-2',
+            tokens: 12_000,
+            sessions: 1,
+            eventsOrTurns: 2,
+            inputTokens: 10_000,
+            cachedInputTokens: 4_000,
+            outputTokens: 2_000
+          }
+        ]}
+      />
+    )
+
+    const subtitle = screen.getByText(/sessions • 2 events/)
+    expect(subtitle).toHaveTextContent('in 10.0k')
+    expect(subtitle).toHaveTextContent('cached 4.0k')
+    expect(subtitle).toHaveTextContent('out 2.0k')
+  })
 })

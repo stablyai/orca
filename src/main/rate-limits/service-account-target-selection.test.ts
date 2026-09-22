@@ -44,6 +44,14 @@ vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
 
+vi.mock('./devin-fetcher', () => ({
+  fetchDevinRateLimits: vi.fn()
+}))
+
+vi.mock('./devin-credentials', () => ({
+  readDevinCredentials: vi.fn(() => ({ status: 'missing' }))
+}))
+
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))

@@ -8,6 +8,13 @@ export function formatTokens(value: number): string {
   return value.toLocaleString()
 }
 
+export function formatPercent(value: number | null): string {
+  if (value === null) {
+    return 'n/a'
+  }
+  return `${Math.round(value * 100)}%`
+}
+
 export function formatCost(value: number | null): string {
   if (value === null) {
     return 'n/a'

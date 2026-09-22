@@ -9,6 +9,11 @@ import type {
   CodexUsageSession
 } from '../codex-usage/types'
 import type {
+  DevinUsageDailyAggregate,
+  DevinUsagePersistedFile,
+  DevinUsageSession
+} from '../devin-usage/types'
+import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
@@ -26,7 +31,7 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
  * than `UsageProviderId`: a `plugin:` provider supplies its own scan function,
  * which is not in this bundle and cannot be named on the wire.
  */
-export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'devin'
 
 /** Request body per provider; `previous` is that provider's own per-source cache. */
 export type UsageScanWorkerRequestBody =
@@ -40,6 +45,11 @@ export type UsageScanWorkerRequestBody =
       providerId: 'opencode'
       worktrees: UsageScanWorktreeRef[]
       previous: OpenCodeUsagePersistedDatabase[]
+    }
+  | {
+      providerId: 'devin'
+      worktrees: UsageScanWorktreeRef[]
+      previous: DevinUsagePersistedFile[]
     }
 
 export type UsageScanWorkerRequest = UsageScanWorkerRequestBody & { id: number }
@@ -67,6 +77,12 @@ export type UsageScanWorkerValue =
       source: OpenCodeUsagePersistedDatabase[]
       sessions: OpenCodeUsageSession[]
       dailyAggregates: OpenCodeUsageDailyAggregate[]
+    }
+  | {
+      providerId: 'devin'
+      source: DevinUsagePersistedFile[]
+      sessions: DevinUsageSession[]
+      dailyAggregates: DevinUsageDailyAggregate[]
     }
 
 export type UsageScanWorkerResponse =
