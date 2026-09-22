@@ -67,6 +67,29 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('passes an opaque OpenCode model through the launch catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'zai-coding-plan/glm-5.3-flash'
+      })
+    ).toEqual({
+      preferences: { model: 'zai-coding-plan/glm-5.3-flash' },
+      receipt: {
+        requested: {
+          agent: 'opencode',
+          model: 'zai-coding-plan/glm-5.3-flash',
+          effort: null
+        },
+        effective: {
+          agent: 'opencode',
+          model: 'zai-coding-plan/glm-5.3-flash',
+          effort: null
+        }
+      }
+    })
+  })
+
   it.each([
     {
       model: 'gpt-5.6-sol',
@@ -136,6 +159,16 @@ describe('orchestration worker launch preferences', () => {
         resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue })
       ).toThrow(`does not support effort ${effortValue}`)
     }
+  })
+
+  it('rejects unsupported OpenCode effort instead of silently dropping it', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'opencode',
+        model: 'zai-coding-plan/glm-5.3-flash',
+        effort: 'high'
+      })
+    ).toThrow('Agent opencode model zai-coding-plan/glm-5.3-flash does not support effort high.')
   })
 
   it('rejects effort without a model', () => {

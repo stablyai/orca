@@ -72,6 +72,24 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'gemini-3.1-pro-high', effort: 'high' })
   })
 
+  it('keeps OpenCode agent arguments while replacing only the per-launch model', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'zai-coding-plan/glm-5.3-flash' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--share --model opencode/global-default'
+    })
+    expect(plan?.launchCommand).toBe("opencode '--share' '--model' 'zai-coding-plan/glm-5.3-flash'")
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "opencode '--share' '--model' 'opencode/global-default'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
