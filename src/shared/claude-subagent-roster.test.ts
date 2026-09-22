@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
+  CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS,
   claudeRosterHasRuntimeWorkingSubagent,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
@@ -29,7 +30,7 @@ describe('claude-subagent-roster', () => {
   it('removes a finished one-shot subagent on stop', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'a1', { agentType: 'general-purpose' }, 100)
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(true)
 
     // Why: retaining finished children as idle rows piled up dozens of dead
     // "Idle - general-purpose" sidebar rows over a long workflow session.
@@ -47,7 +48,7 @@ describe('claude-subagent-roster', () => {
     upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', { agentType: 'probe1' }, 100)
     stopClaudeSubagent(roster, 'aprobe1-6d3cb5b5')
     expect(roster.get('aprobe1-6d3cb5b5')).toMatchObject({ state: 'idle' })
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(false)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(false)
     expect(claudeRosterToSnapshots(roster)).toEqual([
       expect.objectContaining({ id: 'aprobe1-6d3cb5b5', state: 'idle' })
     ])
@@ -84,7 +85,7 @@ describe('claude-subagent-roster', () => {
       state: 'working',
       listedAsSubagentTask: true
     })
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(true)
   })
 
   it('revives an idle teammate as working while keeping its first-observed startedAt', () => {
@@ -97,6 +98,73 @@ describe('claude-subagent-roster', () => {
       startedAt: 100,
       description: 'round two'
     })
+  })
+
+  it('stops gating the pane once a working row passes the stale bound but keeps it in snapshots', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a1', { agentType: 'general-purpose' }, 100)
+    const staleAt = 100 + CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS
+    expect(claudeRosterHasWorkingSubagent(roster, staleAt - 1)).toBe(true)
+    // Why: a lost SubagentStop must not pin the pane 'working' for the rest of
+    // the session (#21327) — but the row stays so a late Stop or a complete
+    // background_tasks inventory can still retire it cleanly.
+    expect(claudeRosterHasWorkingSubagent(roster, staleAt)).toBe(false)
+    expect(claudeRosterToSnapshots(roster)).toEqual([
+      expect.objectContaining({ id: 'a1', state: 'working' })
+    ])
+  })
+
+  it('expires runtime working evidence on the same bound', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a1', {}, 100)
+    expect(
+      claudeRosterHasRuntimeWorkingSubagent(roster, 100 + CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS)
+    ).toBe(false)
+  })
+
+  it('does not expire a revived teammate by its original startedAt', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    const t0 = 1_000_000
+    upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', {}, t0)
+    stopClaudeSubagent(roster, 'aprobe1-6d3cb5b5')
+    // Why: a teammate can idle for longer than the stale bound between turns;
+    // expiry must follow when it last went working, not first spawn (#21327).
+    const revivedAt = t0 + CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS * 2
+    upsertWorkingClaudeSubagent(roster, 'aprobe1-6d3cb5b5', {}, revivedAt)
+    expect(claudeRosterHasWorkingSubagent(roster, revivedAt + 1000)).toBe(true)
+  })
+
+  it('evicts the oldest stale working row when the roster is full so a live child still tracks', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    const now = 100 + CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS
+    for (let i = 0; i < AGENT_STATUS_MAX_SUBAGENTS; i++) {
+      roster.set(`stale-${i}`, { state: 'working', startedAt: 100 + i, workingSince: 100 + i })
+    }
+    // Why: a roster full of lost children must not refuse a real new
+    // SubagentStart — refusing would leave the pane 'done' while a child runs.
+    upsertWorkingClaudeSubagent(roster, 'alive', {}, now)
+    expect(roster.has('alive')).toBe(true)
+    expect(roster.has('stale-0')).toBe(false)
+    expect(roster.size).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+  })
+
+  it('still refuses a new row when every slot is a live working child', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    const now = 1000
+    for (let i = 0; i < AGENT_STATUS_MAX_SUBAGENTS; i++) {
+      roster.set(`live-${i}`, { state: 'working', startedAt: 100, workingSince: 900 })
+    }
+    upsertWorkingClaudeSubagent(roster, 'overflow', {}, now)
+    expect(roster.has('overflow')).toBe(false)
+  })
+
+  it('expires a legacy working row without workingSince by its startedAt', () => {
+    const roster: ClaudeSubagentRoster = new Map([
+      ['a1', { state: 'working' as const, startedAt: 100 }]
+    ])
+    expect(
+      claudeRosterHasWorkingSubagent(roster, 100 + CLAUDE_SUBAGENT_WORKING_STALE_AFTER_MS)
+    ).toBe(false)
   })
 
   it('re-adds a resumed one-shot as working with a fresh startedAt', () => {
@@ -496,24 +564,24 @@ describe('restored-row liveness reap', () => {
 
   it('drops a restored row when no agent process is left behind it', () => {
     const roster = restored('areview-loop-c237a4c577493352')
-    expect(claudeRosterHasRuntimeWorkingSubagent(roster)).toBe(false)
+    expect(claudeRosterHasRuntimeWorkingSubagent(roster, 200)).toBe(false)
     expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(true)
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(false)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(false)
   })
 
   it('keeps a row a live lifecycle event re-tracked', () => {
     const roster = restored('areview-loop-c237a4c577493352')
     upsertWorkingClaudeSubagent(roster, 'areview-loop-c237a4c577493352', {}, 150)
-    expect(claudeRosterHasRuntimeWorkingSubagent(roster)).toBe(true)
+    expect(claudeRosterHasRuntimeWorkingSubagent(roster, 200)).toBe(true)
     expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(false)
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(true)
   })
 
   it('keeps a row a live inventory confirmed as running', () => {
     const roster = restored('a9')
     foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'a9' })], 150)
     expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(false)
-    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+    expect(claudeRosterHasWorkingSubagent(roster, 200)).toBe(true)
   })
 
   it('leaves rows this listener tracked from live events alone', () => {

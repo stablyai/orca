@@ -93,7 +93,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
       // gone and no process left to report, 'done' is the only truthful state — and
       // the one hibernation needs once this pane's agent is restored.
       const state =
-        enriched.payload.state === 'working' && !claudeRosterHasWorkingSubagent(roster)
+        enriched.payload.state === 'working' && !claudeRosterHasWorkingSubagent(roster, Date.now())
           ? 'done'
           : enriched.payload.state
       const stateChanged = state !== enriched.payload.state

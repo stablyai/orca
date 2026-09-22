@@ -126,13 +126,14 @@ export type ClaudePaneStatusResolution = {
 export function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
-  lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>,
+  now: number
 ): ClaudePaneStatusResolution {
   if (lead.state !== 'done') {
     return { stateName: lead.state }
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (claudeRosterHasWorkingSubagent(roster)) {
+  if (claudeRosterHasWorkingSubagent(roster, now)) {
     return { stateName: 'working' }
   }
   if (
@@ -270,7 +271,7 @@ export function clearClaudeAnsweredQuestionWait(
         }
       : {}
   )
-  const resolved = resolveClaudePaneStatus(state, paneKey, restored)
+  const resolved = resolveClaudePaneStatus(state, paneKey, restored, Date.now())
   return resolved.stateName === restored.state && resolved.workingMode === undefined
     ? restored
     : {
