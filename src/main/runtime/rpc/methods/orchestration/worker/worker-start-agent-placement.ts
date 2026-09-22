@@ -32,7 +32,7 @@ import { createWorkerWorktree } from './worker-worktree-creation'
 
 /** Only what the placement itself reads. The runtime's own worktree accessors are untyped, so
  *  naming the two fields keeps `any` out of this module's unions. */
-type PlacedWorktree = { id: string; repoId: string }
+type PlacedWorktree = { id: string; repoId: string; path: string }
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
 export type WorkerAgentPlacement = {

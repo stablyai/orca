@@ -23,6 +23,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   taskSpec: string
   coordinatorHandle: string
   dispatchCapability: string
+  worktreePath?: string
   devMode: boolean | undefined
   requestId: string
 }): Promise<RuntimeTerminalSend['prompt']> {
@@ -37,6 +38,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     taskSpec: args.taskSpec,
     coordinatorHandle: args.coordinatorHandle,
     workerHandle: terminalHandle,
+    ...(args.worktreePath ? { worktreePath: args.worktreePath } : {}),
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)

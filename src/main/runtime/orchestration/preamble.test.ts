@@ -251,6 +251,14 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca orchestration ask')
   })
 
+  it('names the assigned worktree and rejects paths outside it', () => {
+    const result = buildDispatchPreamble(baseParams({ worktreePath: '/tmp/worker-worktree' }))
+
+    expect(result).toContain('Your worktree path is: /tmp/worker-worktree')
+    expect(result).toContain('Do all work for this task inside it.')
+    expect(result).toContain('stop and escalate instead of working there.')
+  })
+
   it('uses orca-dev CLI when devMode is true', () => {
     const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
     expect(result).toContain('orca-dev orchestration send')

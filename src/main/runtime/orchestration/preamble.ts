@@ -12,6 +12,8 @@ export type PreambleParams = {
   taskSpec: string
   coordinatorHandle: string
   workerHandle: string
+  // Why: without the assigned path, an absolute path in the task spec can silently move work into another checkout.
+  worktreePath?: string
   devMode?: boolean
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
@@ -64,7 +66,14 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
-
+${
+  params.worktreePath
+    ? `Your worktree path is: ${params.worktreePath}
+Do all work for this task inside it. If the task spec names a path outside that
+directory, stop and escalate instead of working there.
+`
+    : ''
+}
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
