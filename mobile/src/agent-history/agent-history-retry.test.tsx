@@ -21,7 +21,8 @@ const doubles = vi.hoisted(
 )
 
 vi.mock('expo-router', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), canGoBack: () => false })
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), canGoBack: () => false }),
+  usePathname: () => '/'
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
