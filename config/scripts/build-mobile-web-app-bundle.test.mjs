@@ -36,6 +36,7 @@ import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   hashedAsset,
   readDesktopVersion,
@@ -450,9 +451,11 @@ describe('the Phase C budget', () => {
       join(projectDir, 'config', 'scripts', 'verify-mobile-web-app-bundle.mjs'),
       'utf8'
     )
-    // The bound reads like a per-route escape hatch and is not one: 5 of the 14 routes break it
-    // on their own. What keeps it survivable is that expo-router wants a synchronous export off
-    // layout nodes only, so the note has to name the layout and the export that drives it.
+    // The bound reads like a per-route escape hatch and is not one: of the fourteen routes in the
+    // tree, session breaks it outright at 3.32 MiB and five more spend most of it, so the hatch is
+    // one route away from unusable rather than free. What keeps it survivable is that expo-router
+    // wants a synchronous export off layout nodes only, so the note has to name the layout and the
+    // export that drives it.
     const doc = source.slice(
       0,
       source.indexOf('export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES')
@@ -460,6 +463,27 @@ describe('the Phase C budget', () => {
     const note = doc.slice(doc.lastIndexOf('/**'))
     expect(note).toContain('h/_layout.tsx')
     expect(note).toContain('unstable_settings')
+  })
+
+  /**
+   * The one count above that has to follow the tree, spelled so the census can read it.
+   *
+   * The sweep carries a row per route plus `h/_layout.tsx`, which is not a screen anyone navigates
+   * to, so the route count is its length less one -- and it is the number a route added to the
+   * tree moves. The static-import readings beside it are measurements rather than table counts and
+   * the two frozen mermaid builds must not move at all, so neither is spelled.
+   */
+  it('spells the route count off the sweep it is a count of', async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'build-mobile-web-app-bundle.test.mjs'),
+      'utf8'
+    )
+    const rows = [
+      { precedes: 'routes in the tree', counted: MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length - 1 }
+    ]
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
+      expect(spelled, precedes).toEqual(counts)
+    }
   })
 
   it('budgets what loads first well under what the whole page weighs', () => {
@@ -510,21 +534,31 @@ describe('the Phase C budget', () => {
   })
 
   it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
-    // The two builds this ceiling has to tell apart, both measured at 14 routes and both still
-    // told apart by the envelope, which is tighter than the 4r + 16 they were first read against.
+    // The two builds this ceiling has to tell apart, both measured at 14 routes on the head that
+    // first read them, and both still told apart by the envelope, which is tighter than the
+    // 4r + 16 they were first read against.
     //
-    // The page reaches mermaid through one pre-bundled artifact and the bundle emits 69 scripts
-    // (68 of them the page's own split, one the deferred engine). Importing the package instead
-    // emitted 172: mermaid lazily imports each of its own diagram types and esbuild splits along
-    // those boundaries, all of it inside the generation the phone has already downloaded. The
-    // route term is the only term precisely so that the second of those fails here -- a ceiling
-    // raised to admit 172 would have admitted any split at all.
+    // Reaching mermaid through one pre-bundled artifact emitted 69 scripts there, one of them the
+    // deferred engine; importing the package instead emitted 172, because mermaid lazily imports
+    // each of its own diagram types and esbuild splits along those boundaries, all of it inside
+    // the generation the phone has already downloaded. Both are held at what that head measured
+    // rather than re-read here -- what this case pins is the discrimination, not either build's
+    // size, and this head's own fourteen-route prefix reads 64. Left in digits for that reason:
+    // the census below spells the counts that must follow the tree, and these two must not.
+    //
+    // 69 now sits just under the envelope, so a sweep that falls further fails this case on a
+    // frozen measurement rather than on a build. That is a signal to re-measure the pair against
+    // a mermaid the page imports as a package, not to raise the ceiling.
+    //
+    // The route term is the only term precisely so that the second of those fails here -- a
+    // ceiling raised to admit 172 would have admitted any split at all.
     const ROUTES = 14
     const WITH_ONE_ARTIFACT = 69
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // And the assets that came with it: 215 against 112, of the 256 the shell will load.
+    // And the assets that came with it: 215 against the 113 this head's envelope allows, of the
+    // 256 the shell will load.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
