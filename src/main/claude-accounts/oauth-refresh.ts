@@ -8,10 +8,16 @@ import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 // after the CLI rotates it (the lossy path that strands stale tokens).
 const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'
 const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
+// Why: the token endpoint answers 429 to net.fetch's default Chromium User-Agent
+// (and to curl's) whatever the body, so a refresh without one never succeeds.
+const OAUTH_REFRESH_USER_AGENT = 'orca-desktop'
 
 // Refresh slightly ahead of expiry so a token doesn't expire mid-launch. The
 // CLI uses the same 5-minute skew for its own refresh decision.
 const OAUTH_EXPIRY_BUFFER_MS = 5 * 60 * 1000
+// A CLI using the token refreshes it ahead of expiry, so a token still expired
+// this long after expiresAt has no live CLI rotating it.
+const OAUTH_LIVE_ROTATION_GRACE_MS = 10 * 60 * 1000
 const REFRESH_TIMEOUT_MS = 10_000
 
 type ClaudeOauthBlob = {
@@ -72,6 +78,22 @@ export function isOauthTokenExpiring(credentialsJson: string, now: number = Date
     return true
   }
   return now + OAUTH_EXPIRY_BUFFER_MS >= expiresAt
+}
+
+/**
+ * Whether the stored access token expired longer ago than a live Claude CLI
+ * would have left it unrotated. Unlike isOauthTokenExpiring, missing expiry
+ * metadata is false: only a known-dead token may override the live-PTY gate.
+ */
+export function isOauthTokenExpiredPastGrace(
+  credentialsJson: string,
+  now: number = Date.now()
+): boolean {
+  const expiresAt = parseClaudeOauthBlob(credentialsJson)?.expiresAt
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    return false
+  }
+  return now >= expiresAt + OAUTH_LIVE_ROTATION_GRACE_MS
 }
 
 /**
@@ -141,7 +163,10 @@ export async function refreshClaudeOauthCredentials(
     // routes through Chromium's stack so the env proxy bridge above applies.
     const res = await net.fetch(OAUTH_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': OAUTH_REFRESH_USER_AGENT
+      },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,

@@ -15,7 +15,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
+import {
+  isOauthTokenExpiredPastGrace,
+  isOauthTokenExpiring,
+  refreshClaudeOauthCredentials
+} from './oauth-refresh'
 
 vi.mock('electron', () => createElectronMock())
 
@@ -173,9 +177,9 @@ describe('ClaudeRuntimeAuthService', () => {
     vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
   })
 
-  it('does not refresh the active account while a Claude PTY is live', async () => {
-    const expired = createClaudeCredentialsJson('one@example.com', 'one-expired', null, 1_000)
-    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+  it('does not refresh the active account while a Claude PTY is live and the token is only expiring', async () => {
+    const expiring = createClaudeCredentialsJson('one@example.com', 'one-expiring')
+    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expiring)
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
@@ -203,6 +207,105 @@ describe('ClaudeRuntimeAuthService', () => {
     } finally {
       markClaudePtyExited('pty-live-1')
       vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+      vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
+    }
+  })
+
+  it('refreshes the active account despite a live Claude PTY once the token is expired past the grace window', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const expired = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-expired',
+      null,
+      Date.now() - 60 * 60 * 1000
+    )
+    const refreshedCreds = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-refreshed',
+      null,
+      Date.now() + 8 * 60 * 60 * 1000
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(true)
+    vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(refreshedCreds)
+
+    const { markClaudePtySpawned, markClaudePtyExited } = await import('./live-pty-gate')
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+
+    // The live Claude runs on another config dir (nothing lands in ~/.claude), so read-back
+    // never sees a rotation — the setup where the deferral used to last forever (#20251).
+    markClaudePtySpawned('pty-live-1')
+    try {
+      const preparation = await service.prepareForRateLimitFetch()
+      expect(refreshClaudeOauthCredentials).toHaveBeenCalled()
+      expect(preparation.managedRefreshDeferredByLivePty).toBe(false)
+      expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(refreshedCreds)
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCreds)
+    } finally {
+      markClaudePtyExited('pty-live-1')
+      vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+      vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(false)
+      vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
+    }
+  })
+
+  it('keeps a live Claude rotation that lands while a past-grace refresh fails', async () => {
+    const expired = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-expired',
+      null,
+      Date.now() - 60 * 60 * 1000
+    )
+    const cliRotated = createClaudeCredentialsJson(
+      'one@example.com',
+      'cli-rotated',
+      null,
+      Date.now() + 8 * 60 * 60 * 1000
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(true)
+
+    const { markClaudePtySpawned, markClaudePtyExited } = await import('./live-pty-gate')
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+
+    markClaudePtySpawned('pty-live-1')
+    try {
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+      expect(testState.legacyKeychainCredentials).toBe(expired)
+
+      // A Claude on Orca's store wins the single-use refresh while Orca's request is in
+      // flight, so Orca's request fails; rewriting the stale blob would strand both copies.
+      vi.mocked(refreshClaudeOauthCredentials).mockImplementationOnce(async () => {
+        testState.legacyKeychainCredentials = cliRotated
+        return null
+      })
+      await service.syncForCurrentSelection()
+
+      expect(testState.legacyKeychainCredentials).toBe(cliRotated)
+    } finally {
+      markClaudePtyExited('pty-live-1')
+      vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+      vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(false)
       vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
     }
   })
