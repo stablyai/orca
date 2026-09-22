@@ -1,23 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { normalizeHostAppVersion } from './host-app-version'
 
 const STORAGE_KEY_PREFIX = 'orca:host-app-version:v1:'
-const MAX_VERSION_LENGTH = 64
-
-export function normalizeHostAppVersion(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  const normalized = value.trim()
-  if (
-    normalized.length === 0 ||
-    normalized.length > MAX_VERSION_LENGTH ||
-    normalized.includes('\n') ||
-    normalized.includes('\r')
-  ) {
-    return null
-  }
-  return normalized
-}
 
 export async function loadHostAppVersion(hostId: string): Promise<string | null> {
   try {

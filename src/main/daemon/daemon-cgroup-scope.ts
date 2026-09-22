@@ -308,6 +308,7 @@ export function buildDurableDaemonScopeCommand(
       '--user',
       '--scope',
       `--unit=${daemonScopeUnitName(launchNonce)}`,
+      '--property=TimeoutStopSec=5s',
       '--collect',
       '--quiet',
       '--',

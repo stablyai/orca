@@ -202,6 +202,7 @@ describe('buildDurableDaemonScopeCommand', () => {
       '--user',
       '--scope',
       '--unit=orca-daemon-nonce-1.scope',
+      '--property=TimeoutStopSec=5s',
       '--collect',
       '--quiet',
       '--',
