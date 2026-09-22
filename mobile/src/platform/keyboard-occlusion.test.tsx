@@ -40,10 +40,16 @@ vi.mock('react-native', () => ({
   }
 }))
 
-import { useKeyboardAvoidingPadding, useKeyboardOcclusion } from './keyboard-occlusion'
+import {
+  useKeyboardAvoidingPadding,
+  useKeyboardOcclusion,
+  useSoftKeyboard,
+  type SoftKeyboardState
+} from './keyboard-occlusion'
 
 let lift = 0
 let padding = 0
+let keyboardState: SoftKeyboardState = { height: 0, visible: false }
 
 function Harness(): null {
   lift = useKeyboardOcclusion()
@@ -53,6 +59,11 @@ function Harness(): null {
 /** Separate, so the padding case measures the padding hook's own subscriptions and nothing else. */
 function PaddingHarness(): null {
   padding = useKeyboardAvoidingPadding()
+  return null
+}
+
+function StateHarness(): null {
+  keyboardState = useSoftKeyboard()
   return null
 }
 
@@ -77,6 +88,7 @@ describe('the keyboard the phone reports', () => {
     keyboard.addListenerCalls = 0
     lift = 0
     padding = 0
+    keyboardState = { height: 0, visible: false }
   })
 
   it('animates with the keyboard on iOS and after it on Android', async () => {
@@ -124,5 +136,28 @@ describe('the keyboard the phone reports', () => {
     expect(padding).toBe(0)
     expect(keyboard.addListenerCalls).toBe(0)
     expect(keyboard.listeners.size).toBe(0)
+  })
+
+  it('answers both facts from one subscription, so a screen wanting each pays for one', async () => {
+    // The session screen reads the height to lift its dock and the flag to hold off the terminal
+    // refit. Two hooks would mean two listener pairs and two renders per keyboard event.
+    await mountComponent(StateHarness)
+    expect(keyboard.addListenerCalls).toBe(2)
+    await act(async () => {
+      keyboard.listeners.get('keyboardWillShow')?.({ endCoordinates: { height: 336 } })
+    })
+    expect(keyboardState).toEqual({ height: 336, visible: true })
+    await act(async () => {
+      keyboard.listeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } })
+    })
+    expect(keyboardState).toEqual({ height: 0, visible: false })
+  })
+
+  it('calls a keyboard that reports no height open anyway, because the event is the fact', async () => {
+    await mountComponent(StateHarness)
+    await act(async () => {
+      keyboard.listeners.get('keyboardWillShow')?.({ endCoordinates: { height: 0 } })
+    })
+    expect(keyboardState).toEqual({ height: 0, visible: true })
   })
 })

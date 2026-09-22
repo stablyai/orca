@@ -32,6 +32,8 @@ type ScreenDependencies = {
   pageReady: boolean
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
   client: FakeRpcClient | null
+  /** The IME events the app's own keyboard seam subscribes to, by name. */
+  keyboardListeners: Map<string, (event: { endCoordinates: { height: number } }) => void>
 }
 
 const SNAPSHOT = vi.hoisted(() => ({
@@ -69,12 +71,22 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     postFails: false,
     state: { kind: 'checking' },
     pageReady: false,
-    client: null
+    client: null,
+    keyboardListeners: new Map()
   }
 })
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Keyboard: {
+    addListener: (
+      name: string,
+      listener: (event: { endCoordinates: { height: number } }) => void
+    ) => {
+      dependencies.keyboardListeners.set(name, listener)
+      return { remove: () => dependencies.keyboardListeners.delete(name) }
+    }
+  },
   Linking: { openURL: dependencies.openUrl },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -812,5 +824,24 @@ describe('what one case mutates does not reach the next', () => {
       grants: DEFAULT_ROUTE_GRANTS,
       client: null
     })
+  })
+
+  it('shortens the view by the keyboard, which is the only side that can see one', async () => {
+    // Edge-to-edge makes the manifest's `adjustResize` inert, so the window never shrinks and the
+    // page's `visualViewport` reads full height with the IME up: it lays its live input row out
+    // under the keys. The shell owns the window, so it takes the strip off the view instead.
+    const tree = await render(readyState('session-keyboard'))
+    const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
+    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 8 })
+
+    await act(async () => {
+      dependencies.keyboardListeners.get('keyboardWillShow')?.({ endCoordinates: { height: 336 } })
+    })
+    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 336 })
+
+    await act(async () => {
+      dependencies.keyboardListeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } })
+    })
+    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 8 })
   })
 })

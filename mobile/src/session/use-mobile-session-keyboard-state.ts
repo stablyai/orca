@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import { Keyboard, Platform, type KeyboardEvent } from 'react-native'
+import { useSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { saveCustomKeys, type CustomKey } from '../components/CustomKeyModal'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
@@ -56,24 +56,16 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     subscribeToTerminal
   })
 
+  // Why: react-native-web's `Keyboard` never fires, so inside the shell's page this screen heard no
+  // keyboard at all — the platform seam answers on both hosts. Visibility before height, as the
+  // listeners had it: the flag is what defers the refit the height change would otherwise trigger.
+  const softKeyboard = useSoftKeyboard()
   useEffect(() => {
-    const onShow = (e: KeyboardEvent) => {
-      notifyKeyboardVisibility(true)
-      setKeyboardHeight(e.endCoordinates?.height ?? 0)
-    }
-    const onHide = () => {
-      notifyKeyboardVisibility(false)
-      setKeyboardHeight(0)
-    }
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const showSub = Keyboard.addListener(showEvent, onShow)
-    const hideSub = Keyboard.addListener(hideEvent, onHide)
-    return () => {
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [notifyKeyboardVisibility])
+    notifyKeyboardVisibility(softKeyboard.visible)
+  }, [notifyKeyboardVisibility, softKeyboard.visible])
+  useEffect(() => {
+    setKeyboardHeight(softKeyboard.height)
+  }, [setKeyboardHeight, softKeyboard.height])
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
     if (!tabId) {
