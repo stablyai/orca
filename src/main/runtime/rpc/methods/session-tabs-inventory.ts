@@ -4,6 +4,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
+import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -26,10 +28,16 @@ function clientUnderstandsAuthoritativeInventory(context: RpcContext): boolean {
 export function projectSessionTabsForClient(
   snapshot: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
+  structuredNativeChatEnabled: boolean
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabAgentStatus(
+      snapshot,
+      clientKind,
+      clientCapabilities,
+      structuredNativeChatEnabled
+    ),
     clientCapabilities
   )
 }
@@ -40,7 +48,12 @@ function projectInventory(
 ): SessionTabsInventory {
   return {
     snapshots: inventory.snapshots.map((snapshot) =>
-      projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
+      projectSessionTabsForClient(
+        snapshot,
+        context.clientKind,
+        context.clientCapabilities,
+        isStructuredNativeChatEnabled(context.runtime)
+      )
     ),
     ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
       ? { authoritative: true as const }
@@ -105,11 +118,13 @@ export async function subscribeSessionTabsInventory(
   const deliveredChangeSequenceByWorktree = new Map<string, number>()
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
+  const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     projectSessionTabsForClient(
       snapshot,
       context.clientKind,
-      context.clientCapabilities
+      context.clientCapabilities,
+      isStructuredNativeChatEnabled(context.runtime)
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {
@@ -180,7 +195,7 @@ export async function subscribeSessionTabsInventory(
     }
     emit({
       type: 'updated',
-      ...projected
+      ...withProofDelta(projected)
     })
     if (projected.removed === true) {
       publishedSnapshotsByWorktree.delete(snapshot.worktree)
@@ -254,7 +269,7 @@ export async function subscribeSessionTabsInventory(
   }
   const { inventory, changeSequence } = collected
   censusChangeSequence = changeSequence
-  emit({ type: 'snapshots', ...inventory })
+  emit({ type: 'snapshots', ...inventory, snapshots: inventory.snapshots.map(withProofDelta) })
   for (const snapshot of inventory.snapshots) {
     publishedSnapshotsByWorktree.set(snapshot.worktree, withoutNavigationIntent(snapshot))
   }

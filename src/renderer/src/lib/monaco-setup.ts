@@ -1,4 +1,5 @@
 import { loader } from '@monaco-editor/react'
+import { editorModelRegistry } from './editor-model-registry'
 import * as monaco from 'monaco-editor'
 import { typescript as monacoTS } from 'monaco-editor'
 import 'monaco-editor/min/vs/editor/editor.main.css'
@@ -10,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
+import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
@@ -79,6 +81,7 @@ registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
 registerJsonlLanguage(monaco)
+registerShellMarkdownAliases(monaco)
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)
 installMonacoPeekReferencesPreviewOptions()
@@ -90,5 +93,9 @@ installMonacoContextMenuPaste(monaco)
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 
+const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
+if (import.meta.hot) {
+  import.meta.hot.dispose(unregisterEditorModelRegistry)
+}
 // Re-export for convenience
 export { monaco }

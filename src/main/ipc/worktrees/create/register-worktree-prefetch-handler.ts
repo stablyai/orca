@@ -15,15 +15,13 @@ export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): vo
         return
       }
       try {
-        const baseBranch = await prefetchWorktreeCreateBase({
+        await prefetchWorktreeCreateBase({
           repo,
           baseBranch: args.baseBranch,
           runtime,
-          gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo)
+          gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo),
+          prepareCheckout: (base) => prepareWorktreeCreateForRepo(store, repo, base)
         })
-        if (baseBranch) {
-          await prepareWorktreeCreateForRepo(store, repo, baseBranch)
-        }
       } catch {
         // Why: optimistic warm-up; the real create path awaits the same refresh and reports failures there.
       }

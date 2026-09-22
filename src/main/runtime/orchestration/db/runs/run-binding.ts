@@ -142,7 +142,7 @@ export function bindRun(
            WHERE id = ?`
         )
         .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
-      this.fenceOutstandingDelivery(params.runId)
+      this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
       }

@@ -1,3 +1,4 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +45,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -58,18 +60,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
-  ensureRemoteRuntimeSharedControlConnection: ensureRemoteRuntimeSharedControlConnectionMock,
-  pauseRemoteRuntimeSharedControlRetry: pauseRemoteRuntimeSharedControlRetryMock,
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+    ensureRemoteRuntimeSharedControlConnection: ensureRemoteRuntimeSharedControlConnectionMock,
+    pauseRemoteRuntimeSharedControlRetry: pauseRemoteRuntimeSharedControlRetryMock,
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -114,6 +121,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -148,9 +156,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768', deviceToken: 'device-token' }),
       'status.get',
       undefined,
-      50,
+      15_000,
       undefined,
-      undefined,
+      expect.any(AbortSignal),
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(reconnectRemoteRuntimeSharedControlConnectionMock).toHaveBeenCalledWith(
@@ -319,36 +327,41 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
-  it('returns shared-control diagnostics when saved remote runtime status throws', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
-      state: 'reconnecting',
-      pendingRequestCount: 0,
-      subscriptionCount: 1,
-      reconnectAttempt: 2,
-      lastConnectedAt: 123,
-      lastClose: { code: 1006, reason: '' },
-      lastError: 'closed'
-    })
-    sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('socket closed'))
+  it.each(['runtimeEnvironments:getStatus', 'runtimeEnvironments:connect'])(
+    'preserves failure diagnostics and guidance on %s',
+    async (channel) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
+        state: 'reconnecting',
+        pendingRequestCount: 0,
+        subscriptionCount: 1,
+        reconnectAttempt: 2,
+        lastConnectedAt: 123,
+        lastClose: { code: 1006, reason: '' },
+        lastError: 'closed'
+      })
+      sendRemoteRuntimeRequestMock.mockRejectedValue(
+        new Error('Could not connect to the remote Orca runtime.')
+      )
 
-    const add = handler<
-      { name: string; pairingCode: string },
-      { environment: { id: string; name: string } }
-    >('runtimeEnvironments:addFromPairingCode')
-    await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      await add(null, { name: 'desk', pairingCode: pairingCode() })
 
-    const getStatus = handler<
-      { selector: string; timeoutMs?: number },
-      { ok: false; error: { message: string; data?: { remoteControl?: { state: string } } } }
-    >('runtimeEnvironments:getStatus')
+      const getStatus = handler<
+        { selector: string; timeoutMs?: number },
+        { ok: false; error: { message: string; data?: { remoteControl?: { state: string } } } }
+      >(channel)
 
-    await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
-      ok: false,
-      error: {
-        message: 'socket closed',
-        data: { remoteControl: { state: 'reconnecting' } }
-      }
-    })
-  })
+      await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringContaining('connect both devices to Tailscale'),
+          data: { remoteControl: { state: 'reconnecting' } }
+        }
+      })
+    }
+  )
 })

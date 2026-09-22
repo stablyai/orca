@@ -1,0 +1,514 @@
+name: Operate Relay Asia Admission
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target Relay environment
+        required: true
+        type: choice
+        options: [staging, production]
+      mode:
+        description: Inspect, initialize, verify, atomically register, promote, or roll back admission
+        required: true
+        default: verify
+        type: choice
+        options: [inspect, initialize, verify, register, configure, promote, rollback]
+      cell-ids:
+        description: Exact reviewed comma-separated Asia cell wave
+        required: true
+        type: string
+      selector-generation:
+        description: Exact live selector generation; leave empty only for inspect
+        required: false
+        type: string
+      selector-membership-sha256:
+        description: Exact fingerprint printed by inspect; required only for initialize
+        required: false
+        type: string
+      selector-attempt-id:
+        description: Durable unique attempt ID; empty for inspect, verify, and configure
+        required: false
+        type: string
+      image-digest:
+        description: Expected compatible Relay sha256 digest
+        required: true
+        type: string
+      director-image-digest:
+        description: Director sha256 digest; required only for configure
+        required: false
+        type: string
+      evidence-run-id:
+        description: Successful staging or C27 evidence workflow run ID; required for production promotion
+        required: false
+        type: string
+      evidence-run-attempt:
+        description: Exact evidence workflow run attempt; required for production promotion
+        required: false
+        type: string
+      confirmation:
+        description: Exact typed confirmation for a mutation
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ inputs.environment == 'production' && 'production-cloud-sql-rollout' || 'relay-staging-mutation' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  admission:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    env:
+      DIRECTOR_ORIGIN: ${{ inputs.environment == 'production' && 'https://relay.onorca.dev' || 'https://relay-staging.onorca.dev' }}
+      AUTH_ORIGIN: ${{ inputs.environment == 'production' && 'https://login.onorca.dev' || 'https://auth-staging.onorca.dev' }}
+      DIRECTOR_SERVICE: ${{ inputs.environment == 'production' && 'orca-cloud-relay' || 'orca-cloud-relay-staging' }}
+      REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
+      GCP_PROJECT_ID: ${{ inputs.environment == 'production' && 'onorca-cloud' || 'onorca-cloud-staging' }}
+      GCP_REGION: ${{ inputs.environment == 'production' && vars.PRODUCTION_GCP_REGION || vars.STAGING_GCP_REGION }}
+      DIRECTOR_MAX_INSTANCES: ${{ inputs.environment == 'production' && '5' || '2' }}
+      TF_BACKEND: ${{ inputs.environment == 'production' && 'backend/production.hcl' || 'backend/staging.hcl' }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
+      OPERATION_MODE: ${{ inputs.mode }}
+      TARGET_CELL_IDS: ${{ inputs.cell-ids }}
+      EXPECTED_SELECTOR_GENERATION: ${{ inputs.selector-generation }}
+      EXPECTED_SELECTOR_MEMBERSHIP_SHA256: ${{ inputs.selector-membership-sha256 }}
+      SELECTOR_ATTEMPT_ID: ${{ inputs.selector-attempt-id }}
+      IMAGE_DIGEST: ${{ inputs.image-digest }}
+      DIRECTOR_IMAGE_DIGEST: ${{ inputs.director-image-digest }}
+      EVIDENCE_RUN_ID: ${{ inputs.evidence-run-id }}
+      EVIDENCE_RUN_ATTEMPT: ${{ inputs.evidence-run-attempt }}
+      OPERATION_CONFIRMATION: ${{ inputs.confirmation }}
+      DEPLOY_WORKLOAD_IDENTITY_PROVIDER: ${{ inputs.environment == 'production' && vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER || vars.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ inputs.environment == 'production' && vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT || vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate exact operation inputs before authentication
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${DEPLOY_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${DEPLOY_SERVICE_ACCOUNT}"
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          evidence_kind=none
+          if test "${OPERATION_MODE}" = inspect; then
+            test -z "${EXPECTED_SELECTOR_GENERATION}"
+            test -z "${SELECTOR_ATTEMPT_ID}"
+            test -z "${OPERATION_CONFIRMATION}"
+            test -z "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}"
+            test -z "${DIRECTOR_IMAGE_DIGEST}"
+          else
+            [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          fi
+          if test "${OPERATION_MODE}" = initialize; then
+            test "${EXPECTED_SELECTOR_GENERATION}" = 0
+            [[ "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}" =~ ^[a-f0-9]{64}$ ]]
+            test -z "${DIRECTOR_IMAGE_DIGEST}"
+            [[ "${SELECTOR_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+            test "${OPERATION_CONFIRMATION}" = INITIALIZE_ADMISSION_SELECTOR
+          elif test "${OPERATION_MODE}" = verify; then
+            test -z "${SELECTOR_ATTEMPT_ID}"
+            test -z "${OPERATION_CONFIRMATION}"
+            test -z "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}"
+            test -z "${DIRECTOR_IMAGE_DIGEST}"
+          elif test "${OPERATION_MODE}" = inspect; then
+            :
+          elif test "${OPERATION_MODE}" = configure; then
+            test -z "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}"
+            test -z "${SELECTOR_ATTEMPT_ID}"
+            [[ "${DIRECTOR_IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+            test "${OPERATION_CONFIRMATION}" = CONFIGURE_ASIA_DIRECTOR
+          else
+            test -z "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}"
+            test -z "${DIRECTOR_IMAGE_DIGEST}"
+            [[ "${SELECTOR_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+            case "${OPERATION_MODE}:${OPERATION_CONFIRMATION}" in
+              register:REGISTER_ASIA_MIGRATION_ONLY) ;;
+              promote:PROMOTE_ASIA_GENERAL) ;;
+              rollback:ROLLBACK_ASIA_MIGRATION_ONLY) ;;
+              *) echo "typed confirmation does not match the requested mutation" >&2; exit 1 ;;
+            esac
+          fi
+          if test "${TARGET_ENVIRONMENT}:${OPERATION_MODE}" = production:promote; then
+            [[ "${EVIDENCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+            [[ "${EVIDENCE_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+            case "${TARGET_CELL_IDS}" in
+              production-gce-c27)
+                test "${#SELECTOR_ATTEMPT_ID}" -le 119
+                evidence_kind=staging
+                artifact_name="relay-asia-staging-${EVIDENCE_RUN_ID}-${EVIDENCE_RUN_ATTEMPT}"
+                ;;
+              production-gce-c28,production-gce-c29)
+                evidence_kind=c27
+                artifact_name="relay-asia-c27-canary-${EVIDENCE_RUN_ID}-${EVIDENCE_RUN_ATTEMPT}"
+                ;;
+              *) echo "production promotion wave is not reviewed" >&2; exit 1 ;;
+            esac
+          else
+            test -z "${EVIDENCE_RUN_ID}"
+            test -z "${EVIDENCE_RUN_ATTEMPT}"
+            artifact_name=none
+          fi
+          {
+            echo "evidence_kind=${evidence_kind}"
+            echo "artifact_name=${artifact_name}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+
+      - name: Install exact C27 canary dependencies
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the C27 canary Relay contract
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        run: pnpm --filter @orca-cloud/relay-contract build
+
+      - name: Download immutable rollout evidence
+        if: ${{ steps.inputs.outputs.evidence_kind != 'none' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.inputs.outputs.artifact_name }}
+          path: ${{ runner.temp }}/relay-asia-input-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.evidence-run-id }}
+
+      - name: Verify evidence provenance and rollout binding before authentication
+        if: ${{ steps.inputs.outputs.evidence_kind != 'none' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_KIND: ${{ steps.inputs.outputs.evidence_kind }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="${RUNNER_TEMP}/relay-asia-evidence-run.json"
+          verified="${RUNNER_TEMP}/relay-asia-evidence-verified"
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}" > "${run_json}"
+          evidence_commit_sha="$(
+            jq -er '.head_sha | select(type == "string" and test("^[a-f0-9]{40}$"))' "${run_json}"
+          )"
+          command=(node dev/scripts/relay-asia-rollout-evidence.mjs "verify-${EVIDENCE_KIND}"
+            --evidence "${RUNNER_TEMP}/relay-asia-input-evidence/evidence.json"
+            --run-json "${run_json}"
+            --commit-sha "${evidence_commit_sha}"
+            --image-digest "${IMAGE_DIGEST}"
+            --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            --output "${verified}")
+          if test "${EVIDENCE_KIND}" = c27; then
+            command+=(--selector-generation "${EXPECTED_SELECTOR_GENERATION}")
+          fi
+          "${command[@]}"
+          test "$(< "${verified}")" = verified
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ env.DIRECTOR_ORIGIN }}/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Require the exact director image before promotion
+        if: ${{ inputs.mode == 'promote' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$(curl --fail-with-body --max-time 30 --request POST \
+            "${DIRECTOR_ORIGIN}/v1/admin/runtime-status" \
+            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+            --header 'Content-Type: application/json' --data '{"v":1}')"
+          test "$(jq -r '.role' <<< "${runtime}")" = director
+          test "$(jq -r '.imageDigest' <<< "${runtime}")" = "${IMAGE_DIGEST}"
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: ${{ inputs.environment == 'production' && 'onorca-cloud-terraform-state' || 'onorca-cloud-staging-terraform-state' }}
+          object: ${{ inputs.environment == 'production' && 'terraform/state/cloud-sql-rollout/production.lock' || 'terraform/state/cloud-sql-rollout/staging.lock' }}
+        if: ${{ inputs.mode == 'configure' || (inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27') }}
+
+      - uses: hashicorp/setup-terraform@v3
+        if: ${{ inputs.mode == 'configure' }}
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Run the exact generation-bound admission operation
+        id: admission-operation
+        if: ${{ inputs.mode != 'configure' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        run: |
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --mode "${OPERATION_MODE}" \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-membership-sha256 "${EXPECTED_SELECTOR_MEMBERSHIP_SHA256}" \
+            --attempt-id "${SELECTOR_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          generation="$(jq -er '.generation' <<< "${result}")"
+          states="$(jq -cS '.states // {}' <<< "${result}")"
+          membership="$(jq -cS '.membership // empty' <<< "${result}")"
+          membership_sha256="$(jq -r '.membershipSha256 // empty' <<< "${result}")"
+          echo "generation=${generation}" >> "${GITHUB_OUTPUT}"
+          result_dir="${RUNNER_TEMP}/relay-asia-admission-result"
+          mkdir -p "${result_dir}"
+          node dev/scripts/sanitize-relay-asia-admission-result.mjs \
+            <<< "${result}" > "${result_dir}/result.json"
+          {
+            echo "### Relay Asia admission"
+            echo "- Mode: ${OPERATION_MODE}"
+            echo "- Cells: ${TARGET_CELL_IDS}"
+            echo "- Result generation: ${generation}"
+            echo "- States: \`${states}\`"
+            if test -n "${membership}"; then echo "- Membership: \`${membership}\`"; fi
+            if test -n "${membership_sha256}"; then
+              echo "- Membership SHA-256: \`${membership_sha256}\`"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verify C27 state and start the timed canary
+        id: c27-start
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment production \
+            --mode verify \
+            --cell-ids production-gce-c27,production-gce-c28,production-gce-c29 \
+            --expected-generation "${{ steps.admission-operation.outputs.generation }}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = general
+          test "$(jq -r '.states["production-gce-c28"]' <<< "${result}")" = migration-only
+          test "$(jq -r '.states["production-gce-c29"]' <<< "${result}")" = migration-only
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
+
+      - name: Run a real five-minute C27 control and splice canary
+        id: c27-load
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/relay-asia-c27-load.jsonl"
+          report="${RUNNER_TEMP}/relay-asia-c27-load.json"
+          node dev/scripts/load-relay-controls.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --auth-origin "${AUTH_ORIGIN}" \
+            --preferred-region asia-east2 \
+            --relay-asia-load-principals 1 \
+            --controls 1 \
+            --splices 1 \
+            --capacity-hard-cap 3000 \
+            --ramp-seconds 0 \
+            --duration-seconds 300 \
+            --splice-hold-seconds 60 \
+            --required-lease-horizons 2 > "${log}"
+          jq -cer 'select(.event == "relay_load_complete")' "${log}" | tail -n 1 > "${report}"
+          echo "ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
+
+      - name: Collect regional, Relay SQL, and Cloud SQL canary evidence
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+          CANARY_STARTED_AT: ${{ steps.c27-start.outputs.started_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment production \
+            --mode verify \
+            --cell-ids production-gce-c27,production-gce-c28,production-gce-c29 \
+            --expected-generation "${{ steps.admission-operation.outputs.generation }}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = general
+          ended_at="${{ steps.c27-load.outputs.ended_at }}"
+          sleep 60
+          output="${RUNNER_TEMP}/relay-asia-output-evidence"
+          logs="${RUNNER_TEMP}/relay-asia-c27-runtime-metrics.json"
+          mkdir -p "${output}"
+          gcloud logging read \
+            "timestamp>=\"${CANARY_STARTED_AT}\" AND timestamp<=\"${ended_at}\" AND jsonPayload.event=\"orca_relay_runtime_metrics\"" \
+            --project "${GCP_PROJECT_ID}" \
+            --limit 20000 \
+            --format json > "${logs}"
+          node dev/scripts/relay-asia-rollout-evidence.mjs create-c27 \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --image-digest "${IMAGE_DIGEST}" \
+            --selector-generation "${{ steps.admission-operation.outputs.generation }}" \
+            --started-at "${CANARY_STARTED_AT}" \
+            --ended-at "${ended_at}" \
+            --load-report "${RUNNER_TEMP}/relay-asia-c27-load.json" \
+            --logs-json "${logs}" \
+            --output "${output}/evidence.json"
+          jq -r '.metrics | to_entries[] | "- \(.key): \(.value)"' \
+            "${output}/evidence.json" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload immutable C27 canary evidence
+        id: c27-evidence-upload
+        if: ${{ inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-asia-c27-canary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/relay-asia-output-evidence/evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload sanitized admission result
+        if: ${{ inputs.mode != 'configure' && steps.admission-operation.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-asia-admission-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/relay-asia-admission-result/result.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Return an unproven C27 canary to migration-only
+        if: ${{ always() && inputs.environment == 'production' && inputs.mode == 'promote' && inputs.cell-ids == 'production-gce-c27' && steps.admission-operation.outcome != 'skipped' && steps.c27-evidence-upload.outcome != 'success' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          promoted="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment production \
+            --mode recover-promotion \
+            --cell-ids production-gce-c27 \
+            --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --attempt-id "${SELECTOR_ATTEMPT_ID}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          if test "$(jq -r '.promoted' <<< "${promoted}")" = false; then exit 0; fi
+          promoted_generation="$(jq -er '.generation' <<< "${promoted}")"
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment production \
+            --mode rollback \
+            --cell-ids production-gce-c27 \
+            --expected-generation "${promoted_generation}" \
+            --attempt-id "${SELECTOR_ATTEMPT_ID}-rollback" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '.states["production-gce-c27"]' <<< "${result}")" = migration-only
+
+      - name: Require registered migration-only cells before director configuration
+        if: ${{ inputs.mode == 'configure' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        run: |
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --mode registered \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '[.states[] == "migration-only"] | all' <<< "${result}")" = true
+
+      - name: Build the additive director cell configuration
+        if: ${{ inputs.mode == 'configure' }}
+        id: director-config
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/terraform init -reconfigure -input=false -backend-config="${TF_BACKEND}"
+          topology="${RUNNER_TEMP}/relay-asia-state-topology.json"
+          current="${RUNNER_TEMP}/relay-current-director-cells.json"
+          desired="${RUNNER_TEMP}/relay-asia-director-cells.json"
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments > "${topology}"
+          service="$(gcloud run services describe "${DIRECTOR_SERVICE}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          revision="$(jq -er '[.status.traffic[] | select((.percent // 0) > 0)] |
+            if length == 1 and .[0].percent == 100 then .[0].revisionName else error("split traffic") end' \
+            <<< "${service}")"
+          gcloud run revisions describe "${revision}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er '.spec.containers[0].env[] | select(.name == "ORCA_RELAY_CELLS_JSON") | .value | fromjson' \
+            > "${current}"
+          node dev/scripts/prepare-relay-asia-director-cells.mjs \
+            --current-json "${current}" \
+            --topology-json "${topology}" \
+            --output "${desired}" \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --image-digest "${IMAGE_DIGEST}"
+          echo "file=${desired}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy the registered additive director topology
+        if: ${{ inputs.mode == 'configure' }}
+        env:
+          DIRECTOR_CELLS_FILE: ${{ steps.director-config.outputs.file }}
+        run: |
+          current="$(gcloud secrets versions access latest \
+            --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}")"
+          [[ "${current}" =~ ^(true|false)$ ]]
+          image="us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay@${DIRECTOR_IMAGE_DIGEST}"
+          release_id="asia-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          node dev/scripts/deploy-relay-blue-green.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service "${DIRECTOR_SERVICE}" \
+            --image "${image}" \
+            --role director \
+            --max-instances "${DIRECTOR_MAX_INSTANCES}" \
+            --release-id "${release_id}" \
+            --director-cells-json "$(< "${DIRECTOR_CELLS_FILE}")" \
+            --prune-revisions false
+
+      - name: Verify selector and heartbeats after director configuration
+        if: ${{ inputs.mode == 'configure' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        run: |
+          result="$(node dev/scripts/operate-relay-asia-admission.mjs \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --mode verify \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --expected-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --image-digest "${IMAGE_DIGEST}")"
+          test "$(jq -r '[.states[] == "migration-only"] | all' <<< "${result}")" = true
+          revision="$(gcloud run services describe "${DIRECTOR_SERVICE}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er '[.status.traffic[] | select((.percent // 0) > 0)] |
+              if length == 1 and .[0].percent == 100 then .[0].revisionName else error("split traffic") end')"
+          revision_json="$(gcloud run revisions describe "${revision}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          jq -e --arg image "us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/orca-cloud/relay@${DIRECTOR_IMAGE_DIGEST}" \
+            '.spec.containers[0].image == $image' <<< "${revision_json}" > /dev/null
+          jq -er --arg secret "${REGIONAL_PLACEMENT_SECRET}" \
+              '[.spec.containers[0].env[] |
+                select(.name == "ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED") |
+                (.valueSource.secretKeyRef // .valueFrom.secretKeyRef // {}) |
+                {secret: (.secret // .name), version: (.version // .key)} |
+                select(.secret == $secret and (.version | test("^[1-9][0-9]*$")))] |
+                if length == 1 then .[0].version else error("regional switch version missing") end' \
+              <<< "${revision_json}" > "${RUNNER_TEMP}/relay-regional-placement-version"
+          regional_version="$(< "${RUNNER_TEMP}/relay-regional-placement-version")"
+          [[ "$(gcloud secrets versions access "${regional_version}" --project "${GCP_PROJECT_ID}" \
+            --secret "${REGIONAL_PLACEMENT_SECRET}")" =~ ^(true|false)$ ]]
+          echo "Director configuration now lists the registered migration-only Asia cells." >> "${GITHUB_STEP_SUMMARY}"

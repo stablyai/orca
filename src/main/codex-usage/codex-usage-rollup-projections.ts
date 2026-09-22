@@ -1,3 +1,4 @@
+import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -30,6 +31,7 @@ export function buildSummary(
   let events = 0
   let estimatedCostUsd = 0
   let hasAnyBillableCost = false
+  let hasUnpricedModels = false
   const byModel = new Map<string, number>()
   const byProject = new Map<string, number>()
 
@@ -54,12 +56,14 @@ export function buildSummary(
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
+    } else if (row.model !== null) {
+      // A named model with no pricing entry: its tokens silently leave the total.
+      hasUnpricedModels = true
     }
   }
 
-  const topModel = [...byModel.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
-  const topProject =
-    [...byProject.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+  const topModel = highestUsageKey(byModel)
+  const topProject = highestUsageKey(byProject)
 
   return {
     scope,
@@ -72,6 +76,7 @@ export function buildSummary(
     reasoningOutputTokens,
     totalTokens,
     estimatedCostUsd: hasAnyBillableCost ? estimatedCostUsd : null,
+    hasUnpricedModels,
     topModel,
     topProject,
     hasAnyCodexData: filteredSessions.length > 0 || filteredDaily.length > 0
@@ -111,6 +116,9 @@ export function buildBreakdown(
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
   const filteredDaily = getFilteredDaily(state, scope, range)
+  if (filteredDaily.length === 0) {
+    return []
+  }
   const filteredSessions = getFilteredSessions(state, scope, range)
 
   for (const daily of filteredDaily) {

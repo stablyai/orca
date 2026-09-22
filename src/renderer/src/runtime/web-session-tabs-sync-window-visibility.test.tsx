@@ -16,7 +16,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./use-runtime-session-mirror-environment-key', () => ({
-  useRuntimeSessionMirrorEnvironmentKey: mocks.runtimeSessionMirrorEnvironmentKey
+  useRuntimeSessionMirrorEnvironmentKeys: () => ({
+    environmentKey: mocks.runtimeSessionMirrorEnvironmentKey(),
+    resubscribeSignal: ''
+  })
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
@@ -43,7 +46,6 @@ import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revisi
 import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import {
   acceptReplayedWebSessionTabsSnapshot,
-  _getWebSessionTabsRecoveryTrackingCountsForTest,
   _getWebSessionTabsTrackingCountsForTest,
   resetWebSessionTabsSnapshotFreshnessForTests,
   useWebSessionTabsSync,

@@ -112,8 +112,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     this.headlessTerminals.set(ptyId, state)
     state.writeChain = state.writeChain
       .then(async () => {
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         const snapshot = await this.serializeProviderTerminalBuffer(ptyId)
-        if (!snapshot) {
+        if (this.headlessTerminals.get(ptyId) !== state || !snapshot) {
           return
         }
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
@@ -123,6 +126,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           this.recordOsc7MetadataForPty(ptyId, data)
         }
         await state.emulator.write(data)
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
@@ -141,7 +147,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
-        this.providerSnapshotPreferredPtys.delete(ptyId)
+        if (this.headlessTerminals.get(ptyId) === state) {
+          this.providerSnapshotPreferredPtys.delete(ptyId)
+        }
       })
   }
 
@@ -161,6 +169,17 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         // Best-effort mirror tracking; live PTY streaming must continue even
         // if xterm rejects a raced resize during teardown.
       })
+  }
+
+  /** Public: reflow an already-created model onto a grid the PROVIDER proved — a reattach learns
+   *  the live session's real size only from its spawn reply, after live bytes may have lazily
+   *  created the model at the 80x24 default. Not onExternalPtyResize: nothing measured a pane
+   *  here, so the renderer-geometry baselines behind mobile take-back must stay untouched. */
+  reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
+    if (cols <= 0 || rows <= 0) {
+      return
+    }
+    this.resizeHeadlessTerminal(ptyId, cols, rows)
   }
 
   // Public: desktop-initiated clears (ipc/pty.ts) must also drop this mobile

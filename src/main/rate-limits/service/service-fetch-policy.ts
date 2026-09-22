@@ -25,12 +25,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
+  // A live post flips the snapshot back to ok, but the endpoint's Retry-After is still binding.
   protected isRetryAfterActive(limits: ProviderRateLimits | null): boolean {
-    return Boolean(
-      limits?.status === 'error' &&
-      limits.usageMetadata?.retryAtMs &&
-      limits.usageMetadata.retryAtMs > Date.now()
-    )
+    return Boolean(limits?.usageMetadata?.retryAtMs && limits.usageMetadata.retryAtMs > Date.now())
   }
 
   // Why: a live Claude session already streams fresh usage windows; spending the OAuth usage endpoint's tight budget on the same data invites 429s.
@@ -42,8 +39,13 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
+  // Why: the statusline never carries the Fable window, so for an account that has one the live feed
+  // cannot stand in for the OAuth poll; only accounts the feed fully covers skip it.
   protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
-    return this.isRetryAfterActive(limits) || this.isLiveClaudeUsageFresh(limits)
+    return (
+      this.isRetryAfterActive(limits) ||
+      (this.isLiveClaudeUsageFresh(limits) && !limits?.fableWeekly)
+    )
   }
 
   protected resolveClaudeFetchApply(
@@ -52,9 +54,13 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   ): ProviderRateLimits {
     // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
     // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
+    // The 429's Retry-After still has to reach the poll gate, or every cycle re-hits the throttle.
     const current = this.state.claude
     if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
-      return current
+      const retryAtMs = fresh.usageMetadata?.retryAtMs
+      return retryAtMs
+        ? { ...current, usageMetadata: { ...current.usageMetadata, retryAtMs } }
+        : current
     }
     return this.applyStalePolicy(fresh, previous)
   }
@@ -121,8 +127,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
-        // Tradeoff: while live posts keep the OAuth poll gated, fableWeekly stays frozen until the session idles past the freshness window.
+        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible
+        // and let its presence keep the OAuth poll ungated (see shouldSkipAutomatedClaudeFetch).
         fableWeekly: previous?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,
@@ -131,6 +137,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
           source: 'live-session',
           lastSuccessfulSource: 'live-session',
           credentialSource: previous?.usageMetadata?.credentialSource,
+          retryAtMs: previous?.usageMetadata?.retryAtMs,
           authProvenance: snapshot.provenance
         }
       }

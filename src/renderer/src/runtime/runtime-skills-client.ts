@@ -34,6 +34,7 @@ const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
  * `refresh` is the exception and must be forwarded: it describes the *request*,
  * not the client's host, and it is the only way an explicit re-check reaches
  * past the remote host's shared scans to its disk.
+ * Portable inventory filters also apply to the remote disk being scanned.
  */
 export async function discoverSkillsForRuntimeTarget(
   runtimeTarget: RuntimeClientTarget,
@@ -45,7 +46,11 @@ export async function discoverSkillsForRuntimeTarget(
   return callRuntimeRpc<SkillDiscoveryResult>(
     runtimeTarget,
     'skills.discover',
-    target?.refresh ? { refresh: true } : {},
+    {
+      ...(target?.refresh ? { refresh: true } : {}),
+      ...(target?.names?.length ? { names: target.names } : {}),
+      ...(target?.sourceKinds?.length ? { sourceKinds: target.sourceKinds } : {})
+    },
     { timeoutMs: SKILL_DISCOVERY_TIMEOUT_MS }
   )
 }

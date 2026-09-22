@@ -53,7 +53,9 @@ export function createViewportGuestFactory(
       debugger: {
         isAttached: debuggerIsAttached,
         attach: debuggerAttach,
-        sendCommand: debuggerSendCommand
+        sendCommand: debuggerSendCommand,
+        on: vi.fn(),
+        off: vi.fn()
       }
     }
     return {

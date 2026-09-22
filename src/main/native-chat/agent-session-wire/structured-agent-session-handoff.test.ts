@@ -12,7 +12,8 @@ import {
   setStoredAgentSessionHandoffStage,
   stopStoredAgentSessionOwnerForHandoff
 } from '../../runtime/agent-session-handoff-record-transitions'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import type { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 import { createStructuredHandoffFlowContext } from './structured-agent-session-handoff-flow-context'
 import { handoffStructuredSessionToTui } from './structured-agent-session-handoff-forward'
@@ -20,6 +21,9 @@ import type {
   StructuredAgentSessionHandoffTransport,
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
+import { StructuredTuiCatchupStoppedError } from './structured-agent-session-handoff-types'
+
+const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-handoff'
@@ -46,7 +50,7 @@ let acquireNativeStop: ReturnType<typeof vi.fn<(turnId: string) => Promise<boole
 let acquireNativeCalls: number
 let stopRecoveredOwner: TransportMock<'stopRecoveredOwner'>
 let operations: number
-type HistoryCatchup = (sessionId: string, fence: number) => Promise<void>
+type HistoryCatchup = (sessionId: string, fence: number) => Promise<AbortSignal | void>
 let prepareTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
 let recoverTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
 let activateTuiHistoryCatchup: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>
@@ -176,6 +180,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
         { fence, recovered: true }
       )
     },
+    retryPendingSettlement: async () => true,
     prepareTuiHistoryCatchup,
     recoverTuiHistoryCatchup,
     activateTuiHistoryCatchup,
@@ -211,7 +216,7 @@ beforeEach(async () => {
   stopRecoveredOwner = vi.fn(async () => undefined)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   await establishNativeOwner()
-  journal = await openAgentSessionJournal({
+  journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -232,6 +237,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -239,6 +245,9 @@ describe('structured session handoff failure handling', () => {
   it('parks a stopped native cleanup failure in manual recovery without launching TUI', async () => {
     const operation = operationId()
     const cleanupError = new Error('journal drain failed')
+    const acknowledgeNativeRelease = vi.fn((sessionId: string) => {
+      expect(store.getRecord(sessionId)?.lease.handoffStage).toBe('old-owner-stopped')
+    })
     const retainOwner = vi.fn()
     const releaseOwner = vi.fn()
     const context = createStructuredHandoffFlowContext({
@@ -265,11 +274,13 @@ describe('structured session handoff failure handling', () => {
           state: 'stopped-cleanup-failed' as const,
           error: cleanupError
         })),
+        acknowledgeNativeRelease,
         acquireNative: vi.fn(async () => {
           throw new Error('native acquisition should not run')
         }),
         acquireNativeStop: (_sessionId, turnId) => acquireNativeStop(turnId),
         importTuiHistory: vi.fn(async () => undefined),
+        retryPendingSettlement: vi.fn(async () => true),
         prepareTuiHistoryCatchup,
         recoverTuiHistoryCatchup,
         activateTuiHistoryCatchup,
@@ -298,6 +309,7 @@ describe('structured session handoff failure handling', () => {
     expect(launchTui).not.toHaveBeenCalled()
     expect(retainOwner).not.toHaveBeenCalled()
     expect(releaseOwner).not.toHaveBeenCalled()
+    expect(acknowledgeNativeRelease).toHaveBeenCalledExactlyOnceWith(SESSION)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'released',
@@ -305,6 +317,54 @@ describe('structured session handoff failure handling', () => {
       handoffOperationId: operation,
       ownerProcess: null
     })
+  })
+  it('settles cancellation after a TUI launch returns without retaining the new owner', async () => {
+    const operation = operationId()
+    const controller = new AbortController()
+    const launchEntered = Promise.withResolvers<void>()
+    const launchRelease = Promise.withResolvers<void>()
+    prepareTuiHistoryCatchup.mockResolvedValueOnce(controller.signal)
+    launchTui.mockImplementationOnce(async ({ fence, spawnToken }) => {
+      launchEntered.resolve()
+      await launchRelease.promise
+      return makeTuiOwner(fence, spawnToken)
+    })
+
+    await setStoredAgentSessionHandoffStage(store, {
+      sessionId: SESSION,
+      fence: 1,
+      stage: 'preparing',
+      handoffOperationId: operation,
+      now: NOW
+    })
+    await store.admitOperation({
+      callerKey: 'test',
+      operationId: operation,
+      fingerprint: 'late-launch',
+      now: NOW
+    })
+    const pending = coordinator.restore(SESSION)
+    const rejection = expect(pending).rejects.toBeInstanceOf(StructuredTuiCatchupStoppedError)
+    await launchEntered.promise
+    const acquisitionsBeforeCancellation = acquireNativeCalls
+    controller.abort(new StructuredTuiCatchupStoppedError())
+    launchRelease.resolve()
+    await rejection
+
+    expect(stopFailedTuiLaunch).toHaveBeenCalledOnce()
+    expect(acquireNativeCalls).toBe(acquisitionsBeforeCancellation)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeKind: 'native',
+      claimStatus: 'released',
+      handoffStage: 'old-owner-stopped',
+      ownerProcess: null
+    })
+    expect(store.listOperationRows().find((row) => row.operationId === operation)?.outcome).toEqual(
+      {
+        status: 'failed',
+        code: 'agent_session_handoff_failed'
+      }
+    )
   })
 })
 
@@ -381,6 +441,68 @@ describe('structured session ownership recovery on restore', () => {
     )
   })
 
+  it('settles the interrupted recovery operation after catchup cancellation', async () => {
+    const operation = operationId()
+    let record = await setStoredAgentSessionHandoffStage(store, {
+      sessionId: SESSION,
+      fence: 1,
+      stage: 'preparing',
+      handoffOperationId: operation,
+      now: NOW
+    })
+    record = await stopStoredAgentSessionOwnerForHandoff(store, {
+      sessionId: SESSION,
+      expectedFence: record.lease.runtimeFence,
+      operationId: operation,
+      now: NOW
+    })
+    record = await reserveStoredAgentSessionHandoffOwner(store, {
+      sessionId: SESSION,
+      expectedFence: record.lease.runtimeFence,
+      runtimeKind: 'tui',
+      spawnToken: 'recovery-tui',
+      operationId: operation,
+      claimKeyId: 'key-1',
+      now: NOW
+    })
+    await store.commitProcessIdentity({
+      sessionId: SESSION,
+      fence: record.lease.runtimeFence,
+      process: process('recovery-tui', 4401),
+      now: NOW
+    })
+    await store.admitOperation({
+      callerKey: 'test',
+      operationId: operation,
+      fingerprint: 'recovery',
+      now: NOW
+    })
+    const controller = new AbortController()
+    recoverTuiHistoryCatchup.mockResolvedValueOnce(controller.signal)
+    activateTuiHistoryCatchup.mockImplementationOnce(async () => {
+      controller.abort(new StructuredTuiCatchupStoppedError())
+    })
+    coordinator = createCoordinator()
+
+    await expect(coordinator.restore(SESSION)).rejects.toBeInstanceOf(
+      StructuredTuiCatchupStoppedError
+    )
+
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeKind: 'tui',
+      claimStatus: 'live',
+      handoffStage: null,
+      handoffOperationId: null,
+      ownerProcess: expect.any(Object)
+    })
+    expect(store.listOperationRows().find((row) => row.operationId === operation)?.outcome).toEqual(
+      {
+        status: 'failed',
+        code: 'agent_session_handoff_failed'
+      }
+    )
+  })
+
   it('continues only the persisted TUI handoff after a store restart', async () => {
     const plainOperation = operationId()
     await store.reserveOwner({
@@ -426,7 +548,7 @@ describe('structured session ownership recovery on restore', () => {
           : { outcome: 'pid-absent' },
       now: NOW + 1_000
     })
-    journal = await openAgentSessionJournal({
+    journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',

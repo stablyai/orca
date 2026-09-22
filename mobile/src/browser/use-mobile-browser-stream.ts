@@ -13,9 +13,9 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   getCachedBrowserFrame,
-  updateBrowserLayerVisibility,
   type FrameLayer
 } from './mobile-browser-frame-state'
+import { updateBrowserLayerVisibility } from './browser-frame-layer-paint'
 import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
@@ -35,6 +35,7 @@ type PendingFrame = { frame: BrowserScreencastFrame; cacheKey: string }
 
 type MobileBrowserStreamArgs = {
   appActive: boolean
+  binaryScreencastGranted: boolean
   browserImageRefs: { current: [Image | null, Image | null] }
   browserLayerRefs: { current: [View | null, View | null] }
   browserViewMode: MobileBrowserViewMode
@@ -71,6 +72,7 @@ type MobileBrowserStreamArgs = {
 export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
   const {
     appActive,
+    binaryScreencastGranted,
     browserImageRefs,
     browserLayerRefs,
     browserViewMode,
@@ -115,6 +117,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
 
   const { applyFrameThrottled, clearFrameThrottle } = useMobileBrowserFrameApply({
     browserImageRefs,
+    browserLayerRefs,
     busyRef,
     frameMetadataRef,
     frameMountedRef,
@@ -194,6 +197,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     setError(null)
     if (
       !client ||
+      !binaryScreencastGranted ||
       screencastSupported !== true ||
       !tab.browserPageId ||
       !appActive ||
@@ -201,7 +205,11 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     ) {
       busyRef.current = false
       setBusy(false)
-      if (screencastSupported === false) {
+      if (!binaryScreencastGranted) {
+        // Before the desktop's answer, because this one is about the app in the user's hand and no
+        // desktop update can change it.
+        setError('Update the Orca app to stream browser tabs here.')
+      } else if (screencastSupported === false) {
         setError('Update desktop Orca to stream browser tabs on mobile.')
       } else if (screencastSupported === null) {
         setError('Checking desktop browser streaming support.')
@@ -269,6 +277,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
   }, [
     appActive,
     applyFrameThrottled,
+    binaryScreencastGranted,
     clearFrameThrottle,
     client,
     resetBrowserZoomState,

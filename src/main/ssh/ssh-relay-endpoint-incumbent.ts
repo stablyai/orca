@@ -16,10 +16,17 @@
  *   an enumeration that found no holder). A relay whose socket was already unlinked is
  *   invisible to this probe by construction — that is what the superseded sweep is for.
  * - a probe that could not run, a host without `lsof`, or a connect that failed for any other
- *   reason is `unverifiable`. It never authorizes unlinking, rebinding over, or signalling.
+ *   reason is `unverifiable`. It cannot authorize client cleanup; guarded launch still
+ *   delegates socket takeover checks to the daemon.
  */
+import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
+import {
+  RELAY_CHILD_COUNT_VAR,
+  RELAY_UNRECOGNIZED_CHILD_COUNT_VAR,
+  relayDaemonChildCensusShell
+} from './relay-daemon-service-children'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -38,6 +45,12 @@ export type RelayEndpointHolder = {
   matchesRelayArgv: boolean
   /** Direct children, or null when `pgrep` could not answer. Never guessed. */
   childCount: number | null
+  /**
+   * Direct children *not* positively identified as the daemon's own service processes, or
+   * null when the host could not enumerate them. This — not `childCount` — is what says
+   * whether the relay holds anything; see relay-daemon-service-children.ts.
+   */
+  unrecognizedChildCount: number | null
 }
 
 export type RelayEndpointIncumbent = {
@@ -45,9 +58,9 @@ export type RelayEndpointIncumbent = {
   verdict: RelayEndpointVerdict
   evidence: RelayEndpointEvidence
   socketPresent: boolean
-  /** Pids proven to hold this exact socket. Empty when the host could not enumerate them. */
+  /** Pids observed holding this socket, including partial enumeration results. */
   holders: RelayEndpointHolder[]
-  /** False when no enumeration tool was available — an empty `holders` then proves nothing. */
+  /** False when enumeration was incomplete — an empty `holders` then proves nothing. */
   holdersEnumerable: boolean
 }
 
@@ -66,6 +79,13 @@ const CONNECT_PROBE_JS = [
   'say(e.code==="ECONNREFUSED"?"refused":e.code==="ENOENT"?"absent":"unknown")});',
   `setTimeout(function(){say("unknown")},${CONNECT_PROBE_TIMEOUT_MS})`
 ].join('')
+
+export class RelayProbeCleanupUnconfirmedError extends Error {
+  readonly name = 'RelayProbeCleanupUnconfirmedError'
+  constructor() {
+    super('Remote relay probe cleanup is unverifiable; refusing to race a replacement launch')
+  }
+}
 
 /**
  * A POSIX probe that reports only what the host actually observed. Every field has an
@@ -88,18 +108,28 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'fi',
     'printf \'LISTEN=%s\\n\' "$listen"',
     'if command -v lsof >/dev/null 2>&1; then',
-    "  printf 'HOLDERS_SOURCE=lsof\\n'",
-    // Why -a: lsof ORs its selectors, so without it every unix-socket holder on the box
-    // would be reported as holding this path (#8762).
-    '  for pid in $(lsof -t -a -U "$sock" 2>/dev/null); do',
+    // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders (#8762).
+    `  lsof_result=$("$node" -e ${shellEscape(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
+    '  case "$lsof_result" in',
+    '    cleanup-unconfirmed*)',
+    "      printf 'PROBE_CLEANUP=unconfirmed\\n'",
+    "      printf 'HOLDERS_SOURCE=unavailable\\n'",
+    '      ;;',
+    '    lsof*)',
+    "      printf 'HOLDERS_SOURCE=lsof\\n'",
+    '      ;;',
+    '    *)',
+    "      printf 'HOLDERS_SOURCE=unavailable\\n'",
+    '      ;;',
+    '  esac',
+    "  pids=$(printf '%s\\n' \"$lsof_result\" | sed '1d')",
+    '  for pid in $pids; do',
     '    args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
     '    match=no',
     '    case "$args" in *relay.js*"$sock"*) match=yes ;; esac',
-    '    kids=unknown',
-    '    if command -v pgrep >/dev/null 2>&1; then',
-    '      kids=$(pgrep -P "$pid" 2>/dev/null | grep -c .)',
-    '    fi',
-    '    printf \'HOLDER=%s %s %s\\n\' "$pid" "$match" "$kids"',
+    ...relayDaemonChildCensusShell().map((line) => `    ${line}`),
+    '    printf \'HOLDER=%s %s %s %s\\n\' "$pid" "$match" ' +
+      `"$${RELAY_CHILD_COUNT_VAR}" "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}"`,
     '  done',
     'else',
     "  printf 'HOLDERS_SOURCE=unavailable\\n'",
@@ -115,6 +145,9 @@ export function parseRelayEndpointIncumbentProbe(
   const lines = output.split('\n').map((line) => line.trim())
   if (!lines.includes(PROBE_BEGIN) || !lines.includes(PROBE_END)) {
     return unverifiableEndpoint(sockPath)
+  }
+  if (lines.includes('PROBE_CLEANUP=unconfirmed')) {
+    throw new RelayProbeCleanupUnconfirmedError()
   }
   const socketPresent = lines.includes('PRESENT=yes')
   const listen = lines.find((line) => line.startsWith('LISTEN='))?.slice('LISTEN='.length) ?? ''
@@ -159,17 +192,23 @@ export function parseRelayEndpointIncumbentProbe(
 }
 
 function parseHolder(value: string): RelayEndpointHolder | null {
-  const [rawPid, rawMatch, rawKids] = value.split(/\s+/)
+  const [rawPid, rawMatch, rawKids, rawUnrecognized] = value.split(/\s+/)
   const pid = Number.parseInt(rawPid ?? '', 10)
   if (!Number.isInteger(pid) || pid <= 0) {
     return null
   }
-  const childCount = Number.parseInt(rawKids ?? '', 10)
   return {
     pid,
     matchesRelayArgv: rawMatch === 'yes',
-    childCount: Number.isInteger(childCount) && childCount >= 0 ? childCount : null
+    childCount: parseChildCount(rawKids),
+    unrecognizedChildCount: parseChildCount(rawUnrecognized)
   }
+}
+
+/** `unknown`, a missing field, and anything unparseable are all "could not tell" — never 0. */
+function parseChildCount(raw: string | undefined): number | null {
+  const count = Number.parseInt(raw ?? '', 10)
+  return Number.isInteger(count) && count >= 0 ? count : null
 }
 
 function unverifiableEndpoint(sockPath: string): RelayEndpointIncumbent {
@@ -204,7 +243,10 @@ export async function probeRelayEndpointIncumbent(
   } catch (err) {
     // An exec whose channel never confirmed close may still be running remotely; the caller
     // must not race a detached launch against it.
-    if (isUnconfirmedSshCommandTermination(err)) {
+    if (
+      err instanceof RelayProbeCleanupUnconfirmedError ||
+      isUnconfirmedSshCommandTermination(err)
+    ) {
       throw err
     }
     // Any other unanswered probe observes nothing. It is never evidence of death.
@@ -239,8 +281,12 @@ export function mayLaunchOverRelayEndpoint(incumbent: RelayEndpointIncumbent): b
 
 /**
  * A live relay that provably holds nothing: identity confirmed against its argv, exactly one
- * holder, and zero children. Reaping it destroys no user work. Anything less is retained —
- * killing the wrong pid on someone's remote host is the worst outcome available here.
+ * holder, and no child the host could not account for as one of the daemon's own service
+ * processes. Reaping it destroys no user work. Anything less is retained — killing the wrong
+ * pid on someone's remote host is the worst outcome available here.
+ *
+ * Why not `childCount === 0`: the daemon's AI Vault sidecar never exits once spawned, so that
+ * gate was unreachable for any relay that had ever served a vault request (#13614).
  */
 export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean {
   if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
@@ -250,12 +296,16 @@ export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean 
     return false
   }
   const [holder] = incumbent.holders
-  return holder.matchesRelayArgv && holder.childCount === 0
+  return holder.matchesRelayArgv && holder.unrecognizedChildCount === 0
 }
 
 export function describeRelayEndpointIncumbent(incumbent: RelayEndpointIncumbent): string {
   const holders = incumbent.holders
-    .map((holder) => `${holder.pid}(children=${holder.childCount ?? 'unknown'})`)
+    .map(
+      (holder) =>
+        `${holder.pid}(children=${holder.childCount ?? 'unknown'},` +
+        `unrecognized=${holder.unrecognizedChildCount ?? 'unknown'})`
+    )
     .join(',')
   return (
     `${incumbent.sockPath} verdict=${incumbent.verdict} evidence=${incumbent.evidence} ` +
@@ -282,4 +332,27 @@ export class RelayEndpointHeldError extends Error {
 
 export function isRelayEndpointHeldError(err: unknown): err is RelayEndpointHeldError {
   return err instanceof RelayEndpointHeldError
+}
+
+/**
+ * Thrown when a relay holds the endpoint but never refused us: it accepted a connection or is
+ * enumerated as the holder, yet our --connect got no handshake answer. That is a stalled or
+ * overloaded relay, not a decision — so unlike `RelayEndpointHeldError` this is retryable, and
+ * the session routes it through the relay-lost backoff rather than the terminal error path.
+ */
+export class RelayEndpointUnresponsiveError extends Error {
+  readonly name = 'RelayEndpointUnresponsiveError'
+  constructor(readonly incumbent: RelayEndpointIncumbent) {
+    super(
+      `A relay still owns ${incumbent.sockPath} but did not answer the handshake ` +
+        `(${describeRelayEndpointIncumbent(incumbent)}). Orca will retry rather than replace it; ` +
+        'if it never recovers, use Reset Relay for this host.'
+    )
+  }
+}
+
+export function isRelayEndpointUnresponsiveError(
+  err: unknown
+): err is RelayEndpointUnresponsiveError {
+  return err instanceof RelayEndpointUnresponsiveError
 }

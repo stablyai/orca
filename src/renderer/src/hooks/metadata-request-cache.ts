@@ -14,6 +14,7 @@ export type MetadataRequestStore<T> = {
   cache: Map<string, CachedMetadata<T>>
   inflight: Map<string, Promise<T>>
   failures: Map<string, CachedMetadataFailure>
+  nextCacheExpiryAt: number
   generation: number
 }
 
@@ -22,6 +23,7 @@ export function createMetadataRequestStore<T>(): MetadataRequestStore<T> {
     cache: new Map(),
     inflight: new Map(),
     failures: new Map(),
+    nextCacheExpiryAt: Infinity,
     generation: 0
   }
 }
@@ -29,6 +31,7 @@ export function createMetadataRequestStore<T>(): MetadataRequestStore<T> {
 export function clearMetadataRequestStore<T>(store: MetadataRequestStore<T>): void {
   store.generation += 1
   store.cache.clear()
+  store.nextCacheExpiryAt = Infinity
   store.inflight.clear()
   store.failures.clear()
 }
@@ -38,9 +41,12 @@ function pruneMetadataCache<T>(
   now: number,
   maxEntries = MAX_METADATA_CACHE_ENTRIES
 ): void {
+  store.nextCacheExpiryAt = Infinity
   for (const [key, entry] of store.cache) {
     if (now - entry.fetchedAt >= METADATA_TTL) {
       store.cache.delete(key)
+    } else {
+      store.nextCacheExpiryAt = Math.min(store.nextCacheExpiryAt, entry.fetchedAt + METADATA_TTL)
     }
   }
   if (store.cache.size <= maxEntries) {
@@ -50,6 +56,10 @@ function pruneMetadataCache<T>(
   for (const [key] of sorted.slice(maxEntries)) {
     store.cache.delete(key)
   }
+  // Why: capacity eviction drops the oldest entries, so the gate computed above
+  // points at an expiry that no longer exists and would force a needless sweep.
+  const oldestSurvivor = sorted[maxEntries - 1]?.[1]
+  store.nextCacheExpiryAt = oldestSurvivor ? oldestSurvivor.fetchedAt + METADATA_TTL : Infinity
 }
 
 export function getFreshMetadata<T>(
@@ -57,7 +67,9 @@ export function getFreshMetadata<T>(
   key: string,
   now = Date.now()
 ): CachedMetadata<T> | null {
-  pruneMetadataCache(store, now)
+  if (now >= store.nextCacheExpiryAt) {
+    pruneMetadataCache(store, now)
+  }
   const entry = store.cache.get(key)
   if (!entry || now - entry.fetchedAt >= METADATA_TTL) {
     return null

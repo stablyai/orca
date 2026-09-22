@@ -1,5 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
+import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
+import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
@@ -106,10 +108,13 @@ export class RemoteBrowserSocksServer {
     this.clients.add(socket)
     let phase: 'greeting' | 'request' | 'opening' | 'connected' | 'closed' = 'greeting'
     let buffered = Buffer.alloc(0)
+    const pendingUpstream = new GrowingByteBuffer()
     const timeout = setTimeout(() => socket.destroy(), HANDSHAKE_TIMEOUT_MS)
     const cleanup = (): void => {
       phase = 'closed'
       clearTimeout(timeout)
+      buffered = Buffer.alloc(0)
+      pendingUpstream.clear()
       this.clients.delete(socket)
     }
     const finishFailure = (reply: Uint8Array): void => {
@@ -119,6 +124,7 @@ export class RemoteBrowserSocksServer {
       phase = 'closed'
       clearTimeout(timeout)
       buffered = Buffer.alloc(0)
+      pendingUpstream.clear()
       socket.pause()
       socket.end(reply, () => socket.destroy())
     }
@@ -127,13 +133,15 @@ export class RemoteBrowserSocksServer {
       if (phase === 'closed' || phase === 'connected') {
         return
       }
-      buffered = Buffer.concat([buffered, chunk])
       if (phase === 'opening') {
-        if (buffered.byteLength > MAX_PENDING_UPSTREAM_BYTES) {
+        if (pendingUpstream.byteLength + chunk.byteLength > MAX_PENDING_UPSTREAM_BYTES) {
           fail(1)
+        } else {
+          pendingUpstream.append(chunk)
         }
         return
       }
+      buffered = Buffer.concat([buffered, chunk])
       if (phase === 'greeting' && buffered.byteLength > MAX_HANDSHAKE_BYTES) {
         fail(1)
         return
@@ -181,6 +189,8 @@ export class RemoteBrowserSocksServer {
         return
       }
       phase = 'opening'
+      pendingUpstream.append(buffered)
+      buffered = Buffer.alloc(0)
       void Promise.resolve()
         .then(() => this.open(normalizeListenerWildcard(parsed.target)))
         .then(
@@ -193,9 +203,8 @@ export class RemoteBrowserSocksServer {
             clearTimeout(timeout)
             socket.off('data', onData)
             socket.write(SUCCESS_RESPONSE)
-            if (buffered.byteLength > 0) {
-              upstream.write(buffered)
-              buffered = Buffer.alloc(0)
+            if (pendingUpstream.byteLength > 0) {
+              upstream.write(pendingUpstream.takeBuffer())
             }
             socket.pipe(upstream)
             pipeUpstreamToClient(upstream, socket)
@@ -210,22 +219,6 @@ export class RemoteBrowserSocksServer {
     socket.once('error', cleanup)
     socket.once('close', cleanup)
   }
-}
-
-function pipeUpstreamToClient(upstream: Duplex, socket: Socket): void {
-  upstream.on('data', (chunk: Buffer) => {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    const accepted = socket.write(bytes, (error) => {
-      if (!error && 'settleRead' in upstream && typeof upstream.settleRead === 'function') {
-        upstream.settleRead(bytes.byteLength)
-      }
-    })
-    if (!accepted) {
-      upstream.pause()
-    }
-  })
-  socket.on('drain', () => upstream.resume())
-  upstream.once('end', () => socket.end())
 }
 
 function parseSocksRequest(buffer: Uint8Array): SocksRequest | null | undefined {

@@ -53,7 +53,8 @@ function createHarness(
     shutdown
   } as unknown as IPtyProvider
   const store = {
-    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases)
+    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn()
   } as unknown as Store
   return { provider, store, shutdown }
 }
@@ -170,6 +171,20 @@ describe('sweepOrphanedRelayPtys', () => {
     // The reversal this guards: supersedeSiblingLeasesForPane, dropStalePty and the missing-surface
     // refusal all write `expired` precisely BECAUSE they will not stop the remote process.
     const harness = createHarness([hostEntry()], [lease('pty-1', 'expired')])
+
+    await run(harness)
+
+    expect(harness.shutdown).not.toHaveBeenCalled()
+  })
+
+  it('leaves a PTY whose expired lease names a recycled relay id alone', async () => {
+    // `relayIdRecycled` is the one expired lease the reattach predicate refuses, so it is the case
+    // most likely to be mistaken for a licence to kill. The sweep asks a different question: this
+    // id now names some OTHER incarnation, which makes a stop more dangerous, not less.
+    const harness = createHarness(
+      [hostEntry()],
+      [{ ...lease('pty-1', 'expired'), relayIdRecycled: true }]
+    )
 
     await run(harness)
 

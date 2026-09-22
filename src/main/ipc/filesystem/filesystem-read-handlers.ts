@@ -1,3 +1,8 @@
+import {
+  capturePathExistence,
+  validatePathExistenceBatch,
+  type PathExistenceResult
+} from '../../../shared/path-existence-batch'
 import { ipcMain } from 'electron'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
@@ -144,6 +149,37 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
       return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:pathsExist',
+    async (
+      _event,
+      args: { filePaths: string[]; connectionId?: string }
+    ): Promise<PathExistenceResult[]> => {
+      validatePathExistenceBatch(args.filePaths)
+      const provider = args.connectionId ? requireSshFilesystemProvider(args.connectionId) : null
+      if (provider?.pathsExist) {
+        return provider.pathsExist(args.filePaths)
+      }
+      return Promise.all(
+        args.filePaths.map((filePath) =>
+          capturePathExistence(async () => {
+            try {
+              await (provider
+                ? provider.stat(filePath)
+                : stat(await resolveAuthorizedPath(filePath, store)))
+              return true
+            } catch (error) {
+              if (isENOENT(error)) {
+                return false
+              }
+              throw error
+            }
+          })
+        )
+      )
     }
   )
 

@@ -20,19 +20,26 @@ export type RpcRequest = {
   params?: unknown
 }
 
+/**
+ * `_meta` is optional because the wire does not guarantee it. `isRpcResponse`, which is what both
+ * sides of the bridge actually read a reply through, checks `id`, `ok` and the presence of
+ * `result` or `error` and never looks at `_meta`; `src/shared/runtime-rpc-envelope.ts` already
+ * makes it optional on a failure. The shell also answers `native.` verbs itself, and those replies
+ * name no runtime because none produced them. Nothing in this app reads the field.
+ */
 export type RpcSuccess = {
   id: string
   ok: true
   result: unknown
   streaming?: true
-  _meta: { runtimeId: string }
+  _meta?: { runtimeId: string }
 }
 
 export type RpcFailure = {
   id: string
   ok: false
   error: { code: string; message: string; data?: unknown }
-  _meta: { runtimeId: string }
+  _meta?: { runtimeId: string }
 }
 
 export type RpcResponse = RpcSuccess | RpcFailure
@@ -68,6 +75,8 @@ export type ConnectionLogEntry = {
   detail?: string
   code?: ConnectionDiagnosticCode
   path?: MobileConnectionDiagnosticPath
+  // The relay close code behind a relay-dial-failed entry, so diagnostics need not read it out of `detail`.
+  relayCloseCode?: number
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void

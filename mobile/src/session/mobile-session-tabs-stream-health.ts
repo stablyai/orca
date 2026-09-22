@@ -1,5 +1,6 @@
+import { sessionTabsListRead } from './mobile-session-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 
 export type SessionTabsApplyOutcome<Tab> =
   | { accepted: false }
@@ -44,8 +45,6 @@ type StreamSubscription = {
   listener: (payload: unknown) => void
   cancel: () => void
 }
-
-type GenerationClient = RpcClient & { getGeneration?: () => number }
 
 export class MobileSessionTabsStreamHealth<Result, Tab> {
   private readonly inFlight = new Map<string, RequestCohort>()
@@ -255,7 +254,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   private async runRequest(owner: RequestOwner): Promise<boolean> {
     try {
       this.options.onFetchStarted?.()
-      const response = await this.options.client.sendRequest('session.tabs.list', {
+      const response = await sessionTabsListRead.request(this.options.client, {
         worktree: this.options.scope
       })
       if (!this.isCurrentGeneration(owner.generation)) {
@@ -267,7 +266,8 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
         }
         return false
       }
-      const result = (response as RpcSuccess).result as Result
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot's shape is the owner's type parameter, which no module-level reader can name.
+      const result = sessionTabsListRead.interpret(response) as Result
       if (owner.barrier !== this.barrier) {
         return false
       }
@@ -320,7 +320,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   }
 
   private readGeneration(): number {
-    return (this.options.client as GenerationClient).getGeneration?.() ?? 0
+    return this.options.client.getGeneration?.() ?? 0
   }
 
   private readApplicationRevision(): number {

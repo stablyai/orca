@@ -4,7 +4,7 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
-  readWorktreeMetaForHost,
+  readWorktreeMetaForRepo,
   writeWorktreeMetaForHost
 } from '../../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
@@ -40,10 +40,11 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
   repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): WorktreeMeta {
   const executionHostId = getRepoExecutionHostId(repo)
-  const legacyMeta = store.getWorktreeMeta?.(worktreeId)
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
+  // Why: the locator-keyed row is only a stand-in for a missing snapshot, so don't read it when we have one.
+  const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
   const existing =
-    readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
+    readWorktreeMetaForRepo(store, worktreeId, repo) ??
     getRepoOwnedWorktreeMeta(
       repo,
       worktreeId,

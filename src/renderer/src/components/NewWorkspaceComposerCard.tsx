@@ -11,7 +11,8 @@ import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '@/components/sidebar/AddRemoteHostDialog'
-import { SetProjectLocationDialog } from '@/components/new-workspace/SetProjectLocationDialog'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
@@ -37,6 +38,20 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 
+// Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
+// reaches it without an explicit "Set location" click. Shared with the warm below so both hit
+// the same module-map entry.
+const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
+  import('@/components/new-workspace/SetProjectLocationDialog')
+
+const SetProjectLocationDialog = lazyWithRetry(
+  () =>
+    loadSetProjectLocationDialog().then((module) => ({
+      default: module.SetProjectLocationDialog
+    })),
+  { reloadKey: 'set-project-location-dialog' }
+)
+
 export default function NewWorkspaceComposerCard(
   props: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
@@ -44,6 +59,7 @@ export default function NewWorkspaceComposerCard(
   const {
     contextualTourSource,
     containerClassName,
+    contentClassName,
     composerRef,
     onComposerNodeChange,
     nameInputRef,
@@ -83,6 +99,9 @@ export default function NewWorkspaceComposerCard(
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
   )
+  // Why sticky: the dialog animates itself closed off its own `option` prop, so unmounting it
+  // when the option clears would cut that animation short.
+  const [setLocationDialogMounted, setSetLocationDialogMounted] = React.useState(false)
 
   const selectedRepo = eligibleRepos.find((candidate) => candidate.id === repoId)
   const selectedRepoName = selectedRepo?.displayName ?? selectedRepo?.path ?? 'This project'
@@ -96,6 +115,16 @@ export default function NewWorkspaceComposerCard(
   const needsSetupProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'needs-setup'
   )
+  // Warm on the precursor: the "Set location" row only renders for a needs-setup host that can
+  // still take one, so the chunk resolves while the picker is being read rather than on the click.
+  const hasSetLocationOption = needsSetupProjectHostSetupOptions.some(
+    (option) => option.canSetLocation
+  )
+  React.useEffect(() => {
+    if (hasSetLocationOption) {
+      void loadSetProjectLocationDialog().catch(() => {})
+    }
+  }, [hasSetLocationOption])
   const shouldShowRunTargetPicker =
     readyProjectHostSetupOptions.length > 0 ||
     ephemeralVmRecipes.length > 0 ||
@@ -177,6 +206,7 @@ export default function NewWorkspaceComposerCard(
   }, [onAddProjectOverride, openModal])
   const handleSetLocation = React.useCallback(
     (option: NeedsProjectHostOption): void => {
+      setSetLocationDialogMounted(true)
       setSetLocationOption(option)
       onNestedDialogOpenChange?.(true)
     },
@@ -213,17 +243,11 @@ export default function NewWorkspaceComposerCard(
           selector: action.environmentId,
           timeoutMs: 15_000
         })
-        const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-        useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
-          status: runtimeStatus,
-          checkedAt: Date.now()
-        })
+        unwrapRuntimeRpcResult<RuntimeStatus>(response)
+        await useAppStore.getState().readRuntimeHostStatusSnapshots()
       } catch (error) {
         if (action.kind === 'runtime') {
-          useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
-            status: null,
-            checkedAt: Date.now()
-          })
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
         }
         toast.error(
           error instanceof Error
@@ -267,12 +291,12 @@ export default function NewWorkspaceComposerCard(
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
-        'grid min-w-0 gap-1 rounded-md transition',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
         isFileDragOver && 'ring-2 ring-ring/30',
         containerClassName
       )}
     >
-      <div className="min-w-0 space-y-4 pt-3">
+      <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
         <NewWorkspaceComposerProjectSection
           {...props}
           projectOptions={projectOptions}
@@ -314,19 +338,25 @@ export default function NewWorkspaceComposerCard(
           activeFolderWorkspaceId={activeFolderWorkspaceId}
         />
       </div>
-      <NewWorkspaceComposerFooter
-        {...props}
-        submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
-      />
+      <div className="shrink-0 space-y-1">
+        <NewWorkspaceComposerFooter
+          {...props}
+          submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+        />
+      </div>
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
-      <SetProjectLocationDialog
-        option={setLocationOption}
-        projectName={selectedProjectName}
-        projectKind={selectedRepoIsGit ? 'git' : 'folder'}
-        defaultCloneUrl={defaultCloneUrl}
-        onClose={handleSetLocationClose}
-        onReady={handleSetLocationReady}
-      />
+      {setLocationDialogMounted ? (
+        <React.Suspense fallback={null}>
+          <SetProjectLocationDialog
+            option={setLocationOption}
+            projectName={selectedProjectName}
+            projectKind={selectedRepoIsGit ? 'git' : 'folder'}
+            defaultCloneUrl={defaultCloneUrl}
+            onClose={handleSetLocationClose}
+            onReady={handleSetLocationReady}
+          />
+        </React.Suspense>
+      ) : null}
     </div>
   )
 }

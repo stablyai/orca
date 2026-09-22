@@ -50,7 +50,10 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       if (event.browserPageId !== browserTabId) {
         return
       }
-      setResourceNotice(formatPopupNotice(event))
+      const notice = formatPopupNotice(event)
+      if (notice) {
+        setResourceNotice(notice)
+      }
     })
   }, [browserTabId])
 

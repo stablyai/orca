@@ -121,6 +121,7 @@ describe('execution host registry', () => {
         [
           'builder',
           {
+            checkedAt: 0,
             appVersion: '1.8.0',
             status: {
               runtimeId: 'runtime-builder',
@@ -139,6 +140,7 @@ describe('execution host registry', () => {
         [
           'old-server',
           {
+            checkedAt: 0,
             appVersion: '1.6.0',
             status: {
               runtimeId: 'runtime-old',
@@ -187,6 +189,7 @@ describe('execution host registry', () => {
         [
           'dev-box',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'runtime-dev',
               rendererGraphEpoch: 1,
@@ -229,6 +232,7 @@ describe('execution host registry', () => {
         [
           'dev-box',
           {
+            checkedAt: 0,
             status: null,
             remoteControl: {
               state: 'ready',
@@ -264,6 +268,7 @@ describe('execution host registry', () => {
         [
           'vm-runtime',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'runtime-vm',
               rendererGraphEpoch: 1,
@@ -320,17 +325,15 @@ describe('execution host registry', () => {
     ])
   })
 
-  it('includes runtime hosts from repo ownership but marks them disconnected without live status', () => {
+  it('keeps runtime hosts checking before their first status result', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [{ connectionId: null, executionHostId: 'runtime:env-2' }],
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    // No live status means no evidence the Orca server is reachable, so it must
-    // read 'disconnected' rather than defaulting to 'available'/"Connected".
     expect(hosts).toMatchObject([
       { id: 'local', health: 'local' },
-      { id: 'runtime:env-2', kind: 'runtime', label: 'env-2', health: 'disconnected' }
+      { id: 'runtime:env-2', kind: 'runtime', label: 'env-2', health: 'connecting' }
     ])
   })
 
@@ -342,6 +345,7 @@ describe('execution host registry', () => {
         [
           'gpu',
           {
+            checkedAt: 0,
             appVersion: '1.8.0',
             status: {
               runtimeId: 'runtime-gpu',
@@ -372,4 +376,31 @@ describe('execution host registry', () => {
       }
     ])
   })
+})
+
+it('keeps an initial unknown-transport verification connecting', () => {
+  const hosts = buildExecutionHostRegistry({
+    repos: [],
+    settings: null,
+    runtimeEnvironments: [{ id: 'host', name: 'Host' }],
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'host',
+        {
+          checkedAt: 0,
+          status: null,
+          snapshot: {
+            environmentId: 'host',
+            pairingRevision: 1,
+            sequence: 1,
+            checkedAt: 0,
+            status: null,
+            verification: 'checking',
+            transport: 'unknown'
+          }
+        }
+      ]
+    ])
+  })
+  expect(hosts.find((host) => host.id === 'runtime:host')?.health).toBe('connecting')
 })

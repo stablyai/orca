@@ -238,8 +238,8 @@ export function useTabBarCreateMenuController({
       )
       return
     }
-    if (result.tabId) {
-      queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
+    if (result.surface.kind === 'local-terminal') {
+      queueTerminalTabFocusAfterNewTabMenuClose(result.surface.tabId)
       return
     }
     if (shouldQueueTerminalFocusAfterMenuClose(result)) {

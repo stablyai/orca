@@ -2,7 +2,9 @@ import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
+import { readGitCommandFailureText } from '../../shared/git-command-failure-text'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
 export type AddWorktreeResult = {
@@ -19,6 +21,7 @@ export type GitWorktreeExecOptions = {
   signal?: AbortSignal
   timeout?: number
   includeCreatePreparations?: boolean
+  admissionTier?: GitAdmissionTier
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -77,15 +80,24 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
   return resolved
 }
 
+export type GitExecOptionsForWorktree = {
+  cwd: string
+  wslDistro?: string
+  signal?: AbortSignal
+  timeout?: number
+  admissionTier?: GitAdmissionTier
+}
+
 export function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
+): GitExecOptionsForWorktree {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.timeout ? { timeout: options.timeout } : {})
+    ...(options.timeout ? { timeout: options.timeout } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   }
 }
 
@@ -95,28 +107,8 @@ export function getErrorCode(error: unknown): string | undefined {
     : undefined
 }
 
-function getErrorText(error: unknown): string {
-  if (typeof error === 'object' && error !== null) {
-    const parts: string[] = []
-    if ('message' in error && typeof error.message === 'string') {
-      parts.push(error.message)
-    }
-    if ('stderr' in error && typeof error.stderr === 'string') {
-      parts.push(error.stderr)
-    }
-    return parts.join('\n')
-  }
-  return String(error)
-}
-
 export function isNotGitRepositoryError(error: unknown): boolean {
-  return /not a git repository/i.test(getErrorText(error))
-}
-
-export function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
-  return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
-    getErrorText(error)
-  )
+  return /not a git repository/i.test(readGitCommandFailureText(error))
 }
 
 export function normalizeLocalBranchRef(branch: string): string {

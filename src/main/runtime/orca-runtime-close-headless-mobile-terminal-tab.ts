@@ -21,6 +21,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       allowMissingPersistedTab?: boolean
       killPtys?: boolean
       authorizedPty?: RuntimePtyWorktreeRecord
+      force?: boolean
     } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
@@ -38,7 +39,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     const projectedPtyIds = this.commitHeadlessTerminalTabRetirement(
       worktreeId,
       closedParentTabId,
-      { allowMissing: options.allowMissingPersistedTab }
+      { allowMissing: options.allowMissingPersistedTab, force: options.force }
     )
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     if (options.authorizedPty) {
@@ -85,9 +86,12 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       return false
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+    // A close is not a handover: the generation publishing this worktree still is. Minting an epoch
+    // here published a stranger for a worktree the renderer owns, and a client that retires what it
+    // displaces then rejected that renderer's own next frame. The sibling headless writers carry the
+    // stored epoch forward for the same reason; `...snapshot` is what does it here.
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
@@ -107,7 +111,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         : {}),
       tabs: nextTabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 

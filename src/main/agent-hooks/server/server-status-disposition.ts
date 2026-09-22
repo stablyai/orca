@@ -16,6 +16,21 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     // Delete-then-add keeps recently closed tabs most-recent so eviction sheds only the oldest ids.
     this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
+    for (const key of this.state.lastStatusByPaneKey.keys()) {
+      if (
+        (parsePaneKey(key)?.tabId ?? parseLegacyNumericPaneKey(key)?.tabId) === tabId &&
+        !this.retiredPaneFencesByKey.has(key)
+      ) {
+        this.recordRetiredPaneFence(new Set([key]), [])
+      }
+    }
+    for (const [key, fence] of this.retiredPaneFencesByKey) {
+      const ownerTabId = parsePaneKey(key)?.tabId ?? parseLegacyNumericPaneKey(key)?.tabId
+      if (ownerTabId === tabId) {
+        fence.retirementIdsByPaneKey = {}
+        fence.closed = true
+      }
+    }
     while (this.closedAgentStatusTabIds.size > CLOSED_AGENT_STATUS_TAB_IDS_MAX) {
       const oldest = this.closedAgentStatusTabIds.keys().next().value
       if (oldest === undefined) {
@@ -41,8 +56,24 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     const paneRetired =
       this.closedAgentStatusPaneKeys.has(paneKey) ||
       this.closedAgentStatusPaneKeys.has(ownerPaneKey)
-    const tabId = parsePaneKey(ownerPaneKey)?.tabId
-    if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
+    const tabId =
+      parsePaneKey(ownerPaneKey)?.tabId ?? parseLegacyNumericPaneKey(ownerPaneKey)?.tabId
+    if (
+      (tabId && this.closedAgentStatusTabIds.has(tabId)) ||
+      this.retiredPaneFencesByKey.get(ownerPaneKey)?.closed
+    ) {
+      return 'suppress'
+    }
+    const retirementFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
+    if (
+      paneRetired &&
+      event?.source === 'omp' &&
+      retirementFence?.aliases.some(
+        ({ physicalPaneKey, entry }) =>
+          this.retiredPaneFencesByKey.get(physicalPaneKey) !== retirementFence ||
+          this.retiredPaneFencesByKey.get(entry.stablePaneKey) !== retirementFence
+      )
+    ) {
       return 'suppress'
     }
     if (!paneRetired) {
@@ -128,11 +159,37 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     return tabId !== undefined && this.closedAgentStatusTabIds.has(tabId)
   }
 
+  protected takeRetiredPaneRestartId(paneKey: string): string | undefined {
+    const fence = this.retiredPaneFencesByKey.get(paneKey)
+    const id = fence?.retirementIdsByPaneKey[paneKey]
+    if (fence) {
+      fence.retirementIdsByPaneKey = {}
+    }
+    return id
+  }
+
   protected recordRetiredPaneFence(
     paneKeys: ReadonlySet<string>,
-    aliases: readonly RetiredPaneAlias[]
+    aliases: readonly RetiredPaneAlias[],
+    retirementId?: string
   ): void {
-    const fence: RetiredPaneFence = { paneKeys: [...paneKeys], aliases }
+    const closed = [...paneKeys].some(
+      (key) =>
+        this.retiredPaneFencesByKey.get(key)?.closed || this.isClosedAgentStatusTabForPaneKey(key)
+    )
+    const retirementIdsByPaneKey: Record<string, string> = {}
+    for (const key of paneKeys) {
+      const id = closed ? undefined : retirementId
+      if (id) {
+        retirementIdsByPaneKey[key] = id
+      }
+    }
+    const fence: RetiredPaneFence = {
+      paneKeys: [...paneKeys],
+      aliases,
+      retirementIdsByPaneKey,
+      ...(closed ? { closed: true as const } : {})
+    }
     for (const key of paneKeys) {
       // Delete-then-set keeps the newest fence most-recent so eviction sheds only the oldest.
       this.retiredPaneFencesByKey.delete(key)

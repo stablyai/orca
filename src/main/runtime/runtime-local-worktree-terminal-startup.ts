@@ -99,6 +99,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       }
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
+        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
@@ -163,7 +164,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         didSpawnSetup = true
       }
     }
-  } else if (ports.canSpawn) {
+  } else if (ports.canSpawn && !args.createdWithAgent) {
     try {
       await ports.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

@@ -56,10 +56,6 @@ export function CommitMessageComposer({
               <button
                 type="button"
                 onClick={() => onCancelGenerate()}
-                title={translate(
-                  'auto.components.right.sidebar.SourceControl.527e130b6f',
-                  'Stop generating'
-                )}
                 aria-label={translate(
                   'auto.components.right.sidebar.SourceControl.ddc1fbd690',
                   'Stop generating commit message'
@@ -90,13 +86,6 @@ export function CommitMessageComposer({
                   }
                   onGenerate()
                 }}
-                title={
-                  generateTooltip ??
-                  translate(
-                    'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
-                    'ai commit msg'
-                  )
-                }
                 aria-label={translate(
                   'auto.components.right.sidebar.SourceControl.461575b9bc',
                   'Generate commit message with AI'

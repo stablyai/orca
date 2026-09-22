@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,6 +32,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { ClaudeHookService } from '../claude/hook-service'
+import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
 import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-settings'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
@@ -122,6 +123,15 @@ function runHookCommand(
   })
 }
 
+// Why: a developer box may set HKCU\...\Command Processor\AutoRun, which cmd.exe runs before
+// any .cmd — and MSYS spawns a .cmd without `/d`, so it fires on the Git Bash leg. Redirecting
+// USERPROFILE to a temp home makes the usual `%USERPROFILE%\.cmd_aliases.cmd` target vanish, and
+// cmd's "not recognized" lands on the hook's stderr. Seed an empty target so this suite measures
+// the launcher rather than the host's shell configuration.
+function seedCmdAutoRunTarget(home: string): void {
+  writeFileSync(join(home, '.cmd_aliases.cmd'), '@echo off\r\n', 'utf8')
+}
+
 function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
@@ -158,6 +168,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
   it('delivers the piped payload to the hook listener through cmd.exe and Git Bash', async () => {
     home = mkdtempSync(join(tmpdir(), 'orca-hook-payload-'))
     homedirMock.mockReturnValue(home)
+    seedCmdAutoRunTarget(home)
     expect(new ClaudeHookService().install().state).toBe('installed')
 
     const settings = JSON.parse(readFileSync(getConfigPath(), 'utf8')) as {
@@ -166,6 +177,11 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     // Why: assert nothing about the launcher's shape here — this test's whole value is
     // that it fails for any launcher that loses the payload, named conhost or not.
     const registeredCommand = settings.hooks.PreToolUse[0].hooks[0].command
+    // ...with one exception: a cmd-safe profile must reach the script with no interpreter in
+    // front of it, or #18875's per-event PowerShell start-up has quietly come back.
+    if (WINDOWS_CMD_SAFE_PATH.test(join(home, '.orca', 'agent-hooks', 'claude-hook.cmd'))) {
+      expect(registeredCommand).not.toMatch(/powershell|-EncodedCommand/i)
+    }
 
     const listener = await startHookListener()
     server = listener.server

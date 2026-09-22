@@ -110,6 +110,7 @@ export async function createRuntimeRemoteManagedWorktree(
       }
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
+        ...(args.startupCwd ? { cwd: args.startupCwd } : {}),
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
           : {}),
@@ -222,7 +223,7 @@ export async function createRuntimeRemoteManagedWorktree(
         didSpawnSetup = true
       }
     }
-  } else if (!shouldActivate && deps.canSpawn()) {
+  } else if (!shouldActivate && deps.canSpawn() && !args.createdWithAgent) {
     try {
       await deps.createTerminal(`path:${result.worktree.path}`, { surfaceOwner: false })
     } catch (err) {

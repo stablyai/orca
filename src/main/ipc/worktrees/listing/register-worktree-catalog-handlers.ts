@@ -23,7 +23,10 @@ import {
   warnOnce
 } from './worktree-listing-diagnostics'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import {
+  readAllWorktreeMetaForHost,
+  readAllWorktreeMetaForRepo
+} from '../../../persistence/host-qualified-worktree-meta'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -174,9 +177,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
     if (!repo) {
       return []
     }
-    const allMeta = repo.connectionId
-      ? readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
-      : undefined
+    const allMeta = repo.connectionId ? readAllWorktreeMetaForRepo(store, repo) : undefined
     const sshWorktreeMetaIndex = repo.connectionId
       ? createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))
       : new Map()
@@ -226,7 +227,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         })
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
-      const metadata = allMeta ?? readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
+      const metadata = allMeta ?? readAllWorktreeMetaForRepo(store, repo)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))

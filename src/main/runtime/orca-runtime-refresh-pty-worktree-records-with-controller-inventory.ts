@@ -13,6 +13,7 @@ import {
   PTY_CONTROLLER_LIST_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { pruneOldestMapEntry } from './prune-oldest-map-entry'
 import { withTimeoutResult } from './runtime-async-boundaries'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import {
@@ -36,7 +37,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     targetWorktreeId: string | null = null,
     deadline?: number,
     connectionId?: string | null,
-    retryStale = false
+    retryStale = false,
+    inventoryOptions?: { includeForegroundProcessEvidence?: boolean }
   ): Promise<PtyControllerInventory | null> {
     if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       const targetedLiveness = this.refreshFloatingWorkspacePtyLiveness()
@@ -54,22 +56,23 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     }
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
-    const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
+    const providerKey = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
     } else {
       this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
+      pruneOldestMapEntry(this.ptyControllerInventoryGenerationByProvider, 512)
     }
     const listBudgetMs =
       deadline === undefined
         ? PTY_CONTROLLER_LIST_TIMEOUT_MS
         : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
-    // Why: give each provider a deadline strictly inside our own, so a relay that
-    // never answers still leaves the aggregate time to return the providers that did
-    // — expiring at the same instant would discard the whole inventory instead.
     const providerListOpts = {
-      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS)
+      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS),
+      ...(inventoryOptions?.includeForegroundProcessEvidence === undefined
+        ? {}
+        : { includeForegroundProcessEvidence: inventoryOptions.includeForegroundProcessEvidence })
     }
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
@@ -83,7 +86,6 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           })
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
-      // Why: a transient controller failure is not evidence that retained PTYs exited.
       return null
     }
     const isCurrentInventory =
@@ -96,16 +98,14 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
             inventoryGeneration &&
           this.ptyControllerAggregateInventoryGeneration <= inventoryGeneration
     if (!isCurrentInventory) {
-      // A fleet census that began after this targeted poll must not turn a
-      // user-driven open into an empty result. Re-query the owning provider;
-      // the second generation is then fenced against both operations.
       if (targetWorktreeId !== null && !retryStale) {
         return this.refreshPtyWorktreeRecordsWithControllerInventory(
           resolvedWorktrees,
           targetWorktreeId,
           deadline,
           connectionId,
-          true
+          true,
+          inventoryOptions
         )
       }
       return null
@@ -145,8 +145,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
-      // The owning inventory positively observed this PTY again; prior lost-contact doubt is stale.
-      this.forgetPtyLivenessVerdict(session.id, livenessObservationAtStart)
+      // The owning inventory positively observed this PTY again, so this is host evidence of life,
+      // not merely the absence of doubt.
+      this.markPtyLivenessLive(session.id, livenessObservationAtStart)
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
@@ -277,7 +278,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           }
           pty.connected = true
           pty.disconnectedAt = null
-          this.forgetPtyLivenessVerdict(pty.ptyId)
+          this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
         pty.connected = false
@@ -287,6 +288,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         // clears `connected` for every one of its PTYs at once. Only `false` here
         // is an observed absence; `null` means no provider could be asked.
         if (observed === false) {
+          // Drops the doubt without asserting a death: `pty.listProcesses` returns the relay's
+          // CURRENT session map, so a restarted relay omits every id the previous one minted
+          // whether or not those shells died. That is the same union as pty.attach's not-found,
+          // and neither earns `exited` (docs/reference/ssh-execution-boundary.md).
           this.forgetPtyLivenessVerdict(pty.ptyId)
         } else if (observed === null && this.isSshOwnedPtyId(pty.ptyId)) {
           this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)

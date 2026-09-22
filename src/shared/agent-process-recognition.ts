@@ -4,6 +4,7 @@ import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
+import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -286,10 +287,13 @@ export function recognizeAgentProcessFromCommandLine(
   if (!commandLine) {
     return null
   }
+  if (isFreshOmpLaunchCommand(commandLine)) {
+    return recognizedAgentForProcess('omp')
+  }
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizeAgentProcess(tokens[0])
+  let direct = recognizedAgentForProcess(firstNormalized)
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null

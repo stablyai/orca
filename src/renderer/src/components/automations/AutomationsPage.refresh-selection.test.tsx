@@ -22,6 +22,7 @@ import {
   SELF_PRECONDITION,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRows } from './automations-page-listed-items'
 import { makeAutomation, makeRun } from './automations-page-fixtures'
 
 installAutomationsPageHarness()
@@ -69,7 +70,7 @@ describe('AutomationsPage refresh', () => {
 
     await renderPage()
 
-    expect(mocks.listPanel?.filteredRows[0]?.usageSummary).toEqual(usageSummary)
+    expect(listedRows()[0]?.usageSummary).toEqual(usageSummary)
   })
 
   it('does not re-list through the active runtime just because one is selected', async () => {
@@ -231,9 +232,7 @@ describe('AutomationsPage multi-host selection', () => {
       )
     ).toEqual(['Desktop nightly', 'Remote nightly'])
 
-    const remote = mocks.listPanel?.filteredRows.find(
-      (row) => row.automation.name === 'Remote nightly'
-    )
+    const remote = listedRows().find((row) => row.automation.name === 'Remote nightly')
     await act(async () => {
       mocks.listPanel?.selectAutomationRow(remote?.key ?? '')
     })

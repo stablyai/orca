@@ -31,7 +31,12 @@ export function useCombinedDiffSectionIndexMap({
       previous !== null &&
       previous.entrySignature === entrySignature &&
       previous.sections.length === sections.length &&
-      sections.every((section, index) => previous.sections[index]?.key === section.key)
+      // Why identity first: a section load rewrites one element of a `prev.map(...)` copy, so most
+      // rows settle on a pointer compare instead of a string compare.
+      sections.every(
+        (section, index) =>
+          previous.sections[index] === section || previous.sections[index]?.key === section.key
+      )
     ) {
       return previous.map
     }

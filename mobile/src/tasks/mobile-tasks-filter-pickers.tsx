@@ -1,3 +1,4 @@
+import { jiraSiteSelectWrite } from './mobile-jira-operations'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   BottomDrawer,
@@ -9,6 +10,7 @@ import {
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
+import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
 import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'
 import {
@@ -170,8 +172,8 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
         if (client) {
-          void client
-            .sendRequest('linear.selectWorkspace', { workspaceId })
+          void linearWorkspaceSelect
+            .request(client, { workspaceId })
             .then(() => loadLinearContext())
             .catch((err) => {
               setError(err instanceof Error ? err.message : 'Failed to switch workspace')
@@ -385,7 +387,7 @@ export function renderMobileTasksJiraSitePicker(model: ConnectionPresentationMod
         if (client && siteId !== 'all') {
           // 'all' is a client-side fan-out; only a concrete site is persisted
           // host-side, so selectSite would reject it.
-          void client.sendRequest('jira.selectSite', { siteId }).catch((err: unknown) => {
+          void jiraSiteSelectWrite.request(client, { siteId }).catch((err: unknown) => {
             console.warn('[mobile tasks] failed to select jira site', err)
           })
         }

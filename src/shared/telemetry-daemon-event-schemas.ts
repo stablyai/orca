@@ -77,6 +77,28 @@ export const daemonPtyCwdDeniedSchema = z
   })
   .strict()
 
+// Why: STA-7948 — `daemon_pty_cwd_denied` counts the failure; this counts how often a user is
+// actually told about it, what they do next, and whether the restart they were offered worked, so
+// the notice can be read against that denominator.
+export const daemonFolderAccessNoticeSchema = z
+  .object({
+    action: z.enum([
+      'shown',
+      'fix_opened',
+      'settings_opened',
+      'restart_clicked',
+      'dismissed',
+      'restart_outcome_fixed',
+      'restart_outcome_still_denied',
+      'reset_clicked',
+      'reset_outcome_allowed',
+      'reset_outcome_still_denied',
+      'reset_outcome_unknown'
+    ]),
+    cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES)
+  })
+  .strict()
+
 // Why: daemon replace/retire lifecycle signal — issue #7936 was undiagnosable without asking a user for daemon.log.
 // Enum-only + bucketed session count so no paths, raw versions, or exact counts reach the wire.
 // The union keeps each reason pinned to its transition, so a death can't be reported as a replace.

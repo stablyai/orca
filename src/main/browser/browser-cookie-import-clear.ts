@@ -54,7 +54,13 @@ export type CookieClearSession = {
   restoreClearIdentities: CookieClearStore['restoreClearIdentities']
 }
 
-const mutationLocks = new WeakMap<object, Promise<void>>()
+/**
+ * Reference identity of one live cookie jar — the partition's Electron Session on both import
+ * paths. Held weakly and compared by reference; the lock never reads a field off it.
+ */
+export type CookieMutationLockOwner = WeakKey
+
+const mutationLocks = new WeakMap<CookieMutationLockOwner, Promise<void>>()
 
 function cookieClearKey(url: string, name: string): string {
   return JSON.stringify([url, name])
@@ -85,7 +91,9 @@ export function identitiesFromClearCookies(
  * remove cookies the newer import already reported as written. Callers that need the lock across a
  * try/finally take it directly; callers with a single callback use the wrapper below.
  */
-export async function acquireCookieMutationLock(owner: object): Promise<() => void> {
+export async function acquireCookieMutationLock(
+  owner: CookieMutationLockOwner
+): Promise<() => void> {
   const previous = mutationLocks.get(owner) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
@@ -99,7 +107,10 @@ export async function acquireCookieMutationLock(owner: object): Promise<() => vo
   return release
 }
 
-export async function withCookieMutationLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
+export async function withCookieMutationLock<T>(
+  owner: CookieMutationLockOwner,
+  run: () => Promise<T>
+): Promise<T> {
   const release = await acquireCookieMutationLock(owner)
   try {
     return await run()

@@ -1,4 +1,4 @@
-import { featureIdentity } from './ephemeral-vm-runtime-feature-store'
+import { featureIdentity, sortRuntimeFeatures } from './ephemeral-vm-runtime-feature-store'
 import {
   RollbackEphemeralVmRuntimeRecordSchema,
   type EphemeralVmRuntimeRecord
@@ -32,9 +32,7 @@ export function mergeRuntimeFeatures<T extends { id: string; recipeId: string; c
   for (const entry of required) {
     merged.set(featureIdentity(entry), entry)
   }
-  return [...merged.values()].sort((left, right) =>
-    featureIdentity(left).localeCompare(featureIdentity(right))
-  )
+  return sortRuntimeFeatures([...merged.values()])
 }
 
 export function runtimeFeatureListsEqual<

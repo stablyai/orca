@@ -176,10 +176,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       // visibly nonblank in renderer xterm. Ask the renderer for the active
       // screen instead of reusing the headless transcript path.
       const snapshot = await withTimeout(
-        controller.serializeBuffer(ptyId, {
-          scrollbackRows: 0,
-          altScreenForcesZeroRows: false
-        }),
+        controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         null
       )

@@ -1,6 +1,14 @@
+import { settingsRead } from '../transport/settings-read-operations'
 import type { ClientSettingsActionsModel } from './use-mobile-tasks-client-settings-actions'
+import { jiraConnectionStatusProbe } from './mobile-jira-operations'
 import { extractJiraConnection } from './jira-mobile-connection'
-import { normalizeJiraFilter } from './mobile-jira-issue-filters'
+import { resolveHydratedTaskViewState } from './mobile-tasks-hydrated-view-state'
+import {
+  taskLinearStatusRead,
+  taskPreflightRead,
+  taskRuntimeStatusRead,
+  taskUiStateRead
+} from './mobile-task-runtime-operations'
 import {
   MOBILE_TASKS_CAPABILITY,
   type PersistedTrustedOrcaHooks,
@@ -13,16 +21,8 @@ import {
 } from './mobile-tasks-dependencies'
 import {
   EMPTY_GITHUB_PROJECT_SETTINGS,
-  type LinearStatusResponse,
   type RuntimeTaskSettings,
   type TaskResumeState,
-  type TaskRuntimeStatus,
-  getTaskPresetQuery,
-  githubKindFromQuery,
-  isSuccess,
-  isTaskProvider,
-  normalizeGitHubPreset,
-  normalizeLinearFilter,
   scopeGitHubTaskSearch
 } from './mobile-tasks-legacy-foundation'
 
@@ -195,14 +195,13 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     resetWorkspaceCreateState()
 
     const hydrateTaskState = async (): Promise<void> => {
-      const statusResponse = await client.sendRequest('status.get')
+      const statusReply = await taskRuntimeStatusRead.request(client)
       if (stale) {
         return
       }
-      if (!isSuccess(statusResponse)) {
-        throw new Error(statusResponse.error.message)
-      }
-      const status = statusResponse.result as TaskRuntimeStatus
+      // The guard stays between the request and the interpretation: a screen that has moved on
+      // must not raise a refusal it no longer owns.
+      const status = taskRuntimeStatusRead.interpret(statusReply)
       if (!status.capabilities?.includes(MOBILE_TASKS_CAPABILITY)) {
         // Why: Tasks is additive RPC surface, so old desktop builds can still
         // pair but must not receive the newer task-specific method calls.
@@ -252,49 +251,46 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       }
       setTasksSupportState({ kind: 'supported', client })
       setError('')
-      const [
-        settingsResponse,
-        uiResponse,
-        preflightResponse,
-        linearStatusResponse,
-        jiraStatusResponse
-      ] = await Promise.all([
-        client.sendRequest('settings.get'),
-        client.sendRequest('ui.get'),
-        client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status'),
-        client.sendRequest('jira.status')
-      ])
+      // Why raw requests in the group and not startRpcOperation: main's Promise.all rejects as soon
+      // as one leg rejects, and interpreting at an all-settled barrier would instead wait for the
+      // slowest peer and let a later policy surface a different error.
+      const [settingsResponse, uiReply, preflightReply, linearStatusReply, jiraStatusReply] =
+        await Promise.all([
+          settingsRead.request(client),
+          taskUiStateRead.request(client),
+          taskPreflightRead.request(client),
+          taskLinearStatusRead.request(client),
+          jiraConnectionStatusProbe.request(client)
+        ])
       if (stale) {
         return
       }
 
-      const settings = isSuccess(settingsResponse)
-        ? (((settingsResponse.result as { settings?: RuntimeTaskSettings }).settings ??
-            {}) as RuntimeTaskSettings)
+      const settingsResult = settingsRead.interpret(settingsResponse)
+      const settings = settingsResult.accepted
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          ((settingsResult.value ?? {}) as RuntimeTaskSettings)
         : {}
       setRuntimeTaskSettings(settings)
-      const uiState = isSuccess(uiResponse)
-        ? (
-            uiResponse.result as {
-              ui?: {
+      const uiRead = taskUiStateRead.interpret(uiReply)
+      const uiState = uiRead.accepted
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema checks the `{ ui }` container and leaves both members `unknown`, because each is forwarded whole and re-read field by field with its own defaults downstream.
+          (uiRead.value as
+            | {
                 taskResumeState?: TaskResumeState
                 trustedOrcaHooks?: PersistedTrustedOrcaHooks
               }
-            }
-          ).ui
+            | undefined)
         : null
       setTrustedOrcaHooks(uiState?.trustedOrcaHooks ?? {})
       const resume = uiState?.taskResumeState ?? {}
       taskResumeRef.current = resume
       setGithubProjectHiddenFieldIdsByView(resume.githubProjectHiddenFieldIdsByView ?? {})
 
-      const preflight = isSuccess(preflightResponse)
-        ? (preflightResponse.result as { glab?: { installed?: boolean } })
-        : null
-      const linearStatus = isSuccess(linearStatusResponse)
-        ? (linearStatusResponse.result as LinearStatusResponse)
-        : null
+      const preflightRead = taskPreflightRead.interpret(preflightReply)
+      const preflight = preflightRead.accepted ? preflightRead.value : null
+      const linearRead = taskLinearStatusRead.interpret(linearStatusReply)
+      const linearStatus = linearRead.accepted ? linearRead.value : null
       const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
       const linearIsConnected = linearStatus?.connected === true
       const availableProviders = filterAvailableTaskProviders(preferredProviders, {
@@ -306,63 +302,36 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
           ? [...availableProviders, 'linear' as const]
           : availableProviders
       setLinearConnected(linearIsConnected)
-      // A host without the Jira RPCs answers with an error; extractJiraConnection
-      // maps that to disconnected so Jira still lists as a connectable source.
-      setJiraConnection(
-        extractJiraConnection(isSuccess(jiraStatusResponse) ? jiraStatusResponse.result : null)
-      )
+      // A host without the Jira RPCs skips the probe; extractJiraConnection maps the absent
+      // payload to disconnected so Jira still lists as a connectable source.
+      const jiraRead = jiraConnectionStatusProbe.interpret(jiraStatusReply)
+      setJiraConnection(extractJiraConnection(jiraRead.accepted ? jiraRead.value : null))
       if (!linearIsConnected) {
         setLinearWorkspaces([])
         setLinearTeams([])
         setSelectedLinearTeamIds(new Set())
         setSelectedLinearWorkspaceId(null)
       }
-      const nextProvider =
-        requestedTaskSource && nextVisibleProviders.includes(requestedTaskSource)
-          ? requestedTaskSource
-          : resolveVisibleTaskProvider(
-              isTaskProvider(settings.defaultTaskSource) ? settings.defaultTaskSource : undefined,
-              nextVisibleProviders
-            )
-      const preset =
-        resume.githubItemsPreset === null
-          ? normalizeGitHubPreset(settings.defaultTaskViewPreset)
-          : normalizeGitHubPreset(resume.githubItemsPreset ?? settings.defaultTaskViewPreset)
-      const defaultPreset = normalizeGitHubPreset(settings.defaultTaskViewPreset)
-      const githubQuery =
-        resume.githubItemsPreset === null
-          ? (resume.githubItemsQuery ?? '')
-          : getTaskPresetQuery(preset)
-      const nextLinearFilter = normalizeLinearFilter(resume.linearPreset)
-      const nextLinearQuery = resume.linearQuery ?? ''
-      const nextJiraFilter = normalizeJiraFilter(resume.jiraPreset)
-      const nextJiraQuery = resume.jiraQuery ?? ''
       defaultRepoSelectionRef.current = settings.defaultRepoSelection ?? null
       defaultLinearTeamSelectionRef.current = settings.defaultLinearTeamSelection ?? null
-      const nextQuery =
-        nextProvider === 'github'
-          ? githubQuery
-          : nextProvider === 'linear'
-            ? nextLinearQuery
-            : nextProvider === 'jira'
-              ? nextJiraQuery
-              : ''
-      const nextAppliedQuery =
-        nextProvider === 'github'
-          ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
-          : nextQuery
+      const view = resolveHydratedTaskViewState({
+        settings,
+        resume,
+        requestedTaskSource,
+        visibleProviders: nextVisibleProviders
+      })
 
       setVisibleProviders(nextVisibleProviders)
-      setProvider(nextProvider)
+      setProvider(view.provider)
       setGithubMode(resume.githubMode === 'project' ? 'project' : 'items')
-      setDefaultGitHubPreset(defaultPreset)
-      setGithubPreset(preset)
-      setGithubKind(githubKindFromQuery(githubQuery, preset))
-      setLinearFilter(nextLinearFilter)
-      setJiraFilter(nextJiraFilter)
+      setDefaultGitHubPreset(view.defaultGithubPreset)
+      setGithubPreset(view.githubPreset)
+      setGithubKind(view.githubKind)
+      setLinearFilter(view.linearFilter)
+      setJiraFilter(view.jiraFilter)
       setGithubProjectSettings(settings.githubProjects ?? EMPTY_GITHUB_PROJECT_SETTINGS)
-      setQuery(nextQuery)
-      setAppliedQuery(nextAppliedQuery)
+      setQuery(view.query)
+      setAppliedQuery(view.appliedQuery)
       setTaskStateHydrated(true)
     }
 

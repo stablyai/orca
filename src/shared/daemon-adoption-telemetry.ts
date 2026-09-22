@@ -32,6 +32,17 @@ export const DAEMON_PTY_CWD_CLASSES = [
 ] as const
 export type DaemonPtyCwdClass = (typeof DAEMON_PTY_CWD_CLASSES)[number]
 
+/**
+ * The classes macOS gates behind a per-app TCC row, which is what `tccutil reset` acts on. The
+ * other two are denied through something else, so there is no row to clear and no reset to offer.
+ */
+export const MAC_TCC_FOLDER_CLASSES = ['documents', 'desktop', 'downloads'] as const
+export type MacTccFolderClass = (typeof MAC_TCC_FOLDER_CLASSES)[number]
+
+export function isMacTccFolderClass(cwdClass: DaemonPtyCwdClass): cwdClass is MacTccFolderClass {
+  return MAC_TCC_FOLDER_CLASSES.some((name) => name === cwdClass)
+}
+
 export function classifyDaemonSpawnerPath(
   spawnerExecPath: string | null,
   exists: (path: string) => boolean

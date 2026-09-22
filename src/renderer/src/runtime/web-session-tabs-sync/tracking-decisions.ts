@@ -3,13 +3,14 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  VISIBILITY_INVENTORY_REMOVAL_EPOCH,
   type SessionTabsStreamEvent
 } from './state'
 import {
   acceptSessionTabsRuntimeId,
   isRetiredSessionTabsPublicationEpoch,
-  noteSessionTabsPublicationEpoch
+  isHeadlessMergeSessionTabsPublication,
+  noteSessionTabsPublicationEpoch,
+  sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
 import {
   sessionTabsFreshnessKey,
@@ -19,6 +20,8 @@ import {
 } from './tracking'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {
@@ -62,13 +65,10 @@ export function decideWebSessionTabsSnapshot(
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if ((snapshot as { removed?: unknown }).removed === true) {
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
-    // Retain the removal epoch transition before dropping the live freshness
-    // record; delayed sibling frames from the predecessor stay fenced.
-    // Inventory omissions use a client-only sentinel epoch; recording that
-    // sentinel would retire the host epoch and reject the next live frame.
-    if (snapshot.publicationEpoch !== VISIBILITY_INVENTORY_REMOVAL_EPOCH) {
-      noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
-    }
+    // A retraction is not a handover. The generation that published this worktree is still the live
+    // one and republishes the moment a client recreates a terminal, so retiring it here would fence
+    // a publisher that never died out of its own worktree. A genuinely delayed predecessor frame is
+    // separated from that live republication by receivedFrame, not by epoch identity.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return WEB_SESSION_TABS_FRAME_APPLIED
@@ -78,7 +78,20 @@ export function decideWebSessionTabsSnapshot(
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
-  if (isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)) {
+  const currentSharesPublicationLineage = Boolean(
+    current &&
+    sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
+  )
+  const currentIsHeadlessMerge = current
+    ? isHeadlessMergeSessionTabsPublication(current.publicationEpoch)
+    : false
+  const comparePublicationVersions =
+    currentSharesPublicationLineage &&
+    (currentIsHeadlessMerge || !isHeadlessMergeSessionTabsPublication(snapshot.publicationEpoch))
+  if (
+    isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) &&
+    !currentSharesPublicationLineage
+  ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
   const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
@@ -93,7 +106,8 @@ export function decideWebSessionTabsSnapshot(
   // Why: reject stale snapshots only within an epoch; host restarts create a new epoch.
   if (
     current &&
-    current.publicationEpoch === snapshot.publicationEpoch &&
+    comparePublicationVersions &&
+    sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch) &&
     snapshot.snapshotVersion <= current.snapshotVersion &&
     !isExactCurrentReplay
   ) {
@@ -101,7 +115,12 @@ export function decideWebSessionTabsSnapshot(
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   replayableSessionTabsSnapshotByWorktree.delete(key)
-  noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
+  // A frame that affirms nothing about the worktree has not taken over publishing it, so it must
+  // not be noted. It still applies: rejecting it outright would drop the terminal reconciliation
+  // that legitimately rides on it (host-session-snapshot-authority.ts).
+  if (hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
+  }
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
@@ -119,12 +138,21 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   requestedInitialTerminal: boolean
   snapshotIsFresh: boolean
   localTerminalCount: number
+  hasPersistedTerminalState: boolean
 }): boolean {
   return (
     args.snapshotIsFresh &&
     args.event.type === 'snapshot' &&
+    // Why: a synthesized unpublished frame (`UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0)
+    // is the runtime saying "ask me later", not a host with zero terminals. Seeding on it can
+    // duplicate a pane the host is about to republish after a restart — the same "ask me later"
+    // frame the tombstone write already refuses to treat as the user emptying the workspace.
+    hostSnapshotAffirmsWorktreeContents(args.event) &&
     args.event.tabs.length === 0 &&
-    args.localTerminalCount === 0 &&
+    // Why the shared predicate: the host owning the terminals does not change what an empty
+    // workspace means. A missing row is "never initialized", an explicit empty row is "the user
+    // closed the last terminal", and only the local seeder used to read the difference (STA-6173).
+    shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&
     !args.requestedInitialTerminal &&
     args.activeWorktreeId === args.event.worktree
   )

@@ -88,7 +88,10 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 export function getWindowsWrapperScript(eventName: string): string {
   return [
     '@echo off',
-    'setlocal',
+    // Why (#9358/#9941): `!` is legal in the hooks path, and inherited delayed expansion
+    // eats it out of the percent-expanded `%~dp0` — the wrapper then misses the core and
+    // silently falls back on every event. Same reason the core disables it.
+    'setlocal DisableDelayedExpansion',
     `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
     'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
     'if exist "%ORCA_ANTIGRAVITY_CORE%" (',
@@ -102,8 +105,8 @@ export function getWindowsWrapperScript(eventName: string): string {
     ') else (',
     '  echo {}',
     ')',
-    // Why: when the shared core script is missing, this wrapper becomes the
-    // stdin owner and must finish the agent's payload write before returning.
+    // Missing-core fallbacks obey the same outside-Orca stdin guard as the core.
+    ...buildWindowsHookEnvironmentGuardLines(),
     WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
     'exit /b 0',
     ''

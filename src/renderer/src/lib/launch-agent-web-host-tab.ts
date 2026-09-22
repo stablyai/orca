@@ -128,7 +128,7 @@ export function launchAgentInWebHostTab(args: {
       agent,
       promptAfterReady: pastePromptAfterReady,
       submitPrompt: submitPastedPrompt,
-      forcePromptPaste: promptDelivery === 'submit-after-ready'
+      forcePromptPaste: true
     }).then(handleCreation)
   }
   if (hasPrompt && promptDelivery === 'draft') {

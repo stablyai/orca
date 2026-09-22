@@ -67,19 +67,17 @@ export function readSpoolFile(
   const records: SpoolRecord[] = []
   let consumed = 0
   let start = 0
-  for (let end = 0; end <= bytes.length; end += 1) {
-    if (end !== bytes.length && bytes[end] !== 0x0a) {
-      continue
-    }
+  // indexOf, not a per-byte loop: this runs over every spooled file before the hook listener binds,
+  // and Buffer.indexOf finds the newline with memchr instead of an interpreted scan.
+  for (;;) {
+    const end = bytes.indexOf(0x0a, start)
     // A final line without its newline may still be in flight from a hook writer.
     // Leave it untouched until the writer terminates the record explicitly.
-    if (end === bytes.length && (end === 0 || bytes[end - 1] !== 0x0a)) {
+    if (end === -1) {
       break
     }
     const lineBytes = bytes.subarray(start, end)
-    if (end !== bytes.length) {
-      consumed = end + 1
-    }
+    consumed = end + 1
     start = end + 1
     if (lineBytes.length === 0) {
       continue

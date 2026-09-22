@@ -210,6 +210,7 @@ describe('projectAutomationList', () => {
         if (property === 'map' || property === 'filter') {
           collectionMethodReads.push(String(property))
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         return Reflect.get(target, property, receiver)
       }
     })

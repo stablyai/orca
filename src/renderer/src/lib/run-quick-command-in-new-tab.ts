@@ -33,6 +33,13 @@ function resolveQuickCommandGroupId(
   )
 }
 
+function resolveQuickCommandLaunchGroupId(
+  worktreeId: string,
+  requestedGroupId: string | null | undefined
+): string | null {
+  return requestedGroupId ?? useAppStore.getState().activeGroupIdByWorktree[worktreeId] ?? null
+}
+
 /**
  * Spawn a fresh terminal tab in the given group and queue the quick-command
  * text as the startup command. The PTY connection layer writes the command
@@ -43,7 +50,8 @@ function resolveQuickCommandGroupId(
  * Terminal-command quick commands always append Enter — the split-button is
  * a "run" affordance, distinct from the right-click "Insert" mode where
  * `appendEnter: false` is honored. Agent-prompt quick commands use the
- * agent's normal prompt launch command instead of post-launch TUI paste.
+ * agent's prompt launch path; OpenCode2 submits through the ready-state TUI
+ * delivery path because its `--prompt` startup can leave text unsent.
  */
 export function runQuickCommandInNewTab({
   command,
@@ -61,15 +69,27 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
+      ...(command.agent === 'opencode' || command.agent === 'opencode2'
+        ? { promptDelivery: 'submit-after-ready' as const }
+        : {}),
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
-    if (result?.tabId) {
-      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+    if (
+      result?.surface.kind === 'local-terminal' ||
+      result?.surface.kind === 'local-agent-session'
+    ) {
+      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
-      return { tabId: result.tabId }
+      return { tabId: result.surface.tabId }
+    }
+    if (result?.surface.kind === 'host-published') {
+      const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
+      if (launchedGroupId) {
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
+      }
     }
     if (result) {
       return null

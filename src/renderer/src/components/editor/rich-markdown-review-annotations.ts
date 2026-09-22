@@ -139,7 +139,7 @@ export function getRichMarkdownAnnotationHighlightRangesForComment(
   comment: DiffComment,
   markdownSourceLineOffset: number,
   // Why optional: callers looping over comments pass one shared build.
-  prebuiltBlocks?: RichMarkdownCommentBlock[]
+  prebuiltBlocks?: readonly RichMarkdownCommentBlock[]
 ): RichMarkdownAnnotationHighlightRange[] {
   const blocks = prebuiltBlocks ?? buildRichMarkdownCommentBlocks(editor)
   const selectedText = comment.selectedText?.trim()
@@ -192,13 +192,15 @@ export function getRichMarkdownCommentAnchorTop(
   block: RichMarkdownCommentBlock,
   containerRect: DOMRect,
   containerScrollTop: number,
-  markdownSourceLineOffset: number
+  markdownSourceLineOffset: number,
+  prebuiltBlocks?: readonly RichMarkdownCommentBlock[]
 ): number | null {
   try {
     const ranges = getRichMarkdownAnnotationHighlightRangesForComment(
       editor,
       comment,
-      markdownSourceLineOffset
+      markdownSourceLineOffset,
+      prebuiltBlocks
     )
     // Why: range notes should sort by the start of the selected text. Anchoring
     // to the end puts overlapping ranges with the same final line in creation

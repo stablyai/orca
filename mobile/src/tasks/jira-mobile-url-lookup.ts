@@ -5,7 +5,7 @@ import {
   parseJiraIssueUrl
 } from '../../../src/shared/jira-issue-url'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { jiraIssueRead } from './mobile-jira-operations'
 
 // Resolves a pasted Jira browse URL to the issue it points at, but only through a
 // site the user has actually connected. Matching the site first (rather than
@@ -21,14 +21,12 @@ export async function lookupJiraIssueByUrl(
     return null
   }
   for (const site of getMatchingJiraSites(parsed, sites)) {
-    const response = await client.sendRequest('jira.getIssue', {
-      key: parsed.issueKey,
-      siteId: site.id
-    })
-    if (!response.ok) {
-      continue
-    }
-    const issue = (response as RpcSuccess).result as JiraIssue | null
+    // A site that cannot answer is skipped rather than raised: the next connected site may be
+    // the one the link belongs to.
+    const issue = await jiraIssueRead
+      .request(client, { key: parsed.issueKey, siteId: site.id })
+      .then((reply) => jiraIssueRead.interpret(reply))
+      .catch(() => null)
     if (issue && isResolvedJiraIssueMatch(parsed, site, issue)) {
       return issue
     }

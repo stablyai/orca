@@ -75,6 +75,42 @@ Treat these as wire changes even though nothing in the codec moves:
 If old clients cannot interpret the new projection correctly, gate it behind a
 runtime capability the same way Rule 2 gates an opcode.
 
+## Rule 4 — an enum arm set is a wire surface; unknown arms must degrade, never reject
+
+A closed `z.enum` in a client-side reply schema is a version claim: it asserts the host
+will never send an arm this build has not heard of. A newer host that adds one arm then
+has its whole reply refused, or has the row carrying it silently dropped, even though
+every member the client actually reads is present and well-formed.
+
+Declare the arm set open instead, with `openEnum` in `src/shared/zod-salvage.ts`:
+
+```ts
+// unknown arm degrades to a member the reader already handles; a non-string stays fatal
+status: openEnum(GIT_BRANCH_COMPARE_STATUS, 'error')
+```
+
+Do not reach for `.catch()`. It swallows absence and the wrong type as well, which turns
+a member the reader depends on into a silent default.
+
+A fallback does not have to be an arm. `git.status`'s `area` is the worked example:
+`staged`, `unstaged` and `untracked` each grant an affordance, so coercing an unknown area
+to one of them offers stage, unstage or commit against a row the client cannot place. It
+degrades to absent instead, which withholds all three — every reader is an equality check
+against a known arm, so the row lands in no section — while keeping the row itself. That
+last part is the point. Dropping the row would also drop it from the unresolved-conflict
+gate, and a conflicted worktree that looks clean is granted a hosted-review create it
+should not have. Withholding an affordance is a degrade; removing the evidence a gate
+reads is not.
+
+A fallback is only ever allowed to shape a _reading_. If the member is sent back to the
+host — a token the client echoes into a later call's params — pass it through as
+`z.string()` and let the send site keep it verbatim. `hostedReview`'s `provider` is the
+case: the eligibility reply names it and the create call returns it, so an
+`openEnum(..., 'unsupported')` there does not soften how the client reads a newer host's
+provider, it puts `unsupported` on the wire and makes that host refuse its own. A
+reply-schema fallback must never shape a param. Gate on the token instead, where the
+client decides what it is willing to do with an arm it does not know.
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real
@@ -180,6 +216,33 @@ An old client against a new host ignores the key, as Rule 1 allows. New members 
 `RuntimeTerminalWaitBlockedReason` are also Rule 1: no consumer switches exhaustively on it,
 and both the CLI and worker-start interpolate it as an opaque string.
 
+## Worked example: the `turn` journal item and its transitional downgrade
+
+The structured chat journal records a turn as a first-class item,
+`{ kind: 'turn', turnId, state, userItemId?, startedAt?, completedAt?, durationMs? }`, where it
+used to write `{ kind: 'status', text, turnLifecycle }`. Nothing in the codec moves, but it is
+Rule 3: a client that predates the item does not know the kind and renders it as a text bubble
+with no text. So the item is gated on a client capability, `agent-session.turn-item.v1`.
+
+The gate lives at the RPC boundary only, in
+`src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.ts`, composed
+around `agentSession.history` and `agentSession.subscribe` next to the background-task
+projection. A client that does not advertise the capability receives every `turn` item
+rewritten to the legacy status form with the full lifecycle under `turnLifecycle`; a client that
+advertises it, and any in-process caller, receives the canonical body. The journal, the status
+feed, and every host-side reader keep the `turn` item; `readAgentJournalTurn` in
+`src/shared/agent-session-turn-record.ts` reads either form, so a new client against an old
+host that still writes the status row also works.
+
+An old client against a new host sees the status row it always did. A new client against an old
+host advertises a capability the host ignores and reads the status row through the shared
+reader. The downgrade is transitional: once no supported release lacks the capability, delete
+the projection module and the capability check, and leave the reader.
+
+The cross-version suite derives the old client's list by removing this capability from the
+baseline's own list, per the rule above, so the downgrade stays exercised after a release ships
+it.
+
 ## Known debt: JSON-RPC errors drop Node's string code
 
 An error raised on an SSH host crosses the relay as JSON-RPC, and
@@ -247,3 +310,34 @@ predicate. It is unobservable today — the host publishes neither field for a c
 all, so a mirror has nothing to take either way. If the capability-gated publish this section
 anticipates ever lands, narrow them the same way rather than by placement kind: a mirror should
 take a failure it cannot otherwise see, and only the hosting client should refuse it.
+
+## Known hazard: on the mobile surface a scope refusal is not a missing method
+
+The agent-session harness above asserts that a peer probing an unknown method is told
+`method_not_found`. That holds for the runtime-scoped surface and **not for the mobile one**.
+
+`runtime-rpc-websocket-dispatch.ts` checks `MOBILE_RPC_METHOD_ALLOWLIST` and answers
+`forbidden` _before_ it calls the dispatcher. A method a desktop predates is on neither the
+allowlist nor the registry, and the gate answers first, so a phone never sees
+`method_not_found` for it. `method_not_found` would reach a mobile-scoped device only for a
+method that is allowlisted but unregistered, and `src/main/runtime/mobile-rpc-allowlist.test.ts`
+requires every method the phone calls to be both, so that combination cannot ship. The reverse
+— a registered method that no release has allowlisted yet — is the skew that does occur.
+
+So a phone-side "is this host new enough to serve X?" probe must read **both** codes as
+absence. Keying it on `method_not_found` alone compiles and passes every same-version test
+while never firing. The Files and Git fallbacks have read both since they shipped
+(`isMobileMethodUnavailableError`, `isMobileGitUnavailable`); the Relay pairing probes were the
+outlier, and the cost was a write-once direct-relay upgrade journal, holding a pending resume
+secret, that an old desktop could never retire
+(`mobile/src/transport/pairing-relay-rpc-unavailable.ts`, with the gate pinned desktop-side by
+`src/main/runtime/runtime-rpc-mobile-unknown-method-scope-refusal.test.ts`).
+
+Widening is safe only where `forbidden` cannot also mean a real authorization failure. Prove
+that per probe rather than globally: the pairing handlers cannot emit it (an unwired provider
+answers `runtime_error`), a bad or revoked token answers `unauthorized`, and the gate is one
+of only two places in `src/main` that emits the code at all. A probe whose handler _can_
+refuse by authorization must not be widened.
+
+The cross-version harness dispatches as a mobile client but calls the dispatcher directly, so
+it never runs this gate and nothing reddens if any of the above is forgotten.

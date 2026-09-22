@@ -29,6 +29,7 @@ import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
+import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
@@ -62,11 +63,19 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         let result: CreateWorktreeResult
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
-          result = isFolderRepo(repo)
-            ? createFolderWorkspace(createArgs, repo, store)
-            : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
-              : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+          if (isFolderRepo(repo)) {
+            // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
+            result = createFolderWorkspace(createArgs, repo, store)
+          } else {
+            // Resolve the host rather than reading the raw field: an `executionHostId: 'ssh:*'`-only
+            // row read as local here and ran `git worktree add` on the client against a remote path,
+            // while the runtime sibling on the same repo already resolved.
+            const createRoute = requireWorktreeCreateRoute(repo)
+            result =
+              createRoute.kind === 'ssh'
+                ? await createRemoteWorktree(createArgs, createRoute.repo, store, mainWindow)
+                : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+          }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {

@@ -5,6 +5,10 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { tryStealInstallLockCommand } from './ssh-relay-install-lock-commands'
 import { decodeRemotePowerShellScript, powerShellCommand } from './ssh-remote-powershell'
 import {
+  makeWindowsPublishStagedFileCommand,
+  makeWindowsWriteFileCommand
+} from './system-ssh-windows-file-write'
+import {
   cleanupOwnedRelayUploadStageCommand,
   promoteOwnedRelayUploadStageCommand,
   recoverOneStaleRelayUploadStageCommand,
@@ -38,6 +42,17 @@ describe('Windows remote command line limit', () => {
     [
       'steal stale install lock',
       tryStealInstallLockCommand(windows, 'C:\\Users\\orca\\.orca-remote\\relay', 1_200)
+    ],
+    // F11 flagged these two as uncovered. They carry one path literal each, so they are the file
+    // commands whose length a caller can actually move.
+    ['write file', makeWindowsWriteFileCommand('C:\\Users\\orca\\.orca-remote\\relay.js')],
+    [
+      'publish staged file',
+      makeWindowsPublishStagedFileCommand(
+        'C:\\Users\\orca\\.orca-remote\\relay.js.orca-partial-0123456789ab',
+        'C:\\Users\\orca\\.orca-remote\\relay.js',
+        'create'
+      )
     ]
   ])('keeps the %s command inside what sshd\u2019s cmd.exe accepts', (_name, command) => {
     expect(command.length).toBeLessThanOrEqual(CMD_EXE_COMMAND_LINE_MAX_CHARS)
@@ -73,6 +88,35 @@ describe('Windows remote command line limit', () => {
     }).join('')
     expect(() => powerShellCommand(`Write-Output '${incompressible}'`)).toThrow(
       /Orca budgets 8000 for a line sshd hands to cmd\.exe/u
+    )
+  })
+})
+
+/**
+ * F11 asked whether a pathological path could reach the budget, and what happens if it does.
+ * Measured: the inline encoding crosses 8000 at roughly 2500 high-entropy path characters — an
+ * order of magnitude past what Windows itself accepts — and the failure is a throw before any ssh
+ * is spawned, never a hang.
+ */
+describe('Windows file command budget headroom', () => {
+  it('absorbs a path far longer than Windows will accept', () => {
+    const deep = `C:\\Users\\orca\\${'segment\\'.repeat(30)}relay.js`
+
+    expect(deep.length).toBeGreaterThan(260)
+    expect(makeWindowsWriteFileCommand(deep).length).toBeLessThanOrEqual(
+      CMD_EXE_COMMAND_LINE_MAX_CHARS
+    )
+  })
+
+  it('throws rather than spawning a line cmd.exe would refuse', () => {
+    // Random segments so gzip cannot rescue it, which is the only way to reach the ceiling at all.
+    const incompressible = Array.from(
+      { length: 400 },
+      (_unused, index) => `${index}-${Math.random().toString(36).slice(2)}`
+    ).join('\\')
+
+    expect(() => makeWindowsWriteFileCommand(`C:\\${incompressible}\\f.bin`)).toThrow(
+      /Orca budgets 8000/
     )
   })
 })

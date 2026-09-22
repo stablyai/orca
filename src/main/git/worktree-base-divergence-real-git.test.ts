@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import {
   measureRetargetDivergence,
   RETARGET_MAX_COMMIT_DIVERGENCE
@@ -10,8 +11,13 @@ import {
 
 const tempRoots: string[] = []
 
+// Why the maintenance suppression: `git commit` detaches `git maintenance run --auto`, and its
+// commit-graph task arms once a fixture crosses 100 new commits — which the cap-sized histories
+// below always do. That detached process keeps writing `.git/objects/info/commit-graphs` after the
+// synchronous exec has returned, so it re-creates entries under a `.git/objects` the temp-root
+// teardown is midway through deleting, and the recursive remove dies with ENOTEMPTY.
 function git(cwd: string, args: string[]): string {
-  return execFileSync('git', args, {
+  return execFileSync('git', [...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS, ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe']

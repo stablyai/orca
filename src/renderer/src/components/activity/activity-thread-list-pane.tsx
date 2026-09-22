@@ -74,7 +74,6 @@ export function ActivityThreadListPane({
   showFilterControls = true,
   showOptionsMenu = true,
   showInlineActions = true,
-  scopeFilterRow,
   collapsedGroupKeys,
   onToggleGroupCollapse,
   scrollTopRef
@@ -111,8 +110,6 @@ export function ActivityThreadListPane({
   showFilterControls?: boolean
   showOptionsMenu?: boolean
   showInlineActions?: boolean
-  /** Rendered between the toolbar and the list; carries the active-scope chips row. */
-  scopeFilterRow?: React.ReactNode
   collapsedGroupKeys?: ReadonlySet<string>
   onToggleGroupCollapse?: (groupKey: string) => void
   /** Optional view-local scroll memory; updated without triggering React renders. */
@@ -318,7 +315,6 @@ export function ActivityThreadListPane({
         showOptionsMenu={showOptionsMenu}
         showInlineActions={showInlineActions}
       />
-      {scopeFilterRow}
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollContainerRef}

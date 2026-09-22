@@ -190,6 +190,25 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const worktreeId = 'repo1::/wt-1'
+    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
+    cleanup()
+  })
+
   it('writes exactly once when a relevant field changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -379,6 +398,43 @@ describe('createSessionWriteSubscriber', () => {
           {
             ...useAppStore.getState().tabsByWorktree['wt-1'][0],
             pendingActivationSpawn: true
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('ignores recovery-ledger-only changes', () => {
+    // Why: the ledger is stripped from the persisted session, so churning it
+    // must not rebuild and rewrite the durable payload on every remount.
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            recovery: {
+              attemptedAt: [1],
+              generation: 1,
+              outcome: 'pending',
+              startedAt: 1,
+              reason: 'reattach-unverifiable',
+              tabGeneration: 0
+            }
           }
         ]
       }

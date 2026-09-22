@@ -53,6 +53,7 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })

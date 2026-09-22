@@ -41,7 +41,14 @@ export type SshOrphanRelayPtySweepArgs = {
  *  `reattachAttemptsExhausted` and the lease stays `attached`, hence routed.
  *
  *  Folding it into `routed` would work, but it would also lose the reason in the skip log, and this
- *  is the distinction the sweep most needs to be able to explain. */
+ *  is the distinction the sweep most needs to be able to explain.
+ *
+ *  Deliberately the raw state rather than `sshRemotePtyLeaseAllowsReattach`: that predicate answers
+ *  "may this lease be reattached", and this asks "may this client stop the process". Every non-
+ *  `terminated` state answers no either way, so sorting the marked leases (`supersededBy`,
+ *  `relayIdRecycled`) into `routed` instead would move nothing but the skip reason — and both marks
+ *  are written by paths that leave the remote process running on purpose, so they must keep
+ *  refusing the stop rather than authorizing one. */
 function clientClaims(args: SshOrphanRelayPtySweepArgs): {
   routed: Set<string>
   expired: Set<string>

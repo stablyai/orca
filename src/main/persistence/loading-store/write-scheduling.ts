@@ -64,7 +64,7 @@ export function scheduleSave(owner: WriteSchedulingOperations): void {
 }
 
 export function installWriteSchedulingOperationsContext(
-  target: object,
+  target: WriteSchedulingOperations,
   source: WriteSchedulingOperations
 ): void {
   Object.defineProperty(target, writeSchedulingOperationsContext, {

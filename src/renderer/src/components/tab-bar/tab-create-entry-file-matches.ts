@@ -71,14 +71,15 @@ export function findExistingFileMatches(
       matchKind: 'exact-basename' as const,
       relativePath: file.path
     }))
+  const exactMatches = dedupeMatches([...exactPathMatches, ...exactBasenameMatches])
+  if (exactMatches.length >= limit) {
+    return exactMatches.slice(0, limit)
+  }
   const fuzzyMatches = rankQuickOpenFiles(normalizedQuery, indexedFiles, limit).map((file) => ({
     kind: 'existing-file' as const,
     matchKind: 'fuzzy' as const,
     relativePath: file.path
   }))
 
-  return dedupeMatches([...exactPathMatches, ...exactBasenameMatches, ...fuzzyMatches]).slice(
-    0,
-    limit
-  )
+  return dedupeMatches([...exactMatches, ...fuzzyMatches]).slice(0, limit)
 }

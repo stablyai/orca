@@ -17,7 +17,6 @@ import type { PageInitiatedTabBudget } from './browser-page-initiated-tab-budget
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
-  BrowserSessionUserAgentMode,
   BrowserViewportOverride
 } from '../../shared/browser-workspace-types'
 import type { BrowserAnnotationViewportBridgeOptions } from '../../shared/browser-annotation-viewport-bridge'
@@ -102,7 +101,6 @@ export type BrowserGuestRegistration = {
   workspaceId?: string
   worktreeId?: string
   sessionProfileId?: string | null
-  userAgentMode?: BrowserSessionUserAgentMode
   webContentsId: number
   rendererWebContentsId: number
 }
@@ -117,7 +115,7 @@ export type PopupOwnerContext = {
 
 /**
  * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
- * anti-detection all apply. A workspace-document guest renders one granted document and gets none
+ * auth-identity tracking all apply. A workspace-document guest renders one granted document and gets none
  * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
  */
 export type BrowserGuestPolicy =
@@ -221,7 +219,6 @@ export type {
   BrowserAnnotationViewportBridgeOptions,
   BrowserCertificateFailure,
   BrowserLoadError,
-  BrowserSessionUserAgentMode,
   BrowserViewportOverride,
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,

@@ -551,8 +551,17 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().agentsFilterRepoIds).toEqual([])
     expect(store.getState().agentsShowChildAgents).toBe(false)
     expect(store.getState().agentsCompactMode).toBe(true)
+    expect(store.getState().agentsShowSearch).toBe(true)
     expect(store.getState().agentsReadFilter).toBe('all')
     expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores a hidden agents search field', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ agentsShowSearch: false }))
+
+    expect(store.getState().agentsShowSearch).toBe(false)
   })
 
   it('restores the persisted agents read filter and grouping, rejecting unknown values', () => {

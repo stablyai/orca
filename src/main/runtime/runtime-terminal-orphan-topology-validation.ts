@@ -54,7 +54,8 @@ export function validateRuntimeTerminalOrphanTopology(
   const seenGroupIds = new Set<string>()
   const groupedTabIds = new Set<string>()
   for (const group of topologyGroups) {
-    if (seenGroupIds.has(group.id) || !group.tabOrder.includes(group.activeTabId)) {
+    const groupTabIds = new Set(group.tabOrder)
+    if (seenGroupIds.has(group.id) || !groupTabIds.has(group.activeTabId)) {
       throw new Error('terminal_orphan_topology_invalid')
     }
     seenGroupIds.add(group.id)
@@ -64,7 +65,7 @@ export function validateRuntimeTerminalOrphanTopology(
       }
       groupedTabIds.add(tabId)
     }
-    if (group.recentTabIds?.some((tabId) => !group.tabOrder.includes(tabId))) {
+    if (group.recentTabIds?.some((tabId) => !groupTabIds.has(tabId))) {
       throw new Error('terminal_orphan_topology_invalid')
     }
   }

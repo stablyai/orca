@@ -10,9 +10,8 @@ import type { DashboardAgentRow } from './useDashboardData'
 export function lastEnteredDoneAt(
   agent: Pick<DashboardAgentRow, 'rowSource' | 'state' | 'entry'>
 ): number | null {
-  // Why: idle subagent child rows are alive-but-idle (teammates persist
-  // between turns), not finished — fall through to the started-at timestamp.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
+  // Why: a subagent's synthetic entry may say done while its row is idle or unverifiable.
+  if (agent.rowSource === 'subagent' && agent.state !== 'done') {
     return null
   }
   const entry = agent.entry

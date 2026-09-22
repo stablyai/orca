@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionStatusEvent
+} from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from './structured-agent-session-option-error'
@@ -212,6 +215,39 @@ afterEach(async () => {
 })
 
 describe('structured session options and close', () => {
+  it('publishes an acknowledged model without waiting for journal traffic', async () => {
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'first task' }]
+    }
+    await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    const events: AgentSessionStatusEvent[] = []
+    host.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
+    expect(events).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ status: 'idle', model: DEFAULT_MODEL })]
+      }
+    ])
+    const fields = { key: 'model', value: PICKED_MODEL }
+
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', fields),
+      ...fields
+    })
+
+    expect(events.slice(1)).toEqual([
+      {
+        type: 'status',
+        session: expect.objectContaining({ sessionId: SESSION, model: PICKED_MODEL })
+      }
+    ])
+  })
+
   it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
     optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
     const fields = { key: 'model', value: PICKED_MODEL }

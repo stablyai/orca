@@ -1,0 +1,88 @@
+{
+  "sourceHashes": {
+    "src/main/gitlab/gitlab-known-host-probe.ts": {
+      "baseline": "4f9651c5a383438aa968aec082c200a3371e2f4317372125aa11aa6938793c25",
+      "fixed": "ecf0d67f68cf4b7b1bc7d6ff19a1815a8b95fc9721962d3cd873702f98831bad"
+    },
+    "src/main/git/coalesced-probe.ts": "e5a13820a7d8b5f501a3804961ea26526bd6ad9144ecf597d5d83a70d81885e1",
+    "src/main/git/remote-ref-probe-cache.ts": "d5cbfd97b30e72b03c0d28d8b9e75a2ae1f9e3efc9f5b5570c78e0742c0582dd",
+    "src/main/gitlab/project-ref-parser.ts": "0f8b6758e6a162a58f436ca4213addc42bf6ceb3fcc2e63e8c7402c844af9303",
+    "src/main/gitlab/gitlab-known-host-retirement.test.ts": "c6dedbac0462cae22903805d0a89be397a2b9d122a29640b6a07a2d274f8e98e"
+  },
+  "proofHashes": {
+    "reproduce.cjs": "19f49406685923b050a99fbc92b02b9f6f5f8d8f308dcc14336415a0988679cc",
+    "sources.cjs": "2ee8ac0f295d65f16489da2b0c03800b9db4e88c83ecfb63ae7be1ec3ea6c148",
+    "fix.patch": "695c929087006b3406ce2c30a7ab783d88af3f9675f4ea320dc7f98b8476be9f",
+    "original-source-hashes.json": "f9770d9f0a87afc9231eef6af99e8ded33348fdc21ba46a70b1d5d3388874b97"
+  },
+  "runtime": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "phases": {
+    "baseline": {
+      "retained": {
+        "retained": 128,
+        "afterReset": 0
+      },
+      "rememberedGenerationsRetained": 16,
+      "oldGeneration": {
+        "oldResultRetained": true,
+        "replacementHostsPreserved": true
+      },
+      "reset": {
+        "hosts": ["gitlab.com", "old-before-reset.test"],
+        "calls": 1
+      },
+      "abandoned": ["gitlab.com", "replacement.test", "abandoned.test"],
+      "rememberedSuccessAndFailure": "passed",
+      "nativeWslConnectionIsolation": "passed"
+    },
+    "fixed": {
+      "retained": {
+        "retained": 1,
+        "afterReset": 0
+      },
+      "rememberedGenerationsRetained": 1,
+      "oldGeneration": {
+        "oldResultRetained": false,
+        "replacementHostsPreserved": true
+      },
+      "reset": {
+        "hosts": ["gitlab.com", "fresh-after-reset.test"],
+        "calls": 2
+      },
+      "abandoned": ["gitlab.com", "replacement.test"],
+      "rememberedSuccessAndFailure": "passed",
+      "nativeWslConnectionIsolation": "passed"
+    }
+  }
+}

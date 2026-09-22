@@ -1,9 +1,6 @@
 // @ts-nocheck -- mechanically split class members.
 import { RuntimeFileCommandsWithSearchLocalRuntimeFiles } from './runtime-file-commands-search-local-runtime-files'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+import type { IFilesystemProvider } from '../providers/types'
 import {
   MOBILE_FILE_READ_MAX_BYTES,
   QUICK_OPEN_LEGACY_REMOTE_RESULT_LIMIT
@@ -13,13 +10,14 @@ import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
 export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends RuntimeFileCommandsWithSearchLocalRuntimeFiles {
   protected async searchRemoteQuickOpenFilePaths(
     rootPath: string,
-    connectionId: string,
+    // `null` is "remote and currently unreachable": quick open reports no matches rather than
+    // failing the keystroke, but it never falls back to searching this machine.
+    provider: IFilesystemProvider | null,
     query: string,
     limit: number,
     excludePaths?: string[],
     signal?: AbortSignal
   ): Promise<{ paths: string[]; totalCount: number; truncated: boolean }> {
-    const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return { paths: [], totalCount: 0, truncated: false }
     }
@@ -55,11 +53,10 @@ export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends Runti
     }
   }
 
-  protected async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
+  protected async readRemoteMobileFile(
+    filePath: string,
+    provider: IFilesystemProvider
+  ): Promise<string> {
     const fileStat = await provider.stat(filePath)
     // Why: no ranged reads over SSH here, so reject oversized previews instead of streaming a whole file just to trim it.
     if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {

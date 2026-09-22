@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
@@ -133,8 +133,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       return
     }
     return window.api.dashboard.onRevealAgent((args) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
-      activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+      revealDashboardAgent(args)
     })
   }, [enabled])
 

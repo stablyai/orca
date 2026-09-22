@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearWebSessionCloseIntent,
@@ -19,6 +20,11 @@ import {
   shouldApplyWebSessionTabsSnapshot,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
+import {
+  recordReceivedWebSessionTabsSnapshot,
+  shouldApplyRecoveredWebSessionTabsSnapshot
+} from './web-session-tabs-sync/tracking'
+import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -84,6 +90,52 @@ describe('applyWebSessionTabsSnapshot', () => {
         { environmentId: ENV, worktreeId: WT, tabId: 'structured-agent-session-session-1' }
       )
     ).toBe(agentTab.id)
+  })
+
+  it('mints a first publication under the id the launch draft seed is keyed on', () => {
+    // Why: the draft seed is written under `structuredAgentSessionTabId(sessionId)` before the tab
+    // exists, so a first publication that landed on any other id would leave the composer empty and
+    // silently lose the user's launch context. Collision avoidance can produce another id — the
+    // second half proves that — but never for a session the client has not seen before.
+    const agentTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:session-seed',
+      title: 'Codex Chat',
+      sessionId: 'session-seed',
+      agent: 'codex' as const,
+      isActive: true
+    }
+    const snapshot = makeSnapshot([agentTab], { activeTabId: agentTab.id })
+
+    expect(
+      applyWebSessionTabsSnapshot(makeState(), snapshot, ENV, NOW).unifiedTabsByWorktree?.[WT]
+    ).toEqual([expect.objectContaining({ id: structuredAgentSessionTabId('session-seed') })])
+
+    const squatter: Tab = {
+      id: structuredAgentSessionTabId('session-seed'),
+      entityId: 'other-session',
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const collided = applyWebSessionTabsSnapshot(
+      makeState({
+        unifiedTabsByWorktree: { [WT]: [squatter] },
+        tabBarOrderByWorktree: { [WT]: [squatter.id] }
+      }),
+      snapshot,
+      ENV,
+      NOW
+    )
+    expect(
+      collided.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === 'session-seed')?.id
+    ).not.toBe(structuredAgentSessionTabId('session-seed'))
   })
 
   it('removes a restored structured tab when the host publishes no structured sessions', () => {
@@ -169,6 +221,40 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
+  it('keeps base and headless-merge publications in one freshness lineage', () => {
+    const renderer = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1',
+      snapshotVersion: 14,
+      activeTabType: null
+    })
+    const merged = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1:headless-merge:abc123',
+      snapshotVersion: 8,
+      activeTabType: null
+    })
+    const refreshedRenderer = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1',
+      snapshotVersion: 15,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(renderer, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(merged, ENV)).toBe(true)
+    // listAll can return the renderer base after a host-side headless merge;
+    // the newer base revision must still be allowed to refresh the mirror.
+    expect(shouldApplyWebSessionTabsSnapshot(refreshedRenderer, ENV)).toBe(true)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'renderer:epoch-1',
+          snapshotVersion: 7,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(false)
+  })
+
   it('rejects a delayed frame from an epoch superseded by a later restart', () => {
     const beforeRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-before-restart',
@@ -224,6 +310,11 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(true)
   })
 
+  // The property is unchanged: a predecessor frame already in flight when the worktree was removed
+  // must not resurrect it, even carrying a HIGHER version than the last frame accepted before the
+  // removal. What changed is which layer proves it. Epoch identity cannot — the live publisher
+  // republishes under that same epoch, and fencing on it locked the publisher out of its own
+  // worktree. Delivery order can, and `shouldApplyRecoveredWebSessionTabsSnapshot` holds it.
   it('keeps a removed worktree fenced against delayed predecessor epochs', () => {
     const beforeRemoval = makeSnapshot([], {
       publicationEpoch: 'epoch-before-removal',
@@ -241,27 +332,39 @@ describe('applyWebSessionTabsSnapshot', () => {
       removed: true as const
     }
 
+    const beforeFrame = recordReceivedWebSessionTabsSnapshot(ENV, beforeRemoval)
     expect(shouldApplyWebSessionTabsSnapshot(beforeRemoval, ENV)).toBe(true)
+
+    // A list for this worktree reserves its received frame here, before the removal lands.
+    const delayedFrame = nextReceivedSessionTabsFrame()
+    expect(delayedFrame).toBeGreaterThan(beforeFrame)
+
+    const removedFrame = recordReceivedWebSessionTabsSnapshot(ENV, removed)
     expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(removedFrame).toBeGreaterThan(delayedFrame)
+
+    const delayed = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-removal',
+      snapshotVersion: 4,
+      activeTabType: null
+    })
+    recordReceivedWebSessionTabsSnapshot(ENV, delayed, delayedFrame, undefined, 'bootstrap')
+    expect(shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame)).toBe(false)
+    // The composed gate, exactly as every production apply path spells it.
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-before-removal',
-          snapshotVersion: 4,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, delayed, delayedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(delayed, ENV)
     ).toBe(false)
+
+    const recreated = makeSnapshot([], {
+      publicationEpoch: 'epoch-recreated',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const recreatedFrame = recordReceivedWebSessionTabsSnapshot(ENV, recreated)
     expect(
-      shouldApplyWebSessionTabsSnapshot(
-        makeSnapshot([], {
-          publicationEpoch: 'epoch-recreated',
-          snapshotVersion: 1,
-          activeTabType: null
-        }),
-        ENV
-      )
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENV, recreated, recreatedFrame) &&
+        shouldApplyWebSessionTabsSnapshot(recreated, ENV)
     ).toBe(true)
   })
 

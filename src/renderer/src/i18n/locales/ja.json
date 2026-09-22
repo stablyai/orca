@@ -20,7 +20,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "french": "Français"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースの Claude トークンとコストの使用状況を表示します。",
@@ -87,6 +88,33 @@
       "mr": "MR",
       "port": "ポート",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "有効なフィルターに一致する結果がありません",
+      "emptySubtitle": "上のフィルターをクリアするか、より多くのホストとプロジェクトに広げてください。",
+      "tabKey": "Tab",
+      "label": "フィルター",
+      "activeCount": "{{value0}} 件アクティブ",
+      "removeChip": "フィルター {{value0}} を削除",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "すべてクリア",
+      "hosts": "ホスト",
+      "projects": "プロジェクト",
+      "trigger": "結果をフィルター",
+      "search": "ホストまたはプロジェクトで絞り込む…",
+      "searchHosts": "ホストを絞り込む…",
+      "searchProjects": "プロジェクトを絞り込む…",
+      "noOptions": "一致するホストまたはプロジェクトがありません",
+      "noHosts": "一致するホストがありません",
+      "noProjects": "一致するプロジェクトがありません",
+      "moreOptions": "他 {{value0}} 件 — 入力を続けて絞り込む",
+      "selectAllMatching": "一致するものをすべて選択 ({{value0}})",
+      "selectedCollapsed": "{{value0}} 件選択中 — チップまたはクリアで解除",
+      "clearHosts": "ホストをクリア",
+      "clearProjects": "プロジェクトをクリア",
+      "back": "戻る",
+      "ariaActive": "フィルター: {{value0}} 件アクティブ。",
+      "scopedTo": "スコープ:"
     }
   },
   "auto": {
@@ -330,6 +358,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -712,7 +741,6 @@
       "useComposerState": {
         "7eb3f44ff7": "選択した Agent は無効です。作成する前に、有効な Agent を選択してください。",
         "b2ead86962": "PR ベースを解決できませんでした。",
-        "a9ff236145": "一部の添付ファイルをアップロードできませんでした。",
         "3db83fc58a": "このホスト上に、添付に使用できるプロジェクトパスがありません。",
         "ba6cb77082": "プロジェクトへの接続に失敗しました。",
         "chooseOrAddProjectBeforeWorkspace": "ワークスペースを作成する前に、プロジェクトを選択または追加してください。",
@@ -1312,7 +1340,7 @@
         "326a578923": "orca.yaml + ローカル",
         "2132b670da": "両方",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "名前または「作成元」",
+        "ac3748dcda": "作成元",
         "f660aa1454": "接続中",
         "7711ad5122": "ローカルセットアップコマンド",
         "e5db1b0419": "組み合わせセットアップコマンド",
@@ -1923,7 +1951,7 @@
       "Terminal": {
         "73768427cf": "閉じる",
         "f82e9f02df": "キャンセル",
-        "7958465754": "プロセスが実行中のローカルターミナルがあります。このままウィンドウを閉じますか?",
+        "7958465754": "プロセスが実行中のターミナルがあります。このままウィンドウを閉じますか?",
         "2fa9c69ff3": "ウィンドウを閉じますか?",
         "cd51e28d8b": "保存",
         "0037b21794": "保存しないでください",
@@ -1944,7 +1972,8 @@
         "0f3066256e": "前の一致",
         "42e466b9f1": "正規表現",
         "90c61387d9": "大文字と小文字を区別",
-        "e07012f26e": "検索…"
+        "e07012f26e": "検索…",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "再起動してアップデートする",
@@ -2217,6 +2246,10 @@
                 "7c302f8174": "無題"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "このビューにはまだ項目がありません。",
+            "7e4a2f80c6": "最近追加した項目は、表示されるまで少し時間がかかることがあります。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -4389,11 +4422,10 @@
           "92154beb7e": "新規ワークスペース",
           "49f62c5665": "ワークスペースボード",
           "5c9c7c16aa": "プロジェクトを追加してワークスペースを作成する",
-          "ca6f729da2": "新規ワークスペース ({{value0}})",
           "a30e34eb5c": "ワークスペースボードを閉じる",
-          "25a95899c9": "プロジェクトを追加",
           "spaces": "スペース",
-          "views": "サイドバービュー"
+          "views": "サイドバービュー",
+          "addProject": "プロジェクトを追加"
         },
         "SidebarNav": {
           "80611a8b10": "検索",
@@ -5280,8 +5312,6 @@
           "01af244097": "キャンセル",
           "28c8e53176": "これにより、すべてのワークスペースで実行中のすべてのターミナルペインが強制終了されます。これらのセッションで保存されていない作業内容は失われます。デーモン自体は実行を継続し、新規ターミナルをすぐに開くことができます。これを元に戻すことはできません。",
           "1bbea41a77": "すべてのターミナルセッションを強制終了しますか?",
-          "01d6b7c64e": "実行中のすべてのターミナルペインを強制終了し、デーモンプロセスを再起動します。ペインには「プロセスが終了しました」と表示され、すぐに再度開くことができます。以前のアプリバージョンのレガシープロトコルセッションは保持されます。これを元に戻すことはできません。",
-          "922548bc66": "ターミナルデーモンを再起動しますか?",
           "2b4efdc162": "セッションを強制終了できませんでした。",
           "d18f3005c2": "{{value0}} セッション{{value1}} は終了を拒否しました。",
           "baad8cd651": "実行中のセッションはありません。",
@@ -5800,7 +5830,12 @@
           "14444243ba": "PATH から {{value0}} を削除しますか?",
           "5d432fe44d": "インストール済み",
           "8a9b784c60": "古い",
-          "d363e5929b": "CLI の登録を確認しています…"
+          "d363e5929b": "CLI の登録を確認しています…",
+          "6f894ef9c2": "Finderで表示",
+          "cbe55e4d48": "エクスプローラーで表示",
+          "9fd4023db0": "ファイルマネージャーで表示",
+          "installFailureUnknownReason": "Orca は CLI 登録を完了できず、理由を報告しませんでした。",
+          "installFailureConflictRemedy": "{{value0}} を削除して、不要になった場合は再度登録してください。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -8913,6 +8948,12 @@
             "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。",
             "projectRuntime": "プロジェクトのランタイム",
             "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
+            "githubAccount": "GitHub アカウント",
+            "githubAccountDescription": "このプロジェクトの GitHub API 呼び出し用のキーリング gh ログインをバインドします。",
+            "githubAccountKeyword": "GitHub アカウント",
+            "ghAccount": "gh アカウント",
+            "login": "ログイン",
+            "token": "token",
             "externalWorktrees": "外部ワークツリー",
             "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
@@ -9321,6 +9362,24 @@
           "on": "オン",
           "auto": "Agent",
           "off": "オフ"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "このランタイムの GitHub CLI はアカウントバインディングには古すぎます (gh ≥ 2.40 が必要です)。",
+          "capabilityUnknown": "このランタイムの GitHub CLI がアカウントバインディングをサポートしているかどうかを判断できませんでした。再試行してください。",
+          "envToken": "環境トークンのアカウントはバインドできません。キーリングのログインを使用してください。",
+          "invalidBinding": "その GitHub アカウントバインディングは無効です。",
+          "unavailable": "その GitHub アカウントはこのランタイムでは使用できません。",
+          "saveFailed": "GitHub アカウントバインディングを保存できませんでした。",
+          "title": "GitHub アカウント",
+          "description": "このプロジェクトの GitHub Issue および PR の呼び出しには、特定の gh ログインを使用してください。",
+          "longDescription": "Orca は、選択したキーリングのログインから有効期間の短いトークンを取得し、このプロジェクトの各 gh 呼び出しに注入します。プロジェクトビューはアクティブな gh ログインを使い続けます。",
+          "retry": "再試行",
+          "selectLabel": "アカウント",
+          "ambient": "デフォルト (アクティブな gh ログイン)",
+          "unavailableOption": "{{user}} @ {{host}} (利用不可)",
+          "capabilityBlocked": "このランタイムの GitHub CLI が `gh auth token --user` (gh ≥ 2.40) をサポートするまで、バインディングは使用できません。",
+          "capabilityUnknownHint": "このランタイムでの GitHub CLI アカウントバインディングのサポートを確認できませんでした。バインディングをクリアするか、再試行してください。",
+          "notEnforced": "保存されましたが、このランタイム (混合バージョンのホスト) では適用されません。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",
@@ -11343,7 +11402,6 @@
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "agentSessionQueued": "{{value0}} 件のセッションが順番待ち",
             "sessionHistory": "Agent セッション履歴",
-            "shownRecent": "{{value0}}表示 · {{value1}}最近",
             "resumePastSessions": "過去のセッションを再開",
             "refreshSessionHistory": "セッション履歴を更新",
             "searchSessions": "セッションを検索",
@@ -11356,7 +11414,6 @@
             "sessionId": "セッション ID",
             "logPath": "ログパス",
             "agents": "Agent",
-            "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "openSupportedWorkspace": "セッションを再開する前に、ワークスペースを開いてください。",
@@ -11382,7 +11439,6 @@
             "agents": "Agent",
             "selectAllAgents": "すべて選択",
             "clearAgents": "クリア",
-            "sort": "並べ替え",
             "lastUpdated": "最終更新",
             "created": "作成日時",
             "group": "グループ",
@@ -14179,12 +14235,40 @@
           "770d458144": "グループ化",
           "795cbf26e2": "フィルター…",
           "4616ea39fd": "ワークスペースにジャンプ",
+          "threadListOptionsFiltered": "スレッドリストのオプション、フィルターが有効",
+          "showSearch": "検索を表示",
           "markThreadRead": "スレッドを既読としてマーク",
           "59b131fbd9": "スレッドを未読としてマークする",
           "beb2c19173": "未読",
           "5651b216c6": "不明なプロジェクト",
           "22b22034bc": "スタンドアロンターミナルはアクティビティでは使用できません。",
-          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。"
+          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。",
+          "clearCompleted": "完了済みをクリア",
+          "none": "なし",
+          "search": "検索",
+          "showUnreadOnly": "未読のみ表示",
+          "showChildAgents": "子 Agent を表示",
+          "activityOptions": "アクティビティのオプション",
+          "interrupted": "中断",
+          "state": {
+            "working": "作業中",
+            "monitoring": "バックグラウンドタスクを監視中",
+            "blocked": "ブロック",
+            "waiting": "入力待ち",
+            "failed": "失敗",
+            "done": "完了",
+            "idle": "アイドル",
+            "unverifiable": "最近の更新なし",
+            "permission": "要対応"
+          },
+          "filtersSection": "フィルター",
+          "viewSection": "表示"
+        },
+        "ActivityScopeFilterControls": {
+          "resetScope": "すべてのホストとプロジェクトを表示"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "通知を消去"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未読",
@@ -14560,6 +14644,41 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "デフォルトの Agent",
+          "theme": "外観",
+          "windowsTerminal": "Windows ターミナル",
+          "notifications": "通知",
+          "integrations": "連携"
+        },
+        "actions": {
+          "addFirstProject": "最初のプロジェクトを追加",
+          "continue": "続行",
+          "openingAddProject": "[プロジェクトを追加] を開いています…"
+        }
+      },
+      "skipConfirmation": {
+        "skip": "スキップ",
+        "keepGoing": "いいえ、続ける"
+      },
+      "theme": {
+        "hints": {
+          "system": "OS に合わせる",
+          "dark": "目にやさしい",
+          "light": "明るく鮮明"
+        }
+      },
+      "integrations": {
+        "capabilities": {
+          "startWorkspaceFromIssue": "GitHub の Issue や PR から、タイトルとコンテキストがあらかじめ入力されたワークスペースを開始",
+          "browseIssues": "Orca から離れずに、「タスク」ページで GitHub の Issue と PR を閲覧",
+          "reviewStatus": "すべてのワークツリーで Issue の状態、レビュー状況、CI チェックを確認",
+          "managePullRequests": "Orca から離れずに、PR の閲覧、コメント、マージ"
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
@@ -14587,7 +14706,8 @@
         "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "現在の値が不明です — オンまたはオフを選んでください",
+        "valueIsDefault": "既定",
+        "valueNotReported": "未報告",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -14600,9 +14720,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ",
-          "on": "オン",
-          "off": "オフ"
+          "ultra": "ウルトラ"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -14739,27 +14857,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "ダッシュボード表示",
-      "board": "ダッシュボード",
-      "map": "Agent マップ"
-    },
-    "map": {
-      "host": {
-        "local": "ローカル",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "リモート"
-      },
-      "liveContainmentMap": "ライブ包含マップ",
-      "empty": "現在のフィルターに一致する Agent はありません。",
-      "canvasLabel": "プロジェクト、ワークスペース、Agent の入れ子マップ",
-      "zoomOut": "ズームアウト",
-      "zoomIn": "ズームイン",
-      "fit": "全体表示",
-      "projectCount": "{{agents}}件の Agent · {{workspaces}}件のワークスペース",
-      "agentCount": "{{count}}件の Agent"
-    },
     "placeholder": {
       "title": "Agent ダッシュボード",
       "description": "ここに、すべての Agent が一覧で表示されます。ボードは近日公開です。"
@@ -14834,7 +14931,11 @@
   "dashboard": {
     "sidebar": {
       "label": "Agent",
-      "dashboardLabel": "Agent ダッシュボード"
+      "dashboardLabel": "Agent ダッシュボード",
+      "openActivity": "アクティビティを表示",
+      "closeActivity": "アクティビティビューを閉じる",
+      "projects": "プロジェクト",
+      "workspaces": "ワークスペース"
     }
   },
   "browser": {
@@ -14889,6 +14990,14 @@
       "hide": "Agent を隠す",
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "入力待ち",
+      "working": "処理中",
+      "stopped": "停止",
+      "finished": "完了"
     }
   }
 }

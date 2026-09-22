@@ -117,7 +117,12 @@ export function useOnboardingFlowActions({
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
           if (currentStep.id === 'notifications') {
-            setBusyLabel('Opening Add Project...')
+            setBusyLabel(
+              translate(
+                'components.onboarding.flow.actions.openingAddProject',
+                'Opening Add Project...'
+              )
+            )
             const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
             if (closed) {
               openModal('add-repo')
@@ -190,7 +195,9 @@ export function useOnboardingFlowActions({
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
-    setBusyLabel('Opening Add Project...')
+    setBusyLabel(
+      translate('components.onboarding.flow.actions.openingAddProject', 'Opening Add Project...')
+    )
     try {
       const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
       if (!closed) {

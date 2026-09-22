@@ -84,6 +84,7 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       openCodexConnection: openConnection,
@@ -120,9 +121,13 @@ describe('structured session runtime provider-exit wiring', () => {
       })
     }
 
+    // `pending` is this send's real answer now, not a weaker one: admission settles
+    // when the transport takes the frame, and identity arrives later on the
+    // provider's echo. What proves the message reached the REACQUIRED provider is
+    // the turn it starts below, which is what this test exists to check.
     await expect(
       host.send({ callerKey: 'runtime-test' }, { envelope, body })
-    ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
+    ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     expect(turn).toBe(1)
   })
 
@@ -180,6 +185,7 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       openCodexConnection: openConnection,
@@ -199,6 +205,30 @@ describe('structured session runtime provider-exit wiring', () => {
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(connections).toHaveLength(1)
+    expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      handoffStage: null
+    })
+
+    const restarted = await ensureStructuredAgentSessionHost({
+      stateDirectory: root,
+      hostId: 'local',
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => root!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveCodexCommand: () => 'codex',
+      resolveEnvironment: async () => ({ PATH: process.env.PATH }),
+      openCodexConnection: openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000
+    })
+    await restarted.restoreReadableSessions()
+    const history = restarted.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
+    expect(restarted.deps.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual({
+      provider: 'codex',
+      threadId: 'thread-runtime-close'
+    })
   })
 
   it('waits for an in-flight recovery before tearing down the runtime', async () => {
@@ -260,6 +290,7 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       openCodexConnection: openConnection,
@@ -282,5 +313,98 @@ describe('structured session runtime provider-exit wiring', () => {
     releaseRecovery()
     await stopping
     expect(stopped).toBe(true)
+  })
+  it('drains a final exit callback delivered by the adapter backstop and keeps the retry real', async () => {
+    // The first stop refuses, so host eviction cannot prove the child gone and aborts with the
+    // session still indexed. What finally stops it is `closeAll`, which delivers the exit
+    // callback AFTER host teardown has already run.
+    root = await mkdtemp(join(tmpdir(), 'orca-runtime-backstop-exit-'))
+    operations = 0
+    const connections: {
+      connection: CodexAppServerConnection
+      handlers: CodexAppServerConnectionHandlers
+    }[] = []
+    let closeAttempts = 0
+    const openConnection: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
+      const connection: CodexAppServerConnection = {
+        pid: 4321,
+        closed: false,
+        request: async (method, params) => {
+          if (method === 'thread/start') {
+            return { thread: { id: 'thread-runtime-backstop' } }
+          }
+          if (method === 'thread/resume') {
+            return { thread: { id: (params as { threadId: string }).threadId } }
+          }
+          if (method === 'turn/start') {
+            return { turn: { id: 'turn-backstop' } }
+          }
+          if (method === 'model/list') {
+            return {
+              data: [
+                {
+                  model: 'gpt-test',
+                  displayName: 'GPT Test',
+                  hidden: false,
+                  supportedReasoningEfforts: [],
+                  defaultReasoningEffort: null,
+                  isDefault: true
+                }
+              ],
+              nextCursor: null
+            }
+          }
+          return {}
+        },
+        notify: () => {},
+        respond: () => {},
+        respondWithError: () => {},
+        close: async () => {
+          closeAttempts += 1
+          if (closeAttempts === 1) {
+            return false
+          }
+          handlers.onExit?.(new Error('adapter backstop close'))
+          return true
+        }
+      }
+      connections.push({ connection, handlers })
+      return connection
+    }
+    const host = await ensureStructuredAgentSessionHost({
+      stateDirectory: root,
+      hostId: 'local',
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => root!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveCodexCommand: () => 'codex',
+      resolveEnvironment: async () => ({ PATH: process.env.PATH }),
+      openCodexConnection: openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000
+    })
+    const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+    attachParams.envelope.clientOperationId = operationId()
+    expect(await host.attach({ callerKey: 'runtime-test' }, attachParams)).toMatchObject({
+      ok: true
+    })
+    await host.hold(SESSION, 'desktop-chat:backstop')
+
+    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    // The backstop, not host eviction, is what stopped the child.
+    expect(closeAttempts).toBeGreaterThanOrEqual(2)
+    // The callback it delivered neither reacquired nor wrote a technical row.
+    expect(connections).toHaveLength(1)
+    const history = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
+
+    // The aborted eviction left the session reachable, so the next teardown is a real retry.
+    await stopStructuredAgentSessionRuntime()
+    expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      handoffStage: null
+    })
   })
 })

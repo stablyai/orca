@@ -3,9 +3,12 @@ import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
+import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -26,6 +29,10 @@ import {
 } from './runtime-skill-command-surface'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
+import {
+  RuntimeSessionSearchSettingsController,
+  type SessionSearchSettingsApply
+} from './runtime-session-search-settings'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from './runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
@@ -35,12 +42,15 @@ import { registerConptyDa1OverrideInstaller } from './terminal-model-query-autho
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
   constructor(
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
     deps?: {
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
+      prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
@@ -48,6 +58,12 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      /** Where structured (native chat) sessions publish into that same store, so the snapshot
+       *  above lists them like every other agent. */
+      structuredAgentStatusSink?: StructuredAgentSessionStatusSink
+      /** The identity the runtime resolved for a pane as each status arrived. Without it the
+       *  fleet path reminted cached rows against whatever the pane owns now. */
+      readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
       /** Same rows, but including the resume-identity-only ones `getAgentStatusSnapshot`
        *  filters out so they can't read as running agents. Mobile native chat needs
        *  them: for an agent that publishes identity separately (Pi), that row is the
@@ -82,11 +98,21 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       skillTransactionRecovery?: Promise<unknown>
+      // Why a host hook and not a direct call: the process that owns this runtime's index
+      // differs per host (scanner child on the desktop, in-process on orcad), and on orcad
+      // it is installed after construction, so the closure has to resolve it at call time.
+      applySessionSearchSettings?: SessionSearchSettingsApply
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     super()
     this.store = store
+    this.prepareClaudeAuth = deps?.prepareClaudeAuth
+    store?.onSettingsChanged?.((updates) => {
+      if ('experimentalStructuredNativeChat' in updates) {
+        this.notifyMobileSessionTabsChanged()
+      }
+    })
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)
     installRuntimeGitCommandSurface(runtime, this.gitCommands)
@@ -115,6 +141,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     })
     installRuntimeServiceCommandSurface(runtime, {
       aiVault: this.aiVault,
+      sessionSearchSettings: new RuntimeSessionSearchSettingsController(
+        store,
+        deps?.applySessionSearchSettings ?? null
+      ),
       clientEvents: this.clientEvents,
       nativeChatDraftResolutions: this.nativeChatDraftResolutions,
       subscriptions: this.subscriptions,
@@ -179,6 +209,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
+    this.readObservedAgentStatusPaneIdentityFn =
+      deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null

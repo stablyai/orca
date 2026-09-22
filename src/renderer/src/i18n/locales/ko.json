@@ -20,7 +20,8 @@
         "chinese": "中文（简体）",
         "korean": "한국어",
         "japanese": "日本語",
-        "spanish": "Español"
+        "spanish": "Español",
+        "french": "Français"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -87,6 +88,33 @@
       "mr": "MR",
       "port": "포트",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "활성 필터와 일치하는 결과가 없습니다",
+      "emptySubtitle": "위의 필터를 지우거나 더 많은 호스트와 프로젝트로 범위를 넓히세요.",
+      "tabKey": "Tab",
+      "label": "필터",
+      "activeCount": "{{value0}}개 활성",
+      "removeChip": "{{value0}} 필터 제거",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "모두 지우기",
+      "hosts": "호스트",
+      "projects": "프로젝트",
+      "trigger": "결과 필터",
+      "search": "호스트 또는 프로젝트로 필터...",
+      "searchHosts": "호스트 필터...",
+      "searchProjects": "프로젝트 필터...",
+      "noOptions": "일치하는 호스트 또는 프로젝트가 없습니다",
+      "noHosts": "일치하는 호스트가 없습니다",
+      "noProjects": "일치하는 프로젝트가 없습니다",
+      "moreOptions": "{{value0}}개 더 — 계속 입력하여 범위 좁히기",
+      "selectAllMatching": "일치하는 항목 모두 선택 ({{value0}})",
+      "selectedCollapsed": "{{value0}}개 선택됨 — 칩 또는 지우기로 제거",
+      "clearHosts": "호스트 지우기",
+      "clearProjects": "프로젝트 지우기",
+      "back": "뒤로",
+      "ariaActive": "필터: {{value0}}개 활성.",
+      "scopedTo": "범위:"
     }
   },
   "auto": {
@@ -333,6 +361,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -715,7 +744,6 @@
       "useComposerState": {
         "7eb3f44ff7": "선택한 agent가 비활성화되었습니다. 생성하기 전에 활성화된 agent를 선택하세요.",
         "b2ead86962": "PR 기반을 해결하지 못했습니다.",
-        "a9ff236145": "일부 첨부파일을 업로드할 수 없습니다.",
         "3db83fc58a": "이 호스트에 첨부 파일에 사용할 수 있는 프로젝트 경로가 없습니다.",
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
         "chooseOrAddProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 선택하거나 추가하세요.",
@@ -1317,7 +1345,7 @@
         "326a578923": "orca.yaml + 로컬",
         "2132b670da": "둘 다",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "이름 또는 '다음에서 만들기'",
+        "ac3748dcda": "다음에서 만들기",
         "f660aa1454": "연결 중",
         "7711ad5122": "로컬 설정 명령",
         "e5db1b0419": "결합된 설정 명령",
@@ -1928,7 +1956,7 @@
       "Terminal": {
         "73768427cf": "닫기",
         "f82e9f02df": "취소",
-        "7958465754": "실행 중인 프로세스가 있는 로컬 terminals이 있습니다. 그래도 창을 닫으시겠습니까?",
+        "7958465754": "실행 중인 프로세스가 있는 terminals이 있습니다. 그래도 창을 닫으시겠습니까?",
         "2fa9c69ff3": "창을 닫으시겠습니까?",
         "cd51e28d8b": "저장",
         "0037b21794": "저장하지 않음",
@@ -1949,7 +1977,8 @@
         "0f3066256e": "이전 일치 항목",
         "42e466b9f1": "정규식",
         "90c61387d9": "대소문자 구분",
-        "e07012f26e": "검색..."
+        "e07012f26e": "검색...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "업데이트하려면 다시 시작하세요.",
@@ -2222,6 +2251,10 @@
                 "7c302f8174": "제목 없음"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "이 보기에는 아직 항목이 없습니다.",
+            "7e4a2f80c6": "최근에 추가한 항목은 표시되기까지 시간이 걸릴 수 있습니다."
           }
         },
         "GitHubMarkdownComposer": {
@@ -4394,11 +4427,10 @@
           "92154beb7e": "새로운 워크스페이스",
           "49f62c5665": "워크스페이스 보드",
           "5c9c7c16aa": "워크스페이스를 만들려면 프로젝트를 추가하세요.",
-          "ca6f729da2": "새 워크스페이스({{value0}})",
           "a30e34eb5c": "워크스페이스 보드 닫기",
-          "25a95899c9": "프로젝트 추가",
           "spaces": "스페이스",
-          "views": "사이드바 보기"
+          "views": "사이드바 보기",
+          "addProject": "프로젝트 추가"
         },
         "SidebarNav": {
           "80611a8b10": "검색",
@@ -5285,8 +5317,6 @@
           "01af244097": "취소",
           "28c8e53176": "그러면 모든 워크스페이스에서 실행 중인 모든 terminals 패널이 강제 종료됩니다. 해당 세션에서 저장하지 않은 작업은 모두 손실됩니다. 데몬 자체는 계속 실행되며 새 terminals을 즉시 열 수 있습니다. 이 작업은 취소할 수 없습니다.",
           "1bbea41a77": "모든 terminal 세션을 종료하시겠습니까?",
-          "01d6b7c64e": "실행 중인 모든 terminal 패널을 종료하고 데몬 프로세스를 다시 시작합니다. 패널에는 \"프로세스 종료됨\"이 표시되며 즉시 다시 열 수 있습니다. 이전 앱 버전의 레거시 프로토콜 세션은 보존됩니다. 이 작업은 취소할 수 없습니다.",
-          "922548bc66": "terminal 데몬을 다시 시작하시겠습니까?",
           "2b4efdc162": "세션을 종료할 수 없습니다.",
           "d18f3005c2": "세션 {{value0}}개{{value1}}이(가) 종료를 거부했습니다.",
           "baad8cd651": "실행 중인 세션이 없습니다.",
@@ -5805,7 +5835,12 @@
           "14444243ba": "PATH에서 `{{value0}}`을(를) 제거하시겠습니까?",
           "5d432fe44d": "설치됨",
           "8a9b784c60": "오래됨",
-          "d363e5929b": "CLI 등록 확인 중…"
+          "d363e5929b": "CLI 등록 확인 중…",
+          "6f894ef9c2": "Finder에서 보기",
+          "cbe55e4d48": "탐색기에서 보기",
+          "9fd4023db0": "파일 관리자에서 보기",
+          "installFailureUnknownReason": "Orca가 CLI 등록을 완료하지 못했고 이유를 보고하지 않았습니다.",
+          "installFailureConflictRemedy": "{{value0}}을(를) 제거하고 더 이상 필요하지 않으면 다시 등록하세요."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -8881,6 +8916,12 @@
             "keepForkUpToDateDescription": "이 포크를 upstream에서 안전하게 fast-forward합니다.",
             "projectRuntime": "프로젝트 런타임",
             "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다.",
+            "githubAccount": "GitHub 계정",
+            "githubAccountDescription": "이 프로젝트의 GitHub API 호출에 키링 gh 로그인을 바인딩합니다.",
+            "githubAccountKeyword": "GitHub 계정",
+            "ghAccount": "gh 계정",
+            "login": "로그인",
+            "token": "token",
             "externalWorktrees": "외부 작업 트리",
             "externalWorktreesDescription": "이 프로젝트에서 Orca 외부 작업 트리를 표시할지 재정의합니다.",
             "copy": "copy",
@@ -9289,6 +9330,24 @@
           "on": "켜짐",
           "auto": "에이전트",
           "off": "꺼짐"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "이 런타임의 GitHub CLI는 계정 바인딩을 지원하기에는 너무 오래되었습니다(gh ≥ 2.40 필요).",
+          "capabilityUnknown": "이 런타임의 GitHub CLI가 계정 바인딩을 지원하는지 확인할 수 없습니다. 다시 시도하세요.",
+          "envToken": "환경 토큰 계정은 바인딩할 수 없습니다. 키링 로그인을 사용하세요.",
+          "invalidBinding": "해당 GitHub 계정 바인딩이 유효하지 않습니다.",
+          "unavailable": "이 런타임에서는 해당 GitHub 계정을 사용할 수 없습니다.",
+          "saveFailed": "GitHub 계정 바인딩을 저장할 수 없습니다.",
+          "title": "GitHub 계정",
+          "description": "이 프로젝트의 GitHub 이슈 및 PR 호출에 특정 gh 로그인을 사용하세요.",
+          "longDescription": "Orca는 선택한 키링 로그인의 단기 토큰을 이 프로젝트의 각 gh 호출에 주입합니다. 프로젝트 보기는 활성 gh 로그인을 계속 사용합니다.",
+          "retry": "다시 시도",
+          "selectLabel": "계정",
+          "ambient": "기본값 (활성 gh 로그인)",
+          "unavailableOption": "{{user}} @ {{host}} (사용할 수 없음)",
+          "capabilityBlocked": "이 런타임의 GitHub CLI가 `gh auth token --user`(gh ≥ 2.40)를 지원할 때까지 바인딩을 사용할 수 없습니다.",
+          "capabilityUnknownHint": "이 런타임에서 GitHub CLI 계정 바인딩 지원을 확인할 수 없습니다. 바인딩을 지우거나 다시 시도하세요.",
+          "notEnforced": "저장되었지만 이 런타임(혼합 버전 호스트)에서는 적용되지 않습니다."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 상태 훅",
@@ -10288,6 +10347,27 @@
           "saveFailed": "가시성 기본값을 저장할 수 없습니다.",
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",
           "updateServerDefaults": "표시 기본값을 구성하려면 이 서버를 업데이트하세요."
+        },
+        "orcaAccount": {
+          "connected": "연결됨",
+          "reconnectRequired": "세션이 만료되었습니다. 클라우드 기능을 사용하려면 다시 로그인하세요.",
+          "unavailable": "이 빌드에서는 Orca 로그인을 사용할 수 없습니다.",
+          "signedOut": "로그인하여 아티팩트 및 Orca Relay를 비롯한 클라우드 기능으로 Orca를 확장하세요.",
+          "checking": "계정 상태 확인 중…",
+          "account": "Orca 계정",
+          "signOut": "로그아웃",
+          "signInAgain": "다시 로그인",
+          "signIn": "Orca 로그인",
+          "title": "Orca 계정",
+          "description": "작업을 즉시 공유하고 어디서나 Orca Mobile로 데스크톱에 연결하세요.",
+          "searchDescription": "아티팩트 및 Orca Relay에서 사용하는 계정에 로그인하거나 로그아웃합니다.",
+          "benefitsTitle": "계정에 포함된 기능",
+          "artifactsTitle": "아티팩트 공유",
+          "artifactsDescription": "HTML 및 Markdown 파일을 게시하고 Orca에서 모든 공유 링크를 관리합니다.",
+          "relayTitle": "Orca Relay",
+          "relayDescription": "셀룰러 또는 모든 Wi-Fi 네트워크를 통해 Orca Mobile을 이 데스크톱에 연결합니다.",
+          "skillsTitle": "스킬 공유",
+          "skillsDescription": "단일 스킬 또는 전체 세트를 비공개 링크로 공유하고 사용하는 모든 기기에 설치하세요."
         },
         "automations": {
           "title": "자동화",
@@ -11364,7 +11444,6 @@
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "agentSessionQueued": "{{value0}} 세션이 대기열에 추가됨",
             "sessionHistory": "Agent 세션 기록",
-            "shownRecent": "{{value0}}개 표시 · 최근 {{value1}}개",
             "resumePastSessions": "이전 세션 재개",
             "refreshSessionHistory": "세션 기록 새로고침",
             "searchSessions": "세션 검색",
@@ -11377,7 +11456,6 @@
             "sessionId": "세션 ID",
             "logPath": "로그 경로",
             "agents": "에이전트",
-            "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
             "openSupportedWorkspace": "세션을 재개하기 전에 워크스페이스를 여세요.",
@@ -11403,7 +11481,6 @@
             "agents": "에이전트",
             "selectAllAgents": "모두 선택",
             "clearAgents": "모두 해제",
-            "sort": "정렬",
             "lastUpdated": "마지막 업데이트",
             "created": "생성됨",
             "group": "그룹",
@@ -14235,12 +14312,40 @@
           "770d458144": "그룹화 기준",
           "795cbf26e2": "필터...",
           "4616ea39fd": "워크스페이스로 이동",
+          "threadListOptionsFiltered": "스레드 목록 옵션, 필터 활성화됨",
+          "showSearch": "검색 표시",
           "markThreadRead": "스레드를 읽은 것으로 표시",
           "59b131fbd9": "스레드를 읽지 않은 것으로 표시",
           "beb2c19173": "읽지 않음",
           "5651b216c6": "알 수 없는 프로젝트",
           "22b22034bc": "활동에서는 독립형 terminal을 사용할 수 없습니다.",
-          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요."
+          "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요.",
+          "clearCompleted": "완료된 항목 지우기",
+          "none": "없음",
+          "search": "검색",
+          "showUnreadOnly": "읽지 않은 항목만 표시",
+          "showChildAgents": "하위 에이전트 표시",
+          "activityOptions": "활동 옵션",
+          "interrupted": "중단됨",
+          "state": {
+            "working": "작업 중",
+            "monitoring": "백그라운드 작업 모니터링 중",
+            "blocked": "차단됨",
+            "waiting": "입력 대기 중",
+            "failed": "실패",
+            "done": "완료",
+            "idle": "유휴",
+            "unverifiable": "최근 업데이트 없음",
+            "permission": "주의 필요"
+          },
+          "filtersSection": "필터",
+          "viewSection": "보기"
+        },
+        "ActivityScopeFilterControls": {
+          "resetScope": "모든 호스트 및 프로젝트 표시"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "알림 지우기"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "읽지 않음",
@@ -14616,6 +14721,41 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "기본 Agent",
+          "theme": "테마",
+          "windowsTerminal": "Windows 터미널",
+          "notifications": "알림",
+          "integrations": "연동"
+        },
+        "actions": {
+          "addFirstProject": "첫 프로젝트 추가",
+          "continue": "계속",
+          "openingAddProject": "프로젝트 추가 화면을 여는 중…"
+        }
+      },
+      "skipConfirmation": {
+        "skip": "건너뛰기",
+        "keepGoing": "아니요, 계속하기"
+      },
+      "theme": {
+        "hints": {
+          "system": "OS 설정에 맞춤",
+          "dark": "눈이 편안한 화면",
+          "light": "밝고 선명한 화면"
+        }
+      },
+      "integrations": {
+        "capabilities": {
+          "startWorkspaceFromIssue": "GitHub 이슈나 PR에서 제목과 컨텍스트가 미리 채워진 워크스페이스를 시작합니다",
+          "browseIssues": "Orca를 떠나지 않고 작업 화면에서 GitHub 이슈와 PR을 탐색합니다",
+          "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
+          "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
@@ -14643,7 +14783,8 @@
         "chooseInAgentPicker": "에이전트 선택기에서 선택…",
         "toggleOption": "{{value0}} 전환",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "현재 값을 알 수 없음 — 켜짐 또는 꺼짐을 선택하세요",
+        "valueIsDefault": "기본값",
+        "valueNotReported": "미보고",
         "sentNotConfirmed": "에이전트에 전송됨 — 확인되지 않음",
         "setWhenSessionStarts": "세션을 시작할 때 설정하세요.",
         "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -14656,9 +14797,7 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
-          "ultra": "울트라",
-          "on": "켜짐",
-          "off": "꺼짐"
+          "ultra": "울트라"
         },
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
@@ -14856,27 +14995,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "대시보드 보기",
-      "board": "대시보드",
-      "map": "에이전트 맵"
-    },
-    "map": {
-      "host": {
-        "local": "로컬",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "원격"
-      },
-      "liveContainmentMap": "실시간 포함 관계 맵",
-      "empty": "현재 필터와 일치하는 에이전트가 없습니다.",
-      "canvasLabel": "프로젝트, 작업 공간, 에이전트의 중첩 맵",
-      "zoomOut": "축소",
-      "zoomIn": "확대",
-      "fit": "맞춤",
-      "projectCount": "에이전트 {{agents}}개 · 작업 공간 {{workspaces}}개",
-      "agentCount": "에이전트 {{count}}개"
-    },
     "placeholder": {
       "title": "에이전트 대시보드",
       "description": "모든 에이전트를 한눈에 볼 수 있는 곳입니다. 보드는 곧 제공됩니다."
@@ -14951,7 +15069,11 @@
   "dashboard": {
     "sidebar": {
       "label": "에이전트",
-      "dashboardLabel": "에이전트 대시보드"
+      "dashboardLabel": "에이전트 대시보드",
+      "openActivity": "활동 보기",
+      "closeActivity": "활동 보기 닫기",
+      "projects": "프로젝트",
+      "workspaces": "워크스페이스"
     }
   },
   "browser": {
@@ -15006,6 +15128,14 @@
       "hide": "에이전트 숨기기",
       "action": "에이전트 사용해 보기",
       "hiddenToast": "에이전트 탭이 숨겨졌습니다. 설정 → 실험 기능에서 다시 활성화하세요."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "입력 필요",
+      "working": "작업 중",
+      "stopped": "중지됨",
+      "finished": "완료됨"
     }
   }
 }

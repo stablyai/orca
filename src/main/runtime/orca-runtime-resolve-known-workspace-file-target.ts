@@ -1,8 +1,12 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPersistHeadlessTerminalTitle } from './orca-runtime-persist-headless-terminal-title'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRuntimeFileTargetExecutionHostId } from './orca-runtime-files'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
@@ -14,17 +18,14 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     executionHostId: ExecutionHostId
   ): Promise<{
     worktree: ResolvedWorktree
-    connectionId?: string
+    executionHostId: ExecutionHostId
     relativePath: string
   } | null> {
     const targets = new Map<
       string,
-      {
-        worktree: ResolvedWorktree
-        connectionId?: string
-        executionHostId: ExecutionHostId
-      }
+      { worktree: ResolvedWorktree; executionHostId: ExecutionHostId }
     >()
+    const repos = this.store?.getRepos() ?? []
     const resolvedWorktrees = await this.listResolvedWorktrees()
     const visibilitySourceMatchersByRepoId =
       this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
@@ -37,29 +38,28 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       ) {
         continue
       }
-      const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
+      // Why: `getRepo(id)` is host-blind, so a candidate on one SSH host could be filed under
+      // another's key and then answer for a path it does not hold. Rival rows that disagree with
+      // no worktree host name no single filesystem authority, so that candidate is dropped.
+      const routing = resolveWorktreeHostRouting(repos, worktree)
+      if (routing.kind === 'ambiguous') {
+        continue
+      }
       const target = {
         worktree,
-        executionHostId: getRuntimeFileTargetExecutionHostId({
-          worktree,
-          connectionId: candidateConnectionId
-        }),
-        ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+        executionHostId: routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
       }
       targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
     for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
       try {
-        const candidateConnectionId =
-          this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
+        const candidateConnectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
         const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
         const target = {
           worktree,
-          executionHostId: getRuntimeFileTargetExecutionHostId({
-            worktree,
-            connectionId: candidateConnectionId
-          }),
-          ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
+          executionHostId: candidateConnectionId
+            ? toSshExecutionHostId(candidateConnectionId)
+            : LOCAL_EXECUTION_HOST_ID
         }
         targets.set(`${target.executionHostId}\0${worktree.id}`, target)
       } catch {

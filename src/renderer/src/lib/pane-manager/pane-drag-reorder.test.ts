@@ -133,6 +133,7 @@ function createPane(id: number, container: FakeElement): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,

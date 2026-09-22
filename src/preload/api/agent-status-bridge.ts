@@ -80,8 +80,8 @@ export const agentStatusApi = {
   dropByTabPrefix: (tabId: string): void => {
     ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
   },
-  retirePaneAuthority: (paneKey: string): void => {
-    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+  retirePaneAuthority: (paneKey: string, retirementId?: string): void => {
+    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey, retirementId)
   },
   restorePaneAuthority: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)

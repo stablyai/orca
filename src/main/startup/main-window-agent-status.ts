@@ -2,14 +2,12 @@ import type { BrowserWindow } from 'electron'
 import { agentHookServer } from '../agent-hooks/server'
 import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
-import { isAskUserQuestionTool } from '../../shared/agent-question-answered-intent'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook
 } from '../../shared/synthetic-agent-title'
 import {
   driveSyntheticTitleFromHook,
-  shouldSuppressCodexAutoApprovalSyntheticTitleFromHook,
   stopAllSyntheticTitleSpinners
 } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
@@ -43,9 +41,16 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       promptInteractionKey,
       restoredUnconfirmed,
       observation,
-      isReplay
+      isReplay,
+      authorityRestartId,
+      structuredHost
     }) => {
       if (state.mainWindow?.isDestroyed()) {
+        return
+      }
+      // Why: the renderer still derives structured rows from its own feed subscription; forwarding
+      // these too would give one pane key two writers until that bridge is retired.
+      if (structuredHost) {
         return
       }
       if (providerSessionOnly) {
@@ -72,16 +77,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      const suppressSyntheticCodexAutoApprovalTitle =
-        payload.agentType === 'codex' &&
-        (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
-              agentType: payload.agentType,
-              state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
-            })
-          : false
       const statusEvent = {
+        ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
@@ -99,17 +96,11 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(orchestration ? { orchestration } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
-      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
-        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      }
+      getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
       options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      if (
-        profile &&
-        shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
-        !suppressSyntheticCodexAutoApprovalTitle
-      ) {
+      if (profile && shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state)) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
     }

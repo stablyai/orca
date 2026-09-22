@@ -1,5 +1,7 @@
 import { constants, createWriteStream } from 'node:fs'
-import { lstat, open } from 'node:fs/promises'
+import { lstat, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -16,6 +18,16 @@ import {
   throwIfAborted,
   waitForChannelClose
 } from './system-ssh-operation-lifecycle'
+import {
+  writeWindowsRemoteFile,
+  type WindowsWriteSource
+} from './system-ssh-windows-write-strategy'
+
+export {
+  WINDOWS_STDIN_WRITE_CHUNK_BYTES,
+  WINDOWS_STDIN_WRITE_TIMEOUT_MS
+} from './system-ssh-windows-write-strategy'
+export { WINDOWS_STAGED_WRITE_SUFFIX } from './system-ssh-windows-file-write'
 
 type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
   signal?: AbortSignal
@@ -74,13 +86,16 @@ export async function writeBufferViaSystemSsh(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
-    await writeWindowsBytesViaSystemSsh(
+    await writeWindowsRemoteFile(
       target,
       remotePath,
-      contents.length,
-      (offset, maxBytes) =>
-        Promise.resolve(contents.subarray(offset, Math.min(offset + maxBytes, contents.length))),
-      options
+      {
+        totalBytes: contents.length,
+        readChunk: (offset, maxBytes) =>
+          Promise.resolve(contents.subarray(offset, Math.min(offset + maxBytes, contents.length))),
+        withLocalFile: (send) => withTemporaryLocalFile(contents, send)
+      },
+      options ?? {}
     )
     return
   }
@@ -127,20 +142,19 @@ export async function uploadFileViaSystemSsh(
     throwIfAborted(options?.signal)
 
     if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
-      // #16432: a Windows host cannot take a whole file through one stdin, however the local side
-      // paces it — see WINDOWS_STDIN_WRITE_CHUNK_BYTES. This is the path that carries the large
-      // files, so it is the one that has to be chunked and bounded.
-      await writeWindowsBytesViaSystemSsh(
-        target,
-        remotePath,
-        openedStat.size,
-        async (offset, maxBytes) => {
+      // This is the path that carries the large files, so it is the one the transport choice is
+      // made for; see the #16432 note below.
+      const source: WindowsWriteSource = {
+        totalBytes: openedStat.size,
+        readChunk: async (offset, maxBytes) => {
           const buffer = Buffer.allocUnsafe(Math.min(maxBytes, openedStat.size - offset))
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
           return buffer.subarray(0, bytesRead)
         },
-        options
-      )
+        // The verified local file is already exactly the payload, so sftp sends it as is.
+        withLocalFile: (send) => send(localPath)
+      }
+      await writeWindowsRemoteFile(target, remotePath, source, options ?? {})
       return
     }
 
@@ -173,156 +187,54 @@ export async function uploadFileViaSystemSsh(
 }
 
 /**
- * #16432: Windows PowerShell 5.1 stops draining a redirected stdin over a non-pty ssh exec
- * somewhere between 50KB and 1MB, depending on the host's `DefaultShell`, and it hangs rather than
- * failing. The reporter measured that on both constructs he tried — `[Console]::In.ReadToEnd()` and
- * `new IO.StreamReader([Console]::OpenStandardInput())`, the latter reading incrementally, which is
- * why the limit cannot be attributed to materializing the payload. `Stream.CopyTo` reads the same
- * `[Console]::OpenStandardInput()` object with the same incremental `Read` loop, so nothing in it
- * escapes that limit either: no single write may exceed what one stdin is known to carry.
+ * #16432, re-measured: the constraint is not a size limit, and it is not cmd.exe's.
  *
- * 32KB is an order of magnitude under the low end of the measured range, and under 50KB, which the
- * reporter measured succeeding against a stream reader on the worse of the two `DefaultShell`
- * settings.
- */
-export const WINDOWS_STDIN_WRITE_CHUNK_BYTES = 32 * 1024
-
-/** No Windows stdin write should ever outlive this; a wedged PowerShell never closes on its own. */
-export const WINDOWS_STDIN_WRITE_TIMEOUT_MS = 60_000
-
-/** Suffix for the path a multi-exec Windows write lands on before it is published by rename. */
-export const WINDOWS_STAGED_WRITE_SUFFIX = '.orca-partial'
-
-/**
- * Splits one logical Windows write into stdin-sized execs.
+ * A read on Windows PowerShell 5.1's redirected-stdin handle over a non-pty ssh exec can die
+ * permanently when it finds the stream momentarily empty: no further bytes arrive, and no EOF ever
+ * does. It is probabilistic per such read — not a size threshold, and not certain on the first one.
+ * Measured on Windows 11 26200.9168 / OpenSSH_for_Windows_10.0p2 with `DefaultShell = cmd.exe`, by
+ * replacing the copy loop with a counting reader:
  *
- * A write that needs more than one exec cannot land on the destination directly: a chunk failing
- * mid-file would leave a truncated artifact under the real name with nothing marking it incomplete,
- * and the retry would then meet its own leftovers — under `exclusive` the retry's `CreateNew` fails
- * on them. Multi-exec creates therefore land on a staging path and are published by a rename, which
- * is also where `exclusive` is enforced: once, at the destination, instead of smeared across the
- * first chunk. A caller-requested append cannot be staged without reading the remote file back, so
- * it keeps writing straight through, as its own protocol already implies.
+ *   - a 1.5s gap before any byte, which forces the first read to find nothing -> 0 bytes, 6 of 6
+ *   - one byte, a 1.5s gap, then 32767 more  -> exactly 1 byte, then nothing
+ *   - 32768, a 1.5s gap, then 32768 more     -> exactly 32768, then nothing
+ *   - a continuous 2MB                       -> 167936 / 270336 / 372736, then nothing
+ *
+ * Those three 2MB death points are one payload run three times under the same conditions, which is
+ * what rules out a threshold: a stream that died at a fixed point would not vary by 2x. Independently reproduced by
+ * a second harness, where one 1.9MB counted read survived 39 reads to completion and another died
+ * after 11 — same construct, same payload.
+ *
+ * A payload small enough to arrive in one burst usually presents only one read that can find the
+ * stream empty (the one waiting for EOF), which is why 32KB mostly works: it still failed 15 times
+ * in 120 with the host under load, and 1 in 40 on a quiet one. Neither rate is survivable across
+ * the 62 execs a 1.9MB file needs — even 2.5% compounds to roughly four uploads in five failing —
+ * and no chunk size helps, because the client does not control whether its bytes arrive together.
+ *
+ * The same host, same `DefaultShell`, same connection pattern contradicts every size-limit reading:
+ * `findstr` took 2,016,000 bytes through one exec's stdin, and PowerShell 7 took 2MB. So cmd.exe is
+ * not the ceiling and neither is ~50KB. Writes now go over sftp, which moves the whole payload
+ * without any remote process reading a pipe; see `system-ssh-windows-write-strategy.ts` for the
+ * fallback order.
+ *
+ * Successes are never partial. Across every run in both harnesses a failed write hung; not one
+ * produced a short file, so this defect cannot silently truncate an upload.
  */
-async function writeWindowsBytesViaSystemSsh(
-  target: SshTarget,
-  remotePath: string,
-  totalBytes: number,
-  readChunk: (offset: number, maxBytes: number) => Promise<Buffer>,
-  options: SystemSshWriteBufferOptions
-): Promise<void> {
-  throwIfAborted(options.signal)
-  const staged = !options.append && totalBytes > WINDOWS_STDIN_WRITE_CHUNK_BYTES
-  const writePath = staged ? `${remotePath}${WINDOWS_STAGED_WRITE_SUFFIX}` : remotePath
-  let offset = 0
-  // An empty write still has to run: it is what creates (or truncates) the file.
-  do {
-    const chunk = await readChunk(offset, WINDOWS_STDIN_WRITE_CHUNK_BYTES)
-    if (chunk.length === 0 && offset < totalBytes) {
-      throw new Error(`Source ran short during upload of ${remotePath}`)
-    }
-    await writeWindowsChunkViaSystemSsh(
-      target,
-      writePath,
-      chunk,
-      {
-        ...options,
-        append: staged ? offset > 0 : options.append === true || offset > 0,
-        exclusive: staged ? false : options.exclusive === true && offset === 0
-      },
-      offset
-    )
-    offset += chunk.length
-  } while (offset < totalBytes)
-  if (staged) {
-    await publishWindowsStagedWrite(target, writePath, remotePath, options)
+
+/** A staged write is materialized locally first when the source is a buffer rather than a file. */
+async function withTemporaryLocalFile<T>(
+  contents: Buffer,
+  send: (localPath: string) => Promise<T>
+): Promise<T> {
+  const directory = await mkdtemp(join(tmpdir(), 'orca-win-upload-'))
+  const localPath = join(directory, 'payload.bin')
+  try {
+    // 0600: the payload can be repository content, and tmpdir is shared on every platform.
+    await writeFile(localPath, contents, { mode: 0o600 })
+    return await send(localPath)
+  } finally {
+    await rm(directory, { recursive: true, force: true }).catch(() => {})
   }
-}
-
-async function writeWindowsChunkViaSystemSsh(
-  target: SshTarget,
-  remotePath: string,
-  chunk: Buffer,
-  options: SystemSshWriteBufferOptions,
-  offset: number
-): Promise<void> {
-  throwIfAborted(options.signal)
-  const channel = spawnSystemSshCommand(target, makeWindowsWriteFileCommand(remotePath, options), {
-    wrapCommand: false,
-    ...getSystemSshBuildArgsFromOperationOptions(options)
-  })
-  const closePromise = awaitWithSystemSshAbort(
-    options.signal,
-    () => channel.close(),
-    waitForChannelClose(
-      channel,
-      `write ${remotePath} at offset ${offset}`,
-      WINDOWS_STDIN_WRITE_TIMEOUT_MS
-    )
-  )
-  if (!options.signal?.aborted) {
-    channel.stdin.end(chunk)
-  }
-  await closePromise
-}
-
-async function publishWindowsStagedWrite(
-  target: SshTarget,
-  stagingPath: string,
-  remotePath: string,
-  options: SystemSshWriteBufferOptions
-): Promise<void> {
-  throwIfAborted(options.signal)
-  const channel = spawnSystemSshCommand(
-    target,
-    makeWindowsPublishStagedFileCommand(stagingPath, remotePath, options.exclusive === true),
-    { wrapCommand: false, ...getSystemSshBuildArgsFromOperationOptions(options) }
-  )
-  const closePromise = awaitWithSystemSshAbort(
-    options.signal,
-    () => channel.close(),
-    waitForChannelClose(channel, `publish ${remotePath}`, WINDOWS_STDIN_WRITE_TIMEOUT_MS)
-  )
-  if (!options.signal?.aborted) {
-    channel.stdin.end()
-  }
-  await closePromise
-}
-
-function makeWindowsWriteFileCommand(
-  remotePath: string,
-  options?: { append?: boolean; exclusive?: boolean }
-): string {
-  const fileMode = options?.append ? 'Append' : options?.exclusive ? 'CreateNew' : 'Create'
-  return powerShellCommand(
-    [
-      '$ErrorActionPreference = "Stop"',
-      `$path = ${powerShellLiteral(remotePath)}`,
-      '$parent = [System.IO.Path]::GetDirectoryName($path)',
-      'if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
-      '$inputStream = [Console]::OpenStandardInput()',
-      `$outputStream = [System.IO.File]::Open($path, [System.IO.FileMode]::${fileMode}, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)`,
-      'try { $inputStream.CopyTo($outputStream) } finally { $outputStream.Dispose() }'
-    ].join('; ')
-  )
-}
-
-// `File::Move` throws when the destination exists, which is exactly the exclusive contract; the
-// non-exclusive caller asked to replace, so it deletes first (a no-op on an absent path).
-function makeWindowsPublishStagedFileCommand(
-  stagingPath: string,
-  remotePath: string,
-  exclusive: boolean
-): string {
-  return powerShellCommand(
-    [
-      '$ErrorActionPreference = "Stop"',
-      `$staging = ${powerShellLiteral(stagingPath)}`,
-      `$path = ${powerShellLiteral(remotePath)}`,
-      ...(exclusive ? [] : ['[System.IO.File]::Delete($path)']),
-      '[System.IO.File]::Move($staging, $path)'
-    ].join('; ')
-  )
 }
 
 function makePosixWriteFileCommand(

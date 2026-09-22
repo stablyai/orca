@@ -45,6 +45,8 @@ import {
   signOutCurrentOrcaProfile
 } from '../orca-profiles/profile-cloud-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
+import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
+import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -177,6 +179,12 @@ export function registerOrcaProfileHandlers(
   ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
     getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
   )
+
+  // Why: a background refresh can revoke the session with no renderer request in
+  // flight, so push the change instead of waiting for the next pane to ask.
+  // Why not options.onAuthMutation: that hook drives the relay coordinator, which
+  // is the caller that just failed the refresh — re-entering it here would be a loop.
+  onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
 
   ipcMain.handle(
     'orcaProfiles:createLocal',

@@ -1,16 +1,34 @@
 /**
- * Relay-side pty-master close-on-exec patch for node-pty 1.1.0 (#17915).
+ * Relay-side pty fd-leak patch for node-pty 1.1.0 (#17915).
  *
  * The app gets this through pnpm `patchedDependencies`; the relay installs stock
- * node-pty from npm onto the host, where no pnpm patch reaches. Without it every
- * later child of the relay -- pty children, git helpers, probes, agent CLIs --
- * inherits each live master fd and keeps its /dev/pts device alive for the life
- * of the relay (#8362).
+ * node-pty from npm onto the host, where no pnpm patch reaches. Stock 1.1.0 leaks
+ * a pty fd on both Unix relay platforms, by two unrelated bugs on two code paths.
  *
- * Linux only, deliberately: it is the only relay platform that takes forkpty()'s
- * no-atomic-O_CLOEXEC path, and the only one that already compiles node-pty at
- * install time, so the rebuild costs a second compile rather than a first one.
- * macOS re-opens the tty through uv_tty_init's cloexec dup and Windows has no fds.
+ * Linux takes forkpty(), which has no atomic O_CLOEXEC, so every later child of
+ * the relay -- pty children, git helpers, probes, agent CLIs -- inherits each live
+ * master and keeps its /dev/pts device alive for the life of the relay (#8362).
+ *
+ * macOS takes pty_posix_spawn(), which opens up to three throwaway ptys to push
+ * the real master off fds 0-2 and then never closes them: the cleanup loop is
+ * `for (; count > 0; count--)`, but in any running process the first posix_openpt()
+ * already returns >= 2, so the loop breaks with count == 0 and its body never runs
+ * -- and where it does run it closes low_fds[count], never low_fds[0]. Measured on
+ * darwin-arm64: one orphaned /dev/ptmx fd per terminal, never returned.
+ *
+ * macOS does not inherit the master into spawned children today, but not because it
+ * is marked: FD_CLOEXEC is not set on it (`lsof +fg` shows R,W,NB, no CX). What
+ * closes it is POSIX_SPAWN_CLOEXEC_DEFAULT in pty_posix_spawn's spawn flags, an
+ * Apple-only flag that closes every fd in the child. That is one option away from
+ * gone -- setting uid/gid drops libuv back to fork()/exec(), which honors nothing
+ * but FD_CLOEXEC -- so the master is marked on the Apple path too, exactly as the
+ * app's pnpm patch marks it. Windows has no fds and is excluded.
+ *
+ * The compile it buys differs by platform. Linux relays already run node-gyp at
+ * install time (1.1.0 ships no linux prebuild), so this is a second compile on a
+ * path that already compiles. macOS runs the shipped darwin prebuild and has no
+ * build/ at all, so this is its first compile -- the price of the only fix there
+ * is, since the bug is in the source that prebuild was built from.
  *
  * Non-fatal by construction: the working build is moved aside before anything is
  * touched and moved back on any failure, and a failed attempt drops a skip marker
@@ -31,7 +49,7 @@ const { dirname, join, resolve } = require('node:path')
 
 const EXPECTED_NODE_PTY_VERSION = '1.1.0'
 const ORIGINAL_SOURCE_SHA256 = '5e1005d6bdcfbe97b486ee415419fe7adae99035047f07340fbad36419e0bae6'
-const PATCHED_SOURCE_SHA256 = '97dea52199216c01b62070758f0f38621ae53adc16c221271dd35ae2d8ee3482'
+const PATCHED_SOURCE_SHA256 = '3e6bc1a688aae187d231687130cfc0a11781c672f5f616d73183d471ee8ee65c'
 
 const STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
 const SKIP_MARKER_FILENAME = '.node-pty-cloexec-skip'
@@ -97,7 +115,56 @@ const FORKPTY_CALL_SITE = [
 `
 ]
 
-const REPLACEMENTS = [FORWARD_DECLARATION, DEFINITION, FORKPTY_CALL_SITE]
+// Apple never reaches FORKPTY_CALL_SITE: `default:` sits in the `#else` arm of PtyFork's
+// `#if defined(__APPLE__)`, so before this pair the asset patched nothing macOS executes.
+const POSIX_SPAWN_CALL_SITE = [
+  `  if (pty_nonblock(master) == -1) {
+    throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+  }
+#else
+`,
+  `  if (pty_nonblock(master) == -1) {
+    throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+  }
+  if (pty_cloexec(master) == -1) {
+    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
+  }
+#else
+`
+]
+
+// The throwaway ptys pty_posix_spawn opens to keep the real master off fds 0-2. Byte-identical to
+// the app's pnpm patch, so both trees compile the same cleanup.
+const LOW_FDS_DECLARATION = [
+  `  int low_fds[3];
+  size_t count = 0;
+`,
+  `  int low_fds[3] = {-1, -1, -1};
+  size_t count = 0;
+`
+]
+
+const LOW_FDS_CLEANUP = [
+  `  for (; count > 0; count--) {
+    close(low_fds[count]);
+  }
+`,
+  `  for (size_t i = 0; i <= count && i < 3; i++) {
+    if (low_fds[i] != -1) {
+      close(low_fds[i]);
+    }
+  }
+`
+]
+
+const REPLACEMENTS = [
+  FORWARD_DECLARATION,
+  DEFINITION,
+  POSIX_SPAWN_CALL_SITE,
+  FORKPTY_CALL_SITE,
+  LOW_FDS_DECLARATION,
+  LOW_FDS_CLEANUP
+]
 
 function sourceSha256(source) {
   return createHash('sha256').update(source).digest('hex')
@@ -188,10 +255,12 @@ function rebuildNodePty(relayDir) {
   }
 }
 
-// Why a child: a bad build can abort the process on require, which would strand the
-// moved-aside working build. Why the reachability check: a host without /proc cannot
-// show inheritance, and an unobservable flag is not evidence the rebuild was wrong.
-const VERIFY_SCRIPT = `
+// Why a child, for both scripts below: a bad build can abort the process on require, which would
+// strand the moved-aside working build. Why each ends in a reachability check: a host that cannot
+// show its fds says nothing, and an unobservable flag is not evidence the rebuild was wrong.
+//
+// Linux's leak is inheritance, so the observation is a later plain child's /proc/self/fd.
+const VERIFY_INHERITANCE_SCRIPT = `
 const pty = require(process.argv[1]);
 const term = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
   name: 'xterm-256color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
@@ -200,13 +269,39 @@ const probe = require('node:child_process').spawnSync('/bin/sh', ['-c', 'ls -l /
 try { term.kill() } catch {}
 const listing = probe.stdout || '';
 if (probe.status !== 0 || !listing.includes('->')) { console.log('UNVERIFIED'); process.exit(0) }
-console.log(listing.includes('ptmx') ? 'INHERITED' : 'ISOLATED');
+console.log(listing.includes('ptmx') ? 'LEAKED' : 'ISOLATED');
 process.exit(0);
 `
 
-/** 'isolated' when a later plain child no longer inherits the master, 'unverified' when /proc cannot say. */
-function verifyMasterNotInheritedByLaterChild(relayDir) {
-  const result = spawnSync(process.execPath, ['-e', VERIFY_SCRIPT, nodePtyDir(relayDir)], {
+// Apple's leak is self-held, not inherited, so the observation is this process's own fd table:
+// N live ptys must account for exactly N /dev/ptmx rows. A stock build shows 2N -- the master plus
+// the throwaway pty_posix_spawn opened and never closed. lsof, not /proc, because macOS has no
+// /proc; a host without lsof cannot say, which is 'unverified', not a failed patch.
+const VERIFY_SELF_FDS_SCRIPT = `
+const pty = require(process.argv[1]);
+const terms = [];
+for (let i = 0; i < 3; i++) {
+  terms.push(pty.spawn('/bin/sh', ['-c', 'sleep 30'], {
+    name: 'xterm-256color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env
+  }));
+}
+const probe = require('node:child_process').spawnSync('/bin/sh', ['-c', 'lsof -p ' + process.pid], { encoding: 'utf8', maxBuffer: 1 << 24 });
+for (const term of terms) { try { term.kill() } catch {} }
+const rows = (probe.stdout || '').split('\\n').filter((line) => line.includes('/dev/ptmx'));
+if (probe.status !== 0 || rows.length < terms.length) { console.log('UNVERIFIED'); process.exit(0) }
+console.log(rows.length > terms.length ? 'LEAKED' : 'ISOLATED');
+process.exit(0);
+`
+
+const LEAK_MESSAGE = {
+  darwin: 'rebuilt node-pty still leaks a throwaway pty fd per spawn',
+  linux: 'rebuilt node-pty still leaks the pty master into later children'
+}
+
+/** 'isolated' when the platform's leak is gone, 'unverified' when the host cannot show it. */
+function verifyNoPtyFdLeak(relayDir, platform) {
+  const script = platform === 'darwin' ? VERIFY_SELF_FDS_SCRIPT : VERIFY_INHERITANCE_SCRIPT
+  const result = spawnSync(process.execPath, ['-e', script, nodePtyDir(relayDir)], {
     cwd: relayDir,
     encoding: 'utf8',
     timeout: VERIFY_TIMEOUT_MS,
@@ -219,22 +314,53 @@ function verifyMasterNotInheritedByLaterChild(relayDir) {
       `rebuilt node-pty did not load: ${tail || result.error?.message || result.signal}`
     )
   }
-  if (output.includes('INHERITED')) {
-    throw new Error('rebuilt node-pty still leaks the pty master into later children')
+  if (output.includes('LEAKED')) {
+    throw new Error(LEAK_MESSAGE[platform] || LEAK_MESSAGE.linux)
   }
   return output.includes('ISOLATED') ? 'isolated' : 'unverified'
 }
 
-function rollback(relayDir, releaseDir, backupDir) {
-  rmSync(releaseDir, { recursive: true, force: true })
+/**
+ * What gets moved aside before the compile, and where the compile writes.
+ *
+ * Linux ships no prebuild, so `build/Release` is both the working build and the compile's output,
+ * and moving it aside only arms the rollback. macOS runs `prebuilds/darwin-<arch>` and has no
+ * `build/` at all, so the compile writes a new `build/Release` -- which node-pty's loader checks
+ * ahead of `prebuilds`. Moving `prebuilds` aside does double duty there: it arms the rollback and
+ * it is what makes node-pty's install script fall through from "prebuild found" to `node-gyp
+ * rebuild`. Deliberately not `npm_config_build_from_source`, which deletes the prebuilds outright
+ * and would leave nothing to roll back to.
+ */
+function buildLayout(relayDir, platform, arch) {
+  const ptyDir = nodePtyDir(relayDir)
+  const compiledDir = join(ptyDir, 'build', 'Release')
+  if (platform === 'darwin') {
+    const prebuildsDir = join(ptyDir, 'prebuilds')
+    return {
+      compiledDir,
+      movedDir: prebuildsDir,
+      workingBuildPath: join(prebuildsDir, `darwin-${arch}`, 'pty.node'),
+      missingStatus: 'skipped:no-prebuild'
+    }
+  }
+  return {
+    compiledDir,
+    movedDir: compiledDir,
+    workingBuildPath: join(compiledDir, 'pty.node'),
+    missingStatus: 'skipped:no-compiled-build'
+  }
+}
+
+function rollback(relayDir, layout, backupDir) {
+  rmSync(layout.compiledDir, { recursive: true, force: true })
   try {
     revertNodePtyMasterCloexecSource(relayDir)
   } catch {
     // The build that is about to be restored predates the patch either way.
   }
   if (existsSync(backupDir)) {
-    mkdirSync(dirname(releaseDir), { recursive: true })
-    renameSync(backupDir, releaseDir)
+    mkdirSync(dirname(layout.movedDir), { recursive: true })
+    renameSync(backupDir, layout.movedDir)
   }
 }
 
@@ -244,16 +370,17 @@ function rollback(relayDir, releaseDir, backupDir) {
  */
 function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) {
   const platform = options.platform || process.platform
+  const arch = options.arch || process.arch
   const rebuild = options.rebuild || rebuildNodePty
-  const verify = options.verify || verifyMasterNotInheritedByLaterChild
-  if (platform !== 'linux') {
-    return 'skipped:not-linux'
+  const verify = options.verify || verifyNoPtyFdLeak
+  if (platform !== 'linux' && platform !== 'darwin') {
+    return 'skipped:unsupported-platform'
   }
   const skipMarkerPath = join(relayDir, SKIP_MARKER_FILENAME)
   if (existsSync(skipMarkerPath)) {
     return 'skipped:earlier-attempt-failed'
   }
-  const releaseDir = join(nodePtyDir(relayDir), 'build', 'Release')
+  const layout = buildLayout(relayDir, platform, arch)
   const backupDir = join(nodePtyDir(relayDir), BACKUP_DIRNAME)
   // A backup stranded by a connection that died mid-rebuild is stale by definition:
   // whatever repaired node-pty since built from the source now on disk.
@@ -272,25 +399,28 @@ function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) 
   if (hash !== ORIGINAL_SOURCE_SHA256) {
     return 'skipped:unexpected-source'
   }
-  // No compiled build means the host runs a prebuild or nothing at all; rebuilding
-  // could only take away the artifact the probe just proved loadable.
-  if (!existsSync(join(releaseDir, 'pty.node'))) {
-    return 'skipped:no-compiled-build'
+  // Nothing to fall back on means the host runs neither a compile nor the prebuild
+  // this platform expects; rebuilding could only take away the artifact the probe
+  // just proved loadable.
+  if (!existsSync(layout.workingBuildPath)) {
+    return layout.missingStatus
   }
 
   try {
-    renameSync(releaseDir, backupDir)
+    renameSync(layout.movedDir, backupDir)
   } catch (err) {
     return `skipped:${err.message}`
   }
   try {
     patchNodePtyMasterCloexecSource(relayDir)
     rebuild(relayDir)
-    const verdict = verify(relayDir)
+    const verdict = verify(relayDir, platform)
+    // Discarded, not restored: a tree that gets published must hold no unpatched binary the
+    // loader could still fall back to. A later repair recompiles from the patched source.
     rmSync(backupDir, { recursive: true, force: true })
     return verdict === 'isolated' ? 'patched' : 'patched-unverified'
   } catch (err) {
-    rollback(relayDir, releaseDir, backupDir)
+    rollback(relayDir, layout, backupDir)
     // Bounded on purpose: one compile attempt per relay directory, never a retry loop.
     try {
       writeFileSync(skipMarkerPath, `${new Date().toISOString()} ${err.message}\n`)

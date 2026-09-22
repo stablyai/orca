@@ -23,7 +23,7 @@ export function filesystemPathToFileUri(filePath: string): string {
     return `file://${encodeURIComponent(host)}/${pathSegments.map(encodeURIComponent).join('/')}`
   }
 
-  const normalizedPath = filePath.replaceAll('\\', '/')
+  const normalizedPath = filePath.startsWith('/') ? filePath : filePath.replaceAll('\\', '/')
   const encodedPath = encodePathSegments(normalizedPath)
   return normalizedPath.startsWith('/') ? `file://${encodedPath}` : `file:///${encodedPath}`
 }

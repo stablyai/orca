@@ -50,6 +50,9 @@ export type AutomationDraft = {
   time: string
   dayOfWeek: string
   customSchedule: string
+  // The cadence this record was opened with, or null for a new one. The strict schedule gate
+  // judges new input; a saved cadence that still runs is not re-judged against it.
+  savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
 }

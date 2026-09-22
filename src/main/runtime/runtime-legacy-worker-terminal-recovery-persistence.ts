@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from './orchestration/db'
@@ -22,72 +22,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   ) {}
 
   prepare(): LegacyWorkerTerminalRecoveryPlan {
-    const plan = this.getPlan()
-    const store = this.getStore()
-    if (
-      !store?.getWorkspaceSession ||
-      !store.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow)
-    ) {
-      return plan
-    }
-    const sessions = new Map<
-      ExecutionHostId,
-      { current: WorkspaceSessionState; next: WorkspaceSessionState }
-    >()
-    const changedHostIds = new Set<ExecutionHostId>()
-    for (const blocked of plan.blockedPanes) {
-      let hostIds: ExecutionHostId[]
-      try {
-        const hostId = this.getHostId(blocked.worktreeId)
-        if (!hostId) {
-          throw new Error('folder_workspace_not_found')
-        }
-        hostIds = [hostId]
-      } catch (error) {
-        console.warn('[orchestration] legacy worker resume fence owner is unavailable', {
-          worktreeId: blocked.worktreeId,
-          error
-        })
-        hostIds = store.getWorkspaceSessionHostIds?.() ?? [LOCAL_EXECUTION_HOST_ID]
-      }
-      for (const hostId of hostIds) {
-        let state = sessions.get(hostId)
-        if (!state) {
-          const current = store.getWorkspaceSession(hostId)
-          if (!current) {
-            continue
-          }
-          state = { current, next: structuredClone(current) }
-          sessions.set(hostId, state)
-        }
-        const record = state.next.sleepingAgentSessionsByPaneKey?.[blocked.paneKey]
-        if (
-          !record ||
-          !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
-          record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-        ) {
-          continue
-        }
-        state.next.sleepingAgentSessionsByPaneKey = {
-          ...state.next.sleepingAgentSessionsByPaneKey,
-          [blocked.paneKey]: { ...record, automaticResumeBlockedBy: 'legacy-orchestration-worker' }
-        }
-        changedHostIds.add(hostId)
-      }
-    }
-    const changed = [...sessions].filter(([hostId]) => changedHostIds.has(hostId))
-    if (changed.length === 0) {
-      return plan
-    }
-    try {
-      for (const [hostId, state] of changed) {
-        store.setWorkspaceSession(state.next, hostId)
-      }
-    } catch (error) {
-      console.warn('[orchestration] failed to stage legacy worker resume fence', error)
-    }
-    return plan
+    return this.getPlan() ?? { candidates: [], ambiguousDispatchIds: [] }
   }
 
   async persist(
@@ -181,12 +116,12 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     }
   }
 
-  private getPlan(): LegacyWorkerTerminalRecoveryPlan {
+  private getPlan(): LegacyWorkerTerminalRecoveryPlan | null {
     try {
       return planLegacyWorkerTerminalRecovery(this.getDb().listLegacyWorkerTerminalRecoveryRows())
     } catch (error) {
       console.warn('[orchestration] failed to plan legacy worker terminal recovery', error)
-      return { blockedPanes: [], candidates: [], ambiguousDispatchIds: [] }
+      return null
     }
   }
 

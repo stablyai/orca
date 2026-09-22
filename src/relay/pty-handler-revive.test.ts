@@ -1,6 +1,7 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, rmSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hashWorktreeId } from '../main/terminal-history-id'
 
@@ -46,6 +47,10 @@ import {
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const PTY_1 = testPtyId(1)
+
+// Why a real directory: revive drops an entry whose serialized cwd is gone from this host, so a
+// fixture path that never existed would be skipped before the behaviour under test runs.
+const LIVE_CWD = tmpdir()
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -157,7 +162,7 @@ describe('PtyHandler', () => {
         pid: process.pid,
         cols: 80,
         rows: 24,
-        cwd: '/repo',
+        cwd: LIVE_CWD,
         worktreeId: 'repo-id::/repo'
       }))
     )
@@ -181,7 +186,7 @@ describe('PtyHandler', () => {
         pid: process.pid,
         cols: 80,
         rows: 24,
-        cwd: '/repo',
+        cwd: LIVE_CWD,
         worktreeId: 'repo-id::/repo'
       }
     ])
@@ -488,6 +493,64 @@ describe('PtyHandler', () => {
     ).rejects.toThrow(`PTY "${PTY_1}" not found`)
   })
 
+  // Why: `cwd` is the last serialized field revive took on trust. It proves the directory existed
+  // when the client wrote it down, not that it exists now -- node-pty answers a removed one by
+  // _exit(1)-ing the child on POSIX and by throwing on Windows, and the throw escapes the loop.
+  it('skips a pane whose serialized cwd is gone from this host, keeping the batch', async () => {
+    const removedCwd = join(tmpdir(), `orca-revive-removed-${process.pid}`)
+    rmSync(removedCwd, { force: true, recursive: true })
+    const state = JSON.stringify([
+      { id: 'pty-20', pid: process.pid, cols: 80, rows: 24, cwd: removedCwd },
+      { id: 'pty-21', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    // The later entry still revived, and no other directory stood in for the first.
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+    expect((mockPtySpawn.mock.calls[0][2] as { cwd: string }).cwd).toBe(LIVE_CWD)
+    const live = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-20', 'pty-21']
+    })) as string
+    expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-21'])
+  })
+
+  // Why: the pid gate is the one place revive turns an observation into "this pane is
+  // finished". `kill(pid, 0)` answers EPERM when the process exists under another uid, and
+  // the same ESRCH-only rule `reapPtyProvenExited` applies has to hold here
+  // (docs/reference/ssh-execution-boundary.md).
+  it('keeps a pane whose pid refuses the probe and drops only a proven-gone one', async () => {
+    const state = JSON.stringify([
+      { id: 'pty-30', pid: 424242, cols: 80, rows: 24, cwd: LIVE_CWD },
+      { id: 'pty-31', pid: 434343, cols: 80, rows: 24, cwd: LIVE_CWD }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid) => {
+      if (pid === 424242) {
+        throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+      }
+      if (pid === 434343) {
+        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+      }
+      return true
+    })
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callRequest is typed unknown; pty.serialize answers with the JSON state string this file parses everywhere.
+    const live = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-30', 'pty-31']
+    })) as string
+    expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-30'])
+  })
+
   describe('a Windows relay reviving a WSL pane', () => {
     const worktreeId = 'r::/remote/wsl-worktree'
     const historyFile = join(
@@ -579,7 +642,7 @@ describe('PtyHandler', () => {
           pid: process.pid,
           cols: 80,
           rows: 24,
-          cwd: 'C:\\repo',
+          cwd: LIVE_CWD,
           shellOverride: 'wsl.exe',
           terminalWindowsWslDistro: 'U'.repeat(257)
         }
@@ -605,10 +668,10 @@ describe('PtyHandler', () => {
           pid: process.pid,
           cols: 80,
           rows: 24,
-          cwd: 'C:\\repo',
+          cwd: LIVE_CWD,
           shellOverride: 'wsl.exe'
         },
-        { id: 'pty-13', pid: process.pid, cols: 80, rows: 24, cwd: 'C:\\repo' }
+        { id: 'pty-13', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
       ])
       mockPtySpawn.mockImplementationOnce(() => {
         throw new Error('spawn wsl.exe ENOENT')
@@ -628,6 +691,33 @@ describe('PtyHandler', () => {
       expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-13'])
     })
 
+    // Why: relayHostDirectoryExists stats the relay's own filesystem, and a wsl.exe pane's cwd
+    // lives in the guest -- the same host boundary requireRelaySpawnCwd already honours.
+    it('revives a WSL pane whose cwd is a guest path this host cannot stat', async () => {
+      const state = JSON.stringify([
+        {
+          id: 'pty-14',
+          pid: process.pid,
+          cols: 80,
+          rows: 24,
+          cwd: '/home/dev/guest-only-worktree',
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Ubuntu'
+        }
+      ])
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+      expect((mockPtySpawn.mock.calls[0][2] as { cwd: string }).cwd).toBe(
+        '/home/dev/guest-only-worktree'
+      )
+    })
+
     it('degrades one entry with an unsupported override without failing the batch', async () => {
       const state = JSON.stringify([
         {
@@ -635,10 +725,10 @@ describe('PtyHandler', () => {
           pid: process.pid,
           cols: 80,
           rows: 24,
-          cwd: 'C:\\repo',
+          cwd: LIVE_CWD,
           shellOverride: 'nc.exe'
         },
-        { id: 'pty-10', pid: process.pid, cols: 80, rows: 24, cwd: 'C:\\repo' }
+        { id: 'pty-10', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
       ])
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       try {

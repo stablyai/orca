@@ -55,19 +55,41 @@ export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => P
   }
 }
 
+// Why: a live map that is nowhere near the cap must not pay for a 500-string key array on every
+// accepted update, so the count is threaded in and the keys are materialized only to evict.
+const liveAgentStatusCounts = new WeakMap<Record<string, AgentStatusEntry>, number>()
+
+export function countLiveAgentStatuses(entries: Record<string, AgentStatusEntry>): number {
+  const cached = liveAgentStatusCounts.get(entries)
+  if (cached !== undefined) {
+    return cached
+  }
+  const size = Object.keys(entries).length
+  liveAgentStatusCounts.set(entries, size)
+  return size
+}
+
+export function noteLiveAgentStatusCount(
+  entries: Record<string, AgentStatusEntry>,
+  size: number
+): void {
+  liveAgentStatusCounts.set(entries, size)
+}
+
 // Why: mutate the caller-owned spread so eviction does not allocate another heavy-map copy.
 export function capLiveAgentStatusesInPlace(
   freshLive: Record<string, AgentStatusEntry>,
   protectedPaneKey: string,
   buildClassifier: () => (paneKey: string) => PaneLiveness,
   now: number,
-  maxEntries = MAX_LIVE_AGENT_STATUSES
+  maxEntries = MAX_LIVE_AGENT_STATUSES,
+  entryCount = countLiveAgentStatuses(freshLive)
 ): string[] {
-  const keys = Object.keys(freshLive)
-  let overflow = keys.length - maxEntries
+  let overflow = entryCount - maxEntries
   if (overflow <= 0) {
     return []
   }
+  const keys = Object.keys(freshLive)
   const classify = buildClassifier()
   const evictedPaneKeys: string[] = []
   const sweep = (canEvict: (liveness: PaneLiveness, entry: AgentStatusEntry) => boolean): void => {

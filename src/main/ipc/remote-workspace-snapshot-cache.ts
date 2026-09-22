@@ -26,6 +26,9 @@ function snapshotsAreIdentical(
     previous.revision === next.revision &&
     previous.updatedAt === next.updatedAt &&
     previous.schemaVersion === next.schemaVersion &&
+    // Why no scalar-only fast path: same revision with different session content is a
+    // genuinely new host observation (new token, reset auth window) — the patch-queue
+    // and cache tests pin this. Skipping the walk here mis-authorizes local patches.
     isDeepStrictEqual(previous.session, next.session)
   )
 }

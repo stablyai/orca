@@ -1,4 +1,4 @@
-import type { JiraComment, JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraComment } from '../../../src/shared/jira-types'
 
 export type JiraDetailComment = {
   id: string
@@ -6,31 +6,6 @@ export type JiraDetailComment = {
   authorAvatarUrl?: string
   body: string
   createdAt?: string
-}
-
-type JiraIssueReadEnvelope = {
-  items?: unknown
-  issues?: unknown
-}
-
-// Mirrors extractLinearIssueReadItems: the runtime returns a bare array today,
-// but older and streaming-wrapped hosts hand back an envelope instead.
-export function extractJiraIssueReadItems(result: unknown): JiraIssue[] {
-  if (Array.isArray(result)) {
-    return result as JiraIssue[]
-  }
-
-  if (result && typeof result === 'object') {
-    const envelope = result as JiraIssueReadEnvelope
-    if (Array.isArray(envelope.items)) {
-      return envelope.items as JiraIssue[]
-    }
-    if (Array.isArray(envelope.issues)) {
-      return envelope.issues as JiraIssue[]
-    }
-  }
-
-  throw new Error('Unexpected Jira tasks response')
 }
 
 // Comments are best-effort in the detail sheet: a failed or malformed response

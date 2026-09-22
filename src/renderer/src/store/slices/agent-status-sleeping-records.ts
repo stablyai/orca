@@ -1,7 +1,6 @@
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
-  agentProviderSessionsEqual,
   getAgentResumeArgv,
   isResumableTuiAgent,
   type SleepingAgentLaunchConfig,
@@ -107,21 +106,6 @@ export function manualSleepCaptureEntry(
   capturedAt: number
 ): AgentStatusEntry {
   return { ...entry, updatedAt: capturedAt, interrupted: false }
-}
-
-// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
-// blocked worker must not become auto-resumable at wake.
-export function carryOverAutomaticResumeBlock(
-  record: SleepingAgentSessionRecord,
-  previous: SleepingAgentSessionRecord | undefined
-): void {
-  if (
-    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
-    previous.agent === record.agent &&
-    agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
-  ) {
-    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
-  }
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(

@@ -3,11 +3,16 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
 import { buildJiraIssueSearchJql } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import { extractLinearIssueReadItems } from './linear-mobile-issue-read'
-import { extractJiraIssueReadItems } from './jira-mobile-issue-read'
+import { jiraIssueSearchRead } from './mobile-jira-operations'
+import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
+import {
+  githubWorkItemSearchRead,
+  gitlabWorkItemSearchRead,
+  linearAssignedIssueListRead,
+  linearIssueSearchRead
+} from './mobile-task-source-search-operations'
 import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 
@@ -30,18 +35,16 @@ export async function searchGitHubItems(
   repoId: string,
   query: string
 ): Promise<GitHubWorkItem[]> {
-  const response = await client.sendRequest('github.listWorkItems', {
+  const reply = await githubWorkItemSearchRead.request(client, {
     repo: `id:${repoId}`,
     limit: PER_REPO_FETCH_LIMIT,
     query: scopeGitHubQuery(query)
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const envelope = (response as RpcSuccess).result as { items: GitHubWorkItem[] }
+  const envelope = githubWorkItemSearchRead.interpret(reply)
   // Stamp repoId so the shared row builder + create flow can attribute each item
   // to the searched repo (the runtime omits it, like the desktop fetcher).
-  return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `workItemRow` types every member at `GitHubWorkItem`'s own type and requires the ones a consumer reads unguarded, so the assertion only fills in members the row omits; each of those is read through a guard or interpolated as text (task-source-search-reply-schema.ts:10-12).
+  return envelope.items.map((item) => ({ ...item, repoId })) as GitHubWorkItem[]
 }
 
 export async function searchGitLabItems(
@@ -50,24 +53,19 @@ export async function searchGitLabItems(
   query: string,
   state: MrStateFilter
 ): Promise<GitLabWorkItem[]> {
-  const response = await client.sendRequest('gitlab.listWorkItems', {
+  const reply = await gitlabWorkItemSearchRead.request(client, {
     repo: `id:${repoId}`,
     state,
     page: 1,
     perPage: GITLAB_PER_PAGE,
     query: query.trim() || undefined
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const envelope = (response as RpcSuccess).result as {
-    items: GitLabWorkItem[]
-    error?: { type?: string; message: string }
-  }
+  const envelope = gitlabWorkItemSearchRead.interpret(reply)
   if (envelope.error?.type && envelope.error.type !== 'not_found') {
-    throw new Error(envelope.error.message)
+    throw new Error(envelope.error.message ?? '')
   }
-  return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same row rule as the GitHub search above, against `GitLabWorkItem`.
+  return envelope.items.map((item) => ({ ...item, repoId })) as GitLabWorkItem[]
 }
 
 export async function searchLinearIssues(
@@ -76,25 +74,27 @@ export async function searchLinearIssues(
   linearWorkspaceId: string | null | undefined
 ): Promise<LinearIssue[]> {
   const trimmed = query.trim()
-  const response = trimmed
-    ? await client.sendRequest('linear.searchIssues', {
-        query: trimmed,
-        limit: LINEAR_LIMIT,
-        workspaceId: linearWorkspaceId ?? undefined
-      })
-    : await client.sendRequest('linear.listIssues', {
-        // Empty query lists the viewer's assigned issues, matching desktop's
-        // Smart picker default (SmartWorkspaceNameField uses listLinearIssues('assigned')).
-        filter: 'assigned',
-        limit: LINEAR_LIMIT,
-        workspaceId: linearWorkspaceId ?? undefined
-      })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  // extractLinearIssueReadItems yields the mobile issue-read shape; the fields the
-  // row builder/create flow read (id/identifier/title/url/state/team) are a subset.
-  return extractLinearIssueReadItems((response as RpcSuccess).result) as unknown as LinearIssue[]
+  // The reader yields the mobile issue-read shape; the fields the row builder/create flow read
+  // (id/identifier/title/url/state/team) are a subset.
+  const issues = trimmed
+    ? linearIssueSearchRead.interpret(
+        await linearIssueSearchRead.request(client, {
+          query: trimmed,
+          limit: LINEAR_LIMIT,
+          workspaceId: linearWorkspaceId ?? undefined
+        })
+      )
+    : linearAssignedIssueListRead.interpret(
+        await linearAssignedIssueListRead.request(client, {
+          // Empty query lists the viewer's assigned issues, matching desktop's
+          // Smart picker default (SmartWorkspaceNameField uses listLinearIssues('assigned')).
+          filter: 'assigned',
+          limit: LINEAR_LIMIT,
+          workspaceId: linearWorkspaceId ?? undefined
+        })
+      )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: linearIssueRowSchema requires all nine members this row is read for (`id`, `identifier`, `title`, `url`, `updatedAt`, `priority`, `labels`, `state`, `team`), so the only gap left is `labelIds`: the schema salvages it to `string[] | undefined` while the shared LinearIssue declares it `string[]`. No mobile code reads it.
+  return issues as LinearIssue[]
 }
 
 // Unlike the Tasks search box (raw JQL), the composer field is free text that
@@ -109,15 +109,13 @@ export async function searchJiraIssues(
   if (!jql) {
     return []
   }
-  const response = await client.sendRequest('jira.searchIssues', {
-    jql,
-    limit: JIRA_LIMIT,
-    siteId: siteId ?? undefined
-  })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  return extractJiraIssueReadItems((response as RpcSuccess).result)
+  return jiraIssueSearchRead.interpret(
+    await jiraIssueSearchRead.request(client, {
+      jql,
+      limit: JIRA_LIMIT,
+      siteId: siteId ?? undefined
+    })
+  )
 }
 
 export async function searchBranches(
@@ -125,18 +123,12 @@ export async function searchBranches(
   repoId: string,
   query: string
 ): Promise<BaseRefSearchResult[]> {
-  const response = await client.sendRequest(
-    'repo.searchRefs',
+  const reply = await repoBaseRefSearchRead.request(
+    client,
     { repo: `id:${repoId}`, query: query.trim(), limit: BRANCH_LIMIT },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as {
-    refDetails?: BaseRefSearchResult[]
-    refs?: string[]
-  }
+  const result = repoBaseRefSearchRead.interpret(reply)
   return (
     result.refDetails ??
     (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))

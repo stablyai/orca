@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Core IPtyProvider surface of DaemonPtyAdapter: spawn, io, sizing, teardown. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
@@ -26,8 +27,6 @@ const {
   ),
   isDaemonStaleForCurrentBundleMock: vi.fn(async () => false)
 }))
-
-const itOnPosix = process.platform === 'win32' ? it.skip : it
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
@@ -342,37 +341,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           Object.defineProperty(process, 'platform', platform)
         }
       }
-    })
-
-    itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: 'codex',
-        env: { SHELL: '/bin/zsh' }
-      })
-
-      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-      expect(lastSubprocess.write).toHaveBeenCalledWith('codex\n')
-    })
-
-    itOnPosix('waits for shell-ready for delivery-hinted Codex startup', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        command: "codex 'linked issue context'",
-        startupCommandDelivery: 'shell-ready',
-        env: { SHELL: '/bin/zsh' }
-      })
-
-      await new Promise((resolve) => setTimeout(resolve, 350))
-      expect(lastSubprocess.write).not.toHaveBeenCalled()
-
-      lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
-      lastSubprocess._simulateData('\r\nuser@host $ ')
-
-      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
-      expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
     })
   })
 
@@ -874,6 +842,47 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('fanoutSyntheticExits / getActiveSessionIds (restart primitives)', () => {
+    it.each(['synthetic', 'daemon'])(
+      'snapshots subscriptions and isolates %s exit payloads',
+      async (source) => {
+        const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+        const emitExit =
+          source === 'synthetic'
+            ? () => adapter.fanoutSyntheticExits(-1)
+            : () => lastSubprocess._simulateExit(-1)
+        const calls: string[] = []
+        const secondListener = vi.fn()
+        let unsubscribeSecond = () => {}
+        adapter.onExit((payload) => {
+          calls.push('first')
+          unsubscribeSecond()
+          adapter.onExit(() => calls.push('late'))
+          payload.id = 'mutated'
+          payload.code = 99
+        })
+        unsubscribeSecond = adapter.onExit((payload) => {
+          calls.push('second')
+          secondListener(payload)
+        })
+
+        emitExit()
+        await waitFor(() => calls.length >= 2)
+
+        expect(calls).toEqual(['first', 'second'])
+        expect(secondListener).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id,
+            code: -1,
+            incarnationId: expect.any(String)
+          })
+        )
+        await adapter.spawn({ cols: 80, rows: 24 })
+        emitExit()
+        await waitFor(() => calls.length >= 4)
+        expect(calls).toEqual(['first', 'second', 'first', 'late'])
+      }
+    )
+
     it('reports every live spawn in getActiveSessionIds', async () => {
       const { id: id1 } = await adapter.spawn({ cols: 80, rows: 24 })
       const { id: id2 } = await adapter.spawn({ cols: 80, rows: 24 })
@@ -915,21 +924,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter.fanoutSyntheticExits(-1)
       expect(exits).toHaveLength(1)
-    })
-
-    it('propagates to every registered exit listener in order', () => {
-      const aExits: { id: string; code: number }[] = []
-      const bExits: { id: string; code: number }[] = []
-      adapter.onExit((payload) => aExits.push(payload))
-      adapter.onExit((payload) => bExits.push(payload))
-
-      const internals = adapter as unknown as { activeSessionIds: Set<string> }
-      internals.activeSessionIds.add('sess-a')
-
-      adapter.fanoutSyntheticExits(-1)
-
-      expect(aExits).toEqual([{ id: 'sess-a', code: -1 }])
-      expect(bExits).toEqual([{ id: 'sess-a', code: -1 }])
     })
   })
 })

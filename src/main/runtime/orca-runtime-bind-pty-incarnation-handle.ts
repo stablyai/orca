@@ -54,15 +54,17 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
-      if (
-        !pty?.incarnationId ||
-        pty.incarnationId !== retained.incarnationId ||
-        leaves.length !== 1 ||
-        this.handleByPtyId.has(ptyId)
-      ) {
+      // Why: a handle issued before the host reported the incarnation is un-fenced, so
+      // learning it is not a replacement; only a known-to-different incarnation is.
+      const incarnationReplaced =
+        retained.incarnationId !== null &&
+        pty !== undefined &&
+        pty.incarnationId !== retained.incarnationId
+      if (!pty || incarnationReplaced || leaves.length !== 1 || this.handleByPtyId.has(ptyId)) {
         this.invalidatePtyIncarnationHandle(ptyId)
         continue
       }
+      retained.incarnationId = pty.incarnationId
       this.bindPtyIncarnationHandle(retained, leaves[0])
     }
   }
@@ -91,6 +93,10 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+    if (retained?.incarnationId === pty.incarnationId) {
+      return retained.handle
+    }
     const existingHandle =
       this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {

@@ -8,6 +8,9 @@
  */
 export type AgentOwnershipEvidence = 'present' | 'absent' | 'unknown'
 
+/** Omission requests diagnostic inventory; an explicit null selects only the local provider. */
+export type PtySessionListScope = { connectionId: string | null }
+
 /**
  * One row of `pty:listSessions`. Shared so the main handler, both preload surfaces, and the
  * renderer cannot drift on which evidence the UI is allowed to see.
@@ -16,6 +19,7 @@ export type PtyListedSession = {
   id: string
   cwd: string
   title: string
+  worktreeId?: string
   /**
    * Agent ownership as the listing provider could establish it. Destructive actions must treat
    * anything other than `absent` as live work: discarding this distinction is what let Resource

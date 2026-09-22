@@ -136,6 +136,7 @@ export async function createRuntimeFolderWorktree(args: {
       }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
@@ -172,7 +173,7 @@ export async function createRuntimeFolderWorktree(args: {
       undefined,
       args.startup && !didSpawnStartup ? args.startup : undefined
     )
-  } else if (deps.ptySpawnAvailable && !didSpawnStartup) {
+  } else if (deps.ptySpawnAvailable && !didSpawnStartup && !args.createdWithAgent) {
     try {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

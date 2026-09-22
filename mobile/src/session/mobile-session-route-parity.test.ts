@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { MOBILE_SESSION_ROUTE_SOURCE_FILES } from './mobile-session-route-source-family.test-support'
 
 const SESSION_FILES = MOBILE_SESSION_ROUTE_SOURCE_FILES
+/** The function the route mounts, which C7.7 moved out of the route file and into a component. */
+const ROOT_COMPONENT = 'MobileSessionRouteScreen'
 const LOGIC_EXPANSION_NAMES = new Set([
   'useMobileSessionController',
   'useMobileSessionFoundation',
@@ -62,15 +64,51 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '5c475b904928f418c76a7885afdbed7adbfea3fe3ea05e85d956dc22f958a302'
-const HEAD_HOOK_BINDING_SHA256 = '028f99dd14fea2110cff446418ee71513aeed38484c2dcea68bf0da8eff377c0'
+// Refreshed by C7.2: five clipboard hooks joined the expanded route, which is the whole of the +5 —
+// a writer in the diff-note, Markdown and selection actions, a reader in the selection actions and
+// the attachment probe. The screen's other four clipboard sites (the terminal's paste, the sheets,
+// the quick-command row, the diff-review send) sit outside the walk from `MobileSessionRouteScreen`
+// and so do not move this pin. The copy-path sheet also gained the failure toast the other two had.
+const HEAD_MAIN_HOOK_SHA256 = '6d309ebdf13ecf21e4b42fb29de9db586a3c9835ead43015a5261b67bf18b8f6'
+const HEAD_HOOK_BINDING_SHA256 = '9041e8a74efdacc6099933bac11fb624aff46c99648746cf5504bf320ec431c5'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'd60ffe53f8d77f2dd3ebd14a5de162bb399113c170b59bdc917de6318ec433ec'
-const HEAD_CALLBACK_BODY_SHA256 = '69dfda53fd700f4395a18a37ffdaa530e187bc24b4986d8fdc0184127c00b52d'
-const HEAD_EFFECT_SHA256 = '346d384ea0bf2f8f926c5092c5bf57bc2a03494f49f9639e9d6b8a2c51c9f882'
+  'ed45268b61372abcfeb29e9ce91822f1fb5214542b78356c7cef869824a09d37'
+// Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
+// and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
+// Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
+// whose accepted-check became that operation's own verdict, then again when that check was spelled
+// `=== true` to match the other four sites reading the same verdict. Refreshed in step 7 for the
+// reply casts the checked readers made unnecessary — the markdown tab doc, the worktree record's
+// `diffComments` and the browser tab's page id are typed by their schemas now. Refreshed once more
+// on the merge, for the display-mode toggle whose send became `terminalDisplayModeSet`. Refreshed
+// for the files domain's step 7, which retired the markdown disk fallback's `{ content, truncated,
+// byteLength }` cast: the preview reader checks the content and salvages the flag, so `readMarkdownTab`
+// reads `fallback.value` directly. The dictation-mode refresh is main's own body again — it forwards
+// whatever mode the reply carried, so an absent one leaves the mic as inert as main left it.
+// Refreshed on the merge of C7.2 and C7.3, which moved this pin from both sides: the terminal
+// subscribe now carries the snapshot byte budget its transport imposes, nothing on a phone and the
+// frame cap inside the shell's page, and the Markdown copy action gained the failure branch that
+// answers a refused write. Re-recorded against the merged tree, since neither side's hash covers
+// the other's body. The hook and string counts are C7.2's and stand.
+const HEAD_CALLBACK_BODY_SHA256 = '5845c3b85217a3af9d3d2bfafe564a2b29a1b2c6776b5c2c9ec5afbf365a5157'
+// Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
+// the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
+// again when the reporter took the reply and interpreted it itself, retiring the hand-built
+// refusal the timer site passed when it had no reply at all. Refreshed once more for the
+// last-visited-worktree effect, whose bare store write became the one writer of that key, so the
+// hybrid shell's page mirror sees it as it is written rather than one `init` later. Refreshed for
+// the diff-comments effect, which now catches the loader's rejection. Count unchanged.
+const HEAD_EFFECT_SHA256 = 'cc25f3707d52d278ad65d0bb452fc5ddf5c94bba5ed850e17ac0568d65ebe522'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+// Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
+// rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
+// `handleClearTerminal`, whose send became `terminalBufferClear`, in step 7 for the browser tab
+// create, whose `{ browserPageId?: string }` cast its schema now carries, and once more for
+// `handleCreateTerminal`, whose send became `sessionTabCreateTerminal` and whose `response.ok`
+// branch became that operation's own throw-the-host-message acceptance. Refreshed for negotiated
+// optimistic placement, which defers to legacy host snapshots when ownership paths disagree.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'b562c117eb1e4532dd656d8bdd3ca3bc58ce65d78a7ed740dbd866a48d4d8dbe'
+  '923b5ea7fe3330cbd98213b72736bf1f653115ddb5492cb8eb8306d8ca4f28e8'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -78,16 +116,31 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
+// Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
+// first, then `worktree.activate` twice, `session.tabs.createTerminal` and
+// `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
+// spelled at the call site. Two literals more across C7.2, both of them the toast a refused write
+// now shows: "Couldn't copy path" when the sheets moved onto the clipboard seam, taking the count
+// from 532 to 533, and "Couldn't copy" when the Markdown copy action gained the failure branch the
+// other copy paths already had, taking it to 534.
+//
+// Two more across C7.7, 534 -> 536: `'web'`, the platform guard the Markdown actions'
+// `BackHandler` registration gained so it stops logging on the page, and `"button"`, the
+// accessibility role the header's Back control gained so the page serves it by name. Neither is a
+// behaviour change on a phone. The same `'web'` moves the effect hash, and `"button"` the host-JSX
+// hash. The effect hash moved a second time and back: the diff-notes loader's uncaught rejection
+// was caught and then reverted, because the fix moves `matrix-session.diff-notes-worktree.show-1`
+// and a golden is a review event — so this hash is the one the uncaught `void` call produces.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'ad0def23206f08d0523c155fe730e86824876e67cf1db6b597541b9c35b54447'
-const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = 'b070e25c47b3e298be02a4ffe1572b36e204446fc161bad894690e9939403f54'
+  '2e533c7b630364b65281c55a5b62bfb76de156f47b4225052243beedf4d215d9'
+const HEAD_HOST_JSX_SHA256 = '3ba319e8823e304b1024b5f583ddb340ae583010e522e50ac276231d3658180f'
+const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
-  '6b37a0351795a387a358df76a5ab919a7098ddb76bf25a936c8902c062c8951c'
+  '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
-const HEAD_CAPABILITY_SHA256 = 'ca219f7909a091717110b823d5b94a20770ad3ae51894e0fa765e8628309392d'
+const HEAD_CAPABILITY_SHA256 = '67c3154b71b542bb63a4365d3ea75aef19ef133c02f509318619618221786fab'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -239,7 +292,7 @@ function readNestedFunctions(definitions: ReadonlyMap<string, Definition>): stri
     }
     visit(definition.declaration.body)
   }
-  visitDefinition('SessionScreen', new Set())
+  visitDefinition(ROOT_COMPONENT, new Set())
   return functions
 }
 
@@ -282,7 +335,7 @@ function readNativeAndTimerFacts(definitions: ReadonlyMap<string, Definition>): 
     }
   }
   visitLogicalFunction('FileReader', definitions, collect)
-  visitLogicalFunction('SessionScreen', definitions, collect)
+  visitLogicalFunction(ROOT_COMPONENT, definitions, collect)
   return { cleanups, creations, registrations, removals }
 }
 
@@ -399,7 +452,7 @@ function readJsxFacts(definitions: ReadonlyMap<string, Definition>): {
   for (const name of CONTENT_COMPONENT_NAMES) {
     visitDefinition(name)
   }
-  visitDefinition('SessionScreen')
+  visitDefinition(ROOT_COMPONENT)
   const styleReferences: string[] = []
   for (const record of [...host, ...leaf]) {
     for (const match of record.matchAll(/styles\.([A-Za-z0-9_]+)/g)) {
@@ -417,7 +470,7 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
   const capabilities: string[] = []
   const identityFields: string[] = []
   const navigation: string[] = []
-  visitLogicalFunction('SessionScreen', definitions, (node, sourceFile) => {
+  visitLogicalFunction(ROOT_COMPONENT, definitions, (node, sourceFile) => {
     if (!isRuntimeNode(node)) {
       return
     }
@@ -468,14 +521,14 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
 describe('mobile session route extraction parity', () => {
   it('preserves hooks, callbacks, effects, and nested action bodies', () => {
     const definitions = readDefinitions()
-    const main = readHookFacts('SessionScreen', definitions)
+    const main = readHookFacts(ROOT_COMPONENT, definitions)
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(269)
+    expect(main.hooks).toHaveLength(275)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(78)
+    expect(main.callbacks).toHaveLength(77)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)
@@ -511,18 +564,18 @@ describe('mobile session route extraction parity', () => {
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     expect(compatibility.navigation).toHaveLength(6)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    expect(compatibility.capabilities).toHaveLength(6)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(537)
+    expect(strings).toHaveLength(536)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
-    expect(jsx.leaf).toHaveLength(59)
+    expect(jsx.leaf).toHaveLength(61)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     expect(jsx.styleReferences).toHaveLength(172)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)

@@ -1,9 +1,8 @@
 import { useEffect, useCallback } from 'react'
 import { Keyboard, Platform, type KeyboardEvent } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { saveCustomKeys, type CustomKey } from '../components/CustomKeyModal'
-import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
@@ -105,10 +104,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
 
   useEffect(() => {
     if (hostId && worktreeId) {
-      void AsyncStorage.setItem(
-        LAST_VISITED_WORKTREE_STORAGE_KEY,
-        JSON.stringify({ hostId, worktreeId })
-      )
+      writeLastVisitedWorktree({ hostId, worktreeId })
     }
   }, [hostId, worktreeId])
 

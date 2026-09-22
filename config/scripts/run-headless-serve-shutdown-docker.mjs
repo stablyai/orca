@@ -11,6 +11,22 @@ const signalTarget = valueAfter('--signal-target') ?? 'app'
 const entrypoint = valueAfter('--entrypoint') ?? 'app'
 const intDelivery = valueAfter('--int-delivery') ?? 'foreground-process-group'
 const launcherExecOverlay = args.includes('--launcher-exec-overlay')
+const allEntrypoints = args.includes('--all-entrypoints')
+if (
+  allEntrypoints &&
+  ['--entrypoint', '--signal-target', '--int-delivery', '--launcher-exec-overlay'].some((flag) =>
+    args.includes(flag)
+  )
+) {
+  fail('--all-entrypoints cannot be combined with individual case options')
+}
+const cases = allEntrypoints
+  ? [
+      { entrypoint: 'app', signalTarget: 'app', intDelivery: 'foreground-process-group' },
+      { entrypoint: 'launcher', signalTarget: 'app', intDelivery: 'foreground-process-group' },
+      { entrypoint: 'appimage', signalTarget: 'serving-electron', intDelivery: 'pid' }
+    ]
+  : [{ entrypoint, signalTarget, intDelivery }]
 if (!appImageArg) {
   fail('Usage: run-headless-serve-shutdown-docker.mjs --appimage /path/to/orca.AppImage')
 }
@@ -43,7 +59,7 @@ const artifactVolume = `orca-headless-serve-shutdown-${suffix}`
 const sha256 = createHash('sha256').update(readFileSync(appImage)).digest('hex')
 
 try {
-  docker([
+  const buildArgs = [
     'build',
     '--platform',
     platform,
@@ -52,7 +68,15 @@ try {
     '-t',
     image,
     shutdownDockerDirectory
-  ])
+  ]
+  // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
+  const firstBuild = docker(buildArgs, { allowFailure: true })
+  if (firstBuild.status !== 0) {
+    process.stderr.write(
+      `${firstBuild.stdout}${firstBuild.stderr}\ndocker build failed with status ${firstBuild.status}; retrying once...\n`
+    )
+    docker(buildArgs)
+  }
   docker(['volume', 'create', artifactVolume])
   runDesktopStartupOracle({ image, appImage, platform })
   docker([
@@ -90,50 +114,52 @@ try {
     ].join(' && ')
   ])
 
-  console.log(
-    JSON.stringify({
-      type: 'appimage_under_test',
-      appImage,
-      sha256,
-      platform,
-      signalTarget,
-      entrypoint,
-      intDelivery,
-      launcherExecOverlay
-    })
-  )
   const failedSignals = []
-  for (const signal of ['INT', 'TERM']) {
-    const result = docker(
-      [
-        'run',
-        '--rm',
-        '--init',
-        '--platform',
+  for (const { entrypoint, signalTarget, intDelivery } of cases) {
+    console.log(
+      JSON.stringify({
+        type: 'appimage_under_test',
+        appImage,
+        sha256,
         platform,
-        '--shm-size',
-        '256m',
-        '--name',
-        `orca-headless-serve-shutdown-${signal.toLowerCase()}-${suffix}`,
-        '-e',
-        `ORCA_SIGNAL_TARGET=${signalTarget}`,
-        '-e',
-        `ORCA_TEST_ENTRYPOINT=${entrypoint}`,
-        '-e',
-        `ORCA_INT_DELIVERY=${intDelivery}`,
-        '-v',
-        `${appImage}:/input/orca.AppImage:ro`,
-        '-v',
-        `${artifactVolume}:/artifacts:ro`,
-        image,
-        signal
-      ],
-      { allowFailure: true }
+        signalTarget,
+        entrypoint,
+        intDelivery,
+        launcherExecOverlay
+      })
     )
-    process.stdout.write(result.stdout)
-    process.stderr.write(result.stderr)
-    if (result.status !== 0) {
-      failedSignals.push(`${signal}:${result.status}`)
+    for (const signal of ['INT', 'TERM']) {
+      const result = docker(
+        [
+          'run',
+          '--rm',
+          '--init',
+          '--platform',
+          platform,
+          '--shm-size',
+          '256m',
+          '--name',
+          `orca-headless-serve-shutdown-${entrypoint}-${signal.toLowerCase()}-${suffix}`,
+          '-e',
+          `ORCA_SIGNAL_TARGET=${signalTarget}`,
+          '-e',
+          `ORCA_TEST_ENTRYPOINT=${entrypoint}`,
+          '-e',
+          `ORCA_INT_DELIVERY=${intDelivery}`,
+          '-v',
+          `${appImage}:/input/orca.AppImage:ro`,
+          '-v',
+          `${artifactVolume}:/artifacts:ro`,
+          image,
+          signal
+        ],
+        { allowFailure: true }
+      )
+      process.stdout.write(result.stdout)
+      process.stderr.write(result.stderr)
+      if (result.status !== 0) {
+        failedSignals.push(`${entrypoint}:${signal}:${result.status}`)
+      }
     }
   }
   if (failedSignals.length > 0) {

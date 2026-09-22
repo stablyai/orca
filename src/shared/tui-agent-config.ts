@@ -37,13 +37,15 @@ export type TuiAgentConfig = {
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
+  preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
+  /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
+  submitLineSettleMsPerLine?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
   /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
@@ -128,6 +130,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  // Why: opencode2 installs as a separate binary and uses the same prompt flags.
+  // Its @opentui composer keeps the same cursor-gated paste signal.
+  opencode2: {
+    detectCmd: 'opencode2',
+    // The private server inherits this pane's hook endpoint and identity.
+    launchCmd: 'opencode2 --standalone',
+    expectedProcess: 'opencode2',
+    promptInjectionMode: 'flag-prompt',
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
   'mimo-code': {
     detectCmd: 'mimo',
     promptInjectionMode: 'flag-prompt',
@@ -165,7 +177,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   antigravity: {
     detectCmd: 'agy',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
+    // Why: agy's first-launch trust menu consumes the bracketed paste, and its trust is
+    // exact-path rather than inherited, so every freshly created child worktree raises it
+    // again — a supervised worker would otherwise always fail at agent_readiness
+    // (agent-trust-presets.ts).
+    preflightTrust: 'antigravity',
+    // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
+    // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
+    submitLineSettleMsPerLine: 45
   },
   aider: {
     detectCmd: 'aider',
@@ -207,6 +227,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'codebuff',
     promptInjectionMode: 'stdin-after-start'
   },
+  freebuff: {
+    detectCmd: 'freebuff',
+    promptInjectionMode: 'stdin-after-start'
+  },
   'command-code': {
     // Why: use the full name (not its `cmd` alias) so detection doesn't collide with Windows' built-in cmd.exe.
     detectCmd: 'command-code',
@@ -233,7 +257,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   kimi: {
+    // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
+    // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
     detectCmd: 'kimi',
+    detectCmdAliases: ['kimi-code'],
     promptInjectionMode: 'stdin-after-start'
   },
   'mistral-vibe': {

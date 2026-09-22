@@ -33,6 +33,8 @@ export type UsageProviderOverview = {
   cacheTokens: number
   reasoningTokens: number
   estimatedCostUsd: number | null
+  /** The provider priced some of its tokens but not all, so `estimatedCostUsd` understates the bill. */
+  hasPartialCost: boolean
   topModel: string | null
   topProject: string | null
   activeDays: number

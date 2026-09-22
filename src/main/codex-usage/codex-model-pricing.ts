@@ -77,6 +77,14 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
     cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
     outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
+  },
+  'gpt-6-astra': {
+    input: 10,
+    cachedInput: 1,
+    output: 50,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 20 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 75 }]
   }
 }
 
@@ -170,6 +178,9 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
     return 'gpt-5.6-luna'
+  }
+  if (normalized === 'gpt-6-astra' || normalized.startsWith('gpt-6-astra-')) {
+    return 'gpt-6-astra'
   }
   // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
   // `gpt-5.6-` prefix match would swallow the tier IDs above and any future

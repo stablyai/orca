@@ -65,12 +65,16 @@ describe('prepareGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [40, 41])]) })
       .mockResolvedValueOnce({ stdout: '[]' })
 
-    const result = await prepareGitHubStackedPullRequest('/repo', {
-      provider: 'github',
-      base: 'origin/stack/parent',
-      head: 'refs/heads/stack/child',
-      title: 'Child'
-    })
+    const result = await prepareGitHubStackedPullRequest(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'origin/stack/parent',
+        head: 'refs/heads/stack/child',
+        title: 'Child'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({
       ok: true,
@@ -96,12 +100,16 @@ describe('prepareGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [41, 42])]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [41, 42])]) })
 
-    const result = await prepareGitHubStackedPullRequest('/repo', {
-      provider: 'github',
-      base: 'stack/parent',
-      head: 'stack/child',
-      title: 'Child'
-    })
+    const result = await prepareGitHubStackedPullRequest(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'stack/parent',
+        head: 'stack/child',
+        title: 'Child'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({ ok: true, currentReview: { number: 42 } })
   })
@@ -111,12 +119,16 @@ describe('prepareGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: '[]' })
       .mockResolvedValueOnce({ stdout: '[]' })
 
-    const result = await prepareGitHubStackedPullRequest('/repo', {
-      provider: 'github',
-      base: 'feature/parent',
-      head: 'feature/child',
-      title: 'Child'
-    })
+    const result = await prepareGitHubStackedPullRequest(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'feature/parent',
+        head: 'feature/child',
+        title: 'Child'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
     if (!result.ok) {
@@ -130,12 +142,16 @@ describe('prepareGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: '[]' })
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [41, 45])]) })
 
-    const result = await prepareGitHubStackedPullRequest('/repo', {
-      provider: 'github',
-      base: 'stack/parent',
-      head: 'stack/child',
-      title: 'Child'
-    })
+    const result = await prepareGitHubStackedPullRequest(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'stack/parent',
+        head: 'stack/child',
+        title: 'Child'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
     if (!result.ok) {
@@ -150,12 +166,16 @@ describe('prepareGitHubStackedPullRequest', () => {
       host: 'github.acme.test'
     })
 
-    const result = await prepareGitHubStackedPullRequest('/repo', {
-      provider: 'github',
-      base: 'stack/parent',
-      head: 'stack/child',
-      title: 'Child'
-    })
+    const result = await prepareGitHubStackedPullRequest(
+      '/repo',
+      {
+        provider: 'github',
+        base: 'stack/parent',
+        head: 'stack/child',
+        title: 'Child'
+      },
+      'local'
+    )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
@@ -170,6 +190,7 @@ describe('registerGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: JSON.stringify({ number: 50 }) })
 
     const result = await registerGitHubStackedPullRequest({
+      executionHostId: 'local',
       repoPath: '/repo',
       repository,
       parentReview,
@@ -200,7 +221,7 @@ describe('registerGitHubStackedPullRequest', () => {
       repository,
       parentReview,
       currentReview,
-      connectionId: 'ssh-1'
+      executionHostId: 'ssh:ssh-1'
     })
 
     expect(result).toMatchObject({ ok: true, stackNumber: 50 })
@@ -221,6 +242,7 @@ describe('registerGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [41, 42])]) })
 
     const result = await registerGitHubStackedPullRequest({
+      executionHostId: 'local',
       repoPath: '/repo',
       repository,
       parentReview,
@@ -239,6 +261,7 @@ describe('registerGitHubStackedPullRequest', () => {
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [42])]) })
 
     const result = await registerGitHubStackedPullRequest({
+      executionHostId: 'local',
       repoPath: '/repo',
       repository,
       parentReview,
@@ -259,6 +282,7 @@ describe('registerGitHubStackedPullRequest', () => {
       .mockRejectedValueOnce(new Error('HTTP 422'))
 
     const result = await registerGitHubStackedPullRequest({
+      executionHostId: 'local',
       repoPath: '/repo',
       repository,
       parentReview,

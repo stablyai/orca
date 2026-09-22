@@ -1,8 +1,10 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import type { RpcClient } from './rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 import type { ConnectionLogSink, HostProfile } from './types'
 
 export type MobileEndpointSupervisorDependencies = {
@@ -10,7 +12,8 @@ export type MobileEndpointSupervisorDependencies = {
   openRelay: (
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
-    confirmReqId: string
+    confirmReqId: string,
+    onHostCloseReason?: (reason: RelayHostCloseReason) => void
   ) => MobileRelayRpcSession
   resolveRelay: typeof resolveMobileRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>
@@ -18,7 +21,7 @@ export type MobileEndpointSupervisorDependencies = {
   saveHost: (host: HostProfile) => Promise<void>
   now: () => number
   randomBytes: (length: number) => Uint8Array
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
   onLog?: ConnectionLogSink
 }

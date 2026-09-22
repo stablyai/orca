@@ -82,4 +82,70 @@ describe('activateAndRevealWorktree', () => {
       executionHostId: 'ssh:box'
     })
   })
+
+  it('reselects a live worktree without creating a second terminal tab', () => {
+    const createTab = vi.fn(() => ({ id: 'tab-2' }))
+    const existingTab = { id: 'tab-1' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies only the activation slice used by the test.
+    useAppStore.setState({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      activeView: 'terminal',
+      filterRepoIds: [],
+      isNavigatingHistory: false,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/repo',
+            displayName: 'main',
+            branch: 'main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [existingTab] },
+      getKnownWorktreeById: (worktreeId: string) =>
+        worktreeId === 'wt-1'
+          ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture omits unrelated worktree metadata.
+            ({
+              id: 'wt-1',
+              repoId: 'repo-1',
+              path: '/repo',
+              displayName: 'main',
+              branch: 'main',
+              head: 'abc',
+              isBare: false,
+              isMainWorktree: true
+            } as never)
+          : null,
+      setActiveRepo: vi.fn(),
+      setActiveView: vi.fn(),
+      setActiveWorktree: vi.fn(),
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
+      createTab,
+      setActiveTab: vi.fn(),
+      setTabCustomTitle: vi.fn(),
+      setTabColor: vi.fn(),
+      markDefaultTerminalTabsApplied: vi.fn(),
+      queueTabStartupCommand: vi.fn(),
+      queueTabInitialCwd: vi.fn(),
+      queueTabSetupSplit: vi.fn(),
+      queueTabIssueCommandSplit: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies only the activation slice used by the test.
+    } as never)
+
+    const result = activateAndRevealWorktree('wt-1')
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(createTab).not.toHaveBeenCalled()
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([existingTab])
+  })
 })

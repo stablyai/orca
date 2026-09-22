@@ -376,7 +376,18 @@ describe('OrcaRuntimeService', () => {
         TEST_REPO_PATH,
         'runtime-wsl',
         'origin/main',
-        { wslDistro: 'Ubuntu' }
+        { wslDistro: 'Ubuntu' },
+        expect.any(Function)
+      )
+      // Why: the lazy adoption callback is only invoked when the conflict probe
+      // sees a local ref, so drive it here to prove adoption also routes via WSL.
+      const adoptLocalBranch = vi
+        .mocked(getBranchConflictKind)
+        .mock.calls.findLast((call) => call[1] === 'runtime-wsl')?.[4]
+      await expect(adoptLocalBranch?.()).resolves.toBe(false)
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/runtime-wsl^{commit}'],
+        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
       )
       expect(getPRForBranchMock).toHaveBeenCalledWith(
         TEST_REPO_PATH,
@@ -601,7 +612,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'runtime:env-b')
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: false,
+        allowUnverifiedPtyStop: false,
+        hostId: 'runtime:env-b'
+      })
     ).rejects.toThrow('no longer belongs to runtime:env-b')
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()

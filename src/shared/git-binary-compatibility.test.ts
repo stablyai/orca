@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -8,6 +8,7 @@ import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
+import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
@@ -15,6 +16,7 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { buildGitGrepArgs } from './text-search'
 import { parseGitRemoteFetchUrls } from './git-remote-url-index'
 import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from './git-history-log-parser'
 import {
@@ -110,6 +112,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('quietly distinguishes present and absent branch refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['branch', 'quiet-probe-present', head])
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-present'])
+    ).resolves.toMatchObject({ stdout: `${head}\n`, stderr: '' })
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-absent'])
+    ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+  })
+
+  it('distinguishes an absent branch from a ref pointing at a missing object', async () => {
+    const missingObject = 'a'.repeat(40)
+    const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
+    await writeFile(refPath, `${missingObject}\n`)
+    try {
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
+      ).resolves.toMatchObject({ stdout: `${missingObject}\n`, stderr: '' })
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling^{commit}'])
+      ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+    } finally {
+      await rm(refPath)
+    }
+  })
+
   it('recognizes worktree-list and rev-parse compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['worktree', 'list', '--porcelain', '-z'],
@@ -140,6 +169,29 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).resolves.toBeDefined()
   })
 
+  // Why pin this: worktree removal decides whether to prune and retry `branch -d` by
+  // matching Git's refusal text, and the wording moved inside the supported range
+  // (<=2.40 "Cannot delete branch 'x' checked out at", >=2.43 "cannot delete branch 'x'
+  // used by worktree at"). It is also the only evidence that the refusal is a stderr
+  // message on every supported Git rather than something a caller could read off stdout.
+  it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
+    await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
+    try {
+      const refusal = await runGit(['branch', '-d', '--', 'compat-held']).then(
+        () => null,
+        (error: unknown) => error
+      )
+      expect(refusal).not.toBeNull()
+      expect(isBranchCheckedOutInWorktreeError(refusal)).toBe(true)
+      const streams = refusal as { stdout?: string; stderr?: string }
+      expect(streams.stderr ?? '').toMatch(/delete branch .*compat-held/i)
+      expect(streams.stdout ?? '').toBe('')
+    } finally {
+      await runGit(['worktree', 'remove', '--force', 'held-wt'])
+      await runGit(['branch', '-D', 'compat-held'])
+    }
+  })
+
   it('deregisters a worktree whose directory was renamed away', async () => {
     // Orca renames the checkout into a trash directory and then clears the registration, so every
     // supported Git must accept `worktree remove --force` on the now-missing path.
@@ -151,6 +203,16 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     const remaining = await runGit(['worktree', 'list', '--porcelain'])
     expect(remaining.stdout).not.toContain('deferred-wt')
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
+  })
+
+  it('removes locked prepared worktrees without a separate unlock', async () => {
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-discard', 'HEAD'])
+    await runGit(['-C', 'compat-discard', 'reset', '--hard', 'HEAD'])
+    await runGit(['worktree', 'lock', '--reason', 'owned preparation', 'compat-discard'])
+    await runGit(['worktree', 'remove', '--force', '--force', 'compat-discard'])
+    expect((await runGit(['worktree', 'list', '--porcelain'])).stdout).not.toContain(
+      'compat-discard'
+    )
   })
 
   it('supports prepared worktree creation and finalization', async () => {
@@ -504,5 +566,28 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(item?.id).toBe(head)
     expect(item?.subject).toBe('decorated commit')
     expect(item?.references?.map((ref) => ref.id)).toContain('refs/tags/compat-decorated')
+  })
+
+  it('excludes and includes a directory subtree through the generated pathspecs', async () => {
+    await mkdir(join(repoPath, 'vendored'), { recursive: true })
+    await writeFile(join(repoPath, 'vendored', 'inner.txt'), 'pathspecneedle\n')
+    await writeFile(join(repoPath, 'kept.txt'), 'pathspecneedle\n')
+    await runGit(['add', '-A'])
+    await runGit(['commit', '-qm', 'pathspec fixture'])
+
+    const listFiles = async (opts: Parameters<typeof buildGitGrepArgs>[1]): Promise<string[]> => {
+      const args = buildGitGrepArgs('pathspecneedle', opts).map((arg) =>
+        arg === '-n' ? '-l' : arg
+      )
+      const { stdout } = await runGit(args)
+      return stdout.split(/[\0\n]/).filter(Boolean)
+    }
+
+    const excluded = await listFiles({ excludePattern: 'vendored' })
+    expect(excluded).toContain('kept.txt')
+    expect(excluded.some((file) => file.startsWith('vendored/'))).toBe(false)
+
+    const included = await listFiles({ includePattern: 'vendored' })
+    expect(included).toEqual(['vendored/inner.txt'])
   })
 })

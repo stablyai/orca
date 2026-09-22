@@ -76,6 +76,24 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
 }
 
 /**
+ * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
+ * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
+ * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
+ * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
+ */
+function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
+  const store = useAppStore.getState()
+  if (store.activeTabType === 'terminal') {
+    return store.activeTabId
+  }
+  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
+    return null
+  }
+  const activeTab = store.getActiveTab(activeWorktreeId)
+  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
+}
+
+/**
  * Builds the app-level handlers for every keybindable action. Each returns whether it claimed
  * the chord, so an unavailable surface (settings view, closed floating panel) falls through to
  * the terminal or the next handler instead of silently no-opping.
@@ -172,16 +190,16 @@ export function createAppCommandHandlers(
     [
       'tab.rename',
       () => {
-        const store = useAppStore.getState()
-        if (
-          !workspaceChromeActive ||
-          floatingWorkspaceFocused ||
-          store.activeTabType !== 'terminal' ||
-          !store.activeTabId
-        ) {
+        if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        return claim('tab.rename', () => requestTerminalTabRename(store.activeTabId!))
+        // Why: a structured chat tab is renamed through the same inline editor, so gating on
+        // 'terminal' alone left the shortcut a silent no-op there.
+        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        if (!tabId) {
+          return false
+        }
+        return claim('tab.rename', () => requestTerminalTabRename(tabId))
       }
     ],
     [

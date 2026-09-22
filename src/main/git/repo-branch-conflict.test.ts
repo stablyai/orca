@@ -21,7 +21,7 @@ describe('getBranchConflictKindViaExec', () => {
 
     await expect(getBranchConflictKindViaExec(exec, 'feature/fix')).resolves.toBe('remote')
     expect(calls).toEqual([
-      ['rev-parse', '--verify', 'refs/heads/feature/fix'],
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/fix'],
       ['remote'],
       ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/foo/bar/feature/fix'],
       ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/feature/fix']
@@ -41,7 +41,10 @@ describe('getBranchConflictKindViaExec', () => {
     await expect(
       getBranchConflictKindViaExec(exec, 'feature/fix', 'origin/feature/fix')
     ).resolves.toBeNull()
-    expect(calls).toEqual([['rev-parse', '--verify', 'refs/heads/feature/fix'], ['remote']])
+    expect(calls).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/fix'],
+      ['remote']
+    ])
   })
 
   it('keeps longest configured remote-name matching semantics', async () => {
@@ -176,7 +179,7 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
       getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
     ).resolves.toBeNull()
     expect(calls).toEqual([
-      ['rev-parse', '--verify', 'refs/heads/feature'],
+      ['rev-parse', '--verify', '--quiet', 'refs/heads/feature'],
       ['remote'],
       ['cat-file', '--batch-check']
     ])
@@ -252,5 +255,70 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
       getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
     ).resolves.toBeNull()
     expect(calls.filter((argv) => argv[0] === 'show-ref')).toHaveLength(3)
+  })
+})
+
+describe('branch conflict with existing-branch adoption', () => {
+  const absent = () => Object.assign(new Error('missing'), { code: 1, stderr: '' })
+
+  it('skips adoption and its commit probe for a proven missing local ref', async () => {
+    const exec = vi.fn(async (argv: string[]) => {
+      if (argv[0] === 'rev-parse') {
+        throw absent()
+      }
+      return { stdout: '' }
+    })
+    const adopt = vi.fn(async () => false)
+    await expect(
+      getBranchConflictKindViaExec(exec, 'new', undefined, {}, undefined, adopt)
+    ).resolves.toBeNull()
+    expect(adopt).not.toHaveBeenCalled()
+    expect(exec).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows an existing branch without querying remote refs', async () => {
+    const exec = vi.fn(async () => ({ stdout: 'a'.repeat(40) }))
+    const adopt = vi.fn(async () => true)
+    await expect(
+      getBranchConflictKindViaExec(exec, 'existing', undefined, {}, undefined, adopt)
+    ).resolves.toBeNull()
+    expect(adopt).toHaveBeenCalledOnce()
+    expect(exec).toHaveBeenCalledOnce()
+  })
+
+  it('retains conflicts for refs whose objects cannot be adopted as commits', async () => {
+    const exec = vi.fn(async () => ({ stdout: 'a'.repeat(40) }))
+    const adopt = vi.fn(async () => false)
+    await expect(
+      getBranchConflictKindViaExec(exec, 'dangling', undefined, {}, undefined, adopt)
+    ).resolves.toBe('local')
+    expect(adopt).toHaveBeenCalledOnce()
+    expect(exec).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    Object.assign(new Error('transport'), { code: 1, stderr: 'transport failed' }),
+    Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })
+  ])('still attempts adoption after an undecided ref probe: %s', async (error) => {
+    const exec = vi.fn(async () => {
+      throw error
+    })
+    const adopt = vi.fn(async () => true)
+    await expect(
+      getBranchConflictKindViaExec(exec, 'existing', undefined, {}, undefined, adopt)
+    ).resolves.toBeNull()
+    expect(adopt).toHaveBeenCalledOnce()
+  })
+
+  it('rechecks a ref that disappeared while adoption was running', async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: 'a'.repeat(40) })
+      .mockRejectedValueOnce(absent())
+      .mockResolvedValueOnce({ stdout: '' })
+    await expect(
+      getBranchConflictKindViaExec(exec, 'removed', undefined, {}, undefined, async () => false)
+    ).resolves.toBeNull()
+    expect(exec).toHaveBeenCalledTimes(3)
   })
 })

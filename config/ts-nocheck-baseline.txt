@@ -34,7 +34,7 @@ src/main/runtime/orca-runtime-create-terminal-side-effect-command-code-detector.
 src/main/runtime/orca-runtime-create-terminal.ts
 src/main/runtime/orca-runtime-deliver-pending-messages.ts
 src/main/runtime/orca-runtime-emit-daemon-pty-transient-fact.ts
-src/main/runtime/orca-runtime-fence-automation-owner.ts
+src/main/runtime/orca-runtime-automation-operations.ts
 src/main/runtime/orca-runtime-file-commands.ts
 src/main/runtime/orca-runtime-fit-override-listeners.ts
 src/main/runtime/orca-runtime-focus-terminal.ts

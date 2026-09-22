@@ -174,6 +174,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ agentsCompactMode: v })
       window.api.ui.set({ agentsCompactMode: v }).catch(console.error)
     },
+    agentsShowSearch: true,
+    setAgentsShowSearch: (v) => {
+      set({ agentsShowSearch: v })
+      window.api.ui.set({ agentsShowSearch: v }).catch(console.error)
+    },
     agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
     setAgentsReadFilter: (v) => {
       set({ agentsReadFilter: v })

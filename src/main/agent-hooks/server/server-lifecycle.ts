@@ -1,3 +1,4 @@
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -36,19 +37,22 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.lastWrittenJson = null
-    // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
-    if (this.lastStatusFilePath) {
-      this.hydrateLastStatusFromDisk()
-    }
-    this.captureHydratedAuthorityCommitments()
-    // Drain before binding the listener so replay cannot race a live hook during startup.
-    if (this.endpointDir) {
-      drainAgentHookSpool({
-        endpointDir: this.endpointDir,
-        getPersistedLaunchTokenHash: (paneKey) =>
-          this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-        ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
-      })
+    if (!this.ownerStateInitialized) {
+      // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
+      if (this.lastStatusFilePath) {
+        this.hydrateLastStatusFromDisk()
+      }
+      this.captureHydratedAuthorityCommitments()
+      // Drain before binding the listener so replay cannot race a live hook during startup.
+      if (this.endpointDir) {
+        drainAgentHookSpool({
+          endpointDir: this.endpointDir,
+          getPersistedLaunchTokenHash: (paneKey) =>
+            this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
+          ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
+        })
+      }
+      this.ownerStateInitialized = true
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -102,9 +106,22 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
             })
           : 'suppress'
         if (normalized.event && statusDisposition !== 'suppress') {
+          const restartedAuthority =
+            statusDisposition === 'restart' && source === 'omp'
+              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
+              : undefined
           const event =
             statusDisposition === 'restart'
-              ? { ...normalized.event, launchToken: undefined }
+              ? {
+                  ...normalized.event,
+                  launchToken: undefined,
+                  ...(restartedAuthority
+                    ? {
+                        ...restartedAuthority,
+                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
+                      }
+                    : {})
+                }
               : normalized.event
           if (statusDisposition === 'restart') {
             // Why: a retired pane accepting a new turn is a different agent session behind the
@@ -113,8 +130,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           }
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          if (enriched) {
+            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+            this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          }
         }
         res.writeHead(204)
         res.end()
@@ -134,39 +153,53 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.server = createServer((req, res) => {
       void handleRequest(req, res)
     })
-    await new Promise<void>((resolve, reject) => {
-      const onStartupError = (err: Error): void => {
-        // Why: swap the startup reject-handler for a logging one so a later runtime 'error' can't crash main as an unhandled event.
-        this.server?.off('listening', onListening)
-        reject(err)
-      }
-      const onListening = (): void => {
-        this.server?.off('error', onStartupError)
-        this.server?.on('error', (err) => {
-          console.error('[agent-hooks] server error', err)
-        })
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onStartupError = (err: Error): void => {
+          this.server?.off('listening', onListening)
+          reject(err)
         }
-        this.maybeWriteEndpointFile()
-        resolve()
-      }
-      this.server!.once('error', onStartupError)
-      this.server!.listen(0, '127.0.0.1', onListening)
-    })
+        const onListening = (): void => {
+          this.server?.off('error', onStartupError)
+          this.server?.on('error', (err) => {
+            console.error('[agent-hooks] server error', err)
+          })
+          const address = this.server!.address()
+          if (address && typeof address === 'object') {
+            this.port = address.port
+          }
+          this.maybeWriteEndpointFile()
+          resolve()
+        }
+        this.server!.once('error', onStartupError)
+        this.server!.listen(0, '127.0.0.1', onListening)
+      })
+    } catch (error) {
+      this.rollbackTransportStart()
+      throw error
+    }
+    this.startOpenCodeBinderLoop()
+  }
+
+  private rollbackTransportStart(): void {
+    this.server?.close()
+    this.server = null
+    this.port = 0
+    this.token = ''
+    this.endpointFileWritten = false
   }
 
   stop(): void {
     // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
     this.flushStatusPersistSync()
-    this.server?.close()
-    this.server = null
-    this.port = 0
-    this.token = ''
+    this.stopOpenCodeBinderLoop()
+    this.rollbackTransportStart()
     this.env = 'production'
     this.onAgentStatus = null
+    this.onClaudeStatusLine = null
     this.onPaneStatusCleared = null
+    this.onTransportInterference = null
+    this.transportInterference.reset()
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -178,6 +211,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
+    this.paneKeyByTerminalHandle.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
@@ -189,9 +223,21 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.restartedStatusLaunchTokenHashByPaneKey.clear()
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
+    this.evidenceObservedAtByPaneKey.clear()
+    this.activeHookTurnCompletedAtByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
+    this.paneKeyAliasPersistenceListener = null
+    this.ownerStateInitialized = false
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     clearAllListenerCaches(this.state)
+    this.resetCanonicalStatus()
     this.notifyStatusChangeListeners()
+    this.paneStatusClearListeners.clear()
+    this.statusDropListeners.clear()
+    this.statusChangeListeners.clear()
+    this.statusFreshnessListeners.clear()
+    this.providerSessionChangeListeners.clear()
+    this.enrichedStatusListeners.clear()
+    this.statusRowMutationListeners.clear()
   }
 }

@@ -5,6 +5,7 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import { RESOLVED_WORKTREE_CACHE_TTL_MS } from './orca-runtime-postlude'
+import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
 import {
   resolveLocalProjectRuntimeForRepo,
   resolveLocalProjectRuntimesForRepos
@@ -65,8 +66,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
   protected hasFreshResolvedWorktreeCache(): boolean {
-    const cached = this.resolvedWorktrees.peek()
-    return Boolean(cached && cached.expiresAt > Date.now())
+    return this.resolvedWorktrees.isFresh(getWorktreeScanMutationRevision())
   }
 
   protected async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
@@ -79,7 +79,8 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     }
     return this.resolvedWorktrees.getSnapshot(
       () => this.computeResolvedWorktrees(),
-      RESOLVED_WORKTREE_CACHE_TTL_MS
+      RESOLVED_WORKTREE_CACHE_TTL_MS,
+      getWorktreeScanMutationRevision()
     )
   }
 

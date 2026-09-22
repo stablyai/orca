@@ -16,6 +16,27 @@ function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
 }
 
 describe('recordAgentProviderSession', () => {
+  it('does not capture a structured native owner for terminal resume on restart', () => {
+    const store = createTestStore()
+    const paneKey = 'structured-tab:leaf-1'
+    const providerSession = { key: 'session_id' as const, id: 'provider-session-uuid' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'keep going', agentType: 'claude' },
+        'Claude Chat',
+        undefined,
+        { tabId: 'structured-tab', worktreeId: 'wt-1' },
+        { providerSession, terminalResumeEligible: false }
+      )
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    expect(store.getState().agentStatusByPaneKey[paneKey]?.providerSession).toEqual(providerSession)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'root-session' }
@@ -303,64 +324,6 @@ describe('recordAgentProviderSession', () => {
 
     expect(
       store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
-    ).toBeUndefined()
-  })
-
-  it('preserves the legacy resume fence only for the same Pi session identity', () => {
-    const store = createTestStore()
-    const makeRecord = (transcriptPath: string): SleepingAgentSessionRecord => ({
-      paneKey: 'tab-1:leaf-1',
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      agent: 'pi',
-      providerSession: {
-        key: 'session_id',
-        id: 'pi-session-1',
-        transcriptPath
-      },
-      prompt: '',
-      state: 'working',
-      capturedAt: 10,
-      updatedAt: 10,
-      automaticResumeBlockedBy: 'legacy-orchestration-worker',
-      origin: 'live'
-    })
-    store.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': makeRecord('/tmp/pi-session-1.jsonl')
-      }
-    } as Partial<AppState>)
-
-    store.getState().recordAgentProviderSession(
-      'tab-1:leaf-1',
-      'pi',
-      {
-        key: 'session_id',
-        id: 'pi-session-1',
-        transcriptPath: '/tmp/pi-session-1.jsonl'
-      },
-      { updatedAt: 20 },
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
-    )
-
-    expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
-
-    store.getState().recordAgentProviderSession(
-      'tab-1:leaf-1',
-      'pi',
-      {
-        key: 'session_id',
-        id: 'pi-session-1',
-        transcriptPath: '/tmp/pi-session-2.jsonl'
-      },
-      { updatedAt: 30 },
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
-    )
-
-    expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.automaticResumeBlockedBy
     ).toBeUndefined()
   })
 

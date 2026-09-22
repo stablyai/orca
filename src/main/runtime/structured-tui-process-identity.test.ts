@@ -238,6 +238,41 @@ describe('structured TUI process identity', () => {
     }
   })
 
+  it('does not call a child absent after a single look that outlasted the budget', async () => {
+    // Measured on a 2,085-process host under load: one whole-machine `ps` took 6.2s while the
+    // shell-delivered child landed at ~3.5s. `ps` reads the table when it STARTS, so that one
+    // capture reported a t=0 machine and returned with the 5s budget already spent -- the loop
+    // answered "no exact child" without ever looking again.
+    let clockMs = 0
+    let captures = 0
+    await expect(
+      readStructuredTuiProcessIdentity({
+        hostId: 'local',
+        rootPid: 100,
+        spawnToken: 'spawn-slow-ps',
+        agent: 'claude',
+        platform: 'darwin',
+        readPosixRows: async () => {
+          captures += 1
+          const observedAtMs = clockMs
+          clockMs += 6_200
+          return [
+            { pid: 100, ppid: 1, stat: 'Ss', command: '/bin/zsh' },
+            ...(observedAtMs >= 3_500
+              ? [{ pid: 101, ppid: 100, stat: 'S+', command: 'claude --resume session-1' }]
+              : [])
+          ]
+        },
+        readStartTime: async () => 1_700_000_000_000,
+        now: () => clockMs,
+        sleep: async (delayMs) => {
+          clockMs += delayMs
+        }
+      })
+    ).resolves.toMatchObject({ pid: 101, spawnToken: 'spawn-slow-ps' })
+    expect(captures).toBe(2)
+  })
+
   it('fails closed when the process snapshot omitted the PTY root', async () => {
     await expect(
       readStructuredTuiProcessIdentity({

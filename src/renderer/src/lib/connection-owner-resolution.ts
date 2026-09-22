@@ -5,6 +5,7 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -84,6 +85,23 @@ export function getConnectionIdFromState(
     { repoId, hostId: worktree?.hostId ?? null }
   )
   return resolution.kind === 'resolved' ? resolution.connectionId : undefined
+}
+
+/**
+ * The SSH connectionId of a repo named directly, for callers that hold a repoId rather than a
+ * worktree id — the workspace may not have landed in the store yet, or its rows may disagree about
+ * the owner, and neither is evidence about the repo itself. `undefined` keeps this module's
+ * "cannot determine the host" answer for a repo the store does not carry.
+ */
+export function getRepoConnectionIdFromState(
+  state: ConnectionOwnerState,
+  repoId: string | null | undefined
+): string | null | undefined {
+  if (!repoId) {
+    return undefined
+  }
+  const resolution = resolveIndexedRepoOwner(state.repos, repoId)
+  return resolution.kind === 'resolved' ? getRepoSshConnectionId(resolution.owner) : undefined
 }
 
 export function getConnectionIdForFileFromState(

@@ -132,6 +132,71 @@ describe('toHostReadableTranscriptPath', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('probes only the attested distro when multiple guests contain the same path', async () => {
+    const seen: string[] = []
+    const guestPath = '/home/ada/.codex/sessions/rollout-same.jsonl'
+
+    await expect(
+      toHostReadableTranscriptPath(guestPath, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async (candidate) => {
+          seen.push(candidate)
+          return candidate.includes('Ubuntu') || candidate.includes('Debian')
+        },
+        listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
+      })
+    ).resolves.toBe('\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-same.jsonl')
+    expect(seen).toEqual([
+      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-same.jsonl'
+    ])
+  })
+
+  it('keeps running-distro filtering for an attested guest path', async () => {
+    const pathExists = vi.fn().mockResolvedValue(true)
+    wslMocks.filterPathsToRunningWslDistrosAsync.mockResolvedValue([])
+
+    await expect(
+      toHostReadableTranscriptPath('/home/ada/.codex/sessions/rollout-stopped.jsonl', {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists,
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
+    ).resolves.toBeNull()
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(wslMocks.filterPathsToRunningWslDistrosAsync).toHaveBeenCalledWith([
+      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-stopped.jsonl'
+    ])
+  })
+
+  it('rejects an existing UNC path from a distro other than the attested guest', async () => {
+    const pathExists = vi.fn(async () => true)
+
+    await expect(
+      toHostReadableTranscriptPath('\\\\wsl.localhost\\Debian\\home\\ada\\same.jsonl', {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists
+      })
+    ).resolves.toBeNull()
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
+  it('does not probe an attested UNC transcript after that distro stops', async () => {
+    const pathExists = vi.fn(async () => true)
+    wslMocks.filterPathsToRunningWslDistrosAsync.mockResolvedValue([])
+
+    await expect(
+      toHostReadableTranscriptPath(ROLLOUT_UNC, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists
+      })
+    ).resolves.toBeNull()
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
   it('returns null when no distro maps to an existing file', async () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {

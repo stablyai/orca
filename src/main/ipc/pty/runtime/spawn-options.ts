@@ -3,6 +3,7 @@ import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { ptySizes } from '../delivery/visibility-state'
+import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
 import {
   mergePtyEnvDeletions,
@@ -18,8 +19,9 @@ import {
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
+import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
-import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
   makePaneSpawnReservationKey,
   reservePaneSpawn,
@@ -48,12 +50,9 @@ export async function buildRuntimePtySpawnOptions(
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {
     ctx.spawnOptions.codexHomePathOverride = { value: ctx.selectedCodexHomePath }
   }
-  const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
-  if (startupTerminalColorQueryReplyColors) {
-    ctx.spawnOptions.startupIngress = {
-      colors: startupTerminalColorQueryReplyColors,
-      deadlineMs: 5_000
-    }
+  const startupIngress = getStartupTerminalIngressIntent(args)
+  if (startupIngress) {
+    ctx.spawnOptions.startupIngress = startupIngress
   }
   let ptySpawnCommitReported = false
   ctx.reportPtySpawnCommitted = (): void => {
@@ -110,7 +109,17 @@ export async function buildRuntimePtySpawnOptions(
     ctx.effectiveSessionAppId !== undefined ? ptySizes.get(ctx.effectiveSessionAppId) : undefined
   if (ctx.sessionId !== undefined) {
     ctx.spawnOptions.sessionId = ctx.sessionId
-    ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
+    if (
+      shouldSeedPreAttachPtySize({
+        isFreshSessionId: ctx.isNewDaemonSession,
+        hasCachedSize: ctx.hadSessionSizeBeforeAttach,
+        // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
+        // cached size is the only source that can outrank their requested grid here.
+        requestIsUnmeasured: false
+      })
+    ) {
+      ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
+    }
   }
   ctx.materializedPaneKey = ctx.hostSessionBinding
     ? makePaneKey(ctx.hostSessionBinding.tabId, ctx.hostSessionBinding.leafId)
@@ -131,8 +140,14 @@ export async function buildRuntimePtySpawnOptions(
   if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
     ctx.spawnOptions.tabId = args.tabId
   }
-  if (process.platform === 'win32' && !args.connectionId) {
+  if (!args.connectionId) {
     ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
+    ctx.spawnOptions.terminalShellArgs = resolveConfiguredTerminalShellArgs({
+      connectionId: args.connectionId,
+      requestedShellOverride: args.shellOverride,
+      launchCommand: ctx.launchCommand,
+      settings: ctx.deps.getSettings?.()
+    })
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')

@@ -1,24 +1,28 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
+import { killWithDescendantSweep } from '../main/pty-descendant-termination'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
+import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
-  resolveDefaultCwd,
   resolveProcessCwd,
-  processHasChildren,
   getForegroundProcessName,
   isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
+import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
+import {
+  ORCA_IMAGE_PROTOCOL_ENV,
+  ORCA_IMAGE_PROTOCOL_VALUE
+} from '../shared/terminal-image-protocol'
 import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
@@ -28,8 +32,15 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree/id'
+import { splitWorktreeIdForFilesystem } from '../shared/worktree/id'
+import {
+  formatUnresolvedRelaySpawnCwdMessage,
+  relayHostDirectoryExists,
+  resolveRelaySpawnCwd,
+  type RelaySpawnCwdResolution
+} from './pty-spawn-cwd'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
+import { PTY_ATTACH_PROVEN_EXITED_MARKER } from '../shared/pty-attach-absence-evidence'
 import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
   createShellStartupOutputScanState,
@@ -49,6 +60,7 @@ import {
 import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import type { PtyChildProcessVerdict } from '../shared/terminal-process-inspection'
 import { terminatePtyJob } from '../main/windows/windows-pty-job'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
@@ -65,16 +77,18 @@ import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owne
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import {
   resolveAgentForegroundProcessesBatch,
+  resolveRemoteForegroundEvidence,
   toForegroundProcessEvidence,
   type BatchedForegroundProcessResult
 } from '../main/providers/agent-foreground-process'
-import {
-  getStrictProcessTableSnapshot,
-  PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
-  type ProcessTableRow
-} from '../shared/process-table-snapshot'
-import type { ForegroundProcessEvidence } from '../shared/foreground-process-evidence'
+import type { ProcessTableRow } from '../shared/process-table-snapshot'
+import { getStrictProcessTableSnapshotWithAge } from '../shared/process-table-snapshot-reader'
+import type {
+  ForegroundProcessEvidence,
+  RemoteForegroundEvidence
+} from '../shared/foreground-process-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
+import { pruneRetiredPtyIncarnations } from '../shared/retired-pty-incarnations'
 import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
@@ -110,6 +124,44 @@ import {
   toTerminalUnavailableCause
 } from './node-pty-unavailable-diagnosis'
 import { TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../shared/terminal-unavailable-cause'
+
+/**
+ * The shell a spawn will actually launch, resolved the same way `spawnAfterAdmission` resolves it.
+ *
+ * Non-throwing on an unsupported override: that override fails the spawn later regardless, and this
+ * is only asked in order to decide whose filesystem the cwd lives on.
+ */
+function resolveRelaySpawnShell(
+  params: Record<string, unknown>,
+  env: Record<string, string> | undefined
+): string {
+  const shellOverride = typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
+  const requestedEnvShell =
+    process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
+  return resolveRevivedShellOverride(shellOverride) || requestedEnvShell || resolveDefaultShell()
+}
+
+/**
+ * Spawn cwd, or a refusal. Both `spawnOnce` (admission fence) and `spawnAfterAdmission` (the native
+ * spawn) resolve through here so the fence can never be keyed on a directory the spawn won't use.
+ */
+function requireRelaySpawnCwd(
+  params: Record<string, unknown>,
+  env: Record<string, string> | undefined
+): string {
+  const resolution: RelaySpawnCwdResolution = resolveRelaySpawnCwd({
+    requestedCwd: params.cwd,
+    worktreeId: typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID,
+    env,
+    launchAgent: isTuiAgent(params.launchAgent) ? params.launchAgent : undefined,
+    // A WSL shell executes in a guest, so the relay's own statSync is not the right question.
+    executesOnRelayFilesystem: !isRelayWslShell(resolveRelaySpawnShell(params, env))
+  })
+  if (resolution.kind === 'unresolved') {
+    throw new Error(formatUnresolvedRelaySpawnCwdMessage(resolution.workspaceId))
+  }
+  return resolution.cwd
+}
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return error instanceof Error && isFlattenedNodePtyLoaderMessage(error.message)
@@ -184,7 +236,12 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
+   *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
+   *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
+  shellReadyArmed?: boolean
   physicalExit?: PhysicalExitTracker
+  immediateClose?: Promise<void>
   forceKillSent?: boolean
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
@@ -206,6 +263,7 @@ type RelayAgentSessionCreateResult = {
   replay?: string
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
+  shellReadyArmed?: boolean
 }
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -313,22 +371,6 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
-const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
-  'powershell.exe',
-  'powershell',
-  'pwsh.exe',
-  'pwsh',
-  'cmd.exe',
-  'cmd',
-  'wsl.exe',
-  'wsl',
-  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
-  // the one host that hard-failed a setting the local and daemon PTYs accept.
-  'bash.exe',
-  'bash',
-  WINDOWS_GIT_BASH_SHELL
-])
-
 function resolvePtyShellOverride(shellOverride: string): string {
   if (!shellOverride) {
     return ''
@@ -336,8 +378,7 @@ function resolvePtyShellOverride(shellOverride: string): string {
   if (process.platform !== 'win32') {
     return ''
   }
-  const normalized = shellOverride.toLowerCase()
-  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
+  if (!isSupportedWindowsShellOverride(shellOverride)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
   }
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
@@ -450,7 +491,7 @@ export type PtyEnvAugmenter = (ctx: {
   env: Record<string, string>
   command?: string
   launchAgent?: TuiAgent
-}) => Record<string, string>
+}) => Record<string, string> | Promise<Record<string, string>>
 
 export type RelayPtyWorktreeRemovalCoordinator = {
   beginWorktreePtySpawn(operationPath: string): () => void
@@ -468,6 +509,10 @@ export class PtyHandler {
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingProducerBytesByPty = new Map<string, number>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
+  private retiredIncarnations = new Map<
+    string,
+    { id: string; code: number; incarnationId: string; expiresAt: number }
+  >()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
@@ -589,7 +634,14 @@ export class PtyHandler {
 
   /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
   private relayNodePtyDir(): string {
-    return join(__dirname, 'node_modules', 'node-pty')
+    // Packaged relays live under Resources/relay while runtime dependencies are
+    // copied to the sibling Resources/node_modules directory. Development
+    // bundles keep node_modules beside the relay output, so retain that path as
+    // the fallback.
+    const packagedRoot = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
+    const packagedDir = packagedRoot ? join(packagedRoot, 'node_modules', 'node-pty') : ''
+    const localDir = join(__dirname, 'node_modules', 'node-pty')
+    return packagedDir && existsSync(packagedDir) ? packagedDir : localDir
   }
 
   /**
@@ -638,7 +690,7 @@ export class PtyHandler {
     const matchingIds = [...this.ptys.values()]
       .filter((managed) => {
         const ownedPath = managed.worktreeId
-          ? splitWorktreeId(managed.worktreeId)?.worktreePath
+          ? splitWorktreeIdForFilesystem(managed.worktreeId)?.worktreePath
           : undefined
         return (
           (ownedPath !== undefined && isPathInsideOrEqual(rootPath, ownedPath)) ||
@@ -731,7 +783,7 @@ export class PtyHandler {
   }
 
   /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
-  private buildSpawnEnv(
+  private async buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
     ctx: {
       id: string
@@ -741,7 +793,7 @@ export class PtyHandler {
       launchAgent?: TuiAgent
     },
     envToDelete: readonly string[] = []
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
     const baseEnv = mergeGitConfigEnvProtocol(
       {
         ...stripInheritedBuildModeEnv(process.env),
@@ -757,7 +809,7 @@ export class PtyHandler {
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
-        Object.assign(augmented, augmenter({ ...ctx, env: baseEnv }))
+        Object.assign(augmented, await augmenter({ ...ctx, env: baseEnv }))
       } catch (err) {
         process.stderr.write(
           `[pty-handler] env augmenter threw: ${err instanceof Error ? err.message : String(err)}\n`
@@ -765,6 +817,7 @@ export class PtyHandler {
       }
     }
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
+    result[ORCA_IMAGE_PROTOCOL_ENV] = ORCA_IMAGE_PROTOCOL_VALUE
     // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
     stripLegacyTerminalShimEnv(result, process.platform)
     // Why unconditionally here, not in injectRelayFishHistoryEnv: that runs only for a
@@ -973,6 +1026,13 @@ export class PtyHandler {
         code: exitCode,
         incarnationId: managed.incarnationId
       })
+      this.retiredIncarnations.set(managed.id, {
+        id: managed.id,
+        code: exitCode,
+        incarnationId: managed.incarnationId,
+        expiresAt: Date.now() + 5_000
+      })
+      pruneRetiredPtyIncarnations(this.retiredIncarnations)
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
@@ -1026,9 +1086,12 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      // Additive capability: clients may request the no-process-table inventory
+      // projection and consume fenced inspect evidence on this host.
+      foregroundProcessEvidenceVersion: 1
     }))
-    this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
+    this.dispatcher.onRequest('pty.listProcesses', (params) => this.listProcesses(params))
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
@@ -1619,6 +1682,7 @@ export class PtyHandler {
     const existing = this.agentSessionCreateOperations.get(operationId)
     if (existing) {
       const result = await existing
+      this.assertPtyNotClosing(this.ptys.get(result.id))
       this.sourcePublication?.activate(result.id, result.incarnationId, context)
       const sourceActivation =
         context && this.sourcePublication?.receivingActivation?.(result.id, context.clientId)
@@ -1669,8 +1733,12 @@ export class PtyHandler {
     const env = params.env as Record<string, string> | undefined
     const worktreeId =
       typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
-    const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
-    const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
+    // Must be the filesystem split, matching requireRelaySpawnCwd: a `::workspace:<uuid>` id would
+    // otherwise fence a directory the spawn never enters.
+    const worktreePath = worktreeId
+      ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+      : undefined
+    const cwd = requireRelaySpawnCwd(params, env)
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
     let physicalSpawnCommitted = false
     const markPhysicalSpawnCommitted = (): void => {
@@ -1729,6 +1797,7 @@ export class PtyHandler {
         this.agentSessionOwners.release(result.owner.ptyId, result.owner.generation)
         throw new Error('agent_session_exited_during_start')
       }
+      this.assertPtyNotClosing(managed)
       managed.agentSessionOwners = this.agentSessionOwners.listForPty(managed.id)
       const adoptedReplay = result.disposition === 'adopted' ? managed.buffered.read() : ''
       this.sourcePublication?.activate(managed.id, managed.incarnationId, context)
@@ -1739,7 +1808,10 @@ export class PtyHandler {
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
         ...(sourceActivation ? { sourceActivation } : {}),
-        ...(adoptedReplay ? { replay: adoptedReplay } : {})
+        ...(adoptedReplay ? { replay: adoptedReplay } : {}),
+        ...(managed.shellReadyArmed !== undefined
+          ? { shellReadyArmed: managed.shellReadyArmed }
+          : {})
       }
     } catch (error) {
       if (!physicalSpawnCommitted) {
@@ -1762,6 +1834,7 @@ export class PtyHandler {
     id: string
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
+    shellReadyArmed?: boolean
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -1770,8 +1843,8 @@ export class PtyHandler {
 
     const cols = (params.cols as number) || 80
     const rows = (params.rows as number) || 24
-    const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
+    const cwd = requireRelaySpawnCwd(params, env)
     const envToDelete = sanitizeEnvToDelete(params.envToDelete)
     const explicitTerm =
       !envToDelete.includes('TERM') &&
@@ -1803,7 +1876,7 @@ export class PtyHandler {
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(
+    const spawnEnv = await this.buildSpawnEnv(
       env,
       { id, paneKey, shell, command, launchAgent },
       envToDelete
@@ -1817,10 +1890,13 @@ export class PtyHandler {
       injectRelayFishHistoryEnv(spawnEnv, worktreeId)
     }
     const wslShell = isRelayWslShell(shell)
+    if (wslShell) {
+      // WSLENV is the only channel that carries a host env var into the guest.
+      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
+    }
     if (historyIsolationEnabled && worktreeId) {
       const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
       if (wslShell && historyRoot) {
-        // WSLENV is the only channel that carries a host env var into the guest.
         addWslEnvKeys(spawnEnv, ['HISTFILE'])
       }
     }
@@ -1831,12 +1907,16 @@ export class PtyHandler {
       isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
+    // Why the shell is part of the decision here and not on the client: the client
+    // cannot see which shell this host runs, and plain Codex must still wait where
+    // the marker rides the line editor rather than double-echoing an early write.
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
       shouldUseShellReadyStartupDelivery({
         command: launchCommandHint,
         startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined,
+        shellPath: shell
       })
     const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
@@ -1929,6 +2009,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      shellReadyArmed: rendererShellReadySupported,
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
@@ -1946,6 +2027,7 @@ export class PtyHandler {
           }
         : {})
     }
+    this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
@@ -1969,7 +2051,8 @@ export class PtyHandler {
     return {
       id,
       incarnationId: managed.incarnationId,
-      ...(sourceActivation ? { sourceActivation } : {})
+      ...(sourceActivation ? { sourceActivation } : {}),
+      shellReadyArmed: rendererShellReadySupported
     }
   }
 
@@ -1989,9 +2072,15 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
+    this.assertPtyNotClosing(managed)
+
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (this.reapPtyProvenExited(managed)) {
-      throw new Error(`PTY "${id}" not found`)
+      // Why the marker: this is the ONLY not-found answer backed by a liveness check. The unmarked
+      // one above is also thrown for an id this session map never had — every id minted before a
+      // relay restart — so a client that cannot tell them apart certifies deaths it never observed
+      // (docs/reference/ssh-execution-boundary.md).
+      throw new Error(`PTY "${id}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
     }
 
     // Why: legacy `pty-N` ids repeated across relay generations; reject conflicting identities.
@@ -2023,6 +2112,10 @@ export class PtyHandler {
     ) {
       sourceRecovery = Object.freeze({ status: 'checkpointUnavailable' })
     }
+    if (this.ptys.get(id) !== managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+    this.assertPtyNotClosing(managed)
     const activation = this.sourcePublication?.activate(
       id,
       managed.incarnationId,
@@ -2197,12 +2290,48 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
-      this.requestForceKill(managed)
-      // Why: preserve timed-out entries so onExit/retry owns native handles.
-      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+      await this.closeImmediately(managed)
     } else {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'force-kill')
+    }
+  }
+
+  private assertPtyNotClosing(managed: ManagedPty | undefined): void {
+    if (managed?.immediateClose) {
+      throw new Error(`PTY "${managed.id}" is terminating`)
+    }
+  }
+
+  private async closeImmediately(managed: ManagedPty): Promise<void> {
+    if (managed.immediateClose) {
+      return managed.immediateClose
+    }
+    const ownsRoot = (): boolean => this.ptys.get(managed.id) === managed && !managed.disposed
+    const close = async (): Promise<void> => {
+      if (process.platform === 'win32') {
+        this.requestForceKill(managed)
+      } else {
+        await killWithDescendantSweep(
+          managed.pty.pid,
+          () => {
+            if (ownsRoot()) {
+              this.requestForceKill(managed)
+            }
+          },
+          { ownsRoot, terminateOwnedTree: () => terminatePtyJob(managed.pty) }
+        )
+      }
+      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+    }
+    const pending = close()
+    managed.immediateClose = pending
+    try {
+      await pending
+    } finally {
+      if (managed.immediateClose === pending) {
+        managed.immediateClose = undefined
+      }
     }
   }
 
@@ -2324,6 +2453,13 @@ export class PtyHandler {
     }
     this.notifyExitListener(managed)
     this.agentSessionOwners.release(managed.id)
+    this.retiredIncarnations.set(managed.id, {
+      id: managed.id,
+      code: 0,
+      incarnationId: managed.incarnationId,
+      expiresAt: Date.now() + 5_000
+    })
+    pruneRetiredPtyIncarnations(this.retiredIncarnations)
     disposeManagedPty(managed)
     this.removePty(managed.id)
     this.clearPtyFlowState(managed.id)
@@ -2534,23 +2670,150 @@ export class PtyHandler {
   private async inspectProcess(params: Record<string, unknown>): Promise<{
     foregroundProcess: string | null
     hasChildProcesses: boolean
+    childProcessEvidence?: PtyChildProcessVerdict
+    foregroundProcessEvidence?: RemoteForegroundEvidence
   }> {
+    pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed || managed.disposed) {
+      const tombstone = this.retiredIncarnations.get(id)
+      if (
+        tombstone &&
+        tombstone.expiresAt > Date.now() &&
+        typeof params.expectedIncarnationId === 'string' &&
+        params.expectedIncarnationId === tombstone.incarnationId
+      ) {
+        return {
+          foregroundProcess: null,
+          hasChildProcesses: false,
+          foregroundProcessEvidence: {
+            authorityGeneration: this.ptyIdMintEpoch,
+            observationEpoch: ++this.foregroundEvidenceEpoch,
+            capturedAgeMs: 0,
+            ptyId: id,
+            ptyIncarnationId: tombstone.incarnationId,
+            verdict: 'exited',
+            reason: `pty_exit_${tombstone.code}`
+          }
+        }
+      }
       throw new Error('terminal_gone')
     }
-    const foregroundProcess = await getForegroundProcessName(
-      managed.pty.pid,
-      managed.pty.process || null
-    )
+    const expectedIncarnationId = params.expectedIncarnationId
+    if (
+      expectedIncarnationId !== undefined &&
+      (typeof expectedIncarnationId !== 'string' ||
+        expectedIncarnationId.length === 0 ||
+        expectedIncarnationId !== managed.incarnationId)
+    ) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        foregroundProcessEvidence: {
+          authorityGeneration: this.ptyIdMintEpoch,
+          observationEpoch: ++this.foregroundEvidenceEpoch,
+          capturedAgeMs: 0,
+          ptyId: id,
+          ptyIncarnationId: managed.incarnationId,
+          verdict: 'unverifiable',
+          reason: 'incarnation_mismatch'
+        }
+      }
+    }
+    let rows: readonly ProcessTableRow[] | null = null
+    // Set only when the budgeted evidence read gave up, so the compatibility fields below do not
+    // turn around and ask the same unreadable table again with no budget at all.
+    let tableUnavailable = false
+    let evidence: RemoteForegroundEvidence | undefined
+    if (process.platform === 'win32') {
+      // Why SSH-to-Windows is always unverifiable: POSIX has a real foreground primitive
+      // (the controlling terminal's foreground process group, tpgid/pgid), so the host can
+      // read which process is in front. Windows has no equivalent. Local Windows approximates
+      // it by reading the native process table and walking descendants of the PTY root pid
+      // (windows-foreground-process-rows.ts), but the relay has neither piece: it does not
+      // import windows-process-table, its getForegroundProcessName is POSIX-shaped
+      // (/proc, pgrep, lsof), and relay hosts run stock node-pty, so no ConPTY job/console
+      // association is available. Returning a descendant name without a creation-time and
+      // session fence would be a guess. Lifting this requires teaching the relay the Windows
+      // process table plus a measured creation-time/session fence - a separate change.
+      evidence = {
+        authorityGeneration: this.ptyIdMintEpoch,
+        observationEpoch: ++this.foregroundEvidenceEpoch,
+        capturedAgeMs: 0,
+        ptyId: id,
+        ptyIncarnationId: managed.incarnationId,
+        verdict: 'unverifiable',
+        reason: 'windows_ssh_foreground_unavailable'
+      }
+    } else {
+      try {
+        const snapshot = await getStrictProcessTableSnapshotWithAge()
+        rows = snapshot.rows
+        evidence = resolveRemoteForegroundEvidence(
+          { rootPid: managed.pty.pid, fallbackProcess: managed.pty.process || null },
+          {
+            ptyId: id,
+            ptyIncarnationId: managed.incarnationId,
+            authorityGeneration: this.ptyIdMintEpoch,
+            observationEpoch: ++this.foregroundEvidenceEpoch,
+            capturedAgeMs: snapshot.capturedAgeMs,
+            platform: process.platform
+          },
+          rows
+        )
+      } catch {
+        tableUnavailable = true
+        evidence = {
+          authorityGeneration: this.ptyIdMintEpoch,
+          observationEpoch: ++this.foregroundEvidenceEpoch,
+          capturedAgeMs: 0,
+          ptyId: id,
+          ptyIncarnationId: managed.incarnationId,
+          verdict: 'unverifiable',
+          reason: 'process_table_unreadable'
+        }
+      }
+    }
+    // Preserve the compatibility field for older clients. New remote identity
+    // consumers ignore it unless the fenced evidence member is also accepted.
+    const foregroundProcess =
+      evidence?.verdict === 'live'
+        ? (evidence.processName ?? managed.pty.process) || null
+        : managed.pty.process || null
+    // Derive child liveness from the same capture; do not fork a second process-table probe for
+    // each field/pane in an event burst.
+    //
+    // Why Windows is gated on the caller asking: this is the one field whose Windows answer costs
+    // a process-table read, and `inspectProcess` is the polled path (750ms/2000ms per tracked
+    // pane). A relay host has no `@vscode/windows-process-tree`, so the read falls back to the
+    // 1.36s CIM scan, and polling that would reinstate exactly the fork storm the shared table
+    // exists to prevent (#15209, #15036). Close and cleanup decisions ask for the scan by name;
+    // a poll gets the honest `unverifiable` instead of a fabricated negative.
+    // Why `tableUnavailable` first: it means the budgeted evidence read already gave up. Without
+    // this arm `inspectPtyChildProcesses` re-enters `getProcessTableSnapshot()` and joins the very
+    // capture this call just abandoned, blocking for all of it and spending the whole latency the
+    // budget exists to avoid. The destructive `pty.hasChildProcesses` RPC keeps its fresh probe.
+    const childProcessEvidence: PtyChildProcessVerdict = rows
+      ? rows.some((row) => row.ppid === managed.pty.pid)
+        ? 'children'
+        : 'no-children'
+      : tableUnavailable
+        ? 'unverifiable'
+        : process.platform === 'win32' && params.scanChildProcesses !== true
+          ? 'unverifiable'
+          : await inspectPtyChildProcesses(managed.pty.pid)
     return {
       foregroundProcess,
-      hasChildProcesses: await processHasChildren(managed.pty.pid)
+      // `unverifiable` keeps spelling itself `false` on the compatibility field, which is what
+      // every client too old to read the verdict receives.
+      hasChildProcesses: childProcessEvidence === 'children',
+      childProcessEvidence,
+      ...(evidence ? { foregroundProcessEvidence: evidence } : {})
     }
   }
 
-  private async listProcesses(): Promise<PtyProcessSummary[]> {
+  private async listProcesses(params: Record<string, unknown> = {}): Promise<PtyProcessSummary[]> {
     const results: PtyProcessSummary[] = []
     // Why (SSH-v3 P2 — the host is the authoritative liveness source, so it has to look): this
     // listing is what publishes `agentSessionOwners`, i.e. "there is a live agent session here you
@@ -2559,18 +2822,30 @@ export class PtyHandler {
     const managedEntries = Array.from(this.ptys)
     // R1 seed evidence is additive and POSIX-only. Windows authorities retain
     // the existing title/liveness path until the measured relay adapter lands.
+    // Desktop callers omit this additive field and retain the shipped list
+    // shape/cost; automatic inventory callers pass false explicitly to skip
+    // process-table work on the host.
+    const includeForegroundProcessEvidence = params.includeForegroundProcessEvidence !== false
     let evidenceRows: readonly ProcessTableRow[] | null = null
+    // Same reason as `inspectProcess`: once the budgeted read has given up, the per-PTY title
+    // fallback below must not re-enter the same capture without a budget -- and here it would do
+    // so once per managed PTY.
+    let evidenceTableUnavailable = false
     let evidenceResults: BatchedForegroundProcessResult[] = []
     const evidenceEpoch = ++this.foregroundEvidenceEpoch
     // Worst-case capture time for the snapshot below, not the instant its await settled: the
-    // reader may serve a TTL-cached table, so the observation can already be one window old. The
-    // loop that follows can await per entry, so each record is stamped against this rather than
-    // carrying a shared constant.
+    // reader may serve a TTL-cached table. The WithAge reader returns the real age, so the
+    // stamp is exact rather than assuming the full staleness window.
     let evidenceCapturedAtMs = Date.now()
-    if (process.platform !== 'win32' && managedEntries.length > 0) {
+    if (
+      includeForegroundProcessEvidence &&
+      process.platform !== 'win32' &&
+      managedEntries.length > 0
+    ) {
       try {
-        evidenceRows = await getStrictProcessTableSnapshot()
-        evidenceCapturedAtMs = Date.now() - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+        const evidenceSnapshot = await getStrictProcessTableSnapshotWithAge()
+        evidenceRows = evidenceSnapshot.rows
+        evidenceCapturedAtMs = Date.now() - evidenceSnapshot.capturedAgeMs
         evidenceResults = await resolveAgentForegroundProcessesBatch(
           managedEntries.map(([, managed]) => ({
             rootPid: managed.pty.pid,
@@ -2581,6 +2856,7 @@ export class PtyHandler {
       } catch {
         // An unreadable capture is represented as unverifiable evidence below;
         // existing inventory fields remain available for old clients.
+        evidenceTableUnavailable = true
       }
     }
     for (const [entryIndex, [id, managed]] of managedEntries.entries()) {
@@ -2595,9 +2871,11 @@ export class PtyHandler {
       const title =
         (evidenceRows
           ? (evidenceResults[entryIndex]?.processName ?? managed.pty.process ?? null)
-          : await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+          : includeForegroundProcessEvidence && !evidenceTableUnavailable
+            ? await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
+            : managed.pty.process || null) || 'shell'
       const foregroundProcessEvidence =
-        process.platform !== 'win32'
+        includeForegroundProcessEvidence && process.platform !== 'win32'
           ? toForegroundProcessEvidence(
               evidenceResults[entryIndex] ?? {
                 available: false,
@@ -2673,14 +2951,14 @@ export class PtyHandler {
       if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
         continue
       }
-      // Only re-attach if the original process is still alive
-      try {
-        process.kill(entry.pid, 0)
-      } catch {
+      // Only re-attach if the host proves the original process is still there. `isProcessAlive`
+      // is ESRCH-only for the same reason `reapPtyProvenExited` is: a refusal this host cannot
+      // resolve is unverifiable, not absence (docs/reference/ssh-execution-boundary.md).
+      if (!Number.isInteger(entry.pid) || entry.pid <= 0 || !isProcessAlive(entry.pid)) {
         continue
       }
       const ownedPath = entry.worktreeId
-        ? splitWorktreeId(entry.worktreeId)?.worktreePath
+        ? splitWorktreeIdForFilesystem(entry.worktreeId)?.worktreePath
         : undefined
       const finishCreation = this.beginPtyCreation([ownedPath, entry.cwd])
       this.pendingReviveIds.add(entry.id)
@@ -2724,13 +3002,25 @@ export class PtyHandler {
     const shellOverride = typeof entry.shellOverride === 'string' ? entry.shellOverride.trim() : ''
     const resolvedShellOverride = resolveRevivedShellOverride(shellOverride)
     const shell = resolvedShellOverride || resolveDefaultShell()
+    // Mirrors spawn: the entry's override is what gets re-launched, so a WSL
+    // pane needs the same guest-visible HISTFILE and the same WSLENV carrier.
+    const wslShell = isRelayWslShell(shell)
+    // Why cwd is re-checked: it is the one serialized field revive still took on trust, and it only
+    // proves the directory existed when the client wrote it down. A worktree removed since leaves
+    // node-pty to _exit(1) the child on POSIX (a pane revived already dead) and to throw on Windows,
+    // which escapes the loop and costs every later entry its state. Same call as the shell override
+    // below: drop this one pane rather than substitute a directory it was never pointed at. Skipped
+    // for a WSL shell, whose cwd lives in a guest that never stats on this host.
+    if (!wslShell && !relayHostDirectoryExists(entry.cwd)) {
+      return
+    }
     const terminalWindowsWslDistro =
       typeof entry.terminalWindowsWslDistro === 'string' &&
       entry.terminalWindowsWslDistro.length <= MAX_REVIVED_WSL_DISTRO_LENGTH
         ? entry.terminalWindowsWslDistro
         : null
     const historyIsolationEnabled = entry.historyIsolationEnabled === true
-    const spawnEnv = this.buildSpawnEnv(
+    const spawnEnv = await this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
@@ -2742,9 +3032,9 @@ export class PtyHandler {
     ) {
       injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
     }
-    // Mirrors spawn: the entry's override is what gets re-launched, so a WSL
-    // pane needs the same guest-visible HISTFILE and the same WSLENV carrier.
-    const wslShell = isRelayWslShell(shell)
+    if (wslShell) {
+      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
+    }
     if (historyIsolationEnabled && entry.worktreeId) {
       const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {
         wsl: wslShell

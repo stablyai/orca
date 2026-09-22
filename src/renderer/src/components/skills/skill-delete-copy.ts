@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlan,
@@ -73,8 +74,8 @@ export function skillDeletePlacementSummary(plan: SkillDeletePlan): string | nul
     folders > 0 ? foldersLabel(folders) : null,
     links > 0 ? linksLabel(links) : null
   ].filter((part): part is string => part !== null)
-  const roots = [...new Set(placements.map((placement) => placement.rootLabel))].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  const roots = [...new Set(placements.map((placement) => placement.rootLabel))].sort(
+    compareBaseSensitivityLocaleText
   )
   return translate(
     'auto.components.skills.SkillDelete.placementSummaryParts',

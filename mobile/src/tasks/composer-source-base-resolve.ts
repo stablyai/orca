@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import type { GitHubPrStartPoint } from '../../../src/shared/worktree/types'
+import { worktreeMrBaseResolve, worktreePrBaseResolve } from './mobile-workspace-create-operations'
 import type { ComposerBaseState } from './mobile-composer-source-types'
 
 // The resolved start point for a linked PR/MR: the base branch to create from
@@ -9,8 +9,6 @@ export type ComposerHostedBase = Pick<
   GitHubPrStartPoint,
   'baseBranch' | 'compareBaseRef' | 'pushTarget' | 'branchNameOverride' | 'maintainerCanModify'
 >
-
-type HostedBaseResult = ComposerHostedBase | { error: string }
 
 // Narrows a resolved start point to the fields the composer stores; maintainerCanModify
 // is only consumed to derive the fork-push warning, so it is deliberately dropped.
@@ -35,8 +33,8 @@ export async function resolveComposerPrBase(args: {
   isCrossRepository?: boolean
 }): Promise<GitHubPrStartPoint> {
   const { client, repoId, prNumber, headRefName, baseRefName, isCrossRepository } = args
-  const response = await client.sendRequest(
-    'worktree.resolvePrBase',
+  const reply = await worktreePrBaseResolve.request(
+    client,
     {
       repo: `id:${repoId}`,
       prNumber,
@@ -46,14 +44,12 @@ export async function resolveComposerPrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as GitHubPrStartPoint | { error: string }
+  const result = worktreePrBaseResolve.interpret(reply)
   if ('error' in result) {
     throw new Error(result.error)
   }
-  return result
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolved arm requires `baseBranch`; `compareBaseRef`, `pushTarget`, `branchNameOverride` and `maintainerCanModify` are optional on GitHubPrStartPoint and stay optional here, and unknown members pass through to the create.
+  return result as GitHubPrStartPoint
 }
 
 // Picks the right resolver for a linked hosted item, or null when the item is an
@@ -106,8 +102,8 @@ export async function resolveComposerMrBase(args: {
   isCrossRepository?: boolean
 }): Promise<ComposerHostedBase> {
   const { client, repoId, mrIid, sourceBranch, targetBranch, isCrossRepository } = args
-  const response = await client.sendRequest(
-    'worktree.resolveMrBase',
+  const reply = await worktreeMrBaseResolve.request(
+    client,
     {
       repo: `id:${repoId}`,
       mrIid,
@@ -117,12 +113,10 @@ export async function resolveComposerMrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const result = (response as RpcSuccess).result as HostedBaseResult
+  const result = worktreeMrBaseResolve.interpret(reply)
   if ('error' in result) {
     throw new Error(result.error)
   }
-  return result
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as the PR resolver above.
+  return result as ComposerHostedBase
 }

@@ -9,7 +9,6 @@ import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
 } from '@/components/sidebar/smart-attention'
-import { cn } from '@/lib/utils'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
@@ -42,6 +41,7 @@ import { useNow } from '@/hooks/use-now'
 type PaletteLiveStatus = {
   liveAgentStatusByWorktreeId: ReadonlyMap<string, LiveAgentWorktreeStatus>
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
+  stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
   paneSources: TabPaneInputSources
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
@@ -99,13 +99,15 @@ export function PaletteLiveStatusProvider({
       agentStatusByPaneKey,
       migrationUnsupportedByPtyId
     )
+    const livePaneIds = buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now)
     return {
       liveAgentStatusByWorktreeId: getLiveAgentStatusByWorktreeId(
         agentStatusByPaneKey,
         tabsByWorktree,
         now
       ),
-      agentStatusPaneIdsByTabId: buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now),
+      agentStatusPaneIdsByTabId: livePaneIds.paneIdsByTabId,
+      stalePaneIdsByTabId: livePaneIds.stalePaneIdsByTabId,
       paneSources: {
         entriesByTabId,
         ptyIdsByTabId,
@@ -138,30 +140,41 @@ export function PaletteLiveStatusProvider({
   )
 }
 
+/** Fresh rows suppress all title heuristics; stale rows suppress generated permission labels. */
 function buildLiveAgentStatusPaneIdsByTabId(
   entriesByTabId: ReadonlyMap<string, readonly AgentStatusEntry[]>,
   now: number
-): Record<string, ReadonlySet<string>> {
+): {
+  paneIdsByTabId: Record<string, ReadonlySet<string>>
+  stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
+} {
   const paneIdsByTabId: Record<string, ReadonlySet<string>> = {}
+  const stalePaneIdsByTabId: Record<string, ReadonlySet<string>> = {}
   for (const [tabId, entries] of entriesByTabId) {
     const paneIds = new Set<string>()
+    const stalePaneIds = new Set<string>()
     for (const entry of entries) {
+      const paneId = parsePaneKey(entry.paneKey)?.leafId
+      if (!paneId) {
+        continue
+      }
       if (
         entry.restoredUnconfirmed !== true &&
         !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
       ) {
+        stalePaneIds.add(paneId)
         continue
       }
-      const paneId = parsePaneKey(entry.paneKey)?.leafId
-      if (paneId) {
-        paneIds.add(paneId)
-      }
+      paneIds.add(paneId)
     }
     if (paneIds.size > 0) {
       paneIdsByTabId[tabId] = paneIds
     }
+    if (stalePaneIds.size > 0) {
+      stalePaneIdsByTabId[tabId] = stalePaneIds
+    }
   }
-  return paneIdsByTabId
+  return { paneIdsByTabId, stalePaneIdsByTabId }
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
@@ -200,7 +213,9 @@ export function PaletteWorktreeStatusDot({
     live.paneSources.runtimePaneTitlesByTabId,
     {
       liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
-      agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId
+      agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId,
+      stalePaneIdsByTabId: live.stalePaneIdsByTabId,
+      terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
     }
   )
   return (
@@ -255,15 +270,8 @@ export function PaletteRecentTabStatusDot({
       <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
         {fallback}
         <span
-          className={cn(
-            // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
-            // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
-            // dark-mode row. Selected rows use --jump-palette-selection-surface so the cutout tracks
-            // the stronger keyboard highlight from main.css.
-            'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
-            'bg-popover ring-2 ring-popover',
-            'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)] group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
-          )}
+          // The popover-colored knockout separates the glyph from its icon without inheriting row selection.
+          className="pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full bg-popover ring-2 ring-popover"
           aria-hidden="true"
         >
           <RecentTabAttentionBadgeGlyph badge={badge} />

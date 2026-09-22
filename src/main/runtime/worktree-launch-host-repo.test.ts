@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
+import { resolveWorktreeHostRouting, resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 
 // Why (#11163): the terminal launch scope read
 // `store.getRepo(worktree.repoId)?.connectionId ?? null` — one spelling of one arbitrarily chosen
@@ -90,5 +90,58 @@ describe('resolveWorktreeLaunchHost', () => {
       repo: null,
       connectionId: null
     })
+  })
+})
+
+// The same resolution answering "which host is this on" rather than "what may this client dial".
+// The runtime Git target needs the first question, because `local` and `runtime:` are two different
+// non-SSH answers and only one of them may run here.
+describe('resolveWorktreeHostRouting', () => {
+  const runtimeRow = {
+    id: 'r',
+    path: '/p',
+    connectionId: 'ssh-nested',
+    executionHostId: 'runtime:env-a' as const
+  }
+
+  it('keeps `runtime:` distinct from `local` where the launch answer collapses them', () => {
+    expect(
+      resolveWorktreeHostRouting([runtimeRow], { repoId: 'r', hostId: 'runtime:env-a' })
+    ).toEqual({ kind: 'resolved', hostId: 'runtime:env-a', repo: runtimeRow })
+    // Both answer "no connection this client may dial"; only the routing view says which host.
+    expect(
+      resolveWorktreeLaunchHost([runtimeRow], { repoId: 'r', hostId: 'runtime:env-a' })
+    ).toEqual({ kind: 'resolved', repo: runtimeRow, connectionId: null })
+  })
+
+  it('answers the host the worktree names over a rival row on another ssh host', () => {
+    const rows = [
+      { id: 'r', path: '/p', connectionId: 'openclaw' },
+      { id: 'r', path: '/q', connectionId: 'm4air' }
+    ]
+    expect(resolveWorktreeHostRouting(rows, { repoId: 'r', hostId: 'ssh:m4air' })).toEqual({
+      kind: 'resolved',
+      hostId: 'ssh:m4air',
+      repo: rows[1]
+    })
+    // A row on some other host is not evidence about this one, so it contributes no metadata either.
+    expect(resolveWorktreeHostRouting([rows[0]], { repoId: 'r', hostId: 'ssh:m4air' })).toEqual({
+      kind: 'resolved',
+      hostId: 'ssh:m4air',
+      repo: null
+    })
+  })
+
+  it('separates "nobody carries this id" from "rival rows disagree"', () => {
+    expect(resolveWorktreeHostRouting([], { repoId: 'r' })).toEqual({ kind: 'unowned' })
+    expect(
+      resolveWorktreeHostRouting(
+        [
+          { id: 'r', path: '/p' },
+          { id: 'r', path: '/q', connectionId: 'm4air' }
+        ],
+        { repoId: 'r' }
+      )
+    ).toEqual({ kind: 'ambiguous' })
   })
 })

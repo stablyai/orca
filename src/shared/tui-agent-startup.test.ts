@@ -45,6 +45,24 @@ describe('tui agent startup plans', () => {
     }
   )
 
+  // Structured native chat stopped reading the configured arguments; a terminal launch must
+  // still spell every token of them, in order, exactly as the user wrote them.
+  it('passes the whole configured argument string to a terminal launch', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      agentArgs: resolveTuiAgentLaunchArgs('claude', {
+        claude: '--dangerously-skip-permissions --model Opus'
+      }),
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    // Every token, in order, shell-quoted as the terminal path has always quoted them.
+    expect(plan?.launchCommand).toBe("claude '--dangerously-skip-permissions' '--model' 'Opus'")
+  })
+
   it('uses POSIX quoting when the target shell is Linux', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -648,9 +666,7 @@ describe('tui agent startup plans', () => {
     expect(plan).not.toBeNull()
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
-    expect(plan?.launchCommand).toBe(
-      `omp; command test -n "$fish_pid" && set --erase -g ORCA_OMP_PREFILL; command test -z "$fish_pid" && unset ORCA_OMP_PREFILL; true`
-    )
+    expect(plan?.launchConfig.agentCommand).toBe('omp')
   })
 
   it('returns null for oversized Windows flag drafts so callers paste after ready', () => {
@@ -685,12 +701,12 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
       expectedProcess: 'devin',
       followupPrompt: 'fix the tests',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
-        agentArgs: '--permission-mode bypass',
+        agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+        agentArgs: '--permission-mode bypass --respect-workspace-trust false',
         agentEnv: {}
       }
     })
@@ -714,6 +730,8 @@ describe('tui agent startup plans', () => {
   })
 
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
-    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
+    expect(resolveTuiAgentLaunchArgs('devin', null)).toBe(
+      '--permission-mode bypass --respect-workspace-trust false'
+    )
   })
 })

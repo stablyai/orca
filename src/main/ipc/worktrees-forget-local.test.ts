@@ -138,6 +138,7 @@ describe('registerWorktreeHandlers', () => {
         resolvedConnectionId: 'ssh-dead',
         localProvider: ptyProvider,
         onPtyStopped: clearProviderPtyStateMock,
+        closeStructuredSessions: true,
         includeProviderInventory: false,
         includeLocalRegistry: false
       })
@@ -191,6 +192,7 @@ describe('registerWorktreeHandlers', () => {
         resolvedConnectionId: 'ssh-live',
         localProvider: sshProvider,
         onPtyStopped: clearProviderPtyStateMock,
+        closeStructuredSessions: true,
         includeProviderInventory: true,
         includeLocalRegistry: false
       })

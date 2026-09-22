@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
+import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
@@ -210,7 +211,7 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
   onPtyExitRef.current = onPtyExit
   const systemPrefersDark = useSystemPrefersDark()
   const dispatchNotification = useNotificationDispatch(worktreeId)
-  const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
+  const { setCacheTimerStartedAt } = useTerminalPaneStoreActions()
 
   return {
     clearSessionRestoredBannerForPane,

@@ -252,12 +252,12 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
       expectedProcess: 'devin',
       followupPrompt: 'Trace the failing test',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
-        agentArgs: '--permission-mode bypass',
+        agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+        agentArgs: '--permission-mode bypass --respect-workspace-trust false',
         agentEnv: {}
       }
     })
@@ -409,6 +409,8 @@ describe('isShellProcess', () => {
     expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
     expect(isShellProcess('/bin/zsh')).toBe(true)
+    expect(isShellProcess('/bin/ksh')).toBe(true)
+    expect(isShellProcess('dash')).toBe(true)
     expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
       true
     )

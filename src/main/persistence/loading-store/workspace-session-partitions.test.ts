@@ -10,12 +10,12 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from '../../../shared/workspace-doc-history'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
-import { WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND } from '../restoring-sessions/session-worktree-ownership'
 import {
   HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS,
-  parseWorkspaceSessionsByHostId
-} from './workspace-session-partitions'
+  WORKSPACE_SESSION_FIELD_OWNERSHIP
+} from '../../../shared/workspace-session-host-field-ownership'
+import { WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND } from '../restoring-sessions/session-worktree-ownership'
+import { parseWorkspaceSessionsByHostId } from './workspace-session-partitions'
 
 const HOST = 'ssh:target-1'
 

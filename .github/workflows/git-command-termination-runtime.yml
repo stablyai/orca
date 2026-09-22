@@ -1,0 +1,22 @@
+name: Git command termination runtime
+on:
+  pull_request:
+    paths:
+      - 'src/main/git/command-runner/spawned-command-tree-kill*'
+      - '.github/workflows/git-command-termination-runtime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-exit:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Verify exited native child does not trigger taskkill
+        run: node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/git/command-runner/spawned-command-tree-kill.test.ts

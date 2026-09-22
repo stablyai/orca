@@ -1,7 +1,6 @@
 import { resolvePaneTitleDecision } from '../terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { shouldSeedCacheTimerOnInitialTitle } from '../cache-timer-seeding'
-import { shouldSuppressCodexAutoApprovalSyntheticTitle } from '../codex-auto-approval-notification-suppression'
 import {
   cancelCommandCodeDoneSettle,
   openCommandCodeDoneSettle,
@@ -32,15 +31,6 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
     })
     const paneTitle = decision.displayTitle
-    if (
-      shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
-        paneKey: session.cacheKey,
-        tabId: session.deps.tabId,
-        ...(session.launchToken ? { launchToken: session.launchToken } : {})
-      })
-    ) {
-      return
-    }
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
     // Why: a stale-derived cleared title comes from main's unthrottled 3s

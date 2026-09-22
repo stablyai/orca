@@ -55,6 +55,7 @@ vi.mock('sonner', () => ({ toast: toastSpy }))
 
 import {
   CLEAR_COMPLETED_EVICTION_FALLBACK_MS,
+  clearActivityThread,
   clearCompletedActivity,
   flushPendingClearCompletedEvictions,
   isClearableActivityThread,
@@ -189,6 +190,28 @@ describe('clearCompletedActivity', () => {
     // A later dismiss must not double-drop.
     lastToastOptions().onDismiss()
     expect(drop).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears one thread immediately without bulk-clear feedback', () => {
+    expect(clearActivityThread(doneThread)).toBe(true)
+    expect(mockStore.activityClearedAtByPaneKey).toEqual({ 't-done:1': 5_000 })
+    expect(mockStore.dismissRetainedAgents).toHaveBeenCalledWith(['t-done:1'])
+    expect(
+      (
+        window as unknown as {
+          api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
+        }
+      ).api.agentStatus.dropPersistedBatch
+    ).toHaveBeenCalledWith([
+      expect.objectContaining({ paneKey: 't-done:1', receivedAt: 5_000, stateStartedAt: 5_000 })
+    ])
+    expect(toastSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not clear one active thread', () => {
+    expect(clearActivityThread(workingThread)).toBe(false)
+    expect(mockStore.applyActivityClearedAt).not.toHaveBeenCalled()
+    expect(mockStore.dismissRetainedAgents).not.toHaveBeenCalled()
   })
 
   it('undo restores prior cutoffs and re-retains snapshots, and skips the disk drop', () => {

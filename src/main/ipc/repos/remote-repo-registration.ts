@@ -84,7 +84,7 @@ export async function addRemoteRepoFromPath(
   const detected = await detectRepoIconAndUpstream({
     repoPath: resolvedPath,
     kind: repoKind,
-    connectionId: args.connectionId
+    executionHostId: toSshExecutionHostId(args.connectionId)
   })
   const repo: Repo = {
     id: randomUUID(),

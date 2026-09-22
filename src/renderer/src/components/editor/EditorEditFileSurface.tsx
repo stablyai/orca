@@ -30,6 +30,7 @@ export function EditorEditFileSurface({
   editorViewStateKey,
   diffViewStateKey,
   pdfViewStateKey,
+  pdfPreferenceKey,
   fileContent,
   diffContent,
   editBuffer,
@@ -61,6 +62,7 @@ export function EditorEditFileSurface({
   editorViewStateKey: string
   diffViewStateKey: string
   pdfViewStateKey: string
+  pdfPreferenceKey: string
   fileContent: FileContent | undefined
   diffContent: GitDiffResult | undefined
   editBuffer: string | undefined
@@ -101,6 +103,7 @@ export function EditorEditFileSurface({
     return (
       <EditorFileLoadErrorView
         message={fileContent.loadError}
+        code={fileContent.loadErrorCode}
         onRetry={() => reloadContent(activeFile)}
       />
     )
@@ -112,6 +115,7 @@ export function EditorEditFileSurface({
           content={fileContent.content}
           filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
+          preferenceKey={pdfPreferenceKey}
           scrollCacheKey={pdfViewStateKey}
         />
       )

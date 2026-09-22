@@ -57,7 +57,12 @@ export const mobileOnboardingStyles = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md
+  },
+  notificationContent: {
+    justifyContent: 'flex-start',
+    paddingTop: spacing.xl
   },
   iconSurface: {
     width: 64,
@@ -89,6 +94,13 @@ export const mobileOnboardingStyles = StyleSheet.create({
     maxWidth: 420,
     alignSelf: 'center',
     paddingBottom: spacing.lg
+  },
+  disclosure: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: spacing.lg
   },
   primaryButton: {
     minHeight: 44,

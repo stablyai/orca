@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher, type SinkWriteSettlement } from './dispatcher'
+import type { PreparedRelayFrame, RelayClient } from './dispatcher-contract'
 import { relayWriterControlReserve } from './dispatcher-writer-admission'
 import {
   encodeJsonRpcFrame,
@@ -723,18 +724,18 @@ describe('RelayDispatcher', () => {
 
   describe('legacy PTY chunk sizing', () => {
     type DispatcherInternals = {
-      primaryClient: object
+      primaryClient: RelayClient
       estimateFrameBytes: (msg: JsonRpcNotification) => number
-      prepareFrame: (msg: JsonRpcNotification) => object
+      prepareFrame: (msg: JsonRpcNotification) => PreparedRelayFrame
       enqueueFrame: (
-        client: object,
+        client: RelayClient,
         msg: JsonRpcNotification,
         lane: string,
         onSettled?: (result: SinkWriteSettlement) => void
       ) => boolean
       enqueuePreparedFrame: (
-        client: object,
-        frame: object,
+        client: RelayClient,
+        frame: PreparedRelayFrame,
         lane: string,
         onSettled?: (result: SinkWriteSettlement) => void
       ) => boolean

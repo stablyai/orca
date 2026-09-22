@@ -9,13 +9,14 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
+import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -83,44 +84,6 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
     )
     pane.terminal.focus()
     return false
-  }
-}
-
-function getForkAgentLaunchPlatform(args: {
-  repo: { connectionId?: string | null } | null | undefined
-  worktreePath?: string | null
-  projectRuntime?: ProjectExecutionRuntimeResolution
-}): NodeJS.Platform | undefined {
-  if (args.projectRuntime?.status === 'repair-required') {
-    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
-  }
-  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
-    return 'linux'
-  }
-  return undefined
-}
-
-async function preflightForkAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath?: string | null
-  connectionId?: string | null
-}): Promise<void> {
-  const { agent, workspacePath, connectionId } = args
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preflight || !workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath,
-      ...(connectionId ? { connectionId } : {})
-    })
-  } catch {
-    // Best-effort: if the trust artifact cannot be written, keep the existing launch path.
   }
 }
 
@@ -267,11 +230,19 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
-  await preflightForkAgentTrust({
+  const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
     agent: fork.agent,
-    workspacePath: created.worktree.path,
-    connectionId: sourceRepo?.connectionId
+    workspace: { kind: 'git-worktree', worktreeId: forkWorktreeId },
+    prompt: fork.prompt,
+    promptDelivery: 'draft'
   })
+  if (agentSessionLaunchPlan.route !== 'structured-native-chat') {
+    await preflightAgentTrust({
+      agent: fork.agent,
+      workspacePath: created.worktree.path,
+      connectionId: sourceRepo?.connectionId
+    })
+  }
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
     worktreePath: created.worktree.path,
@@ -283,21 +254,29 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     prompt: fork.prompt,
     promptDelivery: 'draft',
     launchSource: 'terminal_context_menu',
+    agentSessionLaunchPlan,
+    beforeSurfaceOpen: (surface) =>
+      activateAndRevealWorktree(forkWorktreeId, {
+        sidebarRevealBehavior: 'auto',
+        ...(surface.kind === 'local-agent-session' ? { providesInitialSurface: true } : {})
+      }) !== false,
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
-
   if (!result) {
+    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
+  notifyForkOpened()
+  return true
+}
 
+function notifyForkOpened(): void {
   toast.success(
     translate(
       'auto.components.terminal.pane.terminal.agent.session.fork.88e34d00eb',
       'Top-level session fork opened in a new workspace'
     )
   )
-  return true
 }
 
 export async function forkAgentSessionFromPane(args: ForkAgentSessionFromPaneArgs): Promise<void> {

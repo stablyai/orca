@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  getTerminalUrlOpenHint,
-  terminalHttpLinkActionDestinationsFor,
-  terminalUrlOpenHintOptionsFor
-} from './terminal-link-open-hints'
+import { getTerminalUrlOpenHint, terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
 
 function stubPlatform(isMac: boolean): void {
   vi.stubGlobal('navigator', { userAgent: isMac ? 'Mac OS X' : 'Windows NT 10.0' })
@@ -167,39 +163,5 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     )
 
     expect(options.modifierInverts).toBe(true)
-  })
-})
-
-describe('terminalHttpLinkActionDestinationsFor', () => {
-  it.each([
-    ['local', { kind: 'local' } as const, false],
-    ['capable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const, true],
-    ['eligible SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const, true]
-  ])(
-    'offers both destinations for a %s owner and follows the preference',
-    (_label, owner, canOpen) => {
-      expect(
-        terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, canOpen)
-      ).toEqual({
-        primary: 'orca',
-        alternate: 'system'
-      })
-      expect(
-        terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, canOpen)
-      ).toEqual({
-        primary: 'system',
-        alternate: 'orca'
-      })
-    }
-  )
-
-  it.each([
-    ['incapable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const],
-    ['ineligible SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const],
-    ['unknown owner', { kind: 'unknown' } as const]
-  ])('offers only the system browser for an %s', (_label, owner) => {
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, false)).toEqual({
-      primary: 'system'
-    })
   })
 })

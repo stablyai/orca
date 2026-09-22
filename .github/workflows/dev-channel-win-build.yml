@@ -149,9 +149,12 @@ jobs:
           fi
           # Reachability is the trust test: GitHub serves PR-only commits by SHA,
           # so resolving the object is not proof a branch or tag of this repo
-          # reaches it. Bare + tree:0 keeps this to the commit graph.
+          # reaches it. Bare + tree:0 keeps this to the commit graph; reftable
+          # because branches that differ only in casing cannot both be stored by
+          # the files backend on a case-insensitive runner disk, which fails the
+          # entire fetch rather than the one ref.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           if ! git -C "$scratch" rev-parse --verify --quiet "$REQUESTED_SHA^{commit}" >/dev/null; then
             echo "::error::Commit $REQUESTED_SHA is not in stablyai/orca."
@@ -200,6 +203,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Caches the Electron binary and electron-builder's tool downloads (nsis,
       # winCodeSign). Same key shape as release-cut's Windows leg.
@@ -216,6 +222,8 @@ jobs:
       # Why retried: pnpm install triggers electron's postinstall, which pulls the
       # Electron binary from GitHub release assets, and that CDN returns transient
       # 504s often enough to lose a build to it.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -223,6 +231,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.

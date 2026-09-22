@@ -40,6 +40,53 @@ describe('agent status runtime orchestration metadata', () => {
     expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
   })
 
+  it('updates typed attention without changing per-agent unread, focus, or drafts', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const paneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    const draft = {
+      repoId: null,
+      name: 'keep me',
+      prompt: 'unsent draft',
+      note: '',
+      attachments: [],
+      linkedWorkItem: null,
+      agent: 'codex' as const,
+      linkedIssue: '',
+      linkedPR: null
+    }
+    store.getState().setAgentStatus(paneKey, {
+      state: 'waiting',
+      prompt: 'worker prompt',
+      agentType: 'codex'
+    })
+    store.setState({
+      unreadAgentCompletionPanes: { [paneKey]: true },
+      unreadTerminalPanes: { [paneKey]: true },
+      activeTabId: 'tab-compose',
+      newWorkspaceDraft: draft
+    })
+    const before = store.getState()
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        attention: { categories: ['input', 'approval'], requiresAction: true }
+      }
+    })
+
+    const after = store.getState()
+    expect(after.agentStatusByPaneKey[paneKey].orchestration?.attention).toEqual({
+      categories: ['input', 'approval'],
+      requiresAction: true
+    })
+    expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
+    expect(after.unreadTerminalPanes).toBe(before.unreadTerminalPanes)
+    expect(after.activeTabId).toBe('tab-compose')
+    expect(after.newWorkspaceDraft).toBe(draft)
+  })
+
   it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
     vi.useFakeTimers()
     const store = createTestStore()

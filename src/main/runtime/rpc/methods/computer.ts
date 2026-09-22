@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   callComputerSidecarAction,
   callComputerSidecarCapabilities,
@@ -7,7 +6,7 @@ import {
   callComputerSidecarSnapshot,
   resetComputerSidecarForTest
 } from '../../../computer/sidecar-client'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   Click,
   ComputerObserveTarget,
@@ -23,15 +22,19 @@ import {
   SetValue,
   TypeText
 } from './computer-schemas'
+import {
+  ComputerCapabilitiesParams,
+  ComputerPermissionsStatusParams
+} from '../../../../shared/rpc-contract/computer-params'
 
 export function resetComputerSessionsForTest(): void {
   resetComputerSidecarForTest()
 }
 
-export const COMPUTER_METHODS: RpcMethod[] = [
+export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.capabilities',
-    params: z.object({}),
+    params: ComputerCapabilitiesParams,
     handler: async () => {
       return await callComputerSidecarCapabilities()
     }
@@ -54,7 +57,7 @@ export const COMPUTER_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'computer.permissionsStatus',
-    params: z.object({}),
+    params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { getComputerUsePermissionStatus } =
         await import('../../../computer/macos-computer-use-permissions')

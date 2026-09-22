@@ -223,29 +223,29 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
   }
 }
 
-type CopyShape = {
+type DaemonActionCopy = {
   title: string
   description: React.ReactNode
   confirmLabel: string
   busyLabel: string
 }
 
-function getCopy(kind: DaemonActionKind): CopyShape {
+function getCopy(kind: DaemonActionKind): DaemonActionCopy {
   if (kind === 'restart') {
     return {
       title: translate(
         'auto.components.shared.useDaemonActions.922548bc66',
-        'Restart the terminal daemon?'
+        'Restart the terminal service?'
       ),
       description: (
         <>
           {translate(
             'auto.components.shared.useDaemonActions.01d6b7c64e',
-            'Kills every running terminal pane and restarts the daemon process. Panes show "Process exited" and can be reopened immediately. Legacy-protocol sessions from a previous app version are preserved. This can\'t be undone.'
+            'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
           )}
         </>
       ),
-      confirmLabel: 'Restart daemon',
+      confirmLabel: 'Restart',
       busyLabel: 'Restarting…'
     }
   }

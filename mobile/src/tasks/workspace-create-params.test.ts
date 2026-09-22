@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { agentLaunchCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
+import { startupAgentCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
 
-describe('agentLaunchCreateFields', () => {
+describe('startupAgentCreateFields', () => {
   it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
-    expect(agentLaunchCreateFields('claude')).toEqual({
+    expect(startupAgentCreateFields('claude')).toEqual({
       startupAgent: 'claude',
       createdWithAgent: 'claude'
     })
   })
 
   it('launches no agent when none was picked', () => {
-    expect(agentLaunchCreateFields(undefined)).toEqual({})
+    expect(startupAgentCreateFields(undefined)).toEqual({})
   })
 })
 

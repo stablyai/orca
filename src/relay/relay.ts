@@ -10,9 +10,8 @@ import { relayLogLine } from './relay-diagnostic-log'
 
 async function main(): Promise<void> {
   const options = parseRelayLaunchOptions(process.argv)
-  const endpointCredential = readRelayEndpointCredential(options.credentialFile)
   if (options.connectMode) {
-    runRelayConnectChannel(options.sockPath, endpointCredential)
+    runRelayConnectChannel(options.sockPath, readRelayEndpointCredential(options.credentialFile))
     return
   }
   if (options.cliMode) {
@@ -20,11 +19,12 @@ async function main(): Promise<void> {
     await runRelayOrcaCliChannel(
       options.sockPath,
       marker === -1 ? [] : process.argv.slice(marker + 1),
-      endpointCredential
+      readRelayEndpointCredential(options.credentialFile)
     )
     return
   }
-  await runRelayDaemon(options, endpointCredential)
+  // Why no read here: the daemon publishes its credential itself, after it owns the socket.
+  await runRelayDaemon(options)
 }
 
 void main().catch((error) => {

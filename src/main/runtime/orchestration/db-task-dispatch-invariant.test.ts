@@ -26,12 +26,61 @@ afterEach(() => {
 })
 
 describe('Task/Dispatch invariant transactions', () => {
+  it.each(['failed', 'completed', 'blocked'] as const)(
+    'allows a dependency-blocked pending Task to become %s',
+    (status) => {
+      const { db } = createDatabase()
+      const dependency = db.createTask({ runId: 'run_legacy_local', spec: 'unresolved dependency' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'manual resolution',
+        deps: [dependency.id]
+      })
+      const dependent = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'downstream work',
+        deps: [task.id]
+      })
+
+      expect(task.status).toBe('pending')
+      const updated = db.updateTaskStatus(task.id, status, 'manual resolution')
+
+      expect(updated?.status).toBe(status)
+      expect(db.getTask(task.id)?.status).toBe(status)
+      expect(db.getTask(dependent.id)?.status).toBe(status === 'completed' ? 'ready' : 'pending')
+    }
+  )
+
+  it('surfaces invalid Task lifecycle edges instead of returning the unchanged row', () => {
+    const { db } = createDatabase()
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'invalid lifecycle edge' })
+    db.updateTaskStatus(task.id, 'blocked')
+
+    expect(() =>
+      db.updateTaskStatus(
+        task.id,
+        'invalid' as Parameters<OrchestrationDb['updateTaskStatus']>[1],
+        'must reject'
+      )
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'lifecycle_conflict',
+        data: expect.objectContaining({ state: 'blocked', to: 'invalid' })
+      })
+    )
+    expect(db.getTask(task.id)).toMatchObject({ status: 'blocked', result: null })
+  })
+
   it.each(['completed', 'failed'] as const)(
     'rolls back a %s Task when Dispatch settlement fails',
     (status) => {
       const { db } = createDatabase()
-      const task = db.createTask({ spec: 'atomic work' })
-      const dependent = db.createTask({ spec: 'dependent work', deps: [task.id] })
+      const task = db.createTask({ runId: 'run_legacy_local', spec: 'atomic work' })
+      const dependent = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'dependent work',
+        deps: [task.id]
+      })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
       const capability = db.mintDispatchCapability({
         dispatchId: dispatch.id,
@@ -74,7 +123,10 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('does not commit a caller-owned transaction', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'outer transaction work' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'outer transaction work'
+    })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     const sqlite = sqliteFor(db)
 
@@ -98,7 +150,10 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('keeps Dispatch creation inside a caller-owned transaction', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'outer transaction dispatch' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'outer transaction dispatch'
+    })
     const sqlite = sqliteFor(db)
 
     sqlite.exec('BEGIN IMMEDIATE')
@@ -115,7 +170,10 @@ describe('Task/Dispatch invariant transactions', () => {
     'settles every active Dispatch left by a pre-fix split when the Task becomes %s',
     (status) => {
       const { db } = createDatabase()
-      const task = db.createTask({ spec: 'legacy split work' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'legacy split work'
+      })
       const first = createRootDispatch(db, task.id, 'term_first')
       sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const second = createRootDispatch(db, task.id, 'term_second')
@@ -132,17 +190,31 @@ describe('Task/Dispatch invariant transactions', () => {
       expect(db.getActiveDispatchForTerminal('term_first')).toBeUndefined()
       expect(db.getActiveDispatchForTerminal('term_second')).toBeUndefined()
       expect(() =>
-        createRootDispatch(db, db.createTask({ spec: 'first later work' }).id, 'term_first')
+        createRootDispatch(
+          db,
+          db.createTask({ runId: 'run_legacy_local', spec: 'first later work' }).id,
+          'term_first'
+        )
       ).not.toThrow()
       expect(() =>
-        createRootDispatch(db, db.createTask({ spec: 'second later work' }).id, 'term_second')
+        createRootDispatch(
+          db,
+          db.createTask({
+            runId: 'run_legacy_local',
+            spec: 'second later work'
+          }).id,
+          'term_second'
+        )
       ).not.toThrow()
     }
   )
 
   it('does not requeue a legacy split Task while another Dispatch remains active', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'legacy split retry' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'legacy split retry'
+    })
     const first = createRootDispatch(db, task.id, 'term_first')
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = createRootDispatch(db, task.id, 'term_second')
@@ -156,7 +228,10 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('does not block a legacy split Task while another Dispatch remains active', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'legacy split release' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'legacy split release'
+    })
     const first = createRootDispatch(db, task.id, 'term_first')
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = createRootDispatch(db, task.id, 'term_second')
@@ -174,7 +249,10 @@ describe('Task/Dispatch invariant transactions', () => {
     'rejects moving a Task to %s while a Dispatch remains active',
     (status) => {
       const { db } = createDatabase()
-      const task = db.createTask({ spec: 'guarded work' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'guarded work'
+      })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
       expect(() => db.updateTaskStatus(task.id, status, 'must not persist')).toThrowError(
@@ -190,7 +268,10 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('rejects moving a Task to dispatched without an active Dispatch', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'unassigned work' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'unassigned work'
+    })
 
     expect(() => db.updateTaskStatus(task.id, 'dispatched')).toThrowError(
       expect.objectContaining({
@@ -204,7 +285,10 @@ describe('Task/Dispatch invariant transactions', () => {
   it('rejects a Dispatch when failure wins after readiness was observed', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'interleaved work' })
+    const task = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'interleaved work'
+    })
     const sqlite = sqliteFor(first.db)
     const prepare = sqlite.prepare.bind(sqlite)
     let injected = false
@@ -227,8 +311,14 @@ describe('Task/Dispatch invariant transactions', () => {
   it('atomically rejects a same-pane Dispatch that loses the occupancy race', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const firstTask = first.db.createTask({ spec: 'first terminal claimant' })
-    const secondTask = first.db.createTask({ spec: 'second terminal claimant' })
+    const firstTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'first terminal claimant'
+    })
+    const secondTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'second terminal claimant'
+    })
     const sqlite = sqliteFor(first.db)
     const prepare = sqlite.prepare.bind(sqlite)
     let winnerId: string | undefined
@@ -266,14 +356,20 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('rejects worker authority when another Dispatch owns the pane', () => {
     const { db } = createDatabase()
-    const ownerTask = db.createTask({ spec: 'current pane owner' })
+    const ownerTask = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'current pane owner'
+    })
     const owner = createRootDispatch(
       db,
       ownerTask.id,
       'term_owner',
       'tab_old:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     )
-    const workerTask = db.createTask({ spec: 'competing supervised worker' })
+    const workerTask = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'competing supervised worker'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -309,7 +405,10 @@ describe('Task/Dispatch invariant transactions', () => {
     'rejects a %s Task update while its supervised worker remains active',
     (status) => {
       const { db } = createDatabase()
-      const task = db.createTask({ spec: 'supervised lifecycle' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'supervised lifecycle'
+      })
       const started = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
@@ -357,7 +456,10 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('keeps a federated late start authoritative after rejecting Task failure', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'federated lifecycle' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'federated lifecycle'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

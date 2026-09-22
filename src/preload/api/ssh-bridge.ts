@@ -9,9 +9,9 @@ import type {
   SshTargetCreateInput,
   SshTarget,
   SshTargetUpdateInput,
+  SshTerminateSessionsResult,
   PortForwardEntry,
-  EnrichedDetectedPort,
-  SshTerminateSessionsResult
+  EnrichedDetectedPort
 } from '../../shared/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,

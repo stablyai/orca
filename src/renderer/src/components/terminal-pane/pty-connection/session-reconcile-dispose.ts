@@ -176,6 +176,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.startupTiming?.finish('disposed')
       // A successor can claim the numeric pane slot before this retired
       // binding's disposal callback runs; do not clear its pane-scoped error.
       const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
@@ -214,6 +215,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.startupGridSettleHandle?.cancel()
       session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
+      session.terminalSelectionFitGuard?.dispose()
+      session.terminalSelectionFitGuard = null
       if (session.pendingForegroundGridDriftCheckRaf !== null) {
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null

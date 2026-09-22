@@ -172,7 +172,7 @@ describe('mobile terminal records', () => {
             ...base,
             agentStatus: {
               ...base.agentStatus!,
-              state: 'blocked',
+              state: 'blocked' as const,
               updatedAt: 2,
               stateStartedAt: 2
             }
@@ -180,6 +180,20 @@ describe('mobile terminal records', () => {
         ]
       )
     ).toBe(false)
+  })
+
+  it('treats structured agent-session identity changes as session-tab changes', () => {
+    const base = {
+      type: 'agent-session' as const,
+      id: 'agent-tab-1',
+      title: 'Codex',
+      sessionId: 'session-1',
+      agent: 'codex',
+      isActive: true
+    }
+
+    expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
+    expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
   })
 
   const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({

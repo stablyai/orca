@@ -77,7 +77,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const subagentsChanged =
       JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
     const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-    this.scheduleCodexSubagentPoll(source, body, next)
+    if (next) {
+      this.scheduleCodexSubagentPoll(source, body, next)
+    }
   }
 
   protected scheduleAssistantMessageRetry(

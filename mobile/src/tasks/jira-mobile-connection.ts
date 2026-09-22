@@ -4,7 +4,7 @@ import type {
   JiraSiteSelection
 } from '../../../src/shared/jira-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { jiraConnectionStatusRead } from './mobile-jira-operations'
 
 export type MobileJiraConnection = {
   connected: boolean
@@ -66,11 +66,9 @@ function resolveJiraSiteSelection(
 // error to disconnected hid a host that refuses jira.* behind a setup prompt the
 // user could never satisfy. Callers surface the throw instead.
 export async function readJiraConnection(client: RpcClient): Promise<MobileJiraConnection> {
-  const response = await client.sendRequest('jira.status')
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  return extractJiraConnection((response as RpcSuccess).result)
+  return extractJiraConnection(
+    jiraConnectionStatusRead.interpret(await jiraConnectionStatusRead.request(client))
+  )
 }
 
 export function jiraSiteLabel(site: JiraSite): string {

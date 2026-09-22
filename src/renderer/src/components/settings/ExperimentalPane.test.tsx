@@ -258,8 +258,12 @@ describe('ExperimentalPane', () => {
     })
 
     expect(container.textContent).toContain('Use updated structured native chat')
+    // The one opt-in gates both providers, so its copy must not name only Codex.
     expect(container.textContent).toContain(
-      'Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.'
+      'Opt in to the host-owned structured chat runtime for Codex and Claude.'
+    )
+    expect(container.textContent).toContain(
+      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
     )
     expect(container.textContent).toContain('Default view')
     root.unmount()

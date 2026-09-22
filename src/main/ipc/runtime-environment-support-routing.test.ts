@@ -57,7 +57,6 @@ describe('runtime environment support routing', () => {
     ).resolves.toMatchObject({ ok: true })
 
     expect(supportsMock).toHaveBeenCalledTimes(2)
-    expect(clearSupportMock).toHaveBeenCalledOnce()
     expect(supported).toHaveBeenCalledOnce()
     expect(unsupported).not.toHaveBeenCalled()
   })

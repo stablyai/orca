@@ -5,7 +5,7 @@
 // process is on the other end of the pipe" FailFast, because the terminal daemon
 // (hosting the ConPTYs) died together with the main process and severed the
 // console pipe. The fix relocates the daemon into a standalone, detached
-// orca-terminal-daemon.exe that survives main death (src/main/daemon/
+// host process outside the install dir that survives main death (src/main/daemon/
 // daemon-host-relocation.ts). win-update-e2e proves the daemon survives a
 // Windows UPDATE; this harness proves it survives a CRASH of the main process.
 //

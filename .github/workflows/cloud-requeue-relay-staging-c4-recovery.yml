@@ -1,0 +1,60 @@
+name: Requeue Relay Staging C4 Recovery
+
+on:
+  workflow_run:
+    workflows: [Recover Relay Staging C4 Image]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: relay-staging-c4-recovery-requeue
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  requeue:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'cancelled') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    steps:
+      - name: Requeue only a cancelled protected recovery job
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          jobs="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?filter=latest")"
+          count="$(jq -s '[.[].jobs[] | select(.name == "recover" and
+            .conclusion == "cancelled" and .started_at == null)] | length' <<< "${jobs}")"
+          if test "${count}" = 0; then exit 0; fi
+          test "${count}" = 1
+          runs="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/cloud-recover-relay-staging-c4-image.yml/runs?branch=main&per_page=100")"
+          active=0
+          while IFS= read -r run_id; do
+            active_jobs="$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest")"
+            if jq -se '
+              ([.[].jobs[] | select(.name == "gate" and .conclusion == "success")] | length) == 1 and
+              ([.[].jobs[] | select(.name == "recover" and .status != "completed")] | length) == 1
+            ' <<< "${active_jobs}" >/dev/null; then
+              active=1
+              break
+            fi
+          done < <(jq -r --arg source "${SOURCE_RUN_ID}" \
+            '.workflow_runs[] | select((.id | tostring) != $source and
+              .status != "completed") | .id' <<< "${runs}")
+          if test "${active}" != 0; then exit 0; fi
+          gh workflow run cloud-recover-relay-staging-c4-image.yml \
+            --repo "${GITHUB_REPOSITORY}" --ref main \
+            -f confirmation=RECOVER_STAGING_ASIA_C4_IMAGE

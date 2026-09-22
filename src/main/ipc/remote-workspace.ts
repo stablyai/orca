@@ -1,21 +1,21 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import {
   REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
   REMOTE_WORKSPACE_STALE_NOTIFICATION,
   type RemoteWorkspaceChangedEvent,
   type RemoteWorkspaceObservedPatchResult,
-  type RemoteWorkspaceObservedSnapshot,
-  type RemoteWorkspaceSession
+  type RemoteWorkspaceObservedSnapshot
 } from '../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { createRepoRowExecutionHostLookup } from '../../shared/worktree-execution-host-resolution'
 import {
-  createRepoRowExecutionHostLookup,
-  resolveWorktreeExecutionHost
-} from '../../shared/worktree-execution-host-resolution'
+  createWorktreeOwnerResolver,
+  createWorktreeTargetResolver,
+  exportSessionForTarget,
+  persistedSessionForTarget
+} from './remote-workspace-target-session-export'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { CLIENT_ID } from './remote-workspace-client-identity'
@@ -104,33 +104,6 @@ function getExpectedHostObservationTokens(
     tokens.set(targetId, token)
   }
   return tokens
-}
-
-function targetForWorktree(
-  store: Store,
-  worktreeId: string,
-  executionHostId?: string
-): string | null {
-  // Why: this decides which SSH target a workspace session is exported to. The old fallback read
-  // `getRepo(id)?.connectionId`, which is host-blind — the same repo id can name rows on several
-  // hosts, so a session could be published to a machine that never owned the worktree (#11163).
-  // Unresolvable ownership exports to nobody rather than guessing.
-  const resolution = resolveWorktreeExecutionHost(
-    createRepoRowExecutionHostLookup(store.getRepos()),
-    { repoId: getRepoIdFromWorktreeId(worktreeId), hostId: executionHostId ?? null }
-  )
-  return resolution.kind === 'resolved' ? resolution.connectionId : null
-}
-
-function exportSessionForTarget(
-  store: Store,
-  targetId: string,
-  session: WorkspaceSessionState
-): RemoteWorkspaceSession {
-  return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId, executionHostId) =>
-      targetForWorktree(store, worktreeId, executionHostId) === targetId
-  })
 }
 
 function sendRemoteWorkspaceChanged(
@@ -245,12 +218,27 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      if (targets.length === 0) {
+        // Nothing to project onto, so skip the session and repo-catalog reads entirely.
+        return []
+      }
+
+      // One repo read, and ownership resolutions shared across targets: neither depends on the
+      // target. The publish fallback's catalog attribution reads the same lookup for the same
+      // reason — building it per target re-hydrates every repo row once per connected host.
+      const resolveWorktreeOwner = createWorktreeOwnerResolver(
+        createRepoRowExecutionHostLookup(store.getRepos())
+      )
+      const resolveWorktreeTarget = createWorktreeTargetResolver(resolveWorktreeOwner)
       const results = await Promise.all(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
+          const session = exportSessionForTarget(
+            resolveWorktreeTarget,
+            target.id,
+            args.session ?? persistedSessionForTarget(store, target.id, resolveWorktreeOwner)
+          )
           const result = await queueRemoteWorkspacePatch(target.id, async () => {
             const current =
               getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target))

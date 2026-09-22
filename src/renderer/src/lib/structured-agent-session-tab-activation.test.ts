@@ -32,8 +32,54 @@ vi.mock('@/runtime/runtime-worktree-selector', () => ({
 
 import {
   activateStructuredAgentSessionById,
-  activateStructuredAgentSessionTab
+  activateStructuredAgentSessionTab,
+  findStructuredAgentSessionTab
 } from './structured-agent-session-tab-activation'
+
+describe('findStructuredAgentSessionTab', () => {
+  const tab = {
+    id: 'structured-tab-1',
+    worktreeId: 'wt-1',
+    groupId: 'group-1',
+    contentType: 'agent-session',
+    entityId: 'session-1',
+    label: 'Codex Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  } satisfies Tab
+
+  it('matches the native session identity in its workspace inventory', () => {
+    expect(
+      findStructuredAgentSessionTab(
+        { 'wt-1': [tab] },
+        { workspaceId: 'wt-1', sessionId: 'session-1' }
+      )
+    ).toBe(tab)
+  })
+
+  it('does not match a session or tab from another workspace', () => {
+    expect(
+      findStructuredAgentSessionTab(
+        { 'wt-1': [tab] },
+        { workspaceId: 'wt-1', sessionId: 'session-2' }
+      )
+    ).toBeNull()
+    expect(
+      findStructuredAgentSessionTab(
+        { 'wt-2': [{ ...tab, worktreeId: 'wt-2' }] },
+        { workspaceId: 'wt-1', sessionId: 'session-1' }
+      )
+    ).toBeNull()
+    expect(
+      findStructuredAgentSessionTab(
+        { 'wt-1': [{ ...tab, worktreeId: 'wt-2' }] },
+        { workspaceId: 'wt-1', sessionId: 'session-1' }
+      )
+    ).toBeNull()
+  })
+})
 
 describe('activateStructuredAgentSessionTab', () => {
   beforeEach(() => {
@@ -67,7 +113,7 @@ describe('activateStructuredAgentSessionTab', () => {
 
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('structured-tab-1', { worktreeId: 'wt-1' })
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session', 'wt-1')
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'session.tabs.activate',

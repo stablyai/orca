@@ -5,6 +5,7 @@ import { isMobileBinaryPath, isSafeMobileRelativePath } from './runtime-file-com
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { readLocalMobileFile } from './runtime-file-commands-terminal-file-paths'
 import { truncateMobileFilePreview } from './runtime-file-commands-terminal-artifact-access'
+import { requireRuntimeFileProvider } from './runtime-file-command-target'
 
 export class RuntimeFileCommandsWithReadMobileFile extends RuntimeFileCommandsWithConstructor {
   async readMobileFile(
@@ -13,7 +14,8 @@ export class RuntimeFileCommandsWithReadMobileFile extends RuntimeFileCommandsWi
   ): Promise<RuntimeFileReadResult> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree, connectionId } = target
+    const { worktree } = target
+    const provider = requireRuntimeFileProvider(target)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -22,8 +24,8 @@ export class RuntimeFileCommandsWithReadMobileFile extends RuntimeFileCommandsWi
     }
 
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = connectionId
-      ? await this.readRemoteMobileFile(filePath, connectionId)
+    const content = provider
+      ? await this.readRemoteMobileFile(filePath, provider)
       : await readLocalMobileFile(filePath, store)
     const truncated = truncateMobileFilePreview(content)
 

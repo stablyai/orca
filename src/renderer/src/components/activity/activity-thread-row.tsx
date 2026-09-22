@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, ExternalLink } from 'lucide-react'
+import { Bell, ExternalLink, X } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,44 @@ import { ActivityThreadHoverCard } from './activity-thread-hover-card'
 import { activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 
+function ActivityThreadRowAction({
+  label,
+  onClick,
+  keyboardReachable = false,
+  children
+}: {
+  label: string
+  onClick: () => void
+  // Hover-only actions stay `invisible` so long lists don't gain a tab stop per row.
+  keyboardReachable?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className={cn(
+            'size-4 p-0 text-muted-foreground transition-opacity hover:text-foreground can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 focus-visible:opacity-100',
+            !keyboardReachable && 'can-hover:invisible can-hover:group-hover:visible'
+          )}
+          aria-label={label}
+          onClick={(event) => {
+            event.stopPropagation()
+            onClick()
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 // Why React.memo: rows are pure functions of these props; thread identity is stable across
 // query/selection/group re-renders, so memo keeps a keystroke or selection change from
 // re-rendering every mounted row. Callbacks take the thread so parents can pass stable handlers.
@@ -23,6 +61,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   onJump,
   onMarkRead,
   onMarkUnread,
+  onClear,
   canJump,
   compactMode,
   disableMarkUnread = false,
@@ -34,6 +73,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   onJump: (thread: AgentPaneThread) => void
   onMarkRead: (thread: AgentPaneThread) => void
   onMarkUnread: (thread: AgentPaneThread) => void
+  onClear?: (thread: AgentPaneThread) => void
   canJump: boolean
   compactMode: boolean
   disableMarkUnread?: boolean
@@ -59,7 +99,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
         aria-label={taskTitle}
         aria-current={selected ? 'true' : undefined}
         className={cn(
-          'group relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-transparent px-1.5 py-2.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
+          'group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring',
           selected && 'border-transparent'
         )}
       >
@@ -67,7 +107,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
           <span className="mt-0.5 inline-flex shrink-0">
             <ThreadAgentStateIndicator thread={thread} />
           </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             {/* Keep the activation target separate from markdown links and row actions. */}
             <button
               type="button"
@@ -82,7 +122,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 compactMode ? 'truncate' : 'line-clamp-2 break-words',
                 thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
               )}
-              title={taskTitle}
             >
               {taskTitle}
             </button>
@@ -96,7 +135,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',
                     '[&_*]:!m-0 [&_*]:!p-0 [&_br]:hidden [&_ol]:list-none [&_ul]:list-none'
                   )}
-                  title={thread.responsePreview}
                 />
               ) : (
                 <div
@@ -105,7 +143,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',
                     needsAttention ? 'text-agent-question-text' : 'text-foreground/80'
                   )}
-                  title={statusLine}
                 >
                   {statusLine}
                 </div>
@@ -120,41 +157,27 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 {workspaceLabel}
               </span>
               {canJump && showJumpAction ? (
-                <span
-                  className={cn(
-                    'inline-flex shrink-0 items-center transition-opacity',
-                    'can-hover:pointer-events-none can-hover:invisible can-hover:opacity-0',
-                    'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+                <ActivityThreadRowAction
+                  label={translate(
+                    'auto.components.activity.ActivityPrototypePage.4616ea39fd',
+                    'Jump to workspace'
                   )}
+                  onClick={() => onJump(thread)}
                 >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-4 p-0 text-muted-foreground hover:text-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                          'Jump to workspace'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onJump(thread)
-                        }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <ExternalLink className="size-2.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {translate(
-                        'auto.components.activity.ActivityPrototypePage.4616ea39fd',
-                        'Jump to workspace'
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
+                  <ExternalLink className="size-2.5" />
+                </ActivityThreadRowAction>
+              ) : null}
+              {onClear ? (
+                <ActivityThreadRowAction
+                  label={translate(
+                    'auto.components.activity.ActivityThreadRow.clearNotification',
+                    'Clear notification'
+                  )}
+                  keyboardReachable
+                  onClick={() => onClear(thread)}
+                >
+                  <X className="size-2.5" />
+                </ActivityThreadRowAction>
               ) : null}
               <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
                 {thread.unread ? (
