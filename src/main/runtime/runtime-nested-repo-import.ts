@@ -7,6 +7,7 @@ import type {
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
+import { NON_GIT_REPO_REJECTION } from '../../shared/non-git-repo-rejection'
 import type { Repo } from '../../shared/repo-types'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepo } from '../git/repo'
@@ -78,7 +79,7 @@ export class RuntimeNestedRepoImport {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
         if (!isGitRepo(repoPath)) {
-          results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+          results.push({ path: repoPath, status: 'failed', error: NON_GIT_REPO_REJECTION })
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)

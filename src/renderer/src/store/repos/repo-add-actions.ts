@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
+import { isNonGitRepoRejection } from '../../../../shared/non-git-repo-rejection'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
@@ -58,7 +59,7 @@ export function createRepoAddActions(
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          if (kind !== 'git' || !message.includes('Not a valid git repository')) {
+          if (kind !== 'git' || !isNonGitRepoRejection(message)) {
             throw err
           }
           if (target.kind !== 'local') {

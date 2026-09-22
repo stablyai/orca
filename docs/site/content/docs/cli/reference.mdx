@@ -80,10 +80,13 @@ orca serve --port 6768 --pairing-address 100.64.1.20 --json
 ```bash
 orca repo list --json
 orca repo add --path /abs/path/to/repo --json
+orca repo add --path /abs/path/to/notes --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ```
+
+`repo add` infers the project kind: a path inside a git checkout becomes a git project, a directory outside any checkout becomes a folder project with no branches, worktrees, or review state. Pass `--kind folder` to register a directory that sits inside a checkout, or `--kind git` to fail instead of falling back.
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 

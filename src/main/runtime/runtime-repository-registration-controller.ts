@@ -7,6 +7,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { formatNonGitRepoRejection } from '../../shared/non-git-repo-rejection'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepo } from '../git/repo'
@@ -41,7 +42,7 @@ export class RuntimeRepositoryRegistrationController {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
     if (kind === 'git' && !isGitRepo(path)) {
-      throw new Error(`Not a valid git repository: ${path}`)
+      throw new Error(formatNonGitRepoRejection(path))
     }
     const existing = store.getRepos().find((repo) => {
       return (

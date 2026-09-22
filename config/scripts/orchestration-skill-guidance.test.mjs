@@ -356,7 +356,9 @@ describe('owned orchestration references', () => {
     expect(squash(reference)).toContain(
       'ORCA project setup-existing-folder --project <project_id> --host <host_id> --path <abs_path> --kind folder --json'
     )
-    expect(squash(reference)).toContain('and rejects a plain directory')
+    expect(squash(reference)).toContain(
+      'registers a directory outside any Git checkout as a folder project'
+    )
     expect(reference).toContain(
       'ORCA orchestration worker-list --run <run_id> --include-remote --json'
     )

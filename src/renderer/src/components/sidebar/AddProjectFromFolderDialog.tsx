@@ -13,13 +13,12 @@ import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
+import { isNonGitRepoRejection } from '../../../../shared/non-git-repo-rejection'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-
-const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
 const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -133,7 +132,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      if (message.includes(NON_GIT_REPO_ERROR)) {
+      if (isNonGitRepoRejection(message)) {
         if (mountedRef.current && gen === addGenRef.current) {
           openNonGitConfirmation()
         }
