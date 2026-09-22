@@ -65,6 +65,10 @@ const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(gra
  * shell can serve a verb before a screen asks for it -- would otherwise make the census demand
  * the comment overstate what the session route has. A sentence about this file's own rows takes
  * all of them, because that one really does move.
+ *
+ * The rows read the whole file, titles included: a count in a JSDoc and the same count in an `it`
+ * title go stale together, and pinning only the first leaves a green suite describing itself
+ * wrongly to whoever reads the run.
  */
 const SPELLED_COUNTS = {
   'mobile-web-app-page-grant-call-sites.mjs': [
@@ -76,10 +80,12 @@ const SPELLED_COUNTS = {
     { precedes: 'are not repeated here', counted: pinnedElsewhere.length }
   ],
   'mobile-web-app-page-grant-call-sites.test.mjs': [
-    { precedes: 'grants this file pins', counted: pinnedHere.length },
+    // Both the header's "eight grants this file pins" and the title's "eight grants".
+    { precedes: 'grants', counted: pinnedHere.length },
     { precedes: 'rows covering', counted: PAGE_GRANT_CALL_SITES.length },
     { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
-    { precedes: 'did not', counted: pinnedHere.length }
+    { precedes: 'did not', counted: pinnedHere.length },
+    { precedes: 'through the session route', counted: pinnedHereForSession.length }
   ]
 }
 
