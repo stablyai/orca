@@ -151,6 +151,14 @@ export function useMobileWebShellSession(args: {
           // freshness of the next offline verdict, never the generation being opened here.
           await store.persistActiveManifest(hostKey, effect.manifest).catch(() => undefined)
           return
+        case 'record-update-failure':
+          // Stamped here because the reducer holds neither: the host is the mount's, the time the
+          // runtime's. Reports nothing, and the store swallows its own failure.
+          await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
+          return
+        case 'forget-update-failures':
+          await store.forgetHostUpdateFailures(hostId)
+          return
         case 'open-cache':
           send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
           return
@@ -193,7 +201,7 @@ export function useMobileWebShellSession(args: {
         }
       }
     },
-    [client, dispatch, hostKey, runtime]
+    [client, dispatch, hostId, hostKey, runtime]
   )
   // Written after the commit, never during render: React may replay or discard a render, and a
   // closure from one that never committed would run effects for a session that never existed.

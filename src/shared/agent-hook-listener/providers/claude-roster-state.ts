@@ -1,8 +1,6 @@
-import type {
-  AgentStatusState,
-  AgentSubagentSnapshot,
-  AgentWorkingMode
-} from '../../agent-status-types'
+import type { AgentSubagentSnapshot, AgentWorkingMode } from '../../agent-status-types'
+import { foldAgentLeadStatus, type AgentLeadStatusResolution } from '../../agent-lead-status-fold'
+import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-work-liveness'
 import {
   claudeRosterHasWorkingSubagent,
   reapUnconfirmedRestoredClaudeSubagents,
@@ -118,31 +116,25 @@ export function updateClaudeRunningNonAgentTask(
   }
 }
 
-export type ClaudePaneStatusResolution = {
-  stateName: AgentStatusState
-  workingMode?: AgentWorkingMode
-}
+export type ClaudePaneStatusResolution = AgentLeadStatusResolution
 
 export function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
   lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 ): ClaudePaneStatusResolution {
-  if (lead.state !== 'done') {
-    return { stateName: lead.state }
-  }
-  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (claudeRosterHasWorkingSubagent(roster)) {
-    return { stateName: 'working' }
-  }
-  if (
-    !lead.interrupted &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-      state.claudeActiveSessionCronPaneKeys.has(paneKey))
-  ) {
-    return { stateName: 'working', workingMode: 'monitoring' }
-  }
-  return { stateName: 'done' }
+  return foldAgentLeadStatus({
+    leadState: lead.state,
+    interrupted: lead.interrupted === true,
+    childWorkLiveness: agentChildWorkLivenessFromEvidence({
+      hasLiveAgentWork: claudeRosterHasWorkingSubagent(
+        state.claudeSubagentRosterByPaneKey.get(paneKey)
+      ),
+      hasLiveNonAgentWork:
+        state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+        state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    })
+  })
 }
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {

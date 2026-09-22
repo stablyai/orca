@@ -25,7 +25,7 @@ export function openCached(
   patch: Partial<MobileWebShellSession> = {},
   andThen: readonly MobileWebShellSessionEffect[] = []
 ): MobileWebShellStep {
-  return step(session, { ...patch, state: { kind: 'activating' } }, [
+  return step(session, { ...patch, state: { kind: 'activating', source: 'cache' } }, [
     {
       kind: 'open-generation',
       directory: generation.directory,

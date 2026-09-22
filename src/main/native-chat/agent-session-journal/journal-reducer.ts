@@ -13,6 +13,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import { journalRenderItem } from './journal-render-item'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -73,14 +74,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
-    upsertItem(state, itemId, row.revision, {
-      itemId,
-      revision: row.revision,
-      body: row.body,
-      sequence: row.seq,
-      observedAt: row.ts,
-      ...(row.recovered ? { recovered: row.recovered } : {})
-    })
+    upsertItem(state, itemId, row.revision, journalRenderItem(itemId, row.revision, row.body, row))
     return
   }
   if (row.kind === 'tombstone') {
@@ -98,14 +92,12 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         }
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
-        upsertItem(state, itemId, mutation.revision, {
+        upsertItem(
+          state,
           itemId,
-          revision: mutation.revision,
-          body: mutation.body,
-          sequence: row.seq,
-          observedAt: row.ts,
-          ...(row.recovered ? { recovered: row.recovered } : {})
-        })
+          mutation.revision,
+          journalRenderItem(itemId, mutation.revision, mutation.body, row)
+        )
       } else {
         removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }
@@ -251,13 +243,7 @@ function applySubmission(
     resolvedAt: null
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  upsertItem(state, itemId, 0, {
-    itemId,
-    revision: 0,
-    body: row.body,
-    sequence: row.seq,
-    observedAt: row.ts
-  })
+  upsertItem(state, itemId, 0, journalRenderItem(itemId, 0, row.body, row))
 }
 
 function applyDispatch(

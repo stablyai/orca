@@ -98,6 +98,8 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed ||= failed
   }
 
+  /** Deliberately root: a turn is the SESSION'S unit of work, and this lane only
+   *  ever opens turns for the session's own agent. A child runs inside one. */
   private publish(turn: ClaudeCurrentTurn, end?: ClaudeTurnEnd): void {
     const item = claudeTurnLifecycleItem(turn, end)
     this.deps.sink.appendItem(item.identity, item.body, item.options)

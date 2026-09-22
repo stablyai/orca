@@ -98,7 +98,9 @@ export function VaultSessionRow({
         'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
         'The transcript source is unavailable.'
       )
-  const requestDelete = (): void => onRequestDelete?.(session)
+  const requestDelete = session.structuredSession
+    ? undefined
+    : (): void => onRequestDelete?.(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')

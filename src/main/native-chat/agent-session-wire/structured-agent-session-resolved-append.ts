@@ -1,5 +1,6 @@
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 
 /** Resolve a queued item's run identity against the journal bound at execution. */
@@ -25,10 +26,11 @@ export function createStructuredAgentSessionResolvedAppend(
             if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
               throw new Error('structured agent-session item identity exceeded its reserved size')
             }
-            await bound.journal.appendItem(identity, body, {
-              fence: bound.fence,
-              ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-            })
+            await bound.journal.appendItem(
+              identity,
+              body,
+              structuredAgentSessionJournalAppendOptions(bound.fence, options)
+            )
           }
         },
         options
@@ -47,10 +49,11 @@ export function createStructuredAgentSessionResolvedAppend(
             if (estimateStructuredAgentSessionItemBytes(identity, body) + 1 > bytes) {
               throw new Error('structured agent-session item identity exceeded its reserved size')
             }
-            await bound.journal.appendItem(identity, body, {
-              fence: bound.fence,
-              ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-            })
+            await bound.journal.appendItem(
+              identity,
+              body,
+              structuredAgentSessionJournalAppendOptions(bound.fence, options)
+            )
             bound.publish()
           }
         },
