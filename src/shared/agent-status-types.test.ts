@@ -546,7 +546,13 @@ Fix dispatch fallback preview for normalized status prompts`
       JSON.stringify({
         state: 'working',
         subagents: [
-          { id: 'a1', state: 'working', startedAt: 100, agentType: 'general-purpose' },
+          {
+            id: 'a1',
+            state: 'working',
+            startedAt: 100,
+            evidenceObservedAt: -1,
+            agentType: 'general-purpose'
+          },
           { id: 'r1', state: 'idle', startedAt: 'nope', description: 'line\none' },
           { id: 'u1', state: 'unverifiable', startedAt: 200 },
           { id: '', state: 'working', startedAt: 1 },
@@ -569,6 +575,7 @@ Fix dispatch fallback preview for normalized status prompts`
       model: undefined,
       description: undefined
     })
+    expect(result?.subagents?.[0]).not.toHaveProperty('evidenceObservedAt')
     // Why: non-finite startedAt coerces to 0; descriptions fold to one line.
     expect(result?.subagents?.[1]).toMatchObject({
       id: 'r1',

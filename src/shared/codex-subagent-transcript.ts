@@ -213,6 +213,9 @@ export function reconcileCodexSubagentTranscript(
     parentRecords === undefined
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
+  // Parent-rollout activity records are transcript-only child evidence.
+  // Keep their observation clock separate from the child's provider start time.
+  const observedAt = Date.now()
   for (const recordValue of parentRecords ?? []) {
     const activity = readActivity(recordValue)
     if (!activity) {
@@ -234,7 +237,8 @@ export function reconcileCodexSubagentTranscript(
       roster,
       activity.id,
       { description: tracked.description, state: 'working' },
-      tracked.startedAt
+      tracked.startedAt,
+      observedAt
     )
   }
   const entriesByDirectory = new Map<string, string[]>()

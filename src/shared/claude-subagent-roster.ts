@@ -22,6 +22,10 @@ export type TrackedClaudeSubagent = {
   agentType?: string
   description?: string
   startedAt: number
+  /** Last moment THIS child's own activity was observed. Separate from
+   *  `startedAt`, which is the spawn stamp four consumers sort and evict by and
+   *  which must never move. Absent until something observes the child. */
+  evidenceObservedAt?: number
   /** 'idle' = teammate between mailbox turns: alive/resumable, row stays
    *  visible but must not gate the pane 'working'. */
   state: 'working' | 'idle'
@@ -74,6 +78,8 @@ export function upsertWorkingClaudeSubagent(
     existing.state = 'working'
     existing.agentType = fields.agentType ?? existing.agentType
     existing.description = fields.description ?? existing.description
+    // Why: every caller passes a real observation moment; `startedAt` stays put.
+    existing.evidenceObservedAt = now
     // Why: live activity proves the lifecycle stream owns this id again;
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
@@ -91,6 +97,7 @@ export function upsertWorkingClaudeSubagent(
   roster.set(id, {
     state: 'working',
     startedAt: now,
+    evidenceObservedAt: now,
     agentType: fields.agentType,
     description: fields.description
   })
@@ -183,6 +190,9 @@ export function foldClaudeBackgroundTasksIntoRoster(
       existing.state = 'working'
       existing.agentType = task.agentType ?? existing.agentType
       existing.description = task.description ?? existing.description
+      // Coarser than a child's own tool event, but still an assertion ABOUT the
+      // child (the provider lists this lane running now), not the parent's clock.
+      existing.evidenceObservedAt = now
       existing.listedAsSubagentTask = true
       // Why: a live inventory listed the id as running — the restored claim is
       // now confirmed by the current process, so liveness can't reap it.
@@ -344,6 +354,9 @@ export function claudeRosterToSnapshots(
       id,
       state: tracked.state,
       startedAt: tracked.startedAt,
+      ...(tracked.evidenceObservedAt !== undefined
+        ? { evidenceObservedAt: tracked.evidenceObservedAt }
+        : {}),
       agentType: tracked.agentType,
       description: tracked.description
     })

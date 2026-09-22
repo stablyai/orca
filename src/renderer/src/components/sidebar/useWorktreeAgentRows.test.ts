@@ -768,6 +768,28 @@ describe('applyAgentRowLineage', () => {
     expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
   })
 
+  it('gives sibling child rows their own recency, not one borrowed parent clock', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      updatedAt: 900_000,
+      subagents: [
+        { id: 'busy', state: 'working', startedAt: 1500, evidenceObservedAt: 899_000 },
+        { id: 'quiet', state: 'working', startedAt: 1600, evidenceObservedAt: 300_000 }
+      ]
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [entry],
+      retained: [],
+      now: 900_000
+    })
+
+    const children = rows.filter((row) => row.rowSource === 'subagent')
+    expect(children.map((row) => row.entry.evidenceObservedAt)).toEqual([899_000, 300_000])
+    // Spawn stamps are untouched, so the sibling order the user sees is unchanged.
+    expect(children.map((row) => row.startedAt)).toEqual([1500, 1600])
+  })
+
   it('marks working subagent child rows unverifiable when the parent status is stale', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',

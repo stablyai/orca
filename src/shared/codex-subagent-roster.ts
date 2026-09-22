@@ -17,6 +17,9 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
+  /** Last moment THIS child's own activity was observed. Separate from
+   *  `startedAt`, the spawn stamp the snapshot sort depends on. */
+  evidenceObservedAt?: number
 }
 
 export function upsertCodexSubagent(
@@ -28,7 +31,12 @@ export function upsertCodexSubagent(
     model?: string
     state: 'working' | 'waiting'
   },
-  now: number
+  now: number,
+  /** When this child was observed. Deliberately separate from `now`: two callers
+   *  pass a SPAWN stamp there (the transcript scan and the restore seed), and
+   *  reusing it would backdate the child's recency to its own birth. Omitted =
+   *  nothing was observed, so the clock is left exactly as it was. */
+  observedAt?: number
 ): void {
   const normalizedId = id.trim()
   if (normalizedId.length === 0 || normalizedId.length > CODEX_SUBAGENT_ID_MAX_LENGTH) {
@@ -43,6 +51,7 @@ export function upsertCodexSubagent(
     existing.description = description ?? existing.description
     existing.model = model ?? existing.model
     existing.state = fields.state
+    existing.evidenceObservedAt = observedAt ?? existing.evidenceObservedAt
     return
   }
   if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
@@ -53,7 +62,8 @@ export function upsertCodexSubagent(
     description,
     model,
     state: fields.state,
-    startedAt: now
+    startedAt: now,
+    ...(observedAt !== undefined ? { evidenceObservedAt: observedAt } : {})
   })
 }
 
@@ -100,7 +110,9 @@ export function seedCodexSubagentRoster(
         model: snapshot.model,
         state: snapshot.state
       },
-      snapshot.startedAt
+      snapshot.startedAt,
+      // A restore observes nothing: carry the persisted clock, never invent one.
+      snapshot.evidenceObservedAt
     )
   }
 }
@@ -117,7 +129,10 @@ export function codexRosterToSnapshots(
     description: tracked.description,
     model: tracked.model,
     state: tracked.state,
-    startedAt: tracked.startedAt
+    startedAt: tracked.startedAt,
+    ...(tracked.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: tracked.evidenceObservedAt }
+      : {})
   }))
   snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
   return snapshots

@@ -43,7 +43,14 @@ export function buildSubagentChildRows(args: {
     const entry: AgentStatusEntry = {
       state: activeState ?? 'done',
       prompt: subagent.description ?? subagent.agentType ?? '',
+      // The parent's clock is the OLD-HOST FALLBACK, not this child's recency: a
+      // host that reports the child's own observation wins through
+      // `evidenceObservedAt` below, and readers already prefer it. Dropping the
+      // borrow would leave an old host reading "No update in <whole lifetime>".
       updatedAt: args.parentEntry.updatedAt,
+      ...(subagent.evidenceObservedAt !== undefined
+        ? { evidenceObservedAt: subagent.evidenceObservedAt }
+        : {}),
       stateStartedAt: startedAt,
       agentType: subagent.agentType,
       model: subagent.model,

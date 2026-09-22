@@ -79,6 +79,12 @@ export type AgentSubagentSnapshot = {
   state: AgentSubagentState
   /** Timestamp (ms) when this subagent was first observed. */
   startedAt: number
+  /** Timestamp (ms) the host last observed THIS child's own activity, so a row's
+   *  recency is its own rather than its parent's. Absent means the host never
+   *  reported it (an old host, or a provider whose children emit nothing) — never
+   *  "this child was never active". Deliberately not coerced to 0 like `startedAt`:
+   *  a 0 would render as decades of silence. Readers fall back to `updatedAt`. */
+  evidenceObservedAt?: number
 }
 
 export type AgentStatusEntry = {
@@ -298,6 +304,12 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
     state: obj.state,
     startedAt:
       typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
+    // Unlike startedAt, an unreadable value stays ABSENT rather than becoming 0.
+    ...(typeof obj.evidenceObservedAt === 'number' &&
+    Number.isFinite(obj.evidenceObservedAt) &&
+    obj.evidenceObservedAt >= 0
+      ? { evidenceObservedAt: obj.evidenceObservedAt }
+      : {}),
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
     description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
@@ -340,6 +352,7 @@ export function agentSubagentsEqual(
       x.id !== y.id ||
       x.state !== y.state ||
       x.startedAt !== y.startedAt ||
+      x.evidenceObservedAt !== y.evidenceObservedAt ||
       x.agentType !== y.agentType ||
       x.model !== y.model ||
       x.description !== y.description

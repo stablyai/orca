@@ -128,6 +128,11 @@ export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
 
+/** Roster IDENTITY only. `evidenceObservedAt` is deliberately excluded: it moves on
+ *  every child tool event, so folding it in would make a shed roster almost never
+ *  match its cached twin, and an unrestored roster blanks live child rows and
+ *  unblocks hibernation. The cached clock is an older TRUE observation, so
+ *  restoring it is conservative — it can never fabricate freshness. */
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
   const stableRoster = subagents.map(({ id, state, startedAt, agentType, model, description }) => [
     id,

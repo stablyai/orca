@@ -86,6 +86,11 @@ function subagentSnapshotsFromTasks(
       id,
       state: subagentStateFromTask(task),
       startedAt: task.startedAt ?? 0,
+      // Absent stays absent: an old host reported no per-task clock, which is not
+      // the same as a task that has never been active.
+      ...(task.evidenceObservedAt !== undefined
+        ? { evidenceObservedAt: task.evidenceObservedAt }
+        : {}),
       ...(task.name ? { agentType: task.name } : {}),
       ...(task.description ? { description: task.description } : {})
     })

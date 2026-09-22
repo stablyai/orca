@@ -120,6 +120,16 @@ describe('restoreShedStatusFields', () => {
     expect(restored).toBe(shed)
   })
 
+  it('restores across a child-clock advance: the digest is identity, not recency', () => {
+    // evidenceObservedAt moves on every child tool event. Folding it into the
+    // identity digest would make a shed roster essentially never match, and an
+    // absent roster blanks live child rows and unblocks hibernation. The cached
+    // clock is an older TRUE observation, so restoring it is the safe degrade.
+    const pinged = [{ ...roster[0], evidenceObservedAt: 900 }]
+    const restored = restoreShedStatusFields(shed, [createShedSubagentsField(pinged)], cached)
+    expect(restored.subagents).toEqual(roster)
+  })
+
   it('never restores interactivePrompt — a stale answerable card is worse than none', () => {
     const restored = restoreShedStatusFields(shed, ['interactivePrompt'], cached)
     expect(restored.interactivePrompt).toBeUndefined()

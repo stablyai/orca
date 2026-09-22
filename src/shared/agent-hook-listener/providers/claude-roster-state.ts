@@ -169,6 +169,11 @@ export function seedClaudeSubagentRosterFromSnapshots(
     roster.set(snapshot.id, {
       state: 'working',
       startedAt: snapshot.startedAt,
+      // Why: a restore observes nothing. Carry the persisted clock through so the
+      // row reads as last heard from then, not as freshly seen at restore.
+      ...(snapshot.evidenceObservedAt !== undefined
+        ? { evidenceObservedAt: snapshot.evidenceObservedAt }
+        : {}),
       agentType: snapshot.agentType,
       description: snapshot.description,
       // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.

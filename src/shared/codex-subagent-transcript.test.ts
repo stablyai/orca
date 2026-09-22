@@ -80,6 +80,7 @@ describe('Codex subagent transcript reconciliation', () => {
         description: '/root/sidebar_repro',
         state: 'working',
         startedAt: 1234,
+        evidenceObservedAt: expect.any(Number),
         agentType: undefined,
         model: undefined
       }
@@ -96,6 +97,36 @@ describe('Codex subagent transcript reconciliation', () => {
 
     expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
     expect(codexRosterToSnapshots(roster)).toBeUndefined()
+  })
+
+  it('advances a transcript-only child clock when the parent records interaction', () => {
+    vi.useFakeTimers()
+    try {
+      const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+      dirs.push(dir)
+      const parentPath = join(dir, 'rollout-parent.jsonl')
+      writeFileSync(parentPath, jsonl([activity('started', 1234)]))
+      const state = createCodexSubagentTranscriptState()
+      const roster: CodexSubagentRoster = new Map()
+
+      vi.setSystemTime(10_000)
+      reconcileCodexSubagentTranscript(state, roster, parentPath)
+      expect(codexRosterToSnapshots(roster)?.[0]).toMatchObject({
+        startedAt: 1234,
+        evidenceObservedAt: 10_000
+      })
+
+      writeFileSync(parentPath, jsonl([activity('started', 1234), activity('interacted', 5678)]))
+      vi.setSystemTime(20_000)
+      reconcileCodexSubagentTranscript(state, roster, parentPath)
+
+      expect(codexRosterToSnapshots(roster)?.[0]).toMatchObject({
+        startedAt: 1234,
+        evidenceObservedAt: 20_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('resolves a child rollout filed under a later session day than the parent', () => {
@@ -253,6 +284,7 @@ describe('Codex subagent transcript reconciliation', () => {
           description: '/root/sidebar_repro',
           state: 'working',
           startedAt: 1234,
+          evidenceObservedAt: expect.any(Number),
           agentType: undefined,
           model: 'gpt-5.6-terra'
         }

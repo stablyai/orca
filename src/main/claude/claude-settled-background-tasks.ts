@@ -1,4 +1,6 @@
-// Retention state for background tasks that have reached a terminal edge.
+// The tracked background-task row: its type, how a later frame folds into one,
+// how it projects onto the wire, and the retention state for rows that have
+// reached a terminal edge.
 //
 // The real producer settles a task in two steps inside one tick:
 // `background_tasks_changed` arrives FIRST with the task already absent, then
@@ -12,6 +14,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../../shared/agent-session-wire'
+import { taskName, taskUsageTotalTokens } from './claude-background-task-frames'
 
 const MAX_RETAINED_TASKS = 256
 
@@ -28,7 +31,49 @@ export type TrackedClaudeBackgroundTask = {
   /** First-observed epoch ms; preserved across updates and roster replacement
    *  so clients can render elapsed and keep a stable first-seen sort. */
   startedAt: number
+  /** Last epoch ms this task's OWN activity was observed. Moves on every frame
+   *  that proves it alive, which is exactly what `startedAt` must not do. */
+  evidenceObservedAt?: number
   totalTokens?: number
+}
+
+/** Fold a later lifecycle frame into a tracked row. The first-observed stamp
+ *  never moves; `evidenceObservedAt` moves whenever the frame carried one. That
+ *  divergence is the whole reason the two clocks are separate fields. */
+export function mergeTrackedClaudeBackgroundTask(
+  existing: TrackedClaudeBackgroundTask,
+  next: Omit<TrackedClaudeBackgroundTask, 'liveInTurn'>
+): TrackedClaudeBackgroundTask {
+  return {
+    backgrounded: existing.backgrounded || next.backgrounded,
+    // A settled foreground task is not revived by a late edge frame.
+    liveInTurn: existing.liveInTurn,
+    kind: next.kind !== 'unknown' ? next.kind : existing.kind,
+    description: next.description ?? existing.description,
+    name: next.name ?? existing.name,
+    state: next.state ?? existing.state,
+    startedAt: existing.startedAt,
+    evidenceObservedAt: next.evidenceObservedAt ?? existing.evidenceObservedAt,
+    totalTokens: existing.totalTokens
+  }
+}
+
+/** Fold a `task_progress` frame into a live row. The frame's ARRIVAL is the
+ *  evidence — it proves the task is alive even carrying no usage, and it is the
+ *  only per-task liveness signal a backgrounded task emits. Its `description` is
+ *  the current activity ("Running <tool>") and never becomes the task's name. */
+export function applyClaudeTaskProgressFrame(
+  existing: TrackedClaudeBackgroundTask,
+  message: Record<string, unknown>,
+  observedAt: number
+): TrackedClaudeBackgroundTask {
+  const totalTokens = taskUsageTotalTokens(message)
+  return {
+    ...existing,
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    name: existing.name ?? taskName(message),
+    evidenceObservedAt: observedAt
+  }
 }
 
 export function claudeBackgroundTaskDetail(
@@ -42,6 +87,9 @@ export function claudeBackgroundTaskDetail(
     ...(task.name ? { name: task.name } : {}),
     state: task.state ?? (task.kind === 'monitor' ? 'monitoring' : 'working'),
     startedAt: task.startedAt,
+    ...(task.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: task.evidenceObservedAt }
+      : {}),
     ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
     // Only a backgrounded row has a stop the host can target; absent means yes.
     ...(task.backgrounded ? {} : { stoppable: false })
