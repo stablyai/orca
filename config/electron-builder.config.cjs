@@ -181,9 +181,6 @@ module.exports = {
     // Why: these repo-only inputs are either bundled into out/ or copied via
     // extraResources. Shipping them in app.asar bloats the desktop bundle.
     '!src{,/**/*}',
-    // Redundant under !src above, kept explicit: the built bundle ships from out/mobile-web via the
-    // out rules exactly as out/web does, and the source tree must never be mistaken for it.
-    '!src/mobile-web{,/**/*}',
     '!config{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',

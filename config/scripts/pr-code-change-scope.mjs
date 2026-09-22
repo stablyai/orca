@@ -107,14 +107,17 @@ const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/electron-serve-browser-process'
 ]
 
-// The Route A page bundle: the builder and verifier, the entry, the route tree it mounts, the
-// mobile source those routes import, and the shell policy the render check runs the page under.
+// The page bundle the desktop packages: the builder and verifier, the manifest writer and the
+// packaging guard they share, the entry, the route tree it mounts, the mobile source those routes
+// import, and the shell policy the render check runs the page under.
 const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build-mobile-web-app',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
-  'config/scripts/build-mobile-web-bundle',
-  'config/scripts/verify-mobile-web-bundle',
+  'config/scripts/mobile-web-bundle-',
+  'config/scripts/verify-packaged-mobile-web-bundle',
+  'config/scripts/mobile-web-source-line-endings',
+  'config/scripts/script-entry-detection',
   'mobile/web-entry/',
   'mobile/app/',
   'mobile/src/',

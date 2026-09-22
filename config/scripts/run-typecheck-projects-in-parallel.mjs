@@ -11,8 +11,7 @@ const BYTES_PER_GIB = 1024 ** 3
 export const TYPECHECK_PROJECTS = [
   { config: 'tsconfig.node.json', heapGib: 7 },
   { config: 'tsconfig.tc.web.json', heapGib: 6 },
-  { config: 'tsconfig.tc.cli.json', heapGib: 2 },
-  { config: 'tsconfig.mobile-web.json', heapGib: 1 }
+  { config: 'tsconfig.tc.cli.json', heapGib: 2 }
 ]
 
 // The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.

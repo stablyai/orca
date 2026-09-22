@@ -4,12 +4,14 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
-import { isDirectInvocation } from './build-mobile-web-bundle.mjs'
-import { assertNoCarriageReturnsInSource } from './verify-mobile-web-bundle.mjs'
-import { assertMobileWebBundleBuilt } from './verify-packaged-mobile-web-bundle.cjs'
+import { isDirectInvocation } from './script-entry-detection.mjs'
+import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import {
+  MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
+  assertMobileWebBundleBuilt
+} from './verify-packaged-mobile-web-bundle.cjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
-const defaultBundleDir = join(projectDir, 'out', 'mobile-web-app')
 const manifestContract = join(
   projectDir,
   'src',

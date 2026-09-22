@@ -8,7 +8,7 @@ import {
   buildMobileWebAppBundle,
   resolveMobileWebPageRoutes
 } from './build-mobile-web-app-bundle.mjs'
-import { computeMobileWebBundleBuildId } from './build-mobile-web-bundle.mjs'
+import { computeMobileWebBundleBuildId } from './mobile-web-bundle-manifest.mjs'
 import {
   collectMobileWebAppRouteKeys,
   routePathnameFromKey

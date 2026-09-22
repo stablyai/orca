@@ -1,18 +1,19 @@
 import { readFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
   hashedAsset,
-  isDirectInvocation,
   readDesktopVersion,
   readProtocolWindow,
   sha256Hex,
   writeMobileWebBundleTree,
   contentTypeForExtension
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
+import { isDirectInvocation } from './script-entry-detection.mjs'
 import {
   ROUTE_SOURCE_LOADERS,
   assertRoutesCarryNoSynchronousExports,
@@ -26,7 +27,12 @@ const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
 const defaultAppDir = join(mobileDir, 'app')
 const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
-const defaultOutDir = join(projectDir, 'out', 'mobile-web-app')
+// The one definition of where the packaged bundle lives, taken from the guard that enforces it:
+// a second constant here could drift and leave electron-builder's beforePack looking at an empty
+// directory while the builder reported a tree it had written somewhere else.
+const { MOBILE_WEB_BUNDLE_DIR: defaultOutDir } = createRequire(import.meta.url)(
+  './verify-packaged-mobile-web-bundle.cjs'
+)
 
 /**
  * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the

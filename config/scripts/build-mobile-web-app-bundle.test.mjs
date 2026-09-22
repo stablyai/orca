@@ -35,14 +35,14 @@ import {
 import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
-} from './verify-mobile-web-bundle.mjs'
+} from './mobile-web-source-line-endings.mjs'
 import {
   hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
   sha256Hex,
   writeMobileWebBundleTree
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ASSETS
@@ -320,18 +320,6 @@ describeBundling('the app bundle', () => {
       plugins: []
     }
     expect(MOBILE_WEB_APP_SHIMS.filter((shim) => shim.appliesTo(stripped))).toEqual([])
-  })
-
-  it('keeps the shims out of the shipped Phase A bootstrap builder', async () => {
-    const shipped = await readFile(
-      join(projectDir, 'config', 'scripts', 'build-mobile-web-bundle.mjs'),
-      'utf8'
-    )
-    for (const { name } of MOBILE_WEB_APP_SHIMS) {
-      expect(shipped, `the Phase A bootstrap builder mentions ${name}`).not.toContain(name)
-    }
-    expect(shipped).not.toContain('react-native-web')
-    expect(shipped).not.toContain('lucide')
   })
 
   it('ships no haptic that reaches for the DOM', async () => {

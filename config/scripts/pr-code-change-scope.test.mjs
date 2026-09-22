@@ -277,7 +277,7 @@ describe('per-job path classification', () => {
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
-    // build:mobile-web:app is defined there, so the job has to run on an edit to it. A prefix
+    // build:mobile-web is defined there, so the job has to run on an edit to it. A prefix
     // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
     expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
   })
