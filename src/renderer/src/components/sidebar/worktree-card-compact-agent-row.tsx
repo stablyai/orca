@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -15,12 +15,14 @@ import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timesta
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 
+/** Choose the compact row's primary text using the displayed state as its fallback. */
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
-  conversationName: string | null
+  conversationName: string | null,
+  dotState: AgentDotState
 ): string {
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  return prompt || agentStateLabel(dotState)
 }
 
 export function getCompactAgentSecondary(
@@ -89,8 +91,10 @@ type CompactAgentRowProps = {
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
+  displayState?: AgentDotState
 }
 
+/** Render one compact worktree agent row. */
 export const CompactAgentRow = React.memo(function CompactAgentRow({
   agent,
   now,
@@ -104,7 +108,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   reserveDisclosureGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
-  cacheTimerActive = true
+  cacheTimerActive = true,
+  displayState
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -114,9 +119,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // agentType, which is not an iconable agent and would render the unknown
   // "?" glyph. Nesting under the parent already conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
-  const dotState = getAgentDotState(agent)
+  const dotState = displayState ?? getAgentDotState(agent)
   const conversationName = useAgentRowConversationName(agent)
-  const primary = getCompactAgentPrimary(agent, conversationName)
+  const primary = getCompactAgentPrimary(agent, conversationName, dotState)
   const isLineageChild = agent.lineage?.depth === 1
   // Keep a live row's last assistant line stable while status/tool payloads
   // briefly omit the hook-only field between updates. Committed in an effect so a

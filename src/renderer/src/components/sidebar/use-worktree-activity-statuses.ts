@@ -19,6 +19,7 @@ type WorktreeActivityStatusState = Pick<
   | 'terminalLayoutsByTabId'
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
+  | 'acknowledgedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'

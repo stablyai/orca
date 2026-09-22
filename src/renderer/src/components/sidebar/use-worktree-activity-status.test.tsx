@@ -17,6 +17,7 @@ type MockState = {
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  acknowledgedAgentsByPaneKey: Record<string, number>
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   migrationUnsupportedByPtyId: Record<string, never>
   retainedAgentsByPaneKey: Record<string, unknown>
@@ -111,6 +112,7 @@ describe('useWorktreeActivityStatus', () => {
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
+      acknowledgedAgentsByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {},
       migrationUnsupportedByPtyId: {},
       retainedAgentsByPaneKey: {}
@@ -171,6 +173,35 @@ describe('useWorktreeActivityStatus', () => {
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
   })
 
+  it('settles the worktree status after its completion is acknowledged', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      },
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
+
+    mockState = {
+      ...mockState,
+      acknowledgedAgentsByPaneKey: { [paneKey]: 1_000 }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+  })
+
   it('lets a retained done row override the same pane stale working title', () => {
     const worktreeId = 'repo1::/path/wt1'
     const tab = makeTab('tab-1', worktreeId)
@@ -204,6 +235,35 @@ describe('useWorktreeActivityStatus', () => {
     }
 
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
+  })
+
+  it('settles an acknowledged retained completion to the neutral worktree state', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const tab = makeTab('tab-1', worktreeId)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      tabsByWorktree: {
+        [worktreeId]: [tab]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      },
+      acknowledgedAgentsByPaneKey: { [paneKey]: 1_000 },
+      retainedAgentsByPaneKey: {
+        [paneKey]: {
+          entry: makeAgentStatusEntry({ paneKey, state: 'done' }),
+          worktreeId,
+          tab,
+          agentType: 'codex',
+          startedAt: 1_000
+        }
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
   })
 
   it('does not keep the card working when all retained parent agents are done', () => {

@@ -48,6 +48,8 @@ type Props = {
   now: number
   /** Why: bold prompt rides on the card's unvisited signal (shared with the workspace name), not per-agent state. */
   isUnvisited?: boolean
+  /** Presentation-only state; raw status remains available on agent.state. */
+  displayState?: AgentDotState
   /** Why: inline variant passes 'sm' so the dot isn't mistaken for the adjacent ~12px agent icon. */
   stateDotSize?: 'sm' | 'md'
   /** Why: inline-in-card variant drops the redundant chevron and identity glyph in its tighter layout. */
@@ -69,12 +71,14 @@ type Props = {
   onSendTargetClick?: (paneKey: string) => void
 }
 
+/** Render one dashboard or sidebar agent row with an optional presentation-only state. */
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
   onDismiss,
   onActivate,
   now,
   isUnvisited = false,
+  displayState,
   stateDotSize = 'md',
   hideIdentityIcon = false,
   hideExpand = false,
@@ -130,7 +134,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
+  const displayLabel =
+    prompt || agentStateLabel(displayState ?? asDotState(agent.state, agent.entry.workingMode))
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
@@ -155,7 +160,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
   const dotState: AgentDotState = isInterrupted
     ? 'interrupted'
-    : asDotState(agent.state, agent.entry.workingMode)
+    : (displayState ?? asDotState(agent.state, agent.entry.workingMode))
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
