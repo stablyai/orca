@@ -151,7 +151,7 @@
     },
     {
       "file": "src/terminal/terminal-live-input-text-write.web.ts",
-      "reason": "setNativeProps does not exist on React Native Web: a TextInput ref is the DOM node itself, so the native write throws out of the session route's mount effect and faults the whole page rather than clearing the field. This file writes the same text through the node's own value, checked for the <input> or <textarea> RN Web renders, so an interrupted IME composition is still cleared in the case React has no commit to make."
+      "reason": "setNativeProps does not exist on React Native Web, where a TextInput ref is the DOM node, so the native write threw out of the session route's mount effect and faulted the page instead of clearing the field; this one sets value on the <input> or <textarea> RN Web rendered."
     }
   ]
 }

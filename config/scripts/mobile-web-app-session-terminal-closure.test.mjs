@@ -326,11 +326,9 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
  *   local modules  1018 -> 1021   (+3)
  *
- * The live-input seam then adds one. `setNativeProps` does not exist on React Native Web, so the
- * two hooks that cleared and rewrote the terminal's hidden field now write through
- * `src/terminal/terminal-live-input-text-write.ts`, and the page resolves its `.web.ts` sibling.
- * One module, not two: the sibling replaces the native file rather than joining it, and both
- * hooks were already here.
+ * The live-input seam then adds one: the two hooks that write the terminal's hidden field now go
+ * through `src/terminal/terminal-live-input-text-write.ts`, and the page resolves its `.web.ts`.
+ * One module, not two — the sibling replaces the native file, and both hooks were already here.
  *
  *   modules        4363 -> 4364   (+1)
  *   local modules  1021 -> 1022   (+1)
