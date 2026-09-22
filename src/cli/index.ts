@@ -83,9 +83,12 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
+  // BROWSER consumers pass a URL to the executable without shell-template arguments.
+  const commandArgv =
+    argv.length === 1 && /^https?:\/\//i.test(argv[0]) ? ['open-url', '--url', argv[0]] : argv
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
-    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+    parseArgs(commandArgv, COMMAND_PATHS, COMMAND_SPECS)
   )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {

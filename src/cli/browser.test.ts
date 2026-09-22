@@ -204,6 +204,40 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it.each([
+    'http://localhost:8081/login?state=one&redirect_uri=http%3A%2F%2Flocalhost%3A3000',
+    'https://example.com/login?state="quoted"&value=$(literal);--json#fragment'
+  ])('accepts a browser executable invocation with URL %s', async (url) => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_open_url', { browserPageId: 'page-local' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([url], '/tmp/repo/feature')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.openUrl',
+      { url, worktree: 'id:repo::/tmp/repo/feature' },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('does not reinterpret a URL with extra arguments as a browser invocation', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    try {
+      await main(['https://example.com', '--force'], '/tmp/repo/feature')
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
   it('passes tab profile updates through by page id', async () => {
     queueFixtures(
       callMock,
