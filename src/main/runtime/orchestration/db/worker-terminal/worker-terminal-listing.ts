@@ -94,6 +94,7 @@ export function listWorkerTerminalResources(
   workerState: WorkerDispatchListState
   dispatchStatus: DispatchStatus
   workerStage: string | null
+  workerUpdatedAt: string | null
   agentTerminalHandle: string | null
   paneKey: string | null
   worktreeId: string | null
@@ -167,6 +168,7 @@ export function listWorkerTerminalResources(
               COALESCE(r.pane_key, d.assignee_pane_key) AS pane_key,
               COALESCE(w.worktree_id, r.worktree_id) AS worktree_id,
               w.stage AS worker_stage,
+              w.updated_at AS worker_updated_at,
               t.parent_id AS parent_task_id,
               d.task_id, d.run_id, d.status AS dispatch_status,
               d.termination_reason,
@@ -192,6 +194,7 @@ export function listWorkerTerminalResources(
     pane_key: string | null
     worktree_id: string | null
     worker_stage: string | null
+    worker_updated_at: string | null
     parent_task_id: string | null
     task_id: string
     run_id: string
@@ -224,6 +227,7 @@ export function listWorkerTerminalResources(
       workerState: row.worker_state,
       dispatchStatus: row.dispatch_status,
       workerStage: row.worker_stage,
+      workerUpdatedAt: row.worker_updated_at,
       agentTerminalHandle: row.agent_terminal_handle,
       paneKey: row.pane_key,
       worktreeId: row.worktree_id,

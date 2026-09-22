@@ -207,7 +207,7 @@ export function applyFederatedFleetObservations(
         worker.liveness = { verdict: 'unverifiable', reason: unavailableReason }
         worker.evidence.liveStatus = 'unavailable'
         worker.evidence.lastObservedAt = null
-        refreshFleetWorkerVerdict(worker, durable)
+        refreshFleetWorkerVerdict(worker, durable, observedAt)
       }
       continue
     }
@@ -222,19 +222,20 @@ export function applyFederatedFleetObservations(
           : { verdict: 'unverifiable', reason: hostReportedReason(observation.reason) }
     worker.evidence.liveStatus = observation.status === 'live' ? 'fresh' : 'unavailable'
     worker.evidence.lastObservedAt = observation.status === 'unverifiable' ? null : observedAt
-    refreshFleetWorkerVerdict(worker, durable)
+    refreshFleetWorkerVerdict(worker, durable, observedAt)
   }
 }
 
 // Recompute every projection derived from the host's verdict.
 function refreshFleetWorkerVerdict(
   worker: OrchestrationFleetPage['workers'][number],
-  durable: ReadonlyMap<string, FleetDurableWorker>
+  durable: ReadonlyMap<string, FleetDurableWorker>,
+  now: number
 ): void {
   refreshOrchestrationFleetLivenessAttention(worker)
   const row = durable.get(worker.dispatchId)
   if (row) {
-    worker.nextAction = projectFleetNextAction(row, worker.liveness)
+    worker.nextAction = projectFleetNextAction(row, worker.liveness, now)
   }
 }
 

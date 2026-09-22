@@ -11,6 +11,7 @@ decision, stop/abandon request, retention request, or uncertain release.
 | Accepted `worker_done`  | Reuse, retain, or release                                          |
 | Remote contact lost     | Preserve `unverifiable`; do not stop or retry from absence alone   |
 | `unverifiable` liveness | Keep waiting or inspect; never stop, abandon, retry, or release    |
+| `reconcile` nextAction  | Unproven start/stop, evidence exhausted; run the exact argv given  |
 | Proven `exited` agent   | Enumerate with `worker-list`; follow its `nextAction`              |
 
 ## Inspect before acting
@@ -61,6 +62,17 @@ sent no `worker_done`. Only then choose `worker-stop` or `worker-abandon`.
 Absence never authorizes stop, abandon, retry, or release: keep waiting, or
 inspect until you hold one of the positive signals above. A `nextAction` that
 names an inspecting command is asking for evidence, not for cleanup.
+
+The one exception is Orca's own `reconcile` verdict. A Dispatch whose start or
+stop was never observed cannot resolve itself — no turn began, so no
+`worker_done` and no exit are coming — and once its recovery window is spent the
+row reports `nextAction.kind: "reconcile"` with the exact argv to run. That is
+not absence promoted to proof: it still claims no exit, it only ends the wait.
+Run that argv rather than waiting further, resending the prompt, pressing Enter
+again, or starting a replacement. `worker-abandon` fences the Dispatch and
+revokes its capability atomically, so the Task is free for a retry and two
+workers can never own it at once. Until you run it, the Dispatch keeps ownership
+and a late `worker_done` still settles it normally.
 
 `worker-read --source auto` uses a proven provider transcript when available and
 otherwise returns bounded terminal output with a typed `fallbackReason`.

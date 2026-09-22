@@ -140,7 +140,10 @@ worker's own observation of process exit, or a transcript whose final agent turn
 sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose
 `worker-stop` or `worker-abandon` explicitly. `unverifiable` is absence,
 including when `worker-show` reports `agentWait` null. Absence never authorizes
-stop, abandon, retry, or release; keep waiting or inspect.
+stop, abandon, retry, or release; keep waiting or inspect. The one exception is a
+`reconcile` `nextAction`: a Dispatch whose start or stop was never observed cannot
+resolve itself, so once its recovery window is spent Orca hands you the exact argv
+that fences it. Run that argv instead of waiting on evidence that is not coming.
 
 `worker-start` is the normal path, composing placement, terminal readiness,
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves

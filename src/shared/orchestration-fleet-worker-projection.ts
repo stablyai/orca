@@ -1,4 +1,5 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import { WORKER_UNPROVEN_LIFECYCLE_RECONCILE_AFTER_MS } from './orchestration-timing-budgets'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
 import {
@@ -27,6 +28,39 @@ type FleetLivenessSubject = {
 
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
 const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
+
+/**
+ * States where a lifecycle operation was issued and its outcome was never observed. They are the
+ * one unresolved shape no later evidence can settle on its own: a turn that never started sends
+ * no `worker_done`, and a wedged agent produces no exit to observe. Absence here is therefore not
+ * a reason to keep waiting — it is the reason the row owes a reconciliation.
+ */
+const UNPROVEN_LIFECYCLE_STATES = new Set(['start_unknown', 'stop_unknown'])
+
+/** Dispatch statuses that are still the coordinator's to supervise. */
+const UNSETTLED_DISPATCH_STATUSES = new Set(['pending', 'dispatched'])
+
+/** True while this row is an active Dispatch whose lifecycle outcome was never observed. */
+function isUnprovenActiveLifecycle(worker: FleetDurableWorker): boolean {
+  return (
+    UNPROVEN_LIFECYCLE_STATES.has(worker.workerState) &&
+    UNSETTLED_DISPATCH_STATUSES.has(worker.dispatchStatus)
+  )
+}
+
+/**
+ * Whether in-band evidence for an unproven lifecycle state is exhausted.
+ *
+ * An unreadable or missing timestamp counts as exhausted: it cannot prove the row is still inside
+ * its recovery window, and the action this unlocks only *offers* an explicit coordinator command —
+ * nothing settles or stops on its own.
+ */
+function isReconciliationOwed(worker: FleetDurableWorker, now: number): boolean {
+  const enteredAt = worker.workerUpdatedAt ? Date.parse(worker.workerUpdatedAt) : Number.NaN
+  return (
+    Number.isNaN(enteredAt) || now - enteredAt >= WORKER_UNPROVEN_LIFECYCLE_RECONCILE_AFTER_MS
+  )
+}
 
 /** `termination_reason` is only ever written from an observed process end, so anything but
  *  `unknown` is a death certificate — regardless of which state the worker settled into. */
@@ -121,7 +155,8 @@ function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
  *  verdict outranked the `recover` a proven remote exit owes. */
 export function projectFleetNextAction(
   worker: FleetDurableWorker,
-  liveness: FleetLiveness
+  liveness: FleetLiveness,
+  now: number
 ): FleetNextAction {
   if (worker.workerStage === 'released') {
     return { kind: 'none', argv: [] }
@@ -175,6 +210,26 @@ export function projectFleetNextAction(
     !worker.pendingApproval
   ) {
     return { kind: 'none', argv: [] }
+  }
+  // An active Dispatch whose start or stop was never observed cannot be left at `none`: no
+  // `worker_done` and no exit are coming on their own, so `none` made absence absorbing and the
+  // coordinator supervised forever. Ask for evidence first, and once the in-band window is spent
+  // name the one command that revokes ownership atomically. Neither step asserts an exit.
+  if (
+    liveness.verdict === 'unverifiable' &&
+    isUnprovenActiveLifecycle(worker) &&
+    !worker.pendingInput &&
+    !worker.pendingApproval
+  ) {
+    return isReconciliationOwed(worker, now)
+      ? {
+          kind: 'reconcile',
+          argv: ['orchestration', 'worker-abandon', '--dispatch', worker.dispatchId]
+        }
+      : {
+          kind: 'inspect',
+          argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
+        }
   }
   // worker-show repeats this projection; absence alone cannot earn another command.
   if (liveness.verdict === 'unverifiable' && !worker.pendingInput && !worker.pendingApproval) {
@@ -254,7 +309,7 @@ export function projectOrchestrationFleetWorker(
       lastObservedAt: evidence ? evidence.clock.at : null
     },
     resource: projectResource(worker),
-    nextAction: projectFleetNextAction(worker, liveness),
+    nextAction: projectFleetNextAction(worker, liveness, now),
     attention: projectOrchestrationFleetAttention({
       isRoot: worker.parentTaskId === null,
       outcome,
