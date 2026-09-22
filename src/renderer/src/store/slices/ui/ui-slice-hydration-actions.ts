@@ -68,21 +68,17 @@ import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydra
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
   const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-  ] as const
+    ['_portsStatusBarDefaultAdded', 'ports'],
+    ['_kimiStatusBarDefaultAdded', 'kimi'],
+    ['_minimaxStatusBarDefaultAdded', 'minimax'],
+    ['_antigravityStatusBarDefaultAdded', 'antigravity'],
+    ['_grokStatusBarDefaultAdded', 'grok'],
+    ['_factoryStatusBarDefaultAdded', 'factory']
+  ] as const satisfies [string, StatusBarItem][]
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {
       items = [...items, item]
@@ -253,9 +249,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             validRepoHostIdentities.size === 0
               ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
               : filterSetupScriptPromptDismissalsToValidRepos(
-                  ui.setupScriptPromptDismissedRepoIds,
-                  validRepoHostIdentities
-                ),
+                ui.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
           setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
           setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
           setupGuideBrowserMilestoneLegacyComplete:
@@ -310,7 +306,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           for (const field of Object.keys(
             s.persistedUIWriteInFlightCounts
           ) as (keyof PersistedUIWriteBaseline)[]) {
-            ;(hydrated as Record<string, unknown>)[field] = s[field]
+            ; (hydrated as Record<string, unknown>)[field] = s[field]
           }
         }
         // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.

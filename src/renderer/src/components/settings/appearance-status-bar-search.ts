@@ -3,7 +3,9 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
+import { getClaudeStatusBarToggleSearchEntry } from './appearance-status-bar-claude-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
+import { getFactoryStatusBarToggleSearchEntry } from './appearance-status-bar-factory-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -13,38 +15,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
     keywords: string[]
     toggleDescription: string
   }[] => [
-    {
-      id: 'claude',
-      title: translate('auto.components.settings.appearance.search.9dc15020d7', 'Claude Usage'),
-      description: translate(
-        'auto.components.settings.appearance.search.de50c6f516',
-        'Show Claude token and cost usage in the status bar.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.896eb53fd4',
-          'status bar'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.c9fe3a7876',
-          'claude'
-        ),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.afbb6a3767',
-          'tokens'
-        ),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.edbf0f63a0', 'cost'),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.dea0a9a665',
-          'anthropic'
-        )
-      ],
-      toggleDescription: translate(
-        'settings.appearance.statusBar.claudeToggleDescription',
-        'Show Claude token and cost usage for the active workspace.'
-      )
-    },
+    getClaudeStatusBarToggleSearchEntry(),
     {
       id: 'codex',
       title: translate('auto.components.settings.appearance.search.54b1acf24f', 'Codex Usage'),
@@ -200,6 +171,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
       )
     },
     getGrokStatusBarToggleSearchEntry(),
+    getFactoryStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),

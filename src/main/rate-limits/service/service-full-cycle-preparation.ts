@@ -2,7 +2,9 @@ import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
+import { fetchFactoryRateLimits } from '../factory-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { resolveFactoryApiKey } from '../factory-auth'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
@@ -13,6 +15,10 @@ import type {
   NormalizedCodexAccountSelectionTarget,
   ProviderRateLimits
 } from './service-types'
+
+type ProviderResultPromise = Promise<
+  { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+>
 
 export type FetchAllCyclePrepared = {
   claudeTarget: NormalizedClaudeAccountSelectionTarget
@@ -29,6 +35,7 @@ export type FetchAllCyclePrepared = {
   opencodeGeneration: number
   miniMaxConfigChanged: boolean
   miniMaxGeneration: number
+  factoryGeneration: number
   claudeFetchGated: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
@@ -38,10 +45,10 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>
   ]
-  grokResultPromise: Promise<
-    { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
-  >
+  grokResultPromise: ProviderResultPromise
+  factoryResultPromise: ProviderResultPromise
 }
+
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
   protected async prepareFetchAllCycle(
@@ -86,6 +93,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const factoryApiKeyReadResult = resolveFactoryApiKey()
+    this.factoryApiKeyConfigured = factoryApiKeyReadResult.status === 'ok'
+    const factoryGeneration = this.factoryFetchGeneration
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -121,6 +131,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
+      factory: this.withFetchingStatus(previousState.factory, 'factory'),
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
@@ -129,6 +140,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const factoryResultPromise = fetchFactoryRateLimits({
+      signal,
+      apiKeyReadResult: factoryApiKeyReadResult
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -143,12 +161,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
           : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
         codexFetchGated
           ? Promise.resolve(previousState.codex as ProviderRateLimits)
           : (missingWslCodexHome ??
@@ -167,12 +185,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
           : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels,
-              endpointMode: miniMaxEndpoint,
-              apiKey: miniMaxApiKey
-            })
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels,
+            endpointMode: miniMaxEndpoint,
+            apiKey: miniMaxApiKey
+          })
       ])
 
     if (signal.aborted) {
@@ -193,6 +211,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      factoryGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -202,7 +221,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      factoryResultPromise
     }
   }
 }

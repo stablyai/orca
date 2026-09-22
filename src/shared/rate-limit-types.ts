@@ -54,6 +54,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'factory'
     | 'antigravity'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
@@ -123,6 +124,7 @@ export type RateLimitState = {
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  factory: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
@@ -140,8 +142,18 @@ export type RateLimitState = {
   minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when a Factory API key is resolvable (Orca store, FACTORY_API_KEY, or ~/.factory/.env). */
+  factoryApiKeyConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
+}
+
+export type FactoryApiKeySource = 'orca' | 'env' | 'dotenv'
+
+export type FactoryAccountStatus = {
+  configured: boolean
+  source: FactoryApiKeySource | null
+  error: string | null
 }

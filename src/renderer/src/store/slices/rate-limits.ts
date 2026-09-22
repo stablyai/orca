@@ -132,7 +132,15 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     }
   },
 
-  setRateLimitsFromPush: (state) => {
-    set({ rateLimits: state })
+  setRateLimitsFromPush: (incoming) => {
+    const current = get().rateLimits
+    set({
+      rateLimits: {
+        ...incoming,
+        // Why: older hosts omit both fields; keep the last known values instead of dropping the bar.
+        factory: incoming.factory ?? current.factory ?? null,
+        factoryApiKeyConfigured: incoming.factoryApiKeyConfigured ?? current.factoryApiKeyConfigured
+      }
+    })
   }
 })

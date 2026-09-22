@@ -106,6 +106,7 @@ export type InternalRateLimitState = {
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  factory: ProviderRateLimits | null
   grok: ProviderRateLimits | null
 }
 

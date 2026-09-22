@@ -10,7 +10,7 @@ function request(params: unknown): RpcRequest {
 }
 
 describe('parseRpcRequestParams', () => {
-  it('parses repeated valid requests through the compiled schema', () => {
+  it('parses repeated valid requests', () => {
     const method = defineMethod({
       name: 'test.parse',
       params: z.object({ requestId: z.string().min(1), count: z.number().int().nonnegative() }),
@@ -40,7 +40,7 @@ describe('parseRpcRequestParams', () => {
     })
   })
 
-  it('keeps transform output when compilation falls back', () => {
+  it('preserves transform output', () => {
     const method = defineMethod({
       name: 'test.parse',
       params: z.object({ value: z.string().transform((value) => value.toUpperCase()) }),

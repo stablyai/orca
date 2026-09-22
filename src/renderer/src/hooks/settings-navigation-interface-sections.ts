@@ -45,21 +45,21 @@ export function buildInterfaceSettingsSections({
     },
     ...(showDesktopOnlySettings
       ? [
-          {
-            id: 'notifications',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.2eece16ad1',
-              'Notifications'
-            ),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.7682607591',
-              'Native desktop notifications for agent and terminal events.'
-            ),
-            icon: Bell,
-            searchEntries: getNotificationsPaneSearchEntries(),
-            group: 'interface'
-          }
-        ]
+        {
+          id: 'notifications',
+          title: translate(
+            'auto.hooks.useSettingsNavigationMetadata.2eece16ad1',
+            'Notifications'
+          ),
+          description: translate(
+            'auto.hooks.useSettingsNavigationMetadata.7682607591',
+            'Native desktop notifications for agent and terminal events.'
+          ),
+          icon: Bell,
+          searchEntries: getNotificationsPaneSearchEntries(),
+          group: 'interface'
+        }
+      ]
       : []),
     {
       id: 'shortcuts',
@@ -80,7 +80,7 @@ export function buildInterfaceSettingsSections({
       title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok plus Factory subscription usage.'
       ),
       icon: BarChart3,
       searchEntries: getStatsPaneSearchEntries(),

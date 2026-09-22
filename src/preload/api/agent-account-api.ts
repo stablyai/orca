@@ -3,7 +3,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { FactoryAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -60,6 +60,11 @@ export type ClaudeAccountsApi = {
 
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
+}
+export type FactoryAccountsApi = {
+  getStatus: () => Promise<FactoryAccountStatus>
+  saveApiKey: (apiKey: string) => Promise<FactoryAccountStatus>
+  clearApiKey: () => Promise<FactoryAccountStatus>
 }
 
 export type MinimaxCredentialsApi = {

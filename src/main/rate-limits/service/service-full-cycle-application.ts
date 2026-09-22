@@ -25,6 +25,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      factoryGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -34,7 +35,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      factoryResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -44,40 +46,40 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       claudeResult.status === 'fulfilled'
         ? claudeResult.value
         : ({
-            provider: 'claude',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              claudeResult.reason instanceof Error ? claudeResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'claude',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error:
+            claudeResult.reason instanceof Error ? claudeResult.reason.message : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
 
     const codex =
       codexResult.status === 'fulfilled'
         ? codexResult.value
         : ({
-            provider: 'codex',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'codex',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error:
+            codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
 
     const gemini =
       geminiResult.status === 'fulfilled'
         ? geminiResult.value
         : ({
-            provider: 'gemini',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'gemini',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error:
+            geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
 
     // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
     const antigravity = deriveAntigravityRateLimits(gemini)
@@ -86,44 +88,45 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
         : ({
-            provider: 'opencode-go',
-            session: null,
-            weekly: null,
-            monthly: null,
-            updatedAt: Date.now(),
-            error:
-              opencodeGoResult.reason instanceof Error
-                ? opencodeGoResult.reason.message
-                : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'opencode-go',
+          session: null,
+          weekly: null,
+          monthly: null,
+          updatedAt: Date.now(),
+          error:
+            opencodeGoResult.reason instanceof Error
+              ? opencodeGoResult.reason.message
+              : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
 
     const kimi =
       kimiResult.status === 'fulfilled'
         ? kimiResult.value
         : ({
-            provider: 'kimi',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: kimiResult.reason instanceof Error ? kimiResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'kimi',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: kimiResult.reason instanceof Error ? kimiResult.reason.message : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
 
     const miniMax =
       miniMaxResult.status === 'fulfilled'
         ? miniMaxResult.value
         : ({
-            provider: 'minimax',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              miniMaxResult.reason instanceof Error
-                ? miniMaxResult.reason.message
-                : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'minimax',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error:
+            miniMaxResult.reason instanceof Error
+              ? miniMaxResult.reason.message
+              : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
+
 
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
@@ -164,6 +167,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
+    // Factory is independent like Grok. Apply it after the shared cycle so its HTTP call cannot delay the other providers.
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -188,7 +192,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
     })
 
     const grokResult = await grokResultPromise
@@ -199,17 +203,46 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResult.status === 'fulfilled'
         ? grokResult.value
         : ({
-            provider: 'grok',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+          provider: 'grok',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
     this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const factoryResult = await factoryResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const factory =
+      factoryResult.status === 'fulfilled'
+        ? factoryResult.value
+        : ({
+          provider: 'factory',
+          session: null,
+          weekly: null,
+          updatedAt: Date.now(),
+          error:
+            factoryResult.reason instanceof Error
+              ? factoryResult.reason.message
+              : 'Unknown error',
+          status: 'error'
+        } satisfies ProviderRateLimits)
+    const shouldApplyFactory = factoryGeneration === this.factoryFetchGeneration
+    if (shouldApplyFactory) {
+      this.trackActiveFailureStreak('factory', factory)
+    }
+    this.updateState({
+      ...this.state,
+      factory: shouldApplyFactory
+        ? this.applyStalePolicy(factory, previousState.factory)
+        : this.state.factory
     })
   }
 }

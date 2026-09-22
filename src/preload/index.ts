@@ -76,6 +76,7 @@ import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
+import { factoryAccountsApi } from './api/factory-accounts-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { automationsApi } from './api/automations-bridge'
@@ -174,6 +175,7 @@ const api = {
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
   minimaxCredentials: minimaxCredentialsApi,
+  factoryAccounts: factoryAccountsApi,
   grokAccounts: grokAccountsApi,
   ssh: sshApi,
   automations: automationsApi,
@@ -182,6 +184,7 @@ const api = {
   agentStatus: agentStatusApi,
   speech: speechApi
 } satisfies PreloadApi
+
 
 if (process.contextIsolated) {
   try {

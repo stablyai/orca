@@ -90,6 +90,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       | 'opencode-go'
       | 'kimi'
       | 'minimax'
+      | 'factory'
       | 'grok'
       | 'antigravity'
   ): ProviderRateLimits {

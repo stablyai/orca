@@ -21,6 +21,7 @@ import {
   DEFAULT_POLL_MS
 } from './service-types'
 import { readGrokAuthSession } from '../grok-auth'
+import { resolveFactoryApiKey } from '../factory-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -31,9 +32,11 @@ export abstract class RateLimitServiceState {
     kimi: null,
     antigravity: null,
     minimax: null,
+    factory: null,
     grok: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected factoryApiKeyConfigured = resolveFactoryApiKey().status === 'ok'
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -45,6 +48,7 @@ export abstract class RateLimitServiceState {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    factory: 0,
     grok: 0,
     antigravity: 0
   }
@@ -56,6 +60,7 @@ export abstract class RateLimitServiceState {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    factory: 0,
     grok: 0,
     antigravity: 0
   }
@@ -74,6 +79,7 @@ export abstract class RateLimitServiceState {
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected factoryFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
@@ -105,7 +111,7 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
-  constructor() {}
+  constructor() { }
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
     this.stateListeners.add(listener)

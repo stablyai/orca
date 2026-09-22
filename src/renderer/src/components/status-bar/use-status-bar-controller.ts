@@ -99,7 +99,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, factory, grok } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -113,6 +113,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
+    factoryApiKeyConfigured: rateLimits.factoryApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
@@ -121,6 +122,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
+  const visibleFactory = getVisibleUsageProvider('factory', factory, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const showClaude =
     visibleClaude !== null &&
@@ -148,6 +150,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showFactory =
+    visibleFactory !== null &&
+    statusBarItems.includes('factory') &&
+    isStatusBarItemAvailable('factory', detectedAgentIds)
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -165,11 +171,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showKimi ||
     showAntigravity ||
     showMiniMax ||
+    showFactory ||
     showGrok
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, factory, grok },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -182,6 +189,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
+    factory?.status === 'fetching' ||
     grok?.status === 'fetching'
 
   const compact = containerWidth < 900
@@ -201,6 +209,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
+    showFactory ? visibleFactory : null,
     showGrok ? visibleGrok : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 

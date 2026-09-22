@@ -54,7 +54,7 @@ export function buildCapabilitySettingsSections({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, Grok, and Factory AI.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
@@ -78,44 +78,44 @@ export function buildCapabilitySettingsSections({
     // linked provider before the agent skill has anything to act on.
     ...(isLinearConnected
       ? [
-          {
-            id: 'linear',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.linearDescription',
-              'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
-            ),
-            icon: LinearIcon,
-            searchEntries: getLinearAgentSkillPaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
+        {
+          id: 'linear',
+          title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
+          description: translate(
+            'auto.hooks.useSettingsNavigationMetadata.linearDescription',
+            'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
+          ),
+          icon: LinearIcon,
+          searchEntries: getLinearAgentSkillPaneSearchEntries(),
+          group: 'capabilities'
+        }
+      ]
       : []),
     ...(showDesktopOnlySettings
       ? [
-          {
-            id: 'computer-use',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
-              'Enable agents to control any app on your computer.'
-            ),
-            icon: MousePointerClick,
-            searchEntries: getComputerUsePaneSearchEntries(),
-            group: 'capabilities'
-          },
-          {
-            id: 'voice',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
-              'Local speech-to-text dictation with on-device models.'
-            ),
-            icon: Mic,
-            searchEntries: getVoicePaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
+        {
+          id: 'computer-use',
+          title: translate('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
+          description: translate(
+            'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
+            'Enable agents to control any app on your computer.'
+          ),
+          icon: MousePointerClick,
+          searchEntries: getComputerUsePaneSearchEntries(),
+          group: 'capabilities'
+        },
+        {
+          id: 'voice',
+          title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
+          description: translate(
+            'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
+            'Local speech-to-text dictation with on-device models.'
+          ),
+          icon: Mic,
+          searchEntries: getVoicePaneSearchEntries(),
+          group: 'capabilities'
+        }
+      ]
       : [])
   ]
 }
@@ -128,18 +128,18 @@ export function buildSetupSettingsSections({
   return [
     ...(showDesktopOnlySettings
       ? [
-          {
-            id: 'orca-account',
-            title: translate('auto.components.settings.orcaAccount.title', 'Orca Account'),
-            description: translate(
-              'auto.components.settings.orcaAccount.description',
-              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-            ),
-            icon: CircleUserRound,
-            searchEntries: getOrcaAccountSettingsSearchEntries(),
-            group: 'setup'
-          }
-        ]
+        {
+          id: 'orca-account',
+          title: translate('auto.components.settings.orcaAccount.title', 'Orca Account'),
+          description: translate(
+            'auto.components.settings.orcaAccount.description',
+            'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+          ),
+          icon: CircleUserRound,
+          searchEntries: getOrcaAccountSettingsSearchEntries(),
+          group: 'setup'
+        }
+      ]
       : []),
     {
       id: 'setup-guide',
@@ -198,18 +198,18 @@ export function buildSetupSettingsSections({
     },
     ...(showDesktopOnlySettings
       ? [
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'setup'
-          }
-        ]
+        {
+          id: 'mobile',
+          title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+          description: translate(
+            'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+            'Control terminals and agents from your phone.'
+          ),
+          icon: Smartphone,
+          searchEntries: getMobileSettingsPaneSearchEntries(),
+          group: 'setup'
+        }
+      ]
       : [])
   ]
 }

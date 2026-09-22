@@ -133,6 +133,18 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {isStatusBarItemAvailable('factory', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('factory')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('factory')
+            }}
+          >
+            <AgentIcon agent="droid" size={14} />
+            {translate('auto.components.status.bar.StatusBar.factoryUsageMenu', 'Factory AI Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}
           onCheckedChange={() => {

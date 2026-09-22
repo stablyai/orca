@@ -17,6 +17,7 @@ import {
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsFactorySearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
@@ -35,6 +36,7 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
+import { FactoryAccountsSection } from './FactoryAccountsSection'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import type {
   AccountsPaneProps,
@@ -99,7 +101,7 @@ export function AccountsPane({
   // label must not interpolate the fallback.
   const remoteServerName = isRemoteAccountScope
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
-        ?.name ?? null)
+      ?.name ?? null)
     : null
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
@@ -111,8 +113,8 @@ export function AccountsPane({
   // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
   const accountRuntimeSentenceLabel =
     !isRemoteAccountScope &&
-    accountRuntime.runtime === 'host' &&
-    !navigator.userAgent.includes('Windows')
+      accountRuntime.runtime === 'host' &&
+      !navigator.userAgent.includes('Windows')
       ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
       : accountRuntime.label
   const localAccountRuntimeSentenceLabel =
@@ -179,13 +181,13 @@ export function AccountsPane({
   // rate-limit poll must not be misattributed to a remote account owner.
   const activeCodexAuthWarning = codexAccountsLoaded
     ? getCodexAccountAuthWarning({
-        limits: isRemoteAccountScope ? null : codexRateLimits,
-        target: codexRateLimitTarget,
-        runtime: accountRuntime,
-        activeAccountId: activeCodexAccountId,
-        accountId: activeCodexAccountId,
-        authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
-      })
+      limits: isRemoteAccountScope ? null : codexRateLimits,
+      target: codexRateLimitTarget,
+      runtime: accountRuntime,
+      activeAccountId: activeCodexAccountId,
+      accountId: activeCodexAccountId,
+      authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
+    })
     : null
   // Why: the mirror keeps serving the last synced settings when ~/.codex is
   // unusable, so without this the user only sees their edits being ignored.
@@ -356,8 +358,8 @@ export function AccountsPane({
   }
   const visibleSections = [
     wslSupportedPlatform &&
-    !isRemoteAccountScope &&
-    matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
+      !isRemoteAccountScope &&
+      matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
       ? renderAccountsLocationSection(model)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
@@ -377,6 +379,9 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsFactorySearchEntries()) ? (
+      <FactoryAccountsSection key="factory" />
     ) : null
   ].filter(Boolean)
 

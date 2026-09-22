@@ -18,6 +18,8 @@ export type UsageProviderSettings = Pick<
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  // Why: Factory key lives in the Orca store, env, or ~/.factory/.env; main sets this each poll.
+  factoryApiKeyConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -28,6 +30,7 @@ type UsageProviderSnapshots = {
   kimi: ProviderRateLimits | null | undefined
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
+  factory: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
 }
 
@@ -79,7 +82,8 @@ export function hasUsageProviderSettings(
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.factoryApiKeyConfigured === true
   )
 }
 
@@ -114,6 +118,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+  if (providerId === 'factory') {
+    return settings.factoryApiKeyConfigured === true
+  }
   return false
 }
 
@@ -122,7 +129,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'factory' ? { monthly: null } : {}),
     ...(providerId === 'gemini' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
@@ -167,6 +174,7 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
+    isProviderSnapshotPending(providers.factory) ||
     isProviderSnapshotPending(providers.grok)
   ) {
     return false
@@ -180,6 +188,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
+    !isProviderConfigured(providers.factory) &&
     !isProviderConfigured(providers.grok)
   )
 }

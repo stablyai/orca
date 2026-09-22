@@ -82,6 +82,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'factory':
+      return 'D'
     case 'codex':
       return 'X'
   }
@@ -127,32 +129,32 @@ function VerboseProviderUsage({
   const visibleWindows = [
     p.session
       ? {
-          key: 'session',
-          window: p.session,
-          label: formatRateLimitWindowChipLabel(p.session)
-        }
+        key: 'session',
+        window: p.session,
+        label: formatRateLimitWindowChipLabel(p.session)
+      }
       : null,
     p.weekly
       ? {
-          key: 'weekly',
-          window: p.weekly,
-          label: formatRateLimitWindowChipLabel(p.weekly)
-        }
+        key: 'weekly',
+        window: p.weekly,
+        label: formatRateLimitWindowChipLabel(p.weekly)
+      }
       : null,
     p.fableWeekly
       ? {
-          key: 'fableWeekly',
-          window: p.fableWeekly,
-          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
-        }
+        key: 'fableWeekly',
+        window: p.fableWeekly,
+        label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+      }
       : null,
     // Why: monthly stays inline for monthly-only providers; otherwise the detail panel carries it.
     p.monthly && !p.session && !p.weekly
       ? {
-          key: 'monthly',
-          window: p.monthly,
-          label: formatRateLimitWindowChipLabel(p.monthly)
-        }
+        key: 'monthly',
+        window: p.monthly,
+        label: formatRateLimitWindowChipLabel(p.monthly)
+      }
       : null
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
     return window !== null

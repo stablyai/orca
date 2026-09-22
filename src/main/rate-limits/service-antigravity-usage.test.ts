@@ -35,8 +35,12 @@ vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
-vi.mock('./grok-fetcher', () => ({
-  fetchGrokRateLimits: vi.fn()
+vi.mock('./grok-fetcher', () => ({ fetchGrokRateLimits: vi.fn() }))
+
+vi.mock('./factory-fetcher', () => ({ fetchFactoryRateLimits: vi.fn() }))
+
+vi.mock('./factory-auth', () => ({
+  resolveFactoryApiKey: vi.fn(() => ({ status: 'missing' }))
 }))
 
 vi.mock('./grok-auth', () => ({

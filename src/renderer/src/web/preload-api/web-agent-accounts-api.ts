@@ -26,6 +26,17 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
     getStatus: () => Promise.resolve(unsigned)
   }
 }
+export function createFactoryAccountsApi(): NonNullable<
+  Partial<PreloadApi>['factoryAccounts']
+> {
+  const notConfigured = { configured: false, source: null, error: null }
+  const unsupportedError = new Error('Factory API keys are only available in the desktop app.')
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.reject(unsupportedError)
+  }
+}
 
 function createEmptyManagedAccountsState(): {
   accounts: never[]

@@ -77,6 +77,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
+      factory: this.state.factory,
       grok: this.state.grok,
       antigravity: this.state.antigravity
     }
@@ -107,10 +108,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
           ? Math.min(
-              ACTIVE_FAILURE_REFETCH_MS *
-                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
-              MAX_ACTIVE_FAILURE_REFETCH_MS
-            )
+            ACTIVE_FAILURE_REFETCH_MS *
+            2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+            MAX_ACTIVE_FAILURE_REFETCH_MS
+          )
           : MIN_REFETCH_MS
         if (now - lastRetryAt >= throttleMs) {
           retryableFailures.push(provider)

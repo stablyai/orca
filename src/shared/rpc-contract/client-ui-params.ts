@@ -69,6 +69,7 @@ export const StatusBarItem = z.enum([
   'kimi',
   'minimax',
   'grok',
+  'factory',
   'ssh',
   'resource-usage',
   'ports'
@@ -180,7 +181,7 @@ export const UiUpdateFields = z
     _portsStatusBarDefaultAdded: z.boolean().optional(),
     _kimiStatusBarDefaultAdded: z.boolean().optional(),
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
-    _antigravityStatusBarDefaultAdded: z.boolean().optional(),
+    _factoryStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),

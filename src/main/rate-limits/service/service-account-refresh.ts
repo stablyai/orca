@@ -1,4 +1,5 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
+import { resolveFactoryApiKey } from '../factory-auth'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -35,6 +36,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+  invalidateFactoryCredentialState(): void {
+    this.factoryFetchGeneration += 1
+    this.factoryApiKeyConfigured = resolveFactoryApiKey().status === 'ok'
+    // Why: saving/forgetting the key can race an in-flight fetch; clear the visible snapshot before any old-key result returns.
+    this.updateState({
+      ...this.state,
+      factory: this.withFetchingStatus(null, 'factory')
     })
   }
 

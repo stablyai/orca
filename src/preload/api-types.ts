@@ -2,6 +2,7 @@ import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
+  FactoryAccountsApi,
   GrokAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
@@ -137,9 +138,9 @@ export type PreloadApi = {
   git: Merged<GitInspectionApi & GitOperationApi>
   ui: Merged<UiCommandEventApi & UiWindowApi>
   runtime: RuntimeApi['runtime']
-  runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
+  factoryAccounts: FactoryAccountsApi
   grokAccounts: GrokAccountsApi
   ssh: SshApi
   automations: AutomationsApi

@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchFactoryRateLimits } from './factory-fetcher'
+import { resolveFactoryApiKey } from './factory-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -44,8 +46,12 @@ vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
-vi.mock('./grok-fetcher', () => ({
-  fetchGrokRateLimits: vi.fn()
+vi.mock('./grok-fetcher', () => ({ fetchGrokRateLimits: vi.fn() }))
+
+vi.mock('./factory-fetcher', () => ({ fetchFactoryRateLimits: vi.fn() }))
+
+vi.mock('./factory-auth', () => ({
+  resolveFactoryApiKey: vi.fn(() => ({ status: 'missing' }))
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -117,6 +123,36 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('does not restore a replaced Factory key result after credentials change', async () => {
+    const firstFactory = deferred<ProviderRateLimits>()
+    mockFreshBackgroundProviderFetches()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
+    vi.mocked(resolveFactoryApiKey).mockReturnValue({ status: 'ok', apiKey: 'factory-old-key' })
+    vi.mocked(fetchFactoryRateLimits).mockImplementationOnce(() => firstFactory.promise)
+    const service = new RateLimitService()
+
+    const initialRefresh = service.refresh()
+    await flushMicrotasks()
+    expect(fetchFactoryRateLimits).toHaveBeenCalledOnce()
+
+    vi.mocked(resolveFactoryApiKey).mockReturnValue({ status: 'missing' })
+    service.invalidateFactoryCredentialState()
+    const factoryPercentagesAfterInvalidation: number[] = []
+    service.onStateChange(({ factory }) => {
+      if (factory?.session) {
+        factoryPercentagesAfterInvalidation.push(factory.session.usedPercent)
+      }
+    })
+    const queuedRefresh = service.refresh()
+    firstFactory.resolve(okProvider('factory', 42))
+
+    await Promise.all([initialRefresh, queuedRefresh])
+
+    expect(factoryPercentagesAfterInvalidation).not.toContain(42)
+    expect(service.getState().factoryApiKeyConfigured).toBe(false)
+    expect(service.getState().factory?.status).toBe('unavailable')
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
