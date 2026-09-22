@@ -9,7 +9,7 @@ vi.mock('./generation-store-file-system', async () => {
 
 import { createGenerationStore } from './generation-store'
 import { createExpoGenerationFileSystem } from './generation-store-file-system'
-import { forgetHostUpdateFailures } from './forget-host-update-failures'
+import { forgetHostUpdateFailures } from './removed-host-shell-cache'
 
 function store() {
   return createGenerationStore({ fileSystem: createExpoGenerationFileSystem() })
