@@ -119,7 +119,7 @@ afterAll(async () => {
 })
 
 /** A page carrying every signal these cases read: uncaught errors, console errors, request paths. */
-async function openPage(route) {
+async function openPage(route, replies = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   // At document start, where the native shell installs the real channel: the entry reads it while
   // its own script runs, so a channel added after `load` would already be too late.
@@ -133,15 +133,21 @@ async function openPage(route) {
     faultGrant,
     grants: [faultGrant, ...sessionGrants()],
     pageRoutes: PAGE_ROUTE_PATTERNS,
-    replies: {}
+    replies
   })
   const errors = []
+  const warnings = []
   const scripts = []
   const requestedHosts = []
   page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
   page.on('console', (message) => {
     if (message.type() === 'error') {
       errors.push(`console.error: ${message.text()}`)
+    }
+    // Kept apart from `errors`: the bridge reports a refused storage write at warning level, so a
+    // page writing a key it was never handed is invisible to every assertion above.
+    if (message.type() === 'warning') {
+      warnings.push(message.text())
     }
   })
   // Every request, not only the ones that answered: a CSP refusal fails the request, and a check
@@ -153,7 +159,7 @@ async function openPage(route) {
       scripts.push(path)
     }
   })
-  return { page, errors, scripts, requestedHosts }
+  return { page, errors, warnings, scripts, requestedHosts }
 }
 
 /**
@@ -186,8 +192,8 @@ async function waitForRoute({ page, errors }, route, awaitText) {
   }
 }
 
-async function openRoute(route, awaitText) {
-  const opened = await openPage(route)
+async function openRoute(route, awaitText, replies = {}) {
+  const opened = await openPage(route, replies)
   await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
   await waitForRoute(opened, route, awaitText)
   return opened
@@ -265,6 +271,27 @@ describeRender(
       await opened.page.close()
     }, 120_000)
 
+    it('writes no storage key it was never handed, on a mount that read the host status', async () => {
+      // `status.get` is what arms it: `host-status-gates.ts` runs on every mount above the route,
+      // and on a readable status the native `host-app-version-store.ts` writes
+      // `orca:host-app-version:v1:<hostId>` — a key no page route reads and `page-storage-keys.ts`
+      // does not admit, so the bridge refused it and logged one `storage-write-dropped` per mount
+      // on the device. Answered here because the other cases' double answers no RPC at all, which
+      // is exactly why this went unseen: the write needs a reply, not a control.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal', {
+        'status.get': {
+          protocolVersion: 9,
+          minCompatibleMobileVersion: 1,
+          appVersion: '1.4.191',
+          capabilities: []
+        }
+      })
+      // The whole refusal and not this one key: any page-closure writer of an unlisted key lands
+      // on the same line, and naming the key here would let the next one through.
+      expect(opened.warnings.filter((text) => text.includes('storage-write-dropped'))).toEqual([])
+      await opened.page.close()
+    }, 120_000)
+
     it('asks the desktop for the session it was opened on, so the page above is live', async () => {
       // The precondition every assertion above needs: a screen that mounted and asked for nothing
       // would paint the same chrome. The three reads are the header's live title, the tab snapshot
@@ -303,7 +330,8 @@ describeRender(
  * what this route owes it is the `screencastBinary` grant, which
  * `mobile-web-app-screencast-lane-grant.test.mjs` derives from this closure.
  *
- * **The storage refusals.** A page write needs a control to make it. The refusal's own chain is
+ * **The storage refusals a control makes.** The case above covers the writes a mount makes on its
+ * own; a refusal a user's own write earns still needs the control. That chain is
  * `mobile/src/session/mobile-structured-send-page-storage-refusal.test.ts` end to end over the
  * real `page-async-storage`.
  */

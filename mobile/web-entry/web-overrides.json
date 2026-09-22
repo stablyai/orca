@@ -156,6 +156,10 @@
     {
       "file": "src/terminal/terminal-live-input-text-write.web.ts",
       "reason": "setNativeProps does not exist on React Native Web, where a TextInput ref is the DOM node, so the native write threw out of the session route's mount effect and faulted the page instead of clearing the field; this one sets value on the <input> or <textarea> RN Web rendered."
+    },
+    {
+      "file": "src/transport/host-app-version-store.web.ts",
+      "reason": "Not an RN Web API gap but a store the page has no reader for. The native file records the host's status.get app version under orca:host-app-version:v1:<hostId> so the native troubleshoot screen can name a version with no live host; that screen's module, diagnostics/native-diagnostics-operations.ts, is not in the page's bundle. Inside the page AsyncStorage is the bridge's adapter and this key is not one the route was handed, so every mount that read status.get posted a write the shell refused and logged as storage-write-dropped. A key the page only writes is not page state, so it is not admitted through page-storage-keys.ts; the page keeps no record instead."
     }
   ]
 }
