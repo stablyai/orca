@@ -134,7 +134,14 @@ function apiUrl(
   return url
 }
 
-// Reads the body only for a 400 on a non-preview request; consumed either way.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+// Reads the body only for a 400 on a non-preview request, and only from a
+// clone: a 400 that is not a preview rejection is still handed to the caller,
+// which reads it for Azure's own validation message. Cloning here rather than
+// at the call site keeps the unread-clone case from existing at all.
 async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): Promise<boolean> {
   if (response.ok || response.status !== 400) {
     return false
@@ -143,8 +150,8 @@ async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): P
     return false
   }
   try {
-    const body = (await response.json()) as { typeKey?: string | null } | null
-    return body?.typeKey === 'VssInvalidPreviewVersionException'
+    const body: unknown = await response.clone().json()
+    return isRecord(body) && body.typeKey === 'VssInvalidPreviewVersionException'
   } catch {
     return false
   }
@@ -172,6 +179,8 @@ async function fetchWithApiVersionRetry(
   const url = apiUrl(baseUrl, path, options.searchParams)
   const response = await doFetch(url)
   if (await shouldRetryWithPreviewApiVersion(url, response)) {
+    // The retry replaces this response, so its body is never read.
+    await cancelUnreadResponseBody(response)
     markAzureDevOpsPreviewApiVersionOrigin(url.origin)
     return doFetch(apiUrl(baseUrl, path, options.searchParams))
   }

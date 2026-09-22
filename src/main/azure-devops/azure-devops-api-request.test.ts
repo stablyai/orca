@@ -207,3 +207,36 @@ describe('requestAzureDevOpsResponseAtBase', () => {
     expect(result).toEqual({ status: 200, body: { count: 2 } })
   })
 })
+
+describe('requestAzureDevOpsResponseAtBase and the preview-version probe', () => {
+  beforeEach(() => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+  })
+  afterEach(() => {
+    globalThis.fetch = OLD_FETCH
+    process.env = OLD_ENV
+  })
+
+  it('hands back a 400 the preview probe rejected, body intact', async () => {
+    // The probe reads the body to look for VssInvalidPreviewVersionException.
+    // Reading the original would leave nothing for the caller, and the Boards
+    // proxy would report an opaque 503 instead of Azure's validation message.
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'token' }
+    globalThis.fetch = vi.fn(
+      async (_input: string | URL | Request) =>
+        new Response(
+          JSON.stringify({ typeKey: 'RuleValidationException', message: 'TF51011: no such path' }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(SERVER_BASE, '/_apis/wit/wiql', {
+      method: 'POST',
+      body: { query: 'SELECT [System.Id] FROM WorkItems' }
+    })
+
+    expect(result.status).toBe(400)
+    expect(result.body).toMatchObject({ message: 'TF51011: no such path' })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+})
