@@ -18132,5 +18132,12 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Explorer root",
+      "full": "Full repo root",
+      "retry": "Retry"
+    }
   }
 }

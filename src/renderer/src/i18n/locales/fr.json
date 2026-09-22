@@ -16524,5 +16524,12 @@
       "stopped": "arrêté",
       "finished": "terminé"
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Racine de l’explorateur",
+      "full": "Racine du dépôt",
+      "retry": "Réessayer"
+    }
   }
 }

@@ -14999,5 +14999,12 @@
       "stopped": "停止",
       "finished": "完了"
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "エクスプローラーのルート",
+      "full": "リポジトリのルート",
+      "retry": "再試行"
+    }
   }
 }

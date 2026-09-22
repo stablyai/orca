@@ -46,6 +46,7 @@ type UseFileExplorerTreeResult = {
   resetAndLoad: () => void
 }
 
+/** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
   worktreePath: string | null,
   expanded: Set<string>,
@@ -139,7 +140,14 @@ export function useFileExplorerTree(
           setSourceWorkspaceId(null)
           rootReadFailedRef.current = true
         }
-        setDirCache((prev) => ({ ...prev, [dirPath]: { children: [] } }))
+        setDirCache((prev) => ({
+          ...prev,
+          [dirPath]: {
+            ...prev[dirPath],
+            children: prev[dirPath]?.children ?? [],
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
         return !options?.failOnError
       }

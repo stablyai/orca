@@ -1,4 +1,6 @@
 import type React from 'react'
+import { getExplorerDisplayDepth } from './file-explorer-display-root'
+import { Button } from '@/components/ui/button'
 import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -18,6 +20,7 @@ import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
   worktreePath: string | null
+  displayRootPath: string | null
   visibleFilesWorktreePath: string | null
   explorerView: RightSidebarExplorerView
   isFilesViewActive: boolean
@@ -41,6 +44,7 @@ type FileExplorerFilesTreePaneProps = {
 export function FileExplorerFilesTreePane({
   activeRepo,
   worktreePath,
+  displayRootPath,
   visibleFilesWorktreePath,
   explorerView,
   isFilesViewActive,
@@ -59,7 +63,8 @@ export function FileExplorerFilesTreePane({
   handleExplorerBackgroundContextMenuCapture,
   handleExplorerBackgroundDoubleClick
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
-  const { loadingDirPaths, rootCache, rootError } = tree
+  const { loadingDirPaths, rootError } = tree
+  const rootCache = displayRootPath ? tree.dirCache[displayRootPath] : undefined
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
   const {
     scrollRef,
@@ -111,10 +116,14 @@ export function FileExplorerFilesTreePane({
   // when the tree is empty, still loading, or showing a read error.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
   const isNameFilterLoading = nameFilterSource?.relativePaths === null
-  const isRootLoading = !rootCache || (!!worktreePath && loadingDirPaths.has(worktreePath))
+  const isRootLoading = !rootCache || (!!displayRootPath && loadingDirPaths.has(displayRootPath))
   const isLoading = isEmptyState && (hasNameFilter ? isNameFilterLoading : isRootLoading)
-  const treeError = hasNameFilter ? nameFilterFiles.loadError : rootError
-  const hasError = isEmptyState && !isLoading && !!treeError
+  const treeError = hasNameFilter
+    ? nameFilterFiles.loadError
+    : displayRootPath
+      ? (rootCache?.error ?? null)
+      : rootError
+  const hasError = isEmptyState && !isLoading && treeError !== null
   const showTree = !isEmptyState
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
@@ -133,7 +142,7 @@ export function FileExplorerFilesTreePane({
         explorerView !== 'files' && 'pointer-events-none invisible',
         isRootDragOver &&
           explorerView === 'files' &&
-          !(dragSourcePath && dirname(dragSourcePath) === worktreePath) &&
+          !(dragSourcePath && dirname(dragSourcePath) === displayRootPath) &&
           'bg-border',
         isNativeDragOver && explorerView === 'files' && !nativeDropTargetDir && 'bg-border'
       )}
@@ -141,7 +150,9 @@ export function FileExplorerFilesTreePane({
       viewportTabIndex={-1}
       viewportClassName="h-full min-h-0 py-2"
       data-native-file-drop-target={isFilesViewActive ? 'file-explorer' : undefined}
-      data-native-file-drop-dir={visibleFilesWorktreePath ?? undefined}
+      data-native-file-drop-dir={
+        visibleFilesWorktreePath ? (displayRootPath ?? undefined) : undefined
+      }
       onWheelCapture={handleWheelCapture}
       onDragOver={rootDragHandlers.onDragOver}
       onDragEnter={rootDragHandlers.onDragEnter}
@@ -156,6 +167,14 @@ export function FileExplorerFilesTreePane({
         onDoubleClick: handleExplorerBackgroundDoubleClick
       }}
     >
+      {treeError !== null && !isLoading && !hasNameFilter && displayRootPath && (
+        <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
+          {showTree && <p>{treeError}</p>}
+          <Button variant="ghost" size="xs" onClick={() => void tree.refreshDir(displayRootPath)}>
+            {translate('fileExplorer.root.retry', 'Retry')}
+          </Button>
+        </div>
+      )}
       {!showTree && (
         <FileExplorerTreeStatus
           isLoading={isLoading}
@@ -166,6 +185,7 @@ export function FileExplorerFilesTreePane({
       )}
       {showTree && (
         <FileExplorerVirtualRows
+          displayDepthOffset={getExplorerDisplayDepth(worktreePath, displayRootPath)}
           virtualizer={virtualizer}
           inlineInputIndex={inlineInputIndex}
           rowProjection={rowProjection}

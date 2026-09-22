@@ -6,6 +6,7 @@ import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 import { omitRecordKeys } from './record-key-omission'
 
+/** Clears worktree-owned renderer state after successful removal so a reused identity cannot inherit stale preferences. */
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
   worktreeId: string,
@@ -110,6 +111,7 @@ export function applyRemoveWorktreeSuccessState(
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
       // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
+      explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
       // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.

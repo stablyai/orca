@@ -18,6 +18,7 @@ import {
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -33,9 +34,11 @@ type UseFileExplorerInlineInputResult = {
   handleInlineSubmit: (value: string) => void
 }
 
+/** Positions creation input under the displayed root while retaining true workspace paths for edits and undo. */
 export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   expanded,
   rowProjection,
   scrollRef,
@@ -68,12 +71,12 @@ export function useFileExplorerInlineInput({
     if (!inlineInput || inlineInput.type === 'rename') {
       return -1
     }
-    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, worktreePath)
-  }, [inlineInput, rowProjection, worktreePath])
+    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, displayRootPath)
+  }, [inlineInput, rowProjection, displayRootPath])
 
   const startNew = useCallback(
     (type: 'file' | 'folder', parentPath: string, depth: number) => {
-      if (activeWorktreeId && parentPath !== worktreePath && !expanded.has(parentPath)) {
+      if (activeWorktreeId && parentPath !== displayRootPath && !expanded.has(parentPath)) {
         toggleDir(activeWorktreeId, parentPath)
       }
       setInlineInput({
@@ -83,7 +86,7 @@ export function useFileExplorerInlineInput({
         operationOwner: getFileExplorerOperationOwner(activeWorktreeId)
       })
     },
-    [activeWorktreeId, worktreePath, expanded, toggleDir]
+    [activeWorktreeId, displayRootPath, expanded, toggleDir]
   )
 
   const startRename = useCallback(

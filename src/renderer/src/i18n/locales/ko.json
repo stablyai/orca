@@ -15137,5 +15137,12 @@
       "stopped": "중지됨",
       "finished": "완료됨"
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "탐색기 루트",
+      "full": "저장소 루트",
+      "retry": "다시 시도"
+    }
   }
 }

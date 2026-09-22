@@ -14964,5 +14964,12 @@
       "stopped": "detenido",
       "finished": "finalizado"
     }
+  },
+  "fileExplorer": {
+    "root": {
+      "label": "Raíz del explorador",
+      "full": "Raíz del repositorio",
+      "retry": "Reintentar"
+    }
   }
 }

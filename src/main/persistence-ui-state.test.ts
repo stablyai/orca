@@ -132,6 +132,25 @@ describe('Store', () => {
     expect(store.getUI().sidebarWidth).toBe(400)
   })
 
+  it('updateUI persists sanitized per-worktree explorer roots', async () => {
+    const store = await createStore()
+    store.updateUI({
+      explorerDisplayRootByWorktree: {
+        'repo-1::/repo': '/',
+        'repo-2::/repo': 'packages/app',
+        // @ts-expect-error Deliberately malformed input exercises runtime sanitization.
+        'repo-3::/repo': false,
+        // @ts-expect-error Deliberately malformed prototype key exercises runtime sanitization.
+        constructor: false
+      }
+    })
+
+    expect(store.getUI().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({
