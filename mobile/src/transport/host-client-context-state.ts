@@ -1,4 +1,7 @@
 import type { RpcClient } from './rpc-client'
+import type { HostClientOpenRegistry } from './host-client-open-registry'
+import type { HostClientStoreEntry } from './host-entry-opener'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -62,6 +65,47 @@ export function primeHostProfiles(cache: Map<string, HostProfile>, hosts: HostPr
   }
 }
 
+export function createHostClientSelectors(
+  entries: ReadonlyMap<string, HostClientStoreEntry>,
+  pendingOpens: HostClientOpenRegistry
+) {
+  const getKnownState = (hostId: string): ConnectionState | null => {
+    const entry = entries.get(hostId)
+    if (entry) {
+      return entry.state
+    }
+    // Why: the Keychain pass predates the store entry; this window is connecting.
+    return pendingOpens.getActivePromise(hostId) ? 'connecting' : null
+  }
+  return {
+    getKnownState,
+    getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    getClientId: (hostId: string): string | null => entries.get(hostId)?.clientId ?? null,
+    getReconnectAttempt: (hostId: string): number =>
+      entries.get(hostId)?.client.getReconnectAttempt() ?? 0,
+    getLastConnectedAt: (hostId: string): number | null =>
+      entries.get(hostId)?.client.getLastConnectedAt() ?? null,
+    getActivePath: (hostId: string): MobileConnectionPath =>
+      clientActivePath(entries.get(hostId)?.client),
+    getPendingPath: (hostId: string): MobileConnectionPath | null =>
+      clientPendingPath(entries.get(hostId)?.client),
+    isPairingRejected: (hostId: string): boolean =>
+      clientPairingRejected(entries.get(hostId)?.client),
+    getRelayHostReachability: (hostId: string): RelayHostReachability =>
+      clientRelayHostReachability(entries.get(hostId)?.client)
+  }
+}
+
+export function clientRelayHostReachability(client: RpcClient | undefined): RelayHostReachability {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.getRelayHostReachability?.() ?? 'connecting'
+}
+
+export function clientPairingRejected(client: RpcClient | undefined): boolean {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.isPairingRejected?.() ?? false
+}
+
 export function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
   if (typeof logical?.getActivePath !== 'function') {
@@ -69,4 +113,9 @@ export function clientActivePath(client: RpcClient | undefined): MobileConnectio
   }
   // Why: during migration the pending path is what the user is waiting on.
   return logical.getPendingPath?.() ?? logical.getActivePath()
+}
+
+export function clientPendingPath(client: RpcClient | undefined): MobileConnectionPath | null {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.getPendingPath?.() ?? null
 }

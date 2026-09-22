@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../shared/types'
+import type { ClassifiedError } from '../../shared/classified-error'
 import { GlabNonListResponseError } from './glab-api-response'
 
 // Why: glab CLI surfaces API errors as unstructured stderr. Map known

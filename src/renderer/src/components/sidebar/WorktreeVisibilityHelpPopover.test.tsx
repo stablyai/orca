@@ -67,9 +67,8 @@ describe('WorktreeVisibilityHelpPopover', () => {
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     expect(content()?.getAttribute('aria-label')).toBe('Which worktrees are hidden by default?')
-    expect(content()?.textContent).toContain('current and future non-Orca worktrees')
-    expect(content()?.textContent).toContain('.claude/worktrees/*')
-    expect(content()?.textContent).toContain('.gsd-workspaces/*')
+    expect(content()?.textContent).toContain('current and future worktrees')
+    expect(content()?.textContent).toContain('show individual worktrees below')
 
     await dispatch(
       hoverTarget!,

@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import {
   readStoredCodexCredentialState,
   waitForManagedCodexAuthReady
@@ -262,6 +263,6 @@ function createFixture(): {
   }
 }
 
-function writeAuth(home: string, auth: object): void {
+function writeAuth(home: string, auth: Record<string, unknown>): void {
   writeFileSync(join(home, 'auth.json'), JSON.stringify(auth), { mode: 0o600 })
 }

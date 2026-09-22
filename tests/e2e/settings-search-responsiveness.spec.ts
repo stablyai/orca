@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import type { Repo } from '../../src/shared/types'
+import type { Repo } from '../../src/shared/repo-types'
 
 const MATCHING_PROJECT_COUNT = 240
 

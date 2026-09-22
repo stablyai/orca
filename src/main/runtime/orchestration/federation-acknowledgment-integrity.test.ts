@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 
 describe('federation acknowledgment integrity', () => {
@@ -13,6 +14,7 @@ describe('federation acknowledgment integrity', () => {
     db = new OrchestrationDb(':memory:')
     const dispatchId = `ctx_protocol_${protocolVersion}`
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: `task_protocol_${protocolVersion}`,
       homePeerFingerprint: 'home_peer',
@@ -50,6 +52,17 @@ describe('federation acknowledgment integrity', () => {
         })
       }),
       ...(settleRemoteOutcome ? { settleRemoteOutcome } : {})
+    })
+  }
+
+  function enqueueQuestion(target: OrchestrationDb, dispatchId: string, messageId: string): void {
+    target.enqueueFederationRelay({
+      dispatchId,
+      direction: 'to_home',
+      kind: 'question',
+      payload: '{}',
+      messageId,
+      remoteQuestion: true
     })
   }
 
@@ -96,5 +109,55 @@ describe('federation acknowledgment integrity', () => {
 
     expect(current.db.getRemoteDispatchAttachment(current.dispatchId)?.state).toBe('ready')
     expect(current.db.listPendingFederationRelay(current.dispatchId, 'to_home')).toHaveLength(0)
+  })
+
+  it('accepts an identical remote answer replay and rejects a conflicting replay', () => {
+    const current = createReadyAttachment(3)
+    enqueueQuestion(current.db, current.dispatchId, 'question_replay')
+    const answer = {
+      messageId: 'question_replay',
+      dispatchId: current.dispatchId,
+      answerMessageId: 'answer_1',
+      body: 'Yes'
+    }
+
+    current.db.answerRemoteQuestion(answer)
+
+    expect(() => current.db.answerRemoteQuestion(answer)).not.toThrow()
+    expect(() => current.db.answerRemoteQuestion({ ...answer, body: 'No' })).toThrowError(
+      expect.objectContaining({ code: 'answer_conflict' })
+    )
+  })
+
+  it('accepts an identical answer that wins between classification and the guarded update', () => {
+    const current = createReadyAttachment(3)
+    enqueueQuestion(current.db, current.dispatchId, 'question_race')
+    const sqlite = (current.db as unknown as { db: Database.Database }).db
+    const originalPrepare = sqlite.prepare.bind(sqlite)
+    let injected = false
+    const prepare = vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
+      const statement = originalPrepare(sql)
+      if (!injected && sql.includes('UPDATE remote_questions')) {
+        injected = true
+        statement.run('answer_race', 'Yes', 'question_race')
+      }
+      return statement
+    })
+
+    expect(() =>
+      current.db.answerRemoteQuestion({
+        messageId: 'question_race',
+        dispatchId: current.dispatchId,
+        answerMessageId: 'answer_race',
+        body: 'Yes'
+      })
+    ).not.toThrow()
+    expect(injected).toBe(true)
+    expect(current.db.getRemoteQuestion('question_race')).toMatchObject({
+      status: 'answered',
+      answer_message_id: 'answer_race',
+      answer_body: 'Yes'
+    })
+    prepare.mockRestore()
   })
 })

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 type CapturedButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children?: ReactNode
@@ -80,7 +80,7 @@ describe('SourceControlDiscardDialog', () => {
   })
 
   it('makes the discard button the dialog default action', async () => {
-    const { SourceControlDiscardDialog } = await import('./source-control-discard-dialog')
+    const { SourceControlDiscardDialog } = await import('./source-control/commit/discard-dialog')
 
     renderToStaticMarkup(
       <SourceControlDiscardDialog
@@ -107,7 +107,8 @@ describe('SourceControlDiscardDialog', () => {
 
 describe('focusDiscardDialogConfirmButton', () => {
   it('prevents Radix from focusing the first tabbable button', async () => {
-    const { focusDiscardDialogConfirmButton } = await import('./source-control-discard-dialog')
+    const { focusDiscardDialogConfirmButton } =
+      await import('./source-control/commit/discard-dialog')
     const event = { preventDefault: vi.fn() } as unknown as Event
     const confirmButton = { focus: vi.fn() } as unknown as HTMLButtonElement
 

@@ -29,6 +29,9 @@ type ImageViewerProps = {
   filePath: string
   mimeType?: string
   layout?: 'fill' | 'intrinsic'
+  // Why: callers without an owner identity (for example diff and conflict
+  // panes) must not persist a preference under a path-only key.
+  preferenceKey?: string | null
   // Why: absent means "no PDF scroll memory" — diff and conflict-review callers
   // mount several viewers on one path, so they deliberately pass nothing.
   scrollCacheKey?: string | null
@@ -39,6 +42,7 @@ export default function ImageViewer({
   filePath,
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
+  preferenceKey,
   scrollCacheKey = null
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
@@ -215,7 +219,12 @@ export default function ImageViewer({
 
   if (isPdf) {
     return (
-      <PdfViewer content={cleanedContent} filePath={filePath} scrollCacheKey={scrollCacheKey} />
+      <PdfViewer
+        content={cleanedContent}
+        filePath={filePath}
+        preferenceKey={preferenceKey}
+        scrollCacheKey={scrollCacheKey}
+      />
     )
   }
 
@@ -291,7 +300,9 @@ export default function ImageViewer({
                     ? 'block h-auto max-h-none max-w-full'
                     : inlineImageLayoutSize
                       ? 'block h-full w-full'
-                      : 'block max-h-full max-w-full'
+                      : // Why: the w-max/h-max scroll box makes percentage maxes resolve to
+                        // none, so only viewport units bound the image before onLoad.
+                        'block max-h-[100vh] max-w-[100vw]'
                 )}
                 onLoad={(event) => {
                   const img = event.currentTarget

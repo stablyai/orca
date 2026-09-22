@@ -7,10 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { GitHubWorkItem, LinearIssue, Repo } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRecentTabState, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 
@@ -635,10 +638,10 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     await flushEffects()
 
     expect(getRenderedRowIds().filter(Boolean)).toEqual([
-      'worktree:wt-linked',
+      encodePaletteIdentity(['worktree', '|wt-linked']),
       '__create_worktree__'
     ])
-    expect(getCommandValue()).toBe('worktree:wt-linked')
+    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-linked']))
     expect(testContainer.querySelector('[data-cmd-j-linear-issue-preview="true"]')).not.toBeNull()
   })
 
@@ -729,10 +732,10 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     await flushEffects()
 
     expect(getRenderedRowIds().filter(Boolean)).toEqual([
-      'worktree:wt-linked',
+      encodePaletteIdentity(['worktree', '|wt-linked']),
       '__create_worktree__'
     ])
-    expect(getCommandValue()).toBe('worktree:wt-linked')
+    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-linked']))
     expect(
       testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')?.dataset
         .cmdJTaskUrlProvider

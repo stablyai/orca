@@ -1,5 +1,5 @@
 import os from 'node:os'
-import type { ProcessMemoryMetric } from '../../shared/types'
+import type { ProcessMemoryMetric } from '../../shared/process-stats-types'
 
 export function getProcessMemoryMetric(
   platform: NodeJS.Platform = os.platform()

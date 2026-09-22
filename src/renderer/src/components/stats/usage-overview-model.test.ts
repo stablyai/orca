@@ -14,12 +14,8 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
-import {
-  buildUsageOverview,
-  formatUsageCost,
-  formatUsageTokens,
-  getRecentUsageDays
-} from './usage-overview-model'
+import { getRecentUsageDays } from './usage-overview-daily-series'
+import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
 function enabledClaudeScanState(): ClaudeUsageScanState {
   return {
@@ -83,6 +79,7 @@ describe('usage overview model', () => {
       reasoningOutputTokens: 300,
       totalTokens: 3_200,
       estimatedCostUsd: 0.02,
+      hasUnpricedModels: false,
       topModel: 'gpt-5.4',
       topProject: 'orca-secondary',
       hasAnyCodexData: true
@@ -193,6 +190,37 @@ describe('usage overview model', () => {
       cacheTokens: 250,
       totalTokens: 1_600
     })
+  })
+
+  it('marks the overview cost partial when Codex priced some models but not all', () => {
+    function overviewWithUnpricedCodex(hasUnpricedModels: boolean) {
+      const codexSummary: CodexUsageSummary = {
+        scope: 'orca',
+        range: '30d',
+        sessions: 1,
+        events: 3,
+        inputTokens: 2_000,
+        cachedInputTokens: 800,
+        outputTokens: 1_200,
+        reasoningOutputTokens: 300,
+        totalTokens: 3_200,
+        estimatedCostUsd: 0.02,
+        hasUnpricedModels,
+        topModel: 'gpt-6-astra',
+        topProject: 'orca-secondary',
+        hasAnyCodexData: true
+      }
+      return buildUsageOverview({
+        claude: { scanState: null, summary: null, daily: [] },
+        codex: { scanState: enabledCodexScanState(), summary: codexSummary, daily: [] },
+        opencode: { scanState: null, summary: null, daily: [] }
+      })
+    }
+
+    // The provider's own total is a real number, so the null-cost path never fires for it.
+    expect(overviewWithUnpricedCodex(true).estimatedCostUsd).toBeCloseTo(0.02)
+    expect(overviewWithUnpricedCodex(true).hasPartialCost).toBe(true)
+    expect(overviewWithUnpricedCodex(false).hasPartialCost).toBe(false)
   })
 
   it('pads recent usage days with zero-token cells', () => {

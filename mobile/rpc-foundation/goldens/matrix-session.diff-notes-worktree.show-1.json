@@ -1,0 +1,598 @@
+{
+  "operation": "session.diff-notes",
+  "family": "session.diff-notes",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "e54684bad13aa8b8b4794e06351c709053b1c4c6d87776ecdbb1dd1b4406a694",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "106579ec0285": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "12a0229a2392": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1d721a77bb40": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "270b4ca66aa7": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "432aeb4f1709": {
+      "busy": false,
+      "diffComments": [],
+      "pendingDelivery": {
+        "$rpc": "null"
+      }
+    },
+    "48a2db1ee584": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "4a2a4280302f": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "542d7b8c3e3f": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "diffComments": [
+                {
+                  "body": "needs a test",
+                  "createdAt": 0,
+                  "filePath": "src/app.ts",
+                  "id": "note-1",
+                  "lineNumber": 4,
+                  "worktreeId": "workspace-1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "6d49118108f1": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7ceace53bbee": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "86192c11a384": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d5df7c9e19e0": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e28b1ad79121": {
+      "busy": false,
+      "diffComments": [
+        {
+          "body": "needs a test",
+          "createdAt": 0,
+          "diffIdentity": {
+            "$rpc": "undefined"
+          },
+          "filePath": "src/app.ts",
+          "id": "note-1",
+          "lineNumber": 4,
+          "oldPath": {
+            "$rpc": "undefined"
+          },
+          "scope": {
+            "$rpc": "undefined"
+          },
+          "selectedText": {
+            "$rpc": "undefined"
+          },
+          "sentAt": {
+            "$rpc": "undefined"
+          },
+          "side": "modified",
+          "source": "diff",
+          "startLine": {
+            "$rpc": "undefined"
+          },
+          "updatedAt": {
+            "$rpc": "undefined"
+          },
+          "worktreeId": "workspace-1"
+        }
+      ],
+      "pendingDelivery": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f89d7fde99a2": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.diff-notes-worktree.show-1",
+    "checkpoints": [
+      {
+        "id": "session-diff-notes-loaded.normal:loaded",
+        "observation": {
+          "sender": ["542d7b8c3e3f"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e28b1ad79121",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.result-absent:loaded",
+        "observation": {
+          "sender": ["48a2db1ee584"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.result-null:loaded",
+        "observation": {
+          "sender": ["106579ec0285"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.inner-ok-missing:loaded",
+        "observation": {
+          "sender": ["f89d7fde99a2"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.inner-false-string-error:loaded",
+        "observation": {
+          "sender": ["d5df7c9e19e0"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.inner-false-object-error:loaded",
+        "observation": {
+          "sender": ["7ceace53bbee"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.outer-refused:loaded",
+        "observation": {
+          "sender": ["4a2a4280302f"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.outer-refused-no-message:loaded",
+        "observation": {
+          "sender": ["86192c11a384"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.method-not-found:loaded",
+        "observation": {
+          "sender": ["12a0229a2392"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.transport-rejection:loaded",
+        "observation": {
+          "sender": ["6d49118108f1"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-diff-notes-loaded.transport-rejection-no-message:loaded",
+        "observation": {
+          "sender": ["1d721a77bb40"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "432aeb4f1709",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

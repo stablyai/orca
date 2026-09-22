@@ -6,7 +6,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   isAiVaultSessionRecoverableEmpty,
   type AiVaultScope,

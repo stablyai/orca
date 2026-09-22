@@ -126,6 +126,80 @@ function seedRemoteRepo(target: DockerSshRelayTarget, repoPath: string): void {
   )
 }
 
+/**
+ * The fixture image ships Debian's `/etc/bash.bashrc` with the xterm title block commented out and
+ * an all-comments `/root/.bashrc`, so its shell never emits OSC 0. Orca derives a tab title from
+ * that sequence, so without this every SSH tab keeps its `Terminal N` placeholder no matter how
+ * healthy the shell is. Opt in from specs that assert on titles; a real user's shell sets one.
+ */
+export function enableDockerSshRelayTargetShellTitle(target: DockerSshRelayTarget): void {
+  execDockerSshRelayTargetControlCommand(
+    target,
+    `printf '%s\\n' ${shellQuote(String.raw`PS1="\[\e]0;\u@\h: \w\a\]$PS1"`)} >> /root/.bashrc`
+  )
+}
+
+/**
+ * Attempts a `direct-tcpip` channel to a closed loopback port using the host's own ssh client.
+ *
+ * The two outcomes are exactly what distinguishes the policies: a server that permits forwarding
+ * reports a connect failure (port 9 is closed on any sane host), while one running
+ * `AllowTcpForwarding no` refuses the channel itself with "administratively prohibited".
+ */
+function probeDockerSshRelayTargetForwarding(target: DockerSshRelayTarget): string {
+  const result = spawnSync(
+    'ssh',
+    [
+      '-i',
+      target.identityFile,
+      '-p',
+      String(target.port),
+      '-o',
+      'StrictHostKeyChecking=no',
+      '-o',
+      'UserKnownHostsFile=/dev/null',
+      '-o',
+      'BatchMode=yes',
+      '-o',
+      'IdentitiesOnly=yes',
+      '-W',
+      '127.0.0.1:9',
+      `root@${target.host}`
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 }
+  )
+  return result.stderr || result.stdout || `exit ${result.status}`
+}
+
+/**
+ * Denies TCP forwarding on the container's sshd the way a locked-down enterprise host does, so a
+ * spec can prove browser routing fails closed while the terminal plane keeps working.
+ *
+ * sshd re-execs itself on SIGHUP and re-reads its config, which is why this HUPs PID 1 instead of
+ * restarting it — PID 1 *is* sshd here (the entrypoint `exec`s it), so killing it takes the whole
+ * container down. Only sessions opened after the re-exec are governed by the new policy, so call
+ * this before the app connects. Returns once a real ssh client has confirmed the refusal, so a
+ * config that silently failed to apply surfaces here rather than as a confusing assertion later.
+ */
+export function blockDockerSshRelayTargetTcpForwarding(target: DockerSshRelayTarget): void {
+  execDockerSshRelayTargetControlCommand(
+    target,
+    "printf '%s\\n' 'AllowTcpForwarding no' >> /etc/ssh/sshd_config; kill -HUP 1"
+  )
+  const deadline = Date.now() + 60_000
+  let lastProbe = ''
+  while (Date.now() < deadline) {
+    lastProbe = probeDockerSshRelayTargetForwarding(target)
+    if (/administratively prohibited/i.test(lastProbe)) {
+      return
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+  }
+  throw new Error(
+    `sshd never began refusing TCP forwarding after AllowTcpForwarding no: ${lastProbe}`
+  )
+}
+
 export function writeDockerSshRelayTargetFile(
   target: DockerSshRelayTarget,
   filePath: string,
@@ -137,23 +211,17 @@ export function writeDockerSshRelayTargetFile(
   )
 }
 
-export type DockerSshRelayTargetOptions = {
-  /**
-   * `MaxSessions` for the container's sshd. OpenSSH caps *concurrent* session
-   * channels per network connection, so `1` forces every extra channel onto a
-   * new connection and makes a multiplexing failure observable instead of silent.
-   */
-  sshdMaxSessions?: number
+/** Why not `writeDockerSshRelayTargetFile`: that one passes the contents as a shell argument, so a
+ * payload the size of a real repository's path list exceeds ARG_MAX before it reaches the shell. */
+export function copyFileIntoDockerSshRelayTarget(
+  target: DockerSshRelayTarget,
+  localPath: string,
+  remotePath: string
+): void {
+  run('docker', ['cp', localPath, `${target.containerName}:${remotePath}`], { timeoutMs: 120_000 })
 }
 
-export function startDockerSshRelayTarget(
-  testInfo: TestInfo,
-  options: DockerSshRelayTargetOptions = {}
-): DockerSshRelayTarget {
-  const { sshdMaxSessions } = options
-  if (sshdMaxSessions !== undefined && !Number.isInteger(sshdMaxSessions)) {
-    throw new Error(`sshdMaxSessions must be an integer: ${sshdMaxSessions}`)
-  }
+export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
   const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
@@ -189,9 +257,6 @@ export function startDockerSshRelayTarget(
           'chmod 600 /root/.ssh/authorized_keys',
           'git config --global user.email e2e@test.local',
           'git config --global user.name "Orca Docker SSH E2E"',
-          ...(sshdMaxSessions === undefined
-            ? []
-            : [`printf '\\nMaxSessions %d\\n' ${sshdMaxSessions} >> /etc/ssh/sshd_config`]),
           'exec /usr/sbin/sshd -D -e'
         ].join(' && ')
       ],

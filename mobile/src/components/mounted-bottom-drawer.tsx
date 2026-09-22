@@ -1,11 +1,10 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Pressable,
   useWindowDimensions,
   ScrollView,
   Keyboard,
-  BackHandler,
   Modal,
   Platform
 } from 'react-native'
@@ -28,6 +27,7 @@ import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useBackClaim } from '../navigation/use-back-claim'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -88,6 +88,28 @@ export function MountedBottomDrawer({
         topGap: spacing.lg
       })
     : undefined
+
+  // Why: a sheet pinned under a fill picker holds progress at its target while the
+  // picker owns the window, so nothing re-applies its transform when the picker
+  // leaves. If the native view was rebuilt underneath, it keeps a stale transform
+  // and never paints — a dimmed, dead screen the user can only escape by dismissing
+  // the whole modal. A shared-value write alone cannot heal that (verified on
+  // device: an unchanged or nudged style lands on the stale native binding), so the
+  // remount is what repaints; the writes below keep the shared values authoritative
+  // for the fresh view, which matters because the drawer swap (166ms) hands back
+  // before the 180ms enter animation has finished.
+  const [windowEpoch, setWindowEpoch] = useState(0)
+  const wasInteractiveRef = useRef(interactive)
+  useEffect(() => {
+    const tookWindowBack = visible && interactive && !wasInteractiveRef.current
+    wasInteractiveRef.current = interactive
+    if (!tookWindowBack) {
+      return
+    }
+    translateY.value = 0
+    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    setWindowEpoch((epoch) => epoch + 1)
+  }, [interactive, visible])
 
   useEffect(() => {
     if (visible) {
@@ -171,17 +193,18 @@ export function MountedBottomDrawer({
     })
   }, [onClose, progress])
 
-  useEffect(() => {
-    if (!visible || !interactive) {
-      return
-    }
-
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss()
-      return true
-    })
-    return () => sub.remove()
-  }, [visible, interactive, dismiss])
+  // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
+  // a claim the shell hands one press over on. Every session sheet renders through this component,
+  // so this one claim is what makes Android Back close the sheet rather than leave the screen.
+  // Only the top interactive drawer claims; a sheet pinned under a fill picker does not own the key.
+  useBackClaim(
+    visible && interactive
+      ? () => {
+          dismiss()
+          return true
+        }
+      : null
+  )
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
@@ -276,12 +299,12 @@ export function MountedBottomDrawer({
         }
       ]
     }
-  })
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -358,6 +381,10 @@ export function MountedBottomDrawer({
 
         <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
           <Animated.View
+            // Why: remount per window hand-back — see the windowEpoch effect.
+            key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import {
   collectWorktreeTrashSweepRoots,
   getWorktreeTrashRoot,
@@ -43,6 +43,26 @@ describe('moveWorktreeDirectoryToTrash', () => {
     expect(existsSync(worktreePath)).toBe(false)
     expect(trashPath!.startsWith(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(true)
     expect(existsSync(join(trashPath!, 'node_modules', 'pkg', 'index.js'))).toBe(true)
+  })
+
+  it('leaves a file target untouched without creating a trash root', async () => {
+    const worktreePath = join(scratchDir, '.git')
+    await writeFile(worktreePath, 'gitdir: /preserved/admin\n')
+
+    expect(await moveWorktreeDirectoryToTrash(worktreePath)).toBeUndefined()
+    expect(await readFile(worktreePath, 'utf8')).toBe('gitdir: /preserved/admin\n')
+    expect(existsSync(getWorktreeTrashRoot(worktreePath))).toBe(false)
+  })
+
+  it('leaves a directory symlink and its target untouched', async () => {
+    const target = join(scratchDir, 'target')
+    const worktreePath = join(scratchDir, 'link')
+    await createWorktreeDirectory(target)
+    await symlink(target, worktreePath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    expect(await moveWorktreeDirectoryToTrash(worktreePath)).toBeUndefined()
+    expect(existsSync(join(worktreePath, 'node_modules', 'pkg', 'index.js'))).toBe(true)
+    expect(existsSync(getWorktreeTrashRoot(worktreePath))).toBe(false)
   })
 
   it('generates sweepable, collision-free entry names', async () => {

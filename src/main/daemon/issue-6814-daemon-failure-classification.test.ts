@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 // Regression coverage for issue #6814 (terminal lockup after upgrade).
 //
 // Drives the real DaemonServer + checkDaemonHealth client over a real unix
@@ -16,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DaemonServer } from './daemon-server'
 import { checkDaemonHealth } from './daemon-health'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
   return {
@@ -25,6 +26,7 @@ function createMockSubprocess(): SubprocessHandle {
     write() {},
     resize() {},
     kill() {},
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill() {},
     signal() {},
     onData() {},

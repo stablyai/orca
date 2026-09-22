@@ -1,4 +1,4 @@
-import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/types'
+import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { AppState } from '../../store/types'
 import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'

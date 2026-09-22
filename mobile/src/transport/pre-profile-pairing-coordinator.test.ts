@@ -4,7 +4,7 @@ import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry, HostProfile, PairingOffer, RpcResponse } from './types'
-import type { RpcClient } from './rpc-client'
+import type { connect, RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({
@@ -97,7 +97,9 @@ function dependencies(client: RpcClient, events: string[]) {
     new Error('relay unavailable')
   )
   return {
-    connectDirect: vi.fn(() => (events.push('connect'), client)),
+    connectDirect: vi.fn(
+      (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
+    ),
     connectRelay: vi.fn(() => unavailableRelay),
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director unavailable')
@@ -314,6 +316,43 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
+  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
+  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
+  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
+  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
+  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
+    const events: string[] = []
+    const entries: ConnectionLogEntry[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('forbidden')])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.not.objectContaining({ endpoints: expect.anything() })
+    )
+    expect(events).toEqual([
+      'save-journal',
+      'connect',
+      'update-journal',
+      'save-host',
+      'clear-journal'
+    ])
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        message: 'Relay: desktop will not serve relay pairing',
+        detail: 'forbidden'
+      })
+    )
+  })
+
   it('uses relay-basis provisioning when only the relay reaches post-E2EE status', async () => {
     const direct = fakeClient([])
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
@@ -380,6 +419,62 @@ describe('pre-profile pairing coordinator', () => {
     ])
     expect(entries[0]!.detail).toBe('relay-c1.onorca.dev')
     expect(entries[2]).toMatchObject({ level: 'success', detail: 'winner: relay' })
+  })
+
+  it('attributes each racing candidate so direct retries cannot read as relay', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const direct = fakeClient([])
+    ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
+    let journal: MobileRelayPairingJournal | null = null
+    const relay = relayProvisioningClient(() => journal!)
+    const deps = dependencies(direct, [])
+    deps.saveJournal.mockImplementation(async (value) => {
+      journal = value
+    })
+    // Why: the reconnect lines the direct client emits carry the LAN address
+    // and no path label — the exact shape that was misread as relay retrying.
+    deps.connectDirect.mockImplementation((...args) => {
+      const options = args[3]
+      if (options && typeof options !== 'function') {
+        options.onLog?.({
+          id: 'direct-reconnect',
+          ts: now,
+          level: 'warn',
+          message: 'Reconnecting (attempt 2)',
+          detail: '10.5.0.2:6768'
+        })
+      }
+      return direct
+    })
+    deps.connectRelay.mockImplementation((connectArgs) => {
+      connectArgs.onLog?.({
+        id: 'relay-dial',
+        ts: now,
+        level: 'info',
+        message: 'Relay: dialing cell',
+        detail: 'relay-c1.onorca.dev'
+      })
+      connectArgs.onLog?.({ id: 'relay-open', ts: now, level: 'info', message: 'Cell socket open' })
+      return relay
+    })
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(entries.map((entry) => entry.message)).toEqual([
+      'Direct: Reconnecting (attempt 2)',
+      'Relay: pairing candidate started',
+      // Already self-labelled: attribution must not stutter into 'Relay: Relay:'.
+      'Relay: dialing cell',
+      'Relay: Cell socket open',
+      'Pairing path selected'
+    ])
+    expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
   })
 
   it('cancels the disposable physical client without publishing a host', async () => {

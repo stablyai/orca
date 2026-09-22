@@ -183,8 +183,10 @@ export async function injectSameIdLocalActivationCollision(
       if (!runtimeWorktree) {
         throw new Error(`Runtime default checkout unavailable for ${runtimePath}`)
       }
+      const localRepoId = `${runtimeRepo.id}-local-collision`
       const localWorktree = {
         ...runtimeWorktree,
+        repoId: localRepoId,
         path: localCollisionPath,
         hostId: 'local' as const,
         runtimeOwnerEnvironmentId: null
@@ -193,6 +195,7 @@ export async function injectSameIdLocalActivationCollision(
         repos: [
           {
             ...runtimeRepo,
+            id: localRepoId,
             path: localCollisionPath,
             displayName: `Local collision for ${runtimeRepo.displayName}`,
             executionHostId: 'local',
@@ -202,7 +205,7 @@ export async function injectSameIdLocalActivationCollision(
         ],
         worktreesByRepo: {
           ...state.worktreesByRepo,
-          [runtimeRepo.id]: [localWorktree, ...(state.worktreesByRepo[runtimeRepo.id] ?? [])]
+          [localRepoId]: [localWorktree]
         },
         fetchWorktrees: gate.originalFetchWorktrees
       })

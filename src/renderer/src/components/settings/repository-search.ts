@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { SettingsSearchEntry } from './settings-search'
@@ -76,6 +76,40 @@ export function getRepositoryPaneSearchEntries(
         )
       ]
     },
+    ...(!isFolder
+      ? [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.githubAccount',
+              'GitHub Account'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.githubAccountDescription',
+              'Bind a keyring gh login for this project’s GitHub API calls.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.9dc60d7f6d',
+                'github'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.githubAccountKeyword',
+                'github account'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.ghAccount',
+                'gh account'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.login',
+                'login'
+              ),
+              ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
+            ]
+          }
+        ]
+      : []),
     ...(repo.upstream && !isFolder
       ? [
           {

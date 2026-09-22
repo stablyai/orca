@@ -1,14 +1,16 @@
+/**
+ * The desktop half of a dictation start: open the session, check the start is still the current
+ * one, commit recording. The screen is not here — an open microphone holds it on the device side,
+ * which is what left this flow with one stale check instead of two and nothing to release.
+ */
 import { describe, expect, it, vi } from 'vitest'
-import { MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS } from './mobile-dictation-session-state'
 import { startMobileDictationDesktopSession } from './mobile-dictation-desktop-start'
-import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import type { RpcClient } from '../transport/rpc-client'
 
 const OK_RESPONSE = { ok: true, result: {} } as const
 
 type StartHarnessOptions = {
   sendRequest?: (method: string) => Promise<unknown>
-  acquire?: () => Promise<void>
   commitRecordingStart?: () => boolean
 }
 
@@ -17,17 +19,12 @@ function createStartHarness(options: StartHarnessOptions = {}) {
   let enabled = true
   let activeId: string | null = 'dictation-a'
   const setIdle = vi.fn()
-  const release = vi.fn().mockResolvedValue(undefined)
   const commitRecordingStart = vi.fn(options.commitRecordingStart ?? (() => true))
   const rollbackRecordingStart = vi.fn()
   const sendRequest = vi.fn(
     options.sendRequest ?? (async () => OK_RESPONSE)
   ) as unknown as RpcClient['sendRequest']
   const client = { sendRequest } as RpcClient
-  const keepAwakeOwner = {
-    acquire: vi.fn(options.acquire ?? (async () => undefined)),
-    release
-  } as unknown as MobileDictationKeepAwakeOwner
 
   return {
     options: {
@@ -43,7 +40,6 @@ function createStartHarness(options: StartHarnessOptions = {}) {
         }
       },
       setIdle,
-      keepAwakeOwner,
       commitRecordingStart,
       rollbackRecordingStart
     },
@@ -56,7 +52,6 @@ function createStartHarness(options: StartHarnessOptions = {}) {
     },
     getActiveId: () => activeId,
     setIdle,
-    release,
     sendRequest,
     commitRecordingStart,
     rollbackRecordingStart
@@ -64,55 +59,38 @@ function createStartHarness(options: StartHarnessOptions = {}) {
 }
 
 describe('startMobileDictationDesktopSession', () => {
-  it('does not reset UI state when a newer start supersedes keep-awake acquisition', async () => {
+  it('cancels a start a newer one superseded while the desktop session opened', async () => {
     let setNewerStart = () => undefined
     const harness = createStartHarness({
-      acquire: async () => setNewerStart()
+      sendRequest: async (method) => {
+        if (method === 'speech.dictation.start') {
+          setNewerStart()
+        }
+        return OK_RESPONSE
+      }
     })
     setNewerStart = harness.setNewerStart
 
     await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
 
+    // The replacement owns the screen now, and this one must not reset the UI out from under it.
     expect(harness.setIdle).not.toHaveBeenCalled()
     expect(harness.getActiveId()).toBe('dictation-b')
-    expect(harness.release).toHaveBeenCalledWith('dictation-a')
     expect(harness.commitRecordingStart).not.toHaveBeenCalled()
+    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
+      dictationId: 'dictation-a'
+    })
   })
 
-  it('sends desktop cancellation without waiting for a hung keep-awake release', async () => {
-    vi.useFakeTimers()
-    try {
-      let goStale = () => undefined
-      const harness = createStartHarness({
-        acquire: () => {
-          goStale()
-          return new Promise<void>(() => undefined)
-        }
-      })
-      goStale = harness.setNewerStart
-      // Release queues behind the still-running acquisition, so it never settles.
-      harness.release.mockReturnValue(new Promise<void>(() => undefined))
-
-      const startPromise = startMobileDictationDesktopSession(harness.options)
-      await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS)
-
-      // Cancellation is dispatched even though release is still pending, so the
-      // native session tears down without waiting out its own timeout.
-      expect(harness.release).toHaveBeenCalledWith('dictation-a')
-      expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
-        dictationId: 'dictation-a'
-      })
-
-      void startPromise
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('returns to idle when disable makes keep-awake acquisition stale', async () => {
+  it('returns to idle when a disable makes the start stale', async () => {
     let setDisabled = () => undefined
     const harness = createStartHarness({
-      acquire: async () => setDisabled()
+      sendRequest: async (method) => {
+        if (method === 'speech.dictation.start') {
+          setDisabled()
+        }
+        return OK_RESPONSE
+      }
     })
     setDisabled = harness.setDisabled
 
@@ -120,46 +98,54 @@ describe('startMobileDictationDesktopSession', () => {
 
     expect(harness.setIdle).toHaveBeenCalledOnce()
     expect(harness.getActiveId()).toBeNull()
-    expect(harness.release).toHaveBeenCalledWith('dictation-a')
     expect(harness.commitRecordingStart).not.toHaveBeenCalled()
   })
 
-  it('does not hold recording start on a hung keep-awake acquisition', async () => {
-    vi.useFakeTimers()
-    try {
-      const harness = createStartHarness({
-        acquire: () => new Promise<void>(() => undefined)
-      })
-
-      const startPromise = startMobileDictationDesktopSession(harness.options)
-      await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS)
-
-      await expect(startPromise).resolves.toBe(true)
-      expect(harness.commitRecordingStart).toHaveBeenCalledOnce()
-      expect(harness.release).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('continues dictation when keep-awake acquisition fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  it('closes the capture the hook opened when the desktop start fails', async () => {
     const harness = createStartHarness({
-      acquire: async () => {
-        throw new Error('Unable to activate keep awake')
+      sendRequest: async (method) => {
+        if (method === 'speech.dictation.start') {
+          throw new Error('Desktop start failed')
+        }
+        return OK_RESPONSE
       }
     })
 
-    await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(true)
+    await expect(startMobileDictationDesktopSession(harness.options)).rejects.toThrow(
+      'Desktop start failed'
+    )
 
-    expect(consoleError).toHaveBeenCalledOnce()
-    consoleError.mockRestore()
+    // The hook opened the microphone before this ran, and an open microphone holds the screen. No
+    // session started, so both have to go back; nothing else on this path would end the capture,
+    // and the hook's `start` has no catch to do it either.
+    expect(harness.rollbackRecordingStart).toHaveBeenCalledOnce()
+    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
+      dictationId: 'dictation-a'
+    })
+  })
 
-    expect(harness.commitRecordingStart).toHaveBeenCalledOnce()
-    expect(harness.setIdle).not.toHaveBeenCalled()
-    expect(harness.getActiveId()).toBe('dictation-a')
-    expect(harness.release).not.toHaveBeenCalled()
-    expect(harness.sendRequest).not.toHaveBeenCalledWith('speech.dictation.cancel', {
+  it('leaves the capture alone when the failure is no longer the current start', async () => {
+    let setNewerStart = () => undefined
+    const harness = createStartHarness({
+      sendRequest: async (method) => {
+        if (method === 'speech.dictation.start') {
+          setNewerStart()
+          throw new Error('Desktop start failed')
+        }
+        return OK_RESPONSE
+      }
+    })
+    setNewerStart = harness.setNewerStart
+
+    await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
+
+    // There is one capture seam and it carries no start identity, so a stale rejection rolling it
+    // back would stop whatever dictation replaced this one and hand back the screen it holds. By
+    // the time the generation moved, the capture was either already ended — `cancel`, `stop`, the
+    // unmount, a failed dictation — or belongs to a newer start.
+    expect(harness.rollbackRecordingStart).not.toHaveBeenCalled()
+    // Its own desktop session is still cancelled, which is the part that is this start's to undo.
+    expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
       dictationId: 'dictation-a'
     })
   })
@@ -193,7 +179,7 @@ describe('startMobileDictationDesktopSession', () => {
     expect(harness.rollbackRecordingStart).not.toHaveBeenCalled()
   })
 
-  it('cleans up the keep-awake tag and desktop session when native recording throws', async () => {
+  it('cleans up the desktop session when native recording throws', async () => {
     const harness = createStartHarness({
       commitRecordingStart: () => {
         throw new Error('Audio focus request failed')
@@ -204,7 +190,6 @@ describe('startMobileDictationDesktopSession', () => {
       'Audio focus request failed'
     )
 
-    expect(harness.release).toHaveBeenCalledWith('dictation-a')
     expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
       dictationId: 'dictation-a'
     })
@@ -220,7 +205,6 @@ describe('startMobileDictationDesktopSession', () => {
       'Failed to start microphone recording'
     )
 
-    expect(harness.release).toHaveBeenCalledWith('dictation-a')
     expect(harness.sendRequest).toHaveBeenCalledWith('speech.dictation.cancel', {
       dictationId: 'dictation-a'
     })

@@ -1,5 +1,8 @@
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
-import { COLD_RESTORE_SEED_MODE_RESET } from '../../shared/terminal-mode-reset-profiles'
+import {
+  COLD_RESTORE_SEED_MODE_RESET,
+  RESET_GRAPHIC_RENDITION
+} from '../../shared/terminal-mode-reset-profiles'
 
 // Why the reset belongs in the seed and not only at replay: the recovered stream
 // re-arms mouse reporting from two independent sources (rehydrateSequences AND
@@ -12,7 +15,9 @@ import { COLD_RESTORE_SEED_MODE_RESET } from '../../shared/terminal-mode-reset-p
 export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): readonly string[] {
   if (restoreInfo.modes.alternateScreen) {
     const normalBuffer = restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi
-    return normalBuffer ? [normalBuffer, COLD_RESTORE_SEED_MODE_RESET] : []
+    return normalBuffer
+      ? [`${RESET_GRAPHIC_RENDITION}${normalBuffer}`, COLD_RESTORE_SEED_MODE_RESET]
+      : []
   }
   const recovered = [restoreInfo.rehydrateSequences, restoreInfo.snapshotAnsi].filter(
     (segment) => segment.length > 0
@@ -25,5 +30,9 @@ export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): r
   }
   // Why after the snapshot: it must undo the snapshot's own mode trailer, and
   // pendingEscapeTailAnsi is a torn escape that has to stay at the very end.
-  return [...recovered, COLD_RESTORE_SEED_MODE_RESET, ...(escapeTail ? [escapeTail] : [])]
+  const [firstRecovered, ...remainingRecovered] = recovered
+  const groundedRecovered = firstRecovered
+    ? [`${RESET_GRAPHIC_RENDITION}${firstRecovered}`, ...remainingRecovered]
+    : []
+  return [...groundedRecovered, COLD_RESTORE_SEED_MODE_RESET, ...(escapeTail ? [escapeTail] : [])]
 }

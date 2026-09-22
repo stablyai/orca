@@ -1,5 +1,5 @@
 import type { GitLabPipelineJob } from './gitlab-types'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
   const s = status.toLowerCase()

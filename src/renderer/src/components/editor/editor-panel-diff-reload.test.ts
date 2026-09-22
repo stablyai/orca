@@ -4,7 +4,7 @@ import {
   isReloadableSingleFileDiffTab,
   shouldReloadDiffOnGitStatusChange
 } from './editor-panel-diff-reload'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 function makeDiffFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {

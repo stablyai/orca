@@ -1,7 +1,7 @@
 import { Node } from '@tiptap/core'
 import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import type { MarkdownDocumentIndex } from './markdown-doc-links'
 import {
   createMarkdownDocumentIndex,
@@ -11,6 +11,7 @@ import {
 } from './markdown-doc-links'
 import {
   isReservedRichMarkdownTransportBody,
+  skipInlineTransportStartScan,
   type RichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
 import { renderRichMarkdownDocLinkHtml } from './rich-markdown-doc-link-dom'
@@ -126,7 +127,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
     markdownTokenizer: {
       name: 'markdownDocLink',
       level: 'inline',
-      start: transport.startFor('document-link'),
+      start: skipInlineTransportStartScan,
       tokenize(src: string) {
         const matched = transport.match(src, 'document-link')
         if (!matched) {

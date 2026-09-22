@@ -8,8 +8,9 @@ import {
   getSidebarOrderedProjectGroupHeaderIdsByBucket,
   mapSidebarProjectGroupDropIndexToSiblingInsertIndex
 } from './project-group-header-drop'
-import type { Row } from './worktree-list-groups'
-import type { ProjectGroup, Repo } from '../../../../shared/types'
+import type { Row } from './worktree-list/grouping/row-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

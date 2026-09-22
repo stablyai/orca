@@ -705,7 +705,7 @@ describe('SshRelaySession recovery race fencing', () => {
     await session.reconnect(deps.mockConn)
 
     expect(attachForReconnectMock).toHaveBeenCalledTimes(2)
-    expect(attachForReconnectMock.mock.calls.at(-1)?.[1]).toMatchObject({
+    expect(attachForReconnectMock.mock.calls.at(-1)?.[2]).toMatchObject({
       status: 'checkpoint',
       deliveryToken: 'new-token',
       acceptedSourceEndSu: 8
@@ -763,7 +763,7 @@ describe('SshRelaySession recovery race fencing', () => {
     const replacementReconnect = session.reconnect(deps.mockConn)
     await Promise.all([staleReconnect, replacementReconnect])
 
-    const recoveryRequests = attachForReconnectMock.mock.calls.map((call) => call[1])
+    const recoveryRequests = attachForReconnectMock.mock.calls.map((call) => call[2])
     expect(recoveryRequests).toHaveLength(2)
     expect(recoveryRequests[1]).toMatchObject({
       status: 'checkpoint',

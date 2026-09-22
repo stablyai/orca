@@ -1,4 +1,6 @@
-import type { TerminalTab, TuiAgent, Worktree } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
@@ -102,6 +104,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   codex: true,
   autohand: true,
   opencode: true,
+  opencode2: true,
   'mimo-code': true,
   pi: true,
   omp: true,
@@ -117,6 +120,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   aug: true,
   cline: true,
   codebuff: true,
+  freebuff: true,
   'command-code': true,
   continue: true,
   cursor: true,

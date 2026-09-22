@@ -11,6 +11,7 @@ import {
 import { saveHost } from './host-store'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
+import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 type EndpointLifecycle = {
@@ -86,14 +87,16 @@ function createSupervisor(
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host, {
     openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
-    openRelay: (relay, credential, confirmReqId) =>
+    openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,
         resumeToken: credential.token,
         resumeCredentialVersion: credential.version,
         resumeConfirmReqId: confirmReqId,
         deviceToken: host.deviceToken,
-        desktopPublicKeyB64: host.publicKeyB64
+        desktopPublicKeyB64: host.publicKeyB64,
+        onHostCloseReason,
+        onLog
       }),
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
@@ -102,7 +105,7 @@ function createSupervisor(
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
-    setTimer: setTimeout,
-    clearTimer: clearTimeout
+    setTimer: defaultScheduleTimer,
+    clearTimer: defaultCancelTimer
   })
 }

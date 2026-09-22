@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,

@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/cross-platform-path'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
 
 // Why: an ancestor skip is provisional while every blocking descendant is still
 // removing; it hardens or lifts once the blockers settle authoritatively.
@@ -31,7 +32,7 @@ export function isStrictWorkspaceCleanupDescendant(
   child: WorkspaceCleanupCandidate
 ): boolean {
   return (
-    parent.connectionId === child.connectionId &&
+    getWorkspaceCleanupCandidateHostId(parent) === getWorkspaceCleanupCandidateHostId(child) &&
     isStrictWorkspaceCleanupDescendantPath(parent.path, child.path)
   )
 }

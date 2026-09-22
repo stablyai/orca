@@ -173,7 +173,7 @@ export const KO_VALUE_OVERRIDES = {
     '아래 워크스페이스 오류를 확인한 후 새로고침하세요.',
   'Review inactive workspaces before deleting their local files and Orca state.':
     '로컬 파일과 Orca 상태를 삭제하기 전에 비활성 워크스페이스를 확인하세요.',
-  'Review inactive workspaces (': '비활성 워크스페이스 확인(',
+  'Clean up workspaces': '워크스페이스 정리',
   'Review the settings that will be imported from your Ghostty config.':
     'Ghostty 구성에서 가져올 설정을 확인하세요.',
   'GitHub requires review approval before this pull request can merge':

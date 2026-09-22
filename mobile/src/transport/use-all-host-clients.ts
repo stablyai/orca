@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from './rpc-client'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
+import type { HostClientAcquisition } from './host-client-acquisition-registry'
 
 type UseAllHostClientsOptions = {
   autoConnectHostIds?: readonly string[]
@@ -24,6 +26,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
   )
   const [tick, setTick] = useState(0)
   const acquiredHostIdsRef = useRef<Set<string>>(new Set())
+  const acquisitionsRef = useRef<Map<string, HostClientAcquisition>>(new Map())
   const hostUnsubscribesRef = useRef<Map<string, () => void>>(new Map())
   const closeUnusedRef = useRef(closeUnusedOnRelease)
 
@@ -42,10 +45,17 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       }
       hostUnsubscribesRef.current.clear()
       for (const id of acquiredHostIds) {
+        const acquisition = acquisitionsRef.current.get(id)
+        if (!acquisition) {
+          if (closeUnusedRef.current) {
+            ctx.closeIfUnused(id)
+          }
+          continue
+        }
         if (closeUnusedRef.current) {
-          ctx.releaseAndCloseIfUnused(id)
+          ctx.releaseAndCloseIfUnused(id, acquisition)
         } else {
-          ctx.release(id)
+          ctx.release(id, acquisition)
         }
       }
       if (closeUnusedRef.current) {
@@ -56,6 +66,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
         }
       }
       acquiredHostIdsRef.current.clear()
+      acquisitionsRef.current.clear()
     }
   }, [ctx])
 
@@ -82,16 +93,26 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
 
     for (const id of acquiredHostIdsRef.current) {
       if (!nextAcquiredHostIds.has(id)) {
-        if (closeUnusedOnRelease) {
-          ctx.releaseAndCloseIfUnused(id)
-        } else {
-          ctx.release(id)
+        const acquisition = acquisitionsRef.current.get(id)
+        if (!acquisition) {
+          if (closeUnusedOnRelease) {
+            ctx.closeIfUnused(id)
+          }
+          continue
         }
+        if (closeUnusedOnRelease) {
+          ctx.releaseAndCloseIfUnused(id, acquisition)
+        } else {
+          ctx.release(id, acquisition)
+        }
+        acquisitionsRef.current.delete(id)
       }
     }
     for (const id of nextAcquiredHostIds) {
       if (!acquiredHostIdsRef.current.has(id)) {
-        ctx.acquire(id)
+        const acquisition = {}
+        acquisitionsRef.current.set(id, acquisition)
+        ctx.acquire(id, acquisition)
       }
     }
     if (closeUnusedOnRelease) {
@@ -116,10 +137,23 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       client: RpcClient
       state: ConnectionState
       path: MobileConnectionPath
+      pendingPath: MobileConnectionPath | null
+      pairingRejected: boolean
+      relayHostReachability: RelayHostReachability
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
       return client
-        ? [{ hostId, client, state: ctx.getState(hostId), path: ctx.getActivePath(hostId) }]
+        ? [
+            {
+              hostId,
+              client,
+              state: ctx.getState(hostId),
+              path: ctx.getActivePath(hostId),
+              pendingPath: ctx.getPendingPath(hostId),
+              pairingRejected: ctx.isPairingRejected(hostId),
+              relayHostReachability: ctx.getRelayHostReachability(hostId)
+            }
+          ]
         : []
     })
   }, [ctx, hostIds, tick])

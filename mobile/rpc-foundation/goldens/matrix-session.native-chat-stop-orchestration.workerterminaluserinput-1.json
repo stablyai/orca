@@ -1,0 +1,797 @@
+{
+  "operation": "session.native-chat-stop",
+  "family": "session.native-chat-stop",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "a60de7b496f8149593a6e89cd2d29e20fdf75d26536592fec6b0100b43322d3b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "23018091278a": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "5cd1d4a9aed5": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "650fdd02bab4": {
+      "name": "terminal.send#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 14920
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 80,
+        "settledAt": 120,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "662c347cb071": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6d6078dd8a8f": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "75263c07c807": {
+      "name": "cancel-pending",
+      "ordinal": 1,
+      "value": {}
+    },
+    "8c21e926b759": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "ab0f3d65723e": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "ad3d324fcb52": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b59f001bf55b": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c3dd831302ac": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "d8fa0931ea72": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "da27d1e6c936": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "dd4ba833e8b5": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "debf84af8d66": {
+      "errors": []
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ef422fa31f61": {
+      "name": "terminal.send#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "ef7005279d33": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "fcdecc63b46e": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "orchestration.workerTerminalUserInput"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "reported": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.native-chat-stop-orchestration.workerterminaluserinput-1",
+    "checkpoints": [
+      {
+        "id": "native-chat-stop-accepted.normal:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "fcdecc63b46e"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.normal:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "fcdecc63b46e", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.result-absent:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "23018091278a"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.result-absent:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "23018091278a", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.result-null:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "6d6078dd8a8f"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.result-null:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "6d6078dd8a8f", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-ok-missing:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "8c21e926b759"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "8c21e926b759", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-false-string-error:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "d8fa0931ea72"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "d8fa0931ea72", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-false-object-error:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "662c347cb071"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "662c347cb071", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.outer-refused:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "da27d1e6c936"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.outer-refused:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "da27d1e6c936", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.outer-refused-no-message:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "c3dd831302ac"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "c3dd831302ac", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.method-not-found:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "dd4ba833e8b5"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.method-not-found:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "dd4ba833e8b5", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.transport-rejection:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "b59f001bf55b"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.transport-rejection:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "b59f001bf55b", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.transport-rejection-no-message:first-accepted",
+        "observation": {
+          "sender": ["ab0f3d65723e", "ad3d324fcb52"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      },
+      {
+        "id": "native-chat-stop-accepted.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["ab0f3d65723e", "ad3d324fcb52", "650fdd02bab4"],
+          "payloads": ["5cd1d4a9aed5", "ef7005279d33", "ef422fa31f61"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "debf84af8d66",
+          "effects": ["75263c07c807"]
+        }
+      }
+    ]
+  }
+}

@@ -4,7 +4,7 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared/types'
+import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared/project-types'
 import { translate } from '@/i18n/i18n'
 
 export type SetupHostOption = {

@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  GlobalSettings,
-  Repo,
-  Worktree
-} from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { DetectedWorktree, DetectedWorktreeListResult, Worktree } from './worktree/types'
 import {
   getHiddenExternalWorktrees,
   getHiddenImportableExternalWorktrees,
@@ -20,7 +16,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   toDetectedWorktree
-} from './worktree-ownership'
+} from './worktree/ownership'
 
 const repo: Repo = {
   id: 'repo-1',

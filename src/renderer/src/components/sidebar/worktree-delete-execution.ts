@@ -1,27 +1,25 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { translate } from '@/i18n/i18n'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
+import {
+  toWorktreeRemovalTarget,
+  type WorktreeRemovalTarget
+} from '../../../../shared/worktree/removal'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
-import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
-
-// A failed delete usually means unresolved changes, so land on the diff panel.
-function viewWorktreeDiff(worktreeId: string): void {
-  activateAndRevealWorktree(worktreeId)
-  const state = useAppStore.getState()
-  state.setRightSidebarTab('source-control')
-  state.setRightSidebarOpen(true)
-}
+import { beginWorktreeSnapshotPruneBatch } from './worktree-snapshot-prune-batch'
+import { runWorktreeDeleteWithToast } from './run-worktree-delete-with-toast'
 
 function isStrictDescendantPath(parentPath: string, childPath: string): boolean {
   return (
@@ -30,27 +28,44 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
   )
 }
 
+function clearWorktreeDeleteTargetState(target: Pick<Worktree, 'id' | 'hostId'>): void {
+  const state = useAppStore.getState()
+  if (target.hostId) {
+    state.clearWorktreeDeleteState(target.id, target.hostId)
+  } else {
+    state.clearWorktreeDeleteState(target.id)
+  }
+}
+
 export async function runWorktreeDeletesInParallel(
-  targets: readonly Pick<Worktree, 'id' | 'instanceId' | 'displayName' | 'repoId' | 'path'>[],
+  targets: readonly Pick<
+    Worktree,
+    'id' | 'instanceId' | 'displayName' | 'repoId' | 'path' | 'hostId'
+  >[],
   options: WorktreeDeleteWithToastOptions = {}
-): Promise<string[]> {
+): Promise<WorktreeRemovalTarget[]> {
   // A destructive command must run once per identity even if a refresh duplicated rows.
-  const uniqueTargets = Array.from(new Map(targets.map((target) => [target.id, target])).values())
+  const uniqueTargets = Array.from(
+    new Map(targets.map((target) => [getWorktreeHostIdentity(target), target])).values()
+  )
   // Batch focus is committed once after every target settles.
   const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
   const commitBatchFocus = activeWorktreeIdBefore
     ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
     : null
   // Mark all targets up front so the sidebar shows immediate progress.
-  useAppStore.getState().markWorktreesDeleting(uniqueTargets.map((target) => target.id))
-  // Git worktree removal shares repo locks, while separate repos can proceed in parallel.
+  useAppStore
+    .getState()
+    .markWorktreesDeleting(uniqueTargets.map((target) => (target.hostId ? target : target.id)))
+  // Git worktree removal shares repo locks only within one execution host.
   const groups = new Map<string, (typeof uniqueTargets)[number][]>()
   for (const target of uniqueTargets) {
-    const group = groups.get(target.repoId)
+    const groupIdentity = composeWorktreeHostIdentity(target.hostId, target.repoId)
+    const group = groups.get(groupIdentity)
     if (group) {
       group.push(target)
     } else {
-      groups.set(target.repoId, [target])
+      groups.set(groupIdentity, [target])
     }
   }
   for (const group of groups.values()) {
@@ -60,167 +75,131 @@ export async function runWorktreeDeletesInParallel(
   const preservedBranches: PreservedBranchCleanup[] = []
   const aggregatePreservedBranches = uniqueTargets.length > 1
   let listChanged = false
-  const groupResults = await Promise.all(
-    Array.from(groups.values()).map(async (group) => {
-      const deletedInGroup: string[] = []
-      const failedInGroup: (typeof group)[number][] = []
-      for (const target of group) {
-        // A queued target may be recreated while an earlier repo sibling is deleting.
-        const currentTarget = getWorktreeMapFromState(useAppStore.getState()).get(target.id)
-        if (!currentTarget || currentTarget.instanceId !== target.instanceId) {
-          useAppStore.getState().clearWorktreeDeleteState(target.id)
-          listChanged = true
-          continue
-        }
-        if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
-          useAppStore.getState().clearWorktreeDeleteState(target.id)
-          continue
-        }
-        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, {
-          ...options,
-          focusSuccessorOnDelete: false,
-          suppressPreservedBranchToast: aggregatePreservedBranches,
-          onPreservedBranch: (branch) => {
-            preservedBranches.push(branch)
-            options.onPreservedBranch?.(branch)
-          }
-        })
-        if (deleted) {
-          deletedInGroup.push(target.id)
-        } else {
-          // A failed child makes deleting its ancestor unsafe because the child lives below it.
-          failedInGroup.push(target)
-        }
-      }
-      return deletedInGroup
+  const pendingSnapshotPruneBatch =
+    uniqueTargets.length > 1 ? beginWorktreeSnapshotPruneBatch() : null
+  const snapshotPruneBatch = pendingSnapshotPruneBatch ? await pendingSnapshotPruneBatch : null
+  const deletionTailByWorktreeId = new Map<string, Promise<void>>()
+  const runInWorktreeDeleteTurn = async <T>(
+    worktreeId: string,
+    operation: () => Promise<T>
+  ): Promise<T> => {
+    const previous = deletionTailByWorktreeId.get(worktreeId)
+    let releaseTurn: () => void = () => {}
+    const turn = new Promise<void>((resolve) => {
+      releaseTurn = resolve
     })
-  )
+    const tail = previous ? previous.then(() => turn) : turn
+    deletionTailByWorktreeId.set(worktreeId, tail)
+    if (previous) {
+      await previous
+    }
+    try {
+      return await operation()
+    } finally {
+      releaseTurn()
+      if (deletionTailByWorktreeId.get(worktreeId) === tail) {
+        deletionTailByWorktreeId.delete(worktreeId)
+      }
+    }
+  }
+  let groupResults: WorktreeRemovalTarget[][]
+  try {
+    groupResults = await Promise.all(
+      Array.from(groups.values()).map(async (group) => {
+        const deletedInGroup: WorktreeRemovalTarget[] = []
+        const failedInGroup: (typeof group)[number][] = []
+        for (const target of group) {
+          await runInWorktreeDeleteTurn(target.id, async () => {
+            // A queued target may be recreated while an earlier repo sibling is deleting.
+            // Why by host (STA-4343): the id-keyed map keeps ONE row per `repoId::path`,
+            // so on a two-host collision it can hand back the other host's row — whose
+            // instanceId never matches, silently dropping a delete the user confirmed.
+            const currentTarget = getWorktreeOnHostFromState(
+              useAppStore.getState(),
+              target.id,
+              target.hostId
+            )
+            if (!currentTarget || currentTarget.instanceId !== target.instanceId) {
+              clearWorktreeDeleteTargetState(target)
+              listChanged = true
+              return
+            }
+            if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
+              clearWorktreeDeleteTargetState(target)
+              return
+            }
+            const deleted = await runWorktreeDeleteWithToast(
+              toWorktreeRemovalTarget(target),
+              target.displayName,
+              {
+                ...options,
+                focusSuccessorOnDelete: false,
+                suppressPreservedBranchToast: aggregatePreservedBranches,
+                ...(snapshotPruneBatch ? { snapshotPruneBatchId: snapshotPruneBatch.batchId } : {}),
+                onPreservedBranch: (branch) => {
+                  preservedBranches.push(branch)
+                  options.onPreservedBranch?.(branch)
+                }
+              }
+            )
+            if (deleted) {
+              deletedInGroup.push(toWorktreeRemovalTarget(target))
+            } else {
+              // A failed child makes deleting its ancestor unsafe because the child lives below it.
+              failedInGroup.push(target)
+            }
+          })
+        }
+        return deletedInGroup
+      })
+    )
+  } finally {
+    if (snapshotPruneBatch) {
+      try {
+        await snapshotPruneBatch.finish()
+      } catch (error) {
+        console.warn('Failed to finish workspace snapshot prune batch:', error)
+      }
+    }
+  }
   if (listChanged) {
     showWorkspaceListChangedToast()
   }
-  const deletedSet = new Set(groupResults.flat())
+  const deletedIdentities = new Set(
+    groupResults
+      .flat()
+      .map((target) => composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id))
+  )
   // Intermediate focus can spawn a terminal in another target that is still queued.
-  if (activeWorktreeIdBefore && deletedSet.has(activeWorktreeIdBefore)) {
-    commitBatchFocus?.()
+  if (activeWorktreeIdBefore) {
+    const state = useAppStore.getState()
+    const activeRow = getWorktreeOnHostFromState(
+      state,
+      activeWorktreeIdBefore,
+      state.activeWorkspaceExecutionHostId ?? undefined
+    )
+    if (!activeRow) {
+      commitBatchFocus?.()
+    }
   }
   if (aggregatePreservedBranches && preservedBranches.length > 0) {
-    const targetOrder = new Map(uniqueTargets.map((target, index) => [target.id, index]))
+    const targetOrder = new Map(
+      uniqueTargets.map((target, index) => [getWorktreeHostIdentity(target), index])
+    )
     preservedBranches.sort(
       (left, right) =>
-        (targetOrder.get(left.worktreeId) ?? Number.MAX_SAFE_INTEGER) -
-        (targetOrder.get(right.worktreeId) ?? Number.MAX_SAFE_INTEGER)
+        (targetOrder.get(composeWorktreeHostIdentity(left.hostId, left.worktreeId)) ??
+          Number.MAX_SAFE_INTEGER) -
+        (targetOrder.get(composeWorktreeHostIdentity(right.hostId, right.worktreeId)) ??
+          Number.MAX_SAFE_INTEGER)
     )
-    showPreservedBranchBatchToast(deletedSet.size, preservedBranches)
+    showPreservedBranchBatchToast(deletedIdentities.size, preservedBranches)
   }
-  return uniqueTargets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
+  return uniqueTargets
+    .filter((target) => deletedIdentities.has(getWorktreeHostIdentity(target)))
+    .map(toWorktreeRemovalTarget)
 }
 
 /** Shared confirmed and skip-confirm execution with consistent failure recovery. */
-export function runWorktreeDeleteWithToast(
-  worktreeId: string,
-  worktreeName: string,
-  options: WorktreeDeleteWithToastOptions = {}
-): Promise<boolean> {
-  const removeWorktree = useAppStore.getState().removeWorktree
-  const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-  const focusSuccessor = options.focusSuccessorOnDelete !== false
 
-  const removal = options.suppressPreservedBranchToast
-    ? removeWorktree(worktreeId, options.force === true, { suppressPreservedBranchToast: true })
-    : removeWorktree(worktreeId, options.force === true)
-  return removal
-    .then((result) => {
-      if (result.ok) {
-        if (result.preservedBranch) {
-          options.onPreservedBranch?.({
-            worktreeId,
-            branchName: result.preservedBranch.branchName,
-            expectedHead: result.preservedBranch.head,
-            ...(result.preservedBranch.hostId ? { hostId: result.preservedBranch.hostId } : {}),
-            ...(result.preservedBranch.runtimeEnvironmentId
-              ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
-              : {})
-          })
-        }
-        if (focusSuccessor) {
-          commitFocus()
-        }
-        return true
-      }
-      const state = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
-      const canForceDelete = state?.canForceDelete ?? false
-      const hasKnownChanges =
-        (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
-      showDeleteWorktreeFailureToast({
-        error: result.error,
-        canForceDelete,
-        forceDeleteReason: state?.forceDeleteReason ?? null,
-        lockReason: state?.lockReason ?? null,
-        hasKnownChanges,
-        onViewChanges: () => viewWorktreeDiff(worktreeId),
-        onForceDelete: () => {
-          // Recapture focus because the user may have navigated while the toast was open.
-          const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-          // The explicit Force Delete retry may waive an unverified PTY-stop proof.
-          const forceRemoval = useAppStore
-            .getState()
-            .removeWorktree(worktreeId, true, { allowUnverifiedPtyStop: true })
-          forceRemoval
-            .then((forceResult) => {
-              if (!forceResult.ok) {
-                toast.error(
-                  translate(
-                    'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
-                    'Force delete failed'
-                  ),
-                  {
-                    description: forceResult.error,
-                    action: {
-                      label: translate(
-                        'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                        'View'
-                      ),
-                      onClick: () => viewWorktreeDiff(worktreeId)
-                    }
-                  }
-                )
-                return
-              }
-              commitForceFocus()
-              options.onForceDeleted?.(worktreeId)
-            })
-            .catch((err: unknown) => {
-              toast.error(
-                translate(
-                  'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-                  'Failed to delete workspace'
-                ),
-                {
-                  description: err instanceof Error ? err.message : String(err),
-                  action: {
-                    label: translate(
-                      'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                      'View'
-                    ),
-                    onClick: () => viewWorktreeDiff(worktreeId)
-                  }
-                }
-              )
-            })
-        },
-        worktreeId,
-        worktreeName
-      })
-      return false
-    })
-    .catch((err: unknown) => {
-      toast.error(
-        translate(
-          'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-          'Failed to delete workspace'
-        ),
-        { description: err instanceof Error ? err.message : String(err) }
-      )
-      return false
-    })
-}
+export { runWorktreeDeleteWithToast }

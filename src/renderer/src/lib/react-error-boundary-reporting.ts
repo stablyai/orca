@@ -3,6 +3,7 @@ import type {
   CrashReportRecord,
   ReactErrorBoundaryReportArgs
 } from '../../../shared/crash-reporting'
+import { getReactErrorBoundaryAttribution } from '../../../shared/react-update-depth-attribution'
 
 type RendererErrorContext = Pick<
   ReactErrorBoundaryReportArgs,
@@ -65,6 +66,8 @@ export function buildReactErrorBoundaryReportArgs({
 }: BuildReportArgsInput): ReactErrorBoundaryReportArgs {
   const fields = stringFromThrown(error)
   const componentStack = errorInfo?.componentStack?.trim()
+  // Derived here, not per boundary: React #185 lands on a bystander, so every boundary needs the caveat.
+  const attribution = getReactErrorBoundaryAttribution(error)
   return {
     boundaryId,
     surface,
@@ -72,6 +75,7 @@ export function buildReactErrorBoundaryReportArgs({
     errorMessage: fields.message,
     ...(fields.stack ? { errorStack: fields.stack } : {}),
     ...(componentStack ? { componentStack } : {}),
+    ...(attribution ? { attribution } : {}),
     ...(context?.activeView ? { activeView: context.activeView } : {}),
     ...(context?.activeModal !== undefined ? { activeModal: context.activeModal } : {}),
     ...(context?.activeTabType ? { activeTabType: context.activeTabType } : {}),

@@ -1,0 +1,191 @@
+{
+  "operation": "notifications.display-test-screen",
+  "family": "notifications.display-test-screen",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "f55275c268e49679b37d72ce6cbe71186ce02c77fe3fd53f0f21e796502d62e8",
+  "scenarioSha256": "3edeb5f744ed832104df750544b99fea1a1cd9d1b8d2f3f9a5e7c13b415edc3e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0bfc5a373e4d": {
+      "name": "notifications.testPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.testPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "12b4ebc0841b": {
+      "name": "notifications.testPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.testPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "accepted": false,
+            "reason": "not_registered"
+          }
+        }
+      }
+    },
+    "6967f95147f9": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 5,
+        "View": 3
+      },
+      "labels": ["Sending…"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send a test through Orca’s push service.",
+        "Send test notification",
+        "Sending…",
+        "Troubleshooting"
+      ]
+    },
+    "d35f59ee0a2d": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 6,
+        "View": 3
+      },
+      "labels": ["Send test notification"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send a test through Orca’s push service.",
+        "Send test notification",
+        "Send test notification",
+        "Troubleshooting",
+        "Reconnect to register this phone for notifications."
+      ]
+    },
+    "d86c08a509c4": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 5,
+        "View": 3
+      },
+      "labels": ["Send test notification"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send a test through Orca’s push service.",
+        "Send test notification",
+        "Send test notification",
+        "Troubleshooting"
+      ]
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f68b017d64bd": {
+      "name": "notifications.testPush#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.testPush\",\"params\":null}"
+    }
+  },
+  "recording": {
+    "scenario": "notifications-display-test-not-registered",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d86c08a509c4",
+          "effects": []
+        }
+      },
+      {
+        "id": "sending",
+        "observation": {
+          "sender": ["0bfc5a373e4d"],
+          "payloads": ["f68b017d64bd"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "press": "eb79a9b3682a"
+          },
+          "state": "6967f95147f9",
+          "effects": []
+        }
+      },
+      {
+        "id": "not-registered",
+        "observation": {
+          "sender": ["12b4ebc0841b"],
+          "payloads": ["f68b017d64bd"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "press": "eb79a9b3682a"
+          },
+          "state": "d35f59ee0a2d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

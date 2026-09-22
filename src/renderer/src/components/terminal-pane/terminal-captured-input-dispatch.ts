@@ -1,3 +1,4 @@
+import type { IDisposable } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport'
 
 type CapturedTerminalInputDispatch = {
@@ -6,10 +7,12 @@ type CapturedTerminalInputDispatch = {
   capturedTransport: PtyTransport | undefined
   capturedPtyId: string | null
   data: string
+  onAccepted?: () => void
 }
 
-export type TerminalReconfirmationBinding = {
+export type TerminalCapturedInputBinding = {
   requestWindowsShiftEnterReconfirmation?: () => void
+  markShortcutTerminalInputSent?: () => void
 }
 
 export function sendCapturedTerminalInput({
@@ -17,7 +20,8 @@ export function sendCapturedTerminalInput({
   currentTransport,
   capturedTransport,
   capturedPtyId,
-  data
+  data,
+  onAccepted
 }: CapturedTerminalInputDispatch): boolean {
   if (
     !targetPaneMounted ||
@@ -28,12 +32,17 @@ export function sendCapturedTerminalInput({
   ) {
     return false
   }
-  return capturedTransport.sendInput(data)
+  const sent = capturedTransport.sendInput(data)
+  if (sent) {
+    onAccepted?.()
+  }
+  return sent
 }
 
+/** currentBinding arrives as the pane's raw xterm binding; only its identity is read. */
 export function requestCapturedTerminalReconfirmation(
-  currentBinding: object | undefined,
-  capturedBinding: TerminalReconfirmationBinding | undefined
+  currentBinding: IDisposable | TerminalCapturedInputBinding | undefined,
+  capturedBinding: TerminalCapturedInputBinding | undefined
 ): void {
   if (currentBinding === capturedBinding) {
     capturedBinding?.requestWindowsShiftEnterReconfirmation?.()

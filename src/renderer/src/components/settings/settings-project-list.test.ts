@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   buildRepoIdToHostSelection,
   buildRepoIdToRepresentative,

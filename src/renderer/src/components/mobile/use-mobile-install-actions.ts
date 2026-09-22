@@ -3,17 +3,25 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Platform } from './MobileHero'
-import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import { ANDROID_INSTALL_GUIDE_URL, getInstallCopy, type IosChannel } from './mobile-platform-copy'
 
 export function useMobileInstallActions(
   platform: Platform,
   iosChannel: IosChannel
-): { copyInstallUrl: () => Promise<void>; openInstallUrl: () => void } {
+): {
+  copyInstallUrl: () => Promise<void>
+  openAndroidInstallGuide: () => void
+  openInstallUrl: () => void
+} {
   const mountedRef = useMountedRef()
 
   const openInstallUrl = useCallback((): void => {
     void window.api.shell.openUrl(getInstallCopy(platform, iosChannel).url)
   }, [iosChannel, platform])
+
+  const openAndroidInstallGuide = useCallback((): void => {
+    void window.api.shell.openUrl(ANDROID_INSTALL_GUIDE_URL)
+  }, [])
 
   const copyInstallUrl = useCallback(async (): Promise<void> => {
     try {
@@ -33,5 +41,5 @@ export function useMobileInstallActions(
     }
   }, [iosChannel, mountedRef, platform])
 
-  return { copyInstallUrl, openInstallUrl }
+  return { copyInstallUrl, openAndroidInstallGuide, openInstallUrl }
 }

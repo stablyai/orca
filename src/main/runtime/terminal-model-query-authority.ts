@@ -8,7 +8,7 @@
  * renderer's native-Windows-ConPTY determination, recorded per PTY at spawn
  * so the runtime emulator can register the DA1 override before byte zero.
  */
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,

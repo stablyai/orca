@@ -1,5 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { WorktreeGroupBy } from './worktree-list-groups'
+import type { WorktreeGroupBy } from './worktree-list/grouping/row-types'
 import { GROUP_BY_OPTIONS } from './sidebar-workspace-option-items'
 
 type SidebarGroupByToggleProps = {

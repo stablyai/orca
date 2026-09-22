@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -11,11 +11,13 @@ import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TaskProviderLogo } from './TaskProviderLogo'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 type Props = {
   composer: MobileComposerSource
   label: string
   disabled?: boolean
+  onOpenExternalUrl: (url: string) => void
   // Why: only the active form view may focus this field. While the source drawer
   // is open/closing this stays non-focusable so the drawer's dismiss (which
   // restores native focus back here) can't re-fire onFocus and reopen the drawer.
@@ -44,6 +46,7 @@ export function SmartWorkspaceSourceField({
   composer,
   label,
   disabled,
+  onOpenExternalUrl,
   interactive,
   onBeforeOpen,
   onOpenDrawer
@@ -71,8 +74,14 @@ export function SmartWorkspaceSourceField({
           </Text>
           {selection.url ? (
             <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Open selected source"
               hitSlop={6}
-              onPress={() => selection.url && void Linking.openURL(selection.url).catch(() => {})}
+              onPress={() => {
+                if (selection.url) {
+                  onOpenExternalUrl(selection.url)
+                }
+              }}
             >
               <ExternalLink size={15} color={colors.textMuted} />
             </Pressable>
@@ -126,7 +135,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     color: colors.textPrimary
   },
   disabled: {

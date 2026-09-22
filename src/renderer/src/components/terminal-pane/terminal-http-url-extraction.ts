@@ -98,6 +98,7 @@ function trimHttpUrlTrailingPunctuation(
 
 function isHttpUrlBodyTerminator(code: number): boolean {
   return (
+    isNonAsciiUrlTerminator(code) ||
     isAsciiWhitespace(code) ||
     code === 0x22 ||
     code === 0x27 ||
@@ -140,6 +141,14 @@ function isHttpUrlTrailingPunctuation(code: number): boolean {
     code === 0x3e ||
     code === 0x60
   )
+}
+
+// Why not all non-ascii: a url path may legitimately carry unencoded CJK (see the wrapped-url
+// tests), so only punctuation and spaces end it - full-width brackets, an ideographic space, `\u30fb`.
+const NON_ASCII_URL_TERMINATOR = /[\p{P}\p{S}\p{Z}]/u
+
+function isNonAsciiUrlTerminator(code: number): boolean {
+  return code > 0x7e && NON_ASCII_URL_TERMINATOR.test(String.fromCharCode(code))
 }
 
 function isAsciiWhitespace(code: number): boolean {

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatSubagentEntry
+} from '../../../../shared/native-chat-types'
 import type { RpcContext } from '../core'
 
 // Stub the bounded tail reader so the handler returns a deterministic transcript with
@@ -53,6 +56,7 @@ const watcher = vi.hoisted(() => ({
         timestamp: number | null
       }
     ) => void
+    onTranscriptPending?: () => void
   },
   watching: true,
   setupSignal: undefined as AbortSignal | undefined,
@@ -87,6 +91,7 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
   }
 }))
 
+import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
 function makeMessage(text: string): NativeChatMessage {
@@ -190,6 +195,35 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(block.text).toBe(text)
   })
 
+  it('bounds a subagent roster before it reaches mobile', async () => {
+    const agents: NativeChatSubagentEntry[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `task-${index}-${'i'.repeat(600)}`,
+      label: 'l'.repeat(600),
+      state: 'working'
+    }))
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage(''),
+          blocks: [{ type: 'subagent-group', groupId: 'g', agents }]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      agents: { id: string; label: string }[]
+    }
+    expect(block.agents).toHaveLength(64)
+    expect(block.agents[0].label).toBe(`${'l'.repeat(512)}\n… (truncated)`)
+    // The id is as untrusted as the label on an imported roster, but it is the
+    // roster key: it is bounded with a digest, never clipped to a bare prefix.
+    expect(block.agents[0].id).toHaveLength(512)
+    expect(block.agents[0].id).toBe(boundSubagentEntryId(`task-0-${'i'.repeat(600)}`))
+  })
+
   it('clips a pathological text block at the safety ceiling for mobile clients', async () => {
     const text = 'y'.repeat(70_000)
     cachedResult.value = { messages: [makeTextMessage(text)] }
@@ -263,6 +297,39 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 
     expect(JSON.stringify(input).length).toBeLessThan(OVERSIZED.length)
     expect(JSON.stringify(input)).toContain('truncated')
+  })
+
+  // The roster block reached mobile through a bare fall-through, uncapped, on the
+  // one path that exists to keep the payload off the phone.
+  it('bounds a spawn-group roster before sending it to mobile', async () => {
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            {
+              type: 'subagent-group',
+              groupId: 'thread-1:turn-1',
+              agents: Array.from({ length: 80 }, (_unused, index) => ({
+                id: `child-${index}`,
+                label: index === 0 ? OVERSIZED : 'read',
+                state: index === 0 ? (OVERSIZED as 'working') : ('working' as const)
+              }))
+            }
+          ]
+        }
+      ]
+    }
+
+    const result = await readSessionHandler()({ agent: 'codex', sessionId: 's' }, ctxWith('mobile'))
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0]
+    if (block.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
+    }
+
+    expect(block.agents).toHaveLength(64)
+    expect(block.agents[0].label.length).toBeLessThan(OVERSIZED.length)
+    expect(block.agents[0].state).toBe('unverifiable')
   })
 
   it('preserves AskUserQuestion option objects at the supported nesting depth', async () => {
@@ -441,6 +508,44 @@ describe('nativeChat.subscribe initial snapshot', () => {
     for (const frame of emitted as { messages: NativeChatMessage[] }[]) {
       expect(frame.messages[0].blocks[0]).toEqual({ type: 'text', text })
     }
+  })
+
+  it('settles a not-yet-flushed transcript with a pending window, then the real snapshot', async () => {
+    // A brand-new session's JSONL can be a minute out, or never written at all
+    // until the agent is prompted. With no frame the client just spins.
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's', capabilities: { transcriptPending: 1 } },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    const callbacks = activeWatcherArgs()
+    callbacks.onTranscriptPending?.()
+    expect(emitted).toEqual([{ type: 'snapshot', messages: [], hasMore: false, pending: true }])
+
+    const message = makeTextMessage('first turn')
+    callbacks.onInitialSnapshot?.([message], false, 123)
+    expect(emitted).toHaveLength(2)
+    expect(emitted[1]).toMatchObject({ type: 'snapshot', hasMore: false })
+    // The real window is authoritative and carries no pending marker.
+    expect((emitted[1] as { pending?: boolean }).pending).toBeUndefined()
+  })
+
+  it('does not publish pending semantics to a legacy client', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    expect(activeWatcherArgs().onTranscriptPending).toBeUndefined()
+    expect(emitted).toEqual([])
   })
 
   it('emits one windowed snapshot with pagination state before live appends', async () => {

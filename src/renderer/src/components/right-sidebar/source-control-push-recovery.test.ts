@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   captureSourceControlRecoveryEntrySnapshot,
   type SourceControlActionError
-} from './source-control-action-error'
-import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+} from './source-control/sync/action-error'
+import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
 
 function actionError(overrides: Partial<SourceControlActionError> = {}): SourceControlActionError {
   return {

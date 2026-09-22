@@ -1,4 +1,7 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
 import {
   collectLeafIdsInOrder,
   normalizeTerminalLayoutSnapshot,

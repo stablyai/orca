@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
@@ -138,9 +138,8 @@ export function useMarkdownDocuments(
         return
       }
 
-      if (options.anchor) {
-        // Why: heading fragments are preview anchors, not filesystem paths.
-        // Opening preview preserves Obsidian-style [[note#Heading]] navigation.
+      if (options.anchor || activeFile.mode === 'markdown-preview' || viewMode === 'preview') {
+        // Preserve the reading surface; fragments only choose a heading within it.
         openMarkdownPreview(
           {
             filePath: document.filePath,
@@ -164,11 +163,13 @@ export function useMarkdownDocuments(
       })
     },
     [
+      activeFile.mode,
       activeFile.runtimeEnvironmentId,
       connectionId,
       openFile,
       openMarkdownPreview,
       refreshMarkdownDocuments,
+      viewMode,
       worktreeId,
       worktreePath
     ]

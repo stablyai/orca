@@ -1,17 +1,17 @@
 // Why: turns raw gh stderr/stdout into the typed GitHubProjectViewError the
 // renderer can act on (auth vs scope vs rate limit vs drift), shared by the
 // project-view read and mutation paths.
-import type { GitHubProjectViewError } from '../../../shared/github-project-types'
-import { githubProjectHost } from '../../../shared/github-project-identity'
+import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
 
-export type GhGraphqlErrorShape = {
+export type GhGraphqlError = {
   type?: string
   message?: string
   path?: (string | number)[]
   extensions?: { code?: string }
 }
 
-export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlErrorShape[] {
+export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlError[] {
   // `gh api graphql` prints the response JSON to stdout even on GraphQL
   // errors, and the stderr carries a summary. Try stdout first; if parsing
   // fails, fall back to stderr.
@@ -21,7 +21,7 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
       continue
     }
     try {
-      const parsed = JSON.parse(src) as { errors?: GhGraphqlErrorShape[] }
+      const parsed: { errors?: GhGraphqlError[] } = JSON.parse(src)
       if (parsed.errors && parsed.errors.length > 0) {
         return parsed.errors
       }
@@ -32,7 +32,7 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
   return []
 }
 
-export function errorsIndicateParentField(errors: GhGraphqlErrorShape[], stderr: string): boolean {
+export function errorsIndicateParentField(errors: GhGraphqlError[], stderr: string): boolean {
   const lower = stderr.toLowerCase()
   // Preview-header shape: gh returns a 4xx with "preview" in the message.
   if (lower.includes('preview') && lower.includes('parent')) {

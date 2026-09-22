@@ -35,7 +35,7 @@ test('refreshes the visible tree after external Windows file changes', async ({ 
   const row = (name: string) =>
     orcaPage
       .locator('[data-file-explorer-row]')
-      .filter({ hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) })
+      .filter({ has: orcaPage.getByText(name, { exact: true }) })
 
   rmSync(originalPath, { force: true })
   rmSync(renamedPath, { force: true })

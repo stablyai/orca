@@ -1,19 +1,27 @@
 import type { ReactNode } from 'react'
-import { Check, Circle } from 'lucide-react'
+import { Check, Circle, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import {
+  IntegrationStatusPill,
+  type IntegrationStatusTone
+} from '@/components/integration-status-pill'
+import {
+  TASK_PROVIDER_SETUP_STATUS_TONE,
+  getTaskProviderCompletedSteps,
+  getTaskProviderSetupStatus,
+  type TaskProviderReadiness
+} from './task-source-setup-state'
 import { translate } from '@/i18n/i18n'
 
-export type LinearSetupStepStatus = {
-  connected: boolean
-  connectionChecking: boolean
+/** The guide renders the skill row, so unlike other providers those facts are required. */
+export type LinearSetupReadiness = TaskProviderReadiness & {
   skillInstalled: boolean
   skillChecking: boolean
-  visibleInTasks: boolean
+  skillUnverifiable: boolean
 }
 
 type LinearAgentSkillGuideProps = {
-  status: LinearSetupStepStatus
+  readiness: LinearSetupReadiness
   onOpenTaskSources: () => void
   onManageLinearAccess: () => void
   // Why: skill install/update lives once under step 2 so the page does not
@@ -23,16 +31,27 @@ type LinearAgentSkillGuideProps = {
 
 function SetupStatusIcon({
   done,
-  checking
+  checking,
+  unverifiable
 }: {
   done: boolean
   checking: boolean
+  unverifiable?: boolean
 }): React.JSX.Element {
   // Keep a fixed size-5 slot so checking/done/pending never shift the column.
   if (checking) {
     return (
       <span className="flex size-5 items-center justify-center text-muted-foreground">
         <Circle className="size-3.5 animate-pulse motion-reduce:animate-none" />
+      </span>
+    )
+  }
+  // Why above `done`: an unvouched-for scan says nothing about the step either
+  // way, and painting it as pending is the claim this checklist got wrong.
+  if (unverifiable) {
+    return (
+      <span className="flex size-5 items-center justify-center rounded-full border border-border/70 text-muted-foreground">
+        <TriangleAlert className="size-3" />
       </span>
     )
   }
@@ -50,21 +69,64 @@ function SetupStatusIcon({
   )
 }
 
+type LinearSetupPill = { tone: IntegrationStatusTone; label: string; showCount: boolean }
+
+function getLinearSetupPill(readiness: LinearSetupReadiness): LinearSetupPill {
+  const { completed, total } = getTaskProviderCompletedSteps(readiness)
+  // Why: route through the card's status so the two Linear surfaces share one
+  // precedence. Reading `skillUnverifiable` directly here headlined "Cannot verify"
+  // over a step the user had plainly not done (or before they had even connected).
+  const status = getTaskProviderSetupStatus(readiness)
+  // Tone is the shared table's call, not this surface's; only the copy differs.
+  const tone = TASK_PROVIDER_SETUP_STATUS_TONE[status]
+  if (status === 'checking') {
+    return {
+      tone,
+      label: translate('auto.components.settings.LinearAgentSkillGuide.setupChecking', 'Checking…'),
+      showCount: false
+    }
+  }
+  if (status === 'ready') {
+    return {
+      tone,
+      label: translate('auto.components.settings.LinearAgentSkillGuide.setupReady', 'All set'),
+      showCount: false
+    }
+  }
+  // Why: a scan that cannot vouch for "not installed" must not be counted against
+  // the user, so the label reports what was confirmed instead of asserting a failure.
+  if (status === 'skill-unverified') {
+    return {
+      tone,
+      label: translate(
+        'auto.components.settings.LinearAgentSkillGuide.setupUnverified',
+        'Cannot verify'
+      ),
+      showCount: true
+    }
+  }
+  return {
+    tone,
+    label: translate(
+      'auto.components.settings.LinearAgentSkillGuide.setupProgress',
+      '{{done}} of {{total}} ready',
+      { done: completed, total }
+    ),
+    showCount: false
+  }
+}
+
 // Connect, skill, and Tasks visibility in one checklist — skill UI is inlined.
 export function LinearAgentSkillGuide({
-  status,
+  readiness,
   onOpenTaskSources,
   onManageLinearAccess,
   skillPanel
 }: LinearAgentSkillGuideProps): React.JSX.Element {
-  // Count durable outcomes even while a recheck runs so the pill does not flash
-  // from "All set" down to "2 of 3 ready" during skill/connection scans.
-  const checking = status.connectionChecking || status.skillChecking
-  const completed = [status.connected, status.skillInstalled, status.visibleInTasks].filter(
-    Boolean
-  ).length
-  const total = 3
-  const allReady = completed === total && !checking
+  // Share the Task Sources card's arithmetic so the two Linear setup surfaces
+  // cannot disagree about the same three facts; the copy stays count-based here.
+  const pill = getLinearSetupPill(readiness)
+  const { completed, total } = getTaskProviderCompletedSteps(readiness)
 
   return (
     <section className="space-y-3 rounded-xl border border-border/60 bg-card/30 p-4">
@@ -83,23 +145,22 @@ export function LinearAgentSkillGuide({
             )}
           </p>
         </div>
-        <IntegrationStatusPill tone={checking ? 'neutral' : allReady ? 'connected' : 'attention'}>
-          {checking
-            ? translate('auto.components.settings.LinearAgentSkillGuide.setupChecking', 'Checking…')
-            : allReady
-              ? translate('auto.components.settings.LinearAgentSkillGuide.setupReady', 'All set')
-              : translate(
-                  'auto.components.settings.LinearAgentSkillGuide.setupProgress',
-                  '{{done}} of {{total}} ready',
-                  { done: completed, total }
-                )}
-        </IntegrationStatusPill>
+        <span className="inline-flex items-center gap-2">
+          <IntegrationStatusPill tone={pill.tone}>{pill.label}</IntegrationStatusPill>
+          {pill.showCount ? (
+            // Mirrors the Task Sources card so the confirmed count survives a label
+            // that no longer carries it.
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {`${completed}/${total}`}
+            </span>
+          ) : null}
+        </span>
       </div>
 
       <div className="divide-y divide-border/50">
         <div className="flex flex-wrap items-start gap-3 py-3">
           <div className="mt-0.5">
-            <SetupStatusIcon done={status.connected} checking={status.connectionChecking} />
+            <SetupStatusIcon done={readiness.connected} checking={readiness.checking} />
           </div>
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="text-sm font-medium text-foreground">
@@ -118,11 +179,11 @@ export function LinearAgentSkillGuide({
           <Button
             type="button"
             size="sm"
-            variant={status.connected ? 'outline' : 'default'}
+            variant={readiness.connected ? 'outline' : 'default'}
             className="shrink-0"
             onClick={onManageLinearAccess}
           >
-            {status.connected
+            {readiness.connected
               ? translate(
                   'auto.components.settings.LinearAgentSkillGuide.manageKeys',
                   'Manage keys'
@@ -134,7 +195,11 @@ export function LinearAgentSkillGuide({
         <div className="space-y-3 py-3">
           <div className="flex flex-wrap items-start gap-3">
             <div className="mt-0.5">
-              <SetupStatusIcon done={status.skillInstalled} checking={status.skillChecking} />
+              <SetupStatusIcon
+                done={readiness.skillInstalled}
+                checking={readiness.skillChecking}
+                unverifiable={readiness.skillUnverifiable}
+              />
             </div>
             <div className="min-w-0 flex-1 space-y-0.5">
               <p className="text-sm font-medium text-foreground">
@@ -156,7 +221,7 @@ export function LinearAgentSkillGuide({
 
         <div className="flex flex-wrap items-start gap-3 py-3">
           <div className="mt-0.5">
-            <SetupStatusIcon done={status.visibleInTasks} checking={false} />
+            <SetupStatusIcon done={readiness.visible} checking={false} />
           </div>
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="text-sm font-medium text-foreground">
@@ -175,7 +240,7 @@ export function LinearAgentSkillGuide({
           <Button
             type="button"
             size="sm"
-            variant={status.visibleInTasks ? 'outline' : 'default'}
+            variant={readiness.visible ? 'outline' : 'default'}
             className="shrink-0"
             onClick={onOpenTaskSources}
           >

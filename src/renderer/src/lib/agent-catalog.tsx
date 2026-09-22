@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -21,6 +21,7 @@ export type AgentCatalogEntry = {
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
+  searchAliases?: readonly string[]
   /** Direct or bundled image URL for agents whose project identity is not represented by a favicon service. */
   iconUrl?: string
   /** Domain for Google's favicon service — used for agents without an SVG icon. */
@@ -48,13 +49,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
     cmd: 'claude',
-    homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
+    homepageUrl: 'https://code.claude.com/docs'
   },
   {
     id: 'claude-agent-teams',
     label: translate('auto.lib.agent.catalog.bf53f09bf8', 'Claude Agent Teams'),
     cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG['claude-agent-teams'], getCatalogPlatform()),
-    homepageUrl: 'https://code.claude.com/docs/agent-teams'
+    homepageUrl: 'https://code.claude.com/docs/en/agent-teams'
   },
   {
     id: 'openclaude',
@@ -83,6 +84,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     label: translate('auto.lib.agent.catalog.706b0fe68b', 'GitHub Copilot'),
     cmd: 'copilot',
     homepageUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli'
+  },
+  {
+    id: 'opencode2',
+    label: translate('auto.lib.agent.catalog.opencode2_label', 'OpenCode 2'),
+    cmd: 'opencode2',
+    homepageUrl: 'https://opencode.ai/v2/docs/'
   },
   {
     id: 'opencode',
@@ -123,6 +130,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'omp',
     label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',
+    searchAliases: ['oh-my-pi', 'oh my pi'],
     // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
     // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
@@ -219,6 +227,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'codebuff',
     faviconDomain: 'codebuff.com',
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
+  },
+  {
+    id: 'freebuff',
+    label: translate('auto.lib.agent.catalog.b0b350de65', 'Freebuff'),
+    cmd: 'freebuff',
+    faviconDomain: 'freebuff.com',
+    homepageUrl: 'https://freebuff.com/cli'
   },
   {
     id: 'command-code',
@@ -355,6 +370,9 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
+  }
+  if (agent === 'opencode2') {
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)

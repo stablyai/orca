@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/source-control-generation-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   createBranchCommit,
@@ -401,9 +401,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedCommitMessageGenerator(orcaPage, generatorScriptPath, callLogPath)
 
     await openSourceControl(orcaPage, commitWorktreeId)
-    await expect(orcaPage.getByText('e2e-commit-message-generation.txt')).toBeVisible({
-      timeout: 10_000
-    })
+    await expect(
+      orcaPage
+        .getByTestId('source-control-entry')
+        .getByText('e2e-commit-message-generation.txt', { exact: true })
+    ).toBeVisible({ timeout: 10_000 })
     const generate = orcaPage.getByRole('button', {
       name: 'Generate commit message with AI'
     })

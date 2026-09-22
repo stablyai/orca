@@ -13,7 +13,8 @@ import {
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
-import type { FolderWorkspaceLinkedTask, OrcaHooks } from '../../../shared/types'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'

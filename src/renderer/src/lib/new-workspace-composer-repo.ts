@@ -5,7 +5,7 @@ import {
   resolveNewWorkspaceDialogRepoId
 } from '../../../shared/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
   return getNewWorkspaceDialogEligibleRepos(repos)

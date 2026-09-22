@@ -10,7 +10,8 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
-import type { GlobalSettings, TuiAgent } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import type { TuiAgent } from '../../src/shared/tui-agent'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/constants'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 
@@ -451,17 +452,32 @@ test.describe('Onboarding flow', () => {
       // has a live, protocol-compatible status; without one it reads
       // 'disconnected' and the Add Project dialog falls back to Local Mac.
       // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
+      const seededStatus = {
+        runtimeId: `${environment.id}-runtime`,
+        rendererGraphEpoch: 0,
+        graphStatus: 'ready' as const,
+        authoritativeWindowId: null,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        runtimeProtocolVersion: 3,
+        minCompatibleRuntimeClientVersion: 1
+      }
+      // Why a snapshot and not a bare status: since #20003 the published snapshot owns host health,
+      // and main's status owner publishes `checking` for this unreachable host as soon as any
+      // runtime RPC touches it — which flips the Add Project host to Local mid-test. Pinning the
+      // seed at the top sequence makes applyRuntimeHostStatusSnapshot's monotonic guard drop those
+      // publications. A snapshot-less write would also no-op once any snapshot exists.
       store.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: {
-          runtimeId: `${environment.id}-runtime`,
-          rendererGraphEpoch: 0,
-          graphStatus: 'ready',
-          authoritativeWindowId: null,
-          liveTabCount: 0,
-          liveLeafCount: 0,
-          runtimeProtocolVersion: 3,
-          minCompatibleRuntimeClientVersion: 1
+        snapshot: {
+          environmentId: environment.id,
+          pairingRevision: environment.pairingRevision ?? environment.createdAt,
+          sequence: Number.MAX_SAFE_INTEGER,
+          checkedAt: Date.now(),
+          status: seededStatus,
+          verification: 'verified',
+          transport: 'ready'
         },
+        status: seededStatus,
         checkedAt: Date.now()
       })
       // Why: the store's switchRuntimeEnvironment probes reachability, which a
@@ -480,12 +496,51 @@ test.describe('Onboarding flow', () => {
       })
       .toBe(environmentId)
 
+    // Why: runtime-host health now derives from the status snapshot (transport
+    // + verification) whenever one exists, and a snapshot also blocks later
+    // status-only writes — so a status seed alone no longer reads 'available'
+    // and the host selector falls back to Local. Publish a verified, ready
+    // snapshot with a high sequence so later real snapshots cannot downgrade
+    // it, modelling a reachable host for the skip-to-project-setup path.
+    await orcaPage.evaluate((id) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const state = store.getState()
+      const environment = state.runtimeEnvironments.find((entry) => entry.id === id)
+      if (!environment) {
+        throw new Error('runtime environment was not registered')
+      }
+      state.applyRuntimeHostStatusSnapshot({
+        environmentId: id,
+        pairingRevision: environment.pairingRevision ?? environment.createdAt,
+        sequence: 2_147_483_647,
+        checkedAt: Date.now(),
+        status: {
+          runtimeId: `${id}-runtime`,
+          rendererGraphEpoch: 0,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 0,
+          liveLeafCount: 0,
+          runtimeProtocolVersion: 3,
+          minCompatibleRuntimeClientVersion: 1
+        },
+        verification: 'verified',
+        transport: 'ready',
+        remoteControl: null
+      })
+    }, environmentId)
+
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expectAddProjectDialog(orcaPage)
     // The runtime env is selected as the Add Project host and the browse action
     // is host-scoped, proving the server project-setup UI is preserved on skip.
-    await expect(orcaPage.getByText('Existing Git repository or folder on this host')).toBeVisible()
+    await expect(orcaPage.getByText('Existing Git repository or folder on this host')).toBeVisible({
+      timeout: 30_000
+    })
     await expect(orcaPage.getByRole('button', { name: /Browse folder/i })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: /Clone from URL/i })).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: /Create new project/i })).toBeVisible()

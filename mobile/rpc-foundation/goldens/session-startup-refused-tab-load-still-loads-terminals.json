@@ -1,0 +1,245 @@
+{
+  "operation": "session.startup",
+  "family": "session.startup",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
+  "scenarioSha256": "18d0bbda11a394a13d0eaea12b8748dbeede1ae7212907b0ca70a9bafa037424",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2bba58da0410": {
+      "name": "fetch-terminals",
+      "ordinal": 10,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "4f4cd2a4f041": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 4,
+      "value": {}
+    },
+    "5c6699f9b431": {
+      "name": "ensure-session-tabs",
+      "ordinal": 7,
+      "value": {}
+    },
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
+      "value": {}
+    },
+    "7a83179a1016": {
+      "name": "worktree.activate#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "98858d185002": {
+      "name": "fetch-terminals",
+      "ordinal": 9,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "99a213805fa0": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 5,
+      "value": {}
+    },
+    "a509dd4610b2": {
+      "name": "fetch-terminals",
+      "ordinal": 11,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "acf0370bfacc": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "terminalsLoaded": false
+    },
+    "b65466e96997": {
+      "name": "worktree.activate#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {}
+        }
+      }
+    },
+    "d000b4c837b7": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 13,
+      "value": {}
+    },
+    "e35576a6b449": {
+      "name": "clear-pending-restorations",
+      "ordinal": 12,
+      "value": {}
+    },
+    "e8b978dbecff": {
+      "name": "worktree.activate#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f880d7742773": {
+      "name": "reset-drafts",
+      "ordinal": 3,
+      "value": {}
+    },
+    "fde92e0a066b": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 14,
+      "value": {}
+    }
+  },
+  "recording": {
+    "scenario": "session-startup-refused-tab-load-still-loads-terminals",
+    "checkpoints": [
+      {
+        "id": "tab-load-refused",
+        "observation": {
+          "sender": ["7a83179a1016"],
+          "payloads": ["e8b978dbecff"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "5c6699f9b431",
+            "98858d185002"
+          ]
+        }
+      },
+      {
+        "id": "refreshed",
+        "observation": {
+          "sender": ["b65466e96997"],
+          "payloads": ["e8b978dbecff"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "5c6699f9b431",
+            "98858d185002",
+            "2bba58da0410",
+            "a509dd4610b2"
+          ]
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["b65466e96997"],
+          "payloads": ["e8b978dbecff"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "5c6699f9b431",
+            "98858d185002",
+            "2bba58da0410",
+            "a509dd4610b2",
+            "e35576a6b449",
+            "d000b4c837b7",
+            "fde92e0a066b"
+          ]
+        }
+      }
+    ]
+  }
+}

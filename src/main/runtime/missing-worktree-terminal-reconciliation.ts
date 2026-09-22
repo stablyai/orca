@@ -1,6 +1,6 @@
 import type { IPtyProvider } from '../providers/types'
-import type { Repo } from '../../shared/types'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import type { Repo } from '../../shared/repo-types'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { killAllProcessesForWorktree } from './worktree-teardown'
@@ -24,6 +24,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         // receiver, a provider whose own method called `this.listProcesses()`
         // would silently read this sweep's cached snapshot instead of the live
         // host — the batching must not leak past the calls it was built for.
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const member: unknown = Reflect.get(target, property)
         return typeof member === 'function' ? member.bind(target) : member
       }

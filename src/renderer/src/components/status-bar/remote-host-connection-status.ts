@@ -51,6 +51,19 @@ export function runtimeHostConnectionDetail(
   if (!remoteControl) {
     return undefined
   }
+  if (
+    remoteControl.state === 'awaiting_ready' ||
+    remoteControl.state === 'awaiting_authenticated'
+  ) {
+    return undefined
+  }
+  if (remoteControl.state === 'reconnecting') {
+    return translate(
+      'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
+      'Attempt {{value0}}',
+      { value0: String(remoteControl.reconnectAttempt + 1) }
+    )
+  }
   if (remoteControl.lastError) {
     return remoteControl.lastError
   }
@@ -59,13 +72,6 @@ export function runtimeHostConnectionDetail(
       'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
       'Closed: {{value0}}',
       { value0: remoteControl.lastClose.reason }
-    )
-  }
-  if (remoteControl.state === 'reconnecting') {
-    return translate(
-      'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
-      'Attempt {{value0}}',
-      { value0: String(remoteControl.reconnectAttempt + 1) }
     )
   }
   // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a

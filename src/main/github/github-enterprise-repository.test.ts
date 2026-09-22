@@ -27,6 +27,7 @@ import {
   isGitHubHostAuthenticatedForGlobalCli
 } from './github-enterprise-repository'
 import { _resetSshHostnameResolutionCache } from './github-ssh-host-alias-resolution'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 function mockOriginRemote(url: string): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -392,14 +393,121 @@ describe('isGitHubHostAuthenticated', () => {
     }
   })
 
-  it('shares the native gh auth probe across SSH connections', async () => {
-    mockHostAuthenticated()
+  it('does not share a cached answer between SSH connections at the same path', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout:
+          'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+        stderr: ''
+      })
 
-    await isGitHubHostAuthenticated('github.acme-corp.com', '/remote/a', 'ssh-1')
-    await isGitHubHostAuthenticated('github.acme-corp.com', '/remote/b', 'ssh-2')
-
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    await expect(isGitHubHostAuthenticated('github.acme-corp.com', '/repo', 'ssh-1')).resolves.toBe(
+      true
+    )
+    await expect(isGitHubHostAuthenticated('github.acme-corp.com', '/repo', 'ssh-2')).resolves.toBe(
+      false
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
+
+  it('does not reuse a cached answer after the SSH provider reconnects', async () => {
+    const connectionId = 'ssh-reconnected-auth-cache'
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout:
+          'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+        stderr: ''
+      })
+
+    registerSshGitProvider(connectionId, {} as never)
+    try {
+      await expect(
+        isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+      ).resolves.toBe(true)
+      await expect(
+        isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+      ).resolves.toBe(true)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+      registerSshGitProvider(connectionId, {} as never)
+      await expect(
+        isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+      ).resolves.toBe(false)
+    } finally {
+      unregisterSshGitProvider(connectionId)
+    }
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not join an in-flight auth probe from an older SSH provider generation', async () => {
+    const connectionId = 'ssh-reconnected-auth-in-flight'
+    let finishOldProbe: (() => void) | undefined
+    ghExecFileAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOldProbe = () =>
+              resolve({
+                stdout:
+                  'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)',
+                stderr: ''
+              })
+          })
+      )
+      .mockResolvedValueOnce({
+        stdout: 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+        stderr: ''
+      })
+
+    registerSshGitProvider(connectionId, {} as never)
+    try {
+      const oldProbe = isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+      registerSshGitProvider(connectionId, {} as never)
+      const newProbe = isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+
+      await expect(newProbe).resolves.toBe(false)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+      finishOldProbe?.()
+      await expect(oldProbe).resolves.toBe(true)
+    } finally {
+      unregisterSshGitProvider(connectionId)
+    }
+  })
+
+  // The probe answers differ by runtime: a local repo gets a cwd, a
+  // connection-backed repo does not. Sharing one entry attributes whichever
+  // resolved first to both hosts.
+  it.each([
+    ['local resolves first', [null, 'ssh-1'] as const, [true, false]],
+    ['connection resolves first', ['ssh-1', null] as const, [false, true]]
+  ])(
+    'does not cross-attribute auth between a local and a connection-backed repo at the same path (%s)',
+    async (_label, connectionIds, expected) => {
+      ghExecFileAsyncMock.mockImplementation(
+        async (_args: string[], options: { cwd?: string }) => ({
+          stdout: options.cwd
+            ? 'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)'
+            : 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+          stderr: ''
+        })
+      )
+
+      for (const [index, connectionId] of connectionIds.entries()) {
+        await expect(
+          isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+        ).resolves.toBe(expected[index])
+      }
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    }
+  )
 
   it('does not target an unconfigured remote host with ambient credentials', async () => {
     mockHostAuthenticated('github.acme-corp.com')

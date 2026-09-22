@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { SourceControlGroupOrder } from '../../../../shared/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'

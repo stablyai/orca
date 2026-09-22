@@ -6,8 +6,8 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import type { Repo } from '../../../shared/repo-types'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'

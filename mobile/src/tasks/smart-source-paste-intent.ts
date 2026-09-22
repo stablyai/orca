@@ -1,4 +1,5 @@
-import type { GitHubWorkItem, GitLabWorkItem } from '../../../src/shared/types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import {
   normalizeGitHubLinkQuery,
   parseGitHubIssueOrPRLink,
@@ -8,8 +9,14 @@ import {
 import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitlab-links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
-import { githubRepoIdentityKey } from '../../../src/shared/github-repository-identity-key'
+import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
+import {
+  githubRepoSlugRead,
+  githubWorkItemByNumberRead,
+  githubWorkItemBySlugRead,
+  gitlabWorkItemByPathRead
+} from './mobile-task-source-search-operations'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 // A repo the picker can switch to for a cross-repo GitHub paste. Slug is derived
 // best-effort from the repo's remote metadata.
@@ -107,14 +114,17 @@ export async function findRepoMatchingSlugForPaste(
     let resolved = cache.get(repo.id)
     if (!cache.has(repo.id)) {
       try {
-        const response = await client.sendRequest('github.repoSlug', { repo: `id:${repo.id}` })
-        if (!response.ok && response.error.code === 'method_not_found') {
+        const reply = await githubRepoSlugRead.request(client, { repo: `id:${repo.id}` })
+        // Why the raw refusal: a missing method retires the probe host-wide, and the acceptance
+        // policy reports only that the reply was refused, not with which code.
+        if (isMethodNotFoundRefusal(reply)) {
           // Why: RPC availability is host-wide; avoid repeating an unsupported
           // probe for every repo or on the next paste attempt.
           repos.forEach((candidate) => cache.set(candidate.id, null))
           return null
         }
-        resolved = response.ok ? ((response as RpcSuccess).result as RepoSlug | null) : null
+        const slug = githubRepoSlugRead.interpret(reply)
+        resolved = slug.accepted ? slug.value : null
       } catch {
         resolved = null
       }
@@ -132,11 +142,12 @@ export async function lookupGitHubItemByNumber(
   repoId: string,
   number: number
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItem', { repo: `id:${repoId}`, number })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
+  const reply = await githubWorkItemByNumberRead.request(client, {
+    repo: `id:${repoId}`,
+    number
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup decodes the same `workItemRow`, so the assertion only fills in members the row omits, each read through a guard or interpolated as text; what the schema adds is that a non-object payload is now a named incompatible reply rather than a spread over a string.
+  const item = githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
 
@@ -147,7 +158,7 @@ export async function lookupGitHubItemByOwnerRepo(
   number: number,
   type: 'issue' | 'pr'
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItemByOwnerRepo', {
+  const reply = await githubWorkItemBySlugRead.request(client, {
     repo: `id:${repoId}`,
     owner: slug.owner,
     ownerRepo: slug.repo,
@@ -155,10 +166,8 @@ export async function lookupGitHubItemByOwnerRepo(
     number,
     type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+  const item = githubWorkItemBySlugRead.interpret(reply) as GitHubWorkItem | null
   return item ? { ...item, repoId } : null
 }
 
@@ -167,16 +176,14 @@ export async function lookupGitLabItemByPath(
   repoId: string,
   link: NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 ): Promise<GitLabWorkItem | null> {
-  const response = await client.sendRequest('gitlab.workItemByPath', {
+  const reply = await gitlabWorkItemByPathRead.request(client, {
     repo: `id:${repoId}`,
     host: link.slug.host,
     path: link.slug.path,
     iid: link.number,
     type: link.type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitLabWorkItem | null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, against `GitLabWorkItem`.
+  const item = gitlabWorkItemByPathRead.interpret(reply) as GitLabWorkItem | null
   return item ? { ...item, repoId } : null
 }

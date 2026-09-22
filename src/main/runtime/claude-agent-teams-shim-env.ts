@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { accessSync, constants, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
@@ -9,6 +9,7 @@ import {
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
+import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
@@ -20,7 +21,7 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
   await mkdir(root, { recursive: true })
   await writeIfChanged(join(root, 'tmux'), unixShimScript())
   if (process.platform === 'win32') {
-    await writeIfChanged(join(root, 'tmux.cmd'), windowsShimScript())
+    await writeIfChanged(join(root, 'tmux.cmd'), windowsClaudeAgentTeamsShimScript())
   }
   return root
 }
@@ -41,8 +42,15 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
     }
   }
-  const shimDir = await ensureClaudeAgentTeamsShimDir()
   const shimBin = resolveClaudeAgentTeamsShimBin(args.baseEnv)
+  if (!shimBin) {
+    // Why: without an absolute CLI path the shim would resolve a bare `orca` against the pane cwd, so degrade instead.
+    return {
+      command: addClaudeTeammateModeInProcess(args.command),
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    }
+  }
+  const shimDir = await ensureClaudeAgentTeamsShimDir()
   const env = args.createTeamEnv(shimDir, shimBin)
   return {
     command: addClaudeTeammateModeAuto(args.command),
@@ -51,20 +59,27 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   }
 }
 
+/** Absolute path to the Orca CLI that backs the tmux shim, or null when none can be qualified. */
 export function resolveClaudeAgentTeamsShimBin(
   env: Record<string, string | undefined> = process.env
-): string {
-  if (env.ORCA_AGENT_TEAMS_SHIM_BIN) {
-    return env.ORCA_AGENT_TEAMS_SHIM_BIN
+): string | null {
+  // Why: Windows callers pass an env spelt `Path`; reading only `PATH` there would find no CLI at all.
+  const pathValue = env[resolvePathEnvKey(env, process.platform)]
+  const override = env.ORCA_AGENT_TEAMS_SHIM_BIN
+  if (override) {
+    // Why: a bare override name would be resolved by the shim's shell against its cwd, so qualify it or ignore it.
+    const qualified = isAbsolute(override) ? override : findExecutableOnPath(override, pathValue)
+    if (qualified) {
+      return qualified
+    }
   }
   const bundled = bundledLauncherPath()
   if (bundled && isExecutableFile(bundled)) {
     return bundled
   }
   return (
-    findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', env.PATH) ??
-    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), env.PATH) ??
-    getOrcaCliCommandNameForPlatform(process.platform)
+    findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', pathValue) ??
+    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), pathValue)
   )
 }
 
@@ -90,7 +105,8 @@ function bundledLauncherPath(): string | null {
 
 function findExecutableOnPath(command: string, pathValue: string | undefined): string | null {
   for (const directory of pathValue?.split(delimiter) ?? []) {
-    if (!directory) {
+    // Why: empty and relative PATH entries resolve against a cwd we do not control, which is the hijack we are avoiding.
+    if (!directory || !isAbsolute(directory)) {
       continue
     }
     const candidate = join(directory, command)
@@ -113,23 +129,42 @@ function isExecutableFile(candidate: string): boolean {
   }
 }
 
+// Why: an unqualified command name is resolved against the invoking pane's cwd (always on cmd.exe, and via `.`/empty
+// PATH entries on POSIX), so a stray `orca` next to the agent's files would run with the team token. Demand a
+// fully-qualified binary instead of guessing one.
 function unixShimScript(): string {
   return [
     '#!/usr/bin/env sh',
     'set -eu',
-    `exec "\${ORCA_AGENT_TEAMS_SHIM_BIN:-${getOrcaCliCommandNameForPlatform(process.platform)}}" agent-teams-tmux "$@"`,
+    'orca_bin=${ORCA_AGENT_TEAMS_SHIM_BIN:-}',
+    'case $orca_bin in',
+    '  /*|[A-Za-z]:[\\\\/]*) ;;',
+    '  *)',
+    '    echo "orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path" >&2',
+    '    exit 127',
+    '    ;;',
+    'esac',
+    'exec "$orca_bin" agent-teams-tmux "$@"',
     ''
   ].join('\n')
 }
 
-function windowsShimScript(): string {
+export function windowsClaudeAgentTeamsShimScript(): string {
   return [
     '@echo off',
     'setlocal',
-    'if "%ORCA_AGENT_TEAMS_SHIM_BIN%"=="" (',
-    `  set "ORCA_AGENT_TEAMS_SHIM_BIN=${getOrcaCliCommandNameForPlatform(process.platform)}"`,
-    ')',
-    '"%ORCA_AGENT_TEAMS_SHIM_BIN%" agent-teams-tmux %*',
+    'set "ORCA_SHIM_BIN=%ORCA_AGENT_TEAMS_SHIM_BIN%"',
+    'if not defined ORCA_SHIM_BIN goto :unqualified',
+    'if "%ORCA_SHIM_BIN:~1,1%"==":" goto :run',
+    'if "%ORCA_SHIM_BIN:~0,2%"=="\\\\" goto :run',
+    'goto :unqualified',
+    ':run',
+    // Why: no `call` — its extra percent-expansion pass would rewrite tmux pane args such as `%2` into batch parameters.
+    '"%ORCA_SHIM_BIN%" agent-teams-tmux %*',
+    'exit /b %ERRORLEVEL%',
+    ':unqualified',
+    'echo orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path 1>&2',
+    'exit /b 127',
     ''
   ].join('\r\n')
 }

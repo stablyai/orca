@@ -172,6 +172,47 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('folds a multi-block companion turn into one turn carrying every ref', () => {
+    // Claude records a multi-image paste as ONE companion message with a marker block
+    // per image, so a single-block-only rule missed every multi-image turn.
+    const out = normalizeImageTranscriptMessages([
+      {
+        id: 'companion',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '[Image: source: /tmp/a.png]' },
+          { type: 'text', text: '[Image: source: /tmp/b.png]' }
+        ],
+        timestamp: 1,
+        source: 'transcript'
+      }
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' }
+    ])
+  })
+
+  it('does not treat a turn mixing prose with a marker as an image-source turn', () => {
+    const messages = [
+      {
+        id: 'mixed',
+        role: 'user' as const,
+        blocks: [
+          { type: 'text' as const, text: '[Image: source: /tmp/a.png]' },
+          { type: 'text' as const, text: 'and here is what I think' }
+        ],
+        timestamp: 1,
+        source: 'transcript' as const
+      }
+    ]
+    const out = normalizeImageTranscriptMessages(messages)
+
+    expect(out[0]!.blocks.some((block) => block.type === 'image-ref')).toBe(false)
+  })
+
   it('leaves ordinary user text untouched', () => {
     const message = userText('a', 'how about this')
     const messages = [message]
@@ -209,5 +250,34 @@ describe('normalizeImageTranscriptMessages', () => {
       source: 'transcript'
     }
     expect(normalizeImageTranscriptMessages([assistant])).toEqual([assistant])
+  })
+})
+
+describe('normalizeNativeChatUserText control bytes', () => {
+  it('drops the Ctrl+U a TUI pasted in front of the prompt', () => {
+    expect(normalizeNativeChatUserText('\u0015run the tests')).toBe('run the tests')
+  })
+
+  it('drops control bytes that landed inside the prompt', () => {
+    expect(normalizeNativeChatUserText('run\u0015 the\u0000 tests')).toBe('run the tests')
+  })
+
+  it('still finds the image marker behind a leading control byte', () => {
+    expect(normalizeNativeChatUserText('\u0015[Image #1] describe this')).toBe('describe this')
+  })
+
+  // Remove a bracketed-paste wrapper as one sequence so its printable tail cannot survive.
+  it('drops a bracketed-paste wrapper, not just its ESC introducer', () => {
+    expect(normalizeNativeChatUserText('\u001b[200~/tmp/orca-paste-1.png\u001b[201~')).toBe(
+      '/tmp/orca-paste-1.png'
+    )
+  })
+
+  it('preserves bracketed-paste-looking text without an ESC introducer', () => {
+    expect(normalizeNativeChatUserText('[200~literal[201~')).toBe('[200~literal[201~')
+  })
+
+  it('leaves tabs, newlines and carriage returns to the whitespace collapse', () => {
+    expect(normalizeNativeChatUserText('run\tthe\r\ntests')).toBe('run the tests')
   })
 })

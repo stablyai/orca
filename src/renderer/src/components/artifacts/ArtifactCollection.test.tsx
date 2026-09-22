@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
 
@@ -10,12 +11,9 @@ vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: ({ shareUrl }: { shareUrl: string }) => <div>{`Preview ${shareUrl}`}</div>
 }))
 
-vi.mock('./ArtifactActions', () => ({
-  ArtifactActions: () => <div>Artifact actions</div>
-}))
-
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ArtifactCollection } from './ArtifactCollection'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -40,93 +38,194 @@ function artifact(slug: string, title: string): ArtifactListItem {
   }
 }
 
+/** Selection held in state, so whether a click selected is readable off the row's own wash. */
+function SelectingCollection({ items }: { items: ArtifactListItem[] }): React.JSX.Element {
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  return (
+    <ArtifactCollection
+      artifacts={items}
+      deletingId={null}
+      selectedSlug={selectedSlug}
+      selectArtifact={setSelectedSlug}
+      deleteArtifact={vi.fn()}
+      hasMore={false}
+      loadingMore={false}
+      loadMore={vi.fn()}
+      onRefresh={vi.fn()}
+      isRefreshing={false}
+    />
+  )
+}
+
+// `hidden`, because a modal Radix menu marks the rest of the tree aria-hidden while it is open —
+// and the row behind that menu is exactly what these assertions have to read.
+function rowFor(title: string): HTMLElement {
+  return screen.getByRole('button', { name: new RegExp(title), hidden: true })
+}
+
 describe('ArtifactCollection', () => {
   afterEach(cleanup)
+  // Why: the viewport stub spies on HTMLElement.prototype, so an unrestored one fabricates
+  // layout for every later test in the run.
+  afterEach(() => vi.restoreAllMocks())
 
   function renderCollection(
     items: ArtifactListItem[],
-    selectArtifact = vi.fn()
+    selectArtifact = vi.fn(),
+    hasMore = false
   ): { container: HTMLElement; selectArtifact: ReturnType<typeof vi.fn> } {
     const { container } = render(
       <TooltipProvider>
         <ArtifactCollection
           artifacts={items}
           deletingId={null}
-          selectedArtifact={items[0]}
+          selectedSlug={items[0]?.artifact.slug ?? null}
           selectArtifact={selectArtifact}
           deleteArtifact={vi.fn()}
-          hasMore={false}
+          hasMore={hasMore}
           loadingMore={false}
           loadMore={vi.fn()}
+          onRefresh={vi.fn()}
+          isRefreshing={false}
         />
       </TooltipProvider>
     )
     return { container, selectArtifact }
   }
 
-  it('keeps the artifact list beside a contained preview', async () => {
+  it('renders a full-width table list without an inline preview', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     const { container, selectArtifact } = renderCollection(items)
 
-    const collection = container.firstElementChild
-    // Why: full-bleed split — no card frame around the panes.
-    expect(collection).toHaveClass('lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]')
-    expect(collection).not.toHaveClass('rounded-md')
-    expect(collection?.children[1]?.tagName).toBe('SECTION')
-    expect(screen.getByText('Preview https://share.onorca.dev/a/first')).toBeInTheDocument()
+    const table = container.querySelector(`.${LIST_TABLE_CONTAINER_CLASS.split(' ')[0]}`)
+    expect(table).toHaveClass('rounded-md', 'border')
+    expect(screen.getByText('Name')).toBeInTheDocument()
+    expect(screen.getByText('Type')).toBeInTheDocument()
+    expect(screen.queryByText(/Preview https:\/\//)).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('option', { name: /Second artifact/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Second artifact/ }))
     expect(selectArtifact).toHaveBeenCalledWith('second')
   })
 
-  it('exposes the list as a single-tab-stop listbox', () => {
+  it('highlights only the selected row', () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     renderCollection(items)
 
-    expect(screen.getByRole('listbox', { name: 'Shared artifacts' })).toBeInTheDocument()
-    const [first, second] = screen.getAllByRole('option')
-    expect(first).toHaveAttribute('aria-selected', 'true')
-    expect(first).toHaveAttribute('aria-current', 'page')
-    expect(first).toHaveAttribute('tabindex', '0')
-    expect(second).toHaveAttribute('aria-selected', 'false')
-    expect(second).toHaveAttribute('tabindex', '-1')
+    const first = screen.getByRole('button', { name: /First artifact/ })
+    const second = screen.getByRole('button', { name: /Second artifact/ })
+    expect(first).toHaveAttribute('data-current', 'true')
+    expect(second).not.toHaveAttribute('data-current')
   })
 
-  it('moves focus with arrows and commits selection on Enter', async () => {
+  it('commits selection on Enter from the focused row', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     const { selectArtifact } = renderCollection(items)
-    const [first, second] = screen.getAllByRole('option')
+    const second = screen.getByRole('button', { name: /Second artifact/ })
 
-    first.focus()
-    await userEvent.keyboard('{ArrowDown}')
-    expect(second).toHaveFocus()
-    // Why: arrows must not commit — each selection reloads the preview webview.
-    expect(selectArtifact).not.toHaveBeenCalled()
-
+    second.focus()
     await userEvent.keyboard('{Enter}')
     expect(selectArtifact).toHaveBeenCalledWith('second')
   })
 
-  it('filters the list by name and keeps the preview mounted', async () => {
+  it('filters the list by name', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     renderCollection(items)
 
-    await userEvent.type(screen.getByPlaceholderText('Search artifacts'), 'second')
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    expect(screen.getByRole('option', { name: /Second artifact/ })).toBeInTheDocument()
-    expect(screen.getByText('Preview https://share.onorca.dev/a/first')).toBeInTheDocument()
+    await userEvent.type(screen.getByPlaceholderText('Search...'), 'second')
+    expect(screen.getByRole('button', { name: /Second artifact/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /First artifact/ })).not.toBeInTheDocument()
 
-    await userEvent.clear(screen.getByPlaceholderText('Search artifacts'))
-    await userEvent.type(screen.getByPlaceholderText('Search artifacts'), 'nothing')
-    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    await userEvent.clear(screen.getByPlaceholderText('Search...'))
+    await userEvent.type(screen.getByPlaceholderText('Search...'), 'nothing')
+    expect(screen.queryByRole('button', { name: /Second artifact/ })).not.toBeInTheDocument()
     expect(screen.getByText('No matches')).toBeInTheDocument()
   })
 
-  it('shows the share url and expiry instead of repeating the row metadata', () => {
+  /**
+   * Both of the row's menu escapes at once. The actions trigger is a DOM descendant of the row, and
+   * Radix portals the open menu out of it but React still bubbles its clicks back through the row —
+   * so without either guard the detail drawer opens behind every menu interaction.
+   */
+  it('runs a row menu action without selecting the artifact behind the menu', async () => {
+    const user = userEvent.setup()
+    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
+    render(
+      <TooltipProvider>
+        <SelectingCollection items={items} />
+      </TooltipProvider>
+    )
+
+    // Positive control: a click on the row body does select, so the negatives below are not vacuous.
+    await user.click(rowFor('First artifact'))
+    expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
+
+    const trigger = within(rowFor('Second artifact')).getByRole('button', {
+      name: 'Artifact actions'
+    })
+    await user.click(trigger)
+    // Radix mounts menu content only while the menu is open, so a match here is the menu opening.
+    expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeInTheDocument()
+    expect(rowFor('Second artifact')).not.toHaveAttribute('data-current')
+
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link' }))
+    expect(rowFor('Second artifact')).not.toHaveAttribute('data-current')
+    expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
+  })
+
+  // Why past 50: below the windowing threshold every row is in the DOM, so nothing has to be
+  // announced — the set size only has to be right once the rows are windowed.
+  const PAGED_ITEM_COUNT = 60
+
+  function pagedItems(): ArtifactListItem[] {
+    return Array.from({ length: PAGED_ITEM_COUNT }, (_, index) =>
+      artifact(`slug-${index}`, `Artifact ${index}`)
+    )
+  }
+
+  // Why: happy-dom has no layout, and the virtualizer sizes its window from the scroller's
+  // offsetHeight — left at 0 it mounts no rows at all and the assertions below would be vacuous.
+  function stubScrollerViewport(): void {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.classList.contains('overflow-auto') ? 600 : 53
+      }
+    )
+  }
+
+  function announcedSetSizes(container: HTMLElement): string[] {
+    const wrappers = Array.from(container.querySelectorAll('[data-index]'))
+    expect(wrappers.length).toBeGreaterThan(0)
+    // The window is a strict subset, so a set size read off the DOM could not reach the real total.
+    expect(wrappers.length).toBeLessThan(PAGED_ITEM_COUNT)
+    return wrappers.map((wrapper) => wrapper.getAttribute('aria-setsize') ?? 'missing')
+  }
+
+  it('announces an unknown set size while a further page is loadable', () => {
+    stubScrollerViewport()
+    const { container } = renderCollection(pagedItems(), vi.fn(), true)
+
+    // The button is the contradiction: a concrete set size here would claim these are all of them.
+    expect(screen.getByRole('button', { name: /Load more/ })).toBeInTheDocument()
+    const sizes = announcedSetSizes(container)
+    expect(sizes).toEqual(sizes.map(() => '-1'))
+  })
+
+  it('announces the real row count once the cursor is exhausted', () => {
+    stubScrollerViewport()
+    const { container } = renderCollection(pagedItems())
+
+    expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument()
+    const sizes = announcedSetSizes(container)
+    expect(sizes).toEqual(sizes.map(() => String(PAGED_ITEM_COUNT)))
+  })
+
+  it('shows compact type, size, and expiry in the row', () => {
     const items = [artifact('first', 'First artifact')]
     renderCollection(items)
 
-    expect(screen.getByText('https://share.onorca.dev/a/first')).toBeInTheDocument()
-    expect(screen.getByText(/Link expires/)).toBeInTheDocument()
+    expect(screen.getByText('HTML')).toBeInTheDocument()
+    expect(screen.getByText('1.2 KB')).toBeInTheDocument()
+    expect(screen.getByText(/in \d+ days/)).toBeInTheDocument()
+    expect(screen.queryByText('https://share.onorca.dev/a/first')).not.toBeInTheDocument()
   })
 })

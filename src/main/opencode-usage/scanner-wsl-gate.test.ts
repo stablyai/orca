@@ -20,8 +20,9 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: mocks.stat
 }))
 
-import { listOpenCodeDatabases } from './scanner'
+import { listOpenCodeDatabases } from './opencode-database-discovery'
 import {
+  resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
@@ -36,8 +37,19 @@ function stalls<T>(): Promise<T> {
   })
 }
 
+// Complete: UNC readdir results pass through the child dispatcher's dirent
+// serializer, which reads every kind flag.
 function dirent(name: string) {
-  return { name, isFile: () => true }
+  return {
+    name,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isDirectory: () => false,
+    isFIFO: () => false,
+    isFile: () => true,
+    isSocket: () => false,
+    isSymbolicLink: () => false
+  }
 }
 
 // The point of the gate: an ungated syscall on a stalled 9P mount never returns,
@@ -57,6 +69,9 @@ async function settlesOnlyAtTheScanDeadline(pending: Promise<string[]>): Promise
 let originalDatabaseOverride: string | undefined
 
 beforeEach(() => {
+  // blockedRoutes is persistent gate state: a prior stall must not quarantine
+  // this test's route.
+  resetWslTranscriptFsGateForTests()
   originalDatabaseOverride = process.env.OPENCODE_DB
   delete process.env.OPENCODE_DB
   mocks.resolveDataDirectory.mockReset()

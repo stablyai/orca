@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 import {
   compareVersions,
   isBenignCheckFailure,
@@ -85,6 +85,23 @@ describe('statusesEqual', () => {
       statusesEqual(withRecovery, { ...withRecovery, recovery: { ...recovery, version: '1.0.62' } })
     ).toBe(false)
     expect(statusesEqual(withRecovery, { ...withRecovery })).toBe(true)
+  })
+
+  it('delivers a same-valued recovery recaptured for a new package cycle', () => {
+    expect(statusesEqual(withRecovery, { ...withRecovery, recovery: { ...recovery } })).toBe(false)
+  })
+
+  it('separates generic errors by version and retryability', () => {
+    const error: UpdateStatus = {
+      state: 'error',
+      message: 'package unavailable',
+      version: '1.0.61',
+      retryable: false
+    }
+
+    expect(statusesEqual(error, { ...error, version: '1.0.62' })).toBe(false)
+    expect(statusesEqual(error, { ...error, retryable: true })).toBe(false)
+    expect(statusesEqual(error, { ...error })).toBe(true)
   })
 })
 

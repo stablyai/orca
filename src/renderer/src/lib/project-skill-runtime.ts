@@ -1,6 +1,6 @@
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 

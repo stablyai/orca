@@ -12,14 +12,6 @@ export function showWorkspaceCleanupRemovalResultToasts(
 ): void {
   if (result.preservedBranches && result.preservedBranches.length > 0) {
     showPreservedBranchBatchToast(result.removedIds.length, result.preservedBranches)
-  } else if (result.removedIds.length > 0) {
-    toast.success(
-      translate(
-        'auto.components.workspace.cleanup.backgroundRemoval.removed',
-        'Removed workspaces: {{value0}}',
-        { value0: result.removedIds.length }
-      )
-    )
   }
   const definitiveFailures = pendingSettlementFailures
     ? result.failures.filter((failure) => !pendingSettlementFailures.has(failure))

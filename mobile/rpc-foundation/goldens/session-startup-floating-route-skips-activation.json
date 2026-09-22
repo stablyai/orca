@@ -1,0 +1,178 @@
+{
+  "operation": "session.startup",
+  "family": "session.startup",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
+  "scenarioSha256": "82ff29efaa6ee0bf49ce41bfe7dff2083d0f942c10cc9d8bab48925354d17519",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4f4cd2a4f041": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 4,
+      "value": {}
+    },
+    "5bd54a356841": {
+      "name": "fetch-terminals",
+      "ordinal": 8,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
+      "value": {}
+    },
+    "817acfcc1646": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 12,
+      "value": {}
+    },
+    "83de0c92427d": {
+      "name": "fetch-terminals",
+      "ordinal": 9,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
+    "99a213805fa0": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 5,
+      "value": {}
+    },
+    "a193ad4304cb": {
+      "name": "fetch-terminals",
+      "ordinal": 7,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "acf0370bfacc": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "terminalsLoaded": false
+    },
+    "dd4d898535bd": {
+      "name": "clear-pending-restorations",
+      "ordinal": 10,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed8838ca9a14": {
+      "name": "ensure-session-tabs",
+      "ordinal": 6,
+      "value": {}
+    },
+    "ef975183a3b7": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 11,
+      "value": {}
+    },
+    "f880d7742773": {
+      "name": "reset-drafts",
+      "ordinal": 3,
+      "value": {}
+    }
+  },
+  "recording": {
+    "scenario": "session-startup-floating-route-skips-activation",
+    "checkpoints": [
+      {
+        "id": "loading",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb"
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb",
+            "5bd54a356841",
+            "83de0c92427d"
+          ]
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "acf0370bfacc",
+          "effects": [
+            "6419a011f13b",
+            "aab012c297bd",
+            "f880d7742773",
+            "4f4cd2a4f041",
+            "99a213805fa0",
+            "ed8838ca9a14",
+            "a193ad4304cb",
+            "5bd54a356841",
+            "83de0c92427d",
+            "dd4d898535bd",
+            "ef975183a3b7",
+            "817acfcc1646"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,6 +1,8 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
   SourceControlActionRecipe,
@@ -16,6 +18,8 @@ type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
   agentArgs: string
+  /** False when the launch would be structured native chat, which reads no CLI arguments. */
+  agentArgsApply: boolean
   commandTemplate: string
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
@@ -30,7 +34,8 @@ type RunSourceControlAgentActionStartArgs = {
   onStart?: (args: {
     agent: TuiAgent
     commandInput: string
-    agentArgs: string
+    /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
+    agentArgs?: string
   }) => boolean | Promise<boolean>
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,
@@ -54,6 +59,7 @@ export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
   agentArgs,
+  agentArgsApply,
   commandTemplate,
   saveTargetValue,
   actionId,
@@ -75,6 +81,9 @@ export async function runSourceControlAgentActionStart({
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
+  // Why: `undefined` is what makes the launch fall back to the global Agents arguments;
+  // an empty string would beat that fallback and silently suppress them.
+  const launchAgentArgs = agentArgsApply ? agentArgs : undefined
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
       return
@@ -86,7 +95,7 @@ export async function runSourceControlAgentActionStart({
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
-      agentArgs
+      agentArgs: launchAgentArgs
     })
     if (launched) {
       notifyLaunchAccepted()
@@ -97,14 +106,14 @@ export async function runSourceControlAgentActionStart({
       worktreeId,
       groupId: groupId ?? worktreeId,
       prompt: trimmedCommandInput,
-      agentArgs,
+      agentArgs: launchAgentArgs,
       promptDelivery,
       launchPlatform,
       launchSource
     })
     launched = Boolean(result)
-    if (result?.tabId) {
-      focusTerminalTabSurface(result.tabId)
+    if (result?.surface.kind === 'local-terminal') {
+      focusTerminalTabSurface(result.surface.tabId)
     }
     // Why: lets callers park launch-scoped state before submit-after-ready finishes
     // (can take tens of seconds); host mutations still wait for delivery below.

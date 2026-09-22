@@ -25,7 +25,7 @@ scripts:
 
 ## Why the script declares it, not the terminal preference
 
-`terminalWindowsShell` says which shell *interactive terminals* open in. It says nothing about the
+`terminalWindowsShell` says which shell _interactive terminals_ open in. It says nothing about the
 language a project's setup script is written in. Deriving the runner from it had two consequences:
 
 - Windows users with batch-syntax setup scripts silently switched to bash on upgrade, so `copy`,

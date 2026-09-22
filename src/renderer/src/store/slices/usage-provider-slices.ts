@@ -30,13 +30,17 @@ type UsageSnapshot = {
   recentSessions: object[]
 }
 
-type UsageShape<Scope extends string, Range extends string, Snapshot extends UsageSnapshot> = {
+type UsageProviderTypes<
+  Scope extends string,
+  Range extends string,
+  Snapshot extends UsageSnapshot
+> = {
   scope: Scope
   range: Range
   snapshot: Snapshot
 }
 
-type UsageData<T extends UsageShape<string, string, UsageSnapshot>> = {
+type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   scope: T['scope']
   range: T['range']
   scanState: T['snapshot']['scanState'] | null
@@ -47,7 +51,7 @@ type UsageData<T extends UsageShape<string, string, UsageSnapshot>> = {
   recentSessions: T['snapshot']['recentSessions']
 }
 
-type UsageApi<T extends UsageShape<string, string, UsageSnapshot>> = {
+type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   getScanState: () => Promise<T['snapshot']['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<T['snapshot']['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<T['snapshot']['scanState']>
@@ -61,7 +65,7 @@ type UsageApi<T extends UsageShape<string, string, UsageSnapshot>> = {
 type ProviderUsageSlice<
   Prefix extends string,
   Name extends string,
-  T extends UsageShape<string, string, UsageSnapshot>
+  T extends UsageProviderTypes<string, string, UsageSnapshot>
 > = {
   [K in keyof UsageData<T> as `${Prefix}Usage${Capitalize<K & string>}`]: UsageData<T>[K]
 } & Record<`set${Name}UsageEnabled`, (enabled: boolean) => Promise<void>> &
@@ -74,7 +78,7 @@ type ProviderUsageSlice<
 type UsageProviderConfig<
   Prefix extends string,
   Name extends string,
-  T extends UsageShape<string, string, UsageSnapshot>
+  T extends UsageProviderTypes<string, string, UsageSnapshot>
 > = {
   prefix: Prefix
   name: Name
@@ -93,13 +97,13 @@ const usageDataFields = [
   'modelBreakdown',
   'projectBreakdown',
   'recentSessions'
-] as const satisfies readonly (keyof UsageData<UsageShape<string, string, UsageSnapshot>>)[]
+] as const satisfies readonly (keyof UsageData<UsageProviderTypes<string, string, UsageSnapshot>>)[]
 
 function usageDataKey(prefix: string, field: string): string {
   return `${prefix}Usage${field[0].toUpperCase()}${field.slice(1)}`
 }
 
-function readUsageData<T extends UsageShape<string, string, UsageSnapshot>>(
+function readUsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>>(
   state: AppState,
   prefix: string
 ): UsageData<T> {
@@ -109,7 +113,7 @@ function readUsageData<T extends UsageShape<string, string, UsageSnapshot>>(
   ) as UsageData<T>
 }
 
-function createUsagePatch<T extends UsageShape<string, string, UsageSnapshot>>(
+function createUsagePatch<T extends UsageProviderTypes<string, string, UsageSnapshot>>(
   prefix: string,
   patch: Partial<UsageData<T>>
 ): Partial<AppState> {
@@ -123,7 +127,7 @@ function createUsagePatch<T extends UsageShape<string, string, UsageSnapshot>>(
 function createUsageProviderSlice<
   Prefix extends string,
   Name extends string,
-  T extends UsageShape<string, string, UsageSnapshot>
+  T extends UsageProviderTypes<string, string, UsageSnapshot>
 >(
   config: UsageProviderConfig<Prefix, Name, T>
 ): StateCreator<AppState, [], [], ProviderUsageSlice<Prefix, Name, T>> {
@@ -255,18 +259,22 @@ function createUsageProviderSlice<
   }
 }
 
-type ClaudeUsageShape = UsageShape<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
-type CodexUsageShape = UsageShape<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
-type OpenCodeUsageShape = UsageShape<OpenCodeUsageScope, OpenCodeUsageRange, OpenCodeUsageSnapshot>
+type ClaudeUsageTypes = UsageProviderTypes<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
+type CodexUsageTypes = UsageProviderTypes<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
+type OpenCodeUsageTypes = UsageProviderTypes<
+  OpenCodeUsageScope,
+  OpenCodeUsageRange,
+  OpenCodeUsageSnapshot
+>
 
-export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageShape>
-export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageShape>
-export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageShape>
+export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
+export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
+export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
   'claude',
   'Claude',
-  ClaudeUsageShape
+  ClaudeUsageTypes
 >({
   prefix: 'claude',
   name: 'Claude',
@@ -276,7 +284,7 @@ export const createClaudeUsageSlice = createUsageProviderSlice<
   hasCachedData: (state) => state.hasAnyClaudeData
 })
 
-export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', CodexUsageShape>({
+export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', CodexUsageTypes>({
   prefix: 'codex',
   name: 'Codex',
   initialScope: 'orca',
@@ -288,7 +296,7 @@ export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', 
 export const createOpenCodeUsageSlice = createUsageProviderSlice<
   'openCode',
   'OpenCode',
-  OpenCodeUsageShape
+  OpenCodeUsageTypes
 >({
   prefix: 'openCode',
   name: 'OpenCode',

@@ -3,7 +3,7 @@
 // at most one warn per session. See docs/onboarding-funnel-cohort-addendum.md.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import {
   _resetSessionWarnFlagForTests,

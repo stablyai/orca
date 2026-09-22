@@ -9,6 +9,7 @@ import type {
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
+import { readFreshTerminalInventory } from './terminal-inventory-observation'
 
 const RECOVERY_DEADLINE_MS = 8_000
 
@@ -83,15 +84,22 @@ async function expectSingleOwningPty(
   terminal: string,
   ptyId: string
 ): Promise<void> {
-  const listed = await callStartupExecRuntime<RuntimeTerminalListResult>(page, 'terminal.list', {
-    worktree: `id:${worktreeId}`,
-    requireFreshPtyLiveness: true
-  })
-  expect(
-    listed.terminals
-      .filter((candidate) => candidate.tabId === tabId)
-      .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
-  ).toEqual([{ handle: terminal, ptyId }])
+  await expect
+    .poll(
+      async () => {
+        const listed = await readFreshTerminalInventory(() =>
+          callStartupExecRuntime<RuntimeTerminalListResult>(page, 'terminal.list', {
+            worktree: `id:${worktreeId}`,
+            requireFreshPtyLiveness: true
+          })
+        )
+        return (listed?.terminals ?? [])
+          .filter((candidate) => candidate.tabId === tabId)
+          .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
+      },
+      { timeout: 30_000 }
+    )
+    .toEqual([{ handle: terminal, ptyId }])
 }
 
 export async function callStartupExecRuntime<TResult>(

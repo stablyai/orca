@@ -1,4 +1,4 @@
-const LINE_EDITOR_READY_SEQUENCES = ['\x1b[?2004h', '\x1b[?1034h'] as const
+const LINE_EDITOR_READY_SEQUENCES = ['\x1b[?2004h', '\x1b[?1034h', '\x1b]133;A\x07'] as const
 const MAX_SEQUENCE_LENGTH = Math.max(...LINE_EDITOR_READY_SEQUENCES.map((value) => value.length))
 
 export type LineEditorReadyOutputScanState = {

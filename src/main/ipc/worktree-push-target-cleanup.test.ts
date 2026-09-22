@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import type { GitPushTarget, WorktreeMeta } from '../../shared/types'
+import { validateGitExecArgs } from '../../relay/git-exec-validator'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
+  findWorktreeMetaReferencingRemote,
+  hasBranchConfigUsingRemote,
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
@@ -80,6 +84,20 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
   })
 
+  it('sends only argv the relay accepts, so SSH cleanup is not silently skipped', async () => {
+    const exec = makeExec()
+    await cleanupUnusedWorktreePushTargetRemoteWithExec(
+      REPO_PATH,
+      'repo-1::/wt/a',
+      forkTarget(),
+      storeOf({ 'repo-1::/wt/a': forkTarget() }),
+      exec
+    )
+    for (const [args] of exec.mock.calls) {
+      expect(() => validateGitExecArgs(args)).not.toThrow()
+    }
+  })
+
   it('keeps a remote Orca did not create (remoteCreated falsy)', async () => {
     const exec = makeExec()
     await cleanupUnusedWorktreePushTargetRemoteWithExec(
@@ -90,8 +108,13 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       exec
     )
     expect(removeCalls(exec)).toEqual([])
-    // No probing at all when we won't act.
-    expect(exec).not.toHaveBeenCalled()
+    // Why: the store flag alone can't rule out ownership -- on-demand
+    // materialization (#17828) never sets it, so cleanup also probes the
+    // repo-local `orca-created` config provenance before bailing.
+    expect(exec).toHaveBeenCalledWith(
+      ['config', '--get', `remote.${FORK_REMOTE}.orca-created`],
+      REPO_PATH
+    )
   })
 
   it('never touches origin or upstream', async () => {
@@ -224,6 +247,20 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
     expect(removeCalls(exec)).toEqual([])
   })
 
+  it('removes a remote owned only via git-config provenance (lazily materialized, #17828)', async () => {
+    // Why: on-demand materialization never sets the store's `remoteCreated`
+    // flag, so ownership must also be provable from `remote.<name>.orca-created`.
+    const exec = makeExec({ branchConfig: 'true' })
+    await cleanupUnusedWorktreePushTargetRemoteWithExec(
+      REPO_PATH,
+      'repo-1::/wt/a',
+      forkTarget({ remoteCreated: false }),
+      storeOf({ 'repo-1::/wt/a': forkTarget({ remoteCreated: false }) }),
+      exec
+    )
+    expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
+  })
+
   it('does nothing when the remote is already gone (get-url throws)', async () => {
     const exec = makeExec({ getUrlThrows: true })
     await cleanupUnusedWorktreePushTargetRemoteWithExec(
@@ -234,6 +271,70 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       exec
     )
     expect(removeCalls(exec)).toEqual([])
+  })
+})
+
+describe('hasBranchConfigUsingRemote', () => {
+  it('requireExistingBranch: false (default) protects on config alone, even if the branch is gone', async () => {
+    const exec = makeExec({ branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}` })
+    await expect(hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget())).resolves.toBe(true)
+  })
+
+  it('requireExistingBranch: true only protects when the referencing branch still exists', async () => {
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'config') {
+        return { stdout: `branch.contributor/fix.remote ${FORK_REMOTE}`, stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'main\ncontributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    await expect(
+      hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
+    ).resolves.toBe(true)
+  })
+
+  it('requireExistingBranch: true does not protect on a stale config entry from a deleted branch', async () => {
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'config') {
+        return { stdout: `branch.contributor/fix.remote ${FORK_REMOTE}`, stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'main\n', stderr: '' } // contributor/fix no longer exists
+      }
+      return { stdout: '', stderr: '' }
+    })
+    await expect(
+      hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
+    ).resolves.toBe(false)
+  })
+
+  it('extracts branch names containing dots correctly', async () => {
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'config') {
+        return { stdout: `branch.release/1.2.3.remote ${FORK_REMOTE}`, stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'release/1.2.3\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    await expect(
+      hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
+    ).resolves.toBe(true)
+  })
+})
+
+describe('findWorktreeMetaReferencingRemote', () => {
+  it('scopes matches to the given repo id and excludes worktrees without a pushTarget', () => {
+    const store = storeOf({
+      'repo-1::/wt/a': forkTarget(),
+      'repo-1::/wt/b': undefined,
+      'repo-2::/wt/c': forkTarget()
+    })
+    const matches = findWorktreeMetaReferencingRemote(store, 'repo-1', forkTarget())
+    expect(matches.map((match) => match.worktreeId)).toEqual(['repo-1::/wt/a'])
   })
 })
 

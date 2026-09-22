@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 /**
  * Resolves the user-configured Codex *session history* source home, if any.

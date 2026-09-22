@@ -1,4 +1,7 @@
-import type { GitHubPRStack, GitHubPRStackEntry } from '../../../../shared/types'
+import type {
+  GitHubPRStack,
+  GitHubPRStackEntry
+} from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 
 export type GitHubPRStackMergeScope = {

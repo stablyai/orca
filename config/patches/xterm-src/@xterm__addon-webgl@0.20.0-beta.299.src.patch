@@ -1,0 +1,131 @@
+diff --git a/src/GlyphRenderer.ts b/src/GlyphRenderer.ts
+index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf935dd0eca 100644
+--- a/src/GlyphRenderer.ts
++++ b/src/GlyphRenderer.ts
+@@ -61,6 +61,8 @@ function createFragmentShaderSource(maxFragmentShaderTextureUnits: number): stri
+   for (let i = 1; i < maxFragmentShaderTextureUnits; i++) {
+     textureConditionals += ` else if (v_texpage == ${i}) { outColor = texture(u_texture[${i}], v_texcoord); }`;
+   }
++  // A v_texpage beyond the sampler budget matches no branch above. Leaving outColor unwritten
++  // is undefined behaviour in GLSL ES and paints garbage, so fall through to transparent.
+   return (`#version 300 es
+ precision lowp float;
+ 
+@@ -74,7 +76,7 @@ out vec4 outColor;
+ void main() {
+   if (v_texpage == 0) {
+     outColor = texture(u_texture[0], v_texcoord);
+-  } ${textureConditionals}
++  } ${textureConditionals} else { outColor = vec4(0.0, 0.0, 0.0, 0.0); }
+ }`);
+ }
+ 
+diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
+index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
+--- a/src/TextureAtlas.ts
++++ b/src/TextureAtlas.ts
+@@ -3,6 +3,7 @@
+  * @license MIT
+  */
+ 
++import { FontWeight } from '@xterm/xterm';
+ import { IColorContrastCache } from 'browser/Types';
+ import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
+ import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
+@@ -135,21 +136,23 @@ export class TextureAtlas implements ITextureAtlas {
+   private _pageLayoutVersion = 0;
+   public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
+ 
++  // Orca diagnostics: read by terminal-render-desync-weight-probe.ts to tell a real
++  // bold-collapse from a repaint problem. Canvas silently keeps its previous font when an
++  // assignment fails to parse, which rasterizes glyphs at a stale weight.
++  public fontProbeMismatchCount = 0;
++  public fontProbeLastMismatch: { desired: string, actual: string } | undefined;
++
+   public clearTexture(): void {
+-    if (this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
++    // Guard on every page rather than pages[0]: a merged page is never written through
++    // currentRow, so once one lands at index 0 the old check made every later clear a no-op.
++    if (this._pages.every(page => page.glyphs.length === 0 && page.currentRow.x === 0 && page.currentRow.y === 0)) {
+       return;
+     }
+-    for (const page of this._pages) {
+-      page.clear();
+-    }
+-    this._cacheMap.clear();
+-    this._cacheMapCombined.clear();
+-    this._didWarmUp = false;
+-
+-    // Invalidate renderer models so all texture pages are refreshed. The atlas may be shared, in
+-    // which case the clearing renderer has cleared only its own model and every other owner still
+-    // holds texture coords into the rows just wiped.
+-    this._pageLayoutVersion++;
++    // Return the atlas to its constructor state instead of clearing in place: page.clear() leaves
++    // page.glyphs populated, which would keep the guard above from ever firing again. Eviction
++    // also bumps _pageLayoutVersion, so every renderer sharing this atlas rebuilds its model.
++    this._evictAllPages();
++    this._createNewPage();
+   }
+ 
+   private _createNewPage(): AtlasPage {
+@@ -465,6 +468,36 @@ export class TextureAtlas implements ITextureAtlas {
+     return this._config.colors.contrastCache;
+   }
+ 
++  /**
++   * Orca diagnostic. Canvas ignores a font assignment it cannot parse and silently keeps the
++   * previous value, so a bad family or weight rasterizes every glyph at a stale weight. Record
++   * the mismatch rather than correcting it: the goal is to tell that failure apart from a
++   * repaint bug when a terminal renders bold-collapsed.
++   */
++  private _probeRasterizationFontWeight(fontWeight: FontWeight): void {
++    const desired = String(fontWeight);
++    // Only numeric weights are comparable; keywords round-trip through Canvas unchanged.
++    if (!/^(?:[1-8]\d{2}|900)$/.test(desired)) {
++      return;
++    }
++    // Canvas normalizes font serialization: Chromium omits 400 and emits the keyword bold for 700.
++    const token = this._tmpCtx.font.match(
++      /(?:^|\s)(normal|bold|[1-9]\d{0,3})(?=\s+\d+(?:\.\d+)?px(?:\s|$))/
++    )?.[1] ?? '400';
++    const actual = token === 'normal' ? '400' : token === 'bold' ? '700' : token;
++    if (actual === desired) {
++      return;
++    }
++    this.fontProbeMismatchCount++;
++    this.fontProbeLastMismatch = { desired, actual: this._tmpCtx.font };
++    try {
++      (globalThis as { __orcaAtlasFontProbe?: (mismatch: { desired: string, actual: string }) => void })
++        .__orcaAtlasFontProbe?.(this.fontProbeLastMismatch);
++    } catch {
++      // Diagnostics only; a throwing listener must never break rasterization.
++    }
++  }
++
+   private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
+     const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
+ 
+@@ -536,6 +569,7 @@ export class TextureAtlas implements ITextureAtlas {
+     const fontStyle = italic ? 'italic' : '';
+     this._tmpCtx.font =
+       `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
++    this._probeRasterizationFontWeight(fontWeight);
+     this._tmpCtx.textBaseline = TEXT_BASELINE;
+ 
+     const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
+diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1d65ed8bf 100644
+--- a/src/WebglRenderer.ts
++++ b/src/WebglRenderer.ts
+@@ -386,7 +386,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     // page's version, so re-run the update and force a full texture rebind.
+     let merged = false;
+     let mergeRetries = 0;
+-    while (this._charAtlas && this._glyphRenderer.value.beginFrame() && mergeRetries++ < Constants.MERGE_RETRY_LIMIT) {
++    // Test the retry budget before beginFrame: beginFrame latches the page layout version it
++    // observed, so tripping the limit after consuming it would strand a stale model with no
++    // later frame able to notice it needs rebuilding.
++    while (this._charAtlas && mergeRetries++ < Constants.MERGE_RETRY_LIMIT && this._glyphRenderer.value.beginFrame()) {
+       merged = true;
+       this._clearModel(true);
+       this._updateModel(0, this._terminal.rows - 1);

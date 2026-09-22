@@ -3,7 +3,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -91,17 +91,19 @@ function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): Termina
 
 describe('buildWorktreeAgentRows', () => {
   it('includes retained rows even when their original tab is no longer current', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],
       // Why: useWorktreeAgentRows filters retained snapshots by worktreeId, not
       // current tab membership. This is the sidebar behavior that sleep cleanup
       // must counter by dropping worktree-scoped retained rows.
-      retained: [makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)],
+      retained: [retained],
       now: 2000
     })
 
     expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
+    expect(rows[0].tab).toBe(retained.tab)
     expect(rows[0].state).toBe('done')
   })
 
@@ -766,7 +768,7 @@ describe('applyAgentRowLineage', () => {
     expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
   })
 
-  it('decays working subagent child rows to idle when the parent status is stale', () => {
+  it('marks working subagent child rows unverifiable when the parent status is stale', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
       subagents: [{ id: 'a1', state: 'working', startedAt: 1000 }]
@@ -779,7 +781,7 @@ describe('applyAgentRowLineage', () => {
     })
 
     const child = rows.find((row) => row.rowSource === 'subagent')
-    expect(child?.state).toBe('idle')
+    expect(child?.state).toBe('unverifiable')
   })
 
   it('surfaces a live subagent waiting state', () => {

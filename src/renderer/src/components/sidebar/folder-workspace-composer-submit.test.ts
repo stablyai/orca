@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type * as NewWorkspaceModule from '@/lib/new-workspace'
 
@@ -27,7 +28,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { resolveStartupLaunchDraftText } from '@/lib/worktree-activation'
+import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
@@ -115,6 +116,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
     expect(consoleError).toHaveBeenCalledWith(
@@ -531,6 +533,7 @@ describe('submitFolderWorkspaceCreate', () => {
       linkedTask: linkedWorkItem
     })
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
     expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
@@ -587,7 +590,7 @@ describe('submitFolderWorkspaceCreate', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: "claude 'Use Bob'\\''s POSIX startup'"
+          command: `claude 'Use Bob'"'"'s POSIX startup'`
         })
       })
     )
@@ -658,6 +661,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
       runtimeEnvironmentId: null
     })
   })

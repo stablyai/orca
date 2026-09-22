@@ -95,6 +95,55 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
   })
 
+  // The canned "Connect again to continue" sentence is the same for a timeout and for a refused
+  // host key. Only the detail says which, and for a host key it carries the only remedy the user
+  // will see anywhere in the terminal.
+  it('shows the failure detail beneath the status sentence', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="error"
+        error="Host key verification failed for devbox. Run: ssh-keygen -R devbox"
+      />
+    )
+
+    // Both, not either: the sentence says what to do, the detail says what happened.
+    expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
+    expect(screen.getByText(/ssh-keygen -R devbox/)).toBeInTheDocument()
+  })
+
+  it('shows nothing extra when there is no detail', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status="error" />
+    )
+
+    expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
+    expect(screen.queryByText(/ssh-keygen/)).not.toBeInTheDocument()
+  })
+
+  // A removed target already explains itself and can never reconnect; a stale connection error
+  // underneath would contradict that.
+  it('suppresses the detail for a removed target', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="error"
+        error="Host key verification failed for devbox."
+        targetRemoved
+      />
+    )
+
+    expect(screen.queryByText(/Host key verification failed/)).not.toBeInTheDocument()
+  })
+
   it('shows an in-flight state while the SSH target is reconnecting', () => {
     const connect = vi.fn().mockResolvedValue(undefined)
     installSshConnect(connect)
@@ -201,7 +250,9 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
-    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt')
+    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt', {
+      expectedHostId: 'ssh:ssh-dead'
+    })
     expect(connect).not.toHaveBeenCalled()
   })
 

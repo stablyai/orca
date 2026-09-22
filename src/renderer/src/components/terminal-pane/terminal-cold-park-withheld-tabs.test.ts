@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 

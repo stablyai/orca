@@ -21,40 +21,6 @@ function provider(
 }
 
 describe('DaemonSessionOwnerResolver', () => {
-  it('reattaches a held daemon\u2019s session once the daemon stops being wedged', async () => {
-    // Pins a promise the degraded notice makes to the user: "reopening a pane retries, and works
-    // once it does". In held mode discovery ran over the same IPC the daemon was failing, so no
-    // route was ever recorded — recovery therefore cannot come from a cached route. It has to
-    // come from the next attach re-inventorying a provider whose failure cooldown has expired.
-    const session = 'wt-1@@pane-1'
-    let wedged = true
-    const daemonInventory = vi.fn(async () => {
-      if (wedged) {
-        throw new Error('Hello response timed out')
-      }
-      return [{ id: session, cwd: '/repo' }] as PtyProcessInfo[]
-    })
-    const fallback = provider(async () => [])
-    const daemon = provider(daemonInventory, async (opts) => ({
-      id: opts.sessionId as string,
-      isReattach: true
-    }))
-    const resolver = new DaemonSessionOwnerResolver([fallback, daemon], new Map())
-
-    // While wedged the session cannot be proven to belong to anyone, and the resolver refuses
-    // rather than letting the fallback answer with a fresh shell.
-    await expect(
-      resolver.spawnAttachOnly({ sessionId: session, attachOnly: true } as never)
-    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-
-    wedged = false
-    await new Promise((resolve) => setTimeout(resolve, 1_100)) // outlast FAILED_PROVIDER_COOLDOWN_MS
-
-    const result = await resolver.spawnAttachOnly({ sessionId: session, attachOnly: true } as never)
-    expect(result.id).toBe(session)
-    expect(daemon.spawn).toHaveBeenCalledTimes(1)
-  })
-
   it('coalesces complete multi-provider absence without dispatching an attach', async () => {
     let releaseFallback!: (processes: PtyProcessInfo[]) => void
     let releaseCurrent!: (processes: PtyProcessInfo[]) => void

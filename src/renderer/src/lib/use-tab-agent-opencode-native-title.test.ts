@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 

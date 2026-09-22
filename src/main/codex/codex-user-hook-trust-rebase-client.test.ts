@@ -15,7 +15,7 @@ vi.mock('./codex-app-server-session', async (importOriginal) => {
 
 import { runCodexUserHookTrustRebaseSession } from './codex-user-hook-trust-rebase-client'
 
-const invocation = { command: 'codex', args: ['app-server'], timeoutMs: 1000 }
+const invocation = { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 1000 }
 const oldTrusted = '/home/a/.codex/hooks.json:stop:1:0'
 const oldUntrusted = '/home/a/.codex/hooks.json:stop:2:0'
 const newTrusted = '/home/a/.codex/hooks.json:stop:0:0'

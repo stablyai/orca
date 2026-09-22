@@ -5,7 +5,8 @@ import {
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredPositiveNumber,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
@@ -70,7 +71,8 @@ export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
   },
   'set credentials': async ({ flags, client, cwd, json }) => {
     const user = getRequiredStringFlag(flags, 'user')
-    const pass = getRequiredStringFlag(flags, 'pass')
+    // SetCredentials.pass accepts '' (empty passwords are legal in HTTP basic auth).
+    const pass = getRequiredStringFlagAllowingEmpty(flags, 'pass')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.setCredentials', {
       user,

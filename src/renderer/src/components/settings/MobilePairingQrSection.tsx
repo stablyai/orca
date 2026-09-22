@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 
 type MobilePairingQrSectionProps = {
   qrDataUrl: string | null
+  qrSize?: number | null
   qrError: boolean
   pairingUrl: string | null
   endpoint: string | null
@@ -19,6 +20,7 @@ type MobilePairingQrSectionProps = {
 
 export function MobilePairingQrSection({
   qrDataUrl,
+  qrSize = null,
   qrError,
   pairingUrl,
   endpoint,
@@ -28,6 +30,8 @@ export function MobilePairingQrSection({
   onCodeCopiedChange,
   onClearCodeCopiedTimer
 }: MobilePairingQrSectionProps): React.JSX.Element | null {
+  const renderedQrSize = qrSize ?? 192
+  const enlargedQrSize = qrSize == null ? 288 : qrSize * 2
   const pairingCodeButtonMountedRef = useRef(false)
   const pairingCodeButtonRef = useRef<HTMLButtonElement | null>(null)
   const hadPairingUrlRef = useRef(pairingUrl != null)
@@ -102,7 +106,12 @@ export function MobilePairingQrSection({
                 'auto.components.settings.MobilePane.6436e56546',
                 'QR Code for mobile pairing'
               )}
-              className="size-48"
+              className="block"
+              style={{
+                width: renderedQrSize,
+                height: renderedQrSize,
+                imageRendering: 'pixelated'
+              }}
             />
             <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 can-hover:opacity-0 transition-opacity group-hover:opacity-100" />
           </button>
@@ -158,7 +167,7 @@ export function MobilePairingQrSection({
 
       {qrDataUrl ? (
         <Dialog open={qrEnlarged} onOpenChange={onQrEnlargedChange}>
-          <DialogContent className="sm:max-w-sm">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
                 {translate(
@@ -175,7 +184,12 @@ export function MobilePairingQrSection({
                     'auto.components.settings.MobilePane.6436e56546',
                     'QR Code for mobile pairing'
                   )}
-                  className="size-72"
+                  className="block"
+                  style={{
+                    width: enlargedQrSize,
+                    height: enlargedQrSize,
+                    imageRendering: 'pixelated'
+                  }}
                 />
               </div>
               {endpoint && (

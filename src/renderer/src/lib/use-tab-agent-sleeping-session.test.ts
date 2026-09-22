@@ -9,8 +9,10 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -108,6 +110,46 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         launchAgent: 'codex'
       })
     ).toBe('codex')
+  })
+
+  it('suppresses stale sleeping identity after local shell exit evidence', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        processShellForeground: true,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('retains sleeping identity for remote panes without local shell evidence', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: 'zsh',
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it.each(['ksh', 'dash', 'fish'] as const)('recognizes %s as shell exit title', (shell) => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: shell,
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeNull()
   })
 })
 

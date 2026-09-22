@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   advanceSshConnectionGeneration,
   assertSshMutationExpectation,
+  forgetSshConnectionGeneration,
   getSshConnectionGeneration,
+  getSshConnectionGenerationEntryCountForTests,
   resetSshConnectionGenerations,
   setSshConnectionGeneration
 } from './ssh-connection-generation'
@@ -32,6 +34,66 @@ describe('SSH connection generation session scope', () => {
 
     expect(advanceSshConnectionGeneration('ssh-a')).toBe(advanceSshConnectionGeneration('ssh-b'))
     expect(getSshConnectionGeneration('ssh-a')).toBe(getSshConnectionGeneration('ssh-b'))
+  })
+
+  it('forgets generations when a target is permanently removed', () => {
+    resetSshConnectionGenerations(7)
+    advanceSshConnectionGeneration('removed-target')
+
+    forgetSshConnectionGeneration('removed-target')
+
+    expect(getSshConnectionGenerationEntryCountForTests()).toBe(0)
+    expect(getSshConnectionGeneration('removed-target')).toBe(7 * SESSION_COUNTER_STRIDE)
+  })
+
+  it('starts a recreated target above every generation its removed incarnation issued', () => {
+    resetSshConnectionGenerations(7)
+    const targetId = 'runtime-ssh-vm-1'
+    advanceSshConnectionGeneration(targetId)
+    const staleGeneration = advanceSshConnectionGeneration(targetId)
+
+    forgetSshConnectionGeneration(targetId)
+    expect(() => assertSshMutationExpectation(targetId, targetId, staleGeneration)).toThrow(
+      'SSH connection changed; refresh and try again'
+    )
+
+    const replacementGeneration = advanceSshConnectionGeneration(targetId)
+
+    expect(replacementGeneration).toBeGreaterThan(staleGeneration)
+    expect(() => assertSshMutationExpectation(targetId, targetId, staleGeneration)).toThrow(
+      'SSH connection changed; refresh and try again'
+    )
+    expect(() =>
+      assertSshMutationExpectation(targetId, targetId, replacementGeneration)
+    ).not.toThrow()
+  })
+
+  it('keeps the floor at the highest forgotten generation across repeated recreation', () => {
+    resetSshConnectionGenerations(7)
+    const issued: number[] = []
+    for (let incarnation = 0; incarnation < 3; incarnation += 1) {
+      issued.push(advanceSshConnectionGeneration('runtime-ssh-vm-1'))
+      forgetSshConnectionGeneration('runtime-ssh-vm-1')
+    }
+    const lowerForgotten = advanceSshConnectionGeneration('ssh-short-lived')
+    forgetSshConnectionGeneration('ssh-short-lived')
+
+    const replacement = advanceSshConnectionGeneration('runtime-ssh-vm-1')
+
+    expect(new Set(issued).size).toBe(issued.length)
+    expect(replacement).toBeGreaterThan(Math.max(...issued, lowerForgotten))
+    expect(getSshConnectionGenerationEntryCountForTests()).toBe(1)
+  })
+
+  it('drops the forgotten floor when exhaustion rolls the session scope', () => {
+    resetSshConnectionGenerations(7)
+    setSshConnectionGeneration('ssh-old', 8 * SESSION_COUNTER_STRIDE - 1)
+    forgetSshConnectionGeneration('ssh-old')
+
+    const rolledGeneration = advanceSshConnectionGeneration('ssh-a')
+
+    expect(rolledGeneration).toBe(8 * SESSION_COUNTER_STRIDE + 1)
+    expect(advanceSshConnectionGeneration('ssh-b')).toBe(rolledGeneration)
   })
 
   it('rejects an SSH execution-host expectation when direct IPC resolves locally', () => {

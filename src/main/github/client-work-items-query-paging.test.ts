@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 
+// Keep legacy REST request/failure coverage; API-boundary suites exercise the GraphQL path.
+vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
+
 const {
   execFileAsyncMock,
   ghExecFileAsyncMock,
@@ -118,7 +121,7 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
-import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github/work-items-query-bounds'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 

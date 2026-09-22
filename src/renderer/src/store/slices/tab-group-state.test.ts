@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import {
   findTabAndWorktree,
   findGroupForTab,

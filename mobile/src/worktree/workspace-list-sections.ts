@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
@@ -10,6 +10,7 @@ import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-s
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import { sortWorktrees } from './workspace-list-ordering'
+import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
@@ -28,7 +29,7 @@ function makeSection(
     ...(icon ? { icon } : {}),
     data: rows.map((worktree) => ({
       ...worktree,
-      sectionListKey: `${key}:${worktree.worktreeId}`
+      sectionListKey: `${key}:${getWorktreeRowIdentity(worktree)}`
     }))
   }
 }

@@ -5,7 +5,7 @@ import {
   normalizeBranchName
 } from './github-checks'
 import type { AppState } from '../types'
-import type { PRCheckDetail } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 
 describe('deriveCheckStatusFromChecks', () => {
   it('treats an action_required check as failure so it is not a silent pass', () => {

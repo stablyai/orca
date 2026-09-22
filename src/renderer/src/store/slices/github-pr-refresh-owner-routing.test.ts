@@ -3,7 +3,9 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -124,41 +126,53 @@ describe('GitHub PR refresh owner-host routing', () => {
     resetRuntimeMocks()
   })
 
-  it('routes explicit PR refresh for a runtime-owned repo to its owner while Local desktop is active', async () => {
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: makePR({ number: 23 }),
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const store = createTestStore()
-    const repoPath = '/runtime/repo'
-    const branch = 'feature/runtime-owner'
-    seed(store, {
-      settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
-      repos: [
-        makeRepo({
-          id: 'repo-runtime',
-          path: repoPath,
-          executionHostId: 'runtime:env-1'
-        })
-      ],
-      worktreesByRepo: {
-        'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
-      }
-    })
+  it.each([
+    ['active', 80],
+    ['manual', 100]
+  ] as const)(
+    'routes %s PR refresh to the runtime repo owner with its reason',
+    async (reason, priority) => {
+      runtimeEnvironmentCall.mockResolvedValueOnce({
+        id: 'rpc-1',
+        ok: true,
+        result: makePR({ number: 23 }),
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      const store = createTestStore()
+      const repoPath = '/runtime/repo'
+      const branch = 'feature/runtime-owner'
+      seed(store, {
+        settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+        repos: [
+          makeRepo({
+            id: 'repo-runtime',
+            path: repoPath,
+            executionHostId: 'runtime:env-1'
+          })
+        ],
+        worktreesByRepo: {
+          'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
+        }
+      })
 
-    store.getState().enqueueGitHubPRRefresh('wt-runtime', 'active', 80)
+      store.getState().enqueueGitHubPRRefresh('wt-runtime', reason, priority)
 
-    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
-    expect(enqueuePRRefresh).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
-      timeoutMs: 30_000
-    })
-  })
+      await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'github.prForBranch',
+        params: {
+          repo: 'repo-runtime',
+          branch,
+          linkedPRNumber: null,
+          currentHeadOid: 'head-oid',
+          reason
+        },
+        timeoutMs: 30_000
+      })
+    }
+  )
 
   it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
     const store = createTestStore()
@@ -228,7 +242,13 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
+      params: {
+        repo: 'repo-runtime',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid',
+        reason: 'post-push'
+      },
       timeoutMs: 30_000
     })
   })
@@ -276,7 +296,8 @@ describe('GitHub PR refresh owner-host routing', () => {
         repo: 'repo-runtime',
         branch: 'feature/runtime',
         linkedPRNumber: null,
-        currentHeadOid: 'head-oid'
+        currentHeadOid: 'head-oid',
+        reason: 'visible'
       },
       timeoutMs: 30_000
     })

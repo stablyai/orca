@@ -166,11 +166,3 @@ export function formatWorkspaceCleanupContextDetail(
       )
   }
 }
-
-export function formatWorkspaceCleanupContextCount(count: number): string {
-  return translate(
-    'auto.components.workspace.cleanup.candidateRow.contextCount',
-    'Context: {{value0}}',
-    { value0: count }
-  )
-}

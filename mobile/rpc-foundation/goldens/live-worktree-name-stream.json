@@ -1,0 +1,339 @@
+{
+  "operation": "session.live-worktree-name",
+  "family": "live-worktree-name",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "8e41c8624b9b6185e447cee3590a851ab88b6b1ee1d632af90e3a771a90310be",
+  "scenarioSha256": "056abf42b34537025fed30a4401bd465c93bc21558babb826f21b5c803b487eb",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0c439cbde351": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-1::/work/feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "12087a0dcffa": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-1::/work/feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "Feature Work",
+              "worktreeId": "repo-1::/work/feature"
+            }
+          }
+        }
+      }
+    },
+    "3eb45ef8bb4e": {
+      "name": "worktree.show#3",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-1::/work/feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "Feature Work Replayed",
+              "worktreeId": "repo-1::/work/feature"
+            }
+          }
+        }
+      }
+    },
+    "5821a3facfa3": {
+      "name": "runtime.clientEvents.unsubscribe#2",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
+    },
+    "585b33d6e851": {
+      "name": "worktree.show#2",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-1::/work/feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "Feature Work Renamed",
+              "worktreeId": "repo-1::/work/feature"
+            }
+          }
+        }
+      }
+    },
+    "592ccd522724": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "name": "Feature Work Renamed",
+      "resolution": "present"
+    },
+    "7926694cda85": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "name": "Feature Work",
+      "resolution": "present"
+    },
+    "82540afebff7": {
+      "name": "runtime.clientEvents.unsubscribe#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
+    "89ff819afc4f": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "name": "Feature Work Replayed",
+      "resolution": "present"
+    },
+    "9aeda3227a99": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
+    },
+    "c4d8b2697077": {
+      "name": "runtime.clientEvents.subscribe#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    },
+    "d3fd2d2ea215": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
+    },
+    "dcfa9a8e959c": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "name": "feature",
+      "resolution": "unknown"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec05934b1f89": {
+      "name": "worktree.show#3",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-1::/work/feature\"}}"
+    },
+    "eef1ee3c2773": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    }
+  },
+  "recording": {
+    "scenario": "live-worktree-name-stream",
+    "checkpoints": [
+      {
+        "id": "subscribed",
+        "observation": {
+          "sender": ["0c439cbde351"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "dcfa9a8e959c",
+          "effects": []
+        }
+      },
+      {
+        "id": "ready",
+        "observation": {
+          "sender": ["0c439cbde351"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "dcfa9a8e959c",
+          "effects": []
+        }
+      },
+      {
+        "id": "named",
+        "observation": {
+          "sender": ["12087a0dcffa"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7926694cda85",
+          "effects": []
+        }
+      },
+      {
+        "id": "refreshed",
+        "observation": {
+          "sender": ["12087a0dcffa", "585b33d6e851"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "9aeda3227a99"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "592ccd522724",
+          "effects": []
+        }
+      },
+      {
+        "id": "re-subscribed",
+        "observation": {
+          "sender": ["12087a0dcffa", "585b33d6e851"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "9aeda3227a99",
+            "c4d8b2697077",
+            "82540afebff7"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a"
+          },
+          "state": "592ccd522724",
+          "effects": []
+        }
+      },
+      {
+        "id": "replayed",
+        "observation": {
+          "sender": ["12087a0dcffa", "585b33d6e851", "3eb45ef8bb4e"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "9aeda3227a99",
+            "c4d8b2697077",
+            "82540afebff7",
+            "ec05934b1f89"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a"
+          },
+          "state": "89ff819afc4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "unmounted",
+        "observation": {
+          "sender": ["12087a0dcffa", "585b33d6e851", "3eb45ef8bb4e"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "9aeda3227a99",
+            "c4d8b2697077",
+            "82540afebff7",
+            "ec05934b1f89",
+            "5821a3facfa3"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a",
+            "unmount": "eb79a9b3682a"
+          },
+          "state": "89ff819afc4f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

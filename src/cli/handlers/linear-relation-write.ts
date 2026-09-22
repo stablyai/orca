@@ -2,7 +2,7 @@ import type {
   LinearIssueRelationship,
   LinearIssueRelationWriteRequest,
   LinearIssueRelationWriteResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch'
 import { getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'

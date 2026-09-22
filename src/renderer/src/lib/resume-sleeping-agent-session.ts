@@ -4,15 +4,26 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
-  recordPaneIsOwnedByPreservedPane
+  recordPaneIsOwnedByPreservedPane,
+  stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
 import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
+import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
+import {
+  findUnhydratedHostMirrorForPane,
+  type UnhydratedHostMirror
+} from './host-mirrored-pane-liveness'
+import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
+import { sleepingRecordNamesAnotherExecutionHost } from './sleeping-record-execution-host-scope'
+import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
+import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -92,12 +103,44 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
       continue
     }
+    const tabId = getAgentStatusTabId(entry)
+    const pane = parsePaneKey(entry.paneKey)
     if (
-      worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
-      entry.worktreeId === record.worktreeId &&
-      entry.agentType === record.agent &&
+      entry.agentType !== record.agent ||
+      !agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+    ) {
+      continue
+    }
+    // Why this arm carries no workspace scope: a provider session id names one transcript, so a
+    // pane whose exact PTY is live right now already owns it wherever that pane happens to sit, and
+    // resuming forks the agent the user is watching. The scoped arm below still needs its scope —
+    // a status row with no live PTY is a claim about the past. The two ids do drift: adopting an
+    // orphaned terminal re-keys `tabsByWorktree` without re-keying the sleeping records that name
+    // the old id (workspace-session-worktree-id.ts), and a completed turn on a live pane is exactly
+    // where the drift stops being caught.
+    // What this trades, stated because it reads as a regression: `entry.state` is ignored, so a
+    // FINISHED agent whose shell is still up releases its record and will not auto-resume. That is
+    // the intended side of the trade, not an oversight. A live PTY is positive evidence the host
+    // holds the transcript, and a bare `done` row cannot be told apart from a REPL idling at its
+    // prompt with the process still attached. Nothing is killed: the pane, its shell and the
+    // transcript survive, the record was only a queued respawn, and the user can resume by hand.
+    // Forking the transcript is not recoverable; declining to auto-resume is.
+    if (
+      pane &&
+      tabId === pane.tabId &&
+      stablePaneHasLivePty(
+        pane.tabId,
+        pane.leafId,
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId[pane.tabId]
+      )
+    ) {
+      return true
+    }
+    if (
       entry.state !== 'done' &&
-      agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+      worktreeTabIds.has(tabId ?? '') &&
+      entry.worktreeId === record.worktreeId
     ) {
       return true
     }
@@ -133,6 +176,9 @@ function activeOrQueuedResumeClaimsProviderSession(
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
+  if (isStructuredAgentSyntheticSleepingRecord(record)) {
+    return true
+  }
   if (!record.origin && record.state === 'done') {
     return true
   }
@@ -141,11 +187,52 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   )
 }
 
+function replayParkedWorktreeResumeSweep(
+  worktreeId: string,
+  options: ResumeSleepingAgentSessionsOptions | undefined
+): void {
+  // Why: the mirror can settle long after the user moved on, so a replayed
+  // resume must not steal the surface they are looking at now.
+  const isActive = useAppStore.getState().activeWorktreeId === worktreeId
+  // Why `skipClaimKeys` is dropped: it is a park-time snapshot of in-place
+  // wakes, and a latch that has since failed must stay resumable here.
+  resumeSleepingAgentSessionsForWorktree(worktreeId, {
+    ...(options?.onSessionLaunched ? { onSessionLaunched: options.onSessionLaunched } : {}),
+    ...(isActive ? {} : { suppressNavigation: true })
+  })
+}
+
+function parkWorktreeResumeSweepUntilHostMirrorAnswers(
+  worktreeId: string,
+  mirror: UnhydratedHostMirror,
+  options: ResumeSleepingAgentSessionsOptions | undefined
+): void {
+  const replay = (): void => replayParkedWorktreeResumeSweep(worktreeId, options)
+  if (mirror.kind === 'handle') {
+    parkUntilHostMirrorHandleLands(mirror.environmentId, worktreeId, mirror.tabId, replay)
+    return
+  }
+  if (!mirror.environmentId) {
+    // No paired runtime owns the workspace, so no verdict is coming; the next
+    // activation re-runs this sweep once one does.
+    return
+  }
+  parkUntilHostSessionMirrorHydrates(mirror.environmentId, worktreeId, replay)
+}
+
 export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  // Why: every branch below reads local rows as the verdict on what the execution host is running,
+  // and before it answers "I hold no pane for this record" is `unverifiable`, not `exited`. Resuming
+  // on it forks a second agent onto a transcript the host is still writing (STA-3500). Declining is
+  // recoverable — the record survives, and the caller re-runs this sweep once the verdict lands.
+  // Paired-runtime workspaces keep their own per-pane mirror park below, which is finer-grained.
+  if (resolveWorkspaceTerminalHostAuthority(state, worktreeId) === 'unverifiable') {
+    return 0
+  }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
@@ -172,11 +259,24 @@ export function resumeSleepingAgentSessionsForWorktree(
     if (options?.skipClaimKeys?.has(claimKey)) {
       continue
     }
-    if (record.automaticResumeBlockedBy === 'legacy-orchestration-worker') {
-      continue
-    }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    // Why this is a `continue` and not a clear: the id is a valid locator on the machine that
+    // captured it, so the record is evidence, not garbage — deleting it on the strength of a host
+    // disagreement would destroy the user's only handle on that transcript. Declining costs an
+    // automatic wake the user can re-issue by hand; issuing `--resume` on the wrong machine is
+    // `No conversation found` at best and a forked transcript at worst.
+    if (sleepingRecordNamesAnotherExecutionHost(record, currentState)) {
+      continue
+    }
+    const unhydratedMirror = findUnhydratedHostMirrorForPane(record, currentState)
+    if (unhydratedMirror) {
+      // Why: pane ownership is undecidable until the mirror answers, and every
+      // branch below — launch and clear alike — trusts that verdict. Take no
+      // action on the record; the replay re-runs this pass with real evidence.
+      parkWorktreeResumeSweepUntilHostMirrorAnswers(worktreeId, unhydratedMirror, options)
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)

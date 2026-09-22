@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostLineageSnapshot } from '../../../shared/host-lineage-contract'
 import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-contract'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
-import type { Repo, WorktreeLineage, WorkspaceLineage } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
 import { createDirectSshHostHydration } from './direct-ssh-host-hydration'
@@ -110,6 +111,59 @@ describe('createDirectSshHostHydration', () => {
       repo('shared', 'target-b'),
       repo('shared', 'target-a')
     ])
+  })
+
+  it('keeps the manual cross-host order when the host catalog is republished', async () => {
+    const owner = authority('box')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
+        manualRepoOrder: [
+          { hostId: 'ssh:box', repoId: 'bravo' },
+          { hostId: 'local', repoId: 'alpha' },
+          { hostId: 'ssh:box', repoId: 'delta' }
+        ]
+      })
+    )
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(async () =>
+        hostSnapshot(owner, [repo('bravo', 'box'), repo('delta', 'box')])
+      ),
+      listLineage: vi.fn(),
+      isCurrentAuthority: () => true
+    })
+
+    await hydration.capturePreparationInput(owner, 'reconnect')
+
+    expect(store.getState().repos.map((entry) => entry.id)).toEqual(['bravo', 'alpha', 'delta'])
+  })
+
+  // A repo added after the last drag has no overlay entry. Ranked rows must keep their order and
+  // the newcomer sinks to the tail, rather than the overlay being discarded for being incomplete.
+  it('keeps ranked rows in order and appends unranked ones when the overlay is partial', async () => {
+    const owner = authority('box')
+    const store = createStore<AppState>(() =>
+      state({
+        repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
+        manualRepoOrder: [
+          { hostId: 'ssh:box', repoId: 'delta' },
+          { hostId: 'local', repoId: 'alpha' }
+        ]
+      })
+    )
+    const hydration = createDirectSshHostHydration({
+      store,
+      listRepos: vi.fn(async () =>
+        hostSnapshot(owner, [repo('bravo', 'box'), repo('delta', 'box')])
+      ),
+      listLineage: vi.fn(),
+      isCurrentAuthority: () => true
+    })
+
+    await hydration.capturePreparationInput(owner, 'reconnect')
+
+    expect(store.getState().repos.map((entry) => entry.id)).toEqual(['delta', 'alpha', 'bravo'])
   })
 
   it('rejects a mismatched host response without publishing', async () => {

@@ -17,14 +17,14 @@ type OutputChunk = Rollup.OutputChunk
 // graph still resolves.
 
 // Entries executed as plain Node (ELECTRON_RUN_AS_NODE / no electron runtime):
-// forked daemon, parcel-watcher and computer sidecars, and the CLI-run
+// forked daemon, parcel-watcher, WSL filesystem and computer sidecars, and the CLI-run
 // agent-hooks entry. require("electron") throws MODULE_NOT_FOUND in all of them.
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
   'computer-sidecar',
-  'agent-hooks/managed-agent-hook-controls',
-  'codex/codex-app-server-grant-entry'
+  'wsl-transcript-fs-process-entry',
+  'agent-hooks/managed-agent-hook-controls'
 ] as const
 
 // Entries executed as worker threads of the main process. Electron's module is
@@ -40,7 +40,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'session-scanner-opencode-sqlite-worker-entry',
   'session-scanner-worker-entry',
   'main-thread-hang-watchdog-entry',
-  'port-scan-command-worker-entry'
+  'port-scan-command-worker-entry',
+  'usage-scan-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [

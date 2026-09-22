@@ -23,6 +23,16 @@ import {
   normalizePreviewText,
   timestampMs
 } from './session-scanner-values'
+import {
+  NO_TRANSCRIPT_MESSAGES,
+  type TranscriptMessageSink,
+  type TranscriptSessionIdentity
+} from './session-transcript-consumers'
+import {
+  boundedText,
+  transcriptMessageRole,
+  transcriptMessagesFromContent
+} from './session-transcript-message-content'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 
@@ -30,9 +40,12 @@ export function createAccumulator(args: {
   agent: AiVaultAgent
   file: FileWithMtime
   sessionId: string
+  // Where every decoded message goes; absent for one-shot parses with no reader.
+  messages?: TranscriptMessageSink
 }): SessionAccumulator {
   return {
     agent: args.agent,
+    messages: args.messages ?? NO_TRANSCRIPT_MESSAGES,
     sessionId: args.sessionId,
     title: null,
     fallbackTitle: null,
@@ -51,7 +64,30 @@ export function createAccumulator(args: {
     lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
+    earliestTimestampMs: 0,
     latestTimestampMs: 0
+  }
+}
+
+/**
+ * The session identity a fold holds right now. Null until it has an id, which
+ * every supported format writes in the opening lines of the transcript.
+ */
+export function accumulatorSessionIdentity(
+  accumulator: SessionAccumulator
+): TranscriptSessionIdentity | null {
+  const sessionId = accumulator.sessionId.trim()
+  if (!sessionId) {
+    return null
+  }
+  return {
+    sessionId,
+    cwd: accumulator.cwd,
+    // The generated fallback is `finalizeSession`'s, not this one's: a title
+    // that is still absent mid-read is better said to be absent.
+    title: accumulator.title ?? accumulator.fallbackTitle,
+    createdAt: accumulator.createdAt,
+    updatedAt: accumulator.updatedAt
   }
 }
 
@@ -68,6 +104,7 @@ export function accumulatorFoldResumeState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeRecordLine(accumulator, line),
+    identity: () => accumulatorSessionIdentity(accumulator),
     clone: () =>
       accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
     touchFile: (file) => {
@@ -75,6 +112,9 @@ export function accumulatorFoldResumeState(
     },
     // Finalize a snapshot: the live accumulator (and its preview array) keeps
     // accumulating appended lines after this session object is handed out.
+    // A sibling file's metadata is merged onto this result by the parse cache,
+    // never into the fold, so re-merging it later starts from what the
+    // transcript alone said (see session-scanner-sidecar-enrichment.ts).
     finalize: (platform, options) =>
       finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
   }
@@ -96,7 +136,7 @@ export function finalizeSession(
   const title =
     accumulator.title ||
     accumulator.fallbackTitle ||
-    `${aiVaultAgentLabel(accumulator.agent)} ${sessionId.slice(0, 8)}`
+    generatedSessionTitle(accumulator.agent, sessionId)
 
   const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
 
@@ -137,16 +177,27 @@ export function finalizeSession(
   }
 }
 
+/**
+ * The title a session gets when neither the transcript nor the agent named it.
+ * Exported so a later merge can tell "the fold found no title" from a real one
+ * without re-deriving the string (session-scanner-sidecar-enrichment.ts).
+ */
+export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): string {
+  return `${aiVaultAgentLabel(agent)} ${sessionId.slice(0, 8)}`
+}
+
 export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): void {
   const parsed = timestampMs(timestamp)
   if (!Number.isFinite(parsed)) {
     return
   }
   const iso = new Date(parsed).toISOString()
-  if (!accumulator.createdAt || parsed < Date.parse(accumulator.createdAt)) {
+  if (!accumulator.createdAt || parsed < accumulator.earliestTimestampMs) {
     accumulator.createdAt = iso
+    accumulator.earliestTimestampMs = Math.trunc(parsed)
   }
-  if (!accumulator.updatedAt || parsed >= Date.parse(accumulator.updatedAt)) {
+  // ISO serialization truncates fractional milliseconds; latestTimestampMs retains them.
+  if (!accumulator.updatedAt || parsed >= Math.trunc(accumulator.latestTimestampMs)) {
     accumulator.updatedAt = iso
     accumulator.latestTimestampMs = parsed
   }
@@ -161,8 +212,13 @@ export function addPreviewMessage(
     // Why: Claude meta/injected turns still preview, but must not seed the
     // copyable first-prompt row.
     seedFirstUserPrompt?: boolean
+    // Set false by callers that already published this record's messages.
+    publishMessage?: boolean
   }
 ): void {
+  if (args.publishMessage !== false && accumulator.messages.active) {
+    publishTranscriptMessage(accumulator, args.role, args.text, args.timestamp)
+  }
   // Seeded before the preview-empty return so the copy body never depends on
   // preview-only normalization rules.
   seedFullFirstUserPrompt(
@@ -199,13 +255,39 @@ export function addPreviewContent(
     () => extractFullFirstUserPromptText(content),
     options?.seedFirstUserPrompt
   )
+  // Published from the content value, not the preview string: a consumer needs
+  // the whole turn, including the tool blocks the 220-char preview drops.
+  if (accumulator.messages.active) {
+    for (const message of transcriptMessagesFromContent(role, content, timestampIso(timestamp))) {
+      accumulator.messages.push(message)
+    }
+  }
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
     timestamp,
     // Content path already seeded above when capture is enabled.
-    seedFirstUserPrompt: false
+    seedFirstUserPrompt: false,
+    publishMessage: false
   })
+}
+
+/** One already-flattened turn; the content path publishes per block instead. */
+function publishTranscriptMessage(
+  accumulator: SessionAccumulator,
+  role: AiVaultSessionPreviewMessage['role'],
+  text: string | null,
+  timestamp: unknown
+): void {
+  const messageRole = transcriptMessageRole(role)
+  const messageText = text === null ? null : boundedText(text)
+  if (messageRole && messageText) {
+    accumulator.messages.push({
+      role: messageRole,
+      text: messageText,
+      timestamp: timestampIso(timestamp)
+    })
+  }
 }
 
 /**

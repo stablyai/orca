@@ -7,20 +7,14 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 import {
   cleanupDockerSshRelayTarget,
-  DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
-
-type ConnectedDockerRemote = {
-  targetId: string
-  repoId: string
-  worktreeId: string
-}
 
 type RuntimeTerminalStatus = {
   isRunningAgent: boolean
@@ -31,73 +25,6 @@ type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
   title: string | null
-}
-
-async function connectDockerRemote(
-  page: Page,
-  target: DockerSshRelayTarget
-): Promise<ConnectedDockerRemote> {
-  return await page.evaluate(
-    async ({ target, remotePath }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
-      })
-      try {
-        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-          target: {
-            label: `Docker SSH Pi-Compatible Agent ${Date.now()}`,
-            host: '127.0.0.1',
-            port: target.port,
-            username: 'root',
-            identityFile: target.identityFile,
-            identitiesOnly: true,
-            relayGracePeriodSeconds: 1
-          }
-        })
-        store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
-        if (!state || state.status !== 'connected') {
-          throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
-        }
-        store.getState().setSshConnectionState(createdTarget.id, state)
-        const labels = new Map(store.getState().sshTargetLabels)
-        labels.set(createdTarget.id, createdTarget.label)
-        store.getState().setSshTargetLabels(labels)
-
-        const result = await window.api.repos.addRemote({
-          connectionId: createdTarget.id,
-          remotePath,
-          displayName: 'Docker SSH Pi-Compatible Agent'
-        })
-        if ('error' in result) {
-          throw new Error(result.error)
-        }
-        await store.getState().fetchRepos()
-        await store.getState().fetchWorktrees(result.repo.id)
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return {
-          targetId: createdTarget.id,
-          repoId: result.repo.id,
-          worktreeId: worktree.id
-        }
-      } finally {
-        credentialUnsub()
-      }
-    },
-    { target, remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH }
-  )
 }
 
 async function emitOscTitle(page: Page, ptyId: string, title: string): Promise<void> {
@@ -153,7 +80,7 @@ test.describe('Docker SSH Pi-compatible agent titles', () => {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerRemote(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)

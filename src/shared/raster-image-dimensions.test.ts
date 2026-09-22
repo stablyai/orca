@@ -28,7 +28,7 @@ function jpegWithMetadata(
   extraSegments = 0
 ): Buffer {
   const parts = [Buffer.from([0xff, 0xd8])]
-  for (let written = 0; written < metadataBytes; ) {
+  for (let written = 0; written < metadataBytes;) {
     // A JPEG segment length field is 16 bits, so real files chain many segments to carry a profile.
     const size = Math.min(65_533, metadataBytes - written)
     const header = Buffer.alloc(4)

@@ -7,7 +7,7 @@ export function getBrowserLinkRoutingShortcutLabel(platform: { isMac: boolean })
 export function getTerminalLinkActionsDescription(platform: { isMac: boolean }): string {
   return translate(
     'auto.components.settings.BrowserTerminalLinkActionsSetting.description',
-    'Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click.',
+    'Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.',
     { modifier: platform.isMac ? '⌘' : 'Ctrl' }
   )
 }

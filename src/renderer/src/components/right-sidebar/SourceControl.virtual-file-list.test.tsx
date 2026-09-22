@@ -4,13 +4,13 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import SourceControl from './SourceControl'
 import {
-  SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
-  SOURCE_CONTROL_FILE_ROW_OVERSCAN,
-  SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS
-} from './source-control-virtual-file-list'
+  VIRTUALIZED_LIST_MIN_ROWS,
+  VIRTUALIZED_LIST_OVERSCAN,
+  VIRTUALIZED_LIST_ROW_HEIGHT_PX
+} from '@/components/virtualized-list'
 
 const mocks = vi.hoisted(() => {
   const activeRepo = {
@@ -78,9 +78,7 @@ const VIEWPORT_HEIGHT_PX = 600
 // Rows the viewport can show plus overscan on both edges plus the partial
 // rows clipped at each edge of the window.
 const MAX_MOUNTED_ROWS =
-  Math.ceil(VIEWPORT_HEIGHT_PX / SOURCE_CONTROL_FILE_ROW_HEIGHT_PX) +
-  2 * SOURCE_CONTROL_FILE_ROW_OVERSCAN +
-  2
+  Math.ceil(VIEWPORT_HEIGHT_PX / VIRTUALIZED_LIST_ROW_HEIGHT_PX) + 2 * VIRTUALIZED_LIST_OVERSCAN + 2
 
 function gitEntry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
   return {
@@ -209,7 +207,7 @@ beforeEach(() => {
     function (this: HTMLElement) {
       return this.classList.contains('overflow-auto')
         ? VIEWPORT_HEIGHT_PX
-        : SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+        : VIRTUALIZED_LIST_ROW_HEIGHT_PX
     }
   )
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -219,17 +217,7 @@ beforeEach(() => {
     const isScroller = this.classList.contains('overflow-auto')
     const scroller = isScroller ? null : this.closest('.overflow-auto')
     const top = isScroller ? 0 : -(scroller?.scrollTop ?? 0)
-    return {
-      top,
-      bottom: top + SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
-      height: SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
-      left: 0,
-      right: 240,
-      width: 240,
-      x: 0,
-      y: top,
-      toJSON: () => ({})
-    } as DOMRect
+    return new DOMRect(0, top, 240, VIRTUALIZED_LIST_ROW_HEIGHT_PX)
   })
 })
 
@@ -285,7 +273,7 @@ function row(path: string): HTMLDivElement | null {
 }
 
 function virtualList(): HTMLDivElement | null {
-  return container.querySelector<HTMLDivElement>('[data-testid="source-control-virtual-list"]')
+  return container.querySelector<HTMLDivElement>('[data-testid="virtualized-list"]')
 }
 
 describe('SourceControl virtualized changed-files list', () => {
@@ -310,7 +298,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-000.ts')).toBeTruthy()
     expect(row('src/file-250.ts')).toBeNull()
 
-    scrollTo(250 * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    scrollTo(250 * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
 
     expect(row('src/file-250.ts')).toBeTruthy()
     expect(row('src/file-000.ts')).toBeNull()
@@ -332,7 +320,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(container.textContent).toContain('1 selected')
 
     // The selected row scrolls out of the mounted window but stays selected.
-    scrollTo(240 * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    scrollTo(240 * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
     expect(row('src/file-000.ts')).toBeNull()
     expect(container.textContent).toContain('1 selected')
 
@@ -371,7 +359,7 @@ describe('SourceControl virtualized changed-files list', () => {
     })
     renderSourceControl()
 
-    scrollTo(100 * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    scrollTo(100 * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
     expect(row('src/file-100.ts')).toBeTruthy()
     const heightBefore = virtualList()?.style.height
 
@@ -384,7 +372,7 @@ describe('SourceControl virtualized changed-files list', () => {
     }
     renderSourceControl()
 
-    expect(scroller().scrollTop).toBe(100 * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    expect(scroller().scrollTop).toBe(100 * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
     expect(row('src/file-100.ts')).toBeTruthy()
     expect(virtualList()?.style.height).toBe(heightBefore)
   })
@@ -398,7 +386,7 @@ describe('SourceControl virtualized changed-files list', () => {
     })
     renderSourceControl()
 
-    expect(paths.length).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(paths.length).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(virtualList()).toBeNull()
     expect(mountedRows().length).toBe(paths.length)
     for (const path of paths) {
@@ -423,7 +411,7 @@ describe('SourceControl virtualized changed-files list', () => {
 
     expect(virtualList()).toBeTruthy()
     const mounted = container.querySelectorAll(
-      '[data-testid="source-control-virtual-list"] [data-index]'
+      '[data-testid="virtualized-list"] [data-index]'
     ).length
     expect(mounted).toBeGreaterThan(0)
     expect(mounted).toBeLessThanOrEqual(MAX_MOUNTED_ROWS)

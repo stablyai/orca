@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 
@@ -31,6 +31,7 @@ function renderModel(args: {
   fileContents?: Record<string, FileContent>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
+  markdownRichModeSizeOverridden?: boolean
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
@@ -42,6 +43,7 @@ function renderModel(args: {
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
+    markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
     isChangesMode: args.isChangesMode ?? false,
     canOpenWorkspaceFileBrowser: true
   })
@@ -76,6 +78,7 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
       gitStatusEntries: undefined,
       gitBranchEntries: undefined,
       markdownViewMode: {},
+      markdownRichModeSizeOverridden: false,
       isChangesMode: false,
       canOpenWorkspaceFileBrowser: false
     })
@@ -168,10 +171,32 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
   it('disables rich export when a multibyte character crosses the byte limit', () => {
     const model = renderModel({
       markdownViewMode: { '/repo/README.md': 'rich' },
-      editorDrafts: { '/repo/README.md': `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\u00e9` }
+      editorDrafts: {
+        '/repo/README.md': `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\u00e9`
+      }
     })
 
     expect(model.shouldShowMarkdownExportAction).toBe(true)
+    expect(model.canExportMarkdownToPdf).toBe(false)
+  })
+
+  it('keeps rich mode for an oversized file the user chose to open anyway', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'rich' },
+      editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
+      markdownRichModeSizeOverridden: true
+    })
+
+    expect(model.canExportMarkdownToPdf).toBe(true)
+  })
+
+  it('scopes the open-anyway override to its own file', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'rich' },
+      editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
+      markdownRichModeSizeOverridden: false
+    })
+
     expect(model.canExportMarkdownToPdf).toBe(false)
   })
 

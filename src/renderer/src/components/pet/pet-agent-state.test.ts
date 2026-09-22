@@ -46,6 +46,14 @@ describe('selectPetAnimationName', () => {
     expect(select([entry('working')])).toBe('running')
   })
 
+  it('keeps passive monitoring out of the running animation', () => {
+    const monitoring = entry('working', { workingMode: 'monitoring' })
+
+    expect(select([monitoring])).toBe('idle')
+    expect(select([monitoring, entry('working')])).toBe('running')
+    expect(select([monitoring, entry('done')])).toBe('review')
+  })
+
   it('maps blocked and waiting states to waiting', () => {
     expect(select([entry('blocked')])).toBe('waiting')
     expect(select([entry('waiting')])).toBe('waiting')

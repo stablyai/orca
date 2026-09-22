@@ -1,0 +1,146 @@
+{
+  "operation": "files.terminal-path-tap",
+  "family": "files.terminal-path-tap",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
+  "scenarioSha256": "a927e85c3ae58cd3b017955fe28aeffec6a5471b51d782f116639a3aaf4af77d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0358eb8770a0": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 10000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "exists": true,
+            "isDirectory": false,
+            "openTarget": {
+              "absolutePath": "/repo/src/app.ts",
+              "kind": "worktree-file",
+              "provider": "ssh",
+              "relativePath": "src/app.ts"
+            },
+            "relativePath": "src/app.ts"
+          }
+        }
+      }
+    },
+    "47a3b40d1640": {
+      "name": "files.open#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    },
+    "561f3fedeb78": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
+    "591c78d805ec": {
+      "name": "files.open#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.open"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "file_locked",
+            "message": "File is locked"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "c0978ed13409": {
+      "name": "open-feedback",
+      "ordinal": 3,
+      "value": {}
+    },
+    "c7ce9c8dc60e": {
+      "activeSessionTabId": "tab-source",
+      "failed": 1,
+      "switched": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "file-tap-open-refused",
+    "checkpoints": [
+      {
+        "id": "open-refused",
+        "observation": {
+          "sender": ["0358eb8770a0", "591c78d805ec"],
+          "payloads": ["561f3fedeb78", "47a3b40d1640"],
+          "settlements": {
+            "tap": "eb79a9b3682a"
+          },
+          "state": "c7ce9c8dc60e",
+          "effects": ["c0978ed13409"]
+        }
+      }
+    ]
+  }
+}

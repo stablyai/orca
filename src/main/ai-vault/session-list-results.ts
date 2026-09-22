@@ -84,11 +84,9 @@ export function mergeAiVaultListResults(
 
 function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
   const nowMs = Date.now()
-  let latest: string | undefined
   let latestMs = Number.NEGATIVE_INFINITY
   for (const result of results) {
-    const stamp = result.scannedAt
-    const stampMs = Date.parse(stamp)
+    const stampMs = Date.parse(result.scannedAt)
     // Remote legs carry their own clock and only `z.string()` validation. An
     // unparsable or future stamp would pin the merged stamp above every local
     // rescan and silently freeze the renderer's scannedAt equality guard.
@@ -98,10 +96,10 @@ function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
     if (Number.isNaN(stampMs) || stampMs > nowMs) {
       continue
     }
-    if (stampMs > latestMs) {
-      latestMs = stampMs
-      latest = stamp
-    }
+    latestMs = Math.max(latestMs, stampMs)
   }
-  return latest ?? new Date(nowMs).toISOString()
+  // A merge has no single scan instant, so return the canonical form of the
+  // newest accepted one: echoing a winning leg's string made two legs at the
+  // same instant in different ISO shapes resolve by host-enumeration order.
+  return new Date(latestMs === Number.NEGATIVE_INFINITY ? nowMs : latestMs).toISOString()
 }

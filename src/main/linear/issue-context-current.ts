@@ -1,4 +1,4 @@
-import { parseLinearIssueInput } from '../../shared/linear-links'
+import { parseLinearIssueInput } from '../../shared/linear/links'
 import { getConnectedWorkspaces } from './issue-context-client'
 import { linearError } from './issue-context-errors'
 

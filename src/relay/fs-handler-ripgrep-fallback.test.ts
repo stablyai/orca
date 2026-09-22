@@ -38,15 +38,10 @@ import { FileListingCancelledError } from '../shared/file-listing-cancellation'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
+import { runListFilesScan } from './fs-list-files-fallback-chain'
 
 type FsHandlerInternals = {
   search(params: Record<string, unknown>): Promise<unknown>
-  runListFilesScan(
-    rootPath: string,
-    excludePathPrefixes: string[],
-    signal: AbortSignal,
-    maxResults?: number
-  ): Promise<string[]>
 }
 
 function createHandler(): FsHandlerInternals {
@@ -87,7 +82,6 @@ describe('relay direct ripgrep admission', () => {
   })
 
   it('falls back only for a tagged listing launch failure', async () => {
-    const handler = createHandler()
     const controller = new AbortController()
     listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
@@ -96,7 +90,7 @@ describe('relay direct ripgrep admission', () => {
     })
     listFilesWithGitMock.mockResolvedValueOnce(['src/index.ts'])
 
-    await expect(handler.runListFilesScan('/repo', [], controller.signal)).resolves.toEqual([
+    await expect(runListFilesScan('/repo', [], controller.signal)).resolves.toEqual([
       'src/index.ts'
     ])
     expect(listFilesWithRgMock).toHaveBeenCalledTimes(1)
@@ -104,7 +98,6 @@ describe('relay direct ripgrep admission', () => {
   })
 
   it('lets cancellation win an unavailable-listing race before Git starts', async () => {
-    const handler = createHandler()
     const controller = new AbortController()
     const cancellation = new FileListingCancelledError('superseded')
     listFilesWithRgMock.mockImplementationOnce(async () => {
@@ -112,8 +105,17 @@ describe('relay direct ripgrep admission', () => {
       throw new RipgrepUnavailableError()
     })
 
-    await expect(handler.runListFilesScan('/repo', [], controller.signal)).rejects.toBe(
-      cancellation
+    await expect(runListFilesScan('/repo', [], controller.signal)).rejects.toBe(cancellation)
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(listFilesWithGitMock).not.toHaveBeenCalled()
+  })
+
+  it('requires ripgrep for bounded query ranking instead of retaining a full Git inventory', async () => {
+    const controller = new AbortController()
+    listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
+
+    await expect(runListFilesScan('/repo', [], controller.signal, 33, 'target')).rejects.toThrow(
+      'Quick Open search requires ripgrep'
     )
     expect(execFileMock).not.toHaveBeenCalled()
     expect(listFilesWithGitMock).not.toHaveBeenCalled()

@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from './types'
+import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_COMMIT_FAILURE_SUMMARY = 'Commit failed.'
 const LINT_COMMIT_FAILURE_SUMMARY = 'Lint failed during commit.'

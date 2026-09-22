@@ -1,0 +1,1183 @@
+{
+  "operation": "session.create-terminal",
+  "family": "session.create-terminal",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
+  "scenarioSha256": "62930616f1017ffd4b74546c80b17f3aa3bcee52a6ad62ec144d95872fd31321",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1fc8075c4347": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2977cbddd89f": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tab": {
+              "id": "tab-1",
+              "isActive": true,
+              "terminal": "terminal-1",
+              "title": "zsh",
+              "type": "terminal"
+            }
+          }
+        }
+      }
+    },
+    "2a1e7201b529": {
+      "name": "toast",
+      "ordinal": 9,
+      "value": {
+        "durationMs": 1800,
+        "message": "Couldn't run Notes"
+      }
+    },
+    "399c31f3ec8e": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "3e654cc88ff5": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "4941ab88308b": {
+      "name": "terminal.send#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "4c528a84c114": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingActiveSessionTabId": {
+        "$rpc": "null"
+      },
+      "pendingActiveTerminalHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "4d318de3b635": {
+      "name": "unsubscribe-terminal",
+      "ordinal": 3,
+      "value": {
+        "handle": "terminal-0"
+      }
+    },
+    "50740799b9d0": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "52c96555f2b3": {
+      "name": "toast",
+      "ordinal": 9,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Notes sent"
+      }
+    },
+    "57c95d17cb20": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "58bef0d5522c": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "6414ba3fbfbd": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "71da4ae46501": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "7a456c263146": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8596a639a64d": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "8d52fb842a8f": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "95bcf41e673e": {
+      "name": "schedule-delayed-action",
+      "ordinal": 7,
+      "value": {
+        "delayMs": 500
+      }
+    },
+    "b1d637072fc8": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c13357779299": {
+      "name": "subscribe-terminal",
+      "ordinal": 5,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "cce8a731064a": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "d8526e1416e2": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "e247d725ee7d": {
+      "name": "fetch-session-tabs",
+      "ordinal": 10,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f30a8fc69921": {
+      "activeHandle": "terminal-1",
+      "activeSessionTabId": "tab-1",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingActiveSessionTabId": "tab-1",
+      "pendingActiveTerminalHandle": "terminal-1",
+      "sessionTabs": ["tab-1"],
+      "terminals": ["terminal-1"]
+    },
+    "fb6329365e0b": {
+      "name": "default-live-input",
+      "ordinal": 4,
+      "value": {
+        "handles": ["terminal-1"]
+      }
+    },
+    "fcad941f4f7a": {
+      "name": "terminal.send#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "review these notes"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.create-terminal-terminal.send-1",
+    "checkpoints": [
+      {
+        "id": "session-create-terminal-with-prompt.prelude:creating",
+        "observation": {
+          "sender": ["b1d637072fc8"],
+          "payloads": ["cce8a731064a"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "9270aeb7d9c6"
+          },
+          "state": "4c528a84c114",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.prelude:created",
+        "observation": {
+          "sender": ["2977cbddd89f", "7a456c263146"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "95bcf41e673e"]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.prelude:cleanup",
+        "observation": {
+          "sender": ["2977cbddd89f", "fcad941f4f7a"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.normal:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "58bef0d5522c"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.normal:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "58bef0d5522c"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.result-absent:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "3e654cc88ff5"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.result-absent:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "3e654cc88ff5"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.result-null:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "1fc8075c4347"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.result-null:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "1fc8075c4347"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-ok-missing:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "8d52fb842a8f"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-ok-missing:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "8d52fb842a8f"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-false-string-error:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "6414ba3fbfbd"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-false-string-error:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "6414ba3fbfbd"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-false-object-error:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "399c31f3ec8e"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.inner-false-object-error:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "399c31f3ec8e"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "52c96555f2b3",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.outer-refused:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "71da4ae46501"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.outer-refused:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "71da4ae46501"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.outer-refused-no-message:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "50740799b9d0"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.outer-refused-no-message:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "50740799b9d0"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.method-not-found:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "8596a639a64d"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.method-not-found:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "8596a639a64d"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.transport-rejection:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "d8526e1416e2"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.transport-rejection:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "d8526e1416e2"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.transport-rejection-no-message:prompt-sent",
+        "observation": {
+          "sender": ["2977cbddd89f", "57c95d17cb20"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529"
+          ]
+        }
+      },
+      {
+        "id": "session-create-terminal-with-prompt.transport-rejection-no-message:tabs-refreshed",
+        "observation": {
+          "sender": ["2977cbddd89f", "57c95d17cb20"],
+          "payloads": ["cce8a731064a", "4941ab88308b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "f30a8fc69921",
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "c13357779299",
+            "95bcf41e673e",
+            "2a1e7201b529",
+            "e247d725ee7d"
+          ]
+        }
+      }
+    ]
+  }
+}

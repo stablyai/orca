@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   GITHUB_PR_REVIEWER_INPUT_MAX_BYTES,
   appendGitHubPRRequestedReviewers,

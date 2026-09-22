@@ -3,7 +3,17 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 function readWorktreeListSource(): string {
-  return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+  return readFileSync(
+    fileURLToPath(new URL('./worktree-list/rows/SectionHeader.tsx', import.meta.url)),
+    'utf8'
+  )
+}
+
+function readHeaderDragSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./worktree-list/drag/use-header-drag.ts', import.meta.url)),
+    'utf8'
+  )
 }
 
 describe('Project Group header drag DOM source', () => {
@@ -17,10 +27,13 @@ describe('Project Group header drag DOM source', () => {
   })
 
   it('commits Project Group manual sorting through updateProjectGroup tabOrder', () => {
-    const source = readWorktreeListSource()
+    const source = readHeaderDragSource()
 
     expect(source).toContain('const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)')
-    expect(source).toContain('void updateProjectGroup(groupId, { tabOrder })')
+    // Why: the commit must carry the group's owner host so a non-focused host still persists the order.
+    expect(source).toContain(
+      'void updateProjectGroup(groupId, { tabOrder }, { hostId: ownerHostId ?? undefined })'
+    )
   })
 
   it('keeps grab cursor on the title surface and dual handle attrs on row + surface', () => {

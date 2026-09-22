@@ -1,149 +1,22 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
 import { linearError } from '../../../linear/issue-context-errors'
-import { isLinearUuid } from '../../../../shared/linear-uuid'
-
-const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-const LinearDueDate = z.string().refine((value) => LINEAR_DUE_DATE_PATTERN.test(value), {
-  message: 'Linear due dates must use YYYY-MM-DD'
-})
-const OptionalLinearDueDate = LinearDueDate.optional()
-const OptionalLinearDueDateOrClear = z.union([LinearDueDate, z.null()]).optional()
-
-const AgentSearchIssues = z.object({
-  query: requiredString('Missing query'),
-  limit: OptionalFiniteNumber,
-  workspaceId: z.union([z.string(), z.literal('all')]).optional()
-})
-
-const LinearWorkspaceRead = z.object({
-  workspaceId: z.union([z.string(), z.literal('all')]).optional()
-})
-
-const LinearTeamLookup = z.object({
-  teamInput: requiredString('Missing team'),
-  workspaceId: OptionalString.refine((value) => value !== 'all', {
-    message: '--workspace all is only valid for team list'
-  })
-})
-
-const LinearIssueList = z.object({
-  filter: z.enum(['assigned', 'created', 'all', 'completed', 'open']).optional(),
-  teamInput: OptionalString,
-  limit: OptionalFiniteNumber,
-  workspaceId: z.union([z.string(), z.literal('all')]).optional()
-})
-
-const LinearProjectList = z.object({
-  query: OptionalString,
-  limit: OptionalFiniteNumber,
-  workspaceId: z.union([z.string(), z.literal('all')]).optional()
-})
-
-const LinearIncludeFlags = z.object({
-  comments: z.boolean(),
-  children: z.boolean(),
-  attachments: z.boolean(),
-  relations: z.boolean(),
-  activity: z.boolean().default(false)
-})
-
-const LinearCurrentContext = z
-  .object({
-    worktreeId: OptionalString,
-    terminalHandle: OptionalString,
-    cwd: OptionalString,
-    remote: z.boolean().optional()
-  })
-  .optional()
-
-const LinearWriteTarget = z.object({
-  input: OptionalString,
-  current: z.boolean().optional(),
-  workspaceId: OptionalString.refine((value) => value !== 'all', {
-    message: '--workspace all is not valid for Linear writes'
-  }),
-  context: LinearCurrentContext
-})
-
-const AgentIssueContext = z.object({
-  input: OptionalString,
-  current: z.boolean().optional(),
-  workspaceId: OptionalString,
-  include: LinearIncludeFlags,
-  depth: z.number().int().min(0).max(5),
-  context: LinearCurrentContext
-})
-
-const LinearIssueSetState = LinearWriteTarget.extend({
-  to: requiredString('Missing target state')
-})
-
-const LinearIssueUpdateTask = LinearWriteTarget.extend({
-  operation: z.enum(['assignee', 'priority', 'estimate', 'dueDate', 'labels']),
-  assigneeId: z.string().nullable().optional(),
-  assigneeMe: z.boolean().optional(),
-  priority: z.number().int().min(0).max(4).optional(),
-  estimate: z.number().int().min(0).nullable().optional(),
-  dueDate: OptionalLinearDueDateOrClear,
-  labelMode: z.enum(['add', 'remove', 'set']).optional(),
-  labels: z.array(z.string()).optional()
-})
-
-const LinearIssueAddComment = LinearWriteTarget.extend({
-  body: requiredString('Missing comment body'),
-  replyTo: OptionalString,
-  writeId: OptionalString
-})
-
-const LinearIssueRelationWrite = LinearWriteTarget.extend({
-  relatedInput: requiredString('Missing related issue'),
-  relationship: z.enum(['blocks', 'blockedBy', 'relatedTo', 'duplicateOf']),
-  operation: z.enum(['add', 'remove'])
-})
-
-const LinearIssueAttachLink = LinearWriteTarget.extend({
-  url: requiredString('Missing attachment URL'),
-  title: OptionalString,
-  writeId: OptionalString
-})
-
-const LinearIssueCreate = z.object({
-  title: requiredString('Missing issue title'),
-  body: OptionalString,
-  teamInput: OptionalString,
-  teamKey: OptionalString,
-  state: OptionalString,
-  assignee: OptionalString,
-  priority: z.number().int().min(0).max(4).optional(),
-  estimate: z.number().int().min(0).optional(),
-  dueDate: OptionalLinearDueDate,
-  labels: z.array(z.string()).optional(),
-  projectInput: OptionalString,
-  parentInput: OptionalString,
-  parentCurrent: z.boolean().optional(),
-  workspaceId: OptionalString.refine((value) => value !== 'all', {
-    message: '--workspace all is not valid for Linear writes'
-  }),
-  writeId: OptionalString,
-  context: LinearCurrentContext
-})
-
-const LinearSaveIssue = LinearWriteTarget.extend({
-  team: OptionalString,
-  title: OptionalString,
-  description: z.string().optional(),
-  state: OptionalString,
-  assignee: z.string().nullable().optional(),
-  priority: z.number().int().min(0).max(4).optional(),
-  estimate: z.number().min(0).nullable().optional(),
-  dueDate: OptionalLinearDueDateOrClear,
-  labels: z.array(z.string()).optional(),
-  project: z.string().nullable().optional(),
-  parentId: z.string().nullable().optional(),
-  writeId: OptionalString
-})
+import { isLinearUuid } from '../../../../shared/linear/uuid'
+import {
+  AgentIssueContext,
+  AgentSearchIssues,
+  LinearCurrentContext,
+  LinearIssueAddComment,
+  LinearIssueAttachLink,
+  LinearIssueCreate,
+  LinearIssueList,
+  LinearIssueRelationWrite,
+  LinearIssueSetState,
+  LinearIssueUpdateTask,
+  LinearProjectList,
+  LinearSaveIssue,
+  LinearTeamLookup,
+  LinearWorkspaceRead
+} from '../../../../shared/rpc-contract/linear-agent-access-params'
 
 function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {
@@ -155,7 +28,7 @@ function parseLinearWriteId(writeId: string | undefined): string | undefined {
   return writeId
 }
 
-export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
+export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.saveIssue',
     params: LinearSaveIssue,

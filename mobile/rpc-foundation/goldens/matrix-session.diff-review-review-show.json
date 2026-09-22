@@ -1,0 +1,1230 @@
+{
+  "operation": "session.diff-review-load",
+  "family": "session.diff-review",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
+  "scenarioSha256": "f17bb817f9a172e776f1814920d58abc7db122da9c49cfe3bbeaf217f82d70d7",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0624baf0b1a6": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (worktree.show)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "0ea7669e1039": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true
+        }
+      }
+    },
+    "101b622a00da": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "1069be6ec9cc": {
+      "name": "git.branchCompare#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
+    },
+    "11e9ea6be860": {
+      "name": "git.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "168d1f64ca9b": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "1935bb137c1b": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "1cb6dd8e325b": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "diffComments": [],
+              "mobileDiffReview": {
+                "files": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "4a2489a297d0": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 1,
+                "path": "src/old.ts",
+                "removed": 0,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "base-oid",
+              "baseRef": "origin/main",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "head-oid",
+              "mergeBase": "merge-base",
+              "status": "ready"
+            }
+          }
+        }
+      }
+    },
+    "4a899e079b42": {
+      "name": "repo.list#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "5e96b510bf9a": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "80f12d7d71e7": {
+      "name": "worktree.show#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "8f95d359947c": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo-9",
+                "worktreeBaseRef": "origin/main"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "913f959499fd": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9abe670ff788": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b34cc46f308d": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bbb1719b8559": {
+      "name": "worktree.show#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "c3c2c2e9a797": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unable to load review notes",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d0e28a73dae6": {
+      "name": "git.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "branch": "feature",
+            "entries": [
+              {
+                "added": 3,
+                "area": "unstaged",
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "head": "head-sha-1",
+            "upstreamStatus": {
+              "ahead": 1,
+              "behind": 0,
+              "hasUpstream": true
+            }
+          }
+        }
+      }
+    },
+    "d7094b495ca7": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d7e7bd22e9f6": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/main",
+              "linkedPR": 12
+            }
+          }
+        }
+      }
+    },
+    "e13943e37fc3": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": {
+        "branchCompare": {
+          "entries": [
+            {
+              "added": 1,
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/old.ts",
+              "removed": 0,
+              "status": "modified"
+            }
+          ],
+          "summary": {
+            "baseOid": "base-oid",
+            "baseRef": "origin/main",
+            "changedFiles": 1,
+            "commitsAhead": {
+              "$rpc": "undefined"
+            },
+            "compareRef": "feature",
+            "errorMessage": {
+              "$rpc": "undefined"
+            },
+            "headOid": "head-oid",
+            "mergeBase": "merge-base",
+            "status": "ready"
+          }
+        },
+        "branchError": {
+          "$rpc": "undefined"
+        },
+        "comments": [],
+        "kind": "ready",
+        "reviewState": {
+          "completedAt": {
+            "$rpc": "undefined"
+          },
+          "files": {
+            "branch\u0000branch\u0000\u0000src/old.ts": {
+              "filePath": "src/old.ts",
+              "key": "branch\u0000branch\u0000\u0000src/old.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "branch"
+            },
+            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
+              "filePath": "src/app.ts",
+              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "unstaged"
+            }
+          },
+          "updatedAt": 1767225600000,
+          "version": 1
+        },
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
+    "e39817462870": {
+      "branchCompare": "unloaded",
+      "diff": "unloaded",
+      "snapshot": "unloaded"
+    },
+    "f880a1519497": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branchCompare": {
+          "entries": [
+            {
+              "added": 1,
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/old.ts",
+              "removed": 0,
+              "status": "modified"
+            }
+          ],
+          "summary": {
+            "baseOid": "base-oid",
+            "baseRef": "origin/main",
+            "changedFiles": 1,
+            "commitsAhead": {
+              "$rpc": "undefined"
+            },
+            "compareRef": "feature",
+            "errorMessage": {
+              "$rpc": "undefined"
+            },
+            "headOid": "head-oid",
+            "mergeBase": "merge-base",
+            "status": "ready"
+          }
+        },
+        "branchError": {
+          "$rpc": "undefined"
+        },
+        "comments": [],
+        "kind": "ready",
+        "reviewState": {
+          "completedAt": {
+            "$rpc": "undefined"
+          },
+          "files": {
+            "branch\u0000branch\u0000\u0000src/old.ts": {
+              "filePath": "src/old.ts",
+              "key": "branch\u0000branch\u0000\u0000src/old.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "branch"
+            },
+            "unstaged\u0000unstaged\u0000\u0000src/app.ts": {
+              "filePath": "src/app.ts",
+              "key": "unstaged\u0000unstaged\u0000\u0000src/app.ts",
+              "lastOpenedAt": {
+                "$rpc": "undefined"
+              },
+              "lastSeenDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "reviewDiffIdentity": {
+                "$rpc": "undefined"
+              },
+              "reviewedAt": {
+                "$rpc": "undefined"
+              },
+              "scope": "unstaged"
+            }
+          },
+          "updatedAt": 1767225600000,
+          "version": 1
+        },
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
+    "fa437a9d524b": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "fba22678bda3": {
+      "name": "worktree.show#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.diff-review-review-show",
+    "checkpoints": [
+      {
+        "id": "diff-review-snapshot.prelude:pending",
+        "observation": {
+          "sender": ["11e9ea6be860"],
+          "payloads": ["168d1f64ca9b"],
+          "settlements": {
+            "snapshot": "9270aeb7d9c6"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.normal:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "1cb6dd8e325b",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "f880a1519497"
+          },
+          "state": "e13943e37fc3",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.result-absent:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "0ea7669e1039",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "0624baf0b1a6"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.result-null:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "913f959499fd",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "0624baf0b1a6"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.inner-ok-missing:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "b34cc46f308d",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "f880a1519497"
+          },
+          "state": "e13943e37fc3",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.inner-false-string-error:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "101b622a00da",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "f880a1519497"
+          },
+          "state": "e13943e37fc3",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.inner-false-object-error:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "9abe670ff788",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "f880a1519497"
+          },
+          "state": "e13943e37fc3",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.outer-refused:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "fa437a9d524b",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "32a7c0ae7918"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.outer-refused-no-message:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "fba22678bda3",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "c3c2c2e9a797"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.method-not-found:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "5e96b510bf9a",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "b948e8307e81"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.transport-rejection:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "1935bb137c1b",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "a947768bc0ed"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      },
+      {
+        "id": "diff-review-snapshot.transport-rejection-no-message:snapshot",
+        "observation": {
+          "sender": [
+            "d0e28a73dae6",
+            "d7e7bd22e9f6",
+            "8f95d359947c",
+            "d7094b495ca7",
+            "4a2489a297d0"
+          ],
+          "payloads": [
+            "168d1f64ca9b",
+            "80f12d7d71e7",
+            "4a899e079b42",
+            "bbb1719b8559",
+            "1069be6ec9cc"
+          ],
+          "settlements": {
+            "snapshot": "c7584e82c72f"
+          },
+          "state": "e39817462870",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

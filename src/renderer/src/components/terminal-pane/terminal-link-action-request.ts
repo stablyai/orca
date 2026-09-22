@@ -1,24 +1,21 @@
 import type { TerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
-import { isTerminalLinkActionActivation } from './terminal-link-activation'
+import {
+  isTerminalLinkActionActivation,
+  isTerminalMiddleClickActivation
+} from './terminal-link-activation'
+import type { TerminalLinkClickBehavior } from './terminal-link-click-behavior'
+import {
+  closeLinkActionRequest,
+  type LinkAction,
+  type LinkActionKind,
+  type LinkActionRequest
+} from '@/components/link-actions/link-action-request'
 
-export type TerminalLinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task'
+export type TerminalLinkActionKind = LinkActionKind
 
-export type TerminalLinkAction = {
-  external?: boolean
-  label: string
-  run: () => void | Promise<void>
-}
+export type TerminalLinkAction = LinkAction
 
-export type TerminalLinkActionRequest = {
-  paneId: number
-  anchorX: number
-  anchorY: number
-  destination: string
-  kind: TerminalLinkActionKind
-  primary: TerminalLinkAction
-  alternate?: TerminalLinkAction
-  focusTerminal: () => void
-}
+export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
 
 export type TerminalLinkActionRequester = (request: TerminalLinkActionRequest) => void
 
@@ -28,13 +25,15 @@ export type TerminalLinkActionContext = {
   claimPtyMouse: () => boolean
   request: TerminalLinkActionRequester
   focusTerminal: () => void
+  plainClickBehavior?: TerminalLinkClickBehavior
+  middleClickBehavior?: TerminalLinkClickBehavior
 }
 
 export function closeTerminalLinkActionRequest(
   current: TerminalLinkActionRequest | null,
   dismissed?: TerminalLinkActionRequest
 ): TerminalLinkActionRequest | null {
-  return dismissed && current !== dismissed ? current : null
+  return closeLinkActionRequest(current, dismissed)
 }
 
 type LinkActionDetails = Pick<
@@ -50,7 +49,10 @@ export function requestTerminalLinkAction(
   if (
     !event ||
     !context ||
-    !isTerminalLinkActionActivation(event) ||
+    !(
+      isTerminalLinkActionActivation(event) ||
+      (isTerminalMiddleClickActivation(event) && context.middleClickBehavior !== 'none')
+    ) ||
     !context.pointerGesture.canRequestAction(event)
   ) {
     return false
@@ -60,12 +62,21 @@ export function requestTerminalLinkAction(
     return false
   }
   event.preventDefault()
+  const middleClick = isTerminalMiddleClickActivation(event)
+  if ((middleClick ? context.middleClickBehavior : context.plainClickBehavior) === 'open') {
+    context.focusTerminal()
+    details.primary?.run()
+    return true
+  }
+  if (middleClick && context.middleClickBehavior !== 'actions') {
+    return false
+  }
   context.request({
     ...details,
     paneId: context.paneId,
     anchorX: event.clientX,
     anchorY: event.clientY,
-    focusTerminal: context.focusTerminal
+    restoreFocus: context.focusTerminal
   })
   return true
 }

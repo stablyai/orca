@@ -88,7 +88,8 @@ export type DraftPasteReadyScanResult = {
  *
  * Per agent signal:
  *   - `codex-composer-prompt`: ready when the `›` glyph renders after DECSET
- *     2004; never arms the quiet window (`armQuietTimer` stays false).
+ *     2004, or when DECSET follows a glyph rendered while Codex owns the
+ *     alternate screen; never arms the quiet window.
  *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
  *     (`\x1b[?25h`) renders after DECSET 2004. Like Codex it does NOT arm the
  *     quiet window: opencode stays silent for ~1.5-2s between enabling
@@ -122,8 +123,11 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   let recent = ''
   let postAnchorRecent = ''
   let anchorCarry = ''
+  let codexCarry = ''
   let sawMarkerAnchor = false
   let sawQuietAnchor = false
+  let codexAltScreen = false
+  let sawCodexPromptInAltScreen = false
 
   const {
     markerAnchor,
@@ -167,12 +171,46 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     return false
   }
 
+  const scanCodexPreAnchorPrompt = (data: string): void => {
+    const window = codexCarry + data
+    codexCarry = window.slice(-ANCHOR_CARRY_CHARS)
+    let cursor = 0
+    while (cursor < window.length) {
+      const enterIndex = window.indexOf(DECSET_ALT_SCREEN, cursor)
+      const leaveIndex = window.indexOf(DECRST_ALT_SCREEN, cursor)
+      const promptIndex = window.indexOf(CODEX_COMPOSER_PROMPT, cursor)
+      const nextIndex = Math.min(
+        ...[enterIndex, leaveIndex, promptIndex].filter((index) => index !== -1)
+      )
+      if (!Number.isFinite(nextIndex)) {
+        return
+      }
+      if (nextIndex === enterIndex) {
+        codexAltScreen = true
+        sawCodexPromptInAltScreen = false
+        cursor = nextIndex + DECSET_ALT_SCREEN.length
+      } else if (nextIndex === leaveIndex) {
+        codexAltScreen = false
+        sawCodexPromptInAltScreen = false
+        cursor = nextIndex + DECRST_ALT_SCREEN.length
+      } else {
+        if (codexAltScreen) {
+          sawCodexPromptInAltScreen = true
+        }
+        cursor = nextIndex + CODEX_COMPOSER_PROMPT.length
+      }
+    }
+  }
+
   return {
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
       recent = combined.slice(-512)
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
+      }
+      if (readySignal === 'codex-composer-prompt' && !sawMarkerAnchor) {
+        scanCodexPreAnchorPrompt(data)
       }
       if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
@@ -187,6 +225,9 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
           const anchorIndex = combined.indexOf(markerAnchor)
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
+            if (readySignal === 'codex-composer-prompt' && sawCodexPromptInAltScreen) {
+              return { ready: true, armQuietTimer: false }
+            }
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
             if (postAnchorChunk.includes(signalMarker)) {
               return { ready: true, armQuietTimer: false }

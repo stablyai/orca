@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FsChangeEvent } from '../../../../shared/types'
+import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
 
@@ -12,7 +12,6 @@ function processRootEvent(root: string, event: FsChangeEvent): ReturnType<typeof
   const refreshDir = vi.fn()
   const rootCache: DirCache = {
     children: [],
-    loading: false,
     operationOwner: { kind: 'local' }
   }
 

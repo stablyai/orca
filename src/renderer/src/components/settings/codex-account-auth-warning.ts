@@ -2,7 +2,7 @@ import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
 } from '../../../../shared/rate-limit-types'
-import type { CodexSystemDefaultIdentity } from '../../../../shared/types'
+import type { CodexSystemDefaultIdentity } from '../../../../shared/managed-account-types'
 import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
 
 type AccountRuntime = {

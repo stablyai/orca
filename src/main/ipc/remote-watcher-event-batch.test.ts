@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { createRemoteWatcherEventBatch } from './remote-watcher-event-batch'
 
 const ROOT = '/home/u/repo'
@@ -182,13 +182,10 @@ describe('createRemoteWatcherEventBatch', () => {
 
     for (let i = 0; i < 3; i++) {
       batch.push(
-        Array.from(
-          { length: 50 },
-          (_unused, index): FsChangeEvent => ({
-            kind: 'update',
-            absolutePath: `${ROOT}/wave-${i}-${index}.ts`
-          })
-        )
+        Array.from({ length: 50 }, (_unused, index): FsChangeEvent => ({
+          kind: 'update',
+          absolutePath: `${ROOT}/wave-${i}-${index}.ts`
+        }))
       )
     }
     vi.advanceTimersByTime(150)

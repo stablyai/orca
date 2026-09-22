@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { MAX_QUICK_COMMANDS } from '../terminal/quick-commands'
 import { QuickCommandsSheet } from './QuickCommandsSheet'

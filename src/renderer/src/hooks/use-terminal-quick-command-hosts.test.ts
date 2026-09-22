@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalQuickCommands } from '@/store/slices/terminal-quick-command-hosts'
 
 const testState = vi.hoisted(() => ({

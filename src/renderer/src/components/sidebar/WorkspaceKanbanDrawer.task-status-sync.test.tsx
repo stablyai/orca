@@ -4,7 +4,8 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type * as WorkspaceBoardTaskStatusSync from './workspace-board-task-status-sync'
 
@@ -137,7 +138,6 @@ vi.mock('./use-workspace-kanban-column-resize', () => ({
 
 vi.mock('./use-workspace-kanban-create-worktree', () => ({
   useWorkspaceKanbanCreateWorktree: () => ({
-    canCreateWorktree: true,
     createWorktreeForStatus: vi.fn()
   })
 }))

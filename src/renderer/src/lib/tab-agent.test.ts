@@ -8,7 +8,8 @@ import {
   resolveSiblingTabAgent
 } from './tab-agent'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 
 // Composed exactly the way useTabAgent layers the resolvers: focused pane

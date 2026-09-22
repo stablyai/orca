@@ -1,9 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-quick-command-types'
 import { Label } from '@/components/ui/label'
 import {
   Select,

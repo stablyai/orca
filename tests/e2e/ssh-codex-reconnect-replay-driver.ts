@@ -1,5 +1,6 @@
+import { installSshReplayReplyProbe, readSshReplayReplies } from './ssh-codex-replay-reply-probe'
 import { execFileSync } from 'node:child_process'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
 import {
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -135,8 +136,13 @@ export async function switchToNonRemoteWorktree(
   return otherWorktreeId
 }
 
-export async function installPtyReplayProbe(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function installPtyReplayProbe(
+  page: Page,
+  app: ElectronApplication,
+  ptyId: string
+): Promise<void> {
+  await installSshReplayReplyProbe(app, ptyId)
+  await page.evaluate((expectedPtyId) => {
     const api = window.api?.pty
     if (!api || typeof api.onReplay !== 'function') {
       throw new Error('PTY replay API unavailable')
@@ -150,6 +156,9 @@ export async function installPtyReplayProbe(page: Page): Promise<void> {
     holder.__orcaSshCodexReplayProbe?.dispose()
     const payloads: { id: string; length: number; preview: string }[] = []
     const dispose = api.onReplay(({ id, data }) => {
+      if (id !== expectedPtyId) {
+        return
+      }
       payloads.push({
         id,
         length: data.length,
@@ -157,7 +166,7 @@ export async function installPtyReplayProbe(page: Page): Promise<void> {
       })
     })
     holder.__orcaSshCodexReplayProbe = { payloads, dispose }
-  })
+  }, ptyId)
 }
 
 export async function waitForDockerRemoteReconnected(page: Page, targetId: string): Promise<void> {
@@ -182,8 +191,12 @@ export async function waitForDockerRemoteReconnected(page: Page, targetId: strin
     .toBe(true)
 }
 
-export async function readReplayProbeSnapshot(page: Page): Promise<Record<string, unknown>> {
-  return page.evaluate(() => {
+export async function readReplayProbeSnapshot(
+  page: Page,
+  app: ElectronApplication
+): Promise<Record<string, unknown>> {
+  const replies = await readSshReplayReplies(app)
+  return page.evaluate((replies) => {
     const probe = (
       window as unknown as {
         __orcaSshCodexReplayProbe?: {
@@ -192,10 +205,10 @@ export async function readReplayProbeSnapshot(page: Page): Promise<Record<string
       }
     ).__orcaSshCodexReplayProbe
     return {
-      replayCount: probe?.payloads.length ?? 0,
-      replayPayloads: probe?.payloads.slice(-8) ?? []
+      replayCount: (probe?.payloads.length ?? 0) + replies.length,
+      replayPayloads: [...(probe?.payloads ?? []), ...replies].slice(-8)
     }
-  })
+  }, replies)
 }
 
 export async function readDuplicateStatusRows(page: Page): Promise<string[]> {

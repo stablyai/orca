@@ -1,4 +1,4 @@
-import type { GhosttyImportPreview } from '../../../../shared/types'
+import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import {
   Dialog,

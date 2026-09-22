@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { ownRetainedString } from '../../shared/own-retained-string'
 
 type PluginWorkerOutputSink = (level: 'info' | 'warn' | 'error', line: string) => void
 
@@ -21,9 +22,11 @@ export function pipePluginWorkerOutput(
     if (line.trim().length > 0) {
       log(
         level,
-        truncated
-          ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
-          : line
+        ownRetainedString(
+          truncated
+            ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
+            : line
+        )
       )
     }
   }
@@ -49,7 +52,7 @@ export function pipePluginWorkerOutput(
         buffered = ''
         discarding = newline === -1
       } else {
-        buffered += segment
+        buffered += newline === -1 ? ownRetainedString(segment) : segment
         if (newline !== -1) {
           emit(buffered)
           buffered = ''

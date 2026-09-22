@@ -22,6 +22,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
@@ -188,7 +189,9 @@ export function createRestartSession(
       app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
     }
     try {
-      const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
+      const resolvedHome = await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app }) => app.getPath('home'))
+      )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
       await closeElectronAppForE2E(app)

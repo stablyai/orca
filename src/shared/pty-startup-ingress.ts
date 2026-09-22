@@ -1,12 +1,11 @@
-import {
-  parseTerminalOscColorQuery,
-  terminalOscColorQueryReplies,
-  type TerminalOscColorQuerySlot
-} from './terminal-osc-color-reply'
+import { answerStartupColorQuery } from './pty-startup-color-query-answer'
+import { parsePtyStartupQuery } from './pty-startup-query'
+import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
+import type { TerminalOscColorQuerySlot } from './terminal-osc-color-reply'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
-import { answerEachCookedEchoSafeQueryReply } from './terminal-query-reply'
+import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -46,6 +45,8 @@ export class PtyStartupIngress {
   private processing = false
   private closed = false
   private queryOpen: boolean
+  private kittyQueryOpen: boolean
+  private readonly kittyModes = new TerminalKittyKeyboardModeTracker()
   private rawHighWater = 0
   private queryPending: PtyIngressSourceSpan | null = null
   private echoPending: PtyIngressSourceSpan | null = null
@@ -55,9 +56,10 @@ export class PtyStartupIngress {
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe)
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
+    this.kittyQueryOpen = options.intent?.kittyKeyboardProtocol === true
     if (options.intent) {
       this.deadlineTimer = setTimeout(
         () => this.enqueue({ kind: 'expire' }),
@@ -93,10 +95,10 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  // Live color replies reuse startup's cooked-echo containment (#13137).
+  // Query replies stay ordered when an earlier cooked-echo-risk reply is held (#13137, #13892).
   answerLiveQueryReply(reply: string): boolean {
     return !this.closed && reply.length > 0
-      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part))
+      ? deliverTerminalQueryReplyPayload(reply, this.delivery)
       : false
   }
 
@@ -130,6 +132,10 @@ export class PtyStartupIngress {
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
+        this.kittyQueryOpen = false
+        if (this.queryPending?.data.startsWith('\x1b[')) {
+          this.releaseQueryPending()
+        }
         if (this.ownerBackend !== 'windows-conpty') {
           this.queryOpen = false
           // Why the echo hold deliberately survives this, unlike `snapshot`: the
@@ -142,6 +148,7 @@ export class PtyStartupIngress {
         return
       case 'expire':
         this.queryOpen = false
+        this.kittyQueryOpen = false
         this.releasePendingInSourceOrder(false)
         this.delivery.reset()
         this.clearDeadline()
@@ -152,6 +159,7 @@ export class PtyStartupIngress {
         return
       case 'teardown':
         this.queryOpen = false
+        this.kittyQueryOpen = false
         this.releasePendingInSourceOrder(true)
         this.delivery.close()
         this.clearDeadline()
@@ -204,7 +212,7 @@ export class PtyStartupIngress {
           // query and so keeps re-parsing as `partial` — a hang is the worse of the two.
           if (this.queryPending) {
             const resolved = combinePtyIngressSourceSpans(this.queryPending, tail)
-            if (parseTerminalOscColorQuery(resolved.data, 0).kind !== 'none') {
+            if (parsePtyStartupQuery(resolved.data, 0, this.kittyQueryOpen).kind !== 'none') {
               this.processQuerySpan(tail)
               return
             }
@@ -242,7 +250,7 @@ export class PtyStartupIngress {
     const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
     const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
-    if ((!this.queryOpen || !this.intent) && !suppressConptyQuery) {
+    if ((!this.queryOpen || !this.intent) && !this.kittyQueryOpen && !suppressConptyQuery) {
       this.emit(input, false)
       return
     }
@@ -255,7 +263,7 @@ export class PtyStartupIngress {
         this.emit(slicePtyIngressSourceSpan(input, emittedOffset), false)
         return
       }
-      const query = parseTerminalOscColorQuery(input.data, candidateIndex)
+      const query = parsePtyStartupQuery(input.data, candidateIndex, this.kittyQueryOpen)
       if (query.kind === 'none') {
         scanOffset = candidateIndex + 1
         continue
@@ -277,8 +285,14 @@ export class PtyStartupIngress {
         this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
       }
       const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
-      const answered = this.queryOpen && this.intent && this.answerQuery(query.slots)
-      if (answered || suppressConptyQuery) {
+      const answered =
+        query.kind === 'kitty'
+          ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`)
+          : this.queryOpen && this.intent && this.answerQuery(query.slots)
+      if (query.kind === 'kitty' && answered) {
+        this.kittyQueryOpen = false
+      }
+      if (answered || (suppressConptyQuery && query.kind !== 'kitty')) {
         this.emit(querySpan, true, '')
       } else {
         this.emit(querySpan, false)
@@ -289,45 +303,19 @@ export class PtyStartupIngress {
   }
 
   private answerQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
-    if (slots.some((slot) => this.answeredSlots.has(slot)) || !this.intent) {
-      return false
-    }
-    const replies = terminalOscColorQueryReplies(this.intent.colors, slots)
-    if (!replies) {
-      return false
-    }
-
-    let wroteAny = false
-    for (const [index, reply] of replies.entries()) {
-      const slot = slots[index]
-      if (slot === undefined) {
-        return wroteAny
-      }
-      this.answeredSlots.add(slot)
-      // Why per slot: the replies to one query are written independently, so a
-      // deferred write that fails after reporting success invalidates only its own
-      // claim. Dropping every claim would let a slot that did land be answered a
-      // second time, and a duplicate reply corrupts a parser already mid-read.
-      if (!this.delivery.answer(reply, () => this.answeredSlots.delete(slot))) {
-        this.answeredSlots.delete(slot)
-        return wroteAny
-      }
-      wroteAny = true
-    }
-
+    const answered = answerStartupColorQuery(this.intent, slots, this.answeredSlots, this.delivery)
     if (this.answeredSlots.has(10) && this.answeredSlots.has(11)) {
       this.queryOpen = false
     }
-    return wroteAny
+    return answered
   }
 
   private releaseQueryPending(): void {
-    if (!this.queryPending) {
-      return
-    }
     const pending = this.queryPending
     this.queryPending = null
-    this.emit(pending, false)
+    if (pending) {
+      this.emit(pending, false)
+    }
   }
 
   /**
@@ -337,7 +325,11 @@ export class PtyStartupIngress {
    * against a future second arming site, not a live inversion.
    */
   private releasePendingInSourceOrder(includeConptyQuery: boolean): void {
-    if (includeConptyQuery || this.ownerBackend !== 'windows-conpty') {
+    if (
+      includeConptyQuery ||
+      this.ownerBackend !== 'windows-conpty' ||
+      this.queryPending?.data.startsWith('\x1b[')
+    ) {
       this.releaseQueryPending()
     }
     const pending = this.takeEchoPending()
@@ -368,19 +360,14 @@ export class PtyStartupIngress {
   }
 
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
-    this.onEmission({
-      data,
-      rawStartSeq: span.rawStartSeq,
-      rawEndSeq: span.rawEndSeq,
-      transformed
-    })
+    if (this.kittyQueryOpen) {
+      this.kittyModes.scan(data)
+    }
+    this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {
-    if (!this.deadlineTimer) {
-      return
-    }
-    clearTimeout(this.deadlineTimer)
+    clearTimeout(this.deadlineTimer ?? undefined)
     this.deadlineTimer = null
   }
 }

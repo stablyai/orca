@@ -1,19 +1,27 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 import { translate } from '@/i18n/i18n'
+import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
+import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 type GeneralWorkspaceSettingsSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  defaultsSupported?: boolean
+  sourceDefaultsSupported?: boolean
 }
 
 export function GeneralWorkspaceSettingsSection({
   settings,
-  updateSettings
+  updateSettings,
+  updateSettingsOrThrow = updateSettings,
+  defaultsSupported = true,
+  sourceDefaultsSupported = true
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
   return (
     <section key="workspace" className="space-y-4">
@@ -29,6 +37,44 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <div
+        id={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}
+        data-settings-section={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}
+        className="scroll-mt-6"
+      >
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktrees',
+            'External worktrees'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktreesDescription',
+            'Choose which worktrees created outside Orca appear by default on this host.'
+          )}
+          keywords={[
+            'external',
+            'non-Orca',
+            'worktree',
+            'visibility',
+            'sidebar',
+            'show',
+            'hide',
+            'source',
+            'location',
+            'root',
+            'Claude',
+            'GSD'
+          ]}
+        >
+          <GlobalWorktreeVisibilitySourcesSetting
+            settings={settings}
+            defaultsSupported={defaultsSupported}
+            sourceDefaultsSupported={sourceDefaultsSupported}
+            updateSettings={updateSettingsOrThrow}
+          />
+        </SearchableSetting>
+      </div>
 
       <SearchableSetting
         title={translate(

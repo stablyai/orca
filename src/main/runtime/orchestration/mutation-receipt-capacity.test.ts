@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { MUTATION_RECEIPT_MAX_ROWS } from './mutation-receipt-capacity'
+import { SCHEMA_VERSION } from './db/contract-constants'
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
   return (db as unknown as { db: Database.Database }).db
@@ -103,7 +104,7 @@ describe('mutation receipt capacity schema', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(27)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(sqlite.prepare('SELECT receipt_count FROM mutation_receipt_ledger').get()).toEqual({
       receipt_count: 20
     })

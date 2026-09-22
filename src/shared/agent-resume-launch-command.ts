@@ -1,5 +1,6 @@
 import type { ResumableTuiAgent } from './agent-session-resume'
 import {
+  isPosixStartupShell,
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -37,9 +38,9 @@ function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartu
         return i
       }
       if (
-        // Why: `NAME=value cmd` is posix-only syntax; on cmd/PowerShell such a
-        // token is just a bogus executable name, not a prefix to skip.
-        (shell === 'posix' && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) ||
+        // Why: `NAME=value cmd` is sh-family syntax (fish included, 3.1+); on
+        // cmd/PowerShell such a token is a bogus executable name, not a prefix.
+        (isPosixStartupShell(shell) && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) ||
         (shell === 'powershell' && token === '&' && i === 0)
       ) {
         continue

@@ -54,22 +54,30 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
-          void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+          void deleteFolderWorkspace(
+            folderWorkspaceId,
+            worktree.hostId ? { executionHostId: worktree.hostId } : undefined
+          ).then((deleted) => {
             if (
               deleted &&
-              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId) &&
+              (!worktree.hostId ||
+                useAppStore.getState().activeWorkspaceExecutionHostId === worktree.hostId)
             ) {
               setActiveWorktree(null)
             }
           })
           return
         }
-        runWorktreeDelete(worktree.id)
+        // Why the host (STA-4343): this row is one of possibly two for the same
+        // `repoId::path`, so it has to name its own or the delete lands on the other.
+        runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },
     [
       deleteFolderWorkspace,
       folderWorkspaceId,
+      worktree.hostId,
       setActiveWorktree,
       showDeleteQuickAction,
       worktree.id

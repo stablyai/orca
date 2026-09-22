@@ -8,7 +8,7 @@ import {
   unlinkSync,
   writeSync
 } from 'node:fs'
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../shared/secret-store'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
@@ -31,12 +31,12 @@ export function writeEncryptedCredential(
   path: string,
   value: string
 ): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    writeCredentialFileAtomic(path, safeStorage.encryptString(value))
+  if (getSecretStore().isEncryptionAvailable()) {
+    writeCredentialFileAtomic(path, getSecretStore().encryptString(value))
     return
   }
   console.warn(
-    `[${service.toLowerCase()}] safeStorage encryption unavailable — storing credential in plaintext`
+    `[${service.toLowerCase()}] secret encryption unavailable — storing credential in plaintext`
   )
   writeCredentialFileAtomic(path, Buffer.from(value, 'utf-8'))
 }
@@ -111,9 +111,9 @@ export function readStoredCredentialToken(
     return null
   }
 
-  if (safeStorage.isEncryptionAvailable()) {
+  if (getSecretStore().isEncryptionAvailable()) {
     try {
-      return usableToken(safeStorage.decryptString(raw))
+      return usableToken(getSecretStore().decryptString(raw))
     } catch {
       return readPlaintextLegacyCredential(service, raw)
     }
@@ -127,7 +127,7 @@ function readPlaintextLegacyCredential(
   raw: Buffer
 ): string | null {
   const plaintext = decodeUtf8(raw)
-  // Why: legacy plaintext tokens are printable UTF-8; safeStorage ciphertext
+  // Why: legacy plaintext tokens are printable UTF-8; sealed ciphertext
   // such as macOS v10 blobs must not be decoded into auth-header junk.
   if (plaintext === null || hasControlCharacter(plaintext)) {
     throw new CredentialDecryptionError(service)

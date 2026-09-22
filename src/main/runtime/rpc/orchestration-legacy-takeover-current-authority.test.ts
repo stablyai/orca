@@ -81,13 +81,12 @@ describe('legacy takeover by current runtime authority', () => {
     expect(response).toMatchObject({
       ok: true,
       result: {
-        run: {
-          id: harness.adoptedRunId,
-          coordinator_handle: CURRENT_COORDINATOR_HANDLE,
-          coordinator_pane_key: CURRENT_COORDINATOR_PANE
-        }
+        run: { id: harness.adoptedRunId, coordinator_handle: CURRENT_COORDINATOR_HANDLE }
       }
     })
+    expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBe(
+      CURRENT_COORDINATOR_PANE
+    )
   })
 
   it('requires a runtime-issued SSH attachment for fresh launch proof', async () => {

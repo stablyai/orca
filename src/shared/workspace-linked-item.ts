@@ -1,4 +1,4 @@
-import type { WorkspaceLinkedItem } from './types'
+import type { WorkspaceLinkedItem } from './worktree/types'
 
 export function areWorkspaceLinkedItemsEqual(
   a: WorkspaceLinkedItem | null | undefined,

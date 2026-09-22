@@ -1,4 +1,4 @@
-import type { GitHubAssignableUser } from '../../../shared/types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type {
   PendingOp,
   StickyHideEntry,

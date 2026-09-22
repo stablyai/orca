@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { describe, expect, it } from 'vitest'
 import { createNewIssueDraftSlice } from './new-issue-draft'
 import type { AppState } from '../types'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 
 function makeStore() {
   return create<Pick<AppState, 'newIssueDraft' | 'setNewIssueDraft' | 'clearNewIssueDraft'>>()(

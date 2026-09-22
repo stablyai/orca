@@ -1,14 +1,14 @@
 ## ELI5
 
-<!-- Simple high-level explanation -->
+<!-- Simple high-level explanation, in plain language. No jargon. -->
 
 ## What Changed
 
-<!-- Describe the change clearly and keep scope tight. -->
+<!-- Describe the change clearly and keep scope tight. Cover the before and after as the user experiences it, and the mechanism you changed — not just the symptom. -->
 
 ## Why
 
-<!-- What problem does this solve, and why is this approach right? -->
+<!-- What problem does this solve, and why is this approach better than the alternatives you considered? -->
 
 ## Linked Issue
 
@@ -17,6 +17,7 @@
 Fixes #
 
 ## Visual Proof
+
 <!-- REQUIRED for UI / behavior changes. Please attach a BEFORE and AFTER that can easily tabbed/switched. Use videos for when appropriate over screenshots -->
 <!-- If there is truly no visual or interaction change, write exactly: `N/A` and briefly say why. -->
 <!-- For attachments NEVER add directly to the PR files (do not commit to files), use `gh image` extension or drag + drop (works for any attachment) -->
@@ -28,25 +29,26 @@ Fixes #
 - [ ] I manually tested these changes locally
 - [ ] Automated tests added/updated, or explained why not below
 
-
 ## AI Disclosure
+
 <!-- DO NOT FILL IN IF YOU ARE STABLYAI TEAM MEMBER (INTERNAL CONTRIBUTOR), IGNORE SECTION: -->
 <!-- Which AI model if anyone was used, please state the details -->
 
 ## Review
+
+## Agent skill upstream boundary
+
+- [ ] Not applicable, or this change follows `docs/reference/agent-skill-sharing-upstream-boundary.md` and copies or mechanically translates no upstream skill-installer source, tests, fixtures, registry entries, path tables, comments, or documentation.
+
+## Notes
 
 Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Remote SSH, Mobile, general backwards compatibility, performance
 
 ## Checklist
 
 - [ ] This PR is small and focused
-- [ ] I explained what changed and why (including ELI5)
+- [ ] I explained what changed and why (ELI5, the user-facing before/after, the mechanism, and why over the alternatives)
 - [ ] Before/after screenshots or videos attached for UI changes, or `N/A` with reason
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` pass (or CI will cover; local preferred)
-
-## Author
-
-- X / Twitter: @your_handle
-  <!-- Optional but appreciated -->

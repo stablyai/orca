@@ -1,8 +1,65 @@
-import { app } from 'electron'
-import type { UpdateStatus } from '../shared/types'
+import { app, autoUpdater as nativeUpdater } from 'electron'
+import type { UpdateStatus } from '../shared/update-status-types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000
+
+export function registerMacUpdaterEvents({
+  getCurrentStatus,
+  hasInstallableDownloadedVersion,
+  getPendingInstallVersion,
+  getKnownReleaseUrl,
+  performQuitAndInstall,
+  shouldDeferMacQuitForInstall,
+  sendStatus
+}: {
+  getCurrentStatus: () => UpdateStatus
+  hasInstallableDownloadedVersion: () => boolean
+  getPendingInstallVersion: () => string
+  getKnownReleaseUrl: () => string | undefined
+  performQuitAndInstall: () => void | Promise<void>
+  shouldDeferMacQuitForInstall: () => boolean
+  sendStatus: (status: UpdateStatus) => void
+}): void {
+  if (process.platform === 'darwin') {
+    nativeUpdater.on('update-downloaded', () => {
+      const hasInstallableVersion = hasInstallableDownloadedVersion()
+      handleMacInstallerReady(hasInstallableVersion, performQuitAndInstall, () => {
+        sendStatus({
+          state: 'downloaded',
+          version: getPendingInstallVersion(),
+          releaseUrl: getKnownReleaseUrl()
+        })
+      })
+    })
+  }
+
+  app.on('before-quit', (event) => {
+    if (!shouldDeferMacQuitForInstall()) {
+      return
+    }
+    if (consumeMacInstallGuardBypass()) {
+      recordUpdaterLifecycle('macos_before_quit_guard_bypassed')
+      return
+    }
+    if (isMacQuitAndInstallInFlight()) {
+      return
+    }
+    if (
+      deferMacQuitUntilInstallerReady(
+        getCurrentStatus(),
+        hasInstallableDownloadedVersion(),
+        getPendingInstallVersion,
+        sendStatus
+      )
+    ) {
+      recordUpdaterLifecycle('macos_before_quit_deferred', {
+        version: getPendingInstallVersion()
+      })
+      event.preventDefault()
+    }
+  })
+}
 
 /** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false

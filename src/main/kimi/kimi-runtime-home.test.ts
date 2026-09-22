@@ -9,7 +9,7 @@ vi.mock('../wsl', () => wslMocks)
 vi.mock('node:os', () => ({ homedir: () => 'C:\\Users\\neil' }))
 
 import { getHostKimiHome, getKimiRuntimeTarget, resolveKimiHome } from './kimi-runtime-home'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 function settings(overrides: Partial<GlobalSettings>): GlobalSettings {
   return overrides as GlobalSettings

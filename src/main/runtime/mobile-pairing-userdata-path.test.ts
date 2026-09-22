@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 // Import from the production source of truth so a filename rename can't silently
 // pass these tests against stale names.
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // Mutable userData the electron mock resolves. We flip it mid-test to simulate
 // app.setName('Orca') changing how app.getPath('userData') resolves (e.g. from
@@ -14,8 +16,12 @@ import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairin
 // of whether the test host's filesystem is case-sensitive.
 const appState = { userData: '' }
 
+// Why the port for getPath: userData now resolves through AppEnvironment, so an
+// electron mock would be inert here. safeStorage is still mocked because the modules
+// under test seal through it directly.
+installFakeAppEnvironment({ getPath: () => appState.userData })
+
 vi.mock('electron', () => ({
-  app: { getPath: () => appState.userData },
   safeStorage: {
     isEncryptionAvailable: () => false,
     encryptString: (plaintext: string) => Buffer.from(plaintext, 'utf-8'),
@@ -37,6 +43,8 @@ describe('mobile pairing userData path stability', () => {
     lateDir = join(root, 'userdata-late')
     mkdirSync(canonicalDir, { recursive: true })
     mkdirSync(lateDir, { recursive: true })
+    // Why re-install: the global setup's beforeEach reinstates its own fake.
+    installFakeAppEnvironment({ getPath: () => appState.userData })
     vi.resetModules()
   })
 
@@ -54,8 +62,9 @@ describe('mobile pairing userData path stability', () => {
     appState.userData = lateDir
 
     expect(getCanonicalUserDataPath()).toBe(canonicalDir)
-    const { app } = await import('electron')
-    expect(getCanonicalUserDataPath()).not.toBe(app.getPath('userData'))
+    // Why the port: this is the "resolve late" path the captured value must differ from.
+    const { getAppEnvironment } = await import('../../shared/app-environment')
+    expect(getCanonicalUserDataPath()).not.toBe(getAppEnvironment().getPath('userData'))
   })
 
   it('writes DeviceRegistry + E2EE keypair under the canonical path, not the late one', async () => {
@@ -158,6 +167,46 @@ describe('mobile pairing userData path stability', () => {
 
     expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
     expect(readFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), 'utf-8')).toBe(canonicalKeypair)
+  })
+
+  it('rolls back the first copy when the second file fails to migrate', async () => {
+    // A half-copied pair would leave the registry without its E2EE key and, worse,
+    // trip the existing-target guard so the next launch never retries.
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof NodeFs>('node:fs')
+      let copies = 0
+      return {
+        ...actual,
+        default: actual,
+        copyFileSync: (source: string, target: string) => {
+          copies += 1
+          if (copies === 2) {
+            throw new Error('simulated copy failure')
+          }
+          actual.copyFileSync(source, target)
+        }
+      }
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      appState.userData = canonicalDir
+      const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
+        await import('../persistence')
+      initDataPath()
+
+      appState.userData = lateDir
+      writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), JSON.stringify([]))
+      writeFileSync(join(lateDir, E2EE_KEYPAIR_FILENAME), JSON.stringify({ v: 1 }))
+
+      expect(() => migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)).not.toThrow()
+
+      expect(errorSpy).toHaveBeenCalled()
+      expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
+      expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
+    } finally {
+      errorSpy.mockRestore()
+      vi.doUnmock('node:fs')
+    }
   })
 
   it('no-ops when the source path equals the canonical path (no rename happened)', async () => {

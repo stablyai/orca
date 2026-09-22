@@ -11,6 +11,7 @@ import {
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
 } from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
   rightSidebarOpen: true,
@@ -198,6 +199,7 @@ function expectNoDrag(tag: string): void {
 }
 
 function setRendererPlatform(platform: NodeJS.Platform): void {
+  resetRendererAppPlatformCacheForTests()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {

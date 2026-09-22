@@ -38,7 +38,7 @@ describe('buildPrintToPdfOptions', () => {
       generateDocumentOutline: false,
       scale: 1.5,
       pageSize: { width: 8.5, height: 11 },
-      margins: { marginType: 'custom', top: 0.25, bottom: 0.5, left: 0.75, right: 1 },
+      margins: { top: 0.25, bottom: 0.5, left: 0.75, right: 1 },
       pageRanges: '1-2',
       headerTemplate: '<span></span>',
       footerTemplate: '<span></span>'
@@ -47,7 +47,6 @@ describe('buildPrintToPdfOptions', () => {
 
   it('defaults omitted margin sides to 1cm when any side is set', () => {
     expect(buildPrintToPdfOptions({ marginTop: 0.25 }).margins).toEqual({
-      marginType: 'custom',
       top: 0.25,
       bottom: DEFAULT_MARGIN_INCHES,
       left: DEFAULT_MARGIN_INCHES,

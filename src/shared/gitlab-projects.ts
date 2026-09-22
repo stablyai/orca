@@ -1,6 +1,6 @@
 // Why: pure helpers for GitLabProjectSettings — kept out of the IPC
 // handler so the recents logic is testable without mocking the Store.
-import type { GitLabProjectSettings } from './types'
+import type { GitLabProjectSettings } from './gitlab-types'
 
 /** Default max recents kept before older entries fall off. */
 export const GITLAB_RECENTS_MAX = 10

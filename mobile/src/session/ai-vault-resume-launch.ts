@@ -13,30 +13,14 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../src/shared/tui-agent-launch-defaults'
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
-import type { RpcClient } from '../transport/rpc-client'
-import {
-  readMobileReviewCreatedTerminal,
-  readMobileReviewTerminalSendAccepted,
-  type MobileReviewTerminalTab
-} from './mobile-diff-review-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
-
-const NODE_PLATFORMS = new Set<NodeJS.Platform>([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-])
 
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
@@ -165,12 +149,14 @@ function normalizeMobileAiVaultResumeCommandOverrides(
 }
 
 export async function resumeAiVaultSessionInTerminal(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
   launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
 ): Promise<MobileReviewTerminalTab> {
-  const created = await client.sendRequest(
-    'session.tabs.createTerminal',
+  // Each request is awaited outside its catch so a transport drop propagates as the original error
+  // object; only a refusal is rewritten into this step's own copy.
+  const created = await reviewTerminalCreateRun.request(
+    client,
     {
       worktree: `id:${worktreeId}`,
       ...(launch.env ? { env: launch.env } : {}),
@@ -184,15 +170,13 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
-  if (!created.ok) {
-    throw new Error(created.error?.message || 'Failed to create terminal')
-  }
-  const terminalTab = readMobileReviewCreatedTerminal(created.result)
-  if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
-  }
-  const sent = await client.sendRequest(
-    'terminal.send',
+  let terminalTab
+  terminalTab = interpretOrThrowRefusalMessage(
+    () => reviewTerminalCreateRun.interpret(created),
+    'Failed to create terminal'
+  )
+  const sent = await reviewTerminalSendRun.request(
+    client,
     {
       terminal: terminalTab.terminal,
       text: launch.command,
@@ -200,10 +184,12 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
-  if (!sent.ok) {
-    throw new Error(sent.error?.message || 'Failed to send resume command')
-  }
-  if (!readMobileReviewTerminalSendAccepted(sent.result)) {
+  let accepted
+  accepted = interpretOrThrowRefusalMessage(
+    () => reviewTerminalSendRun.interpret(sent),
+    'Failed to send resume command'
+  )
+  if (!accepted) {
     throw new Error('Terminal input is locked')
   }
   return terminalTab
@@ -235,16 +221,6 @@ export function createMobileAiVaultResumeMutationRegistry(
       bySessionId.delete(sessionId)
     }
   }
-}
-
-export function readMobileRuntimeHostPlatform(statusResult: unknown): NodeJS.Platform | null {
-  if (!statusResult || typeof statusResult !== 'object') {
-    return null
-  }
-  const hostPlatform = (statusResult as { hostPlatform?: unknown }).hostPlatform
-  return typeof hostPlatform === 'string' && NODE_PLATFORMS.has(hostPlatform as NodeJS.Platform)
-    ? (hostPlatform as NodeJS.Platform)
-    : null
 }
 
 export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): string | null {

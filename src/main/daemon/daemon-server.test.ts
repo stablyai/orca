@@ -1,13 +1,15 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
+import type { ConnectedDaemonClient } from './daemon-client-connections'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 
@@ -30,6 +32,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {
@@ -49,21 +52,16 @@ function createMockSubprocess(): SubprocessHandle & {
 }
 
 type DaemonServerPrivate = {
-  server: Server | null
-  pendingPtySpawnPreparations: Map<string, Set<unknown>>
+  lifecycle: { server: Server | null }
+  preparations: { pending: Map<string, Set<unknown>> }
   host: {
     kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
+    dispose: () => Promise<void>
   }
-  clients: Map<
-    string,
-    {
-      clientId: string
-      controlSocket: Socket
-      streamSocket: Socket | null
-      authenticatedPairEstablished: boolean
-    }
-  >
-  routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
+  connections: { clients: Map<string, ConnectedDaemonClient> }
+  requestRouter: {
+    route(clientId: string, request: DaemonRequest): Promise<unknown>
+  }
 }
 
 describe('DaemonServer', () => {
@@ -263,7 +261,9 @@ describe('DaemonServer', () => {
           requestType === 'kill'
             ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
             : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
-        await expect(cancelRequest).resolves.toEqual({})
+        await expect(cancelRequest).resolves.toEqual(
+          requestType === 'kill' ? {} : { canceled: true }
+        )
         finishPreparation()
         await canceledCreates
         expect(spawnSubprocess).not.toHaveBeenCalled()
@@ -342,11 +342,11 @@ describe('DaemonServer', () => {
       // Wait for the server to process the close (and cancel the prep) before
       // releasing the preflight, else the resumed spawn races ahead of cancellation.
       await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).clients.size).toBe(0)
+        expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
       )
       finishPreparation()
       await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).pendingPtySpawnPreparations.size).toBe(0)
+        expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
       )
       expect(spawnSubprocess).not.toHaveBeenCalled()
     })
@@ -483,8 +483,8 @@ describe('DaemonServer', () => {
       const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
 
       let acknowledged = false
-      const routed = daemon
-        .routeRequest('client-1', {
+      const routed = daemon.requestRouter
+        .route('client-1', {
           id: 'kill-1',
           type: 'kill',
           payload: { sessionId: 'agent-session', immediate: true }
@@ -585,14 +585,14 @@ describe('DaemonServer', () => {
           write: vi.fn()
         } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
 
-        daemon.clients.set('client-1', {
+        daemon.connections.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
           streamSocket,
           authenticatedPairEstablished: true
         })
 
-        await daemon.routeRequest('client-1', {
+        await daemon.requestRouter.route('client-1', {
           id: 'req-1',
           type: 'createOrAttach',
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
@@ -605,7 +605,7 @@ describe('DaemonServer', () => {
         expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"background"')
 
         streamSocket.write.mockClear()
-        await daemon.routeRequest('client-1', {
+        await daemon.requestRouter.route('client-1', {
           id: 'req-2',
           type: 'write',
           payload: { sessionId: 'test-session', data: 'x' }
@@ -642,14 +642,14 @@ describe('DaemonServer', () => {
           write: vi.fn()
         } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
 
-        daemon.clients.set('client-1', {
+        daemon.connections.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
           streamSocket,
           authenticatedPairEstablished: true
         })
 
-        await daemon.routeRequest('client-1', {
+        await daemon.requestRouter.route('client-1', {
           id: 'req-1',
           type: 'createOrAttach',
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
@@ -700,13 +700,13 @@ describe('DaemonServer', () => {
           writableLength: number
         }
 
-        daemon.clients.set('client-1', {
+        daemon.connections.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
           streamSocket,
           authenticatedPairEstablished: true
         })
-        await daemon.routeRequest('client-1', {
+        await daemon.requestRouter.route('client-1', {
           id: 'req-1',
           type: 'createOrAttach',
           payload: { sessionId: 'test-session', cols: 80, rows: 24 }
@@ -773,11 +773,11 @@ describe('DaemonServer', () => {
       const control = await connectRawHello('control', 'raw-client')
       const stream = await connectRawHello('stream', 'raw-client')
 
-      expect(daemon.clients.get('raw-client')?.streamSocket).toBeTruthy()
+      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeTruthy()
 
       stream.destroy()
 
-      await waitFor(() => daemon.clients.get('raw-client')?.streamSocket === null)
+      await waitFor(() => daemon.connections.clients.get('raw-client')?.streamSocket === null)
       control.destroy()
     })
 
@@ -794,7 +794,7 @@ describe('DaemonServer', () => {
       const secondStream = await connectRawHello('stream', 'raw-client')
 
       await waitFor(() => firstClosed)
-      expect(daemon.clients.get('raw-client')?.streamSocket).toBeTruthy()
+      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeTruthy()
       secondStream.destroy()
       control.destroy()
     })
@@ -816,8 +816,8 @@ describe('DaemonServer', () => {
       const secondControl = await connectRawHello('control', 'raw-client')
 
       await waitFor(() => firstControlClosed && firstStreamClosed)
-      expect(daemon.clients.get('raw-client')?.controlSocket).toBeTruthy()
-      expect(daemon.clients.get('raw-client')?.streamSocket).toBeNull()
+      expect(daemon.connections.clients.get('raw-client')?.controlSocket).toBeTruthy()
+      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeNull()
       secondControl.destroy()
     })
 
@@ -831,7 +831,7 @@ describe('DaemonServer', () => {
       })
 
       await waitFor(() => closed || stream.destroyed)
-      expect(daemon.clients.has('missing-client')).toBe(false)
+      expect(daemon.connections.clients.has('missing-client')).toBe(false)
     })
   })
 
@@ -843,7 +843,7 @@ describe('DaemonServer', () => {
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
       }
-      const controlSocket = [...daemon.clients.values()][0].controlSocket
+      const controlSocket = [...daemon.connections.clients.values()][0].controlSocket
       const originalWrite = controlSocket.write.bind(controlSocket)
       let replyFlushed: (() => void) | undefined
       vi.spyOn(controlSocket, 'write').mockImplementation(((
@@ -925,7 +925,7 @@ describe('DaemonServer', () => {
       const c = await connectClient()
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
-      await waitFor(() => daemon.server === null)
+      await waitFor(() => daemon.lifecycle.server === null)
       // Why not existsSync: the dead entry remains for the next publisher to replace.
       expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })

@@ -50,7 +50,13 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'AAAA', uri: 'file:///photo.jpg' }])
     })
 
-    expect(result).toEqual([{ path: '/tmp/orca-attach.png', previewUri: 'file:///photo.jpg' }])
+    expect(result).toEqual([
+      {
+        path: '/tmp/orca-attach.png',
+        previewUri: 'file:///photo.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
+    ])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
@@ -86,9 +92,21 @@ describe('uploadMobileNativeChatImages', () => {
     })
 
     expect(result).toEqual([
-      { path: '/tmp/a.png', previewUri: 'file:///a.jpg' },
-      { path: '/tmp/b.png', previewUri: 'file:///b.jpg' },
-      { path: '/tmp/c.png', previewUri: 'file:///c.jpg' }
+      {
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      },
+      {
+        path: '/tmp/b.png',
+        previewUri: 'file:///b.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      },
+      {
+        path: '/tmp/c.png',
+        previewUri: 'file:///c.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
     ])
     expect(order).toEqual([
       'read:file:///a.jpg',
@@ -136,7 +154,8 @@ describe('uploadMobileNativeChatImages', () => {
     expect(onImageUploaded).toHaveBeenCalledOnce()
     expect(onImageUploaded).toHaveBeenCalledWith({
       path: '/tmp/a.png',
-      previewUri: 'file:///a.jpg'
+      previewUri: 'file:///a.jpg',
+      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
     })
   })
 
@@ -149,7 +168,13 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'BBBB' }])
     })
 
-    expect(result).toEqual([{ path: '/tmp/x.png', previewUri: 'data:image/png;base64,BBBB' }])
+    expect(result).toEqual([
+      {
+        path: '/tmp/x.png',
+        previewUri: 'data:image/png;base64,BBBB',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
+    ])
   })
 
   it('signals upload start only after a real image is picked', async () => {

@@ -1,0 +1,241 @@
+import {
+  formatByteCeiling,
+  REMOTE_IMPORT_MAX_FILE_BYTES,
+  REMOTE_IMPORT_MAX_TOTAL_BYTES
+} from './runtime-import-limits'
+import { constants } from 'node:fs'
+import { lstat, open, readdir, realpath } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { authorizeExternalPath } from './filesystem-auth'
+import { isENOENT } from './filesystem-path-containment'
+import type {
+  StagedExternalImportEntry,
+  StagedExternalImportSource
+} from '../../shared/filesystem-import-result-types'
+
+class RuntimeUploadSymlinkError extends Error {}
+
+/** Bytes this source contributes to the drop budget; 0 unless it staged. */
+export function stagedRuntimeUploadByteLength(source: StagedExternalImportSource): number {
+  if (source.status !== 'staged') {
+    return 0
+  }
+  return source.entries.reduce(
+    (total, entry) => (entry.kind === 'file' ? total + entry.byteLength : total),
+    0
+  )
+}
+
+/**
+ * @param totalBytesBefore Bytes already staged by earlier sources in the same drop,
+ *   so the total ceiling covers the whole drop rather than each source alone.
+ */
+export async function stageOneSourceForRuntimeUpload(
+  sourcePath: string,
+  totalBytesBefore = 0
+): Promise<StagedExternalImportSource> {
+  const resolvedSource = resolve(sourcePath)
+
+  // Why: runtime uploads read client-local paths in the client main process;
+  // authorize before lstat just like local copy imports.
+  authorizeExternalPath(resolvedSource)
+
+  let sourceStat: Awaited<ReturnType<typeof lstat>>
+  try {
+    sourceStat = await lstat(resolvedSource)
+  } catch (error) {
+    if (isENOENT(error)) {
+      return { sourcePath, status: 'skipped', reason: 'missing' }
+    }
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      ((error as NodeJS.ErrnoException).code === 'EACCES' ||
+        (error as NodeJS.ErrnoException).code === 'EPERM')
+    ) {
+      return { sourcePath, status: 'skipped', reason: 'permission-denied' }
+    }
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  if (sourceStat.isSymbolicLink()) {
+    return { sourcePath, status: 'skipped', reason: 'symlink' }
+  }
+  if (!sourceStat.isFile() && !sourceStat.isDirectory()) {
+    return { sourcePath, status: 'skipped', reason: 'unsupported' }
+  }
+  try {
+    const entries = sourceStat.isDirectory()
+      ? await stageDirectoryEntries(resolvedSource, totalBytesBefore)
+      : [(await stageFileEntry(resolvedSource, '', { totalBytesBefore })).entry]
+    return {
+      sourcePath,
+      status: 'staged',
+      name: basename(resolvedSource),
+      kind: sourceStat.isDirectory() ? 'directory' : 'file',
+      entries
+    }
+  } catch (error) {
+    if (error instanceof RuntimeUploadSymlinkError) {
+      return { sourcePath, status: 'skipped', reason: 'symlink' }
+    }
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+async function stageDirectoryEntries(
+  rootPath: string,
+  totalBytesBefore: number
+): Promise<StagedExternalImportEntry[]> {
+  const entries: StagedExternalImportEntry[] = [{ relativePath: '', kind: 'directory' }]
+  let totalBytes = totalBytesBefore
+  const rootRealPath = await realpath(rootPath)
+
+  async function visit(dirPath: string): Promise<void> {
+    const dirStat = await lstat(dirPath)
+    if (dirStat.isSymbolicLink()) {
+      throw new RuntimeUploadSymlinkError(
+        `Symlink not allowed in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
+      )
+    }
+    if (!dirStat.isDirectory()) {
+      throw new Error(
+        `Unsupported file type in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
+      )
+    }
+    await assertRealPathInsideRoot(
+      rootRealPath,
+      dirPath,
+      normalizeRelativeUploadPath(relative(rootPath, dirPath))
+    )
+    const dirEntries = await readdir(dirPath, { withFileTypes: true })
+    for (const entry of dirEntries) {
+      const childPath = join(dirPath, entry.name)
+      const childRelativePath = normalizeRelativeUploadPath(relative(rootPath, childPath))
+      if (entry.isSymbolicLink()) {
+        throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${childRelativePath}'`)
+      }
+      if (entry.isDirectory()) {
+        entries.push({ relativePath: childRelativePath, kind: 'directory' })
+        await visit(childPath)
+        continue
+      }
+      if (!entry.isFile()) {
+        throw new Error(`Unsupported file type in '${childRelativePath}'`)
+      }
+      const stagedFile = await stageFileEntry(childPath, childRelativePath, {
+        rootRealPath,
+        totalBytesBefore: totalBytes
+      })
+      totalBytes += stagedFile.byteLength
+      entries.push(stagedFile.entry)
+    }
+  }
+
+  await visit(rootPath)
+  return entries
+}
+
+async function stageFileEntry(
+  filePath: string,
+  relativePath: string,
+  options: { rootRealPath?: string; totalBytesBefore: number }
+): Promise<{ entry: StagedExternalImportEntry; byteLength: number }> {
+  const statResult = await lstat(filePath)
+  const displayPath = normalizeRelativeUploadPath(relativePath)
+  // Why: a dropped file's relative path is '', so errors would name nothing.
+  // The entry keeps '' — only the message falls back to the file's own name.
+  const displayName = displayPath || basename(filePath)
+  if (statResult.isSymbolicLink()) {
+    throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayName}'`)
+  }
+  if (!statResult.isFile()) {
+    throw new Error(`Unsupported file type in '${displayName}'`)
+  }
+  if (options.rootRealPath) {
+    await assertRealPathInsideRoot(options.rootRealPath, filePath, displayName)
+  }
+  assertRemoteUploadBudget(displayName, statResult.size, options.totalBytesBefore + statResult.size)
+  const fileHandle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const openedStat = await fileHandle.stat()
+    if (!openedStat.isFile()) {
+      throw new Error(`Unsupported file type in '${displayName}'`)
+    }
+    if (
+      openedStat.size !== statResult.size ||
+      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
+      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
+    ) {
+      throw new Error(`File changed during upload staging: '${displayName}'`)
+    }
+    assertRemoteUploadBudget(
+      displayName,
+      openedStat.size,
+      options.totalBytesBefore + openedStat.size
+    )
+    // Why: bytes are read slice-by-slice at upload time, so staging records the
+    // identity the streamer re-checks rather than the body itself. Size alone
+    // would let a same-size replacement slip through between the two calls.
+    return {
+      entry: {
+        relativePath: displayPath,
+        kind: 'file',
+        byteLength: openedStat.size,
+        inode: openedStat.ino,
+        deviceId: openedStat.dev,
+        modifiedAtMs: openedStat.mtimeMs
+      },
+      byteLength: openedStat.size
+    }
+  } finally {
+    await fileHandle.close()
+  }
+}
+
+async function assertRealPathInsideRoot(
+  rootRealPath: string,
+  candidatePath: string,
+  displayPath: string
+): Promise<void> {
+  const candidateRealPath = await realpath(candidatePath)
+  const relativeToRoot = relative(rootRealPath, candidateRealPath)
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  if (
+    relativeToRoot !== '' &&
+    (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))
+  ) {
+    throw new Error(`Path escaped upload root during staging: '${displayPath}'`)
+  }
+}
+
+function assertRemoteUploadBudget(
+  displayName: string,
+  fileBytes: number,
+  totalBytes: number
+): void {
+  if (fileBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
+    throw new Error(
+      `'${displayName}' is ${formatByteCeiling(fileBytes)}, over the ` +
+        `${formatByteCeiling(REMOTE_IMPORT_MAX_FILE_BYTES)} per-file remote import limit`
+    )
+  }
+  if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
+    throw new Error(
+      `This import is ${formatByteCeiling(totalBytes)}, over the ` +
+        `${formatByteCeiling(REMOTE_IMPORT_MAX_TOTAL_BYTES)} total remote import limit`
+    )
+  }
+}
+
+function normalizeRelativeUploadPath(path: string): string {
+  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
+}

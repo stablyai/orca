@@ -4,6 +4,7 @@ export const UI_LANGUAGE_CHINESE = 'zh'
 export const UI_LANGUAGE_KOREAN = 'ko'
 export const UI_LANGUAGE_JAPANESE = 'ja'
 export const UI_LANGUAGE_SPANISH = 'es'
+export const UI_LANGUAGE_FRENCH = 'fr'
 
 export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_SYSTEM
@@ -12,6 +13,7 @@ export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_KOREAN
   | typeof UI_LANGUAGE_JAPANESE
   | typeof UI_LANGUAGE_SPANISH
+  | typeof UI_LANGUAGE_FRENCH
 
 export type PluginUiLanguage = `plugin:${string}`
 export type UiLanguage = BuiltInUiLanguage | PluginUiLanguage
@@ -22,7 +24,8 @@ const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_JAPANESE,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_FRENCH
 ])
 
 const PLUGIN_UI_LANGUAGE_RE =

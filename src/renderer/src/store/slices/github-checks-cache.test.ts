@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 
-import { createGitHubSlice, prChecksCacheSuffix } from './github'
+import { createGitHubSlice } from './github'
+import { prChecksCacheSuffix } from '../github/cache-identity'
 import { createHostedReviewSlice } from './hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { AppState } from '../types'
-import type { PRCheckDetail, PRInfo } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 
 const mockApi = {
   gh: {

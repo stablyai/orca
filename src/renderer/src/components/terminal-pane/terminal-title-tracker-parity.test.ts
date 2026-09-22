@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 // Why: Phase 3 slice 1 of terminal-side-effect-authority.md runs a per-PTY
 // title tracker in main alongside the renderer transport's byte parser. Both
 // must derive IDENTICAL ordered title/status facts from the same bytes, or
@@ -103,6 +104,19 @@ describe('main title tracker parity with the renderer transport processor', () =
     vi.useRealTimers()
   })
 
+  it('agrees on captured OMP native frames before and after owner rebranding', () => {
+    const captured = readFileSync(
+      new URL('../../../../main/runtime/__fixtures__/omp-native-title-win32.txt', import.meta.url),
+      'utf8'
+    )
+    feedBoth(paths, captured)
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events.some((event) => event.kind === 'became-working')).toBe(true)
+    expect(paths.main.events.some((event) => event.kind === 'became-idle')).toBe(true)
+    feedBoth(paths, captured.replaceAll(']0;π', ']0;OMP'))
+    expect(paths.main.events).toEqual(paths.renderer.events)
+  })
+
   it('derives identical facts from a coalesced spinner+idle chunk (issue #1083)', () => {
     // One realistic node-pty batch: Pi's 80ms spinner frames plus agent_end's
     // trailing idle title. A last-title reader sees only the idle title and
@@ -117,6 +131,32 @@ describe('main title tracker parity with the renderer transport processor', () =
     const kinds = paths.main.events.map((event) => event.kind)
     expect(kinds).toContain('became-working')
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
+  })
+
+  // Why: OMP 17.2.12+ cannot animate under WSL/ConPTY, so it emits static state markers
+  // instead of braille frames (#13890). Both paths must see the same working→idle turn.
+  it('derives identical facts from static OMP WSL state titles', () => {
+    const chunk = `${ESC}]0;zsh | π : cwd${BEL}response text\r\n` + `${ESC}]0;zsh | π > cwd${BEL}`
+    feedBoth(paths, chunk)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    const kinds = paths.main.events.map((event) => event.kind)
+    expect(kinds).toContain('became-working')
+    expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
+  })
+
+  // Why: an OMP pane that stops emitting titles mid-turn must still leave working, or the
+  // stale native marker keeps the pane — and its synthetic spinner — pinned to working.
+  it('clears a stale static OMP working title in both paths', () => {
+    feedBoth(paths, `${ESC}]0;zsh | π : cwd${BEL}`)
+    feedBoth(paths, 'title-free output')
+    vi.advanceTimersByTime(3_000)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events).toContainEqual({
+      kind: 'became-idle',
+      title: 'zsh | π > cwd'
+    })
   })
 
   it('derives identical facts from BEL- and ST-terminated titles', () => {

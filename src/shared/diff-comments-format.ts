@@ -1,4 +1,4 @@
-import type { DiffComment } from './types'
+import type { DiffComment } from './diff-comment-types'
 
 function isMarkdownComment(comment: Pick<DiffComment, 'source'>): boolean {
   return comment.source === 'markdown'

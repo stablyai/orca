@@ -1,4 +1,4 @@
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
 
 export type CheckDetailsLoadState = {
   requestId?: number
@@ -7,9 +7,14 @@ export type CheckDetailsLoadState = {
   error: string | null
 }
 
+declare const checksContextOwnerBrand: unique symbol
+
+/** Identity minted per checks context; only its reference is ever compared. */
+export type GitHubChecksContextOwner = object & { readonly [checksContextOwnerBrand]?: never }
+
 export type GitHubChecksTabState = {
   contextKey: string
-  contextOwner: object
+  contextOwner: GitHubChecksContextOwner
   sourceChecks: GitHubChecksSource
   localChecks: PRCheckDetail[] | null
   expandedCheckKey: string | null

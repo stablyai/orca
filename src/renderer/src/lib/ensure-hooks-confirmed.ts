@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { OrcaHooks } from '../../../shared/types'
+import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {
@@ -8,6 +8,7 @@ import {
   type IssueCommandReadResult
 } from '@/runtime/runtime-hooks-client'
 import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -128,6 +129,14 @@ async function confirmScriptContent(
   const previouslyApproved = Boolean(existingHash)
 
   return new Promise<'run' | 'skip'>((resolve) => {
+    let settled = false
+    const settle = (decision: 'run' | 'skip'): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      resolve(decision)
+    }
     state.openModal('confirm-orca-yaml-hooks', {
       repoId,
       repoName,
@@ -135,7 +144,9 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
-      onResolve: (decision: 'run' | 'skip') => resolve(decision)
+      onResolve: settle,
+      // Why: eviction must fail closed without stranding the singleton trust queue.
+      [MODAL_DISMISSED_KEY]: () => settle('skip')
     })
   })
 }

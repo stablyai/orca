@@ -1,0 +1,683 @@
+{
+  "operation": "session.tabs-stream-health",
+  "family": "session.tabs-stream-health",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
+  "scenarioSha256": "fab12524a09049d976da752cbe1b837a0aee04ce6e1eef75cbf517c862cb0d4a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "01a7e0d83191": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "023d1c79061d": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "05a791f26f12": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0cde28482d1a": {
+      "name": "session.tabs.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "15ed06bc7b53": {
+      "name": "fetch-failed",
+      "ordinal": 4,
+      "value": {
+        "code": "method_not_found",
+        "message": "Unknown method"
+      }
+    },
+    "18295edda482": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "1d8cdc057f73": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "49a2260ea0e7": {
+      "accepted": "unapplied",
+      "applicationRevision": 0
+    },
+    "510d7b10aacf": {
+      "name": "fetch-started",
+      "ordinal": 1,
+      "value": {}
+    },
+    "540a1c1f9afc": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      }
+    },
+    "54c028e441b6": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "5b4b31a5c6c8": {
+      "name": "fetch-failed",
+      "ordinal": 4,
+      "value": {
+        "code": "refused",
+        "message": "outer refused"
+      }
+    },
+    "60a84325dd0c": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "72cf9146105f": {
+      "name": "fetch-errored",
+      "ordinal": 5,
+      "value": "Cannot read properties of undefined (reading 'tabs')"
+    },
+    "75ab5fae8ed4": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7f8a0566a246": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "85bf7ca92393": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "88f4e35276e9": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "8a0ba48aedaa": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "8a782843ee8b": {
+      "name": "fetch-failed",
+      "ordinal": 4,
+      "value": {
+        "code": "refused",
+        "message": ""
+      }
+    },
+    "94f0f260fae7": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "9c37ed7ec7a5": {
+      "name": "fetch-errored",
+      "ordinal": 5,
+      "value": "Cannot read properties of null (reading 'tabs')"
+    },
+    "b6ed47ca5ea3": {
+      "accepted": {
+        "source": "list",
+        "tabs": []
+      },
+      "applicationRevision": 0
+    },
+    "c106b3cf3f62": {
+      "name": "fetch-errored",
+      "ordinal": 4,
+      "value": "transport failure"
+    },
+    "d68be3f11f15": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "d8eba295ab18": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      }
+    },
+    "dca46076da98": {
+      "name": "fetch-succeeded",
+      "ordinal": 4,
+      "value": {
+        "error": "refused"
+      }
+    },
+    "df45a919af4f": {
+      "name": "fetch-errored",
+      "ordinal": 4,
+      "value": ""
+    },
+    "e29309cc10af": {
+      "accepted": {
+        "source": "list",
+        "tabs": [
+          {
+            "id": "tab-1"
+          }
+        ]
+      },
+      "applicationRevision": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tabs-stream-health-session.tabs.list-1",
+    "checkpoints": [
+      {
+        "id": "session-tabs-health-reconciled.normal:reconciled",
+        "observation": {
+          "sender": ["18295edda482"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "e29309cc10af",
+          "effects": ["510d7b10aacf", "540a1c1f9afc"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.result-absent:reconciled",
+        "observation": {
+          "sender": ["01a7e0d83191"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "1d8cdc057f73", "72cf9146105f"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.result-null:reconciled",
+        "observation": {
+          "sender": ["8a0ba48aedaa"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "023d1c79061d", "9c37ed7ec7a5"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-ok-missing:reconciled",
+        "observation": {
+          "sender": ["7f8a0566a246"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["510d7b10aacf", "dca46076da98"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-false-string-error:reconciled",
+        "observation": {
+          "sender": ["60a84325dd0c"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["510d7b10aacf", "d68be3f11f15"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.inner-false-object-error:reconciled",
+        "observation": {
+          "sender": ["94f0f260fae7"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "b6ed47ca5ea3",
+          "effects": ["510d7b10aacf", "d8eba295ab18"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.outer-refused:reconciled",
+        "observation": {
+          "sender": ["88f4e35276e9"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "5b4b31a5c6c8"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.outer-refused-no-message:reconciled",
+        "observation": {
+          "sender": ["54c028e441b6"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "8a782843ee8b"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.method-not-found:reconciled",
+        "observation": {
+          "sender": ["85bf7ca92393"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "15ed06bc7b53"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.transport-rejection:reconciled",
+        "observation": {
+          "sender": ["75ab5fae8ed4"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "c106b3cf3f62"]
+        }
+      },
+      {
+        "id": "session-tabs-health-reconciled.transport-rejection-no-message:reconciled",
+        "observation": {
+          "sender": ["05a791f26f12"],
+          "payloads": ["0cde28482d1a"],
+          "settlements": {
+            "activate": "84e5ca07cb7a",
+            "reconcile": "eb79a9b3682a"
+          },
+          "state": "49a2260ea0e7",
+          "effects": ["510d7b10aacf", "df45a919af4f"]
+        }
+      }
+    ]
+  }
+}

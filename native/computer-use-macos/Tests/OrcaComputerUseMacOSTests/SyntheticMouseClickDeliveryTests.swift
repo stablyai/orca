@@ -82,7 +82,7 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: 1,
                 target: target,
-                currentRecipient: { intruder },
+                currentObservation: { .focused(intruder) },
                 makeEvent: { $0 },
                 post: { posted.append($0) },
                 pause: { _ in }
@@ -96,19 +96,61 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         XCTAssertEqual(posted, [.move])
     }
 
-    func testRecipientChangeAfterMouseUpStopsUntilStateIsVerified() throws {
+    func testFinalMouseUpMayDismissTheTargetWithoutFailingTheClick() throws {
         let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
-        let intruder = SyntheticMouseClickDelivery.Recipient(ownerPID: 52, windowID: 202)
-        var recipients = [target, intruder, target, target]
-        var firstAttempt: [SyntheticMouseClickDelivery.Step] = []
+        var observations: [SyntheticMouseClickDelivery.RecipientObservation] = [.focused(target), .dismissed]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
+
+        try SyntheticMouseClickDelivery.deliver(
+            clickCount: 1,
+            target: target,
+            currentObservation: { observations.removeFirst() },
+            makeEvent: { $0 },
+            post: { posted.append($0) },
+            pause: { _ in }
+        )
+
+        XCTAssertEqual(posted, [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)])
+    }
+
+    func testFinalUnavailableObservationRemainsFailClosed() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        var observations: [SyntheticMouseClickDelivery.RecipientObservation] = [.focused(target), .unavailable]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
 
         XCTAssertThrowsError(
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: 1,
                 target: target,
-                currentRecipient: { recipients.removeFirst() },
+                currentObservation: { observations.removeFirst() },
                 makeEvent: { $0 },
-                post: { firstAttempt.append($0) },
+                post: { posted.append($0) },
+                pause: { _ in }
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? SyntheticMouseClickDelivery.FenceFailure,
+                .recipientChanged(expected: target, actual: nil, deliveredPresses: 1)
+            )
+        }
+        XCTAssertEqual(posted, [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)])
+    }
+
+    func testFinalMouseUpRejectsADifferentFocusedRecipient() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        let intruder = SyntheticMouseClickDelivery.Recipient(ownerPID: 52, windowID: 202)
+        var recipients: [SyntheticMouseClickDelivery.Recipient?] = [target, intruder]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
+
+        XCTAssertThrowsError(
+            try SyntheticMouseClickDelivery.deliver(
+                clickCount: 1,
+                target: target,
+                currentObservation: {
+                    recipients.removeFirst().map(SyntheticMouseClickDelivery.RecipientObservation.focused) ?? .dismissed
+                },
+                makeEvent: { $0 },
+                post: { posted.append($0) },
                 pause: { _ in }
             )
         ) { error in
@@ -117,34 +159,19 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
                 .recipientChanged(expected: target, actual: intruder, deliveredPresses: 1)
             )
         }
-        XCTAssertEqual(firstAttempt, [
-            .move,
-            .buttonDown(pressIndex: 1),
-            .buttonUp(pressIndex: 1),
-        ])
-
-        var retry: [SyntheticMouseClickDelivery.Step] = []
-        try SyntheticMouseClickDelivery.deliver(
-            clickCount: 1,
-            target: target,
-            currentRecipient: { recipients.removeFirst() },
-            makeEvent: { $0 },
-            post: { retry.append($0) },
-            pause: { _ in }
-        )
-        XCTAssertEqual(retry, [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)])
+        XCTAssertEqual(posted, [.move, .buttonDown(pressIndex: 1), .buttonUp(pressIndex: 1)])
     }
 
-    func testMouseUpPostsBeforeSecondRecipientCheck() throws {
+    func testMouseUpPostsBeforeRecipientCheckForTheNextPress() throws {
         let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
         var trace: [String] = []
 
         try SyntheticMouseClickDelivery.deliver(
-            clickCount: 1,
+            clickCount: 2,
             target: target,
-            currentRecipient: {
+            currentObservation: {
                 trace.append("recipient")
-                return target
+                return .focused(target)
             },
             makeEvent: { $0 },
             post: {
@@ -160,7 +187,9 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             pause: { _ in }
         )
 
-        XCTAssertEqual(trace, ["move", "recipient", "down", "up", "recipient"])
+        XCTAssertEqual(trace, [
+            "move", "recipient", "down", "up", "recipient", "recipient", "down", "up", "recipient"
+        ])
     }
 
     func testRecipientChangeBeforeLaterPressReportsCompletedPresses() {
@@ -173,7 +202,9 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: 2,
                 target: target,
-                currentRecipient: { recipients.removeFirst() },
+                currentObservation: {
+                    .focused(recipients.removeFirst())
+                },
                 makeEvent: { $0 },
                 post: { posted.append($0) },
                 pause: { _ in }
@@ -191,7 +222,66 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         ])
     }
 
-    func testMultiClickRevalidatesBeforeEveryPressAndAfterEveryRelease() throws {
+    func testRecipientChangeAfterIntermediateMouseUpStopsBeforeNextPress() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        let intruder = SyntheticMouseClickDelivery.Recipient(ownerPID: 52, windowID: 202)
+        var recipients: [SyntheticMouseClickDelivery.Recipient?] = [target, intruder]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
+
+        XCTAssertThrowsError(
+            try SyntheticMouseClickDelivery.deliver(
+                clickCount: 2,
+                target: target,
+                currentObservation: {
+                    recipients.removeFirst().map(SyntheticMouseClickDelivery.RecipientObservation.focused) ?? .dismissed
+                },
+                makeEvent: { $0 },
+                post: { posted.append($0) },
+                pause: { _ in }
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? SyntheticMouseClickDelivery.FenceFailure,
+                .recipientChanged(expected: target, actual: intruder, deliveredPresses: 1)
+            )
+        }
+        XCTAssertEqual(posted, [
+            .move,
+            .buttonDown(pressIndex: 1),
+            .buttonUp(pressIndex: 1),
+        ])
+    }
+
+    func testIntermediateMouseUpDismissalStopsBeforeNextPress() {
+        let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
+        var recipients: [SyntheticMouseClickDelivery.Recipient?] = [target, nil]
+        var posted: [SyntheticMouseClickDelivery.Step] = []
+
+        XCTAssertThrowsError(
+            try SyntheticMouseClickDelivery.deliver(
+                clickCount: 2,
+                target: target,
+                currentObservation: {
+                    recipients.removeFirst().map(SyntheticMouseClickDelivery.RecipientObservation.focused) ?? .dismissed
+                },
+                makeEvent: { $0 },
+                post: { posted.append($0) },
+                pause: { _ in }
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? SyntheticMouseClickDelivery.FenceFailure,
+                .recipientChanged(expected: target, actual: nil, deliveredPresses: 1)
+            )
+        }
+        XCTAssertEqual(posted, [
+            .move,
+            .buttonDown(pressIndex: 1),
+            .buttonUp(pressIndex: 1),
+        ])
+    }
+
+    func testMultiClickRevalidatesBeforeEveryPressAndBetweenReleases() throws {
         let target = SyntheticMouseClickDelivery.Recipient(ownerPID: 41, windowID: 101)
         var validationCount = 0
         var posted: [SyntheticMouseClickDelivery.Step] = []
@@ -199,9 +289,9 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         try SyntheticMouseClickDelivery.deliver(
             clickCount: 2,
             target: target,
-            currentRecipient: {
+            currentObservation: {
                 validationCount += 1
-                return target
+                return .focused(target)
             },
             makeEvent: { $0 },
             post: { posted.append($0) },
@@ -220,7 +310,7 @@ final class SyntheticMouseClickDeliveryTests: XCTestCase {
         XCTAssertThrowsError(try SyntheticMouseClickDelivery.deliver(
             clickCount: 1,
             target: target,
-            currentRecipient: { target },
+            currentObservation: { .focused(target) },
             makeEvent: { step in
                 if case .buttonUp = step { throw PreparationFailure.mouseUp }
                 return step

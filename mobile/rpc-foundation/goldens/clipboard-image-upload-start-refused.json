@@ -1,0 +1,89 @@
+{
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "bf0227939c2d41d6a1ebc5b07a31196043e78f1580811bd32ec6fc5f447f5934",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "765ab192e1a5": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Image is too large",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "7bc2e4227914": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "a338b739235b": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "too_large",
+            "message": "Image is too large"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a69f0ea71c3c": {
+      "failure": "Image is too large",
+      "path": "unsaved"
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-upload-start-refused",
+    "checkpoints": [
+      {
+        "id": "start-refused",
+        "observation": {
+          "sender": ["a338b739235b"],
+          "payloads": ["7bc2e4227914"],
+          "settlements": {
+            "remote": "765ab192e1a5"
+          },
+          "state": "a69f0ea71c3c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

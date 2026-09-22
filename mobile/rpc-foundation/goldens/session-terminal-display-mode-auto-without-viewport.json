@@ -1,0 +1,160 @@
+{
+  "operation": "session.terminal-display-mode",
+  "family": "session.terminal-display-mode",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "9e90ad39a8d4257adf30166757a6364c4710dc3ae9f06365f80a3dd8f1c94d89",
+  "scenarioSha256": "bb278c4da53b82d84cf50b308901ce196cc1f07c1a84790ad491319ee6746541",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "36a9812a9d80": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": [],
+      "viewport": {
+        "$rpc": "null"
+      }
+    },
+    "8dda780d8b54": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "$rpc": "null"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a1c27099bee5": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "auto"
+          }
+        }
+      }
+    },
+    "b8202d6f729b": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d26d24f38a03": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"auto\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "e27323f28d10": {
+      "name": "subscribe-terminal",
+      "ordinal": 1,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-display-mode-auto-without-viewport",
+    "checkpoints": [
+      {
+        "id": "in-flight",
+        "observation": {
+          "sender": ["b8202d6f729b"],
+          "payloads": ["d26d24f38a03"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "9270aeb7d9c6"
+          },
+          "state": "8dda780d8b54",
+          "effects": ["e27323f28d10"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a1c27099bee5"],
+          "payloads": ["d26d24f38a03"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "eb79a9b3682a"
+          },
+          "state": "36a9812a9d80",
+          "effects": ["e27323f28d10"]
+        }
+      }
+    ]
+  }
+}

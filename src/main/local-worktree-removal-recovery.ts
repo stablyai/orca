@@ -1,5 +1,6 @@
-import type { GitWorktreeInfo, RemoveWorktreeResult } from '../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
+import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
@@ -46,7 +47,7 @@ function staleRegistrationRecoveryError(
       error,
       canonicalWorktreePath,
       force
-    )} The worktree directory was removed, but Git still has stale worktree registration. Retry deletion after resolving the Git registration error.`
+    )} Git still has stale worktree registration. Retry deletion after resolving the Git registration error.`
   )
 }
 
@@ -150,7 +151,7 @@ async function isRecoverableWindowsFilesystemRemovalFailure(
   }
 }
 
-export async function removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval(
+export async function removeStaleLocalWorktreeRegistration(
   args: StaleLocalWorktreeRegistrationArgs
 ): Promise<RemoveWorktreeResult> {
   return removeRequiredGitWorktreeRegistration(args)

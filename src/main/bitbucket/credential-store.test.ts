@@ -19,13 +19,13 @@ async function loadStore(
   // Why: doMock registrations outlive resetModules, so an injected failure from
   // one case would leak into every later one in this file.
   vi.doUnmock('node:fs')
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => true,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: decryptStringMock
-    }
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: decryptStringMock,
+    describeProtectionGap: () => null
+  })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }

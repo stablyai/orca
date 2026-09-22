@@ -1,742 +1,551 @@
-/**
- * STA-3077 behavioral oracles: reconnecting an SSH workspace must not add panes
- * the user never opened, and must not accumulate remote shells.
- *
- * These assert observable behavior, not a mechanism, so they stay valid under
- * any implementation that fixes the defect. Each case names the root cause it
- * pins from the #12264 diagnosis.
- *
- * Reported symptom: relay PTY count went 2 -> 19 -> 20 across three reconnects.
- */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import {
+  testState,
+  createStore,
+  makeRepo,
+  makeTerminalTab,
+  writeDataFile
+} from './persistence-test-harness'
+import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { getDefaultPersistedState } from '../shared/constants'
-
-const testState = { dir: '' }
+import { sshRemotePtyLeaseAllowsReattach } from '../shared/ssh-types'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
-const TARGET = 'ssh-target-1'
-const WORKTREE = 'repo-1:wt-1'
+const TARGET = 'ssh-1'
+const WORKTREE = 'repo1::/worktree'
 const TAB = 'tab-1'
-/** Must be a real layout leaf UUID — the store drops any other spelling. */
-const LEAF = '3f1c9a2e-7b4d-4e1a-9c8f-2d5e6a7b8c90'
+const OTHER_TAB = 'tab-moved-to'
 
-async function createStore(state: Record<string, unknown> = {}) {
-  mkdirSync(testState.dir, { recursive: true })
-  writeFileSync(
-    join(testState.dir, 'orca-data.json'),
-    JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
-    'utf-8'
-  )
-  vi.resetModules()
-  const { Store, initDataPath } = await import('./persistence')
-  initDataPath()
-  return new Store()
-}
-
-beforeEach(() => {
-  testState.dir = mkdtempSync(join(tmpdir(), 'orca-sta3077-'))
-})
-
-/** One pane's lease, as the reattach path records it. */
-function leaseFor(ptyId: string, updatedAt: number) {
+/**
+ * The renderer's published session for one SSH pane. `terminalTopologyRevisionByRepoId` is what
+ * makes persisted membership authoritative — without it the host cannot tell "the user closed
+ * this tab" from "the renderer has not published its layout yet".
+ */
+function sessionWithPane(args: {
+  tabId: string
+  leafId: string
+  ptyId: string
+  authoritative?: boolean
+}) {
   return {
-    targetId: TARGET,
-    ptyId,
-    worktreeId: WORKTREE,
-    tabId: TAB,
-    leafId: LEAF,
-    state: 'attached' as const,
-    updatedAt
+    activeRepoId: 'repo1',
+    activeWorktreeId: WORKTREE,
+    activeTabId: args.tabId,
+    tabsByWorktree: {
+      [WORKTREE]: [makeTerminalTab({ id: args.tabId, ptyId: args.ptyId, worktreeId: WORKTREE })]
+    },
+    terminalLayoutsByTabId: {
+      [args.tabId]: {
+        root: { type: 'leaf' as const, leafId: args.leafId },
+        activeLeafId: args.leafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+      }
+    },
+    ...(args.authoritative === false ? {} : { terminalTopologyRevisionByRepoId: { repo1: 1 } })
   }
 }
 
-function liveLeasesForPane(store: {
-  getSshRemotePtyLeases: (targetId?: string) => readonly {
-    ptyId: string
-    tabId?: string
-    leafId?: string
-    state: string
-  }[]
-}) {
+/** The session after the user closes the tab: membership stays authoritative, the tab is gone. */
+function sessionAfterClose() {
+  return {
+    activeRepoId: 'repo1',
+    activeWorktreeId: WORKTREE,
+    activeTabId: null,
+    tabsByWorktree: { [WORKTREE]: [] },
+    terminalLayoutsByTabId: {},
+    terminalTopologyRevisionByRepoId: { repo1: 2 }
+  }
+}
+
+/** What the relay's reattach bind does per PTY — see `restoreReattachedPtyRuntime`. */
+function relayReattachBinds(
+  store: ReturnType<typeof createStore>,
+  args: { tabId: string; leafId: string; ptyId: string; incarnationId?: string }
+): boolean | null {
+  return store.persistPtyBinding({
+    worktreeId: WORKTREE,
+    tabId: args.tabId,
+    leafId: args.leafId,
+    ptyId: args.ptyId,
+    ...(args.incarnationId ? { incarnationId: args.incarnationId } : {}),
+    mayCreate: false,
+    mayReviveRetiredSurface: false
+  })
+}
+
+/**
+ * One reconnect's worth of writes, in the order the spawn commits actually issue them: the lease
+ * row first — so a force-quit in the renderer's debounce window cannot leave a running remote shell
+ * with no lease to reattach it — then the binding, then the binding-side supersession trigger.
+ *
+ * This suite used to bind BEFORE upserting, an order no caller uses. Under that order supersession
+ * always saw a session already naming the arriving shell and passed; under production's order it
+ * bailed on the predecessor's binding every time and never re-ran, so the guard could not catch the
+ * per-reconnect lease growth it exists to pin.
+ *
+ * Goes through `persistPtyBinding` rather than `setWorkspaceSession` because that is the writer
+ * production uses; a raw session write is reconciled back to the attached lease's PTY by binding
+ * recovery, which would make the fixture disagree with the real flow.
+ */
+function paneSpawnCommits(
+  store: ReturnType<typeof createStore>,
+  args: { tabId: string; leafId: string; ptyId: string; leaseTabId?: string }
+): void {
+  store.upsertSshRemotePtyLease({
+    targetId: TARGET,
+    ptyId: args.ptyId,
+    worktreeId: WORKTREE,
+    tabId: args.leaseTabId ?? args.tabId,
+    leafId: args.leafId,
+    state: 'attached'
+  })
+  store.persistPtyBinding({
+    worktreeId: WORKTREE,
+    tabId: args.tabId,
+    leafId: args.leafId,
+    ptyId: args.ptyId
+  })
+  store.supersedeSshRemotePtyLeasesForBoundPane(TARGET, args.leafId)
+}
+
+function liveLeasePtyIds(store: ReturnType<typeof createStore>): string[] {
   return store
     .getSshRemotePtyLeases(TARGET)
-    .filter(
-      (lease) =>
-        lease.tabId === TAB &&
-        lease.leafId === LEAF &&
-        lease.state !== 'terminated' &&
-        lease.state !== 'expired'
-    )
+    .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+    .map((lease) => lease.ptyId)
 }
 
-describe('STA-3077: one pane owns at most one live remote PTY lease', () => {
-  // RC1: lease uniqueness keys on (targetId, ptyId) only, so a pane whose PTY id
-  // changes leaves its predecessor behind with nothing to retire it.
-  it('does not accumulate a second live lease when one pane re-leases a new PTY id', async () => {
-    const store = await createStore()
+/**
+ * What `reattachKnownPtys` actually feeds to `pty.attach`. Goes through the shipped predicate
+ * rather than restating it, so the two cannot drift into the fan-out this suite exists to pin.
+ */
+function bulkReattachPtyIds(store: ReturnType<typeof createStore>): string[] {
+  return store
+    .getSshRemotePtyLeases(TARGET)
+    .filter(sshRemotePtyLeaseAllowsReattach)
+    .map((lease) => lease.ptyId)
+}
 
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-a', 1))
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-b', 2))
+function tabIds(store: ReturnType<typeof createStore>): string[] {
+  return (store.getWorkspaceSession().tabsByWorktree?.[WORKTREE] ?? []).map((tab) => tab.id)
+}
 
-    expect(liveLeasesForPane(store)).toHaveLength(1)
+describe('STA-3077: an SSH reattach binds panes without grafting them back', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // RC1: the reported 2 -> 19 -> 20 growth. Lease count must not scale with
-  // reconnect count for a fixed set of panes.
-  it('keeps live lease count flat across repeated reconnects of one pane', async () => {
+  // The reported user-visible bug in one assertion. `closeTab` fires pty.kill in the background
+  // and only COUNTS rejections, so a transport-class failure leaves the lease non-terminated —
+  // and `reattachKnownPtys` treats every non-terminated lease as live.
+  it('does not resurrect a tab whose closing pty.kill failed with a transport error', async () => {
     const store = await createStore()
-
-    for (let reconnect = 0; reconnect < 10; reconnect += 1) {
-      store.upsertSshRemotePtyLease(leaseFor(`relay-pty-${reconnect}`, reconnect + 1))
-    }
-
-    expect(liveLeasesForPane(store)).toHaveLength(1)
-  })
-})
-
-describe('STA-3077: superseding respects the durable pane binding', () => {
-  // Spawn-shaped setup: the creating branches are intentionally allowed here.
-  function bindPaneTo(store: Awaited<ReturnType<typeof createStore>>, ptyId: string) {
-    store.persistPtyBinding({
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'pty-1',
       worktreeId: WORKTREE,
       tabId: TAB,
-      leafId: LEAF,
-      ptyId,
-      incarnationId: `inc-${ptyId}`
+      leafId: TEST_LEAF_1,
+      state: 'attached'
     })
-  }
+    // The user closes the tab; the remote kill never lands, so the lease survives untouched.
+    store.setWorkspaceSession(sessionAfterClose())
 
-  it('scrubs the predecessor binding when the arriving lease is the bound one', async () => {
+    const bound = relayReattachBinds(store, {
+      tabId: TAB,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-1',
+      incarnationId: 'inc-1'
+    })
+
+    expect(bound).toBe(false)
+    expect(tabIds(store)).toEqual([])
+  })
+
+  // Tripwire: a refusal must not depend on the pane sitting where its lease says it does.
+  // `detachTerminalPaneToTab` moves a live pane, and the lease keeps naming the tab it left.
+  it('binds a pane that moved to another tab rather than refusing it', async () => {
     const store = await createStore()
-    bindPaneTo(store, 'relay-pty-a')
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-a', 1))
-    bindPaneTo(store, 'relay-pty-b')
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-b', 2))
+    store.setWorkspaceSession(
+      sessionWithPane({ tabId: OTHER_TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' })
+    )
 
-    expect(liveLeasesForPane(store).map((lease) => lease.ptyId)).toEqual(['relay-pty-b'])
-    const layout = store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]
-    expect(layout?.ptyIdsByLeafId?.[LEAF]).toBe('relay-pty-b')
-  })
+    const { findTerminalTabIdForLeaf } =
+      await import('./runtime/workspace-session-terminal-membership-authority')
+    // The relay resolves the tab from the live layout before binding, exactly as the production
+    // path does; forwarding the lease's frozen `TAB` here is what would strand the pane.
+    const resolvedTabId = findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)
+    expect(resolvedTabId).toBe(OTHER_TAB)
 
-  // Expiring the bound predecessor here would detach a live pane, so both stay
-  // live and reattach arbitrates with the binding in hand.
-  it('defers instead of expiring the lease the pane is bound to', async () => {
-    const store = await createStore()
-    bindPaneTo(store, 'relay-pty-a')
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-a', 1))
-    store.upsertSshRemotePtyLease(leaseFor('relay-pty-b', 2))
+    const bound = relayReattachBinds(store, {
+      tabId: resolvedTabId!,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-2',
+      incarnationId: 'inc-2'
+    })
 
+    expect(bound).toBe(true)
     expect(
-      liveLeasesForPane(store)
-        .map((lease) => lease.ptyId)
-        .sort()
-    ).toEqual(['relay-pty-a', 'relay-pty-b'])
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[LEAF]).toBe(
-      'relay-pty-a'
-    )
-
-    // Arbitration keeps the bound lease, not the newer one.
-    expect(await store.supersedeDuplicatePaneLeases(TARGET)).toBe(1)
-    expect(liveLeasesForPane(store).map((lease) => lease.ptyId)).toEqual(['relay-pty-a'])
-  })
-})
-
-describe('STA-3077: existing duplicate leases are healed, not revived', () => {
-  // Installs that predate pane-keyed supersession already carry the duplicates
-  // this bug accumulated. Preventing new ones does not help them.
-  it('retires every stale duplicate for a pane and keeps the newest', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: Array.from({ length: 20 }, (_, index) => ({
-        ...leaseFor(`relay-pty-${index}`, index + 1),
-        createdAt: index + 1
-      }))
-    })
-
-    const retired = await store.supersedeDuplicatePaneLeases(TARGET)
-
-    expect(retired).toBe(19)
-    expect(liveLeasesForPane(store).map((lease) => lease.ptyId)).toEqual(['relay-pty-19'])
+      store.getWorkspaceSession().terminalLayoutsByTabId?.[OTHER_TAB]?.ptyIdsByLeafId?.[TEST_LEAF_1]
+    ).toBe('pty-2')
   })
 
-  // Recency alone would retire the lease the pane is actually bound to whenever a
-  // newer unbound lease exists, detaching a live pane instead of healing it.
-  it('keeps the durably bound lease even when an unbound one is newer', async () => {
-    const store = await createStore()
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-bound',
-      incarnationId: 'inc-bound'
-    })
-    store.upsertSshRemotePtyLease({ ...leaseFor('relay-pty-bound', 1), createdAt: 1 })
-    // Arrives later but no pane is bound to it.
-    store.upsertSshRemotePtyLease({ ...leaseFor('relay-pty-newer', 99), createdAt: 99 })
-
-    await store.supersedeDuplicatePaneLeases(TARGET)
-
-    expect(liveLeasesForPane(store).map((lease) => lease.ptyId)).toEqual(['relay-pty-bound'])
-  })
-
-  // A retirement that is not durable must not be believed: it would read as
-  // retired in memory and attached on disk for the rest of the session.
-  it('rolls the retirement back when the durable write fails', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    // The durable write is the async twin: retirement runs on reconnect, and the sync flush
-    // fsyncs a multi-MB file from the main thread. Reaching for a private name is not ideal,
-    // but the property under test is the rollback, and it must follow whichever writer the
-    // retirement actually awaits.
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockRejectedValue(new Error('disk full'))
-
-    expect(await store.supersedeDuplicatePaneLeases(TARGET)).toBe(0)
-    expect(liveLeasesForPane(store)).toHaveLength(2)
-  })
-
-  it('does not chase store mutations after the retirement generation is durable', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    const internal = store as unknown as { enqueueWrite: () => Promise<void> }
-    const enqueueWrite = internal.enqueueWrite.bind(store)
-    let injectedMutation = false
-    const enqueueSpy = vi.spyOn(internal, 'enqueueWrite').mockImplementation(async () => {
-      await enqueueWrite()
-      if (!injectedMutation) {
-        injectedMutation = true
-        store.updateUI({ sidebarWidth: 777 })
-      }
-    })
-
-    expect(await store.supersedeDuplicatePaneLeases(TARGET)).toBe(1)
-
-    expect(enqueueSpy).toHaveBeenCalledOnce()
-    enqueueSpy.mockRestore()
-    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-  })
-
-  it('retries when a mutation invalidates the retirement write before rename', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    const internal = store as unknown as { writeToDiskAsync: () => Promise<void> }
-    const writeToDiskAsync = internal.writeToDiskAsync.bind(store)
-    let injectedMutation = false
-    const writeSpy = vi.spyOn(internal, 'writeToDiskAsync').mockImplementation(async () => {
-      const write = writeToDiskAsync()
-      if (!injectedMutation) {
-        injectedMutation = true
-        store.updateUI({ sidebarWidth: 778 })
-      }
-      await write
-    })
-
-    expect(await store.supersedeDuplicatePaneLeases(TARGET)).toBe(1)
-
-    expect(writeSpy).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not undo a concurrent confirmation of the provisional expired state', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.markSshRemotePtyLease(TARGET, 'relay-pty-a', 'expired')
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(
-      store.getSshRemotePtyLeases(TARGET).find((lease) => lease.ptyId === 'relay-pty-a')?.state
-    ).toBe('expired')
-    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-  })
-
-  it('rolls back after a rejected concurrent attach request', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.markSshRemotePtyLease(TARGET, 'relay-pty-a', 'attached')
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(
-      store.getSshRemotePtyLeases(TARGET).find((lease) => lease.ptyId === 'relay-pty-a')?.state
-    ).toBe('attached')
-  })
-
-  it('does not revive a provisional loser after a concurrent same-pane upsert', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.upsertSshRemotePtyLease({ ...leaseFor('relay-pty-c', 3), createdAt: 3 })
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(liveLeasesForPane(store).map((lease) => lease.ptyId)).toEqual(['relay-pty-c'])
-  })
-
-  it('does not restore attached state over a concurrent detach', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.markSshRemotePtyLeasesForShutdown(TARGET, 'detached')
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(
-      store.getSshRemotePtyLeases(TARGET).find((lease) => lease.ptyId === 'relay-pty-a')?.state
-    ).toBe('expired')
-    expect(
-      store.getSshRemotePtyLeases(TARGET).find((lease) => lease.ptyId === 'relay-pty-b')?.state
-    ).toBe('detached')
-  })
-
-  it('does not roll back concurrent session or lease changes after a failed write', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.markSshRemotePtyLease(TARGET, 'relay-pty-a', 'terminated')
-    const concurrentTab = 'tab-concurrent'
-    const concurrentLeaf = '8a2b4c6d-1e3f-4a5b-8c7d-9e0f1a2b3c4d'
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: concurrentTab,
-      leafId: concurrentLeaf,
-      ptyId: 'relay-pty-concurrent',
-      incarnationId: 'inc-concurrent'
-    })
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(
-      store.getSshRemotePtyLeases(TARGET).find((lease) => lease.ptyId === 'relay-pty-a')?.state
-    ).toBe('terminated')
-    expect(
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[concurrentTab]?.ptyIdsByLeafId?.[
-        concurrentLeaf
-      ]
-    ).toBe('relay-pty-concurrent')
-  })
-
-  it('does not restore a binding for a lease removed during a failed write', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-a',
-      incarnationId: 'inc-a'
-    })
-    delete store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[LEAF]
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    store.removeSshRemotePtyLease(TARGET, 'relay-pty-a')
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(store.getSshRemotePtyLeases(TARGET).some((lease) => lease.ptyId === 'relay-pty-a')).toBe(
-      false
-    )
-    expect(
-      store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.find((tab) => tab.id === TAB)?.ptyId
-    ).toBeNull()
-  })
-
-  it('restores a tab binding into the moved leaf after a concurrent session replacement', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-a',
-      incarnationId: 'inc-a'
-    })
-    delete store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[LEAF]
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    expect(
-      store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.find((tab) => tab.id === TAB)?.ptyId
-    ).toBeNull()
-    const movedTabId = 'tab-moved'
-    const replacement = structuredClone(store.getWorkspaceSession())
-    const movedTab = replacement.tabsByWorktree?.[WORKTREE]?.find((tab) => tab.id === TAB)
-    if (!movedTab || !replacement.terminalLayoutsByTabId?.[TAB]) {
-      throw new Error('expected source tab and layout')
-    }
-    movedTab.id = movedTabId
-    replacement.terminalLayoutsByTabId[movedTabId] = replacement.terminalLayoutsByTabId[TAB]
-    delete replacement.terminalLayoutsByTabId[TAB]
-    store.setWorkspaceSession(replacement)
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(
-      store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.find((tab) => tab.id === movedTabId)
-        ?.ptyId
-    ).toBe('relay-pty-a')
-    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-  })
-
-  it('does not restore a retired binding after the leaf is deleted', async () => {
-    const otherTab = 'tab-other'
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2, tabId: otherTab }
-      ]
-    })
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-a',
-      incarnationId: 'inc-a'
-    })
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: otherTab,
-      leafId: LEAF,
-      ptyId: 'relay-pty-b',
-      incarnationId: 'inc-b'
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.supersedeDuplicatePaneLeases(TARGET)
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[LEAF]).toBe(
-      undefined
-    )
-    const replacement = structuredClone(store.getWorkspaceSession())
-    replacement.tabsByWorktree![WORKTREE] = []
-    replacement.terminalLayoutsByTabId = {}
-    store.setWorkspaceSession(replacement)
-    rejectWrite(new Error('disk full'))
-
-    expect(await retirement).toBe(0)
-    expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]).toEqual([])
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
-  })
-
-  it('leaves distinct panes alone', async () => {
-    const otherLeaf = '8a2b4c6d-1e3f-4a5b-8c7d-9e0f1a2b3c4d'
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2, leafId: otherLeaf }
-      ]
-    })
-
-    expect(await store.supersedeDuplicatePaneLeases(TARGET)).toBe(0)
-    expect(store.getSshRemotePtyLeases(TARGET).filter((l) => l.state === 'attached')).toHaveLength(
-      2
-    )
-  })
-
-  // A lease is rebuilt field by field on load, so a field added to the type but not to the
-  // normalizer is dropped on every boot — it would look right in memory and be gone on the next
-  // start, which is how a fence ships silently permitting everything. A synthesized identity is
-  // refused outright rather than carried: it is not stable across reconnects, so one persisted by
-  // another build would later read as a different shell and strand a live pane.
-  it('keeps a host-attested incarnation across a reload and refuses a synthesized one', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1, incarnationId: 'inc-host-a' },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2, incarnationId: 'legacy:23:0:relay-pty-b' }
-      ]
-    })
-
-    const byPtyId = new Map(store.getSshRemotePtyLeases(TARGET).map((l) => [l.ptyId, l]))
-    expect(byPtyId.get('relay-pty-a')?.incarnationId).toBe('inc-host-a')
-    expect(byPtyId.get('relay-pty-b')?.incarnationId).toBeUndefined()
-  })
-})
-
-describe('SSH reconnect lease retirement batching', () => {
-  it('keeps concurrent terminal state when the asynchronous write fails', async () => {
-    const store = await createStore({
-      sshRemotePtyLeases: [
-        { ...leaseFor('relay-pty-a', 1), createdAt: 1 },
-        { ...leaseFor('relay-pty-b', 2), createdAt: 2 }
-      ]
-    })
-    let rejectWrite: (error: Error) => void = () => {}
-    vi.spyOn(
-      store as unknown as { flushDurableStateOrThrowAsync: () => Promise<void> },
-      'flushDurableStateOrThrowAsync'
-    ).mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          rejectWrite = reject
-        })
-    )
-
-    const retirement = store.markSshRemotePtyLeasesTerminatedAsync(TARGET, ['relay-pty-a'])
-    const concurrentTab = 'tab-concurrent'
-    const concurrentLeaf = '8a2b4c6d-1e3f-4a5b-8c7d-9e0f1a2b3c4d'
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: concurrentTab,
-      leafId: concurrentLeaf,
-      ptyId: 'relay-pty-concurrent',
-      incarnationId: 'inc-concurrent'
-    })
-    rejectWrite(new Error('disk full'))
-
-    await expect(retirement).rejects.toThrow('disk full')
-    expect(
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[concurrentTab]?.ptyIdsByLeafId?.[
-        concurrentLeaf
-      ]
-    ).toBe('relay-pty-concurrent')
-  })
-})
-
-describe('STA-3077: reattach binds panes, it never creates them', () => {
-  // RC3: persistPtyBinding has four creating branches (mint tab, mint root leaf,
-  // split root and graft leaf, mint layout). They are load-bearing for spawn and
-  // wrong for reattach, where the pane either exists or is gone for good.
-  it('does not mint a tab for a pane that no longer exists', async () => {
-    const store = await createStore()
-
-    store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-a',
-      incarnationId: 'inc-a',
-      mayCreate: false
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree?.[WORKTREE] ?? []).toHaveLength(0)
-    expect(session.terminalLayoutsByTabId?.[TAB]).toBeUndefined()
-  })
-
-  // Unknown is not dead: failing to resolve a pane must not be reported as
-  // success, and must not terminate anything.
-  it('reports an unresolved reattach rather than silently succeeding', async () => {
+  // Losing a tab is worse than keeping a duplicate. Before the renderer publishes a layout the
+  // host cannot read absence as a close, so the creating write must still be allowed — this is
+  // the disconnect/reconnect tab loss that reverted this fix twice.
+  it('still binds when the session is not yet authoritative for the worktree', async () => {
     const store = await createStore()
 
     const bound = store.persistPtyBinding({
       worktreeId: WORKTREE,
       tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-a',
-      incarnationId: 'inc-a',
-      mayCreate: false
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-1',
+      incarnationId: 'inc-1',
+      // The relay passes mayCreate:false only once membership is authoritative; an unauthoritative
+      // session takes the creating write instead.
+      ...(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo1
+        ? { mayCreate: false }
+        : {})
+    })
+
+    expect(bound).toBe(true)
+    expect(tabIds(store)).toEqual([TAB])
+  })
+
+  it('does not clear and rebind a retired surface loaded from an older profile', async () => {
+    const paneKey = `${TAB}:${TEST_LEAF_1}`
+    const persisted = getDefaultPersistedState(testState.dir)
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    persisted.repos = [makeRepo({ id: 'repo1', path: '/repo1' })]
+    persisted.workspaceSession = {
+      ...persisted.workspaceSession,
+      ...sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }),
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-1' },
+      terminalSurfaceTombstonesByPaneKey: {
+        [paneKey]: {
+          worktreeId: WORKTREE,
+          parentTabId: TAB,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-1',
+          incarnationId: 'inc-1',
+          retiredAt: 1
+        }
+      }
+    }
+    writeDataFile(persisted)
+    const store = await createStore()
+
+    expect(store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeDefined()
+    expect(
+      relayReattachBinds(store, {
+        tabId: TAB,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-1'
+      })
+    ).toBe(false)
+    expect(store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeDefined()
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]?.ptyIdsByLeafId?.[TEST_LEAF_1]
+    ).toBe('pty-1')
+  })
+
+  it('refuses to graft a second leaf into a tab the reattach does not already own', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+
+    const bound = relayReattachBinds(store, {
+      tabId: TAB,
+      leafId: TEST_LEAF_2,
+      ptyId: 'pty-2',
+      incarnationId: 'inc-2'
     })
 
     expect(bound).toBe(false)
+    const layout = store.getWorkspaceSession().terminalLayoutsByTabId?.[TAB]
+    expect(layout?.ptyIdsByLeafId?.[TEST_LEAF_2]).toBeUndefined()
+    expect(layout?.root).toEqual({ type: 'leaf', leafId: TEST_LEAF_1 })
+  })
+
+  // A close raises the repo's topology revision, and that is what the fence reads. Pinned as
+  // behavior because `terminalSurfaceTombstonesByPaneKey` — the older per-surface fence — is
+  // consumed and cleared by `sanitizeWorkspaceSessionTerminalRetirements` on every session write,
+  // so it is never present by the time a binding write could consult it.
+  it('treats a raised topology revision as the authority that makes absence a close', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    store.setWorkspaceSession(sessionAfterClose())
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalTopologyRevisionByRepoId?.repo1).toBeGreaterThan(0)
+    expect(session.terminalSurfaceTombstonesByPaneKey ?? {}).toEqual({})
+    expect(relayReattachBinds(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' })).toBe(
+      false
+    )
   })
 })
 
-describe('STA-3077: exact-binding compare-and-swap', () => {
-  // Already correct at HEAD. Pinned so a fix cannot regress it: a stale renderer
-  // replay must not overwrite a binding the host has since re-admitted.
-  it('refuses a write whose expected binding no longer matches', async () => {
-    const store = await createStore()
+describe('STA-3077: one pane keeps at most one live remote lease', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
 
-    const stale = store.persistPtyBinding({
+  // The 2 -> 19 -> 20 mechanism: lease identity was `(targetId, ptyId)` alone, so a reconnect
+  // minting a new relay id left its predecessor live with nothing to retire it.
+  it('retires the predecessor when a pane re-leases under a new relay pty id', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
+    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
+
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    expect(liveLeasePtyIds(store)).toEqual(['pty-2'])
+  })
+
+  // Superseding must not assert a death nobody observed — the remote shell is deliberately left
+  // running, so the predecessor is `expired`, never `terminated`.
+  it('marks the superseded lease expired rather than terminated', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
+    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
+
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
+    expect(predecessor?.state).toBe('expired')
+  })
+
+  // The reported growth: live claims must not scale with reconnect count.
+  it('holds the live lease count flat across ten reconnects of one pane', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-0' }))
+
+    for (let reconnect = 0; reconnect < 10; reconnect++) {
+      paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
+    }
+
+    expect(liveLeasePtyIds(store)).toEqual(['pty-9'])
+  })
+
+  // A pane broken out into its own tab keeps its leaf but not its tabId. Keying supersession on
+  // the tab would stop it competing with its own predecessor — the cardinality growth again.
+  it('supersedes across a tab change, because the leaf is the pane identity', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'pty-1',
       worktreeId: WORKTREE,
       tabId: TAB,
-      leafId: LEAF,
-      ptyId: 'relay-pty-b',
-      incarnationId: 'inc-b',
-      expectedBinding: { ptyId: 'relay-pty-a', incarnationId: 'inc-a' }
+      leafId: TEST_LEAF_1,
+      state: 'attached'
     })
 
-    expect(stale).toBe(false)
+    // The successor's lease names the tab the pane sits in NOW; the predecessor's still names the
+    // one it was written in. Only the leaf is common, so keying on the tab would stop the two
+    // competing and leave both live — the cardinality growth.
+    paneSpawnCommits(store, {
+      tabId: TAB,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-2',
+      leaseTabId: OTHER_TAB
+    })
+
+    expect(liveLeasePtyIds(store)).toEqual(['pty-2'])
+  })
+
+  // Expiring the lease the pane is actually bound to would detach a live pane. When the arriving
+  // lease is not yet the bound one, both stay live and reattach arbitrates with the binding.
+  it('leaves both live when the pane is still bound to the predecessor', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
+    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
+
+    // A lease arrives for a shell the pane has NOT bound; the binding still names pty-1.
+    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-9', state: 'detached' })
+
+    expect(liveLeasePtyIds(store).sort()).toEqual(['pty-1', 'pty-9'])
+  })
+
+  // Panes are independent: superseding one must not touch a sibling's lease.
+  it('does not supersede a different pane in the same worktree', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-1' }))
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'sibling-pty',
+      worktreeId: WORKTREE,
+      tabId: TAB,
+      leafId: TEST_LEAF_2,
+      state: 'attached'
+    })
+    const lease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
+    store.upsertSshRemotePtyLease({ ...lease, ptyId: 'pty-1', state: 'attached' })
+
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    expect(liveLeasePtyIds(store).sort()).toEqual(['pty-2', 'sibling-pty'])
+  })
+
+  // Characterises the merge that makes relay pty-id RECYCLING dangerous: a lease upserted without
+  // pane fields inherits whatever pane the matched record named. Correct for a same-shell
+  // re-upsert, which is why it exists; unsafe when the relay restarted and handed this id to a
+  // different shell. Pinned so a future change to the merge is a deliberate one.
+  it('inherits stored pane fields when a lease re-upserts without them', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'pty-1',
+      worktreeId: WORKTREE,
+      tabId: TAB,
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'pty-1',
+      worktreeId: undefined,
+      tabId: undefined,
+      leafId: undefined,
+      state: 'detached'
+    } as never)
+
+    expect(store.getSshRemotePtyLeases(TARGET)[0]).toMatchObject({
+      ptyId: 'pty-1',
+      tabId: TAB,
+      leafId: TEST_LEAF_1,
+      state: 'detached'
+    })
   })
 })
 
-describe('STA-3077 step F: live-layout tab resolution is reattach-only', () => {
-  // The lease's tabId is the frozen side on reattach, so the live layout outranks it there. On a
-  // SPAWN the opposite holds: the caller's tabId is fresh truth and the persisted layout is the
-  // stale side, because the renderer publishes membership on a debounce. Breaking a pane out into
-  // a new tab and spawning into it inside that window would otherwise resolve back to the tab the
-  // pane just left, writing the durable binding and the fence under one tab while the lease and
-  // the runtime registration use the other — the split-coordinate defect step F exists to remove.
-  it('resolves the live tab only on the reattach bind, never on a spawn', async () => {
-    const { readFileSync } = await import('node:fs')
-    const relay = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
-    const ipc = readFileSync('src/main/ipc/pty.ts', 'utf-8')
-
-    // The reattach holds a tabId frozen in a lease, so it must resolve the live one first.
-    expect(relay).toContain('resolvePaneShellTabId(')
-    // Resolving BEFORE the durable write is what keeps a thrown write from losing the answer and
-    // registering the pane in the graph under the tab it left.
-    expect(relay.indexOf('resolvePaneShellTabId(')).toBeLessThan(relay.indexOf('bindPaneShell({'))
-    // Spawn callers hold the fresh tabId; none of them may consult the debounced layout.
-    expect(ipc).toContain('bindPaneShell({')
-    expect(ipc.split('bindPaneShell({').slice(1).join('')).not.toContain('resolvePaneShellTabId')
+describe('STA-3077: `expired` separates a superseded sibling from an orphan', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
-})
-
-describe('STA-3077: the reattach path actually refuses to create', () => {
-  // This is the oracle the store-level tests could not provide: `mayCreate`
-  // existed and was correct, but no production caller passed it, so reattach
-  // still grafted panes. Pin the wiring, not just the capability.
-  // The reattach bind now goes through the one `bindPaneShell` producer, and it
-  // still refuses to create.
-  it('passes mayCreate:false from the SSH reattach binding write', async () => {
-    const { readFileSync } = await import('node:fs')
-    const source = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
-    const bindCall = source.slice(
-      source.indexOf('restoreReattachedPtyRuntime'),
-      source.indexOf('private async attachPtyWithRetry')
-    )
-    expect(bindCall).toContain('bindPaneShell')
-    expect(bindCall).toContain('mayCreate: false')
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // Strengthened, not relaxed: counting guards against calls went vacuous once
-  // the direct store calls disappeared, so pin both halves instead.
-  it('has no production persistPtyBinding caller that can create during reattach', async () => {
-    const { readFileSync } = await import('node:fs')
-    const source = readFileSync('src/main/ssh/ssh-relay-session.ts', 'utf-8')
-    // Every bind in the relay session is a reattach; none may grow topology.
-    expect(source.split('persistPtyBinding(').length - 1).toBe(0)
-    const binds = source.split('bindPaneShell(').length - 1
-    expect(binds).toBeGreaterThan(0)
-    // Each `bindPaneShell(` call site must carry its own `mayCreate: false`.
-    const guardedBinds = source
-      .split('bindPaneShell(')
-      .slice(1)
-      .filter((tail) => tail.slice(0, tail.indexOf('})')).includes('mayCreate: false')).length
-    expect(guardedBinds).toBe(binds)
+  const paneLease = { targetId: TARGET, worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1 }
+
+  async function storeWithPane(ptyId: string) {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId }))
+    store.upsertSshRemotePtyLease({ ...paneLease, ptyId, state: 'attached' })
+    return store
+  }
+
+  // The negative control on the whole change: reattaching the predecessor is the 2 -> 19 -> 20
+  // fan-out, and supersession is the only evidence that separates it from an orphan.
+  it('never bulk-reattaches a superseded sibling', async () => {
+    const store = await storeWithPane('pty-1')
+
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
+    expect(predecessor).toMatchObject({ state: 'expired', supersededBy: 'pty-2' })
+    expect(bulkReattachPtyIds(store)).toEqual(['pty-2'])
+  })
+
+  // The cardinality invariant restated on the set that actually reaches `pty.attach`.
+  it('holds the bulk reattach set flat across ten reconnects of one pane', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-0' }))
+
+    for (let reconnect = 0; reconnect < 10; reconnect++) {
+      paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: `pty-${reconnect}` })
+    }
+
+    expect(bulkReattachPtyIds(store)).toEqual(['pty-9'])
+  })
+
+  // The orphan the split buys back: nothing observed this shell, so the bulk path may ask.
+  it('bulk-reattaches an expired lease whose reattach only lost contact', async () => {
+    const store = await storeWithPane('pty-1')
+
+    store.markSshRemotePtyLease(TARGET, 'pty-1', 'expired')
+
+    const orphan = store.getSshRemotePtyLeases(TARGET)[0]
+    expect(orphan).toMatchObject({ state: 'expired' })
+    expect(orphan.supersededBy).toBeUndefined()
+    expect(orphan.relayIdRecycled).toBeUndefined()
+    expect(bulkReattachPtyIds(store)).toEqual(['pty-1'])
+  })
+
+  // Without this the orphan above stays reattachable forever and every past reconnect adds one
+  // more `pty.attach` to each handshake. A newer lease is the same evidence either way.
+  it('marks an already-expired orphan superseded once a newer lease wins the pane', async () => {
+    const store = await storeWithPane('pty-1')
+    store.markSshRemotePtyLease(TARGET, 'pty-1', 'expired')
+    const orphanUpdatedAt = store.getSshRemotePtyLeases(TARGET)[0].updatedAt
+
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    const predecessor = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
+    expect(predecessor).toMatchObject({ state: 'expired', supersededBy: 'pty-2' })
+    // `getRecentExpiredSshLease` reads `updatedAt` as recency; a stale lease must not look fresh.
+    expect(predecessor?.updatedAt).toBe(orphanUpdatedAt)
+    expect(bulkReattachPtyIds(store)).toEqual(['pty-2'])
+  })
+
+  // A relay renumbers from `pty-1` on every start, so this row can be a different shell. The mark
+  // belongs to the lease that lost, never to whatever claims the id next.
+  it('clears the supersession mark when the id is re-upserted as a live lease', async () => {
+    const store = await storeWithPane('pty-1')
+    paneSpawnCommits(store, { tabId: TAB, leafId: TEST_LEAF_1, ptyId: 'pty-2' })
+
+    // A restarted relay hands `pty-1` to a new shell for a different pane.
+    store.upsertSshRemotePtyLease({
+      targetId: TARGET,
+      ptyId: 'pty-1',
+      worktreeId: WORKTREE,
+      tabId: OTHER_TAB,
+      leafId: TEST_LEAF_2,
+      state: 'attached'
+    })
+
+    const recycled = store.getSshRemotePtyLeases(TARGET).find((entry) => entry.ptyId === 'pty-1')
+    expect(recycled?.supersededBy).toBeUndefined()
+    expect(bulkReattachPtyIds(store).sort()).toEqual(['pty-1', 'pty-2'])
+  })
+
+  // The pending-stop replay's `relay-id-recycled` retirement relied on `expired` alone to keep the
+  // lease out of the reattach that runs one step later; it now says so.
+  it('never bulk-reattaches a lease whose relay id was recycled', async () => {
+    const store = await storeWithPane('pty-1')
+
+    store.markSshRemotePtyLease(TARGET, 'pty-1', 'expired', { relayIdRecycled: true })
+
+    expect(store.getSshRemotePtyLeases(TARGET)[0]).toMatchObject({ relayIdRecycled: true })
+    expect(bulkReattachPtyIds(store)).toEqual([])
+  })
+
+  it('never bulk-reattaches a terminated lease, marked or not', async () => {
+    const store = await storeWithPane('pty-1')
+
+    store.markSshRemotePtyLease(TARGET, 'pty-1', 'terminated')
+
+    expect(bulkReattachPtyIds(store)).toEqual([])
   })
 })

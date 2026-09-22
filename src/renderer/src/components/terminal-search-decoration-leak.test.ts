@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * closed, until the window was minimized and restored.
  *
  * Mechanism, in @xterm/xterm's SortedList (patched in
- * config/patches/@xterm__xterm@6.1.0-beta.287.patch):
+ * config/patches/@xterm__xterm@*.patch, generated from the source patch under
+ * config/patches/xterm-src/):
  *
  *   - DecorationService keys its SortedList on `decoration.marker.line`.
  *   - `delete()` only records an index and defers the array compaction, while
@@ -106,7 +107,7 @@ function openTerminalWithSearch(): SearchHarness {
  * showed up for some of them, so the regression has to sweep rather than pin
  * one lucky case.
  */
-const CONTENT_SHAPES: readonly (readonly [string, string])[] = [
+const CONTENT_LAYOUTS: readonly (readonly [string, string])[] = [
   ['matches on two lines', 'needle one\r\nneedle two\r\n'],
   ['matches on three lines', 'needle one\r\nneedle two\r\nneedle three\r\n'],
   ['matches on four lines', 'needle a\r\nneedle b\r\nneedle c\r\nneedle d\r\n'],
@@ -127,7 +128,7 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
     document.body.replaceChildren()
   })
 
-  it.each(CONTENT_SHAPES)(
+  it.each(CONTENT_LAYOUTS)(
     'leaves no highlighted cells after closing search (%s)',
     async (_name, content) => {
       // Sweeping the match-navigation count matters: which decoration is the

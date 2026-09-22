@@ -30,6 +30,60 @@ describe('diffFromToolCall', () => {
     ])
   })
 
+  it('reads structured apply_patch file changes as a diff', () => {
+    const diff = diffFromToolCall('apply_patch', {
+      changes: [
+        {
+          path: '/repo/src/app.ts',
+          kind: { type: 'update', move_path: null },
+          diff: '@@ -1,2 +1,2 @@\n const value = 1\n-old()\n+newValue()'
+        }
+      ]
+    })
+
+    expect(diff).toEqual([
+      { kind: 'meta', text: '--- /repo/src/app.ts' },
+      { kind: 'meta', text: '+++ /repo/src/app.ts' },
+      { kind: 'meta', text: '@@ -1,2 +1,2 @@' },
+      { kind: 'context', text: ' const value = 1' },
+      { kind: 'del', text: 'old()' },
+      { kind: 'add', text: 'newValue()' }
+    ])
+  })
+
+  it('reads direct apply_patch text as a diff', () => {
+    expect(
+      diffFromToolCall('apply_patch', {
+        patch: '@@ -1 +1 @@\n-before\n+after'
+      })
+    ).toEqual([
+      { kind: 'meta', text: '@@ -1 +1 @@' },
+      { kind: 'del', text: 'before' },
+      { kind: 'add', text: 'after' }
+    ])
+  })
+
+  it.each([31_999, 32_000, 32_001])(
+    'preserves multi-file truncation at %i characters before the next section',
+    (length) => {
+      const header = '--- a\n+++ a\n'
+      const diff = '@@ -1 +1 @@\n-old\n+new\n'
+      const first = diff + 'x'.repeat(length - header.length - diff.length)
+      const changes = [
+        { path: 'a', diff: first },
+        null,
+        { path: 'ignored' },
+        { path: 'b', kind: { move_path: 'c' }, diff: '@@ -1 +1 @@\n-b\n+c' }
+      ]
+      const text = `${header}${first}\n--- b\n+++ c\n@@ -1 +1 @@\n-b\n+c`
+      for (const maxLines of [2, 120, 40_000]) {
+        expect(diffFromToolCall('apply_patch', { changes }, maxLines)).toEqual(
+          diffFromText(text, maxLines)
+        )
+      }
+    }
+  )
+
   it('returns null when there is no old/new payload', () => {
     expect(diffFromToolCall('Edit', { file_path: '/x' })).toBeNull()
   })

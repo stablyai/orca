@@ -21,6 +21,11 @@ pnpm install
 pnpm dev
 ```
 
+Ordinary installs include native optional dependencies for the current OS and CPU only.
+Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
+arm64 artifacts by default), run `pnpm install:release` to add the other CPU's variants.
+See [the install policy](../docs/reference/pnpm-install-policy.md).
+
 ## Branch Naming
 
 Use a clear, descriptive branch name that reflects the change.
@@ -52,7 +57,7 @@ If your change affects UI or interaction behavior, verify it on the platforms it
 
 Project-owned type declarations belong in `.ts` files. `.d.ts` is reserved for ambient shims (e.g., `env.d.ts`, `vite/client.d.ts`). TypeScript's `skipLibCheck: true` setting applies globally, including to our own `.d.ts` files, which means any unresolved type reference in a `.d.ts` silently becomes `any` at its call sites. Write your types in `.ts` files so the compiler actually checks them.
 
-CI enforces this for `src/preload/` and `src/shared/` — see `docs/preload-typecheck-hole.md`.
+CI enforces this for `src/preload/` and `src/shared/`.
 
 ## Pull Requests
 
@@ -111,7 +116,6 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
 The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
-
 
 ## Release Channels
 

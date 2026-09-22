@@ -15,6 +15,7 @@ import { OrchestrationDb } from '../runtime/orchestration/db'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
 
 // Why: pointing the passthrough at a missing CLI entry forces the legacy
 // in-process fallback, which is what these dispatch tests exercise.
@@ -81,7 +82,9 @@ describe('runRemoteOrcaCli', () => {
       }),
       getLegacyAdoption: vi.fn(() => undefined),
       getActiveDispatchForIdentity: vi.fn(() => undefined),
+      getActiveDispatchMailboxOwners: vi.fn(() => []),
       getCurrentRunForPane: vi.fn(() => undefined),
+      getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
     const runtime = {
@@ -96,6 +99,8 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       getTerminalPaneKey: () => null,
+      getLiveTerminalPaneKey: (handle: string) =>
+        handle === 'term_windows' ? 'tab_windows:leaf_windows' : null,
       deliverPendingMessagesForHandle: vi.fn(),
       notifyMessageArrived: vi.fn(),
       linearIssueContext: vi.fn(async (request: unknown) => ({
@@ -175,6 +180,36 @@ describe('runRemoteOrcaCli', () => {
     }
   )
 
+  // Why: `orca terminal create --shell` gates on these; without them an SSH pane was told the
+  // host was too old, when the accurate refusal is that SSH cannot apply the shell.
+  it('reports the execution host capabilities through the legacy status fallback', async () => {
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'getStatus').mockReturnValue({
+      runtimeId: 'runtime-test',
+      rendererGraphEpoch: 1,
+      graphStatus: 'ready',
+      authoritativeWindowId: 1,
+      liveTabCount: 0,
+      liveLeafCount: 0,
+      capabilities: ['terminal.create-shell-selection.v1']
+    })
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      { argv: ['status', '--json'], cwd: '/home/alice/repo', env: {} },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode, result.stdout).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      result: {
+        target: { kind: 'environment', environment: 'ssh' },
+        runtime: { reachable: true, capabilities: ['terminal.create-shell-selection.v1'] }
+      }
+    })
+  })
+
   it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
     const { runtime, db } = createRuntime()
 
@@ -188,9 +223,18 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
-    const payload = JSON.parse(result.stdout) as { ok: boolean }
-    expect(payload.ok).toBe(true)
+    expect(result.exitCode, result.stdout).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      result: {
+        warnings: [
+          {
+            code: 'legacy_terminal_recipient',
+            recipient: 'term_windows'
+          }
+        ]
+      }
+    })
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
   })
 
@@ -210,7 +254,7 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
+    expect(result.exitCode, result.stdout).toBe(0)
     expect(db.insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ senderPaneKey: undefined })
     )
@@ -228,7 +272,7 @@ describe('runRemoteOrcaCli', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'remote work', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    const dispatch = createRootDispatch(db, task.id, 'term_ssh', 'tab_owner:leaf_owner')
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_foreign:leaf_foreign')
 
     try {
@@ -286,7 +330,7 @@ describe('runRemoteOrcaCli', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'remote work', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    const dispatch = createRootDispatch(db, task.id, 'term_ssh', 'tab_owner:leaf_owner')
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_owner:leaf_owner')
 
     try {
@@ -345,7 +389,12 @@ describe('runRemoteOrcaCli', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'remote work', runId: run.id })
-    const started = db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     const capability = db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_ssh',
@@ -481,7 +530,7 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
+    expect(result.exitCode, result.stdout).toBe(0)
     const payload = JSON.parse(result.stdout) as { ok: boolean }
     expect(payload.ok).toBe(true)
     const message = db.getUnreadMessages('term_windows')[0]

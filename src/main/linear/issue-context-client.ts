@@ -1,14 +1,13 @@
-import type { LinearSearchIssueSummary, LinearSearchResult } from '../../shared/linear-agent-access'
-import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
-import type { LinearWorkspace } from '../../shared/types'
+import type { LinearSearchIssueSummary, LinearSearchResult } from '../../shared/linear/agent-access'
+import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
+import type { LinearWorkspace } from '../../shared/linear/workspace-types'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
 import {
-  acquire,
-  clearToken,
   getClients,
   getPublicFileUrlClient,
   getStatus,
   isAuthError,
-  release,
   type LinearClientForWorkspace
 } from './client'
 import {
@@ -70,14 +69,16 @@ export async function searchLinearIssuesForAgents(args: {
     .flat()
     .sort((left, right) => Date.parse(right.updatedAt ?? '') - Date.parse(left.updatedAt ?? ''))
   const limited = merged.slice(0, limit)
+  const limitReached = merged.length > limit
   return {
     issues: limited,
+    truncated: limitReached,
     meta: {
       query: args.query,
       workspaceId,
       limit,
       returned: limited.length,
-      limitReached: merged.length > limit,
+      limitReached,
       partial: perWorkspace.failures.length > 0,
       workspaceErrors: perWorkspace.failures.map(({ workspace, code, message }) => ({
         workspace,

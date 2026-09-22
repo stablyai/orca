@@ -35,9 +35,9 @@ vi.mock('node:os', async () => {
 import {
   getCodexSessionDirectories,
   getCodexSessionsDirectory,
-  listCodexSessionFiles,
-  scanCodexUsageFiles
-} from './scanner'
+  listCodexSessionFiles
+} from './codex-session-file-discovery'
+import { scanCodexUsageFiles } from './scanner'
 
 const originalCodexHome = process.env.CODEX_HOME
 let fakeHomeDir: string
@@ -382,6 +382,25 @@ describe('listCodexSessionFiles', () => {
     expect(
       result.dailyAggregates.reduce((total, aggregate) => total + aggregate.eventCount, 0)
     ).toBe(3)
+
+    // A suffix-only parse must not leave a resume offset behind: once the
+    // bridge markers are gone, a later append has to reparse the whole file so
+    // the previously skipped prefix is counted.
+    rmSync(runtimeBridgeMarkerDir, { recursive: true, force: true })
+    rmSync(runtimeSessionPath)
+    writeFileSync(
+      systemSessionPath,
+      `${copiedPrefix}${usageRecord('2026-05-26T12:01:00.000Z', 3, 13)}${usageRecord('2026-05-26T12:03:00.000Z', 4, 17)}`
+    )
+
+    const afterBridge = await scanCodexUsageFiles([], result.processedFiles)
+
+    expect(
+      afterBridge.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(17)
+    expect(
+      afterBridge.dailyAggregates.reduce((total, aggregate) => total + aggregate.eventCount, 0)
+    ).toBe(3)
   })
 
   it('counts token events copied into forked rollout files exactly once', async () => {
@@ -592,6 +611,153 @@ describe('listCodexSessionFiles', () => {
     expect(
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(25)
+  })
+
+  // Bridge markers can appear on a source file that already has a resume state:
+  // the copy is made after a scan, so the scanner sees a non-legacy cache and a
+  // legacy suffix offset at once. Resuming would extend the cached full-history
+  // projection instead of restarting as a suffix-only parse, which loses the
+  // total-only baseline the suffix depends on and recounts the copied records.
+  it('reparses in full when bridge markers appear on an already-resumable source', async () => {
+    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    const runtimeBridgeMarkerDir = join(
+      userDataDir,
+      'codex-runtime-home',
+      'home',
+      '.orca-session-copies'
+    )
+    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
+    mkdirSync(runtimeSessionsDir, { recursive: true })
+    mkdirSync(systemSessionsDir, { recursive: true })
+    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
+    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
+    const meta = `${JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'legacy-session', cwd: join(fakeHomeDir, 'repo') }
+    })}\n`
+    // The prefix has to clear MIN_RESUMABLE_PREFIX_BYTES or scan 1 records no
+    // resume point and the transition under test never arises.
+    let padding = ''
+    for (let index = 0; index < 40; index++) {
+      const minute = String(index).padStart(2, '0')
+      padding += usageRecord(`2026-05-26T11:${minute}:00.000Z`, 1, index + 1)
+    }
+    const scannedPrefix = `${meta}${padding}${usageRecord('2026-05-26T12:00:00.000Z', 10, 50)}`
+    writeFileSync(systemSessionPath, scannedPrefix, 'utf-8')
+
+    // No markers yet, so this scan records a plain incremental resume point.
+    const first = await scanCodexUsageFiles([], [])
+    expect(
+      first.processedFiles.find((file) => file.path === systemSessionPath)?.parseResumeState
+        ?.parsedBytes
+    ).toBe(Buffer.byteLength(scannedPrefix))
+
+    // The source grows, then the legacy copy is taken: the copied prefix now
+    // reaches past the recorded resume offset.
+    const copiedPrefix = `${scannedPrefix}${usageRecord('2026-05-26T12:01:00.000Z', 3, 53)}`
+    writeFileSync(systemSessionPath, copiedPrefix, 'utf-8')
+    writeFileSync(runtimeSessionPath, copiedPrefix, 'utf-8')
+    mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
+    const sourceStat = lstatSync(systemSessionPath)
+    const targetStat = lstatSync(runtimeSessionPath)
+    writeFileSync(
+      join(runtimeBridgeMarkerDir, 'system.jsonl.json'),
+      `${JSON.stringify({
+        sourcePath: systemSessionPath,
+        sourceSize: sourceStat.size,
+        sourceMtimeMs: sourceStat.mtimeMs,
+        targetSize: targetStat.size,
+        targetMtimeMs: targetStat.mtimeMs
+      })}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      systemSessionPath,
+      [
+        copiedPrefix,
+        totalOnlyUsageRecord('2026-05-26T12:02:00.000Z', 70),
+        totalOnlyUsageRecord('2026-05-26T12:03:00.000Z', 74)
+      ].join('')
+    )
+    writeFileSync(
+      runtimeSessionPath,
+      `${copiedPrefix}${usageRecord('2026-05-26T12:04:00.000Z', 5, 58)}`
+    )
+
+    const second = await scanCodexUsageFiles([], first.processedFiles)
+    const cold = await scanCodexUsageFiles([], [])
+
+    // 40 padding + 10 + 3 copied prefix, 5 runtime-only, and the source suffix
+    // contributing 74 - 70 once its leading total-only record reads as baseline.
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(62)
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.eventCount, 0)
+    ).toBe(44)
+    expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
+  })
+
+  // The reuse gate has its own legacy check, separate from the resume gate. A
+  // cached entry can predate the bridge marker while the source file itself is
+  // untouched, so (size, mtime) still match and nothing else would stop the
+  // scan serving a full-history projection for a file that is now parsed
+  // suffix-only — double-counting the copied prefix against the managed copy.
+  it('does not reuse a pre-bridge cache once the source became suffix-only', async () => {
+    const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    const markerDir = join(userDataDir, 'codex-runtime-home', 'home', '.orca-session-copies')
+    const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
+    mkdirSync(runtimeSessionsDir, { recursive: true })
+    mkdirSync(systemSessionsDir, { recursive: true })
+    const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
+    const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
+    const meta = `${JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'legacy-session', cwd: join(fakeHomeDir, 'repo') }
+    })}\n`
+    const copiedPrefix = `${meta}${usageRecord('2026-05-26T12:00:00.000Z', 10)}`
+    // A total-only tail is what separates the two readings: parsed as a suffix
+    // it is a baseline worth nothing, carried in a full projection it is a
+    // delta worth 3.
+    writeFileSync(
+      systemSessionPath,
+      `${copiedPrefix}${totalOnlyUsageRecord('2026-05-26T12:01:00.000Z', 13)}`,
+      'utf-8'
+    )
+
+    // No marker directory yet, so this is an ordinary full parse.
+    const first = await scanCodexUsageFiles([], [])
+    const cachedStat = lstatSync(systemSessionPath)
+
+    // The bridge marker lands afterwards, recording the source as it stood when
+    // the copy was taken. The source file is not touched.
+    mkdirSync(markerDir, { recursive: true })
+    writeFileSync(
+      runtimeSessionPath,
+      `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 5, 15)}`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(markerDir, 'system.jsonl.json'),
+      `${JSON.stringify({
+        sourcePath: systemSessionPath,
+        sourceSize: Buffer.byteLength(copiedPrefix),
+        sourceMtimeMs: cachedStat.mtimeMs - 5000,
+        targetSize: Buffer.byteLength(copiedPrefix),
+        targetMtimeMs: cachedStat.mtimeMs - 5000
+      })}\n`,
+      'utf-8'
+    )
+    // The reuse gate's own check is the only thing left: the stat still matches.
+    expect(lstatSync(systemSessionPath).size).toBe(cachedStat.size)
+    expect(lstatSync(systemSessionPath).mtimeMs).toBe(cachedStat.mtimeMs)
+
+    const second = await scanCodexUsageFiles([], first.processedFiles)
+    const cold = await scanCodexUsageFiles([], [])
+    expect(
+      second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(15)
+    expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
   })
 
   it('treats a leading total-only source suffix record as baseline', async () => {

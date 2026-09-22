@@ -1,0 +1,91 @@
+{
+  "operation": "terminal.query-reply",
+  "family": "terminal.query-reply",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
+  "scenarioSha256": "bfa1d5f83b4112d3cce6a19e9dc27daf9281ed99745bc01bd19226dd7b268c71",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "11a49f853eb8": {
+      "accepted": true
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "ccb884e12d95": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "cd7cf7b1f566": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "inputKind": "query-reply",
+            "terminal": "terminal-1",
+            "text": "\u001b[0n"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-query-reply-accepted",
+    "checkpoints": [
+      {
+        "id": "accepted",
+        "observation": {
+          "sender": ["cd7cf7b1f566"],
+          "payloads": ["ccb884e12d95"],
+          "settlements": {
+            "send": "84e5ca07cb7a"
+          },
+          "state": "11a49f853eb8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

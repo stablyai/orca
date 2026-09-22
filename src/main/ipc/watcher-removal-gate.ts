@@ -5,7 +5,7 @@ import {
 import {
   TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE,
   WATCHER_REMOVAL_IN_PROGRESS_MESSAGE
-} from '../../shared/worktree-removal-fence-error'
+} from '../../shared/worktree/removal-fence-error'
 
 // Why: fence slots are identities, not a counter, so a removal that gives up waiting can drop exactly
 // the installs it waited on without a late finishInstall corrupting the count for a newer install.

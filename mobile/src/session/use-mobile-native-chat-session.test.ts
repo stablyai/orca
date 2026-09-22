@@ -633,4 +633,81 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       ids: []
     })
   })
+
+  it('settles the view but not the read on a pending snapshot', async () => {
+    // The host answers with an empty pending window while the transcript file
+    // does not exist yet. Calling that 'ready' would let the launch-draft seed
+    // adopt a prefill the agent may already have been sent; leaving it
+    // 'loading' is the bare forever-spinner this frame exists to end.
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+      return () => {}
+    })
+    await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
+
+    expect(subscribe).toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.objectContaining({ capabilities: { transcriptPending: 1 } }),
+      expect.any(Function)
+    )
+    expect(renders.at(-1)).toMatchObject({
+      status: 'awaiting-transcript',
+      transcriptLoading: true,
+      ids: []
+    })
+  })
+
+  it('takes the real snapshot after a pending one as this subscription’s base', async () => {
+    let emitFrame: (frame: unknown) => void = () => {}
+    const client = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        emitFrame = onData
+        onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mountAt(client, 'session-a')
+
+    await act(async () =>
+      emitFrame({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+    )
+
+    expect(renders.at(-1)).toMatchObject({
+      status: 'ready',
+      transcriptLoading: false,
+      ids: ['a-1']
+    })
+  })
+
+  it('never captures a pending window over the retained transcript', async () => {
+    const client = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mountAt(client, 'session-a')
+
+    // Same identity, fresh client: this read finds no transcript file behind the
+    // session and answers pending.
+    const reconnected = {
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await act(async () =>
+      renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
+    )
+
+    // One more rebind reads retention back: it still holds the real history,
+    // which it could not had the empty pending window captured over it.
+    const rebound = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
+    renders.length = 0
+    await act(async () =>
+      renderer?.update(createElement(Harness, { client: rebound, sessionId: 'session-a' }))
+    )
+
+    expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
+  })
 })

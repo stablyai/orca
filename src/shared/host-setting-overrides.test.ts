@@ -6,7 +6,7 @@ import {
   getHostSettingOverride,
   setHostSettingOverride
 } from './host-setting-overrides'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 function settingsWith(
   overrides: GlobalSettings['hostSettingOverrides']

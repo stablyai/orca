@@ -140,7 +140,15 @@ export function shouldMountBackgroundWorktreeTab(
 // seconds (field trace: 200+ replay-guard stall releases in one activation
 // window). Deferred tabs behave like cold-parked tabs from birth: no view
 // until first reveal, parked byte watchers own their side effects meanwhile.
-export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
+//
+// Why 0 and not a small budget: measured switch-to-first-paint scales linearly
+// with the tabs an activation mounts (~40ms/tab even without a GPU), and the
+// hidden ones buy the visible pane nothing. The old budget of 4 exempted the
+// 2-5 tab worktrees that make up almost every real switch, so they paid the
+// full fan-out. Nothing is traded away: useActivationDeferredTabAdmission
+// mounts the hidden siblings on idle frames right after the reveal, so the warm
+// working set (and later tab switches) ends up exactly where it was before.
+export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 0
 
 export function canMountTerminalWorkspaceForStartup(args: {
   workspaceSessionReady: boolean
@@ -197,7 +205,8 @@ export function planColdActivationTabDeferral(opts: {
   deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
   worktreeId: string
   allTabIds: readonly string[]
-  isTabLive: (tabId: string) => boolean
+  /** Worktree is passed so duplicate legacy tab ids fail closed by owner. */
+  isTabLive: (tabId: string, worktreeId?: string) => boolean
   /** Safe to leave unmounted: parked byte watchers can cover it and no spawn
    *  is pending. Non-deferrable tabs mount immediately. */
   isTabDeferrable: (tabId: string) => boolean
@@ -218,7 +227,7 @@ export function planColdActivationTabDeferral(opts: {
     // Why live/previously-allowed tabs stay in: narrowing would unmount
     // panes that are already up (or background mounts still registering).
     if (
-      isTabLive(tabId) ||
+      isTabLive(tabId, worktreeId) ||
       immediateTabIds.has(tabId) ||
       previouslyAllowed?.has(tabId) ||
       !isTabDeferrable(tabId)

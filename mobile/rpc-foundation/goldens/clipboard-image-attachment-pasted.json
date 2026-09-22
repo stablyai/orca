@@ -1,0 +1,223 @@
+{
+  "operation": "clipboard.image-terminal-attachment",
+  "family": "clipboard.image-attachment",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "d6db064741cd68d6ad8a3e490a774d8145adb4a5b7cca8218f5c972b1a31f93b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "080f28c67e30": {
+      "name": "terminal.send#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~@/tmp/img.png\u001b[201~ "
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "08a3a6323626": {
+      "name": "before-terminal-send",
+      "ordinal": 8,
+      "value": {
+        "terminal": "terminal-1"
+      }
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "7c2e3ea286aa": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "814ccd56a769": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "8452698ac11a": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "b50d2ec23283": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.commitImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": "/tmp/img.png"
+        }
+      }
+    },
+    "b7a44aafa946": {
+      "attached": true,
+      "failure": {
+        "$rpc": "null"
+      }
+    },
+    "e61d3d3476df": {
+      "name": "terminal.send#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "f05e4695ffa3": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "received": 32
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-attachment-pasted",
+    "checkpoints": [
+      {
+        "id": "attached",
+        "observation": {
+          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "080f28c67e30"],
+          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "e61d3d3476df"],
+          "settlements": {
+            "normal": "84e5ca07cb7a"
+          },
+          "state": "b7a44aafa946",
+          "effects": ["994fccf9b305", "08a3a6323626"]
+        }
+      }
+    ]
+  }
+}

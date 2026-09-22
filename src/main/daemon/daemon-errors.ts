@@ -1,11 +1,17 @@
-import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 // Error classes shared across the daemon protocol boundary (client, server,
 // host). Split from types.ts, which is capped for wire-shape declarations.
+const ATTACH_CANCELED_PREFIX = 'Attach canceled for session '
+
 export class TerminalAttachCanceledError extends Error {
   constructor(sessionId: string) {
-    super(`Attach canceled for session ${sessionId}`)
+    super(`${ATTACH_CANCELED_PREFIX}${sessionId}`)
     this.name = 'TerminalAttachCanceledError'
   }
+}
+
+/** Recognizes the daemon's attach-cancellation across the wire, where only the message survives. */
+export function isTerminalAttachCanceledMessage(message: string): boolean {
+  return message.startsWith(ATTACH_CANCELED_PREFIX)
 }
 
 export class DaemonProtocolError extends Error {
@@ -15,6 +21,39 @@ export class DaemonProtocolError extends Error {
   }
 }
 
+/**
+ * The control connection itself failed: nothing was delivered and no reply is
+ * coming. Distinct from a DaemonProtocolError the daemon actually answered with
+ * (or one we raised on our own timeout) — only this class proves the socket, and
+ * therefore every session sharing it, is already lost. Extends
+ * DaemonProtocolError and keeps the same messages so existing instanceof and
+ * message checks (isDaemonGoneError) still match.
+ */
+export class DaemonConnectionLostError extends DaemonProtocolError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DaemonConnectionLostError'
+  }
+}
+
+/**
+ * Nothing came back before our own deadline. The daemon may still be alive and merely
+ * slow, so this is not a connection loss — but a request AND the cancel sent to clean
+ * it up both hitting this means the daemon is wedged with its socket still open.
+ */
+export class DaemonRequestTimeoutError extends DaemonProtocolError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DaemonRequestTimeoutError'
+  }
+}
+
+/**
+ * The one message `isDaemonGoneError` matches that a still-open connection can produce,
+ * so it is the only way a wedged-but-connected daemon reaches the respawn path.
+ */
+export const DAEMON_UNAVAILABLE_RECONNECT_MESSAGE = 'Daemon temporarily unavailable; reconnect'
+
 export class SessionNotFoundError extends Error {
   constructor(sessionId: string) {
     super(`Session not found: ${sessionId}`)
@@ -22,15 +61,7 @@ export class SessionNotFoundError extends Error {
   }
 }
 
-/**
- * A PtyWriteUnavailableError so a throw partway through a paste reaches the renderer as
- * `pty:writeUnavailable` and the pane re-attaches, instead of the remaining chunks vanishing
- * with nothing to explain the gap.
- *
- * Deliberately not a SessionNotFoundError: that is matched by isPtyAlreadyGoneError and would
- * be synthesized into an exit the session never had — the same lie one layer down.
- */
-export class TerminalSessionOwnerUnverifiedError extends PtyWriteUnavailableError {
+export class TerminalSessionOwnerUnverifiedError extends Error {
   constructor(sessionId: string) {
     super(`Terminal session owner could not be verified: ${sessionId}`)
     this.name = 'TerminalSessionOwnerUnverifiedError'

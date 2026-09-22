@@ -1,0 +1,196 @@
+{
+  "operation": "tasks.task-create-linear",
+  "family": "tasks.task-create-linear",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "f6c7eea985190d9edeead5b36f90c8aa98679f69d19dab7579fec88841645259",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0fef9dc7845d": {
+      "name": "createTitle",
+      "ordinal": 7,
+      "value": ""
+    },
+    "13b1e9c092d4": {
+      "name": "createBody",
+      "ordinal": 8,
+      "value": ""
+    },
+    "3c76066eb236": {
+      "name": "linear.createIssue#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "description": "a body",
+            "teamId": "team-1",
+            "title": "A new task",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "ok": true,
+            "title": "A sub-issue",
+            "url": ""
+          }
+        }
+      }
+    },
+    "5294116e0f90": {
+      "name": "creatingTask",
+      "ordinal": 1,
+      "value": true
+    },
+    "61b2cb7e4313": {
+      "composer": false,
+      "creating": false,
+      "error": "",
+      "item": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "b1504689c2b3": {
+      "name": "creatingTask",
+      "ordinal": 9,
+      "value": false
+    },
+    "b44dfc09514f": {
+      "name": "actionItem",
+      "ordinal": 5,
+      "value": {
+        "key": "linear:linear-workspace:issue-3",
+        "provider": "linear",
+        "source": {
+          "description": "a body",
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#3b82f6",
+            "name": "Open",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "workspaceId": "linear-workspace",
+            "workspaceName": "Workspace"
+          },
+          "title": "A sub-issue",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace",
+          "workspaceName": "Workspace"
+        },
+        "status": "Open",
+        "subtitle": "ENG-3 · undefined",
+        "title": "A sub-issue",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    "ce67fb8d9d58": {
+      "name": "linear.createIssue#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fa467ac4ab12": {
+      "name": "showCreateTask",
+      "ordinal": 6,
+      "value": false
+    }
+  },
+  "recording": {
+    "scenario": "tk-create-linear",
+    "checkpoints": [
+      {
+        "id": "create-settled",
+        "observation": {
+          "sender": ["3c76066eb236"],
+          "payloads": ["ce67fb8d9d58"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create-0": "eb79a9b3682a"
+          },
+          "state": "61b2cb7e4313",
+          "effects": [
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "b44dfc09514f",
+            "fa467ac4ab12",
+            "0fef9dc7845d",
+            "13b1e9c092d4",
+            "b1504689c2b3"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -3,8 +3,8 @@ import {
   buildCreatePrIntentUnavailableEligibility,
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
-} from './source-control-hosted-review-creation-eligibility-snapshot'
-import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
+} from './source-control/review/hosted-review-creation-eligibility-snapshot'
+import { resolveCreatePrIntentEligibility } from './source-control/review/create-pr-intent-state'
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 

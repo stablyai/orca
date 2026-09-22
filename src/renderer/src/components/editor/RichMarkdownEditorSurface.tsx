@@ -19,7 +19,7 @@ import type { NotesSendMenuScope } from './NotesSendMenu'
 import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 function shouldFocusEmptyEditorFromSurfaceClick(
   event: React.MouseEvent<HTMLDivElement>,
@@ -206,7 +206,8 @@ export function RichMarkdownEditorSurface({
         <div className="relative min-h-0 flex-1">
           <div
             ref={scrollContainerRef}
-            className="relative h-full overflow-auto scrollbar-editor"
+            // Image layout must not anchor-scroll over the restored tab position.
+            className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
               if (!shouldFocusEmptyEditorFromSurfaceClick(event, editor)) {
                 return

@@ -4,6 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
+  hasUnroutableTerminalWorktreeOwner,
   resolveTerminalHostOwnership,
   resolveTerminalWorktreeRoute
 } from './terminal-worktree-route'
@@ -65,12 +66,57 @@ describe('resolveTerminalWorktreeRoute', () => {
     })
   })
 
+  it('routes and tears down an unstamped local worktree despite an unrelated saved runtime', () => {
+    const ownerlessWorktree = { id: 'repo-1::/w', repoId: 'repo-1' }
+    const state = localState({
+      repos: [{ id: 'repo-1' }],
+      worktreesByRepo: { 'repo-1': [ownerlessWorktree] },
+      detectedWorktreesByRepo: { 'repo-1': { worktrees: [ownerlessWorktree] } },
+      runtimeEnvironments: [{ id: 'saved-runtime' }],
+      settings: { activeRuntimeEnvironmentId: null }
+    } as unknown as Partial<AppState>)
+
+    expect(resolveTerminalWorktreeRoute(state, 'repo-1::/w')).toEqual({
+      runtimeEnvironmentId: null
+    })
+    expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
+      kind: 'local-or-ssh',
+      runtimeEnvironmentId: null
+    })
+  })
+
   it('still fails a genuinely unknown/stale worktree closed', () => {
     expect(resolveTerminalWorktreeRoute(localState(), 'repo-9::/stale')).toBeNull()
   })
 
   it('does not treat a folder workspace as an unresolved worktree', () => {
     expect(resolveTerminalWorktreeRoute(localState(), folderWorkspaceKey('abc-123'))).not.toBeNull()
+  })
+
+  // #16733: the store a reporter actually has — a real local repo/worktree whose legacy rows were
+  // persisted before owner projection, plus one saved runtime environment. resolveTerminalWorktreeRoute
+  // is the sole gate in front of terminal-request-ipc-bridge.ts's "Terminal creation is unavailable
+  // because the worktree owner could not be resolved" reply, so a non-null route here is exactly
+  // "that toast cannot fire".
+  describe('unstamped local worktrees with a saved runtime (#16733)', () => {
+    /** The single saved runtime is the hazard: it arms the legacy hydration gates while owning nothing here. */
+    const unstampedState = (): AppState =>
+      localState({
+        repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
+        worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1' }] },
+        runtimeEnvironments: [{ id: 'some-hub' }]
+      } as unknown as Partial<AppState>)
+
+    it('keeps a terminal routable on a local worktree while an unrelated runtime is saved', () => {
+      expect(resolveTerminalWorktreeRoute(unstampedState(), 'repo-1::/w')).toEqual({
+        runtimeEnvironmentId: null
+      })
+      expect(hasUnroutableTerminalWorktreeOwner(unstampedState(), 'repo-1::/w')).toBe(false)
+    })
+
+    it('still fails a genuinely unknown worktree id closed in that same state', () => {
+      expect(resolveTerminalWorktreeRoute(unstampedState(), 'repo-9::/stale')).toBeNull()
+    })
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import {
   buildImportedHookSettings,

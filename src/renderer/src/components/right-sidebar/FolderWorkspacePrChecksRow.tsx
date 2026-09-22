@@ -3,15 +3,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import {
   CHECK_COLOR,
   CHECK_ICON,
-  ChecksList,
   prStateColor,
   PullRequestIcon
-} from './checks-panel-content'
-import type { ParentPrChecksRow } from './parent-pr-checks-rows'
+} from './checks-panel/check-presentation'
+import { ChecksList } from './checks-panel/checks-list'
+import type { ParentPrChecksRow } from './parent-pr-checks-row-types'
 
 type FolderWorkspacePrChecksRowProps = {
   row: ParentPrChecksRow

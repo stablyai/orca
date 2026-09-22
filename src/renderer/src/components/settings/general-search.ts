@@ -24,6 +24,25 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.externalWorktrees',
+      'External worktrees'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.externalWorktreesDescription',
+      'Choose whether worktrees created outside Orca appear by default.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.externalKeyword',
+        'external'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.visibility', 'visibility'),
+      ...translateSearchKeyword('auto.components.settings.general.search.sidebar', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.141f71c69f', 'Nest Workspaces'),
     description: translate(
       'auto.components.settings.general.search.b9cffd374d',
@@ -131,6 +150,28 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+      'Confirm before closing running terminals'
+    ),
+    description: translate(
+      'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+      'Ask before stopping a running agent or command when closing a terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.running_terminal',
+        'running'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
+      ...translateSearchKeyword('auto.components.settings.general.search.confirm', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.close', 'close'),
+      ...translateSearchKeyword('auto.components.settings.general.search.omp', 'OMP')
     ]
   }
 ])

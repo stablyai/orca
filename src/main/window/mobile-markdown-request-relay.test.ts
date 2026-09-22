@@ -67,4 +67,38 @@ describe('requestMobileMarkdownFromRenderer', () => {
 
     await expect(pending).resolves.toMatchObject({ content: '# ok' })
   })
+
+  it('rejects and cleans up when the BrowserWindow closes and webContents becomes unavailable', async () => {
+    const { requestMobileMarkdownFromRenderer } = await import('./mobile-markdown-request-relay')
+    const webContents = Object.assign(new EventEmitter(), {
+      send: vi.fn()
+    })
+    let windowClosed = false
+    const mainWindow = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false
+    })
+    Object.defineProperty(mainWindow, 'webContents', {
+      get: () => {
+        if (windowClosed) {
+          throw new Error('webContents unavailable after close')
+        }
+        return webContents
+      }
+    })
+
+    const pending = requestMobileMarkdownFromRenderer(mainWindow as never, {
+      operation: 'read',
+      worktreeId: 'wt-1',
+      tabId: 'tab-md'
+    })
+    expect(ipcEmitter.listenerCount('ui:mobileMarkdownResponse')).toBe(1)
+
+    windowClosed = true
+    mainWindow.emit('closed')
+
+    await expect(pending).rejects.toThrow('renderer_unavailable')
+    expect(ipcEmitter.listenerCount('ui:mobileMarkdownResponse')).toBe(0)
+    expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
+  })
 })

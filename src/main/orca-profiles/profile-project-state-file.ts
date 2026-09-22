@@ -3,30 +3,32 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
-import type {
-  PersistedState,
-  Project,
-  ProjectHostSetup,
-  Repo,
-  SparsePreset,
-  WorkspaceSessionState
-} from '../../shared/types'
+import {
+  normalizeProjectHostSetupRows,
+  normalizeProjectRows
+} from '../../shared/project-catalog-row-normalization'
+import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Project, ProjectHostSetup } from '../../shared/project-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { SparsePreset } from '../../shared/worktree/create-types'
+import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { getOrcaProfileDataFile } from './profile-index-store'
 
 export type TransferProfileState = PersistedState
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord<T>(value: unknown): value is Record<string, T> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function arrayOrEmpty<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : []
+  return Array.isArray(value) ? value : []
 }
 
 function recordOrEmpty<T>(value: unknown): Record<string, T> {
-  return isRecord(value) ? (value as Record<string, T>) : {}
+  return isRecord<T>(value) ? value : {}
 }
 
 export function readProfileState(profileId: string, userDataPath: string): TransferProfileState {
@@ -35,16 +37,26 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
   if (!existsSync(dataFile)) {
     return structuredClone(defaults)
   }
-  const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as Partial<PersistedState>
+  const parsed: Partial<PersistedState> = JSON.parse(readFileSync(dataFile, 'utf-8'))
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
     repos: arrayOrEmpty<Repo>(parsed.repos),
-    projects: arrayOrEmpty<Project>(parsed.projects),
-    projectHostSetups: arrayOrEmpty<ProjectHostSetup>(parsed.projectHostSetups),
+    // Why normalize: another profile's file is untrusted JSON, and a null repoId/path here would be
+    // carried straight into the importing app's state.
+    projects: normalizeProjectRows(arrayOrEmpty<Project>(parsed.projects)),
+    projectHostSetups: normalizeProjectHostSetupRows(
+      arrayOrEmpty<ProjectHostSetup>(parsed.projectHostSetups)
+    ),
     projectGroups: arrayOrEmpty(parsed.projectGroups),
     folderWorkspaces: arrayOrEmpty(parsed.folderWorkspaces),
     sparsePresetsByRepo: recordOrEmpty<SparsePreset[]>(parsed.sparsePresetsByRepo),
+    retiredWorktreeNamesByRepo: recordOrEmpty<RetiredNameRegistry>(
+      parsed.retiredWorktreeNamesByRepo
+    ),
+    retiredWorktreeNamesByNamespace: recordOrEmpty<RetiredNameRegistry>(
+      parsed.retiredWorktreeNamesByNamespace
+    ),
     worktreeMeta: recordOrEmpty(parsed.worktreeMeta),
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
@@ -54,17 +66,15 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {
-          pr: recordOrEmpty((parsed.githubCache as PersistedState['githubCache']).pr),
-          issue: recordOrEmpty((parsed.githubCache as PersistedState['githubCache']).issue)
+          pr: recordOrEmpty(parsed.githubCache.pr),
+          issue: recordOrEmpty(parsed.githubCache.issue)
         }
       : defaults.githubCache,
     workspaceSession: isRecord(parsed.workspaceSession)
       ? { ...getDefaultWorkspaceSession(), ...parsed.workspaceSession }
       : defaults.workspaceSession,
-    workspaceSessionsByHostId: isRecord(parsed.workspaceSessionsByHostId)
-      ? (parsed.workspaceSessionsByHostId as Partial<
-          Record<ExecutionHostId, WorkspaceSessionState>
-        >)
+    workspaceSessionsByHostId: isRecord<WorkspaceSessionState>(parsed.workspaceSessionsByHostId)
+      ? parsed.workspaceSessionsByHostId
       : {},
     sshTargets: arrayOrEmpty(parsed.sshTargets),
     sshRemotePtyLeases: arrayOrEmpty(parsed.sshRemotePtyLeases),
@@ -102,16 +112,22 @@ function isRepoBackedProjectHostSetup(
 
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
-  const existingProjectsById = new Map(state.projects.map((project) => [project.id, project]))
+  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects)
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
-  const independentSetups = state.projectHostSetups.filter((setup) => {
-    if (projectedSetupIds.has(setup.id)) {
-      return false
-    }
-    return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
-  })
+  const independentSetups = state.projectHostSetups
+    .filter((setup) => {
+      if (projectedSetupIds.has(setup.id)) {
+        return false
+      }
+      return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
+    })
+    // Why: follow the repo's project through a derived-id change so no ghost project row survives.
+    .map((setup) => {
+      const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
+      return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
+    })
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
   const independentProjects = state.projects
     .filter(
@@ -121,19 +137,9 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
-  const projectedProjects = projection.projects.map((project) => {
-    const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
-      ? {
-          ...project,
-          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
-          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
-        }
-      : project
-  })
   return {
     ...state,
-    projects: [...projectedProjects, ...independentProjects],
+    projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }

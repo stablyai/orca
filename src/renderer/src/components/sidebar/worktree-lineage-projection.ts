@@ -2,7 +2,8 @@ import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../../../../shared/resolved-worktree-lineage'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type LineageRenderInfo =
   | { state: 'none' }
@@ -21,10 +22,49 @@ export function getProjectedWorktreeLineage(
   return (worktree as WorktreeWithResolvedLineage).lineage
 }
 
+type LineageProjection = {
+  cyclicLineageIds?: Set<string>
+  childrenByParentId?: Map<string, Worktree[]>
+}
+
+/**
+ * Why: both projections are O(worktrees) scans that the sidebar row builder and
+ * the pinned/attached-children readers re-run several times per pass, and
+ * zustand re-runs those on every store write. Both are pure in the two inputs,
+ * and both inputs are immutable store-derived collections that are REPLACED
+ * rather than mutated, so their identity pair is a sound cache key. Weak on both
+ * levels so a superseded lineage record or worktree index is not pinned.
+ */
+const projectionByLineageAndWorktreeMap = new WeakMap<
+  Readonly<Record<string, WorktreeLineage>>,
+  WeakMap<ReadonlyMap<string, Worktree>, LineageProjection>
+>()
+
+function getLineageProjection(
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  worktreeMap: ReadonlyMap<string, Worktree>
+): LineageProjection {
+  let byWorktreeMap = projectionByLineageAndWorktreeMap.get(lineageById)
+  if (!byWorktreeMap) {
+    byWorktreeMap = new WeakMap()
+    projectionByLineageAndWorktreeMap.set(lineageById, byWorktreeMap)
+  }
+  let projection = byWorktreeMap.get(worktreeMap)
+  if (!projection) {
+    projection = {}
+    byWorktreeMap.set(worktreeMap, projection)
+  }
+  return projection
+}
+
 export function getCyclicProjectedWorktreeLineageIds(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Set<string> {
+  const projection = getLineageProjection(lineageById, worktreeMap)
+  if (projection.cyclicLineageIds) {
+    return projection.cyclicLineageIds
+  }
   const validLineageByChildId = new Map<string, WorktreeLineage>()
   for (const worktree of worktreeMap.values()) {
     const lineage = getProjectedWorktreeLineage(worktree, lineageById)
@@ -36,7 +76,9 @@ export function getCyclicProjectedWorktreeLineageIds(
       validLineageByChildId.set(worktree.id, lineage)
     }
   }
-  return getCyclicWorktreeLineageChildIds(validLineageByChildId)
+  const cyclicLineageIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
+  projection.cyclicLineageIds = cyclicLineageIds
+  return cyclicLineageIds
 }
 
 export function getLineageRenderInfo(
@@ -64,6 +106,10 @@ export function getProjectedWorktreeLineageChildrenByParentId(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Map<string, Worktree[]> {
+  const projection = getLineageProjection(lineageById, worktreeMap)
+  if (projection.childrenByParentId) {
+    return projection.childrenByParentId
+  }
   const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
   const childrenByParentId = new Map<string, Worktree[]>()
   for (const worktree of worktreeMap.values()) {
@@ -75,6 +121,7 @@ export function getProjectedWorktreeLineageChildrenByParentId(
     children.push(worktree)
     childrenByParentId.set(lineage.parent.id, children)
   }
+  projection.childrenByParentId = childrenByParentId
   return childrenByParentId
 }
 

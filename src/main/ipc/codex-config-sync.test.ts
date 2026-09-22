@@ -21,13 +21,20 @@ vi.mock('node:os', async (importOriginal) => {
 
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
+import { getCodexSettingsBaselinePath } from '../codex/config-settings-baseline'
 
 let root: string
 
 function invokeHandler(mirroredHome: string | null): CodexConfigSyncStatus {
+  return invokeHandlerWithStatus({ kind: 'ready', homePath: mirroredHome })
+}
+
+function invokeHandlerWithStatus(
+  mirrored: { kind: 'ready'; homePath: string | null } | { kind: 'unavailable' }
+): CodexConfigSyncStatus {
   handleMock.mockClear()
   registerCodexConfigSyncHandlers({
-    getMirroredHostHomePathForStatus: () => mirroredHome
+    getMirroredHostHomePathForStatus: () => mirrored
   })
   const handler = handleMock.mock.calls.at(-1)?.[1] as () => CodexConfigSyncStatus
   return handler()
@@ -73,8 +80,42 @@ describe('codexConfigSync:status handler', () => {
     })
   })
 
+  it('reports a stall when the selected home baseline cannot be read', () => {
+    const perAccountHome = join(root, 'codex-accounts', 'acct-1', 'home')
+    mkdirSync(perAccountHome, { recursive: true })
+    writeFileSync(join(perAccountHome, 'config.toml'), 'model = "runtime-model"\n', 'utf-8')
+    writeFileSync(join(root, '.codex', 'config.toml'), 'model = "system-model"\n', 'utf-8')
+    const baselinePath = getCodexSettingsBaselinePath(perAccountHome)
+    mkdirSync(baselinePath)
+
+    expect(invokeHandler(perAccountHome)).toEqual({
+      state: 'stalled',
+      reason: 'managed-home-unavailable',
+      systemConfigPath: join(root, '.codex', 'config.toml'),
+      managedStatePath: baselinePath
+    })
+  })
+
   it('re-registers cleanly so a reload cannot leak a duplicate handler', () => {
     invokeHandler(null)
     expect(removeHandlerMock).toHaveBeenCalledWith('codexConfigSync:status')
+  })
+})
+
+// STA-4422: an unreadable managed home must not be reported as healthy. Before
+// the fix the resolver collapsed to `null`, which this channel reads as "no
+// mirror exists" and reports as synced.
+it('reports a managed-home-unavailable stall instead of synced when the home is unreadable', () => {
+  // Anchor: a genuine no-mirror lane still reports synced.
+  expect(invokeHandlerWithStatus({ kind: 'ready', homePath: null })).toEqual({
+    state: 'synced',
+    reason: null,
+    systemConfigPath: join(root, '.codex', 'config.toml')
+  })
+
+  expect(invokeHandlerWithStatus({ kind: 'unavailable' })).toEqual({
+    state: 'stalled',
+    reason: 'managed-home-unavailable',
+    systemConfigPath: join(root, '.codex', 'config.toml')
   })
 })

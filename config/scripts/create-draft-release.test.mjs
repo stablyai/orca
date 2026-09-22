@@ -132,7 +132,7 @@ describe('createDraftRelease', () => {
   it('creates a draft release with bounded generated notes', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([release('v1.4.35'), release('v1.4.36')]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.35')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'a'.repeat(130_000) }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
@@ -140,6 +140,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -173,9 +174,11 @@ describe('createDraftRelease', () => {
     const createBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
     expect(createBody).toMatchObject({
       tag_name: 'v1.4.36',
+      target_commitish: 'abc123',
       name: 'v1.4.36',
       draft: true,
-      prerelease: false
+      prerelease: false,
+      make_latest: 'false'
     })
     expect(createBody.body).toHaveLength(120_000)
     expect(createBody.body).toContain('Release notes were truncated')
@@ -184,7 +187,7 @@ describe('createDraftRelease', () => {
   it('marks rc tags as prereleases', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([release('v1.4.36'), release('v1.4.36-rc.1')]))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.36')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36-rc.1', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36-rc.1', draft: true }))
 
@@ -192,6 +195,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36-rc.1',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -200,10 +204,141 @@ describe('createDraftRelease', () => {
     expect(createBody.prerelease).toBe(true)
   })
 
+  it('regenerates notes for an existing draft release', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'stale' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'notes' }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      targetCommitish: 'abc123',
+      fetchImpl,
+      log: vi.fn()
+    })
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.not.objectContaining({ method: expect.anything() })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ body: 'notes' }) })
+    )
+  })
+
+  it('skips the update when the draft was published while notes were generated', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      targetCommitish: 'abc123',
+      fetchImpl,
+      log: vi.fn()
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.not.objectContaining({ method: expect.anything() })
+    )
+  })
+
+  it('restores the published body when publication lands between the check and the patch', async () => {
+    const log = vi.fn()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'hand-written notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'hand-written notes' }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      targetCommitish: 'abc123',
+      fetchImpl,
+      log
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(6)
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      6,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ body: 'hand-written notes' })
+      })
+    )
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('restored its published body'))
+  })
+
+  it('leaves a body written after the patch in place instead of rolling it back', async () => {
+    const log = vi.fn()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'hand-written notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'newer published body' }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      targetCommitish: 'abc123',
+      fetchImpl,
+      log
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('leaving the newer body in place'))
+  })
+
+  it('preserves notes on an existing published release', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse([release('v1.4.36', { id: 42 })]))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      targetCommitish: 'abc123',
+      fetchImpl,
+      log: vi.fn()
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('omits previous_tag_name for the first desktop release so notes fall back to the GitHub default', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([release('v1.4.36'), release('mobile-v0.0.12')]))
+      .mockResolvedValueOnce(jsonResponse([release('mobile-v0.0.12')]))
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
@@ -211,6 +346,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -233,6 +369,7 @@ describe('createDraftRelease', () => {
       repo: 'stablyai/orca',
       tag: 'v1.4.36',
       token: 'token',
+      targetCommitish: 'abc123',
       fetchImpl,
       log: vi.fn()
     })
@@ -249,5 +386,26 @@ describe('createDraftRelease', () => {
     )
     const generateNotesBody = JSON.parse(fetchImpl.mock.calls[2][1].body)
     expect(generateNotesBody.previous_tag_name).toBe('v1.4.35')
+  })
+
+  it('refuses an untagged GitHub draft so electron-builder cannot publish latest', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ tag_name: 'untagged-abc', name: 'v1.4.36', draft: true })
+      )
+
+    await expect(
+      createDraftRelease({
+        repo: 'stablyai/orca',
+        tag: 'v1.4.36',
+        token: 'token',
+        targetCommitish: 'abc123',
+        fetchImpl,
+        log: vi.fn()
+      })
+    ).rejects.toThrow('GitHub created draft release untagged-abc instead of draft v1.4.36')
   })
 })

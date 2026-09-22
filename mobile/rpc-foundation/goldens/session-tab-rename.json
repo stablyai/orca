@@ -1,0 +1,106 @@
+{
+  "operation": "session.tab-close",
+  "family": "session.tab-close",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "9e877af8539e5425f65edd6b3ff8af73e719aae2033980411a8e8a3b508dcd9e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "056772c9ebd6": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "renamed": true
+          }
+        }
+      }
+    },
+    "0923ddf47a9b": {
+      "name": "fetch-terminals",
+      "ordinal": 3,
+      "value": {}
+    },
+    "42b6d6d7fdf9": {
+      "activeHandle": "terminal-1",
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "build"
+        }
+      ]
+    },
+    "7e43ade02444": {
+      "name": "terminal.rename#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-tab-rename",
+    "checkpoints": [
+      {
+        "id": "renamed",
+        "observation": {
+          "sender": ["056772c9ebd6"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      }
+    ]
+  }
+}

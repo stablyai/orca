@@ -1,16 +1,14 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { STREAM_CHUNK_SIZE, JsonRpcErrorCode, RelayErrorCode } from './relay-protocol'
-import type { FileReadResult } from '../providers/types'
+import type { FileReadLimits, FileReadResult } from '../providers/types'
 import {
   createSshFileStreamInactivityDeadline,
   SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS
 } from './ssh-file-stream-inactivity-deadline'
+import { sshFileStreamReadCap } from './ssh-file-stream-read-cap'
 
 const RESULT_ENCODING_BASE64 = 'base64'
 const SENTINEL_STREAM_ID = -1
-
-const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 
 type StreamMetadataResponse = {
   streamId?: number
@@ -37,9 +35,14 @@ export class StreamProtocolError extends Error {
   }
 }
 
+// Why: exceeding a cap the caller itself set is a size verdict, not a protocol fault — callers
+// translate it into their own too-large error rather than leaking the raw stream message.
+export class FileReadCapExceededError extends StreamProtocolError {}
+
 export async function readFileViaStream(
   mux: SshChannelMultiplexer,
-  filePath: string
+  filePath: string,
+  limits?: FileReadLimits
 ): Promise<FileReadResult> {
   // Why: subscribe BEFORE awaiting the metadata response so a chunk arriving
   // immediately after the response cannot beat the listener registration.
@@ -71,13 +74,7 @@ export async function readFileViaStream(
     let bytesReceived = 0
     let settled = false
 
-    // Why: chunk/end/error frames may arrive in the same dispatch tick as the
-    // metadata response. Queue them until streamIdRef is set, then drain.
-    type PendingFrame =
-      | { kind: 'chunk'; params: Record<string, unknown> }
-      | { kind: 'end'; params: Record<string, unknown> }
-      | { kind: 'error'; params: Record<string, unknown> }
-    const pending: PendingFrame[] = []
+    // Install metadata during response dispatch, before adjacent stream frames.
     let metadataReady = false
 
     const inactivity = createSshFileStreamInactivityDeadline(() => {
@@ -226,23 +223,9 @@ export async function readFileViaStream(
       fail(err)
     }
 
-    const drainPending = (): void => {
-      while (!settled && pending.length > 0) {
-        const frame = pending.shift()!
-        if (frame.kind === 'chunk') {
-          handleChunk(frame.params)
-        } else if (frame.kind === 'end') {
-          handleEnd(frame.params)
-        } else {
-          handleStreamError(frame.params)
-        }
-      }
-    }
-
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamChunk', (params) => {
         if (!metadataReady) {
-          pending.push({ kind: 'chunk', params })
           return
         }
         handleChunk(params)
@@ -251,7 +234,6 @@ export async function readFileViaStream(
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamEnd', (params) => {
         if (!metadataReady) {
-          pending.push({ kind: 'end', params })
           return
         }
         handleEnd(params)
@@ -260,7 +242,6 @@ export async function readFileViaStream(
     unsubscribers.push(
       mux.onNotificationByMethod('fs.streamError', (params) => {
         if (!metadataReady) {
-          pending.push({ kind: 'error', params })
           return
         }
         handleStreamError(params)
@@ -281,56 +262,67 @@ export async function readFileViaStream(
     void mux
       // Why: flowControl declares this client acks each chunk, letting a new
       // relay pace the pump. Old relays ignore the extra param and flood.
-      .request('fs.readFileStream', { filePath, flowControl: 'ack' })
-      .then((rawMetadata) => {
-        if (settled) {
-          return
-        }
-        const metadata = rawMetadata as StreamMetadataResponse
-        isBinary = metadata.isBinary
-        isImage = metadata.isImage
-        mimeType = metadata.mimeType
-        resultEncoding = metadata.resultEncoding ?? RESULT_ENCODING_BASE64
+      .request(
+        'fs.readFileStream',
+        { filePath, flowControl: 'ack' },
+        {
+          beforeResolve: (rawMetadata) => {
+            if (settled) {
+              return
+            }
+            const metadata = rawMetadata as StreamMetadataResponse
+            isBinary = metadata.isBinary
+            isImage = metadata.isImage
+            mimeType = metadata.mimeType
+            resultEncoding = metadata.resultEncoding ?? RESULT_ENCODING_BASE64
 
-        if (metadata.empty) {
-          succeed({
-            content: '',
-            isBinary: metadata.isBinary,
-            ...(metadata.isImage !== undefined ? { isImage: metadata.isImage } : {}),
-            ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {})
-          })
-          return
-        }
+            if (metadata.empty) {
+              succeed({
+                content: '',
+                isBinary: metadata.isBinary,
+                ...(metadata.isImage !== undefined ? { isImage: metadata.isImage } : {}),
+                ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {})
+              })
+              return
+            }
 
-        if (typeof metadata.streamId !== 'number') {
-          fail(new StreamProtocolError('Metadata missing streamId for non-empty stream'))
-          return
-        }
+            if (typeof metadata.streamId !== 'number') {
+              fail(new StreamProtocolError('Metadata missing streamId for non-empty stream'))
+              return
+            }
 
-        const cap = metadata.isBinary ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
-        if (metadata.totalSize < 0 || metadata.totalSize > cap) {
-          streamIdRef.current = metadata.streamId
-          fail(
-            new StreamProtocolError(
-              `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
-            )
-          )
-          return
-        }
+            const cap = sshFileStreamReadCap(metadata.isBinary, limits)
+            if (metadata.totalSize < 0 || metadata.totalSize > cap) {
+              streamIdRef.current = metadata.streamId
+              fail(
+                new FileReadCapExceededError(
+                  `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
+                )
+              )
+              return
+            }
 
-        totalSize = metadata.totalSize
-        totalChunks = totalSize === 0 ? 0 : Math.ceil(totalSize / STREAM_CHUNK_SIZE)
-        try {
-          buffer = Buffer.alloc(totalSize)
-        } catch (err) {
-          streamIdRef.current = metadata.streamId
-          fail(new Error(`Failed to allocate ${totalSize} bytes: ${(err as Error).message}`))
-          return
+            totalSize = metadata.totalSize
+            totalChunks = totalSize === 0 ? 0 : Math.ceil(totalSize / STREAM_CHUNK_SIZE)
+            try {
+              buffer = Buffer.alloc(totalSize)
+            } catch (err) {
+              streamIdRef.current = metadata.streamId
+              fail(new Error(`Failed to allocate ${totalSize} bytes: ${(err as Error).message}`))
+              return
+            }
+            streamIdRef.current = metadata.streamId
+            metadataReady = true
+            inactivity.reset()
+          }
         }
-        streamIdRef.current = metadata.streamId
-        metadataReady = true
-        inactivity.reset()
-        drainPending()
+      )
+      // Why: beforeResolve is an optional hook; if a mux ever resolves without running
+      // it, metadata never installs and no deadline is armed. Fail instead of hanging.
+      .then(() => {
+        if (!settled && !metadataReady) {
+          fail(new StreamProtocolError('Metadata response resolved without stream identity'))
+        }
       })
       .catch((err) => {
         fail(err as Error)

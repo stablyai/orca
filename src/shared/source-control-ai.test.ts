@@ -17,7 +17,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiOperation
 } from './source-control-ai-types'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')

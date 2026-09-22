@@ -1,18 +1,11 @@
-import { z } from 'zod'
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ipc/ssh'
+import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
 let clientEventSubscriptionSeq = 0
 
-const ClientEventsUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
-
-export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
+export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     params: null,

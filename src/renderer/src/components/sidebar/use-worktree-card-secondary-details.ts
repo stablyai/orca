@@ -1,6 +1,9 @@
 import React, { useCallback } from 'react'
+import { toast } from 'sonner'
 
-import type { GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { translate } from '@/i18n/i18n'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -141,35 +144,79 @@ export function useWorktreeCardSecondaryDetails({
     },
     [hoverReview, openTaskPage, repo]
   )
+  const openLinkedUrlInBrowser = useCallback(
+    (url: string): void => {
+      void openWorkspaceBrowserTab({
+        workspaceId: worktree.id,
+        url,
+        intent: { kind: 'url' }
+      }).catch((error: unknown) => {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+        )
+      })
+    },
+    [worktree.id]
+  )
+  const handleOpenIssueInBrowser = useCallback(
+    (url: string): void => {
+      openLinkedUrlInBrowser(url)
+    },
+    [openLinkedUrlInBrowser]
+  )
+  const handleOpenReviewInBrowser = useCallback(
+    (url: string): void => {
+      openLinkedUrlInBrowser(url)
+    },
+    [openLinkedUrlInBrowser]
+  )
   const hoverReviewProvider = hoverReview?.provider
+  const canUnlinkReview =
+    hoverReviewProvider === 'github' ||
+    (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
+    (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
+    (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
+    (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const hasExplicitLinkedReview =
     (hoverReviewProvider === 'github' && worktree.linkedPR !== null) ||
     (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
     (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
-  const handleUnlinkReview = useCallback(() => {
+  const handleUnlinkReview = useCallback(async () => {
+    const options = { executionHostId: worktree.hostId ?? 'local' }
     switch (hoverReviewProvider) {
       case 'github':
-        void updateWorktreeMeta(worktree.id, { linkedPR: null })
+        if (hoverReview) {
+          const result = await updateWorktreeMeta(
+            worktree.id,
+            { linkedPR: null, suppressedGitHubPR: hoverReview.number },
+            options
+          )
+          if (!result.ok) {
+            toast.error(result.error)
+          }
+        }
         return
       case 'gitlab':
-        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
         return
       case 'bitbucket':
-        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
         return
       case 'azure-devops':
-        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
         return
       case 'gitea':
-        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
         break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
+  }, [hoverReview, hoverReviewProvider, updateWorktreeMeta, worktree.hostId, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -213,7 +260,10 @@ export function useWorktreeCardSecondaryDetails({
     showInlineAgentList,
     compactInlineAgentRows,
     handleOpenGitHubIssueInOrca,
+    handleOpenIssueInBrowser,
     handleOpenReviewInOrca,
+    canUnlinkReview,
+    handleOpenReviewInBrowser,
     hasExplicitLinkedReview,
     handleUnlinkReview,
     handleOpenLinearIssueInOrca,

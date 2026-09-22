@@ -24,14 +24,16 @@ const CLI_TO_SERVE_VALUE_FLAG = new Map([
 /**
  * Flags that consume the next argv token as a value (CLI-form + Electron passthrough).
  * Residual class: a flag outside this list whose space-separated value is literally `serve` would
- * read as the subcommand. Chromium switches are `--flag=value` only, so no real launch does that.
+ * read as the subcommand. Include switches that may arrive in either argv shape.
  */
-const VALUE_TAKING_FLAGS = new Set([
+export const VALUE_TAKING_FLAGS = new Set([
   ...CLI_TO_SERVE_VALUE_FLAG.keys(),
   '--serve-port',
   '--serve-pairing-address',
   '--serve-project-root',
+  '--disable-features',
   '--user-data-dir',
+  '--proxy-server',
   '--environment',
   '--pairing-code'
 ])
@@ -134,8 +136,7 @@ export function normalizeServeModeArgv(argv: readonly string[]): string[] {
       next.push(...argv.slice(i))
       break
     }
-    // Why: the CLI accepts `--port=6768` as well as `--port 6768`, but
-    // getServeOptions only reads the next token, so `=` must be split apart.
+    // Why: keep the internal argv shape canonical even though getServeOptions accepts both forms.
     const eq = token.indexOf('=')
     const name = eq === -1 ? token : token.slice(0, eq)
     // Why only the bare form: the CLI reads its serve booleans as `flags.get(name) === true`
@@ -153,7 +154,14 @@ export function normalizeServeModeArgv(argv: readonly string[]): string[] {
       continue
     }
     if (eq !== -1) {
-      next.push(valueFlag, token.slice(eq + 1))
+      const value = token.slice(eq + 1)
+      // Preserve the unambiguous `=` form when its value starts with `--`; splitting
+      // it would make the value look like a second option to the direct parser.
+      if (value.startsWith('--')) {
+        next.push(`${valueFlag}=${value}`)
+      } else {
+        next.push(valueFlag, value)
+      }
       continue
     }
     next.push(valueFlag)

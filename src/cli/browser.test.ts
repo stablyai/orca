@@ -183,6 +183,27 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('opens browser-launch URLs on the client hosting the current worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_open_url', { browserPageId: 'page-local' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['open-url', '--url', 'https://example.com/login', '--json'], '/tmp/repo/feature')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.openUrl',
+      {
+        url: 'https://example.com/login',
+        worktree: 'id:repo::/tmp/repo/feature'
+      },
+      { timeoutMs: 60_000 }
+    )
+  })
+
   it('passes tab profile updates through by page id', async () => {
     queueFixtures(
       callMock,
@@ -290,6 +311,76 @@ describe('orca cli browser page targeting', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', { worktree: undefined })
+  })
+})
+
+describe('orca cli browser identity', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('gets the host identity only after capability negotiation', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', { capabilities: ['browser.identity.v1'] }),
+      okFixture('identity', {
+        identity: {
+          state: 'valid',
+          appliedMode: 'clean',
+          configuredMode: 'native',
+          explicitSelection: true,
+          migrationNoticePending: false,
+          restartRequired: true
+        },
+        migrationNotice: null
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['browser', 'identity', 'get', '--json'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.identity.get')
+  })
+
+  it('sets the host identity through the runtime writer', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', { capabilities: ['browser.identity.v1'] }),
+      okFixture('identity', {
+        ok: true,
+        identity: {
+          state: 'valid',
+          appliedMode: 'clean',
+          configuredMode: 'native',
+          explicitSelection: true,
+          migrationNoticePending: false,
+          restartRequired: true
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['browser', 'identity', 'set', '--mode', 'native', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.identity.set', { mode: 'native' })
+  })
+
+  it('refuses an older runtime instead of guessing at identity support', async () => {
+    queueFixtures(callMock, okFixture('status', { capabilities: [] }))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['browser', 'identity', 'get'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Update or restart Orca'))
   })
 })
 
@@ -414,29 +505,6 @@ describe('orca cli browser tab profiles', () => {
     expect(logSpy).toHaveBeenCalledWith('No browser profiles found.')
   })
 
-  it('marks native-UA profiles in text output', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_profiles_native_ua', {
-        profiles: [
-          {
-            id: 'google',
-            scope: 'isolated',
-            label: 'Google',
-            partition: 'persist:orca-browser-session-google',
-            source: null,
-            userAgentMode: 'native'
-          }
-        ]
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['tab', 'profile', 'list'], '/tmp/not-an-orca-worktree')
-
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('ua:native'))
-  })
-
   it('creates isolated browser tab profiles by default', async () => {
     queueFixtures(
       callMock,
@@ -485,33 +553,6 @@ describe('orca cli browser tab profiles', () => {
     expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
       label: 'From Chrome',
       scope: 'imported'
-    })
-  })
-
-  it('creates a profile with the native user agent when requested', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_profile_native_ua', {
-        profile: {
-          id: 'google',
-          scope: 'isolated',
-          label: 'Google',
-          partition: 'persist:orca-browser-session-google',
-          userAgentMode: 'native'
-        }
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['tab', 'profile', 'create', '--label', 'Google', '--no-ua-spoof', '--json'],
-      '/tmp/not-an-orca-worktree'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('browser.profileCreate', {
-      label: 'Google',
-      scope: 'isolated',
-      userAgentMode: 'native'
     })
   })
 

@@ -1,5 +1,10 @@
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+
 export type HostedReviewLocalGitOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 }
 
 export type HostedReviewExecutionOptions = {
@@ -14,7 +19,13 @@ export function getHostedReviewLocalGitOptions(
   options: HostedReviewExecutionOptions = {}
 ): HostedReviewLocalGitOptions {
   const wslDistro = options.localGitExecOptions?.wslDistro
-  return wslDistro ? { wslDistro } : {}
+  const admissionTier = options.localGitExecOptions?.admissionTier
+  const ghAccount = options.localGitExecOptions?.ghAccount
+  return {
+    ...(wslDistro ? { wslDistro } : {}),
+    ...(admissionTier ? { admissionTier } : {}),
+    ...(ghAccount ? { ghAccount } : {})
+  }
 }
 
 export function hasHostedReviewLocalGitOptions(

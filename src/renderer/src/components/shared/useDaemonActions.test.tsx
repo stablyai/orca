@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
   vi.hoisted(() => ({
@@ -30,7 +30,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import type { KillAllTerminalSurfacesSummary } from './kill-all-terminal-surfaces'
-import { useDaemonActions } from './useDaemonActions'
+import { DaemonActionDialog, useDaemonActions, type DaemonActionsApi } from './useDaemonActions'
 
 function rejectedSummary(): KillAllTerminalSurfacesSummary {
   return {
@@ -148,5 +148,44 @@ describe('useDaemonActions kill-all cleanup', () => {
       expect.any(Object)
     )
     expect(toastInfoMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('DaemonActionDialog restart copy', () => {
+  function pendingRestartApi(): DaemonActionsApi {
+    return {
+      pending: 'restart',
+      setPending: vi.fn(),
+      busyKind: null,
+      isBusy: false,
+      runRestart: vi.fn(async () => {}),
+      runKillAll: vi.fn(async () => {}),
+      runConfirmed: vi.fn()
+    }
+  }
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  // The old copy promised panes showing "Process exited" that the user reopens by hand; agents
+  // resume themselves now, so it described a product that no longer exists.
+  it('names the terminal service and states only what actually happens', () => {
+    render(<DaemonActionDialog api={pendingRestartApi()} />)
+
+    expect(screen.getByText('Restart the terminal service?')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
+      )
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeTruthy()
+  })
+
+  it('no longer promises reopenable "Process exited" panes', () => {
+    render(<DaemonActionDialog api={pendingRestartApi()} />)
+
+    expect(screen.queryByText(/Process exited/)).toBeNull()
+    expect(screen.queryByText(/Legacy-protocol sessions/)).toBeNull()
   })
 })

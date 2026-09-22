@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState } from '../../../../shared/constants'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
-  Repo,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   finishProjectAddWithDefaultCheckout,
   getProjectDefaultCheckout,
@@ -529,7 +529,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'no_authoritative_detection'
     })
     expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith(['repo-2', 'repo-1'])
     expect(mocks.state.setShowActiveOnly).toHaveBeenCalledWith(false)
   })
 })

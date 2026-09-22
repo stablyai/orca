@@ -7,7 +7,8 @@ import {
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { Tab, TuiAgent } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
@@ -127,7 +128,7 @@ export function launchAgentInWebHostTab(args: {
       agent,
       promptAfterReady: pastePromptAfterReady,
       submitPrompt: submitPastedPrompt,
-      forcePromptPaste: promptDelivery === 'submit-after-ready'
+      forcePromptPaste: true
     }).then(handleCreation)
   }
   if (hasPrompt && promptDelivery === 'draft') {

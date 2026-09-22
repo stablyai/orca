@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
-import type { GitHubPrReadOutcome } from './github-pr-rpc'
+import { fetchPRChecks, type GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,
   emptyPrSidebarDetails,
@@ -15,6 +17,7 @@ import {
   type PrSidebarLoadDeps
 } from './mobile-pr-sidebar-state'
 import { buildMobilePrSidebarIdentity } from './use-mobile-pr-sidebar-controller'
+import type { RpcResponse } from '../transport/types'
 
 function ok<T>(result: T): GitHubPrReadOutcome<T> {
   return { ok: true, result }
@@ -38,6 +41,10 @@ const DETAILS = { item: { number: 7 }, checks: [] } as unknown as GitHubWorkItem
 const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
 ]
+
+// A host reply that settled fine at the transport but carries no result — the
+// `result-absent` partition of the reply matrix.
+const RESULT_ABSENT_REPLY: RpcResponse = { id: 'x', ok: true, _meta: { runtimeId: 'r' } }
 
 function ghInfo(over: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
@@ -86,7 +93,10 @@ describe('loadPrSidebarData', () => {
       branch: 'feat',
       headSha: 'sha-status'
     })
-    expect(out).toEqual({ kind: 'ready', data: { pr: PR, details: null, checks: CHECKS } })
+    expect(out).toEqual({
+      kind: 'ready',
+      data: { pr: PR, details: null, checks: CHECKS, checksError: null }
+    })
     // Details (heavy comments payload) are NOT fetched on the critical path.
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
     // forBranch's PR number is threaded into prForBranch as the linked hint.
@@ -114,7 +124,10 @@ describe('loadPrSidebarData', () => {
     })
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 42 })
-    expect(out).toEqual({ kind: 'ready', data: { pr: merged, details: null, checks: CHECKS } })
+    expect(out).toEqual({
+      kind: 'ready',
+      data: { pr: merged, details: null, checks: CHECKS, checksError: null }
+    })
   })
 
   it('prefers the forBranch open hint over the worktree linkedPR', async () => {
@@ -148,12 +161,39 @@ describe('loadPrSidebarData', () => {
     expect(out).toEqual({ kind: 'none' })
   })
 
-  it('routes a checks failure through the classifier', async () => {
+  // Checks are contained, not fatal: even a permanent failure keeps the PR on screen,
+  // because the title/body/comments/merge controls do not depend on the checks read.
+  it('keeps the PR rendered when the checks read fails, carrying the message', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
       { worktreeId: 'w', branch: 'feat' }
     )
-    expect(out.kind).toBe('blocked')
+    expect(out).toEqual({
+      kind: 'ready',
+      data: { pr: PR, details: null, checks: [], checksError: '403 forbidden' }
+    })
+  })
+
+  // The reply this whole PR is about: a host whose prChecks shape drifted. The reader
+  // refuses it, and the sidebar must still render the PR with a readable checks message.
+  it('keeps the PR rendered when the host sends a checks reply the reader refuses', async () => {
+    const sendRequest = vi.fn(async () => RESULT_ABSENT_REPLY)
+    const out = await loadPrSidebarData(
+      deps({
+        fetchPRChecks: (worktreeId, args) => fetchPRChecks({ sendRequest }, worktreeId, args)
+      }),
+      { worktreeId: 'repo-1::/w', branch: 'feat' }
+    )
+    expect(out).toEqual({
+      kind: 'ready',
+      data: {
+        pr: PR,
+        details: null,
+        checks: [],
+        checksError: 'The host sent a reply this app could not read (github.prChecks)'
+      }
+    })
+    expect(sendRequest).toHaveBeenCalledOnce()
   })
 
   it('returns an error state when a dep rejects (no escaping rejection)', async () => {

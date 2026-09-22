@@ -1,6 +1,7 @@
 import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import type { GitHubAssignableUser, GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
 export function formatRelativeTime(input: string): string {

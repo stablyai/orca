@@ -37,6 +37,10 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     prompt: '프롬프트',
     rename: '이름 변경',
     session: '세션',
+    // Why: MT read 'unfreeze' as thawing ice (녹이다). Pin it to the 정지됨 pair so
+    // frozen-terminal recovery stays reachable from the term the UI actually shows.
+    frozen: '정지됨',
+    unfreeze: '정지 해제',
     location: '위치',
     detect: '감지',
     path: '경로',
