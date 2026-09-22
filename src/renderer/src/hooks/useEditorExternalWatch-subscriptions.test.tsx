@@ -134,6 +134,23 @@ describe('useEditorExternalWatch subscriptions', () => {
     expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a shared local folder watched until its last editor owner closes', async () => {
+    const project = { ...runtimeTarget(), runtimeEnvironmentId: null, connectionId: undefined }
+    const floating = { ...project, worktreeId: 'global-floating-terminal' }
+    subscriptionState.snapshot = { targets: [project, floating], targetsKey: 'both' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(watchWorktree).toHaveBeenCalledTimes(1)
+
+    subscriptionState.snapshot = { targets: [floating], targetsKey: 'floating-only' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+    expect(watchWorktree).toHaveBeenCalledTimes(1)
+
+    subscriptionState.snapshot = { targets: [], targetsKey: '' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+  })
+
   it('disposes a runtime subscription that resolves after unmount', async () => {
     const pending = deferredRuntimeSubscription()
     const unsubscribeRuntime = vi.fn()

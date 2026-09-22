@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
@@ -102,6 +103,30 @@ describe('getEditorExternalWatchTargets', () => {
         runtimeEnvironmentId: null
       }
     ])
+  })
+
+  it('watches floating notes outside registered workspaces and deduplicates their folders', () => {
+    const repo = makeRepo('repo-1')
+    const state = makeState({
+      repo,
+      worktree: makeWorktree(repo.id),
+      runtimeEnvironmentId: 'remote-runtime',
+      openFiles: ['/notes/docs.md', '/notes/su.md', '/other/cudoc.md'].map((filePath) => ({
+        ...makeOpenFile(FLOATING_TERMINAL_WORKTREE_ID),
+        id: filePath,
+        filePath,
+        runtimeEnvironmentId: null
+      }))
+    })
+    expect(getEditorExternalWatchTargets(state).targets).toEqual(
+      ['/notes', '/other'].map((worktreePath) => ({
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        worktreePath,
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }))
+    )
+    expect(getEditorExternalWatchTargets({ ...state, openFiles: [] }).targets).toEqual([])
   })
 
   it('enables WSL aliases for a proven-local Windows drive watcher', () => {
