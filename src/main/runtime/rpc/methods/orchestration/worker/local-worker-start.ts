@@ -25,6 +25,7 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
+import { recordZcodeReadinessFailure, waitForZcodeReadiness } from './worker-zcode'
 
 type WorkerStartMutation = {
   callerFingerprint: string
@@ -75,6 +76,16 @@ export async function startLocalWorker(args: {
     })
   }
   let mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
+  const promptDeliveryWorktree = creationWorktree ?? resolvedWorktree
+  const promptDelivery =
+    agent && promptDeliveryWorktree
+      ? await runtime.resolveOrchestrationPromptDelivery(agent, promptDeliveryWorktree.id)
+      : 'agent-input'
+  const interactiveAgentCommand =
+    agent && promptDelivery === 'agent-input' && promptDeliveryWorktree
+      ? await runtime.resolveOrchestrationInteractiveAgentCommand(agent, promptDeliveryWorktree.id)
+      : undefined
+  const launchObservedAfter = Date.now()
 
   const startOptions = {
     worktree: requestedWorktree,
@@ -137,6 +148,8 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      promptDelivery,
+      interactiveAgentCommand,
       effects,
       onStage: (stage) => {
         failedStage = stage
@@ -165,6 +178,13 @@ export async function startLocalWorker(args: {
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
+    await waitForZcodeReadiness({
+      runtime,
+      terminalHandle,
+      agent: agent!,
+      promptDelivery,
+      timeoutMs: params.timeoutMs ?? 60_000
+    })
     // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
     // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
     // still holds it back, and that gate has to be waited on explicitly here.
@@ -218,7 +238,10 @@ export async function startLocalWorker(args: {
       dispatchCapability: capability,
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
-      agent: agent ?? null,
+      agent: agent!,
+      promptDelivery,
+      launchObservedAfter,
+      ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
       setupReceipt,
       launchReceipt: launch.receipt,
       mode,
@@ -230,6 +253,7 @@ export async function startLocalWorker(args: {
       }
     })
   } catch (error) {
+    recordZcodeReadinessFailure({ agent, promptDelivery, failedStage })
     await tearDownFailedWorkerStart({
       runtime,
       structuredSession: placed?.structuredSession ?? null,

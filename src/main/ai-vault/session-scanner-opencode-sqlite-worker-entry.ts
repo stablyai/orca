@@ -8,6 +8,7 @@ import {
   captureOpenCode2SqliteSession,
   parseOpenCode2SqliteSession
 } from './session-scanner-opencode2-sqlite'
+import { readZcodeSqliteTranscript } from './zcode-sqlite-transcript'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -49,6 +50,9 @@ async function handleRequest(
           ? await captureOpenCode2SqliteSession(request)
           : await captureOpenCodeSqliteSession(request)
       return { id: request.id, ok: true, value: capture }
+    }
+    if (request.kind === 'transcript') {
+      return { id: request.id, ok: true, value: readZcodeSqliteTranscript(request) }
     }
     const session =
       request.agent === 'opencode2'

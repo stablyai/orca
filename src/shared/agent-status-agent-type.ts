@@ -1,0 +1,27 @@
+// Agent types are extensible; these names only improve narrowing for built-in integrations.
+export type WellKnownAgentType =
+  | 'claude'
+  | 'openclaude'
+  | 'codex'
+  | 'gemini'
+  | 'antigravity'
+  | 'amp'
+  | 'opencode'
+  | 'mimo-code'
+  | 'cursor'
+  | 'copilot'
+  | 'aider'
+  | 'pi'
+  | 'omp'
+  | 'prime-agent'
+  | 'droid'
+  | 'command-code'
+  | 'grok'
+  | 'hermes'
+  | 'devin'
+  | 'ante'
+  | 'trae'
+  | 'zcode'
+  | 'unknown'
+
+export type AgentType = WellKnownAgentType | (string & {})

@@ -40,6 +40,12 @@ export type WorkerSetupReceipt = {
     | 'not_applicable'
 }
 
+export function getInteractiveAgentStartupTimeoutMs(agent: TuiAgent): number {
+  // The npm-distributed ZCode TUI performs provider and workspace discovery before
+  // rendering its composer. On a cold launch that can exceed the generic 30s budget.
+  return agent === 'zcode' ? 90_000 : 30_000
+}
+
 export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
   const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
   const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
@@ -61,20 +67,31 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  promptDelivery: 'agent-input' | 'startup-command'
+  interactiveAgentCommand?: string
   taskId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
-  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-    title: `worker-${args.taskId}`,
-    // Why: dispatching a worker is background work; it must not pull the sidebar
-    // to the worker's workspace while the user is reading somewhere else.
-    surfaceOwner: false
-  })
+  const terminal =
+    args.promptDelivery === 'startup-command' || args.interactiveAgentCommand
+      ? await args.runtime.createDeferredAgentTerminal(`id:${args.worktreeId}`, {
+          agent: args.agent,
+          bareShell: true,
+          ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+          title: `worker-${args.taskId}`,
+          surfaceOwner: false
+        })
+      : await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+          // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+          // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+          // configured launcher instead of executing the raw id.
+          startupAgent: args.agent,
+          ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+          title: `worker-${args.taskId}`,
+          // Why: dispatching a worker is background work; it must not pull the sidebar
+          // to the worker's workspace while the user is reading somewhere else.
+          surfaceOwner: false
+        })
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
@@ -83,6 +100,26 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
+  if (args.interactiveAgentCommand) {
+    // The daemon queues writes until the POSIX shell-ready gate opens. Waiting for
+    // `tui-idle` here is incorrect because this is deliberately a bare shell: it
+    // has no agent title or ready prompt and therefore cannot satisfy that agent
+    // readiness condition. Send the startup command now, then prove readiness from
+    // the launched process below.
+    await args.runtime.sendTerminal(terminal.handle, {
+      text: args.interactiveAgentCommand,
+      enter: true
+    })
+    if (
+      !(await args.runtime.waitForTerminalAgentProcess(
+        terminal.handle,
+        args.agent,
+        getInteractiveAgentStartupTimeoutMs(args.agent)
+      ))
+    ) {
+      throw new Error('interactive_agent_start_failed')
+    }
+  }
   return { handle: terminal.handle, warning: terminal.warning }
 }
 

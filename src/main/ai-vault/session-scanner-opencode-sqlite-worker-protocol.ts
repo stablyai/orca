@@ -1,6 +1,7 @@
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { TranscriptMessage } from './session-transcript-consumers'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
 
 // Why: request/response shapes shared by the worker entry and the main-thread
 // client. Kept type-only (and electron-free) so importing it into the worker
@@ -38,10 +39,22 @@ export type OpenCodeSqliteCaptureRequest = {
   agent?: 'opencode2'
 }
 
+export type OpenCodeSqliteTranscriptRequest = {
+  id: number
+  kind: 'transcript'
+  dbPath: string
+  sessionId: string
+  offset?: number
+  endOffset?: number
+  beforeOffset?: number
+  limit: number
+}
+
 export type OpenCodeSqliteWorkerRequest =
   | OpenCodeSqliteListRequest
   | OpenCodeSqliteParseRequest
   | OpenCodeSqliteCaptureRequest
+  | OpenCodeSqliteTranscriptRequest
 
 // The list leg returns candidates plus the issues it accumulated; the worker
 // mutates a local array and hands it back so the caller can merge it into the
@@ -57,6 +70,14 @@ export type OpenCodeSqliteListValue = {
 export type OpenCodeSqliteCaptureValue = {
   session: AiVaultSession | null
   messages: TranscriptMessage[]
+}
+
+export type OpenCodeSqliteTranscriptValue = {
+  messages: NativeChatMessage[]
+  nextOffset: number
+  beforeOffset: number
+  limited: boolean
+  warnings: string[]
 }
 
 export type OpenCodeSqliteWorkerResponse =

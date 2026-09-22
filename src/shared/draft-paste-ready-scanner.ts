@@ -5,6 +5,10 @@ import type { DraftPasteReadySignal } from './tui-agent-config'
 // "input is ready" moment per agent instead of guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT = '›'
+// ZCode's Ink renderer enters synchronized-output mode before painting its
+// composer. Unlike banner text, this survives narrow, inactive, and first-frame
+// terminal layouts.
+const ZCODE_RENDER_FRAME = '\x1b[?2026h'
 // Why: opencode emits the DECTCEM show-cursor only once the composer row is
 // mounted and the text cursor is placed in it — a "composer ready" signal,
 // analogous to Codex's prompt glyph. It fires ~2s after bracketed paste is
@@ -38,6 +42,12 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
     markerAnchor: DECSET_BRACKETED_PASTE,
     markerAnchorEnd: null,
     marker: CODEX_COMPOSER_PROMPT,
+    quietAnchor: null
+  },
+  'zcode-composer-prompt': {
+    markerAnchor: null,
+    markerAnchorEnd: null,
+    marker: null,
     quietAnchor: null
   },
   'render-cursor-after-bracketed-paste': {
@@ -128,6 +138,8 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   let sawQuietAnchor = false
   let codexAltScreen = false
   let sawCodexPromptInAltScreen = false
+  let zcodeStage = 0
+  let zcodeCarry = ''
 
   const {
     markerAnchor,
@@ -202,8 +214,27 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     }
   }
 
+  const scanZcodeComposerSequence = (data: string): boolean => {
+    const markers = [DECSET_BRACKETED_PASTE, ZCODE_RENDER_FRAME, '\x1b[?2026l', DECTCEM_SHOW_CURSOR]
+    const window = zcodeCarry + data
+    let cursor = 0
+    while (zcodeStage < markers.length) {
+      const markerIndex = window.indexOf(markers[zcodeStage]!, cursor)
+      if (markerIndex === -1) {
+        zcodeCarry = window.slice(Math.max(cursor, window.length - ANCHOR_CARRY_CHARS))
+        return false
+      }
+      cursor = markerIndex + markers[zcodeStage]!.length
+      zcodeStage += 1
+    }
+    return true
+  }
+
   return {
     observe(data: string): DraftPasteReadyScanResult {
+      if (readySignal === 'zcode-composer-prompt') {
+        return { ready: scanZcodeComposerSequence(data), armQuietTimer: false }
+      }
       const combined = recent + data
       recent = combined.slice(-512)
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {

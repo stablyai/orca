@@ -26,5 +26,12 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     pattern: /(?:^|\/)node_modules\/prime-agent\/dist\/bundle\/cli\.js$/,
     agent: 'prime-agent',
     processName: 'prime-agent'
+  },
+  // Why: zcode-app-cli's stable package entrypoint remains identifiable while
+  // its release version and native child process layout evolve independently.
+  {
+    pattern: /(?:^|\/)node_modules\/zcode-app-cli\/bin\/zcode\.js$/,
+    agent: 'zcode',
+    processName: 'zcode-cli'
   }
 ]

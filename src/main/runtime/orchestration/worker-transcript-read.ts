@@ -13,6 +13,7 @@ import {
   readInitialLocalWorkerTranscriptPage
 } from './worker-transcript-local-read'
 import { readRemoteWorkerTranscript } from './worker-transcript-remote-read'
+import { readZcodeWorkerTranscript } from './worker-transcript-read-zcode'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -49,6 +50,12 @@ export async function readWorkerTranscript(args: {
   /** Remote execution-host provider. When present no local filesystem lookup occurs. */
   filesystemProvider?: IFilesystemProvider
 }): Promise<WorkerTranscriptReadResult> {
+  if (args.agent === 'zcode') {
+    if (args.filesystemProvider) {
+      return { ok: false, reason: 'provider_unsupported', warnings: [] }
+    }
+    return readZcodeWorkerTranscript(args)
+  }
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }

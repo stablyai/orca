@@ -1,4 +1,6 @@
 import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-contracts'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
@@ -25,6 +27,9 @@ export async function deliverWorkerDispatchPreamble(args: {
   dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
+  agent: TuiAgent
+  promptDelivery: 'agent-input' | 'startup-command'
+  launchPreferences?: AgentLaunchPreferences
 }): Promise<RuntimeTerminalSend['prompt']> {
   const { runtime, structuredSession, terminalHandle } = args
   const preamble = buildDispatchPreamble({
@@ -39,7 +44,8 @@ export async function deliverWorkerDispatchPreamble(args: {
     workerHandle: terminalHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    ...(args.promptDelivery === 'startup-command' ? { workerKind: 'one-shot-agent' } : {})
   })
   if (structuredSession) {
     await sendStructuredWorkerPreamble({
@@ -49,6 +55,16 @@ export async function deliverWorkerDispatchPreamble(args: {
       preamble
     })
     return undefined
+  }
+  if (args.promptDelivery === 'startup-command') {
+    return (
+      await runtime.sendTerminalAgentStartupPrompt(
+        terminalHandle,
+        args.agent,
+        preamble,
+        args.launchPreferences
+      )
+    ).prompt
   }
   return (
     await runtime.sendTerminalAgentPrompt(terminalHandle, preamble, {

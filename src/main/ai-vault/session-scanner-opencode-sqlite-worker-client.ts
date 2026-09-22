@@ -4,6 +4,7 @@ import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-typ
 import type {
   OpenCodeSqliteCaptureValue,
   OpenCodeSqliteListValue,
+  OpenCodeSqliteTranscriptValue,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
@@ -23,6 +24,7 @@ export const PARSE_TIMEOUT_MS = 15_000
 // Longer than a parse because it reads every part of the session rather than
 // the newest window, and shorter than nothing at all because the queue is FIFO.
 export const CAPTURE_TIMEOUT_MS = 30_000
+export const TRANSCRIPT_TIMEOUT_MS = 15_000
 export const IDLE_TEARDOWN_MS = 30_000
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
@@ -201,6 +203,27 @@ export class OpenCodeSqliteWorkerClient {
       return parseOpenCodeSqliteCaptureValue(value)
     } catch (err) {
       throw sessionReadFailure(err)
+    }
+  }
+
+  async transcript(args: {
+    dbPath: string
+    sessionId: string
+    offset?: number
+    endOffset?: number
+    beforeOffset?: number
+    limit: number
+  }): Promise<OpenCodeSqliteTranscriptValue> {
+    try {
+      return (await this.dispatch(
+        (id) => ({ id, kind: 'transcript', ...args }),
+        TRANSCRIPT_TIMEOUT_MS
+      )) as OpenCodeSqliteTranscriptValue
+    } catch (err) {
+      if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
+        throw new Error('ZCode SQLite transcript reader could not start.')
+      }
+      throw err instanceof Error ? err : new Error(String(err))
     }
   }
 

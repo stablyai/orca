@@ -1,4 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
@@ -15,6 +17,7 @@ import {
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './worker-topology'
+import { mergeZcodeProviderWarning } from './worker-zcode'
 
 /**
  * Delivers the dispatch preamble and settles the worker's start state on the strongest
@@ -34,7 +37,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
-  agent: string | null
+  agent: TuiAgent
+  promptDelivery: 'agent-input' | 'startup-command'
+  launchObservedAfter: number
+  launchPreferences?: AgentLaunchPreferences
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
@@ -58,7 +64,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
-    requestId: args.requestId
+    requestId: args.requestId,
+    agent: args.agent,
+    promptDelivery: args.promptDelivery,
+    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {})
   })
   effects.push({
     kind: 'dispatch_input',
@@ -77,6 +86,14 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     ? { verdict: 'observed' }
     : await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery })
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
+  const terminalRevealWarning = await mergeZcodeProviderWarning(args.terminalRevealWarning, {
+    runtime,
+    terminalHandle,
+    agent: args.agent,
+    promptDelivery: args.promptDelivery,
+    observedAfter: args.launchObservedAfter,
+    timeoutMs: args.timeoutMs
+  })
   monitorWorkerSetup({
     runtime,
     db,
@@ -125,7 +142,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
         `orca terminal read --terminal ${terminalHandle} --screen`,
         `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
       ],
-      ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
+      ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
     }
   }
   const worker = alreadySettled
@@ -151,6 +168,6 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     effects,
     ...(deliveredPrompt ? { prompt: deliveredPrompt } : {}),
     residualResources: [],
-    ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
+    ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
   }
 }

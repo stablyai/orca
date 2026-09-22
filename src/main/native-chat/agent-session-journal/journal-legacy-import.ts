@@ -117,6 +117,12 @@ export async function prepareLegacyTranscriptImport(input: {
   if (!transcriptAgent) {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
+  if (transcriptAgent === 'zcode') {
+    return {
+      ok: false,
+      error: 'ZCode SQLite transcripts are imported through the dedicated SQLite transcript path.'
+    }
+  }
   const filePath =
     options.filePath ?? (await resolveSessionFilePath(input.agent, input.sessionId, options))
   if (!filePath) {

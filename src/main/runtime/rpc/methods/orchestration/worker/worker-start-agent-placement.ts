@@ -59,6 +59,8 @@ type WorkerAgentPlacementArgs = {
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
+  promptDelivery: 'agent-input' | 'startup-command'
+  interactiveAgentCommand: string | undefined
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
@@ -118,12 +120,19 @@ async function placeInCreatedWorktree(
     coordinatorWorktree,
     params: args.params,
     agent: args.agent as TuiAgent,
-    withAgentTerminal: args.mode.mode !== 'structured',
+    withAgentTerminal:
+      args.mode.mode !== 'structured' &&
+      args.promptDelivery === 'agent-input' &&
+      !args.interactiveAgentCommand,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     effects: args.effects
   })
   const worktree = requireWorktree(created.worktree)
-  if (args.mode.mode !== 'structured') {
+  if (
+    args.mode.mode !== 'structured' &&
+    args.promptDelivery === 'agent-input' &&
+    !args.interactiveAgentCommand
+  ) {
     return {
       mode: args.mode,
       worktree,
@@ -170,6 +179,10 @@ async function createWorkerAgentSurface(
     worktreeId,
     agent: args.agent as TuiAgent,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+    promptDelivery: args.promptDelivery,
+    ...(args.interactiveAgentCommand
+      ? { interactiveAgentCommand: args.interactiveAgentCommand }
+      : {}),
     taskId: args.taskId,
     effects: args.effects
   })
