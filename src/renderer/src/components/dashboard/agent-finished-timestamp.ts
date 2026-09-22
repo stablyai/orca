@@ -1,3 +1,4 @@
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { DashboardAgentRow } from './useDashboardData'
 
@@ -23,7 +24,7 @@ export function lastEnteredDoneAt(
     return completedAt
   }
   // Why: display is looser than ranking — an interrupted turn still shows when it stopped.
-  if (entry.state === 'done' && entry.interrupted === true && entry.sessionBoundary !== true) {
+  if (isInterruptedAgentCompletion(entry) && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {

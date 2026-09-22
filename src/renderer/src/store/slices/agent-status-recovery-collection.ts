@@ -3,6 +3,7 @@ import {
   getAgentResumeArgv,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   normalizePaneKeySet,
@@ -153,7 +154,7 @@ export function collectHibernatedCompletionEvidenceForWorktree(
       !allowedPaneKeys.has(paneKey) ||
       entry.state !== 'done' ||
       agentType === undefined ||
-      entry.interrupted === true
+      isInterruptedAgentCompletion(entry)
     ) {
       continue
     }

@@ -70,12 +70,18 @@ export function normalizeClaudeEvent(
     })
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  // A stopped turn may still be holding background work, and the boundary that reports that work
+  // drained is the SAME turn ending — it just carries no `is_interrupt` of its own. Carry the fact
+  // onto it so the turn completes as what it was. Scoped to a lead record already sitting at the
+  // boundary (`interrupted` is only ever set there), and every other lead event overwrites that
+  // record without it, so the next prompt ends the carry.
+  const carriesEndedTurnInterrupt =
+    previousLead?.state === 'done' && previousLead.interrupted === true
   const interrupted =
     isTurnBoundary &&
     ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-      previousLead?.interrupted === true)
+      carriesEndedTurnInterrupt)
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
@@ -116,15 +122,10 @@ export function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron && interrupted !== true) {
+    if (hasActiveSessionCron) {
       state.claudeActiveSessionCronPaneKeys.add(paneKey)
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -232,11 +233,6 @@ export function normalizeClaudeEvent(
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
-  if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  }
-
   if (isManualCompactCompletion) {
     // Why: a manual /compact only ever completes at an idle prompt, so a child that exists ONLY as
     // a disk snapshot has nothing live behind it and must not keep the pane spinning — that
@@ -253,10 +249,7 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
-    state: reportedStateName,
-    interrupted
-  })
+  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, { state: reportedStateName })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName

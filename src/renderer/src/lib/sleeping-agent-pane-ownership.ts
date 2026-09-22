@@ -1,4 +1,5 @@
 import type { useAppStore } from '@/store'
+import { isInterruptedAgentCompletion } from '../../../shared/agent-interrupt-outcome'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
@@ -23,7 +24,7 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
-    !(record.origin === 'live' && record.interrupted === true) &&
+    !(record.origin === 'live' && isInterruptedAgentCompletion(record)) &&
     record.state === 'done'
   )
 }

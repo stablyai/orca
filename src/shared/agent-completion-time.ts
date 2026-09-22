@@ -1,3 +1,4 @@
+import { isInterruptedAgentCompletion } from './agent-interrupt-outcome'
 import type { AgentStateHistoryEntry, AgentStatusEntry } from './agent-status-types'
 
 /** The subset of a hook entry a completion time is derived from. */
@@ -13,7 +14,7 @@ function mostRecentCompletedTurnInHistory(
   for (const row of history ?? []) {
     if (
       row.state === 'done' &&
-      row.interrupted !== true &&
+      !isInterruptedAgentCompletion(row) &&
       Number.isFinite(row.startedAt) &&
       row.startedAt > max
     ) {
@@ -33,7 +34,7 @@ function mostRecentCompletedTurnInHistory(
  *   - for a session-boundary `done` (connected idle, not a turn), the real completion it displaced.
  */
 export function agentEntryCompletionAt(entry: AgentCompletionSource): number | null {
-  if (entry.state !== 'done' || entry.interrupted === true) {
+  if (entry.state !== 'done' || isInterruptedAgentCompletion(entry)) {
     return null
   }
   if (entry.sessionBoundary === true) {

@@ -1,5 +1,6 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
+import { isInterruptedAgentCompletion } from '../../../../../shared/agent-interrupt-outcome'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
@@ -88,8 +89,7 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
       current.agentType === entry.agentType
     const inferredFromEntry =
       options?.allowInferredInterrupt === true &&
-      current.state === 'done' &&
-      current.interrupted === true &&
+      isInterruptedAgentCompletion(current) &&
       current.prompt === entry.prompt &&
       current.agentType === entry.agentType &&
       current.stateHistory?.some(

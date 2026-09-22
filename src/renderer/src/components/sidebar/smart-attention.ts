@@ -1,4 +1,5 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
@@ -91,17 +92,15 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   let max = 0
   for (const h of history) {
     // Why: setAgentStatus preserves `interrupted` on history rows, so filter them like the current entry.
-    if (h.state === 'done' && h.interrupted) {
+    if (isInterruptedAgentCompletion(h)) {
       continue
     }
-    if (h.state === 'done' || h.state === 'blocked' || h.state === 'waiting') {
-      // Why: Infinity from a corrupted row would pin the worktree atop Class 3 forever; treat non-finite as missing.
-      if (!Number.isFinite(h.startedAt)) {
-        continue
-      }
-      if (h.startedAt > max) {
-        max = h.startedAt
-      }
+    if (h.state !== 'done' && h.state !== 'blocked' && h.state !== 'waiting') {
+      continue
+    }
+    // Why: Infinity from a corrupted row would pin the worktree atop Class 3 forever; treat non-finite as missing.
+    if (Number.isFinite(h.startedAt) && h.startedAt > max) {
+      max = h.startedAt
     }
   }
   return max > 0 ? max : null

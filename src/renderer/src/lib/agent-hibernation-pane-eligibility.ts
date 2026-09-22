@@ -1,3 +1,4 @@
+import { isInterruptedAgentCompletion } from '../../../shared/agent-interrupt-outcome'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { getAgentResumeArgv, isResumableTuiAgent } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -89,7 +90,7 @@ export function getEligiblePane(args: {
   )
   if (
     entry.state !== 'done' ||
-    entry.interrupted === true ||
+    isInterruptedAgentCompletion(entry) ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||
     (sleepingRecord && !hasOnlyLiveResumeAnchor)

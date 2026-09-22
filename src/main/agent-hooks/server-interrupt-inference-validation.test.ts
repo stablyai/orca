@@ -161,7 +161,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('suppresses replayed same-prompt working events after an inferred interrupt', () => {
+  it('refuses a replayed same-prompt working event after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -213,6 +213,9 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
 
+      // Why: a replay is re-delivery of evidence the interrupt already superseded, not a new
+      // sighting of the pane. It is dated to the original observation, which is older than the
+      // interrupt, so letting it restate the pane would walk the row backwards in time.
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           state: 'done',

@@ -10,6 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
@@ -29,7 +30,7 @@ function stateDotTooltipLabel(
   dotState: AgentDotState,
   now: number
 ): string {
-  if (agent.entry.interrupted === true) {
+  if (isInterruptedAgentCompletion(agent.entry)) {
     return 'Interrupted by user'
   }
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
@@ -141,7 +142,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
-  const isInterrupted = agent.entry.interrupted === true
+  const isInterrupted = isInterruptedAgentCompletion(agent.entry)
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
   const lineageChildCount = lineage?.childCount ?? 0

@@ -42,8 +42,8 @@ export type AgentStateHistoryEntry = {
   prompt: string
   /** When this state was first reported. */
   startedAt: number
-  /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
-   *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
+  /** True when the user stopped this turn (agent hook like Claude `is_interrupt`, or Orca's
+   *  guarded fallback). A turn fact, not a completion claim — see `isInterruptedAgentCompletion`. */
   interrupted?: boolean
 }
 
@@ -138,8 +138,10 @@ export type AgentStatusEntry = {
    *  Why: batched publications can fold a whole done→working turn into one notification,
    *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
   lastCompletedAssistantMessage?: string
-  /** True when this `done` was reached via interrupt, not normal completion
-   *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
+  /** True when the user stopped this turn (agent-reported or Orca's guarded fallback). It says
+   *  nothing about whether the pane finished: a stopped turn can leave background shells or
+   *  crons running, and those keep the row `working`. Readers that mean "finished by interrupt"
+   *  must ask `isInterruptedAgentCompletion`. Undefined otherwise. */
   interrupted?: boolean
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
@@ -181,6 +183,7 @@ export type AgentStatusPayload = {
   lastAssistantMessage?: string
   /** See the AgentStatusEntry field for semantics. */
   lastAssistantMessageIsToolOutput?: boolean
+  /** See the AgentStatusEntry field: a turn fact, valid on any state. */
   interrupted?: boolean
   /** True when this `done` marks a session boundary (connect/resume/clear landing idle,
    *  e.g. Claude SessionStart — STA-3386), not a completed turn. Consumers that react to
@@ -393,8 +396,9 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // an old host that never sends it keeps today's behavior instead of silently suppressing.
     lastAssistantMessageIsToolOutput:
       obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
-    // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
-    interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    // The user stopped this turn. Independent of `state`: Ctrl+C does not stop the background
+    // shells and crons a pane may still be reporting, so the fact must not force a `done` claim.
+    interrupted: obj.interrupted === true ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents)

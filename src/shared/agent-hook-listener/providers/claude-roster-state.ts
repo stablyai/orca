@@ -102,16 +102,14 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+/** The authoritative inventory is the only thing that may register or retire the gate. Ctrl+C
+ *  stops the turn, not the OS processes the turn started. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean,
-  /** Lead-turn property. Pass `false` from any non-lead fold: an interrupt clears the gate even when
-   *  the inventory positively reports a running shell, which is a live-shell judgement no new call
-   *  site may inherit by copying this signature. */
-  interrupted: boolean
+  hasRunningNonAgentTask: boolean
 ): void {
-  if (hasRunningNonAgentTask && !interrupted) {
+  if (hasRunningNonAgentTask) {
     state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -126,7 +124,7 @@ export type ClaudePaneStatusResolution = {
 export function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
-  lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  lead: Pick<ClaudeLeadTurnState, 'state'>
 ): ClaudePaneStatusResolution {
   if (lead.state !== 'done') {
     return { stateName: lead.state }
@@ -136,19 +134,17 @@ export function resolveClaudePaneStatus(
     return { stateName: 'working' }
   }
   if (
-    !lead.interrupted &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-      state.claudeActiveSessionCronPaneKeys.has(paneKey))
+    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+    state.claudeActiveSessionCronPaneKeys.has(paneKey)
   ) {
     return { stateName: 'working', workingMode: 'monitoring' }
   }
   return { stateName: 'done' }
 }
-/** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
+/** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane.
+ *  Records the turn fact only: background shells and crons are retired by their own inventory. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }
 
 /** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */

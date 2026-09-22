@@ -163,6 +163,20 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('interrupted')
   })
 
+  it('reports a stopped turn whose background work still runs as monitoring, not interrupted', () => {
+    const stopped = entry(FIRST_LEAF_ID, 'working', {
+      workingMode: 'monitoring',
+      interrupted: true
+    })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [stopped.paneKey]: stopped },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('monitoring')
+  })
+
   it('does not let a finished sibling mask an interrupted outcome', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     const finished = entry(SECOND_LEAF_ID, 'done')

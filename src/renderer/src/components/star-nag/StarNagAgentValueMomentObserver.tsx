@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 
@@ -36,7 +37,7 @@ function hasSuccessfulDoneTransition(
       // Why: a session-boundary done is an idle connect (STA-3386), not a value moment —
       // a stale working row + resume would otherwise nag on launch.
       entry.sessionBoundary !== true &&
-      !entry.interrupted &&
+      !isInterruptedAgentCompletion(entry) &&
       hasMeaningfulPrompt(entry)
     ) {
       return true

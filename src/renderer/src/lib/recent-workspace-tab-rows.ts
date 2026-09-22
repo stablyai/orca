@@ -11,6 +11,7 @@ import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { isInterruptedAgentCompletion } from '../../../shared/agent-interrupt-outcome'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
@@ -88,7 +89,7 @@ export function resolveRecentWorkspaceTabStatus(
   const hasInterrupted = panes.some(
     (pane) =>
       pane.kind === 'hook' &&
-      pane.entry.interrupted === true &&
+      isInterruptedAgentCompletion(pane.entry) &&
       isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
   )
   if (hasInterrupted) {

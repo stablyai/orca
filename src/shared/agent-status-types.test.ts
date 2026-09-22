@@ -430,10 +430,10 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(result!.interrupted).toBe(true)
   })
 
-  it('clears interrupted on non-done states (stale-signal suppression)', () => {
+  it('keeps interrupted on non-done states (a stopped turn need not claim the pane finished)', () => {
     for (const state of ['working', 'blocked', 'waiting'] as const) {
       const result = parseAgentStatusPayload(`{"state":"${state}","interrupted":true}`)
-      expect(result!.interrupted).toBeUndefined()
+      expect(result!.interrupted).toBe(true)
     }
   })
 

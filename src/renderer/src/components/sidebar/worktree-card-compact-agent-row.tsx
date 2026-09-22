@@ -9,6 +9,7 @@ import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
@@ -28,7 +29,7 @@ export function getCompactAgentSecondary(
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
-  if (agent.entry.interrupted === true) {
+  if (isInterruptedAgentCompletion(agent.entry)) {
     return 'Interrupted by user'
   }
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears

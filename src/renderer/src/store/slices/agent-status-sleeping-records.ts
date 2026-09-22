@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   getAgentResumeArgv,
@@ -79,7 +80,7 @@ export function normalizeSleepingAgentSessionCollectOptions(
 }
 
 export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
-  return entry.state === 'done' && entry.interrupted !== true
+  return entry.state === 'done' && !isInterruptedAgentCompletion(entry)
 }
 
 // Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive

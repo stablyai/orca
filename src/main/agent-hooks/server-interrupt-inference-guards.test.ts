@@ -414,7 +414,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('preserves an inferred interrupted row when OpenCode immediately reports SessionIdle', () => {
+  it('carries the inferred interrupt onto the SessionIdle OpenCode reports for that turn', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -456,6 +456,8 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
 
+      // Why: the agent's own terminal report for the stopped turn is accepted — it is fresher and
+      // no less true — and it keeps the fact that the user is why the turn ended.
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
@@ -463,8 +465,7 @@ describe('AgentHookServer listener replay', () => {
           prompt: 'long task',
           agentType: 'opencode',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          receivedAt: 1_501
         })
       ])
       expect(listener).toHaveBeenLastCalledWith(

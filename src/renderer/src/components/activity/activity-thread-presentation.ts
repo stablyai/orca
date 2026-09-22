@@ -7,6 +7,7 @@ import {
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
 } from '@/lib/activity-thread-display'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
@@ -118,7 +119,14 @@ export type ActivityThreadStatusId = AgentDotState
  *  interrupted predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   const state = thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
-  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
+  if (
+    !thread.currentAgentState &&
+    state === 'done' &&
+    isInterruptedAgentCompletion({
+      state,
+      interrupted: thread.latestEvent?.entry.interrupted
+    })
+  ) {
     return 'interrupted'
   }
   return state

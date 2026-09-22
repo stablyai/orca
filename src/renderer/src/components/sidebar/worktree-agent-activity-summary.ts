@@ -1,3 +1,4 @@
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
@@ -233,8 +234,7 @@ function applyLiveAgentState(
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
-  } else if (entry.interrupted === true) {
-    // Interrupted is encoded as done, so it must be checked first.
+  } else if (isInterruptedAgentCompletion(entry)) {
     summary.hasInterrupted = true
   } else if (entry.state === 'working') {
     if (entry.workingMode === 'monitoring') {

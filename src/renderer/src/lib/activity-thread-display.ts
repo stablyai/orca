@@ -10,6 +10,7 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from './agent-row-primary-text'
+import { isInterruptedAgentCompletion } from '../../../shared/agent-interrupt-outcome'
 import { formatAgentToolPreview } from './agent-row-tool-preview'
 
 // Why: follow-up replies ("yes", "ok proceed") are valid hook prompts but are
@@ -198,10 +199,10 @@ export function getActivityThreadStatusPreview(
   >,
   agentState?: AgentStatusState | null
 ): string {
-  if (entry.interrupted === true) {
+  const state = agentState ?? entry.state
+  if (isInterruptedAgentCompletion({ state, interrupted: entry.interrupted })) {
     return 'Interrupted by user'
   }
-  const state = agentState ?? entry.state
   const toolPreview = formatAgentToolPreview(entry, state)
   if (toolPreview) {
     return toolPreview

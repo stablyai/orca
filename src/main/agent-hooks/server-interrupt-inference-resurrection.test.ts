@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('does not let late same-turn working hooks resurrect an inferred interrupt', () => {
+  it('publishes late same-turn work while keeping the interrupt that stopped the turn', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -72,14 +72,17 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
 
+      // Why: the tool really is still running, so hiding it behind a frozen `done` was a lie the
+      // old clamp forced. Report the work AND the interrupt.
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'done',
+          state: 'working',
           prompt: 'long task',
           agentType: 'pi',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          toolName: 'bash',
+          toolInput: '/bin/sleep 90',
+          receivedAt: 6_000
         })
       ])
     } finally {
@@ -87,7 +90,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('does not let late Claude tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+  it('keeps the interrupt on late Claude tool hooks that carry an explicit prompt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -142,12 +145,11 @@ describe('AgentHookServer listener replay', () => {
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'done',
+          state: 'working',
           prompt: 'Do I have gpu acceleration on on my terminal?',
           agentType: 'claude',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          receivedAt: 2_000
         })
       ])
     } finally {
@@ -155,7 +157,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('does not let late Codex tool hooks with explicit prompt resurrect an inferred interrupt', () => {
+  it('keeps the interrupt on late Codex tool hooks that carry an explicit prompt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -210,12 +212,11 @@ describe('AgentHookServer listener replay', () => {
 
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'done',
+          state: 'working',
           prompt: 'Run sleep 30, then reply done.',
           agentType: 'codex',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          receivedAt: 6_000
         })
       ])
     } finally {
@@ -389,7 +390,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('suppresses same-turn Claude tool progress after the stale suppression window', () => {
+  it('still reads Claude tool progress as the stopped turn past the late-progress window', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -438,14 +439,15 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
 
+      // Why: a Claude retry of the same prompt arrives as UserPromptSubmit, so tool lifecycle work
+      // names the stopped turn however long it took to arrive — no clock needed for this arm.
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'done',
+          state: 'working',
           prompt: 'repeat task',
           agentType: 'claude',
           interrupted: true,
-          receivedAt: 1_500,
-          stateStartedAt: 1_500
+          receivedAt: 16_501
         })
       ])
     } finally {

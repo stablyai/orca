@@ -1,12 +1,11 @@
 import {
-  reconcileRemoteCodexState,
-  markCodexLeadTurnInterrupted
+  markCodexLeadTurnInterrupted,
+  reconcileRemoteCodexState
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
-import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
@@ -17,7 +16,7 @@ import {
   shouldKeepClaudePermissionVisible
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
-import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
+import { resolveInterruptedTurnProgress } from './server-interrupted-turn-progress'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
@@ -165,39 +164,26 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
     const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
-    const boundaryAwarePayload = attachClaudeChildOnlyBoundary(previous, effectivePayload)
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
-    if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'done' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS
-    ) {
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
+    const turnProgress = resolveInterruptedTurnProgress(
+      previous,
+      attachClaudeChildOnlyBoundary(previous, effectivePayload),
+      now
+    )
+    if (turnProgress.hold) {
+      this.commitStatusRowMutation(rowBefore, turnProgress.hold)
+      return turnProgress.hold
     }
+    const boundaryAwarePayload = turnProgress.payload
     if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'working' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      (effectivePayload.isReplay === true ||
-        isToolProgressWorkingAfterInterrupt(effectivePayload) ||
-        (effectivePayload.hasExplicitPrompt !== true &&
-          Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
+      boundaryAwarePayload.payload.agentType === 'codex' &&
+      boundaryAwarePayload.payload.interrupted === true
     ) {
-      if (effectivePayload.payload.agentType === 'codex') {
-        markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
-      }
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
+      // Why: keep the Codex lead-turn record in sync, or its own fold re-emits the live turn.
+      markCodexLeadTurnInterrupted(this.state, boundaryAwarePayload.paneKey)
     }
     if (
       effectivePayload.payload.state !== 'done' ||

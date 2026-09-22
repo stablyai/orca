@@ -168,7 +168,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         ...(restored.workingMode ? { workingMode: restored.workingMode } : {}),
         prompt: payload.prompt,
         agentType: payload.agentType,
-        ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(restored.interrupted ? { interrupted: true } : {}),
         ...(restored.turnCompletedAt !== undefined
           ? { turnCompletedAt: restored.turnCompletedAt }
           : {}),

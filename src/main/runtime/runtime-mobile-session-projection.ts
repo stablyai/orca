@@ -3,6 +3,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
+import { isInterruptedAgentCompletion } from '../../shared/agent-interrupt-outcome'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
@@ -22,6 +23,19 @@ import {
   getLatestAgentCandidateTitle,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
+
+/** Strip the event-only turn stamp, which rides its own tab field, and clamp the published
+ *  `interrupted`: paired phones and web clients have always read it as "finished by interrupt",
+ *  so the internal split between the turn fact and the pane state stays off this wire. */
+function toClientAgentStatus(
+  entry: AgentStatusEntry & { turnCompletedAt?: number }
+): AgentStatusEntry {
+  const { turnCompletedAt: _turnCompletedAt, ...fields } = entry
+  return {
+    ...fields,
+    ...(entry.interrupted !== undefined ? { interrupted: isInterruptedAgentCompletion(entry) } : {})
+  }
+}
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -270,8 +284,7 @@ export function projectRuntimeMobileSessionTabs(
     const projectedStatusEntry = projectedAgentStatus.agentStatus as
       | (AgentStatusEntry & { turnCompletedAt?: number })
       | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const projectedTurnCompletedAt = projectedStatusEntry?.turnCompletedAt
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -281,7 +294,7 @@ export function projectRuntimeMobileSessionTabs(
         ? rawTurnCompletedAt
         : undefined
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? { agentStatus: clientStatusFields as AgentStatusEntry }
+      ? { agentStatus: toClientAgentStatus(projectedStatusEntry) }
       : {}
     tabs.push({
       type: 'terminal',

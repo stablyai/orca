@@ -1,4 +1,5 @@
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
@@ -63,7 +64,7 @@ export function createAgentStatusWorktreeDropActions(
               allowedPaneKeys.has(paneKey) &&
               entry.state === 'done' &&
               entry.agentType !== undefined &&
-              entry.interrupted !== true
+              !isInterruptedAgentCompletion(entry)
             ) {
               retainedEvidence.set(
                 paneKey,

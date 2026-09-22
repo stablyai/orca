@@ -89,6 +89,15 @@ describe('worktree card agent summary', () => {
     expect(eligible).toContain('data-slot="tooltip-trigger"')
   })
 
+  it('does not give a stopped turn the interrupted dot while its background work runs', () => {
+    const base = monitoringAgent()
+    const stopped = { ...base, entry: { ...base.entry, interrupted: true } }
+
+    // Why: the turn was stopped, but the shell it started was not — the dot names the pane.
+    expect(getAgentDotState(stopped)).toBe('monitoring')
+    expect(getCompactAgentSecondary(stopped, Date.now())).toBe('Monitoring background tasks')
+  })
+
   it('lists interrupted outcomes before clean completions', () => {
     const done = monitoringAgent()
     done.state = 'done'

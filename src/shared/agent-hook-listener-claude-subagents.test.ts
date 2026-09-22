@@ -392,10 +392,10 @@ describe('shared agent-hook-listener', () => {
         agent_type: 'general-purpose'
       })
       const interruptedStop = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
-      // Why: the child is still running, so the pane stays working and the
-      // parse layer clamps `interrupted` off this intermediate emit.
+      // Why: the child is still running, so the pane stays working — and it says so while also
+      // reporting that the user stopped the turn. Two facts, one row.
       expect(interruptedStop?.payload.state).toBe('working')
-      expect(interruptedStop?.payload.interrupted).toBeUndefined()
+      expect(interruptedStop?.payload.interrupted).toBe(true)
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')

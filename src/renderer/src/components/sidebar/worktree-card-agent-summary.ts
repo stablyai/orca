@@ -1,6 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { agentRowDotState } from '@/lib/agent-row-dot-state'
 
 export type SummaryAgentGroup = {
@@ -21,7 +22,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
 ]
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  if (agent.entry.interrupted === true) {
+  if (isInterruptedAgentCompletion(agent.entry)) {
     return 'interrupted'
   }
   return agentRowDotState(agent.state, agent.entry.workingMode)

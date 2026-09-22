@@ -303,9 +303,7 @@ export function collectRetainedAgentsOnDisappear(args: {
     // (state === 'done' and not interrupted). Explicit teardown paths mark
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
-    const lastState = prev.row.state
-    const wasInterrupted = prev.row.entry.interrupted === true
-    if (lastState !== 'done' || wasInterrupted) {
+    if (prev.row.state !== 'done' || prev.row.entry.interrupted === true) {
       continue
     }
     toRetain.push({

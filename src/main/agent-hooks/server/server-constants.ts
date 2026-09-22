@@ -5,18 +5,20 @@ export const LAST_STATUS_FILE_NAME = 'last-status.json'
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
 export const CODEX_SUBAGENT_POLL_MS = 1_000
-export const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
+// Why: a hook still in flight when the user stopped the turn arrives within seconds; past this the
+// same prompt reading `working` again is a new turn, not that turn's tail.
+export const INTERRUPTED_TURN_LATE_PROGRESS_MS = 15_000
+export const TOOL_PROGRESS_HOOK_EVENTS = new Set([
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure'
+])
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 export const LAST_STATUS_FILE_VERSION = 2
 
 // Why: trailing-edge debounce so a burst of hook events yields one disk write, not N; quit-time flushStatusPersistSync() guarantees the final flush.
 export const STATUS_PERSIST_DEBOUNCE_MS = 250
-export const TOOL_PROGRESS_HOOK_EVENTS = new Set([
-  'PreToolUse',
-  'PostToolUse',
-  'PostToolUseFailure'
-])
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.

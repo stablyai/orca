@@ -2,6 +2,7 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from '@/attention/agent-attention-contract'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import {
@@ -92,8 +93,7 @@ function getTerminalTabActivityFlags(
       } else {
         flags.hasLiveWorking = true
       }
-    } else if (entry.interrupted === true) {
-      // Interrupted is encoded as done, so it must be checked first.
+    } else if (isInterruptedAgentCompletion(entry)) {
       flags.hasInterrupted = true
     } else if (entry.state === 'done') {
       flags.hasLiveDone = true

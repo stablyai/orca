@@ -223,6 +223,33 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
   })
 
+  it('keeps a stopped turn whose background work still runs out of the interrupted rollup', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 2,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'working',
+            workingMode: 'monitoring',
+            interrupted: true
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    // Why: the interrupted arm is evaluated before the working one, so an interrupt that no longer
+    // implies a finished pane would roll a live monitoring card up as "Interrupted".
+    expect(summary).toMatchObject({ hasInterrupted: false, hasLiveMonitoring: true })
+  })
+
   it('lets an unconfirmed restored row suppress only its pane title', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)

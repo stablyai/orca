@@ -4,6 +4,7 @@ import type {
   DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions
 } from './agent-status-contract'
+import { isInterruptedAgentCompletion } from '../../../../shared/agent-interrupt-outcome'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
@@ -162,7 +163,7 @@ export function createAgentStatusDropActions(
         if (
           liveEntry?.state === 'done' &&
           liveEntry.agentType !== undefined &&
-          liveEntry.interrupted !== true
+          !isInterruptedAgentCompletion(liveEntry)
         ) {
           retainedEvidence.set(
             paneKey,

@@ -5,6 +5,7 @@ import {
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { isInterruptedAgentCompletion } from '../../shared/agent-interrupt-outcome'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -47,7 +48,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
       toolInput: entry.toolInput ?? null,
-      interrupted: entry.interrupted ?? false,
+      // Compatibility projection: the published row's `interrupted` has always meant "finished by
+      // interrupt", and paired clients and phones still read it that way. Keep it clamped here so
+      // the internal split stays invisible on the wire.
+      interrupted: isInterruptedAgentCompletion(entry),
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
