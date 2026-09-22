@@ -31,7 +31,8 @@ export type SessionParseCachePersistenceOptions = {
 let options: SessionParseCachePersistenceOptions | null = null
 let loadPromise: Promise<void> | null = null
 let saveTimer: NodeJS.Timeout | null = null
-let lastSave: Promise<void> = Promise.resolve()
+let lastSave: Promise<void> | null = null
+let pendingSave: SessionParseCachePersistenceOptions | null = null
 
 /** Enable persistence. Called only from the composition root; every export is a no-op until then. */
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
@@ -49,7 +50,8 @@ export function resetSessionParseCachePersistenceForTests(): void {
     clearTimeout(saveTimer)
     saveTimer = null
   }
-  lastSave = Promise.resolve()
+  lastSave = null
+  pendingSave = null
 }
 
 /**
@@ -80,9 +82,7 @@ export function scheduleSessionParseCachePersist(stats: SessionParseStats): void
   }
   saveTimer = setTimeout(() => {
     saveTimer = null
-    // Chained so a slow write and a rescheduled save can't rename out of order
-    // (an older snapshot landing last); persistSnapshot never rejects.
-    lastSave = lastSave.then(() => persistSnapshot(current))
+    requestSnapshotSave(current)
   }, SAVE_DEBOUNCE_MS)
   // Why: a pending cache save must not keep a quitting process alive.
   if (typeof saveTimer.unref === 'function') {
@@ -97,13 +97,31 @@ export async function flushSessionParseCachePersist(): Promise<void> {
     saveTimer = null
     if (options !== null) {
       const current = options
-      lastSave = lastSave.then(() => persistSnapshot(current))
+      requestSnapshotSave(current)
     }
   }
   await lastSave
 }
 
 export const flushSessionParseCachePersistForTests = flushSessionParseCachePersist
+
+function requestSnapshotSave(current: SessionParseCachePersistenceOptions): void {
+  // Each save reads the latest cache, so a stalled write needs only one follow-up.
+  pendingSave = current
+  lastSave ??= drainSnapshotSaves()
+}
+
+async function drainSnapshotSaves(): Promise<void> {
+  try {
+    while (pendingSave !== null) {
+      const current = pendingSave
+      pendingSave = null
+      await persistSnapshot(current)
+    }
+  } finally {
+    lastSave = null
+  }
+}
 
 async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
   await sweepOrphanedTempFiles(current.filePath)
