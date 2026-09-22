@@ -2,7 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
-import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import type {
+  MobileWebShellSessionState,
+  MobileWebShellUpdateNotice
+} from './mobile-web-shell-session-contract'
 
 type ScreenDependencies = {
   retry: Mock
@@ -28,6 +31,8 @@ type ScreenDependencies = {
   /** Whether the view refuses what it is handed, which is a page the post never reached. */
   postFails: boolean
   state: MobileWebShellSessionState
+  /** Non-null when the generation on screen is a fallback from an update the shell refused. */
+  updateNotice: MobileWebShellUpdateNotice | null
   /** What the session reducer says about the page's handshake; true only for the fence's case. */
   pageReady: boolean
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
@@ -68,6 +73,7 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     posted: [],
     postFails: false,
     state: { kind: 'checking' },
+    updateNotice: null,
     pageReady: false,
     client: null
   }
@@ -122,6 +128,7 @@ vi.mock('expo-file-system', () => ({
   },
   Paths: { cache: 'file:///cache' }
 }))
+vi.mock('lucide-react-native', () => ({ X: 'Icon' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))
@@ -199,6 +206,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     state: dependencies.state,
     pageRoutes: dependencies.pageRoutes,
     routeGrants: dependencies.routeGrants,
+    updateNotice: dependencies.updateNotice,
     retry: dependencies.retry,
     reportShellFailure: dependencies.reportShellFailure,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
@@ -317,6 +325,7 @@ beforeEach(() => {
   dependencies.openUrl.mockImplementation(() => Promise.resolve(true))
   dependencies.canGoBack = true
   dependencies.pathname = '/h/host-1'
+  dependencies.updateNotice = null
 })
 
 describe('the hybrid shell screen', () => {
@@ -796,6 +805,64 @@ describe('the dropped-frame count on the dev facts line', () => {
     } finally {
       Object.assign(globalThis, { __DEV__: true })
     }
+  })
+})
+
+/**
+ * An update the session refused, over a workspace the session opened anyway.
+ *
+ * The decision is the reducer's; what this pins is that the screen keeps the two apart — the
+ * refusal is a line above the page, so a dismissed notice leaves the same document mounted rather
+ * than reloading it, and the copy claims only what happened.
+ */
+describe('a refused update is said beside the page, not in front of it', () => {
+  function dismissControl(tree: ReactTestRenderer): ReactTestInstance | undefined {
+    return byName(tree, 'Pressable').find(
+      (node) => node.props.accessibilityLabel === 'Dismiss notice'
+    )
+  }
+
+  it('serves the page and says the update did not happen, promising no retry', async () => {
+    dependencies.updateNotice = 'update-failed'
+    const tree = await render(readyState('session-one'))
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
+    const text = textOf(tree)
+    expect(text).toContain("Couldn't update the workspace from this host")
+    expect(text).toContain('Showing the last version that worked')
+    expect(text).not.toContain('Try again')
+  })
+
+  it('says nothing when the generation on screen is the one the host serves', async () => {
+    const tree = await render(readyState('session-one'))
+    expect(dismissControl(tree)).toBeUndefined()
+    expect(textOf(tree)).not.toContain("Couldn't update")
+  })
+
+  it('keeps the same document mounted when the notice is dismissed', async () => {
+    dependencies.updateNotice = 'update-failed'
+    const tree = await render(readyState('session-one'))
+    dependencies.lifecycle.length = 0
+    await act(async () => {
+      dismissControl(tree)?.props.onPress()
+    })
+    expect(dismissControl(tree)).toBeUndefined()
+    expect(textOf(tree)).not.toContain("Couldn't update")
+    // The page is the point: a notice that reloaded the workspace to get out of the way would
+    // cost the user exactly what the fallback was for.
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
+    expect(dependencies.lifecycle).toEqual([])
+  })
+
+  it('shows a later refusal rather than staying dismissed for the rest of the host', async () => {
+    dependencies.updateNotice = 'update-failed'
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      dismissControl(tree)?.props.onPress()
+    })
+    // The next flow refused too, and opened its own fallback: a new document, so the tap on the
+    // one before it is not an answer about this one.
+    await update(tree, readyState('session-two'))
+    expect(dismissControl(tree)).toBeDefined()
   })
 })
 

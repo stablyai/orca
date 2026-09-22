@@ -33,6 +33,7 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     pageReady: false,
     gates: null,
     cached: null,
+    updateNotice: null,
     flow: 0
   }
 }
@@ -59,7 +60,7 @@ function startFlow(
 ): MobileWebShellStep {
   // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
   // keeps a status refetch arriving mid-check from running the cache read and the download twice.
-  const base = { ...patch, gates, flow: session.flow + 1 }
+  const base = { updateNotice: null, ...patch, gates, flow: session.flow + 1 }
   const verdict = gateVerdict(gates)
   if (verdict.kind === 'native-route') {
     return step(session, { ...base, state: NATIVE_ROUTE }, before)
@@ -108,6 +109,21 @@ function openCached(
   ])
 }
 
+/** Opens a generation already on disk under its own route list, or leaves the route native when
+ *  that list does not carry it. The only judge available when the newer manifest is either absent
+ *  or refused: opening under a bundle this shell is not running would grant the page what some
+ *  other bytes declared. */
+function openByOwnRoutes(
+  session: MobileWebShellSession,
+  generation: CachedGeneration,
+  patch: Partial<MobileWebShellSession> = {}
+): MobileWebShellStep {
+  const view = routeViewOf(generation.routes, session.routePathname)
+  return rendersRoute(view.pageRoutes, session.routePathname)
+    ? openCached(session, generation, { ...patch, ...view })
+    : step(session, { ...patch, ...view, state: NATIVE_ROUTE })
+}
+
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -128,10 +144,7 @@ function onCacheRead(
       return step(session, { cached: null, state: { kind: 'offline' } })
     }
     // The cached bundle's own list, which is the only one an unreachable host can be judged by.
-    const view = routeViewOf(generation.routes, session.routePathname)
-    return rendersRoute(view.pageRoutes, session.routePathname)
-      ? openCached(session, generation, { cached: generation, ...view })
-      : step(session, { cached: generation, ...view, state: NATIVE_ROUTE })
+    return openByOwnRoutes(session, generation, { cached: generation })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -251,31 +264,31 @@ function onShellFailed(
   ])
 }
 
+/**
+ * The read did not produce a generation, and what follows is decided by what is already on disk.
+ *
+ * With nothing cached there is nothing to show, so the refusal is the screen. With a generation
+ * cached there is: it was compatible when it was written, and it is the same one the offline gate
+ * opens without being asked. Refusing the new bytes was right — a truncated asset does not hash,
+ * and a host that will not answer has not been read — but a wall over an intact workspace refuses a
+ * screen twice. The same branch either way, because the link going and the bundle being refused
+ * leave the phone holding exactly the same thing.
+ *
+ * Only the bundle-side refusal is named: a link that went says nothing about an update having been
+ * there to fail, and the notice would be claiming a generation this phone never heard of.
+ */
 function onDownloadFailed(
   session: MobileWebShellSession,
   failure: MobileWebShellReadFailure
 ): MobileWebShellStep {
   const cached = session.cached
-  if (failure === 'transport' && cached !== null) {
-    // The link went, not the bundle. A generation already on disk was compatible when it was
-    // written, and it is the same one the offline gate would have opened had the reachability
-    // change arrived before this rejection did; which of the two lands first is a race.
-    //
-    // Judged by its own routes, not the manifest's. The newer manifest was read before the
-    // download was attempted, so its `pageRoutes` and `routeGrants` are already on the session:
-    // opening the cached page under them would grant it what a bundle it is not running declared,
-    // and would mount it for a route only the newer bundle claims.
-    const { pageRoutes, pageRouteGrants, routeGrants } = routeViewOf(
-      cached.routes,
-      session.routePathname
-    )
-    if (!rendersRoute(pageRoutes, session.routePathname)) {
-      return step(session, { pageRoutes, pageRouteGrants, routeGrants, state: NATIVE_ROUTE })
-    }
-    return openCached(session, cached, { pageRoutes, pageRouteGrants, routeGrants })
+  if (cached === null) {
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
   }
-  return step(session, {
-    state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+  return openByOwnRoutes(session, cached, {
+    updateNotice: failure === 'bundle' ? 'update-failed' : null
   })
 }
 
@@ -366,6 +379,7 @@ export function reduceMobileWebShellSession(
         ? step(session, {
             retriedOnce: false,
             remountedOnce: false,
+            updateNotice: null,
             state: CHECKING,
             flow: session.flow + 1
           })

@@ -70,6 +70,20 @@ export type MobileWebShellFailureCause =
   | 'download-failed'
   | 'status-unreadable'
 
+/**
+ * Why the workspace on screen is not the one this host serves now.
+ *
+ * Set when the shell asked a reachable host for an update and refused the answer — a manifest it
+ * could not read, or assets that did not arrive whole — and opened the last generation it had
+ * accepted instead. A notice beside `ready`, never a state in front of it: the page is running and
+ * nothing about it is blocked.
+ *
+ * Named rather than a flag, and one name rather than two, because one name is all that is verified
+ * from here: both refusals arrive as the same event, and neither proves a newer generation exists.
+ * Nothing about it is persisted, so the next flow asks again.
+ */
+export type MobileWebShellUpdateNotice = 'update-failed'
+
 export type MobileWebShellSessionState =
   /** Gates unsettled, cache being read, or a manifest in flight. Nothing is on screen yet. */
   | { readonly kind: 'checking' }
@@ -211,6 +225,9 @@ export type MobileWebShellSession = {
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null
+  /** Null unless the generation on screen is a fallback from an update this shell refused. Cleared
+   *  by every entry into the flow, so it never outlives the screen it explains. */
+  readonly updateNotice: MobileWebShellUpdateNotice | null
   /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
    *  run belongs to, and echoed back on their results. */
   readonly flow: number
