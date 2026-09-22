@@ -6,6 +6,7 @@ import {
   getRuntimeEnvironmentRevision
 } from './runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { prepareRuntimePrerequisiteParams } from './runtime-prerequisite-params'
 
 type RuntimeFileMutationTarget = { kind: 'environment'; environmentId: string }
 export type RuntimeFileImportSession = {
@@ -39,8 +40,12 @@ export async function callRuntimeFileMutation<TResult>(
     target.environmentId,
     expectedEnvironmentPairingRevision
   )
-  await assertRuntimeFileMutationCapability(target, requestRevision)
-  return callRuntimeRpc<TResult>(target, method, params, {
+  const preparedParams = prepareRuntimePrerequisiteParams(method, params, () =>
+    assertRuntimeFileMutationCapability(target, requestRevision)
+  )
+  params = undefined
+  const readyParams = await preparedParams
+  return callRuntimeRpc<TResult>(target, method, readyParams, {
     timeoutMs,
     expectedEnvironmentPairingRevision: requestRevision
   })

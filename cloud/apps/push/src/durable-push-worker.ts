@@ -16,6 +16,7 @@ export class DurablePushWorker {
     if (this.timer) return
     this.stopped = false
     this.timer = setInterval(() => {
+      if (this.running) return
       void this.runDue().catch(() => {
         console.warn(JSON.stringify({ event: 'orca_push_worker_failed' }))
       })
@@ -57,8 +58,16 @@ export class DurablePushWorker {
         await this.store.finish(queued)
         continue
       }
+      let renewalPending = false
       const heartbeat = setInterval(() => {
-        void this.store.renew(queued).catch(() => {})
+        if (renewalPending) return
+        renewalPending = true
+        void this.store
+          .renew(queued)
+          .catch(() => {})
+          .finally(() => {
+            renewalPending = false
+          })
       }, 10_000)
       heartbeat.unref()
       try {

@@ -219,3 +219,69 @@ it('runs due work on its timer and releases the timer on stop', async () => {
   await h.worker.stop()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it('does not accumulate polling waiters while a provider delivery is pending', async () => {
+  const h = await fixture()
+  vi.useFakeTimers()
+  let finish!: (outcome: PushProviderOutcome) => void
+  h.send.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  await h.accept(note(1))
+  const runDue = vi.spyOn(h.worker, 'runDue')
+  h.worker.start()
+  try {
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(h.send).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(runDue).toHaveBeenCalledOnce()
+
+    let stopped = false
+    const stopping = h.worker.stop().then(() => {
+      stopped = true
+    })
+    await Promise.resolve()
+    expect(stopped).toBe(false)
+    finish({ status: 'sent' })
+    await stopping
+    expect(stopped).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    finish({ status: 'sent' })
+    await h.worker.stop()
+  }
+})
+
+it.each(['fulfilled', 'rejected'] as const)(
+  'keeps one lease renewal pending until %s',
+  async (outcome) => {
+    const h = await fixture()
+    vi.useFakeTimers()
+    const sending = Promise.withResolvers<PushProviderOutcome>()
+    const renewing = Promise.withResolvers<void>()
+    h.send.mockImplementationOnce(() => sending.promise)
+    const renew = vi.spyOn(h.store, 'renew').mockReturnValue(renewing.promise)
+    await h.accept(note(1))
+    h.worker.start()
+    try {
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(h.send).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(renew).toHaveBeenCalledOnce()
+      if (outcome === 'fulfilled') renewing.resolve()
+      else renewing.reject(new Error('renewal unavailable'))
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(renew).toHaveBeenCalledTimes(2)
+      sending.resolve({ status: 'sent' })
+      await h.worker.stop()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      renewing.resolve()
+      sending.resolve({ status: 'sent' })
+      await h.worker.stop()
+    }
+  }
+)

@@ -37,12 +37,11 @@ export async function writeRuntimeFile(
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    await window.api.fs.writeFile(
+    return window.api.fs.writeFile(
       withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
     )
-    return
   }
-  await callRuntimeFileMutation(
+  return callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',
     withSshMutationExpectation(context, {

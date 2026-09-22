@@ -1,6 +1,28 @@
 const DEFAULT_TIMEOUT_MS = 8_000
 const DEFAULT_POLL_MS = 100
 
+export async function readRelayLoadRuntimeQueuedBytes(origin, adminToken, fetchImpl = fetch) {
+  const response = await fetchImpl(`${origin}/v1/admin/runtime-status`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ v: 1 }),
+    signal: AbortSignal.timeout(5_000)
+  })
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('reader evidence identity was rejected')
+    }
+    throw new Error(`reader runtime status returned ${response.status}`)
+  }
+  const status = await response.json()
+  const queuedBytes = status?.runtime?.queuedBytes
+  if (!Number.isSafeInteger(queuedBytes) || queuedBytes < 0) {
+    throw new Error('reader runtime queued bytes are invalid')
+  }
+  return queuedBytes
+}
+
 export async function createRelayLoadReaderEvidence(origins, dependencies) {
   const distinctOrigins = [...new Set(origins)].sort()
   const baselines = new Map(await Promise.all(distinctOrigins.map(async (origin) => [

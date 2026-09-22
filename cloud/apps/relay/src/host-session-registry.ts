@@ -32,6 +32,7 @@ import type { RelayAssignmentStore } from './assignment-store.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
+import { waitForHostControlFrame } from './host-control-frame.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import {
@@ -794,12 +795,7 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
       return
     }
-    let firstFrameTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host hello timeout')
-    }, 2_000)
-    socket.once('message', (raw, isBinary) => {
-      if (firstFrameTimer) clearTimeout(firstFrameTimer)
-      firstFrameTimer = null
+    waitForHostControlFrame(socket, 2_000, 'host hello timeout', (raw, isBinary) => {
       if (isBinary) {
         socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host hello must be text')
         return
@@ -991,6 +987,7 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
       return
     }
+    if (socket.readyState !== socket.OPEN) return
 
     const key = this.key(identity.sub, identity.relayHostId)
     const existing = this.sessions.get(key)
@@ -1035,11 +1032,7 @@ export class HostSessionRegistry {
       ciphertextB64: Buffer.from(ciphertext).toString('base64'),
       expiresAt
     })
-    const proofTimer = setTimeout(() => {
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host proof timeout')
-    }, 10_000)
-    socket.once('message', (raw, isBinary) => {
-      clearTimeout(proofTimer)
+    waitForHostControlFrame(socket, 10_000, 'host proof timeout', (raw, isBinary) => {
       const ack = isBinary
         ? null
         : HostChallengeAckSchema.safeParse(payload(raw, 'host-challenge-ack'))
@@ -1336,6 +1329,10 @@ export class HostSessionRegistry {
       if (session.heartbeatTimer) clearInterval(session.heartbeatTimer)
       session.heartbeatTimer = null
       session.orphanTimer = setTimeout(() => {
+        session.orphanTimer = null
+        if (session.regionalDrainTimer) clearTimeout(session.regionalDrainTimer)
+        session.regionalDrainTimer = null
+        session.regionalDrainExpiresAt = null
         session.state = 'closed'
         for (const close of session.activeSplices.values()) close()
         const key = this.key(session.identity.sub, session.relayHostId)

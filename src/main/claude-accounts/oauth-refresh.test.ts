@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import {
   applyRefreshedToken,
   isOauthTokenExpiring,
@@ -173,14 +174,33 @@ describe('refreshClaudeOauthCredentials', () => {
 
   it('returns null on a non-ok response and logs the status for diagnosability', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    netFetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) })
-    expect(await refreshClaudeOauthCredentials(credentials(), NOW)).toBeNull()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('429'))
-    warn.mockRestore()
+    const cancel = vi.fn()
+    netFetchMock.mockResolvedValue(cancelTrackingResponse(429, cancel))
+    try {
+      expect(await refreshClaudeOauthCredentials(credentials(), NOW)).toBeNull()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('429'))
+      expect(cancel).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('returns null when the request throws (never rejects)', async () => {
     netFetchMock.mockRejectedValue(new Error('network down'))
     await expect(refreshClaudeOauthCredentials(credentials(), NOW)).resolves.toBeNull()
+  })
+
+  it('preserves the HTTP status when cancelling an unread error body fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const cancel = vi.fn().mockRejectedValue(new Error('response stream failed'))
+    netFetchMock.mockResolvedValue(new Response(new ReadableStream({ cancel }), { status: 429 }))
+
+    try {
+      await expect(refreshClaudeOauthCredentials(credentials(), NOW)).resolves.toBeNull()
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(warn).toHaveBeenCalledWith('[claude-oauth-refresh] token endpoint returned 429')
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

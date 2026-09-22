@@ -17,6 +17,7 @@ import {
   type RelayRegion
 } from '@orca-cloud/relay-contract'
 import { Hono, type Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { SignJWT } from 'jose'
 import { z } from 'zod'
 import {
@@ -117,6 +118,13 @@ export function createRelayApp(
   }
 ): Hono {
   const app = new Hono()
+  app.use(
+    '/v1/*',
+    bodyLimit({
+      maxSize: RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes,
+      onError: (context) => context.json({ error: 'request_too_large' }, 413)
+    })
+  )
   let regionCatalogCache:
     | { expiresAt: number; value: Awaited<ReturnType<RelayAssignmentStore['regionCatalog']>> }
     | undefined

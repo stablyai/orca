@@ -175,38 +175,26 @@ describe('web git preload API', () => {
     })
 
     const statusCalls = runtimeCalls.filter((call) => call.method === 'git.status')
-    // Why: strict — `toEqual` would pass on a forwarded `branchLineTotalMergeBase: undefined`,
-    // which is exactly what the conditional spread must avoid sending.
+    // The queue snapshots wire JSON, which omits absent optional fields.
     expect(statusCalls).toStrictEqual([
       {
         method: 'git.status',
         params: {
           worktree: 'id:wt-1',
-          includeIgnored: undefined,
-          includeLineStats: undefined,
-          bypassEffectiveUpstreamNegativeCache: undefined,
-          reuseLineStats: undefined,
           branchLineTotalMergeBase: TEST_COMMIT_OID
         }
       },
       {
         method: 'git.status',
         params: {
-          worktree: 'id:wt-1',
-          includeIgnored: undefined,
-          includeLineStats: undefined,
-          bypassEffectiveUpstreamNegativeCache: undefined,
-          reuseLineStats: undefined
+          worktree: 'id:wt-1'
         }
       },
       {
         method: 'git.status',
         params: {
           worktree: 'id:wt-1',
-          includeIgnored: undefined,
-          includeLineStats: false,
-          bypassEffectiveUpstreamNegativeCache: undefined,
-          reuseLineStats: undefined
+          includeLineStats: false
         }
       }
     ])

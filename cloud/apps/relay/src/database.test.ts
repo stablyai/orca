@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   openInMemoryRelayDatabase,
@@ -18,6 +19,26 @@ afterEach(() => {
 })
 
 describe('relay database', () => {
+  it('releases queued operations after SQLite refuses to begin a transaction', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-relay-locked-db-'))
+    temporaryDirectories.push(dataDir)
+    const database = await openRelayDatabase({ dataDir })
+    const blocker = new DatabaseSync(join(dataDir, 'orca-relay.sqlite'))
+    try {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        blocker.exec('BEGIN IMMEDIATE')
+        await expect(database.transaction(async () => {})).rejects.toThrow('database is locked')
+        blocker.exec('ROLLBACK')
+        expect(
+          await database.transaction((transaction) => transaction.query('SELECT 1 AS value'))
+        ).toEqual([{ value: 1 }])
+      }
+    } finally {
+      blocker.close()
+      await database.close()
+    }
+  })
+
   it('upgrades an existing SQLite relay without treating legacy controls as idle-capable', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'orca-idle-schema-'))
     temporaryDirectories.push(dataDir)

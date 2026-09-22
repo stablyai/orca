@@ -160,10 +160,17 @@ export function captureWebFileMutationSession(): {
     timeoutMs?: number
   ): Promise<RuntimeRpcResponse<TResult>> => {
     assertCurrent()
-    const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-      assertCurrent()
-      return client.call(method, params, { timeoutMs })
-    })
+    const pendingResponse = runtimeCallQueuePool.enqueueJson(
+      environment.id,
+      method,
+      params,
+      (queuedParams) => {
+        assertCurrent()
+        return client.call(method, queuedParams, { timeoutMs })
+      }
+    )
+    params = undefined
+    const response = await pendingResponse
     assertCurrent()
     updateEnvironmentFromResponse(environment, response)
     return response as RuntimeRpcResponse<TResult>
@@ -173,7 +180,9 @@ export function captureWebFileMutationSession(): {
     params?: unknown,
     timeoutMs?: number
   ): Promise<TResult> => {
-    const response = await callBoundRuntimeEnvelope<TResult>(method, params, timeoutMs)
+    const pendingResponse = callBoundRuntimeEnvelope<TResult>(method, params, timeoutMs)
+    params = undefined
+    const response = await pendingResponse
     if (!response.ok) {
       throw new Error(response.error.message)
     }

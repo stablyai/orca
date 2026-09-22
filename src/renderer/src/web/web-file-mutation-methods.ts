@@ -3,6 +3,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { withWebFileMutationAdmission } from './web-file-mutation-admission'
 
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -83,48 +84,57 @@ export function createWebFileMutationMethods(
   }
 
   return {
-    writeFile: async ({ filePath, content }) => {
-      const session = dependencies.captureSession()
-      const file = await session.resolveFilePath(filePath)
-      await callMutation(session, 'files.write', file, { relativePath: file.relativePath, content })
-    },
-    createFile: async ({ filePath }) => {
-      const session = dependencies.captureSession()
-      const file = await session.resolveFilePath(filePath)
-      await callMutation(session, 'files.createFile', file, { relativePath: file.relativePath })
-    },
-    createDir: async ({ dirPath }) => {
-      const session = dependencies.captureSession()
-      const file = await session.resolveFilePath(dirPath)
-      await callMutation(session, 'files.createDir', file, { relativePath: file.relativePath })
-    },
-    rename: async ({ oldPath, newPath }) => {
-      const session = dependencies.captureSession()
-      const oldFile = await session.resolveFilePath(oldPath)
-      const newFile = await session.resolveFilePath(newPath)
-      assertSameWorktree(oldFile, newFile)
-      await callMutation(session, 'files.rename', oldFile, {
-        oldRelativePath: oldFile.relativePath,
-        newRelativePath: newFile.relativePath
+    writeFile: ({ filePath, content }) =>
+      withWebFileMutationAdmission({ filePath, content }, async () => {
+        const session = dependencies.captureSession()
+        const file = await session.resolveFilePath(filePath)
+        await callMutation(session, 'files.write', file, {
+          relativePath: file.relativePath,
+          content
+        })
+      }),
+    createFile: ({ filePath }) =>
+      withWebFileMutationAdmission({ filePath }, async () => {
+        const session = dependencies.captureSession()
+        const file = await session.resolveFilePath(filePath)
+        await callMutation(session, 'files.createFile', file, { relativePath: file.relativePath })
+      }),
+    createDir: ({ dirPath }) =>
+      withWebFileMutationAdmission({ dirPath }, async () => {
+        const session = dependencies.captureSession()
+        const file = await session.resolveFilePath(dirPath)
+        await callMutation(session, 'files.createDir', file, { relativePath: file.relativePath })
+      }),
+    rename: ({ oldPath, newPath }) =>
+      withWebFileMutationAdmission({ oldPath, newPath }, async () => {
+        const session = dependencies.captureSession()
+        const oldFile = await session.resolveFilePath(oldPath)
+        const newFile = await session.resolveFilePath(newPath)
+        assertSameWorktree(oldFile, newFile)
+        await callMutation(session, 'files.rename', oldFile, {
+          oldRelativePath: oldFile.relativePath,
+          newRelativePath: newFile.relativePath
+        })
+      }),
+    copy: ({ sourcePath, destinationPath }) =>
+      withWebFileMutationAdmission({ sourcePath, destinationPath }, async () => {
+        const session = dependencies.captureSession()
+        const source = await session.resolveFilePath(sourcePath)
+        const destination = await session.resolveFilePath(destinationPath)
+        assertSameWorktree(source, destination)
+        await callMutation(session, 'files.copy', source, {
+          sourceRelativePath: source.relativePath,
+          destinationRelativePath: destination.relativePath
+        })
+      }),
+    deletePath: ({ targetPath, recursive }) =>
+      withWebFileMutationAdmission({ targetPath, recursive }, async () => {
+        const session = dependencies.captureSession()
+        const file = await session.resolveFilePath(targetPath)
+        await callMutation(session, 'files.delete', file, {
+          relativePath: file.relativePath,
+          recursive
+        })
       })
-    },
-    copy: async ({ sourcePath, destinationPath }) => {
-      const session = dependencies.captureSession()
-      const source = await session.resolveFilePath(sourcePath)
-      const destination = await session.resolveFilePath(destinationPath)
-      assertSameWorktree(source, destination)
-      await callMutation(session, 'files.copy', source, {
-        sourceRelativePath: source.relativePath,
-        destinationRelativePath: destination.relativePath
-      })
-    },
-    deletePath: async ({ targetPath, recursive }) => {
-      const session = dependencies.captureSession()
-      const file = await session.resolveFilePath(targetPath)
-      await callMutation(session, 'files.delete', file, {
-        relativePath: file.relativePath,
-        recursive
-      })
-    }
   }
 }

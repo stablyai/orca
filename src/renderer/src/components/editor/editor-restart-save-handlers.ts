@@ -28,11 +28,12 @@ export function createEditorRestartSaveHandlers({
     return store.getState().editorDrafts[file.id] ?? null
   }
 
-  const handleSaveDirtyFiles = async (event: Event): Promise<void> => {
+  const handleSaveDirtyFiles = (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorSaveDirtyFilesDetail>).detail
     if (!detail) {
-      return
+      return Promise.resolve()
     }
+    const { resolve, reject } = detail
 
     try {
       detail.claim()
@@ -41,7 +42,7 @@ export function createEditorRestartSaveHandlers({
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
-        return
+        return Promise.resolve()
       }
 
       for (const file of dirtyFiles) {
@@ -54,21 +55,23 @@ export function createEditorRestartSaveHandlers({
         detail.reject(
           'Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.'
         )
-        return
+        return Promise.resolve()
       }
 
-      await Promise.all(
-        dirtyFiles.map(async (file) => {
+      return Promise.all(
+        dirtyFiles.map((file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
-            throw new Error(`Missing editor buffer for ${file.relativePath}`)
+            return Promise.reject(new Error(`Missing editor buffer for ${file.relativePath}`))
           }
-          await queueSave(file, content)
+          return queueSave(file, content)
         })
-      )
-      detail.resolve()
+      ).then(resolve, (error: unknown) => {
+        reject(error instanceof Error ? error.message : String(error))
+      })
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))
+      return Promise.resolve()
     }
   }
 

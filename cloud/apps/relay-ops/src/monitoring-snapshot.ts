@@ -253,7 +253,10 @@ async function monitoringRequest(
     headers: { authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error(`Cloud Monitoring returned ${response.status}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`Cloud Monitoring returned ${response.status}`)
+  }
   return await response.json()
 }
 

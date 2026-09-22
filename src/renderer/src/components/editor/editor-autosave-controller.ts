@@ -37,7 +37,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     bumpSaveGeneration
   })
 
-  const handleSaveAndClose = async (event: Event): Promise<void> => {
+  const handleSaveAndClose = (event: Event): void => {
     const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
     if (!file) {
@@ -47,24 +47,25 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     flushPendingEditorChange(file.id)
     const draft = store.getState().editorDrafts[fileId]
     if (draft !== undefined) {
-      try {
-        await queueSave(file, draft)
-      } catch {
-        return
-      }
+      void queueSave(file, draft).then(
+        () => store.getState().closeFile(fileId),
+        () => {}
+      )
+      return
     }
     store.getState().closeFile(fileId)
   }
 
-  const handleSaveFile = async (event: Event): Promise<void> => {
+  const handleSaveFile = (event: Event): void => {
     const detail = (event as CustomEvent<EditorSaveFileDetail>).detail
     if (!detail) {
       return
     }
+    const { fileId, resolve, reject } = detail
 
     try {
       detail.claim()
-      const file = store.getState().openFiles.find((openFile) => openFile.id === detail.fileId)
+      const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
       if (!file) {
         detail.resolve()
         return
@@ -82,8 +83,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      await queueSave(file, content)
-      detail.resolve()
+      void queueSave(file, content).then(resolve, (error: unknown) => {
+        reject(error instanceof Error ? error.message : String(error))
+      })
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))
     }

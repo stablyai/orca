@@ -66,6 +66,8 @@ function postRaw(
       }
       settled = true
       if (options.destroyRequest) {
+        // Destroy can emit a socket error after the request's owning listeners are removed.
+        req?.on('error', ignoreDestroyedRequestError)
         req?.destroy()
       }
       if (options.destroyResponse) {
@@ -151,3 +153,5 @@ function postRaw(
     req.end()
   })
 }
+
+function ignoreDestroyedRequestError(): void {}

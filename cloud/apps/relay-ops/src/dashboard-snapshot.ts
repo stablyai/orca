@@ -115,6 +115,10 @@ export class DashboardSnapshotCache {
   ) {}
 
   async read(environment: RelayOpsEnvironmentId, windowMinutes: number): Promise<DashboardSnapshot> {
+    const now = Date.now()
+    for (const [entryKey, entry] of this.entries) {
+      if (entry.expiresAt <= now) this.entries.delete(entryKey)
+    }
     const key = `${environment}:${windowMinutes}`
     const cached = this.entries.get(key)
     if (cached && cached.expiresAt > Date.now()) return cached.snapshot

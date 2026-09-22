@@ -50,6 +50,9 @@ export async function closeRemoteWatcherForWorktreePath(
   if (inFlight) {
     inFlight.listeners.clear()
     inFlight.cancelled = true
+    // Abort the provider.watch() call itself; cancellation alone only causes
+    // its eventual result to be discarded and can retain the remote callback.
+    inFlight.abortController.abort()
   }
   const state = watcherLifecycleState.remoteWatchers.get(key)
   const provider = getSshFilesystemProvider(connectionId)

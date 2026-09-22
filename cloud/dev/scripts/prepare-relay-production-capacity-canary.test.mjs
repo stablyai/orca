@@ -350,3 +350,94 @@ describe('production Relay capacity cell admission', () => {
     assert.equal(calls, 2)
   })
 })
+
+function pacedDrainResponse(context, status) {
+  let controller
+  let canceled = false
+  const value = new Response(new ReadableStream({
+    start(stream) {
+      controller = stream
+      controller.enqueue(new TextEncoder().encode('{"unused":"'))
+    },
+    cancel() {
+      canceled = true
+    }
+  }), { status })
+  context.after(() => {
+    if (!canceled) controller.close()
+  })
+  return { value, isCanceled: () => canceled }
+}
+
+async function withinDrainResponse(operation) {
+  let timer
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('paced drain response is still streaming')), 100)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+for (const status of [200, 400, 401, 403, 409, 429, 503]) {
+  it(`releases unused streaming paced-drain ${status} responses`, async (context) => {
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const paced = pacedDrainResponse(context, status)
+      const calls = []
+      const operation = withinDrainResponse(prepareProductionCapacityCell(
+        { ...config, mode: 'drain', paceWindowMs: 120_000 },
+        {
+          token: 'token',
+          wait: async () => {},
+          fetch: async (_url, init) => {
+            const body = JSON.parse(init.body)
+            calls.push(body)
+            if (status === 503 && calls.length === 1) return response({}, 503)
+            if (body.paceWindowMs === undefined) {
+              assert.equal(paced.isCanceled(), true)
+              return response({ v: 1, draining: true })
+            }
+            return paced.value
+          }
+        }
+      ))
+      if (status === 200 || status === 400) {
+        assert.deepEqual(await operation, {
+          changed: false,
+          drained: true,
+          paceWindowMs: status === 200 ? 120_000 : 0
+        })
+      } else {
+        await assert.rejects(operation, new RegExp(`returned ${status}`))
+      }
+      assert.equal(paced.isCanceled(), true)
+      assert.equal(calls.length, status === 400 || status === 503 ? 2 : 1)
+      assert.equal(calls.filter((body) => body.paceWindowMs === undefined).length, status === 400 ? 1 : 0)
+    }
+  })
+}
+
+it('preserves paced-drain rejection when body cancellation fails', async () => {
+  let canceled = 0
+  await assert.rejects(prepareProductionCapacityCell(
+    { ...config, mode: 'drain', paceWindowMs: 120_000 },
+    {
+      token: 'token',
+      fetch: async () => ({
+        ok: false,
+        status: 401,
+        body: {
+          cancel: async () => {
+            canceled++
+            throw new Error('cancel failed')
+          }
+        }
+      })
+    }
+  ), /returned 401/)
+  assert.equal(canceled, 1)
+})

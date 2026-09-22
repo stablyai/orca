@@ -143,7 +143,10 @@ async function googleRequest(
     },
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new GoogleApiError(response.status)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new GoogleApiError(response.status)
+  }
   return await response.json()
 }
 
@@ -178,7 +181,9 @@ async function probePath(
         redirect: 'error',
         signal: AbortSignal.timeout(8_000)
       })
-      return { ok: response.ok, latencyMs: Math.round(performance.now() - startedAt) }
+      const latencyMs = Math.round(performance.now() - startedAt)
+      await response.body?.cancel().catch(() => undefined)
+      return { ok: response.ok, latencyMs }
     } catch {
       return null
     }

@@ -14,8 +14,8 @@ describe('editor self-write registry', () => {
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     __clearSelfWriteRegistryForTests()
+    vi.useRealTimers()
   })
 
   it('matches Windows drive paths case-insensitively', () => {

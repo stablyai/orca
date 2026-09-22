@@ -5,9 +5,11 @@ import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-f
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from './runtime-client-target'
+import { prepareRuntimePrerequisiteParams } from './runtime-prerequisite-params'
+import type { RuntimeRpcCallOptions } from './runtime-rpc-call-options'
 
 export {
   getActiveRuntimeTarget,
@@ -16,6 +18,7 @@ export {
 } from './runtime-client-target'
 export {
   hasRuntimeRpcErrorCode,
+  isRuntimeScopeForbiddenError,
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult
 } from './runtime-rpc-result'
@@ -36,26 +39,11 @@ type RuntimeCompatibilityCacheEntry = {
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
 
-// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
-// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
-// instead of silently swallowing the failure into empty/retry-looping UI.
-export function isRuntimeScopeForbiddenError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
-}
-
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-    expectedEnvironmentRuntimeId?: string
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
   const expectedEnvironmentPairingRevision =
     target.kind === 'environment'
@@ -69,10 +57,24 @@ export async function callRuntimeRpc<TResult>(
     method !== 'status.get' &&
     options.skipCompatibilityCheck !== true
   ) {
-    await ensureRuntimeEnvironmentCompatible(target.environmentId, {
-      ...options,
-      expectedEnvironmentPairingRevision
-    })
+    const preparedParams = prepareRuntimePrerequisiteParams(
+      method,
+      params,
+      () =>
+        ensureRuntimeEnvironmentCompatible(target.environmentId, {
+          ...options,
+          expectedEnvironmentPairingRevision
+        }),
+      options.signal
+    )
+    params = undefined
+    return preparedParams.then((readyParams) =>
+      callRuntimeRpc<TResult>(target, method, readyParams, {
+        ...options,
+        expectedEnvironmentPairingRevision,
+        skipCompatibilityCheck: true
+      })
+    )
   }
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
@@ -332,6 +334,4 @@ export async function assertRuntimeEnvironmentCapability(
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests }
