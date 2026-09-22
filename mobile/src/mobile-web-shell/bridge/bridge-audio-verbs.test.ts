@@ -1,5 +1,7 @@
 /**
- * The four audio verbs: what their schemas refuse, and what the shell's capture answers.
+ * Every audio verb `BRIDGE_NATIVE_VERB_NAMES` holds: what their schemas refuse, and what the
+ * shell's capture answers. Named off the table rather than counted, because the count was four
+ * until #22072 retired the wake-lock verb and a number in a header has nothing to hold it.
  *
  * The handler is driven through its engine seam rather than through `@orca/expo-two-way-audio`,
  * for the reason the media verbs' device half is driven through one: the arms worth pinning — a
@@ -104,7 +106,13 @@ function decode(base64: string): Uint8Array {
 }
 
 describe('the audio verbs in the table', () => {
-  it('lists all three, each under a name a manifest grant may carry', () => {
+  it('lists every audio verb the table holds, each under a name a manifest grant may carry', () => {
+    // AUDIO_VERBS is what every case below walks, so it has to be the table's audio rows and not a
+    // copy of them: a verb added to one and not the other would leave these cases pinning the old
+    // set while reading as coverage of the new one.
+    expect(BRIDGE_NATIVE_VERB_NAMES.filter((name) => name.startsWith('native.audio.'))).toEqual([
+      ...AUDIO_VERBS
+    ])
     for (const verb of AUDIO_VERBS) {
       expect(BRIDGE_NATIVE_VERB_NAMES, verb).toContain(verb)
       expect(BRIDGE_NATIVE_VERBS[verb], verb).toBeDefined()
