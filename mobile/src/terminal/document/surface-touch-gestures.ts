@@ -1,5 +1,5 @@
 import type { TerminalDocumentScope } from './document-scope'
-import { scheduleDocumentFrame } from './document-frame-registry'
+import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import { clampPan, getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
@@ -97,7 +97,7 @@ export function attachSurfaceEventHandlers(
         return
       }
       if (scope.touchGesture.momentumId) {
-        cancelAnimationFrame(scope.touchGesture.momentumId)
+        cancelDocumentFrame(scope, scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
       }
       const touches = touchesInRoot(scope.root, e.touches)
@@ -288,7 +288,7 @@ export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
 /** Ruling 21: the momentum loop, which would keep scrolling into the terminal that replaced it. */
 export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
   if (scope.touchGesture.momentumId !== null) {
-    cancelAnimationFrame(scope.touchGesture.momentumId)
+    cancelDocumentFrame(scope, scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null
   }
 }

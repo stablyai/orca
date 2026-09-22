@@ -128,7 +128,7 @@ describe('TerminalWebView scroll routing', () => {
       'export function stopNormalBufferSmoothScroll('
     )
     expect(resetBlock).toContain('scope.pendingNormalScrollDeltaY = 0')
-    expect(resetBlock).toContain('cancelAnimationFrame(scope.normalScrollFrameId)')
+    expect(resetBlock).toContain('cancelDocumentFrame(scope, scope.normalScrollFrameId)')
   })
 
   it('drains terminal writes without shifting the queued array', () => {

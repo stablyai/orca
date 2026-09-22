@@ -1,7 +1,7 @@
 import { getCellHeight } from './fit-scale'
 import { getTotalScale, updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
-import { scheduleDocumentFrame } from './document-frame-registry'
+import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-registry'
 
 export function clampNormalScrollLines(scope: TerminalDocumentScope, lines: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || lines === 0) {
@@ -92,7 +92,7 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
   scope.pendingNormalScrollDeltaY = 0
   if (scope.normalScrollFrameId !== null) {
-    cancelAnimationFrame(scope.normalScrollFrameId)
+    cancelDocumentFrame(scope, scope.normalScrollFrameId)
     scope.normalScrollFrameId = null
   }
   if (scope.smoothScrollOffsetY === 0) {
