@@ -49,9 +49,16 @@ export function TaskPagePluginSourceContent(): React.JSX.Element {
   // that races a scope change sends none of them. Once they all settle this
   // flips once and the list reloads with them — without it, a selection that
   // survives the new scope is never applied, because nothing else changes.
-  const facetsSettled = facets.every(
-    (facet) => (facetOptions[facet.id]?.status ?? 'loading') !== 'loading'
-  )
+  //
+  // False, not vacuously true, before any facet is declared: the effect below
+  // runs on mount regardless, and this only governs re-runs. Were it true then,
+  // the arrival of the declarations would flip it false and fire a second
+  // unfiltered load between the mount one and the settled one. A source that
+  // declares no facets simply never re-runs on it, which is correct — there is
+  // nothing to wait for.
+  const facetsSettled =
+    facets.length > 0 &&
+    facets.every((facet) => (facetOptions[facet.id]?.status ?? 'loading') !== 'loading')
 
   // The query and the scope selection are both part of the request, so a chip,
   // a debounced search, or a picked project lands here as one reload rather

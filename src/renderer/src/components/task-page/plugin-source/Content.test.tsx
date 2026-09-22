@@ -517,4 +517,33 @@ describe('TaskPage contributed source content', () => {
     )
   })
 
+  it('does not fire an extra unfiltered load when the facet declarations arrive', async () => {
+    // Mount loads unfiltered (nothing has settled yet) and the settle reloads
+    // with the selection. The declarations arriving in between must not count
+    // as a third state, or every open costs a wasted list request.
+    const invoke = stubFacetSource({ state: [{ id: 'Active', label: 'Active' }], sprint: [] })
+    selectBoards()
+    useAppStore.setState({
+      pluginTaskSourceQuery: { search: null, filterId: null, facetSelections: { state: ['Active'] } }
+    })
+
+    renderContent()
+
+    await screen.findByRole('combobox', { name: 'State' })
+    await waitFor(
+      () => {
+        const filtered = invoke.mock.calls.filter(
+          ([args]) =>
+            args.method === 'listItems' &&
+            JSON.stringify(args.params?.facetSelections ?? {}) ===
+              JSON.stringify({ state: ['Active'] })
+        )
+        expect(filtered.length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 }
+    )
+    const listCalls = invoke.mock.calls.filter(([args]) => args.method === 'listItems')
+    expect(listCalls.length).toBeLessThanOrEqual(2)
+  })
+
 })
