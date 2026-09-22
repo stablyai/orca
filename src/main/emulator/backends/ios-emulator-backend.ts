@@ -25,12 +25,18 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { captureSimulatorLog } from '../simctl-log-capture'
+import type { SimulatorLogEntry } from '../simctl-log'
 import type {
   BackendAvailability,
   EmulatorBackend,
   EmulatorBackendCapabilities,
   EmulatorDevice
 } from './emulator-backend'
+
+const IOS_LOGCAT_DEFAULT_LINES = 500
+const IOS_LOGCAT_MAX_LINES = 10_000
+const IOS_LOGCAT_WINDOW = '10m'
 
 // The iOS/serve-sim backend: device/helper mechanics extracted from the former
 // monolithic EmulatorBridge. The bridge now routes to this (and, later, an
@@ -43,7 +49,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     launch: false,
     permissions: false,
     accessibilityTree: true,
-    logcat: false
+    logcat: true
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
@@ -184,6 +190,37 @@ export class IosEmulatorBackend implements EmulatorBackend {
       )
     }
     return requestServeSimAccessibilityTree(axUrl)
+  }
+
+  /**
+   * Returns a bounded, app-filtered snapshot of recent iOS Unified Logs.
+   * @param deviceId Simulator identifier or name.
+   * @param options Line limit and required application filters.
+   * @returns Normalized entries ordered from oldest to newest.
+   */
+  async logcat(
+    deviceId: string,
+    options?: { lines?: number; filters?: readonly string[] }
+  ): Promise<SimulatorLogEntry[]> {
+    const filters = options?.filters?.map((filter) => filter.trim()).filter(Boolean)
+    if (!filters || filters.length === 0) {
+      throw new EmulatorError(
+        'emulator_error',
+        'iOS logcat requires --filter with an app bundle id, executable name, or logging subsystem.'
+      )
+    }
+    const lines = options?.lines ?? IOS_LOGCAT_DEFAULT_LINES
+    if (!Number.isInteger(lines) || lines <= 0) {
+      throw new EmulatorError('emulator_error', 'iOS logcat lines must be a positive integer.')
+    }
+    if (lines > IOS_LOGCAT_MAX_LINES) {
+      throw new EmulatorError(
+        'emulator_error',
+        `iOS logcat supports at most ${IOS_LOGCAT_MAX_LINES} lines.`
+      )
+    }
+    const udid = await this.resolveDeviceId(deviceId)
+    return captureSimulatorLog(udid, { filters, lines, window: IOS_LOGCAT_WINDOW })
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
