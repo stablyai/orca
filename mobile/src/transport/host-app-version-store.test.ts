@@ -9,11 +9,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: asyncStorageMock
 }))
 
-import {
-  loadHostAppVersion,
-  normalizeHostAppVersion,
-  recordHostAppVersion
-} from './host-app-version-store'
+import { normalizeHostAppVersion } from './host-app-version'
+import { loadHostAppVersion, recordHostAppVersion } from './host-app-version-store'
 
 describe('host app version store', () => {
   beforeEach(() => {
