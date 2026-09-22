@@ -43,10 +43,13 @@ export default function MobileWebPageCatchAllScreen() {
    * `firstParam` per key, because `init.route.params` is one value per name: a repeated key would
    * otherwise cross as `a,b`. An empty value is kept rather than dropped — a named switch drops
    * its own because it knows what its screen makes of one, and this switch knows no screen.
+   *
+   * `#` is dropped with them: expo-router parks the URL fragment under that key before it reads
+   * the search string, and a fragment is not a query — the route the page is given carries none.
    */
   const query = Object.fromEntries(
     Object.entries(params)
-      .filter(([key]) => key !== 'hostId' && key !== 'page')
+      .filter(([key]) => key !== 'hostId' && key !== 'page' && key !== '#')
       .map(([key, value]) => [key, firstParam(value)])
   )
 

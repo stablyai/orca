@@ -162,6 +162,20 @@ describe('the catch-all switch', () => {
     expect(route && shellScreenRouteKey(route)).toBe('/h/host-1/files?q=a+b%26c%3Dd%2Fe')
   })
 
+  it('drops the fragment expo-router parks under `#`, which is not a query', async () => {
+    // `parseQueryParams` seeds `params['#']` from the hash before it reads the search string, so
+    // `/h/x/session/y#files` arrives here with a key no query ever had.
+    dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], '#': 'files' }
+    await render()
+    expect(dependencies.routes[0]).not.toHaveProperty('params')
+  })
+
+  it('keeps the rest of the query when a fragment rides along with it', async () => {
+    dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], '#': 'files', tab: 'diff' }
+    await render()
+    expect(dependencies.routes[0]?.params).toEqual({ tab: 'diff' })
+  })
+
   it('never carries its own segments back as query params', async () => {
     // `useLocalSearchParams` merges the route params into the search params, and both of these are
     // already in the pathname above.
