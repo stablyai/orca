@@ -24,7 +24,9 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
+import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
@@ -37,7 +39,6 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeHostMessage,
   type BridgeInitRoute
 } from './bridge-envelope'
 
@@ -113,6 +114,15 @@ export type BridgeRpcClient = RpcClient & {
    * Declared in `ready.reports`, so a shell waiting for it is one this page will answer.
    */
   notifyPagePainted: () => void
+  /**
+   * Claims the device Back key for this document until the dispose is called.
+   *
+   * The shell owns the key and only hands a press over while something here is holding it, so a
+   * claim is what turns Android Back from "leave this screen" into "close what is on top of it".
+   * Consumers answer newest first and a `false` falls through, exactly as a native `BackHandler`
+   * listener does; a press nothing takes is handed back to the shell to pop with.
+   */
+  claimBack: (consumer: PageBackConsumer) => () => void
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -224,7 +234,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     sendFrame({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'ready',
-      accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT],
+      accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME],
       reports: [BRIDGE_PAGE_PAINTED]
     })
   })
@@ -272,11 +282,6 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
-  function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
-    handshake.stop()
-    shellSession.accept(message)
-  }
-
   /** A shell rebuilt under the page: what the cache holds is for a client that is already gone. */
   function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
     if (cache.apply(snapshotFromShell) !== 'stale') {
@@ -286,12 +291,28 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     handshake.restart()
   }
 
+  const back = createPageBackConsumers({
+    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
+    onUnclaimed: () => {
+      report({ kind: 'back-unclaimed' })
+      notifications.notifyNavigateBack()
+    }
+  })
+
   const readInboundFrame = createBridgeInboundFrameReader({
     requests,
     subscriptions,
     report,
-    acceptInit,
-    acceptState
+    // Declared here rather than beside the others: the re-assert has to run after the session has
+    // taken this frame, so the claim's own gate reads this `init`'s `accepts` and a shell that
+    // never named it still hears nothing.
+    acceptInit: (message) => {
+      handshake.stop()
+      shellSession.accept(message)
+      back.reassert()
+    },
+    acceptState,
+    acceptBack: back.press
   })
 
   /** After `close` the page is not the document the shell is answering any more. */
@@ -390,6 +411,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
     closed = true
     handshake.stop()
+    back.clear()
     subscriptions.closeAll()
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
     requests.closeAll()
@@ -450,6 +472,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
+    claimBack: back.claim,
     close,
     onReady: shellSession.onReady,
     onRouteUpdate: shellSession.onRouteUpdate,

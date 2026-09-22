@@ -213,6 +213,29 @@ export async function readBridgePagePainted() {
 }
 
 /**
+ * Every name a Back press can travel under, read where the product reads them: the claim and the
+ * frame this lane added, and the pop the page asks for when it has nothing to spend a press on.
+ * The third is what separates "the sheet closed" from "the whole screen went".
+ */
+export async function readBridgeBackNames() {
+  const lane = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
+    'utf8'
+  )
+  const fields = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    'utf8'
+  )
+  const claim = /BRIDGE_BACK_CLAIM_NOTIFY = '([a-z-]+)'/.exec(lane)
+  const frame = /BRIDGE_BACK_FRAME = '([a-z-]+)'/.exec(lane)
+  const navigateBack = /BRIDGE_NAVIGATE_BACK_NOTIFY = '([a-z-]+)'/.exec(fields)
+  if (!claim || !frame || !navigateBack) {
+    throw new Error('could not read the Back names the page and the shell exchange')
+  }
+  return { claim: claim[1], frame: frame[1], navigateBack: navigateBack[1] }
+}
+
+/**
  * The shell's half of the bridge, as the page's channel sees it.
  *
  * The entry mounts nothing until `init` lands, so a render check with no shell renders no route at
@@ -242,6 +265,7 @@ export function installShellDouble({
   pageRoutes = null,
   pageRouteGrants = null,
   accepts = null,
+  backFrame = null,
   replies,
   streams = [],
   windowCaps = null
@@ -266,6 +290,14 @@ export function installShellDouble({
   // acked every frame look the same from the page's side.
   globalThis.__orcaRenderCheckAcks = []
   const openStreams = new Map()
+  // One Back press, on demand. The shell decides when the key goes to the page, so a check has no
+  // other way to make one happen: nothing the document does produces this frame.
+  globalThis.__orcaRenderCheckSendBack = () => {
+    if (backFrame === null) {
+      throw new Error('this shell double was not given the back frame name')
+    }
+    channel.onmessage?.({ data: JSON.stringify({ v: version, type: backFrame }) })
+  }
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)

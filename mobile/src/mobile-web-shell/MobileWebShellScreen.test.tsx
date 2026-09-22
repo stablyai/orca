@@ -19,6 +19,12 @@ vi.mock('react-native', () => ({
       stop: () => {}
     })
   },
+  BackHandler: {
+    addEventListener: (name: string, listener: () => boolean) => {
+      dependencies.backHandlers.set(name, listener)
+      return { remove: () => dependencies.backHandlers.delete(name) }
+    }
+  },
   Keyboard: {
     addListener: (
       name: string,
@@ -91,7 +97,9 @@ vi.mock('expo-router', () => ({
     canGoBack: () => dependencies.canGoBack
   }),
   // Read by the pop latch, which clears on the route this shell is mounted at changing.
-  usePathname: () => dependencies.pathname
+  usePathname: () => dependencies.pathname,
+  // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
+  useNavigation: () => ({ setOptions: dependencies.setScreenOptions })
 }))
 // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
 // and a mount/unmount log is the only thing that can tell a remount from a prop update.
@@ -164,8 +172,10 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
     reportPageReady: dependencies.reportPageReady,
     reportPagePainted: dependencies.reportPagePainted,
+    reportPageBackClaim: dependencies.reportPageBackClaim,
     pageReady: dependencies.pageReady,
-    pageFrame: dependencies.pageFrame
+    pageFrame: dependencies.pageFrame,
+    backClaimed: dependencies.backClaimed
   })
 }))
 
@@ -185,6 +195,7 @@ import {
   textOf,
   updateScreen as reRenderScreen
 } from './mobile-web-shell-screen-test-harness'
+import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
@@ -567,6 +578,38 @@ describe('the hybrid shell screen', () => {
     })
     expect(dependencies.back).toHaveBeenCalledTimes(1)
     expect(dependencies.push).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The screen's end of the Back lane. `Platform.OS` is pinned to `ios` for this file, so what is
+   * readable here is the swipe the shell takes away; which key each platform uses is
+   * `use-shell-page-back.test.tsx`.
+   */
+  it('carries the page taking the device Back key up to the session', async () => {
+    dependencies.client = createFakeRpcClient()
+    const tree = await renderScreen(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+        }
+      })
+    })
+    expect(dependencies.reportPageBackClaim).toHaveBeenCalledWith(true)
+  })
+
+  it('takes the stack swipe away while the session says the page is holding the key', async () => {
+    dependencies.backClaimed = true
+    await renderScreen(readyState('session-one'))
+    expect(dependencies.setScreenOptions).toHaveBeenCalledWith({ gestureEnabled: false })
+  })
+
+  it('leaves the swipe alone while the page is holding nothing', async () => {
+    await renderScreen(readyState('session-one'))
+    expect(dependencies.setScreenOptions).toHaveBeenCalledWith({ gestureEnabled: true })
   })
 
   it('pops nothing when this page is the first screen on the stack, rather than dismissing it', async () => {

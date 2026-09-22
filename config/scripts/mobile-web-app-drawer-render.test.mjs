@@ -8,6 +8,7 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-depende
 import {
   createBundleServer,
   installShellDouble,
+  readBridgeBackNames,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
@@ -57,6 +58,7 @@ let origin
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
+let backNames = null
 
 beforeAll(async () => {
   if (!bundles) {
@@ -65,6 +67,7 @@ beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
+  backNames = await readBridgeBackNames()
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-drawer-'))
   const { outDir } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const served = await createBundleServer({ outDir, cspHeader })
@@ -269,4 +272,101 @@ describeDrawer('the bottom drawer on the page', () => {
       }
     }, 120_000)
   }
+})
+
+/** Every notify the page posted, by name, so a case can say what crossed and what did not. */
+function notifyNames() {
+  return globalThis.__orcaRenderCheckNotifies.map((frame) => frame.name)
+}
+
+/**
+ * The defect on the real bundle in a real browser: Android Back with a sheet open.
+ *
+ * Chromium only. Android's WebView is Chromium, and the key exists nowhere else — a WebKit arm
+ * would be pinning a platform that has no hardware Back at all. What the unit suites cannot reach
+ * is here: the claim leaving a mounted page over the real channel, and the press closing a sheet
+ * that a real Reanimated animation put on screen.
+ */
+describeDrawer('the device Back key reaching a sheet on the page', () => {
+  it('closes the sheet instead of leaving the screen', async () => {
+    const browser = await ENGINES[0].launch()
+    try {
+      const page = await browser.newPage({ viewport: VIEWPORT, reducedMotion: 'no-preference' })
+      const errors = []
+      page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
+      await page.addInitScript(installShellDouble, {
+        version: bridgeVersion,
+        sessionId: 'render-check-session',
+        buildId: 'render-check-build',
+        route: { pathname: HOST_ROUTE },
+        host: SHELL_HOST,
+        storage: {},
+        faultGrant,
+        // What a shell that knows the lane offers, and the frame it would send. Without the first
+        // the page posts no claim at all, which is the older-shell arm the unit suites pin.
+        accepts: [backNames.claim],
+        backFrame: backNames.frame
+      })
+      await page.goto(`${origin}/`, { waitUntil: 'load' })
+      await page.waitForFunction(
+        () => document.documentElement.dataset.orcaWebEntry === 'mounted',
+        { timeout: 30_000, polling: 250 }
+      )
+      // Nothing is claimed by a page with no sheet open: the key stays the shell's, which is what
+      // leaves today's pop as the fallback.
+      expect(await page.evaluate(notifyNames)).not.toContain(backNames.claim)
+
+      const chip = await page.waitForFunction(centreOf, 'Filter', {
+        timeout: 30_000,
+        polling: 250
+      })
+      await page.mouse.click(...Object.values(await chip.jsonValue()))
+      await page.waitForFunction(
+        () => document.querySelector('[aria-label="Dismiss drawer"]') !== null,
+        { timeout: 10_000, polling: 100 }
+      )
+      const claimed = await page.waitForFunction(
+        (name) =>
+          globalThis.__orcaRenderCheckNotifies.find(
+            (frame) => frame.name === name && frame.claimed === true
+          ) ?? null,
+        backNames.claim,
+        { timeout: 10_000, polling: 100 }
+      )
+      expect(await claimed.jsonValue(), errors.join(' | ')).toMatchObject({ claimed: true })
+
+      await page.evaluate(() => {
+        globalThis.__orcaRenderCheckSendBack()
+      })
+      const closed = await page
+        .waitForFunction(() => document.querySelector('[aria-label="Dismiss drawer"]') === null, {
+          timeout: 10_000,
+          polling: 100
+        })
+        .then(() => true)
+        .catch(() => false)
+      expect(
+        closed,
+        `${errors.join(' | ')} | ${JSON.stringify(await page.evaluate(notifyNames))}`
+      ).toBe(true)
+
+      // The press was spent here. A page that had handed it back would have asked the shell to pop
+      // the screen, which is the defect this lane is about: the sheet closes and the session route
+      // goes with it.
+      expect(await page.evaluate(notifyNames)).not.toContain(backNames.navigateBack)
+      // And the key goes back to the shell with the sheet, so the next press leaves the screen.
+      const claims = await page.evaluate(
+        (name) =>
+          globalThis.__orcaRenderCheckNotifies
+            .filter((frame) => frame.name === name)
+            .map((frame) => frame.claimed),
+        backNames.claim
+      )
+      expect(claims).toEqual([true, false])
+      expect(errors).toEqual([])
+      await page.close()
+    } finally {
+      await browser.close()
+    }
+  }, 120_000)
 })

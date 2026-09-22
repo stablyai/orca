@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useNavigation, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   OrcaMobileWebShellView,
@@ -36,6 +36,7 @@ import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { softwareKeyboardWindowInset } from '../platform/software-keyboard-window-inset'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
+import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -187,6 +188,7 @@ export function MobileWebShellScreen({
     platform: Platform.OS
   })
   const router = useRouter()
+  const navigation = useNavigation()
   const popShellStack = useShellStackPop()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
   const {
@@ -201,8 +203,10 @@ export function MobileWebShellScreen({
     reportDocumentLoaded,
     reportPageReady,
     reportPagePainted,
+    reportPageBackClaim,
     pageReady,
-    pageFrame
+    pageFrame,
+    backClaimed
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   // Which mount the notice was dismissed on, not whether it was: a later refusal opens its own
   // generation under a new session id, so it is not silenced by a tap on the one before it.
@@ -257,6 +261,8 @@ export function MobileWebShellScreen({
     // The one thing that says the page is something to look at. The cover below stays up until it
     // lands, for a page that declared it would send one.
     onPagePainted: reportPagePainted,
+    // While this is true the key below belongs to the page, not to the stack this screen sits on.
+    onPageBackClaim: reportPageBackClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
     },
@@ -305,6 +311,14 @@ export function MobileWebShellScreen({
   useEffect(() => {
     publishRoute(route)
   }, [publishRoute, route])
+
+  // The navigation object rather than the router: what this takes away is this screen's own place
+  // on the stack, which is a screen option, and the router has no member that says it.
+  useShellPageBack({
+    claimed: backClaimed,
+    sendBack: bridge.sendBack,
+    setOptions: navigation.setOptions
+  })
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.

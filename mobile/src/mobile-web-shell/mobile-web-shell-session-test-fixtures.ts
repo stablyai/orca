@@ -110,6 +110,7 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'document-loaded':
     case 'page-ready':
     case 'page-painted':
+    case 'page-back-claim':
       return event
     case 'cache-read':
     case 'manifest-read':

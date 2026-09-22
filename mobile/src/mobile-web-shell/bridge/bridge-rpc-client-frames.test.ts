@@ -12,6 +12,7 @@ import {
   BRIDGE_ACK_INTERVAL_FRAMES
 } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
+import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 import {
@@ -47,7 +48,7 @@ describe('bridge client handshake', () => {
       {
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'ready',
-        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT],
+        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME],
         reports: [BRIDGE_PAGE_PAINTED]
       }
     ])

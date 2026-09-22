@@ -1,5 +1,6 @@
 import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { RpcClient } from '../transport/rpc-client'
+import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
@@ -115,6 +116,16 @@ export type BridgeHostOptions = {
    * what the session already established and serves it.
    */
   sessionEstablished: boolean
+  /**
+   * What the session already established about the device Back key, when this host is a rebuild
+   * taking one over. Absent for a host opening a session of its own.
+   *
+   * The sibling of `sessionEstablished`, and for the same reason: the page is never told that its
+   * client was swapped, so what it declared and what it is holding are facts about the session
+   * rather than about this object. A host that relearned them would refuse every press until the
+   * page happened to speak again.
+   */
+  sessionBack?: BridgeSessionBack
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /**
@@ -193,6 +204,15 @@ export type BridgeHostOptions = {
    * has to know whether it is coming, and a page served from an older desktop never sends one.
    */
   onPagePainted: () => void
+  /**
+   * The page is holding the device Back key, or has let it go. Required, because the shell only
+   * intercepts the key while a claim is live and a host built without this would leave the claim
+   * unreadable — a page holding one would have Back pop the screen out from under its sheet.
+   *
+   * False arrives on its own for every way a document ends, so a caller never has to guess whether
+   * a claim outlived the page that made it.
+   */
+  onPageBackClaim: (claimed: boolean) => void
   /**
    * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
    * the value it applied. The holder of that param compares before it clears: a tap that has moved

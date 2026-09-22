@@ -25,7 +25,7 @@ const router = vi.hoisted(() => ({
   canGoBack: vi.fn(() => false)
 }))
 
-vi.mock('expo-router', () => ({ useRouter: () => router }))
+vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
 // The house pattern for a screen test: react-native is Flow source vitest cannot parse, so the
 // host components become strings and the tree below is the panel's own structure.

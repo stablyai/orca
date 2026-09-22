@@ -9,6 +9,7 @@ import {
   type BridgeInitRoute
 } from './bridge-envelope'
 import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
@@ -36,7 +37,8 @@ export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
 export const BRIDGE_SHELL_ACCEPTS: readonly string[] = [
   BRIDGE_ROUTE_PARAM_CLEAR,
   BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
-  BRIDGE_PAGE_PAINTED
+  BRIDGE_PAGE_PAINTED,
+  BRIDGE_BACK_CLAIM_NOTIFY
 ]
 
 /** The one frame that starts a session, built in one place so its caps and its grants agree. */

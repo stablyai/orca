@@ -23,7 +23,7 @@ const router = vi.hoisted(() => ({
   canGoBack: vi.fn(() => false)
 }))
 
-vi.mock('expo-router', () => ({ useRouter: () => router }))
+vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 // The web file re-exports the screen hooks through the provider module, and reaching the real ones
 // imports the Expo runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({

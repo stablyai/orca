@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_CLEARABLE_ROUTE_PARAMS, BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 import {
@@ -110,6 +111,15 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_PAGE_PAINTED)
+  }),
+  // Ungranted, for the reason the paint report is: the page is describing its own document, and
+  // whether the device's Back key reaches it is the shell's decision either way. The state travels
+  // whole rather than as a toggle, so a frame the shell drops costs one press and not a lane.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_BACK_CLAIM_NOTIFY),
+    claimed: z.boolean()
   })
 ])
 

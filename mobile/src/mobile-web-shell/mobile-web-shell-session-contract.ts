@@ -212,6 +212,9 @@ export type MobileWebShellSessionEvent =
   | { readonly type: 'page-ready'; readonly reports: readonly string[] }
   /** The page has a frame on screen. Only a page that declared it ever sends one. */
   | { readonly type: 'page-painted' }
+  /** The page is holding the device Back key, or has let it go. The host sends false on its own
+   *  for every way a document ends, so this never has to be inferred from silence. */
+  | { readonly type: 'page-back-claim'; readonly claimed: boolean }
   | { readonly type: 'page-ready-deadline'; readonly flow: number }
 
 /** Latches live beside the state because both outlive the state they were set in: `retriedOnce`
@@ -240,6 +243,14 @@ export type MobileWebShellSession = {
   readonly pageReportsPaint: boolean
   /** Whether this document has reported a frame on screen. Cleared with `pageReady`. */
   readonly pagePainted: boolean
+  /**
+   * Whether the document on screen is holding the device Back key.
+   *
+   * Cleared with the rest of what a document says about itself, and that is the load-bearing half:
+   * a claim that outlived its sheet would have the shell hand Back to a page with nothing to do
+   * with it, which is a key that does nothing at all.
+   */
+  readonly pageBackClaimed: boolean
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null

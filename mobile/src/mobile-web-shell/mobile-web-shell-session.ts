@@ -36,6 +36,7 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     pageReady: false,
     pageReportsPaint: false,
     pagePainted: false,
+    pageBackClaimed: false,
     gates: null,
     cached: null,
     updateNotice: null,
@@ -333,6 +334,7 @@ export function reduceMobileWebShellSession(
         : step(session, {})
     case 'page-ready':
     case 'page-painted':
+    case 'page-back-claim':
       return step(session, pageDocumentStatePatch(session, event))
     case 'page-ready-deadline':
       // A document that finished and never said a word is a document that did not load, whatever
