@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { exposeMessages } from './mailbox-message-receipt'
+import { exposeMessagesBeyondBatch } from './messages-beyond-batch-receipt'
 import { routeAllMailboxPages } from '../schemas'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import type { CheckParams } from '../schemas'
@@ -231,6 +232,7 @@ export async function checkWorkerMailbox(args: {
         messages: exposeMessages(current?.messages ?? []),
         count: current?.messages.length ?? 0,
         replayed: current?.replayed ?? false,
+        ...exposeMessagesBeyondBatch(current?.newerMessages),
         acknowledged: acknowledged?.delivery.id ?? null,
         timedOut: false,
         cancelled: false,
@@ -283,6 +285,7 @@ export async function checkWorkerMailbox(args: {
     messages: exposeMessages(arrived?.messages ?? []),
     count: arrived?.messages.length ?? 0,
     replayed: arrived?.replayed ?? false,
+    ...exposeMessagesBeyondBatch(arrived?.newerMessages),
     acknowledged: acknowledged?.delivery.id ?? null,
     ...(params.format || params.inject
       ? { formatted: arrived?.messages.map(formatMessageBanner).join('\n\n') ?? '' }

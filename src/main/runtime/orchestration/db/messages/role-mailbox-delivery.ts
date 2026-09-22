@@ -24,6 +24,33 @@ export function getDeliveryMessages(this: OrchestrationDb, delivery: DeliveryRow
   )
 }
 
+/**
+ * Unread mail for this mailbox that an outstanding batch does not contain.
+ *
+ * An unacknowledged Delivery replays verbatim for as long as it is held, so without this a worker
+ * that stalls mid-batch never learns that a newer message — a redirect, a stop — arrived behind
+ * it. Reported, never merged: the batch a worker acknowledges stays exactly the batch it was
+ * handed, so a retried acknowledgement can never mark a message read that no response carried.
+ */
+function readMailboxMessagesBeyondBatch(
+  db: OrchestrationDb,
+  params: { runId: string; mailboxHandle: string },
+  batch: readonly MessageRow[],
+  limit: number
+): MessageRow[] {
+  const batchIds = new Set(batch.map((message) => message.id))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the driver types every row as unknown; this is the same `SELECT * FROM messages` this file already reads as MessageRow, against the same table.
+  const rows = db.db
+    .prepare(
+      `SELECT * FROM messages
+       WHERE run_id = ? AND to_handle = ? AND read = 0
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence ASC LIMIT ?`
+    )
+    .all(params.runId, params.mailboxHandle, limit + batchIds.size) as MessageRow[]
+  return exposeMessageListTimestamps(rows.filter((row) => !batchIds.has(row.id)).slice(0, limit))
+}
+
 export function getOrCreateMailboxDelivery(
   this: OrchestrationDb,
   params: {
@@ -34,7 +61,14 @@ export function getOrCreateMailboxDelivery(
     limit?: number
     wakeTypes?: MessageType[]
   }
-): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
+):
+  | {
+      delivery: DeliveryRow
+      messages: MessageRow[]
+      replayed: boolean
+      newerMessages: MessageRow[]
+    }
+  | undefined {
   const limit = Math.min(
     Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
@@ -53,8 +87,14 @@ export function getOrCreateMailboxDelivery(
         )
       }
       const messages = this.getDeliveryMessages(existing)
+      const newerMessages = readMailboxMessagesBeyondBatch(this, params, messages, limit)
       this.db.exec('COMMIT')
-      return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
+      return {
+        delivery: exposeDeliveryTimestamps(existing),
+        messages,
+        replayed: true,
+        newerMessages
+      }
     }
     if (params.wakeTypes?.length) {
       const placeholders = params.wakeTypes.map(() => '?').join(',')
@@ -101,7 +141,12 @@ export function getOrCreateMailboxDelivery(
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
     this.db.exec('COMMIT')
-    return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }
+    return {
+      delivery: exposeDeliveryTimestamps(delivery),
+      messages,
+      replayed: false,
+      newerMessages: []
+    }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error

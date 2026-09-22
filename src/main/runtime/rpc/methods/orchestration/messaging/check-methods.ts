@@ -11,6 +11,8 @@ import {
   dispatchFenced,
   isSupersededDispatch
 } from './dispatch-mailbox-fence'
+import { checkNamedDispatchMailbox } from './check-named-dispatch'
+import { unservedDispatchMailbox, withUnservedDispatchMailbox } from './unserved-dispatch-mailbox'
 
 export const ORCHESTRATION_CHECK_METHODS = [
   defineMethod({
@@ -33,9 +35,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
 
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
       const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
-      const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
-      if (params.run || boundRun) {
-        return checkRunMailbox({
+      // Explicit --dispatch names the caller's OWN Dispatch mailbox and is resolved BEFORE the
+      // implicit bound-Run route, so a pane that is both an old child Run's coordinator and a live
+      // worker can still reach its Dispatch. It cannot collide with --run: the schema refuses both
+      // together.
+      if (params.dispatch) {
+        return checkNamedDispatchMailbox({
           params,
           runtime,
           db,
@@ -43,11 +48,31 @@ export const ORCHESTRATION_CHECK_METHODS = [
           paneKey,
           typeFilter,
           signal,
-          legacyCoordinatorRunId,
-          revalidateLegacyCoordinator,
-          orchestrationCompatibilityEvidence,
-          recordMutationReceipt
+          dispatchId: params.dispatch
         })
+      }
+      const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+      if (params.run || boundRun) {
+        // Precedence is unchanged: an intentional child coordinator keeps its Run. A pane that is
+        // ALSO a dispatched worker is simply told which mailbox it is not being served, so a
+        // redirect it cannot see is no longer silent.
+        const unserved = unservedDispatchMailbox({ db, handle, paneKey })
+        return withUnservedDispatchMailbox(
+          await checkRunMailbox({
+            params,
+            runtime,
+            db,
+            handle,
+            paneKey,
+            typeFilter,
+            signal,
+            legacyCoordinatorRunId,
+            revalidateLegacyCoordinator,
+            orchestrationCompatibilityEvidence,
+            recordMutationReceipt
+          }),
+          unserved
+        )
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)

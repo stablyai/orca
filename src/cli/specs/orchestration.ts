@@ -85,8 +85,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: 'Check messages for a terminal',
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id> | --dispatch <dispatch_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
+      '  --dispatch: read the mailbox of this exact Dispatch instead of the bound Run.\n' +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
@@ -99,6 +100,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       ...GLOBAL_FLAGS,
       'terminal',
       'run',
+      'dispatch',
       'ack',
       'unread',
       'peek',
@@ -113,7 +115,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging. A replay that has been overtaken reports the newer messages under newerMessages so a held batch never hides a redirect.',
+      'A worker reads its own Dispatch with --dispatch <dispatch_id>; a coordinator of a child Run reads that Run with --run <run_id>. The two selectors name different mailboxes and are refused together.',
+      'A pane that coordinates a Run and is also a dispatched worker keeps being served its Run, and the receipt names the Dispatch mailbox it is not being served under unservedMailbox.'
     ]
   },
   {

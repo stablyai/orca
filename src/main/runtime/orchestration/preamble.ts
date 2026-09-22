@@ -121,7 +121,12 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # arrives when you look, so run this at each natural checkpoint — before you
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
-  ${cli} orchestration check --terminal ${params.workerHandle} --json
+  #
+  # --dispatch names YOUR Dispatch mailbox. Keep it: a pane that has ever created
+  # a Run is served that Run instead, which is how a reused worker stops seeing
+  # its own mail. If you also coordinate a child Run, read that one separately
+  # with --run <run_id>; the two selectors cannot be combined.
+  ${cli} orchestration check --terminal ${params.workerHandle} --dispatch ${params.dispatchId} --json
 \`\`\`
 
 ${postDoneInstructions}`

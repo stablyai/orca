@@ -38,6 +38,16 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         'Choose at most one message read mode: --unread, --peek, or --all.'
       )
     }
+    const run = getOptionalStringFlag(flags, 'run')
+    const dispatch = getOptionalStringFlag(flags, 'dispatch')
+    // Why: one message for both surfaces. Without this the CLI would forward both selectors and
+    // an older runtime that ignores --dispatch would silently serve the Run mailbox instead.
+    if (run !== undefined && dispatch !== undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose at most one mailbox selector: --run or --dispatch.'
+      )
+    }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
@@ -55,7 +65,8 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         format: flags.has('format') ? true : undefined,
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
-        run: getOptionalStringFlag(flags, 'run'),
+        run,
+        dispatch,
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
         timeoutMs

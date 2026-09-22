@@ -26,7 +26,14 @@ export function getOrCreateRunDelivery(
     limit?: number
     wakeTypes?: MessageType[]
   }
-): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
+):
+  | {
+      delivery: DeliveryRow
+      messages: MessageRow[]
+      replayed: boolean
+      newerMessages: MessageRow[]
+    }
+  | undefined {
   return this.getOrCreateMailboxDelivery({
     runId: params.runId,
     mailboxHandle: `run:${params.runId}`,

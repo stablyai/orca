@@ -4,6 +4,7 @@ import type { RpcContext } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { exposeMessages } from './mailbox-message-receipt'
+import { exposeMessagesBeyondBatch } from './messages-beyond-batch-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from '../schemas'
 import { resolveRunScope } from '../runs/run-scope'
@@ -137,6 +138,7 @@ export async function checkRunMailbox(args: {
       messages: exposeMessages(current.messages),
       count: current.messages.length,
       replayed: current.replayed,
+      ...exposeMessagesBeyondBatch(current.newerMessages),
       acknowledged: acknowledged?.delivery.id ?? null,
       timedOut: false,
       cancelled: false,
@@ -241,6 +243,7 @@ export async function checkRunMailbox(args: {
     messages: exposeMessages(current?.messages ?? []),
     count: current?.messages.length ?? 0,
     replayed: current?.replayed ?? false,
+    ...exposeMessagesBeyondBatch(current?.newerMessages),
     acknowledged: acknowledged?.delivery.id ?? null,
     timedOut: false,
     cancelled: false,

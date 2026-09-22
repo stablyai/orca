@@ -44,6 +44,10 @@ export const CheckParams = z
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
+    // Why: a pane that has ever created a Run keeps that binding for life and the implicit route
+    // serves that Run ahead of any Dispatch, so a reused worker needs a way to name its own
+    // mailbox without rebinding the terminal away from a child Run it may still be coordinating.
+    dispatch: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
   })
@@ -58,6 +62,14 @@ export const CheckParams = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+      })
+    }
+    // Why: the two selectors name different mailboxes, so passing both says nothing about which
+    // is wanted, and guessing would hand a worker its coordinator's mail or the reverse.
+    if (params.run !== undefined && params.dispatch !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose at most one mailbox selector: --run or --dispatch.'
       })
     }
   })

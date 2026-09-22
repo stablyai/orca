@@ -165,12 +165,16 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toMatch(/orchestration send --from term_worker --type escalation/)
     expect(result).toContain('--task-id task_abc123 --dispatch-id ctx_def456')
-    expect(result).toContain('orchestration check --terminal term_worker --json')
+    expect(result).toContain(
+      'orchestration check --terminal term_worker --dispatch ctx_def456 --json'
+    )
   })
 
   it('gives the worker a concrete cadence for reading coordinator follow-ups', () => {
     const result = buildDispatchPreamble(baseParams())
-    const checkLine = result.indexOf('orchestration check --terminal term_worker --json')
+    const checkLine = result.indexOf(
+      'orchestration check --terminal term_worker --dispatch ctx_def456 --json'
+    )
     const cadence = result.slice(0, checkLine)
 
     // Why: the transport is durable but never interrupts, so "you may check" produced
