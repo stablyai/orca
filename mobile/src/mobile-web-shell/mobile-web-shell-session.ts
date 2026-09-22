@@ -2,20 +2,25 @@ import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
+  MobileWebShellBlockedVerdict,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellReadFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
-  MobileWebShellSessionState,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import { awaitsGates, cachedGenerationWall, gateKey, gateVerdict } from './mobile-web-shell-gates'
+import {
+  awaitsGates,
+  cachedGenerationWall,
+  CHECKING,
+  gateKey,
+  gateState,
+  gateVerdict,
+  NATIVE_ROUTE
+} from './mobile-web-shell-gates'
 import { matchesRoutePattern, routeViewOf } from './page-route-policy'
-
-const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
-const NATIVE_ROUTE: MobileWebShellSessionState = { kind: 'native-route' }
 
 function rendersRoute(pageRoutes: readonly string[], pathname: string): boolean {
   return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
@@ -61,29 +66,9 @@ function startFlow(
   // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
   // keeps a status refetch arriving mid-check from running the cache read and the download twice.
   const base = { updateNotice: null, ...patch, gates, flow: session.flow + 1 }
-  const verdict = gateVerdict(gates)
-  if (verdict.kind === 'native-route') {
-    return step(session, { ...base, state: NATIVE_ROUTE }, before)
-  }
-  if (verdict.kind === 'wall') {
-    return step(session, { ...base, state: { kind: 'wall', verdict: verdict.verdict } }, before)
-  }
-  if (verdict.kind === 'status-unreadable') {
-    return step(
-      session,
-      {
-        ...base,
-        state: {
-          kind: 'failed',
-          reason: 'status-unreadable',
-          retriedOnce: patch.retriedOnce ?? session.retriedOnce
-        }
-      },
-      before
-    )
-  }
-  if (verdict.kind === 'dialling' || verdict.kind === 'pending') {
-    return step(session, { ...base, state: CHECKING }, before)
+  const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
+  if (gated !== null) {
+    return step(session, { ...base, state: gated }, before)
   }
   // Offline sweeps and reads the cache exactly as a connected host does. What it skips is the
   // compat check, and `onCacheRead` is where that shows.
@@ -109,19 +94,35 @@ function openCached(
   ])
 }
 
-/** Opens a generation already on disk under its own route list, or leaves the route native when
- *  that list does not carry it. The only judge available when the newer manifest is either absent
- *  or refused: opening under a bundle this shell is not running would grant the page what some
- *  other bytes declared. */
+/**
+ * Opens a generation already on disk under its own route list, or leaves the route native when that
+ * list does not carry it. The only judge available when the newer manifest is absent or refused:
+ * opening under a bundle this shell is not running would grant the page what other bytes declared.
+ *
+ * The route question comes first and `wall` is asked only on the served branch, the order
+ * `onManifestRead` takes: a route this bundle never claimed is not a screen to refuse, and a
+ * generation cached before routes were listed claims none at all. `patch` belongs to either answer;
+ * `served` is what only an opened page gets, so the native one carries no notice about an update
+ * for a screen it is not showing.
+ */
 function openByOwnRoutes(
   session: MobileWebShellSession,
   generation: CachedGeneration,
-  patch: Partial<MobileWebShellSession> = {}
+  options: {
+    patch?: Partial<MobileWebShellSession>
+    served?: Partial<MobileWebShellSession>
+    wall?: MobileWebShellBlockedVerdict | null
+  } = {}
 ): MobileWebShellStep {
+  const { patch = {}, served = {}, wall = null } = options
   const view = routeViewOf(generation.routes, session.routePathname)
-  return rendersRoute(view.pageRoutes, session.routePathname)
-    ? openCached(session, generation, { ...patch, ...view })
-    : step(session, { ...patch, ...view, state: NATIVE_ROUTE })
+  if (!rendersRoute(view.pageRoutes, session.routePathname)) {
+    return step(session, { ...patch, ...view, state: NATIVE_ROUTE })
+  }
+  if (wall !== null) {
+    return step(session, { ...patch, ...view, state: { kind: 'wall', verdict: wall } })
+  }
+  return openCached(session, generation, { ...patch, ...served, ...view })
 }
 
 function onCacheRead(
@@ -142,7 +143,7 @@ function onCacheRead(
       return step(session, { cached: null, state: { kind: 'offline' } })
     }
     // The cached bundle's own list, which is the only one an unreachable host can be judged by.
-    return openByOwnRoutes(session, generation, { cached: generation })
+    return openByOwnRoutes(session, generation, { patch: { cached: generation } })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -285,17 +286,22 @@ function onDownloadFailed(
   failure: MobileWebShellReadFailure
 ): MobileWebShellStep {
   const cached = session.cached
-  if (cached === null) {
+  const gates = session.gates
+  if (cached === null || gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
   }
-  const wall = session.gates === null ? null : cachedGenerationWall(session.gates, cached.compat)
-  if (wall !== null) {
-    return step(session, { state: { kind: 'wall', verdict: wall } })
+  // The gates may have moved under the download: a `fetching` session does not await them, so the
+  // verdict here is read fresh and answered with the shell's one answer for it.
+  const verdict = gateVerdict(gates)
+  const gated = gateState(verdict, session.retriedOnce)
+  if (gated !== null) {
+    return step(session, { state: gated })
   }
   return openByOwnRoutes(session, cached, {
-    updateNotice: failure === 'bundle' ? 'update-failed' : null
+    served: { updateNotice: failure === 'bundle' ? 'update-failed' : null },
+    wall: cachedGenerationWall(verdict, gates, cached.compat)
   })
 }
 

@@ -8,6 +8,11 @@ import type {
   MobileWebShellSessionState
 } from './mobile-web-shell-session-contract'
 
+/** Shared because several transitions reach each of them, and two objects that are equal but not
+ *  identical are two renders where the reducer meant one. */
+export const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
+export const NATIVE_ROUTE: MobileWebShellSessionState = { kind: 'native-route' }
+
 /**
  * Whether a gates change may start or restart the flow.
  *
@@ -81,32 +86,60 @@ export function gateVerdict(gates: MobileWebShellGates): MobileWebShellGateVerdi
 }
 
 /**
+ * The screen a gate verdict decides on its own, or null when it leaves the flow something to do.
+ *
+ * One mapping and two readers: the entry into the flow, and the fallback after a read the host
+ * refused. A `fetching` session does not await the gates, so a refusal can land under a verdict the
+ * flow never started on, and a second opinion taken there is how a host whose status had merely
+ * gone unreadable would earn the wall the rule above exists to keep off it.
+ *
+ * Null for `offline` and `open` alike: both still have a cache behind them, and which of the two it
+ * is decides only whether what comes out of it is judged against the host.
+ */
+export function gateState(
+  verdict: MobileWebShellGateVerdict,
+  retriedOnce: boolean
+): MobileWebShellSessionState | null {
+  switch (verdict.kind) {
+    case 'native-route':
+      return NATIVE_ROUTE
+    case 'wall':
+      return { kind: 'wall', verdict: verdict.verdict }
+    case 'status-unreadable':
+      return { kind: 'failed', reason: 'status-unreadable', retriedOnce }
+    case 'dialling':
+    case 'pending':
+      return CHECKING
+    case 'offline':
+    case 'open':
+      return null
+  }
+}
+
+/**
  * The wall a generation already on disk earns against a host that can still be reached, or null
  * when it may be opened.
  *
- * The offline rule does not reach here. That one skips the compat check because a host nobody can
- * reach cannot have changed; this host has just answered, and an update exists precisely because it
- * moved — so bytes that were inside the window when they were written may be outside it now.
- *
- * Only an `open` gate is judged further, and that is the whole of why this lives beside
- * `gateVerdict` rather than beside the transition that calls it. The other verdicts are already
- * answered above: an absent capability is the native-route rule, not a wall, and an unreadable
- * status leaves that same empty list — walling on either would be the `bundle-unavailable` wall
- * this file exists to keep off a host that simply did not reply.
+ * Takes the verdict its caller already computed rather than deriving a second one, because the
+ * distinction it turns on is the one `gateState` leaves open: `offline` keeps the rule that a host
+ * nobody can reach cannot have moved past these bytes, and `open` is the only answer that leaves a
+ * host to judge them against — this one has just replied, and an update exists precisely because it
+ * moved, so bytes inside the window when they were written may be outside it now.
  */
 export function cachedGenerationWall(
+  verdict: MobileWebShellGateVerdict,
   gates: MobileWebShellGates,
   manifest: MobileWebBundleCompatManifest
 ): MobileWebShellBlockedVerdict | null {
-  if (gateVerdict(gates).kind !== 'open') {
+  if (verdict.kind !== 'open') {
     return null
   }
-  const verdict = evaluateMobileWebBundleCompat({
+  const blocked = evaluateMobileWebBundleCompat({
     hostCapabilities: gates.hostCapabilities,
     hostStatus: gates.hostStatus,
     manifest
   })
-  return verdict.kind === 'blocked' ? verdict : null
+  return blocked.kind === 'blocked' ? blocked : null
 }
 
 /**
