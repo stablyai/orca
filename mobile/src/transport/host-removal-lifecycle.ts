@@ -1,3 +1,4 @@
+import { forgetHostUpdateFailures } from '../mobile-web-shell/forget-host-update-failures'
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { removeHost } from './host-store'
 
@@ -17,4 +18,7 @@ export async function removeHostAndCloseClient(
     throw error
   }
   forgetHostClient(hostId)
+  // Why after the commit and not awaited: evidence about a host that is gone, never a reason to
+  // hold the removal or fail it.
+  void forgetHostUpdateFailures(hostId).catch(() => undefined)
 }
