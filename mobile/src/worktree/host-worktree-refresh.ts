@@ -1,6 +1,7 @@
 import { AppState } from 'react-native'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from '../transport/rpc-client'
+import type { Worktree } from './workspace-list-sections'
 
 const WORKTREE_REFRESH_MS = 3000
 
@@ -9,7 +10,7 @@ type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
 type HostWorktreeRefreshArgs = {
   client: RpcClient
-  fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
+  fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<Worktree[] | undefined>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
 }
 
