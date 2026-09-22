@@ -41,25 +41,6 @@ function closureOf(pathname) {
   return held
 }
 
-/**
- * The one place a page route reaches a seam it does not declare, recorded rather than exempted.
- *
- * `app/h/_layout.tsx` wraps every `/h` route in `HostProtocolGate`, whose `ProtocolBlockScreen`
- * offers an Update Orca link through `openExternalLink`. Six routes declare `externalLink` and two
- * do not, so on those two the wall's link posts a notify the shell refuses — a dead tap with
- * nothing on screen. Pre-existing on main and not C7.7's to change: widening two other routes'
- * grants is a capability decision, and this lane reports rather than fixes it.
- *
- * Exact, so it reds in both directions: adding the grant to either route empties an entry here and
- * a new gap anywhere adds one.
- */
-const KNOWN_UNDECLARED = new Map([
-  [
-    'externalLink',
-    ['/h/[hostId] needs externalLink', '/h/[hostId]/agent-history/[worktreeId] needs externalLink']
-  ]
-])
-
 describe('the call-site reader', () => {
   const navigate = PAGE_GRANT_CALL_SITES[0]
   const storage = PAGE_GRANT_CALL_SITES[1]
@@ -150,10 +131,10 @@ describeClosure(
      */
     it.each(PAGE_GRANT_CALL_SITES.map((row) => [row.grants.join(' + '), row]))(
       'declares %s on every registered route whose own call sites reach it',
-      async (name, row) => {
+      async (_name, row) => {
         expect(
           await grantsMissingForRow(mobileDir, MOBILE_WEB_PAGE_ROUTES, closureOf, row)
-        ).toEqual(KNOWN_UNDECLARED.get(name) ?? [])
+        ).toEqual([])
       }
     )
 

@@ -5,9 +5,7 @@ import {
   audioStartParamsSchema,
   audioStartResultSchema,
   audioStopParamsSchema,
-  audioStopResultSchema,
-  wakelockSetParamsSchema,
-  wakelockSetResultSchema
+  audioStopResultSchema
 } from './bridge-audio-verbs'
 import {
   mediaPickParamsSchema,
@@ -44,8 +42,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.media.release',
   'native.audio.start',
   'native.audio.read',
-  'native.audio.stop',
-  'native.wakelock.set'
+  'native.audio.stop'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -115,8 +112,7 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     result: mediaReleaseResultSchema
   },
   // Dictation's capture. Their shapes live in `bridge-audio-verbs.ts` for the media trio's reason:
-  // the pull, its ring and the wake tag that outlives it are one contract, and the wake lock is
-  // here rather than beside `navigate` because nothing but a capture asks for one.
+  // the pull, its ring and the tail the stop carries back are one contract.
   'native.audio.start': {
     params: audioStartParamsSchema,
     result: audioStartResultSchema
@@ -128,10 +124,6 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.audio.stop': {
     params: audioStopParamsSchema,
     result: audioStopResultSchema
-  },
-  'native.wakelock.set': {
-    params: wakelockSetParamsSchema,
-    result: wakelockSetResultSchema
   }
 }
 

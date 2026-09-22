@@ -140,6 +140,24 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
 
+  it('lets explicit worker preferences override configured arguments in draft launches', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'claude',
+      draft: 'review this',
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--model haiku --effort low',
+      sessionOptions: { model: 'opus', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+
+    expect(plan?.launchCommand).toContain(
+      "claude '--model' 'opus' '--effort' 'high' --prefill 'review this'"
+    )
+    expect(plan?.launchCommand).not.toContain('haiku')
+    expect(plan?.launchCommand).not.toContain("'low'")
+  })
+
   it('applies explicit session options to resume commands', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',

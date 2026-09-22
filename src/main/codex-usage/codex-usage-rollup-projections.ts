@@ -31,6 +31,7 @@ export function buildSummary(
   let events = 0
   let estimatedCostUsd = 0
   let hasAnyBillableCost = false
+  let hasUnpricedModels = false
   const byModel = new Map<string, number>()
   const byProject = new Map<string, number>()
 
@@ -55,6 +56,9 @@ export function buildSummary(
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
+    } else if (row.model !== null) {
+      // A named model with no pricing entry: its tokens silently leave the total.
+      hasUnpricedModels = true
     }
   }
 
@@ -72,6 +76,7 @@ export function buildSummary(
     reasoningOutputTokens,
     totalTokens,
     estimatedCostUsd: hasAnyBillableCost ? estimatedCostUsd : null,
+    hasUnpricedModels,
     topModel,
     topProject,
     hasAnyCodexData: filteredSessions.length > 0 || filteredDaily.length > 0

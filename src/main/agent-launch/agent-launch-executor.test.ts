@@ -439,3 +439,95 @@ describe('a launch into an existing workspace, by workspace kind', () => {
     expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 })
+
+/**
+ * The launch inputs the host cannot derive for itself.
+ *
+ * The pair is deliberately asymmetric and the asymmetry is the contract: a requested `cwd` is
+ * something only a terminal can apply, so it decides the route; launch arguments are a TUI concern
+ * the structured providers version independently, so they do NOT decide the route and a structured
+ * launch that received some has to admit it ignored them.
+ */
+describe('caller-supplied launch inputs', () => {
+  const EXISTING = { kind: 'existing' as const, worktree: 'wt-7' }
+
+  it('downgrades a structured preference to a terminal when the launch names a cwd', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: EXISTING, cwd: '/repo/packages/api' })
+
+    // A structured session runs in its workspace, so honouring the cwd and honouring the
+    // preference are mutually exclusive; the receipt has to say which one lost.
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+    expect(result.receipt).toMatchObject({
+      mode: 'terminal',
+      preferred: 'structured',
+      reason: 'tui_launch_command'
+    })
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  it('still opens a structured session when the cwd is only whitespace', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: EXISTING, cwd: '   ' })
+
+    expect(result.outcome.kind).toBe('structured')
+  })
+
+  it('hands cwd, agentArgs and launchSource to the terminal it creates', async () => {
+    const h = harness({ settings: null })
+    await h.run({
+      agent: 'claude',
+      target: EXISTING,
+      cwd: '/repo/packages/api',
+      agentArgs: '--model opus',
+      launchSource: 'source_control_recovery'
+    })
+
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      cwd: '/repo/packages/api',
+      agentArgs: '--model opus',
+      launchSource: 'source_control_recovery'
+    })
+  })
+
+  it('forwards an explicit "no arguments" rather than dropping it as falsy', async () => {
+    const h = harness({ settings: null })
+    await h.run({ agent: 'claude', target: EXISTING, agentArgs: null })
+
+    // `null` means the caller wants none; dropping it here would silently restore the user's
+    // configured default, which is the opposite of what was asked.
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toHaveProperty('agentArgs', null)
+  })
+
+  it('omits agentArgs entirely when the caller sent none, so the settings default still applies', async () => {
+    const h = harness({ settings: null })
+    await h.run({ agent: 'claude', target: EXISTING })
+
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty('agentArgs')
+  })
+
+  it('warns that a structured session ignored the launch arguments, without changing the route', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: EXISTING, agentArgs: '--model opus' })
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.warning).toContain('does not apply launch arguments')
+  })
+
+  it('warns when a structured session ignored an explicit "no arguments" too', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: EXISTING, agentArgs: null })
+
+    // The structured path reads the bypass-permissions bit from the user's SETTINGS default, so a
+    // caller that asked for no arguments can still get a session with more permission than it asked
+    // for. Staying silent about that is the failure mode worth a test.
+    expect(result.warning).toContain('does not apply launch arguments')
+  })
+
+  it('leaves a structured launch unwarned when it carried no arguments at all', async () => {
+    const h = harness({})
+    const result = await h.run({ agent: 'claude', target: EXISTING })
+
+    expect(result.warning).toBeUndefined()
+  })
+})

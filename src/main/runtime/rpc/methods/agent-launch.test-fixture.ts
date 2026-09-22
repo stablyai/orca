@@ -64,7 +64,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
       ...(options.createWarning ? { warning: options.createWarning } : {})
     })),
-    createTerminal: vi.fn(async () => ({
+    // Args are declared so a test can assert what the launch asked for, not merely that it asked.
+    createTerminal: vi.fn(async (_selector: string, _options?: Record<string, unknown>) => ({
       handle: 'term_1',
       ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
     })),

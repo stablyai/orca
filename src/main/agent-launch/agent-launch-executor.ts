@@ -72,6 +72,11 @@ export type AgentLaunchSurfaceFactory = {
     /** Set only for an agent whose CLI takes the prompt on argv, so the text is in the process's
      *  arguments at exec time rather than raced into its composer afterwards. */
     startupPrompt?: string
+    /** Replaces the settings default for this launch only; `null` means no arguments at all. */
+    agentArgs?: string | null
+    cwd?: string
+    /** The one member of the `agent_started` triple the host cannot derive for itself. */
+    launchSource?: string
   }): Promise<{ handle: string; warning?: string }>
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
@@ -128,6 +133,10 @@ export type AgentLaunchWorkspaceFactory = {
     /** Set only alongside a `startupAgent` whose CLI takes the prompt on argv: agent-first creation
      *  builds the startup command, so that is where an argv prompt belongs. */
     startupPrompt?: string
+    /** Inputs needed when this terminal is created as the worktree's startup surface. */
+    agentArgs?: string | null
+    cwd?: string
+    launchSource?: string
   }): Promise<{
     worktreeId: string
     startupTerminalHandle: string | undefined
@@ -156,7 +165,8 @@ export async function executeAgentLaunch(
     placement: {
       agent: intent.agent,
       workspaceKind: launchWorkspaceKind(intent.target),
-      ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {})
+      ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {}),
+      ...(intent.cwd ? { cwd: intent.cwd } : {})
     },
     settings,
     vocabulary
@@ -279,7 +289,14 @@ async function resolveWorkspace(
     // owns the prompt for the same reason, so it re-supplies its own rather than honouring theirs.
     create: withoutReservedAgentCreateFields(intent.target.create),
     startupAgent: preflight.mode === 'structured' ? undefined : intent.agent,
-    ...(startupPrompt ? { startupPrompt } : {})
+    ...(startupPrompt ? { startupPrompt } : {}),
+    ...(preflight.mode === 'structured'
+      ? {}
+      : {
+          ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+          ...(intent.cwd ? { cwd: intent.cwd } : {}),
+          ...(intent.launchSource ? { launchSource: intent.launchSource } : {})
+        })
   })
   // Only when a startup terminal actually came back: a create that produced none ran no command,
   // so nothing carried the prompt and the launch still owes it to whatever surface it builds next.
@@ -312,10 +329,34 @@ async function createSurface(
     })
     return {
       outcome: { kind: 'structured', sessionId: session.sessionId, handle: session.handle },
-      structured: session
+      structured: session,
+      ...ignoredStructuredAgentArgsWarning(intent)
     }
   }
   return createTerminalSurface(execution, worktreeId)
+}
+
+/**
+ * A structured session cannot apply launch arguments, so a launch that carried some and got one
+ * anyway has to say so.
+ *
+ * Reported rather than routed around: the arguments field is a TUI concern by an explicit decision
+ * (`hasExplicitTuiLaunchCommand` reads the launch command and pointedly not the args, because the
+ * Agent SDK and app-server version their option sets independently of the interactive CLI), so
+ * downgrading here would override a stated user preference on the strength of a field that is not
+ * evidence about the surface. `null` warns too: "no arguments" is also unapplied, and the structured
+ * path still reads the bypass-permissions bit out of the user's *settings* default, so a caller that
+ * asked for none can get a session running with more permission than it requested.
+ */
+function ignoredStructuredAgentArgsWarning(
+  intent: AgentLaunchIntent
+): { warning: string } | undefined {
+  return intent.agentArgs === undefined
+    ? undefined
+    : {
+        warning:
+          'Started a structured chat session, which does not apply launch arguments; the requested arguments were ignored.'
+      }
 }
 
 /**
@@ -332,7 +373,11 @@ async function createTerminalSurface(
     worktreeId,
     agent: intent.agent,
     ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-    ...(startupPrompt ? { startupPrompt } : {})
+    ...(startupPrompt ? { startupPrompt } : {}),
+    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
+    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+    ...(intent.cwd ? { cwd: intent.cwd } : {}),
+    ...(intent.launchSource ? { launchSource: intent.launchSource } : {})
   })
   return {
     outcome: { kind: 'terminal', handle: terminal.handle },

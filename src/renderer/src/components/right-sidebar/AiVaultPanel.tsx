@@ -59,7 +59,6 @@ import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
-
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
   const activeWorktree = useActiveWorktree()
@@ -78,8 +77,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
-    useAiVaultOriginalPaneActions()
+  const paneActions = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const {
@@ -99,7 +97,6 @@ export default function AiVaultPanel(): React.JSX.Element {
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-
   const runtimeHostOptions = useMemo(
     () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
     [runtimeEnvironments]
@@ -366,12 +363,13 @@ export default function AiVaultPanel(): React.JSX.Element {
             buildResumeStartup={launchActions.buildResumeStartup}
             getSessionResumeState={getSessionResumeState}
             getSessionResumeActions={getSessionResumeActions}
-            getOriginalPaneTarget={getOriginalPaneTarget}
-            getSessionLiveState={getSessionLiveState}
+            getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
+            isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
+            getSessionLiveState={paneActions.getSessionLiveState}
             getWorktreeInfo={getSessionWorktreeInfo}
             onToggleGroup={toggleGroup}
-            onJumpToOriginalPane={jumpToOriginalPane}
-            onJumpToWorktree={jumpToWorktree}
+            onJumpToOriginalPane={paneActions.jumpToOriginalPane}
+            onJumpToWorktree={paneActions.jumpToWorktree}
             onResume={launchActions.handleResume}
             getSessionResumeInChat={getSessionResumeInChat}
             onContinueInNewSession={launchActions.handleContinueInNewSession}

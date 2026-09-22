@@ -178,9 +178,7 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.audio.read':
       return { base64: '', droppedBytes: 0, recording: true, interruption: null }
     case 'native.audio.stop':
-      return { stopped: true }
-    case 'native.wakelock.set':
-      return { active: true }
+      return { stopped: true, base64: '', droppedBytes: 0 }
   }
 }
 

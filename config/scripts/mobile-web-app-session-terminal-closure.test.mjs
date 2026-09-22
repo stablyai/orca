@@ -177,9 +177,10 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * `src/mobile-web-shell/bridge/bridge-audio-verbs.ts` — and eight vendored ones leave, because the
  * capture seam is what stops the page importing a microphone it does not have. Five are
  * `@orca/expo-two-way-audio` (its web module, `core`, `events`, `hooks` and the index) and three
- * are `expo-keep-awake`; the page asks the shell for both over `native.audio.start|read|stop` and
- * `native.wakelock.set` instead. The native halves of the seam resolve out of this closure
- * entirely, which is the -8 + 3.
+ * are `expo-keep-awake`; the page asks the shell for the microphone over
+ * `native.audio.start|read|stop` instead, and never asks about the screen at all — an open mic
+ * holds it on the device side. The native halves of the seam resolve out of this closure entirely,
+ * which is the -8 + 3.
  *
  * Measured, not derived: `mobile-web-app-session-dictation-capture.test.mjs` moves the web file
  * aside and walks the closure again, which puts those eight back.
@@ -208,8 +209,45 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * declared beside the route-update accept, so `bridge-route-update.ts` and the
  * `shell-screen-route.ts` it reads a route key from now enter through the envelope as well. All
  * four are schema and string constants: the closure grew, the download did not gain a package.
+ *
+ * Main measures 4,333 at `3cfb070294`: #21924 (`2739246058`) turned `agent-session-wire.ts`'s
+ * type-only import of `agent-session-record` into a value import, so `src/shared/agent-session-record.ts`
+ * and the two it reaches, `agent-session-conversation-name.ts` and `surrogate-safe-text-slice.ts`,
+ * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
+ * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
+ *
+ * Then ruling 36 gave the screen to the microphone and two local modules left:
+ * `src/hooks/mobile-dictation-keep-awake.ts` and
+ * `src/hooks/mobile-dictation-foreground-keep-awake.ts`, the page's wake-tag owner and its Android
+ * foreground re-acquire. Both are deleted rather than moved — the device module that opens the
+ * microphone takes the screen and gives it back — so the page has nothing left to own.
+ *
+ *   modules        4333 -> 4331   (-2)
+ *   local modules   991 ->  989   (-2)
+ *
+ * Measured on this merge rather than subtracted from the line above, and the two local lists
+ * diffed to name the difference: those two leave and nothing joins. The same measurement, taken
+ * before #22067 landed, is how this branch read main's pin of 4,330 as three modules stale — the
+ * three the paragraph above names.
+ *
+ * Then the two other table parsers gave up their own row splitters and read the editor's
+ * `src/components/rich-markdown/markdown-table-rows.ts` instead, which the session page reaches
+ * through the PR comment renderer. It is the one module that joins, and the only one it can be: it
+ * imports nothing, and no other file under `rich-markdown/` is in the closure beside it.
+ *
+ *   modules        4331 -> 4332   (+1)
+ *   local modules   989 ->  990   (+1)
+ *
+ * Then #18790 (`0677271709`) taught the agent icon table a new agent, and its icon
+ * `src/shared/agent-icons/freebuff.png` entered through `mobile-agent-icon-assets.ts`, which the
+ * session page reaches as it reaches every other icon there. An image asset, not a package, and
+ * the one line that differs between the closure at `226f4a0775` and at `059ee59a48`; it landed
+ * between #22114's measurement and its merge, so main read one short.
+ *
+ *   modules        4332 -> 4333   (+1)
+ *   local modules   990 ->  991   (+1)
  */
-const SESSION_ROUTE_MODULES = 4330
+const SESSION_ROUTE_MODULES = 4333
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

@@ -1,3 +1,5 @@
+import { isTableSeparator, splitTableRow } from './rich-markdown/markdown-table-rows'
+
 export type MobileMarkdownBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -10,20 +12,6 @@ export type MobileMarkdownBlock =
 
 const HEADING = /^(#{1,6})\s+(.+)$/
 const CODE_FENCE = /^```([A-Za-z0-9_-]+)?\s*$/
-
-function splitTableRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim())
-}
-
-function isTableSeparator(line: string): boolean {
-  const cells = splitTableRow(line)
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
-}
 
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
   const lines = content.replace(/\r\n?/g, '\n').split('\n')

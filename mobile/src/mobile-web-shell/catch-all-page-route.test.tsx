@@ -33,6 +33,12 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
+}))
+
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
 vi.mock('./PageRouteUnavailableScreen', () => ({

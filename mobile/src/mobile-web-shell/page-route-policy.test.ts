@@ -98,8 +98,7 @@ describe('the grants this app implements', () => {
       'native.media.release',
       'native.audio.start',
       'native.audio.read',
-      'native.audio.stop',
-      'native.wakelock.set'
+      'native.audio.stop'
     ])
   })
 

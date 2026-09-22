@@ -87,7 +87,11 @@ async function agentLaunchIntent(
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
-    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {})
+    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
+    // `null` means "no arguments" and must survive; only absence falls back to the settings default.
+    ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
+    ...(params.cwd ? { cwd: params.cwd } : {}),
+    ...(params.launchSource ? { launchSource: params.launchSource } : {})
   }
 }
 

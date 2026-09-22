@@ -119,7 +119,7 @@
     },
     {
       "file": "src/platform/dictation-capture.web.ts",
-      "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio and the wake tag through expo-keep-awake, neither of which a browser has; this one asks the shell for both over native.audio.start|read|stop and native.wakelock.set, draining the shell's ring on a timer and raising each reply as the events the engine emits directly. The flow above the seam is one file on both hosts."
+      "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
     },
     {
       "file": "src/platform/media-picker.web.ts",

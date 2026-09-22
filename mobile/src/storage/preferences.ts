@@ -123,11 +123,23 @@ const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
 // Why: the hybrid shell route is dark. Default-off means a store build never fetches, writes or
 // sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
 // `'true'`, including an unreadable store, is off.
+/**
+ * Whether this build can have the flag on at all.
+ *
+ * A release build never reads the key: it shares its bundle id with the development build and the
+ * iOS data container survives an install-over, so a flag a developer left on would otherwise
+ * follow the store build in and mount the shell on a deep link.
+ *
+ * Named rather than spelled twice. The hook beside the reader starts its state on this answer so
+ * a store build is decided on its first render rather than after an effect, and two spellings of
+ * one `__DEV__` test would be two things to keep true.
+ */
+export function mobileWebShellFlagCanBeOn(): boolean {
+  return typeof __DEV__ !== 'undefined' && __DEV__
+}
+
 export async function loadMobileWebShellEnabled(): Promise<boolean> {
-  // A release build never reads the key at all: it shares its bundle id with the development build
-  // and the iOS data container survives an install-over, so a flag a developer left on would
-  // otherwise follow the store build in and mount the shell on a deep link.
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+  if (!mobileWebShellFlagCanBeOn()) {
     return false
   }
   try {

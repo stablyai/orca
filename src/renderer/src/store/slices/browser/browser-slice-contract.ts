@@ -192,6 +192,10 @@ export type BrowserSlice = {
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
+  removeDeliveredBrowserPageAnnotations: (
+    pageId: string,
+    deliveredAnnotations: readonly BrowserPageAnnotation[]
+  ) => void
   hydrateBrowserSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

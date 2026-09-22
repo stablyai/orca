@@ -583,6 +583,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -1948,44 +1949,27 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
-        "title": "Reconnect interrupted chats?",
-        "body": "These chats were mid-turn when Orca closed. Reconnecting restores each one where it stopped, with its full context and without re-sending your prompt — the interrupted reply will not continue on its own.",
-        "updateBody": "These chats were mid-turn when Orca installed an update. Reconnecting restores each one where it stopped, with its full context and without re-sending your prompt — the interrupted reply will not continue on its own.",
-        "terminalSessionsUnaffected": "Only chats are affected — your terminal sessions kept running and need nothing from you.",
-        "resume": "Reconnect",
-        "reconnectAgent": "Reconnect {{value0}} chat",
-        "resumeAll": "Reconnect all",
-        "resuming": "Reconnecting…",
-        "notNow": "Not now",
+        "title": "Resume interrupted chats?",
+        "body": "These chats were mid-turn when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check its last action before carrying on. Your own prompt is not re-sent.",
+        "updateBody": "These chats were mid-turn when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check its last action before carrying on. Your own prompt is not re-sent.",
+        "resuming": "Resuming…",
         "untitled": "Untitled chat",
-        "listLabel": "Chats that would be reconnected",
-        "notNowHint": "Not now keeps everything — you can reopen any chat later and carry on from the same point.",
-        "dontAskAgain": "Don't ask again — reconnect automatically next time",
-        "dontAskAgainHint": "Qualifying chats will be reconnected automatically after a restart, and Orca will tell you when it happens. You can turn this off in Settings → Experimental → Chat UI.",
-        "resumedOne": "Reconnected 1 chat",
-        "resumedMany": "Reconnected {{value0}} chats",
-        "oneAgent": "1 agent",
-        "manyAgents": "{{value0}} agents",
-        "reconnectAndContinue": "Reconnect and continue",
-        "continuedOne": "Reconnected 1 chat and asked it to continue",
-        "continuedMany": "Reconnected {{value0}} chats and asked them to continue",
-        "whatIsSentTitle": "What Orca sends",
-        "whatIsSentBody": "Continuing sends one short message to each agent, telling it that Orca restarted and asking it to check its last action before carrying on. Your own prompt is never re-sent.",
-        "selectAgent": "Reconnect {{value0}} chat \"{{value1}}\" in {{value2}}",
-        "projects": "Folder workspaces",
-        "resumeSelected": "Reconnect {{value0}}",
+        "listLabel": "Chats that would be resumed",
+        "dontAskAgain": "Don't ask again (resume automatically)",
+        "dontAskAgainHint": "You can turn this off in Settings → Experimental → Chat UI.",
+        "continuedOne": "Resumed 1 chat and asked it to continue",
+        "continuedMany": "Resumed {{value0}} chats and asked them to continue",
+        "selectAgent": "Resume {{value0}} chat \"{{value1}}\" in {{value2}}",
+        "resumeSelected": "Resume {{value0}} chats",
+        "resumeSelectedOne": "Resume 1 chat",
         "continueUnconfirmed": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message.",
         "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
         "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message.",
-        "reconnectUnconfirmed": "Reconnection is unconfirmed for {{value0}} chats. You can still open them normally.",
-        "reconnectUnconfirmed_one": "Reconnection is unconfirmed for {{value0}} chat. You can still open it normally.",
-        "reconnectUnconfirmed_other": "Reconnection is unconfirmed for {{value0}} chats. You can still open them normally.",
         "continueRefused": "{{value0}} chats could not be continued. Open them to continue manually.",
         "continueRefused_one": "{{value0}} chat could not be continued. Open it to continue manually.",
         "continueRefused_other": "{{value0}} chats could not be continued. Open them to continue manually.",
-        "reconnectRefused": "{{value0}} chats could not be reconnected. You can still open them normally.",
-        "reconnectRefused_one": "{{value0}} chat could not be reconnected. You can still open it normally.",
-        "reconnectRefused_other": "{{value0}} chats could not be reconnected. You can still open them normally."
+        "dismissAll": "Dismiss all",
+        "dismissUnconfirmed": "Dismissing the resume offer was not confirmed — it may still be in the status bar."
       },
       "StarNagCard": {
         "92b0f9d921": "is authenticated and try again.",
@@ -4082,6 +4066,13 @@
             "38a934f31f": "Session expired",
             "cfcef0699a": "Directory unreadable",
             "7b3c1d94ae": "Usage unavailable"
+          },
+          "NativeChatResumeStatusSegment": {
+            "labelOne": "1 chat to resume",
+            "label": "{{value0}} chats to resume",
+            "ariaLabelOne": "1 chat available to resume",
+            "ariaLabel": "{{value0}} chats available to resume",
+            "tooltip": "Open interrupted chats available to resume"
           }
         }
       },
@@ -4191,7 +4182,8 @@
           "rangeLast7Days": "Last 7 days",
           "rangeLast30Days": "Last 30 days",
           "rangeLast90Days": "Last 90 days",
-          "rangeAllTime": "All time"
+          "rangeAllTime": "All time",
+          "costExcludesUnpricedModels": "• excludes unpriced models"
         },
         "OpenCodeUsagePane": {
           "349f7c3f5c": "Total",
@@ -7165,9 +7157,9 @@
             "structuredCopy": "Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.",
             "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat",
-            "resumeTitle": "Reconnect working chats automatically after a restart",
-            "resumeCopy": "When Orca quits or installs an update, chats that were mid-turn are offered again on the next launch. On, they are reconnected without asking and Orca tells you afterwards — the same thing as ticking \"Don't ask again\" in that prompt. Off, you choose from the list each time. Reconnecting restores a chat where it stopped; it does not continue the interrupted reply.",
-            "resumeToggleLabel": "Toggle automatic reconnect after a restart"
+            "resumeTitle": "Resume working chats automatically after a restart",
+            "resumeCopy": "When Orca quits or installs an update, chats that were mid-turn are automatically resumed when Orca is reopened.",
+            "resumeToggleLabel": "Toggle automatic resume after a restart"
           },
           "agentDashboard": {
             "title": "Agent Dashboard",

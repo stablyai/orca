@@ -1,6 +1,6 @@
 /**
  * Which route closures reach dictation's capture seam, and therefore which routes must be granted
- * the four audio verbs.
+ * the three audio verbs.
  *
  * A census rather than a hand list, because a grant row written by hand is a row that stops
  * agreeing with the closure the moment a screen moves: the rule below reads what each registered
@@ -11,16 +11,15 @@
  * rule failing, which a green rule over a satisfied manifest cannot.
  *
  * The closure also says what the seam took out of the page. Without its web half the bundler
- * resolves the native one, and the vendored `@orca/expo-two-way-audio` web stub lands in the
- * closure along with `expo-keep-awake` — which is what dictation on the page used to be: a module
- * answering denied microphone permission, and a wake lock that did nothing.
+ * resolves the native one, and with it the device module that owns the microphone: the vendored
+ * `@orca/expo-two-way-audio` web stub lands in the closure along with `expo-keep-awake` — which is
+ * what dictation on the page used to be: a module answering denied microphone permission, and a
+ * wake lock that did nothing.
  *
- * Measured on this tree by moving `dictation-capture.web.ts` aside and walking the closure again:
- * `modules` 4,319 to 4,326 and `local` 977 to 976. Eight vendored modules re-enter — five from
- * `@orca/expo-two-way-audio` and three from `expo-keep-awake` — less the one local file that left,
- * which is the +7. The eight is the number below; the absolute counts are provenance and are not
- * asserted, because every merge of main moves them and a census that pinned them would fail for
- * reasons that are nobody's.
+ * Eight vendored modules re-enter that way, five from `@orca/expo-two-way-audio` and three from
+ * `expo-keep-awake`. That eight is the number below; absolute module counts are not asserted,
+ * because every merge of main moves them and a census that pinned them would fail for reasons that
+ * are nobody's.
  *
  * So "absent" here is a fact about the seam and not about the census failing to look, and the
  * precondition is checked rather than assumed: both package names are resolved from the install, so
@@ -47,15 +46,10 @@ const NATIVE_SEAM = 'src/platform/dictation-capture.ts'
 
 /** Every verb the seam calls. Named here so the rule below is the census's own answer and not a
  *  second list to keep true; `bridge-audio-verbs.test.ts` pins them against the verb table. */
-const DICTATION_GRANTS = [
-  'native.audio.start',
-  'native.audio.read',
-  'native.audio.stop',
-  'native.wakelock.set'
-]
+const DICTATION_GRANTS = ['native.audio.start', 'native.audio.read', 'native.audio.stop']
 
 /** Native modules the seam exists to keep out: importing either reaches a JSI binding, and their
- *  web builds are a denied microphone and a no-op wake lock. */
+ *  web builds are a denied microphone and a no-op screen lock. */
 const NATIVE_AUDIO_MODULES = ['@orca/expo-two-way-audio', 'expo-keep-awake']
 
 /**
@@ -100,9 +94,8 @@ function routeModule(pathname) {
   return last === '[hostId]' ? `app/${withoutRoot}/index.tsx` : `app/${withoutRoot}.tsx`
 }
 
-/** The grants a closure needs of the seam: all four, or none. A route granted three would record
- *  with the screen free to lock, and a lock mid-processing suspends the app and loses the
- *  transcript. */
+/** The grants a closure needs of the seam: all three, or none. A route granted two would open a
+ *  microphone it could not drain or could not stop. */
 function dictationGrantsNeeded(closure) {
   return closure.local.includes(SEAM) ? DICTATION_GRANTS : []
 }
@@ -191,7 +184,7 @@ describeClosure(
       // The hook above the seam is still in the closure, so the absences above are the seam's work
       // and not dictation having left the page.
       expect(closure.local).toContain('src/hooks/use-mobile-dictation.ts')
-      expect(closure.local).toContain('src/hooks/mobile-dictation-keep-awake.ts')
+      expect(closure.local).toContain('src/hooks/mobile-dictation-audio-chunk.ts')
     })
 
     it('is big enough that finding nothing would mean something', async () => {
@@ -218,7 +211,7 @@ describe('the census rule itself', () => {
     ])
   })
 
-  it('asks for all four grants or none, never a subset', () => {
+  it('asks for all three grants or none, never a subset', () => {
     expect(dictationGrantsNeeded({ local: [SEAM] })).toEqual(DICTATION_GRANTS)
     expect(dictationGrantsNeeded({ local: ['src/platform/media-picker.web.ts'] })).toEqual([])
   })
@@ -246,7 +239,7 @@ describe('the census rule itself', () => {
       // holds routes to, none of which the shell has a row for.
       const { BRIDGE_NATIVE_VERB_NAMES } =
         await import('../../mobile/src/mobile-web-shell/bridge/bridge-native-verbs.ts')
-      expect(new Set(DICTATION_GRANTS).size).toBe(4)
+      expect(new Set(DICTATION_GRANTS).size).toBe(3)
       for (const grant of DICTATION_GRANTS) {
         expect(BRIDGE_NATIVE_VERB_NAMES, grant).toContain(grant)
         expect(

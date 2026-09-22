@@ -3,7 +3,8 @@ import { firstParam } from '../navigation/route-param-reader'
 import { shellScreenRoute, shellScreenRouteKey } from './shell-screen-route'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
-import { useMobileWebShellEnabled } from './use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from './ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from './shell-switch-decision'
 
 /**
  * Any host-scoped pathname this app has no route file for, handed to the shell.
@@ -32,7 +33,6 @@ export default function MobileWebPageCatchAllScreen() {
   }>()
   const hostId = firstParam(params.hostId)
   const segments = Array.isArray(params.page) ? params.page : params.page ? [params.page] : []
-  const enabled = useMobileWebShellEnabled()
   const refusal = <PageRouteUnavailableScreen hostId={hostId} />
 
   const route =
@@ -42,7 +42,12 @@ export default function MobileWebPageCatchAllScreen() {
         })
       : null
 
-  if (enabled !== true || !hostId || route === null) {
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return refusal
   }
   // Keyed on the route, as the other switches are: a host captures the grants its session opened
@@ -57,9 +62,9 @@ export default function MobileWebPageCatchAllScreen() {
   // connection that the screen does not exist. `catch-all-page-route-states.test.tsx` drives them.
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey(route)}
+      key={shellScreenRouteKey(decision.route)}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={refusal}
     />
   )

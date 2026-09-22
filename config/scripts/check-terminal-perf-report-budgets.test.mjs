@@ -81,7 +81,7 @@ describe('check-terminal-perf-report-budgets', () => {
       [
         'panes=101',
         'frames=60',
-        'median=76.0ms',
+        'median=26.0ms',
         'worst=301.0ms',
         'revisit=301.0ms',
         'maxTimerDrift=151.0ms',
@@ -96,7 +96,7 @@ describe('check-terminal-perf-report-budgets', () => {
     const result = runChecker(reportPath)
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('median typing latency 76ms exceeded budget 75ms')
+    expect(result.stderr).toContain('median typing latency 26ms exceeded budget 25ms')
     expect(result.stderr).toContain('worst typing latency 301ms exceeded budget 300ms')
     expect(result.stderr).toContain('revisit latency 301ms exceeded budget 300ms')
     expect(result.stderr).toContain('timer drift 151ms exceeded budget 150ms')
@@ -107,9 +107,7 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
   })
 
-  // Why: covers every isUnderLoadTimerDriftScenario branch (two exact + two
-  // prefix matches) so a predicate regression cannot silently re-apply the
-  // unloaded 150ms ceiling to multi-pane redraw rows.
+  // Redraw scenarios must not inherit the unloaded drift ceiling.
   it.each([
     'opencode-same-workspace-typing',
     'opencode-cross-workspace-typing',
@@ -128,6 +126,41 @@ describe('check-terminal-perf-report-budgets', () => {
       encoding: 'utf8'
     })
     expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  // Historical outliers must not become the new latency baseline.
+  it.each([
+    ['opencode-baseline-typing', 'median=13.8ms worst=83.5ms', 0],
+    ['opencode-baseline-typing', 'maxTimerDrift=189.0ms', 1],
+    ['opencode-hidden-real-pty-restore-latin', 'restore=1640.7ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'worst=2090.6ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'maxTimerDrift=2032.6ms', 1],
+    ['opencode-main-pressure-worktree-revisit-marker', 'revisit=1030.2ms', 1],
+    ['opencode-main-pressure-worktree-revisit-typing', 'worst=1045.5ms', 1],
+    ['opencode-scale-same-workspace-25', 'worst=2053.2ms', 1],
+    ['opencode-scale-same-workspace-25', 'median=26.0ms', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'median=26.0ms', 1],
+    ['opencode-main-pressure-active-typing-25', 'rendererDroppedBacklogs=1', 1],
+    ['opencode-hidden-real-pty-pressure-typing-25', 'rendererPeakQueuedChars=2097153', 1],
+    ['opencode-main-pressure-active-scroll-25', 'scroll=151.0ms', 1],
+    ['opencode-baseline-typing', 'worst=301.0ms', 1]
+  ])('%s (%s) exits %s', (scenario, description, status) => {
+    const result = runChecker(writeReport(description, scenario))
+    expect(result.status, result.stderr).toBe(status)
+  })
+
+  it.each([
+    'opencode-main-pressure-active-typing',
+    'opencode-main-pressure-active-typing-25',
+    'opencode-main-pressure-active-typing-50',
+    'opencode-main-pressure-worktree-revisit-typing',
+    'opencode-main-pressure-worktree-revisit-drain'
+  ])('allows measured transient peaks but preserves backlog and loss limits for %s', (scenario) => {
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3227648', scenario)).status).toBe(0)
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3670016', scenario)).status).toBe(0)
+    expect(runChecker(writeReport('rendererPeakQueuedChars=3670017', scenario)).status).toBe(1)
+    expect(runChecker(writeReport('rendererQueuedChars=2097153', scenario)).status).toBe(1)
+    expect(runChecker(writeReport('rendererDroppedBacklogs=1', scenario)).status).toBe(1)
   })
 
   it('fails multi-pane redraw scenarios that exceed the under-load timer-drift budget', () => {

@@ -67,6 +67,9 @@ function renderRow(
     detailsExpanded?: boolean
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
     onToggleDetails?: () => void
+    onJumpToOriginalPane?: () => void
+    onResume?: () => void
+    resumeHidden?: boolean
     onRequestDelete?: () => void
   } = {}
 ) {
@@ -83,9 +86,11 @@ function renderRow(
         vaultScope="all"
         detailsExpanded={overrides.detailsExpanded ?? false}
         resumeDisabled={false}
+        resumeHidden={overrides.resumeHidden}
         onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
+        onJumpToOriginalPane={overrides.onJumpToOriginalPane}
         showJumpToWorktree={false}
-        onResume={vi.fn()}
+        onResume={overrides.onResume ?? vi.fn()}
         resumeLabel="Resume in New Tab"
         resumeActions={{
           worktree: { worktreeId: null, disabled: true },
@@ -139,6 +144,25 @@ describe('VaultSessionRow details toggle', () => {
     await user.click(title as Element)
 
     expect(onToggleDetails).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VaultSessionRow native session actions', () => {
+  it('shows the jump action instead of Resume for an open structured session', async () => {
+    const onJumpToOriginalPane = vi.fn()
+    const onResume = vi.fn()
+    renderRow({ resumeHidden: true, onJumpToOriginalPane, onResume })
+
+    expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
+    fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+
+    expect(onJumpToOriginalPane).toHaveBeenCalledOnce()
+    expect(onResume).not.toHaveBeenCalled()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    expect(await screen.findByRole('menuitem', { name: 'Jump to Original Pane' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New Tab' })).toBeNull()
   })
 })
 

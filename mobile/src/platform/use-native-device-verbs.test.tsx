@@ -116,36 +116,34 @@ describe('the device handler the shell hands its host', () => {
   })
 })
 
-describe('the wake tag a page session takes', () => {
+describe('the screen a page session leaves behind', () => {
   beforeEach(() => {
     device.wakeTags.length = 0
   })
 
-  it('is given back when the session ends, not left holding the screen awake', async () => {
+  it('is given back when the session ends with the microphone still open', async () => {
     const first = mount('session-a')
-    await expect(
-      first.serve('native.wakelock.set', { active: true, tag: 'orca-a' })
-    ).resolves.toEqual({ active: true })
-    // The page is a document that can navigate, fault or be swiped away mid-dictation, so a tag it
-    // took and never released would keep the screen awake for the app's lifetime.
-    first.unmount()
+    await first.serve('native.audio.start', { sampleRate: 16_000 })
     await Promise.resolve()
-    expect(device.wakeTags).toEqual(['+orca-a', '-orca-a'])
+    expect(device.wakeTags).toEqual(['+orca-microphone'])
+    // The page is a document that can navigate, fault or be swiped away mid-dictation, so a screen
+    // its capture took and never gave back would stay awake for the app's lifetime.
+    first.unmount()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(device.wakeTags).toEqual(['+orca-microphone', '-orca-microphone'])
   })
 
-  it('leaves the next session nothing of the last one to release', async () => {
+  it('leaves the next session nothing of the last one to give back', async () => {
     const first = mount('session-a')
-    await first.serve('native.wakelock.set', { active: true, tag: 'orca-a' })
+    await first.serve('native.audio.start', { sampleRate: 16_000 })
     first.unmount()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     device.wakeTags.length = 0
     const second = mount('session-b')
-    // A tag the previous session held is the previous session's; this one asking for it back must
-    // not reach the device, and must not report it as held either.
-    await expect(
-      second.serve('native.wakelock.set', { active: false, tag: 'orca-a' })
-    ).resolves.toEqual({ active: false })
-    expect(device.wakeTags).toEqual([])
     second.unmount()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // A session that never opened the microphone never took the screen, so its end asks the device
+    // for nothing: deactivating a tag nobody holds is a native call this build does not make.
+    expect(device.wakeTags).toEqual([])
   })
 })

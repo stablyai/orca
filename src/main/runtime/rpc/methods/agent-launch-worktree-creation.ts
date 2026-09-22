@@ -35,7 +35,14 @@ export function agentLaunchWorkspaceFactory(
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
   return {
-    createWorktree: async ({ create, startupAgent, startupPrompt }) => {
+    createWorktree: async ({
+      create,
+      startupAgent,
+      startupPrompt,
+      agentArgs,
+      cwd,
+      launchSource
+    }) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
@@ -68,6 +75,9 @@ export function agentLaunchWorkspaceFactory(
             },
             context.clientKind ? { clientKind: context.clientKind } : {}
           ),
+          ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(cwd ? { startupCwd: cwd } : {}),
+          ...(launchSource ? { startupLaunchSource: launchSource } : {}),
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,
