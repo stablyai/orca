@@ -60,11 +60,16 @@ const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(gra
  * sentences that say how many were written when a fourteenth grant existed and did not move when
  * #22072 removed it.
  *
- * Two counts, and which one a row takes is what its sentence is about. A sentence about the
- * session route takes the intersection, because a row pinning a grant no route declares -- the
- * shell can serve a verb before a screen asks for it -- would otherwise make the census demand
- * the comment overstate what the session route has. A sentence about this file's own rows takes
- * all of them, because that one really does move.
+ * Two counts, and which one a row takes is what its sentence is about. Exactly one row takes the
+ * intersection: the `.mjs` sentence for how many of the session route's grants these rows cover,
+ * which a row pinning a grant no route declares -- the shell can serve a verb before a screen asks
+ * for it -- would otherwise make the census demand overstates the session route's list.
+ *
+ * Every other row counts the rows here, the title about reaching them through the session route
+ * included. That title names the session route but is not a claim about it: the assertion under it
+ * compares `grantsNeeded` with every row's grants, so it has to move when the rows move and not
+ * when the route does. A census holding it at the intersection would have kept the title below the
+ * assertion it heads.
  *
  * The rows read the whole file, titles included: a count in a JSDoc and the same count in an `it`
  * title go stale together, and pinning only the first leaves a green suite describing itself
@@ -85,7 +90,7 @@ const SPELLED_COUNTS = {
     { precedes: 'rows covering', counted: PAGE_GRANT_CALL_SITES.length },
     { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
     { precedes: 'did not', counted: pinnedHere.length },
-    { precedes: 'through the session route', counted: pinnedHereForSession.length }
+    { precedes: 'through the session route', counted: pinnedHere.length }
   ]
 }
 
