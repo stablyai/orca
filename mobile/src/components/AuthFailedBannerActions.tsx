@@ -5,9 +5,9 @@ import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 /**
  * What the banner offers once authentication has failed: reconnect, re-pair, or drop the pairing.
  *
- * Its own file because its `.web` sibling offers none of them. All three are native-only — the
- * page's `forceReconnect` is null (`client-context.web.tsx`), `/pair-scan` is outside the page's
- * route root, and removal refuses (`page-host-removal-refusal.ts`).
+ * Its own file because its `.web` sibling offers Re-pair alone: the page hands `/pair-scan` to the
+ * shell, but its `forceReconnect` is null (`client-context.web.tsx`) and removal refuses
+ * (`page-host-removal-refusal.ts`).
  */
 export function AuthFailedBannerActions({
   canRetry,

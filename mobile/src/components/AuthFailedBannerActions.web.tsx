@@ -1,19 +1,26 @@
-import { Text } from 'react-native'
+import { Pressable, Text } from 'react-native'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
 /**
- * The page offers no control here, because it can honour none of the three.
- *
- * `forceReconnect` is null on this document (`client-context.web.tsx`), the
- * page registers only routes under `app/h` so `/pair-scan` is not one of them, and removal refuses
- * (`page-host-removal-refusal.ts`). A line naming the app rather than nothing at all: a banner that
- * reports a failure and offers no way out reads as a dead end.
+ * The page offers Re-pair alone: its push of `/pair-scan` is handed to the shell
+ * (`route-handoff.web.ts`), which opens the native scan screen. Retry and Remove are inert here —
+ * `forceReconnect` is null (`client-context.web.tsx`) and removal refuses
+ * (`page-host-removal-refusal.ts`) — so a line names the app for those two instead.
  */
-export function AuthFailedBannerActions(_props: {
+export function AuthFailedBannerActions({
+  onRepair
+}: {
   canRetry: boolean
   onRetry: () => void
   onRepair: () => void
   onRemove: () => void
 }) {
-  return <Text style={styles.actionText}>Reconnect or re-pair from the Orca app.</Text>
+  return (
+    <>
+      <Pressable style={styles.action} onPress={onRepair}>
+        <Text style={styles.actionText}>Re-pair</Text>
+      </Pressable>
+      <Text style={styles.note}>Reconnect or remove this host from the Orca app.</Text>
+    </>
+  )
 }
