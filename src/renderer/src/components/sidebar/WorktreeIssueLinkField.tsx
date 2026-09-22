@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { GitLabIcon } from '@/components/icons/GitLabIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { ChevronDown, ExternalLink, Github, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -32,9 +33,13 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
-  return provider === 'linear'
-    ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
-    : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
+  if (provider === 'linear') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
+  }
+  if (provider === 'gitlab') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.8d3f1b6a27', 'GitLab')
+  }
+  return translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
 }
 
 function ProviderIcon({
@@ -44,11 +49,13 @@ function ProviderIcon({
   provider: IssueLinkProvider
   className?: string
 }): React.JSX.Element {
-  return provider === 'linear' ? (
-    <LinearIcon className={className} />
-  ) : (
-    <Github className={className} />
-  )
+  if (provider === 'linear') {
+    return <LinearIcon className={className} />
+  }
+  if (provider === 'gitlab') {
+    return <GitLabIcon className={className} />
+  }
+  return <Github className={className} />
 }
 
 export type WorktreeIssueLinkFieldProps = {
@@ -115,28 +122,42 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     if (isInvalid) {
-      return provider === 'linear'
-        ? translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
-            'Not a Linear issue key or linear.app issue URL.'
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
-            'Not a GitHub issue number or issue URL.'
-          )
+      if (provider === 'linear') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
+          'Not a Linear issue key or linear.app issue URL.'
+        )
+      }
+      if (provider === 'gitlab') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.4c9e2a7d13',
+          'Not a GitLab issue number or issue URL.'
+        )
+      }
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
+        'Not a GitHub issue number or issue URL.'
+      )
     }
     // Why: ranked above displacement because it answers the click the user just
     // made, and it clears as soon as they edit the value that caused it.
     if (openIssueFailed) {
-      return provider === 'linear'
-        ? translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.d8c8a30d1f',
-            "Couldn't open that issue. Check the identifier and your Linear connection."
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.269198eeda',
-            "Couldn't open that issue. Check the number and your GitHub connection."
-          )
+      if (provider === 'linear') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.d8c8a30d1f',
+          "Couldn't open that issue. Check the identifier and your Linear connection."
+        )
+      }
+      if (provider === 'gitlab') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.b1e7d4c802',
+          "Couldn't open that issue. Orca only knows the URL of a GitLab issue a workspace was created from."
+        )
+      }
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.269198eeda',
+        "Couldn't open that issue. Check the number and your GitHub connection."
+      )
     }
     // Whole sentences per arity rather than a joined list: a translated " and "
     // fragment would not survive languages that order or punctuate lists differently.
@@ -155,8 +176,8 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     return translate(
-      'auto.components.sidebar.WorktreeIssueLinkField.f047887705',
-      'Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.'
+      'auto.components.sidebar.WorktreeIssueLinkField.2f6a8c1e94',
+      'Paste a GitHub, GitLab or Linear URL, or enter a number. Leave blank to remove the link.'
     )
   }, [displacedLinkLabels, isInvalid, isReadOnly, openIssueFailed, provider])
 
@@ -176,8 +197,8 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           disabled={isReadOnly}
           aria-invalid={isInvalid || undefined}
           placeholder={translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.662ae142f8',
-            'Issue #, or a GitHub or Linear URL'
+            'auto.components.sidebar.WorktreeIssueLinkField.6e1d9b3a55',
+            'Issue #, or a GitHub, GitLab or Linear URL'
           )}
           className="h-8 text-xs"
           style={{ paddingRight: issueAdornmentReserve(label) }}

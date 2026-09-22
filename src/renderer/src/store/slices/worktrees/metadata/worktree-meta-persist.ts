@@ -121,6 +121,22 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
+  // linked-work-item-context.v1 is a sound proxy for both GitLab slots: #1839 and
+  // #2431 added them to the schema and are ancestors of the commit introducing
+  // that capability. Presence, not value — a dropped *clear* strands a stale link.
+  if (
+    target.kind === 'environment' &&
+    ('linkedGitLabIssue' in updates || 'linkedGitLabMR' in updates)
+  ) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.2b9f4e7c01',
+        'Update the remote runtime to link GitLab issues and merge requests'
+      )
+    )
+  }
   let compatibleUpdates = updates
   if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
     if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {

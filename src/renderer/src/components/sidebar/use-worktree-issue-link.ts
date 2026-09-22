@@ -5,7 +5,12 @@ import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear/links'
-import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
+import {
+  getIssueLinkProviderFromUrl,
+  type IssueLinkProvider
+} from '../../../../shared/issue-link-input'
+import { parseBareItemNumber } from '../../../../shared/work-item-number'
+import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -52,6 +57,9 @@ export function useWorktreeIssueLink(args: {
   /** The persisted identifier the stored org key belongs to. */
   linkedLinearIssue?: string | null
   linearSourceContext?: TaskSourceContext | null
+  /** Recorded at workspace creation: the only URL a GitLab issue link ever has. */
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedGitLabIssue?: number | null
 }): {
   canOpenIssue: boolean
   openingIssue: boolean
@@ -67,9 +75,12 @@ export function useWorktreeIssueLink(args: {
     issueProvider,
     linearOrganizationUrlKey,
     linkedLinearIssue,
-    linearSourceContext
+    linearSourceContext,
+    linkedWorkItem,
+    linkedGitLabIssue
   } = args
   const isLinear = issueProvider === 'linear'
+  const isGitLab = issueProvider === 'gitlab'
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [openingIssue, setOpeningIssue] = useState(false)
@@ -91,13 +102,16 @@ export function useWorktreeIssueLink(args: {
     [issueInput]
   )
 
+  // Why: GitHub-only. A GitLab value must never fall into the GitHub number
+  // lookup or read the GitHub issue cache.
+  const isGitHub = issueProvider === 'github'
   const issueNumber = useMemo(
-    () => (isLinear ? null : parseGitHubIssueOrPRNumber(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isGitHub ? parseGitHubIssueOrPRNumber(boundedInput) : null),
+    [isGitHub, boundedInput]
   )
   const issueUrlFromInput = useMemo(
-    () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isGitHub ? parseExplicitGitHubIssueUrl(boundedInput) : null),
+    [isGitHub, boundedInput]
   )
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
@@ -127,6 +141,30 @@ export function useWorktreeIssueLink(args: {
     })
   }, [parsedLinearIssue, linkedLinearIssue, linearOrganizationUrlKey])
 
+  // Why: a GitLab issue is stored as a bare iid with no project path, so the only
+  // URL that exists is the one recorded when the workspace was created. Nothing
+  // new is persisted to close that gap — the arrow degrades instead.
+  const gitLabIssueUrl = useMemo(() => {
+    if (!isGitLab) {
+      return null
+    }
+    const trimmed = boundedInput.trim()
+    // A pasted URL opens itself, never a stored URL it happens to share a number
+    // with. getIssueLinkProviderFromUrl carries the `^https?://` gate, so a
+    // GitLab-shaped ftp:// URL never reaches shell.openUrl.
+    if (getIssueLinkProviderFromUrl(trimmed) === 'gitlab') {
+      return trimmed
+    }
+    const number = parseBareItemNumber(trimmed)
+    return number !== null &&
+      number === linkedGitLabIssue &&
+      linkedWorkItem?.provider === 'gitlab' &&
+      linkedWorkItem.type === 'issue' &&
+      linkedWorkItem.number === number
+      ? (linkedWorkItem.url ?? null)
+      : null
+  }, [boundedInput, isGitLab, linkedGitLabIssue, linkedWorkItem])
+
   const issueRepo = useAppStore((s) => {
     const repoId = ownerRepoId ?? findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)?.repoId
     return repoId ? s.repos.find((repo) => repo.id === repoId) : undefined
@@ -149,11 +187,13 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
-  const canOpenIssue = isLinear
-    ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+  const canOpenIssue = isGitLab
+    ? gitLabIssueUrl !== null
+    : isLinear
+      ? Boolean(parsedLinearIssue)
+      : issueInputLooksLikeUrl
+        ? Boolean(issueUrlFromInput)
+        : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {
@@ -168,6 +208,14 @@ export function useWorktreeIssueLink(args: {
       mountedRef.current &&
       openRequestRef.current === generation &&
       latestRequestKeyRef.current === requestKey
+
+    // No async lookup and no spinner — there is nothing to fetch.
+    if (isGitLab) {
+      if (gitLabIssueUrl) {
+        void window.api.shell.openUrl(gitLabIssueUrl)
+      }
+      return
+    }
 
     if (isLinear) {
       if (!parsedLinearIssue) {
@@ -246,6 +294,8 @@ export function useWorktreeIssueLink(args: {
     cachedIssueUrl,
     fetchIssue,
     fetchLinearIssue,
+    gitLabIssueUrl,
+    isGitLab,
     isLinear,
     issueInput,
     issueInputLooksLikeUrl,
