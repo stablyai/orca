@@ -21,6 +21,7 @@ type CheckResult = {
   formatted?: string
   deliveryId?: string | null
   runId?: string
+  dispatchId?: string
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean
@@ -40,8 +41,8 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     const run = getOptionalStringFlag(flags, 'run')
     const dispatch = getOptionalStringFlag(flags, 'dispatch')
-    // Why: one message for both surfaces. Without this the CLI would forward both selectors and
-    // an older runtime that ignores --dispatch would silently serve the Run mailbox instead.
+    // Why: the two selectors name different mailboxes, so forwarding both leaves the served one
+    // to the host's precedence. A host that drops --dispatch entirely is caught after the call.
     if (run !== undefined && dispatch !== undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -74,6 +75,9 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     } finally {
       stopKeepalive?.()
     }
+    if (dispatch !== undefined) {
+      assertNamedDispatchWasServed(result.result, dispatch)
+    }
     if (peek) {
       result = filterLegacyPeekResult(result, wait)
     }
@@ -97,6 +101,28 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       })
     }
   }
+}
+
+/**
+ * A host that predates `--dispatch` strips the unknown key and falls through to the implicit
+ * bound-Run route, which is the exact mailbox the selector exists to avoid. Refusing here is the
+ * caller-side assertion `docs/reference/remote-wire-compatibility.md` Rule 1 requires of a client
+ * that needs a new field: a silent fallback would read — and on a consuming check acknowledge —
+ * the wrong mailbox. Any batch that host handed back stays unacknowledged and replays.
+ */
+function assertNamedDispatchWasServed(result: CheckResult, dispatch: string): void {
+  if (result.dispatchId === dispatch) {
+    return
+  }
+  const served = result.dispatchId
+    ? `Dispatch ${result.dispatchId}`
+    : result.runId
+      ? `Run ${result.runId}`
+      : 'no named mailbox'
+  throw new RuntimeClientError(
+    'dispatch_selector_unsupported',
+    `The connected runtime ignored --dispatch ${dispatch} and answered for ${served}. Nothing was read here; upgrade the runtime to one that supports --dispatch.`
+  )
 }
 
 function filterLegacyPeekResult(
