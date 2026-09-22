@@ -46,6 +46,15 @@ function cover(tree: ReactTestRenderer) {
   return tree.root.findAllByProps({ testID: 'mobile-web-shell-cover' })[0] ?? null
 }
 
+/** The colour the cover fills with, read out of its style prop rather than assumed of its shape. */
+function coverBackground(tree: ReactTestRenderer): unknown {
+  const style: unknown = cover(tree)?.props.style
+  const base: unknown = Array.isArray(style) ? style[0] : null
+  return typeof base === 'object' && base !== null && 'backgroundColor' in base
+    ? base.backgroundColor
+    : null
+}
+
 describe('the frame the shell keeps over an unpainted page', () => {
   it('is up while the page has not painted', () => {
     const tree = render(true)
@@ -54,10 +63,9 @@ describe('the frame the shell keeps over an unpainted page', () => {
 
   it('paints the app surface and never black, so an empty view is never a hole', () => {
     // The whole defect in one assertion: what shows while the WebView draws nothing is this.
-    const held = cover(render(true))
-    const style = held?.props.style as readonly Record<string, unknown>[]
-    expect(style[0]?.backgroundColor).toBe(colors.bgBase)
-    expect(style[0]?.backgroundColor).not.toBe('#000000')
+    const background = coverBackground(render(true))
+    expect(background).toBe(colors.bgBase)
+    expect(background).not.toBe('#000000')
   })
 
   it('never takes a touch, so a report that never lands leaves a usable page under it', () => {

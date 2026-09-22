@@ -15,6 +15,7 @@ import {
   type BridgeHapticsKind
 } from './bridge/bridge-haptics-notify'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -60,6 +61,8 @@ type Probe = {
   storageWrites: { key: string; value: string | null }[]
   /** The running total after each dropped screencast frame, as the screen receives it. */
   droppedBinaryFrames: number[]
+  /** One per paint the page reported, which is what lifts the screen's cover. */
+  paints: number
 }
 
 /** What the page cannot read for itself, as the screen hands it over. */
@@ -174,6 +177,9 @@ function Harness(props: {
     onPageReady: () => {
       setHandshook(sessionId)
       props.readies.push(sessionId ?? props.session.kind)
+    },
+    onPagePainted: () => {
+      props.probe.paints += 1
     }
   })
   props.probe.view = view
@@ -221,6 +227,7 @@ async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
     haptics: [],
     backPops: 0,
     droppedBinaryFrames: [],
+    paints: 0,
     storageWrites: []
   }
   const faults: BridgeErrorCapture[] = []
@@ -309,6 +316,14 @@ describe('the bridge channel', () => {
       clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-1' })
     )
     expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
+  })
+
+  it("hands the page's first paint to the caller that owns the cover over the view", async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    expect(mounted.probe.paints).toBe(0)
+    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(mounted.probe.paints).toBe(1)
   })
 
   it('hands a URL the page asked for to the caller that can leave the app', async () => {
@@ -565,6 +580,7 @@ describe('the callbacks a render passes', () => {
       haptics: [],
       backPops: 0,
       droppedBinaryFrames: [],
+      paints: 0,
       storageWrites: []
     }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
@@ -627,6 +643,7 @@ describe('client changes', () => {
       haptics: [],
       backPops: 0,
       droppedBinaryFrames: [],
+      paints: 0,
       storageWrites: []
     }
     const render = (deliver: readonly string[]): ReactElement =>
@@ -661,6 +678,7 @@ function newProbe(): Probe {
     haptics: [],
     backPops: 0,
     droppedBinaryFrames: [],
+    paints: 0,
     storageWrites: []
   }
 }
