@@ -26,16 +26,20 @@ chown -R root:root /opt/orca
 # --- 2. Fake update feed -----------------------------------------------------
 # The "new" artifact is the same AppImage; the helper's version gate is the
 # VERSION record, not the AppImage content, so reuse is safe.
-install -d -m 0755 /srv/feed
-cp "$APPIMAGE" /srv/feed/orca-linux-1.AppImage
-sha=$(sha512sum /srv/feed/orca-linux-1.AppImage | awk '{print $1}')
+# Served under latest/download: that is the path electron-updater requests, because
+# updater-setup.ts appends it to ORCA_RELEASE_FEED_BASE.
+FEED_DIR=/srv/feed/latest/download
+FEED_URL=http://127.0.0.1:8123/latest/download/latest-linux.yml
+install -d -m 0755 "$FEED_DIR"
+cp "$APPIMAGE" "$FEED_DIR/orca-linux-1.AppImage"
+sha=$(sha512sum "$FEED_DIR/orca-linux-1.AppImage" | awk '{print $1}')
 b64=$(printf '%s' "$sha" | base64 -w0)
-cat > /srv/feed/latest-linux.yml <<EOF
+cat > "$FEED_DIR/latest-linux.yml" <<EOF
 version: 1.2.3-test
 files:
   - url: orca-linux-1.AppImage
     sha512: $b64
-    size: $(stat -c %s /srv/feed/orca-linux-1.AppImage)
+    size: $(stat -c %s "$FEED_DIR/orca-linux-1.AppImage")
 path: orca-linux-1.AppImage
 releaseDate: '2026-01-01T00:00:00.000Z'
 releaseName: '1.2.3-test'
@@ -44,6 +48,23 @@ EOF
 python3 /usr/local/bin/mock-feed.py --port 8123 --root /srv/feed &
 feed_pid=$!
 trap 'kill $feed_pid 2>/dev/null || true' EXIT
+
+# A backgrounded feed that dies is invisible to set -e, so prove it serves the
+# manifest at the path the app requests before anything depends on it.
+feed_serves_manifest() {
+  python3 - "$FEED_URL" <<'PROBE'
+import sys, urllib.request
+try:
+    urllib.request.urlopen(sys.argv[1], timeout=2).read(1)
+except Exception:
+    sys.exit(1)
+PROBE
+}
+for _ in $(seq 1 25); do
+  feed_serves_manifest && break
+  sleep 0.2
+done
+feed_serves_manifest || fail "mock feed never served $FEED_URL"
 
 # --- 3. Unit with --json so the helper can verify readiness via journal ------
 cat > /etc/systemd/system/orca-serve.service <<EOF
@@ -82,7 +103,7 @@ bash /tmp/helper-install.sh
 install -d -m 0775 -o root -g "$SERVICE_USER" "$SPOOL_DIR"
 spool_request() {
   cat > "$SPOOL_DIR/request.json" <<EOF
-{"schemaVersion":2,"runtimeId":"$1","attemptId":"$2","fromVersion":"$3","targetVersion":"$4","artifactPath":"/srv/feed/orca-linux-1.AppImage","sha512":"$b64","servingPid":1,"unitName":"$UNIT_NAME"}
+{"schemaVersion":2,"runtimeId":"$1","attemptId":"$2","fromVersion":"$3","targetVersion":"$4","artifactPath":"$FEED_DIR/orca-linux-1.AppImage","sha512":"$b64","servingPid":1,"unitName":"$UNIT_NAME"}
 EOF
   chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
   chmod 0640 "$SPOOL_DIR/request.json"

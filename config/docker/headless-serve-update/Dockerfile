@@ -35,7 +35,7 @@ RUN apt-get update \
 RUN useradd --create-home --shell /bin/bash orca
 
 COPY --chmod=0755 run-update-case.sh /usr/local/bin/run-update-case
-COPY --chmod=0755 mock-feed.py /usr/local/bin/mock-feed
+COPY --chmod=0755 mock-feed.py /usr/local/bin/mock-feed.py
 
 # Orca is enabled as a systemd service by the case script, but the classic
 # sysvinit compatibility link keeps systemd from waiting on it at boot.
