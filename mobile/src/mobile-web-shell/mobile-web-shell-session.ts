@@ -176,7 +176,11 @@ function onManifestRead(
     manifest
   })
   if (verdict.kind === 'blocked') {
-    return step(session, { cached: same ?? cached, state: { kind: 'wall', verdict } }, persist)
+    // The one same-build read that is not written, and the held generation keeps its own routes
+    // with it: disk holds the last manifest this shell accepted, and an offline entry skips the
+    // compat check. Writing one this shell has just walled would have the next offline entry open
+    // a page under the grants of a bundle it had declared it cannot read.
+    return step(session, { state: { kind: 'wall', verdict } })
   }
   if (same !== null) {
     return openCached(

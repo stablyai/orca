@@ -136,7 +136,11 @@ describe('a same-build manifest whose route verdict is not a page', () => {
     expect(step.session.cached?.routes).toEqual(UNSERVED_ROUTES)
   })
 
-  it('persists the manifest it walls, because the wall is about this shell', () => {
+  it('persists nothing of a manifest it walls, and holds the routes it can still use', () => {
+    // The one same-build read that must not be written: disk holds the last manifest this shell
+    // accepted, and an offline entry skips the compat check. Writing a manifest this shell just
+    // walled would have the next offline entry open a page under the grants of a bundle it had
+    // declared it cannot read.
     const twoRoutes = [
       { pathname: '/h/[hostId]', grants: ['navigate'] },
       { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
@@ -146,8 +150,8 @@ describe('a same-build manifest whose route verdict is not a page', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: fresh })
 
     expect(step.session.state).toMatchObject({ kind: 'wall' })
-    expect(step.effects).toEqual([{ kind: 'persist-manifest', manifest: fresh.wire }])
-    expect(step.session.cached?.routes).toEqual(twoRoutes)
+    expect(step.effects).toEqual([])
+    expect(step.session.cached?.routes).toEqual(PAGE_ROUTES)
   })
 
   it('persists nothing for another build that takes this route native', () => {
