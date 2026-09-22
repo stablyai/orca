@@ -95,8 +95,8 @@ describe('against a real react-native-web ScrollView', () => {
     const { node, unmount } = await renderScroller()
     try {
       expect(node.tagName).toBe('DIV')
-      // Not merely absent from this instance: RN Web has no such method to inherit either.
-      expect(Reflect.get(node, 'setNativeProps')).toBeUndefined()
+      // `in` walks the prototype chain, so this says RN Web has no such method to inherit either.
+      expect('setNativeProps' in node).toBe(false)
     } finally {
       unmount()
     }
