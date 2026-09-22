@@ -560,6 +560,12 @@ export async function buildMobileWebAppBundle({
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
+    // An empty data URI, which is a browser's own way of being told there is no icon: without a
+    // declaration it asks the origin for /favicon.ico on its own, and the shell's asset server
+    // answers 403 because the path is in no manifest. The page is a WebView document with no tab
+    // to put an icon in, and the bundle's own images are content-hashed route assets, so there is
+    // nothing here to point at. `img-src 'self' data: https:` already admits the scheme.
+    '<link rel="icon" href="data:," />\n' +
     `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')

@@ -89,6 +89,7 @@ let server
 let browser
 let origin
 let routeChunks = {}
+let servedPaths = []
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
@@ -106,6 +107,7 @@ beforeAll(async () => {
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
   server = served.server
   origin = served.origin
+  servedPaths = served.requestedPaths
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
 }, 240_000)
@@ -276,6 +278,27 @@ describeRender(
       // there is nothing for the policy to have refused. A font, a beacon or a provider image
       // added anywhere in this closure reds this.
       expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
+      await opened.page.close()
+    }, 120_000)
+
+    it('asks the origin for no icon, which the shell has none to answer with', async () => {
+      // The document declares `<link rel="icon" href="data:,">`. Without it a browser asks the
+      // origin for /favicon.ico on its own, and the shell's asset server answers 403 because the
+      // path is in no manifest — which the emulator run saw, repeatedly.
+      //
+      // Only a full Chrome asks; the bundled headless shell never does, so against the default
+      // browser this case is a precondition rather than a measurement.
+      // `ORCA_MOBILE_WEB_RENDER_BROWSER` is what CI resolves, and that is where this bites.
+      // Read off the server's own log, not the page's: a favicon fetch is made by the browser
+      // process rather than the page, and Playwright's `page.on('request')` never reports one.
+      // The whole file's log, because no case here may produce this request.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal')
+      // Settled rather than read at the paint: a browser asks for the icon after `load`, later
+      // than the text the route waited on, and reading there passes on a request still to come.
+      await opened.page.waitForLoadState('networkidle')
+      expect(servedPaths.filter((path) => path === '/favicon.ico')).toEqual([])
+      // The precondition, so a run that recorded no request at all cannot pass this.
+      expect(servedPaths).toContain('/')
       await opened.page.close()
     }, 120_000)
 
