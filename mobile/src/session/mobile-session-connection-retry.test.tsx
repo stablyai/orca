@@ -35,12 +35,12 @@ function present(forceReconnectHost: ForceReconnect): Presentation {
     visibleTabs: [],
     forceReconnectHost
   }
+  type Scope = Parameters<typeof useMobileSessionPresentation>[0]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the presentation hook reads only these members of the session scope; the rest of the controller is unreachable from it.
+  const sessionScope = scope as unknown as Scope
   const read: { value: Presentation | null } = { value: null }
   function Probe(): null {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the presentation hook reads only these members of the session scope; the rest of the controller is unreachable from it.
-    read.value = useMobileSessionPresentation(
-      scope as unknown as Parameters<typeof useMobileSessionPresentation>[0]
-    )
+    read.value = useMobileSessionPresentation(sessionScope)
     return null
   }
   act(() => {
