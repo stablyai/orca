@@ -10,7 +10,8 @@ import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   createFakeGenerationFileSystem as createFakeFileSystem,
-  FAKE_GENERATION_ROOT
+  FAKE_GENERATION_ROOT,
+  type FakeGenerationFileSystem as FakeFileSystem
 } from './generation-file-system-fake'
 
 // The adapter is deliberately untested at runtime — it would need a device filesystem — so this is
