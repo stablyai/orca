@@ -55,6 +55,33 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     }
   })
 
+  it('bubbles the macOS app-menu accelerators so the native menu item fires', () => {
+    // Why: Hide/Hide Others/Minimize/Quit belong to the native menu, not to
+    // Orca, so unlike the Cmd chords above nothing claims them before xterm.
+    // Left to xterm, kitty CSI-u encoding preventDefaults the keydown and the
+    // menu item the user can still click never fires from its key (#20837).
+    const accelerators = [
+      event({ key: 'h', code: 'KeyH', metaKey: true }),
+      event({ key: 'h', code: 'KeyH', metaKey: true, altKey: true }),
+      event({ key: 'm', code: 'KeyM', metaKey: true }),
+      event({ key: 'q', code: 'KeyQ', metaKey: true })
+    ]
+    for (const e of accelerators) {
+      expect(shouldBypassXtermKeyboardEvent(e, opts)).toBe(true)
+    }
+  })
+
+  it('leaves the same letters alone without Cmd so they reach the shell', () => {
+    const plain = [
+      event({ key: 'h', code: 'KeyH' }),
+      event({ key: 'q', code: 'KeyQ' }),
+      event({ key: 'h', code: 'KeyH', ctrlKey: true })
+    ]
+    for (const e of plain) {
+      expect(shouldBypassXtermKeyboardEvent(e, opts)).toBe(false)
+    }
+  })
+
   it('bubbles already-handled Cmd app shortcuts so kitty does not also write to shell', () => {
     // Why: some window-level shortcuts call preventDefault without stopping
     // propagation. App shortcuts must not also become terminal input.

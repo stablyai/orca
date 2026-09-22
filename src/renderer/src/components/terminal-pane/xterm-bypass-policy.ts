@@ -247,6 +247,17 @@ function isPlainCtrlC(event: XtermBypassEvent): boolean {
   )
 }
 
+// macOS application-menu accelerators (Hide, Hide Others, Minimize, Quit). Orca
+// binds none of them on darwin, so no window-level handler consumes them before
+// xterm — the assumption the Cmd branch below was written under.
+const MAC_APP_MENU_ACCELERATORS = ['Mod+H', 'Mod+Alt+H', 'Mod+M', 'Mod+Q'] as const
+
+function matchesMacAppMenuAccelerator(event: XtermBypassEvent): boolean {
+  return MAC_APP_MENU_ACCELERATORS.some((binding) =>
+    keybindingMatchesInput(binding, event, 'darwin')
+  )
+}
+
 function matchesClipboardBinding(
   binding: string,
   event: XtermBypassEvent,
@@ -333,9 +344,15 @@ export function shouldBypassXtermKeyboardEvent(
     // Why: window-level handlers already consume other Cmd chords before xterm
     // sees them in Electron. Web clients still need paste to bubble to
     // Chromium's native paste event instead of xterm's Kitty encoder.
+    //
+    // The app-menu accelerators are the exception that assumption misses: they
+    // belong to the native menu, not to Orca, so nothing upstream claims them
+    // and the kitty encoder's preventDefault() strands the very item the user
+    // can still click (#20837).
     return (
       matchesClipboardBinding('Mod+C', event, 'darwin') ||
-      matchesClipboardBinding('Mod+V', event, 'darwin')
+      matchesClipboardBinding('Mod+V', event, 'darwin') ||
+      matchesMacAppMenuAccelerator(event)
     )
   }
 
