@@ -90,3 +90,17 @@ export const terminalPathResolutionSchema = z.looseObject({
  * acceptance verdict, so declaring a member would be a requirement with no reader behind it.
  */
 export const terminalArtifactWriteSchema = z.unknown()
+
+/**
+ * One base64 slice of a file, for `files.readChunk` (RuntimeFileReadChunkResult).
+ *
+ * All three members are required: the media handoff's download loop appends `contentBase64`,
+ * advances by `bytesRead`, and stops on `eof` with no guard behind any of them, so a reply
+ * missing one is a host-payload defect worth surfacing as an open failure rather than
+ * silently writing garbage into the file the OS will open.
+ */
+export const fileMediaChunkSchema = z.looseObject({
+  contentBase64: z.string(),
+  bytesRead: z.number().int().nonnegative(),
+  eof: z.boolean()
+})

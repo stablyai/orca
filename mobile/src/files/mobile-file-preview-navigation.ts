@@ -1,4 +1,5 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { mediaHandoffMimeFor } from './mobile-file-media-handoff'
 import { defaultScheduleTimer } from '../transport/timer-scheduler'
 import {
   createMobileFilePreviewHref,
@@ -34,5 +35,13 @@ export function canPreviewMobileFileRow(item: {
   kind: 'text' | 'binary'
   relativePath: string
 }): boolean {
-  return item.kind === 'text' || classifyMobileArtifact(item.relativePath) === 'image'
+  if (item.kind === 'text') {
+    return true
+  }
+  // Raster images render in the viewer; PDF/media binaries open the OS handoff
+  // screen. Both are tappable rows — anything else stays unavailable.
+  return (
+    classifyMobileArtifact(item.relativePath) === 'image' ||
+    mediaHandoffMimeFor(item.relativePath) !== null
+  )
 }

@@ -15,6 +15,8 @@ import {
 } from './mobile-file-preview-request'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import { MobileFileMediaHandoff } from './MobileFileMediaHandoff'
+import { mediaHandoffMimeFor } from './mobile-file-media-handoff'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
@@ -152,9 +154,17 @@ export function MobileFilePreviewScreen({ route }: Props) {
     routePreviewSourceKey
   ])
 
+  // A PDF or media file never loads a preview at all: the host refuses the binary, so the
+  // screen renders the OS handoff instead and the preview pipeline stays out of it.
+  const mediaHandoffMime =
+    previewSource?.source === 'worktree' ? mediaHandoffMimeFor(previewSource.relativePath) : null
+
   useEffect(() => {
+    if (mediaHandoffMime) {
+      return
+    }
     void loadPreview()
-  }, [loadPreview])
+  }, [loadPreview, mediaHandoffMime])
 
   const retry = useCallback(async () => {
     if (!previewParams) {
@@ -260,22 +270,33 @@ export function MobileFilePreviewScreen({ route }: Props) {
           ) : null}
         </View>
       </SafeAreaView>
-      <MobileFilePreviewBody
-        preview={preview}
-        relativePath={displayPath}
-        title={title || 'File'}
-        editable={isEditableTerminalArtifact}
-        draftContent={draftContent}
-        saveError={saveError}
-        lineColumn={lineColumn}
-        imageWidth={Math.max(1, width - spacing.md * 2)}
-        imageHeight={Math.max(240, height - 160)}
-        onDraftChange={setDraftContent}
-        onImageError={() =>
-          setPreview({ status: 'error', message: 'Unable to load preview', reconnect: false })
-        }
-        onRetry={retry}
-      />
+      {mediaHandoffMime && previewSource?.source === 'worktree' ? (
+        <MobileFileMediaHandoff
+          client={client}
+          connected={connState === 'connected'}
+          mimeType={mediaHandoffMime}
+          relativePath={previewSource.relativePath}
+          title={title || 'File'}
+          worktreeId={previewSource.worktreeId}
+        />
+      ) : (
+        <MobileFilePreviewBody
+          preview={preview}
+          relativePath={displayPath}
+          title={title || 'File'}
+          editable={isEditableTerminalArtifact}
+          draftContent={draftContent}
+          saveError={saveError}
+          lineColumn={lineColumn}
+          imageWidth={Math.max(1, width - spacing.md * 2)}
+          imageHeight={Math.max(240, height - 160)}
+          onDraftChange={setDraftContent}
+          onImageError={() =>
+            setPreview({ status: 'error', message: 'Unable to load preview', reconnect: false })
+          }
+          onRetry={retry}
+        />
+      )}
       <ConfirmModal
         visible={confirmingDiscard}
         title="Discard changes?"
