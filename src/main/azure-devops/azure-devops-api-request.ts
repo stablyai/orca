@@ -174,6 +174,9 @@ async function fetchWithApiVersionRetry(
         ...authHeaders(config)
       },
       ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+      // A same-origin redirect would carry this request, credential and all, to
+      // a path the Boards proxy policy already checked and no longer governs.
+      redirect: 'error',
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
   const url = apiUrl(baseUrl, path, options.searchParams)

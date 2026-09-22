@@ -240,3 +240,23 @@ describe('requestAzureDevOpsResponseAtBase and the preview-version probe', () =>
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('redirect handling', () => {
+  afterEach(() => {
+    globalThis.fetch = OLD_FETCH
+    process.env = OLD_ENV
+  })
+
+  it('refuses to follow a redirect rather than carrying the credential to an unchecked path', async () => {
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'token' }
+    let seen: RequestInit | undefined
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      seen = init
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+
+    await requestAzureDevOpsResponseAtBase(SERVER_BASE, '/_apis/wit/workitems')
+
+    expect(seen?.redirect).toBe('error')
+  })
+})
