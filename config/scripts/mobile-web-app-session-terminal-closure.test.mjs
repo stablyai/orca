@@ -145,11 +145,12 @@ const GAINED_OUTSIDE_THE_DOCUMENT = [
   'src/terminal/terminal-webview-html.web.ts',
   'src/terminal/terminal-webview-html/document-markup.ts',
   'src/terminal/terminal-webview-html/document-style.ts',
-  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
-  // under the host, so what the page injects can only reach what the terminal owns.
-  'src/terminal/terminal-webview-html/document-style-scoping.ts',
   'src/terminal/terminal-webview-ready-promises.ts',
-  'src/terminal/use-terminal-webview-controller.ts'
+  'src/terminal/use-terminal-webview-controller.ts',
+  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
+  // under the host, so what the page injects can only reach what the terminal owns. It sits
+  // outside `src/terminal/` because the rich Markdown editor's mount reads the same rewrite.
+  'src/style-scoping/document-style-scoping.ts'
 ]
 
 const XTERM_PACKAGES = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
@@ -235,7 +236,7 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * the web sibling replaces its own native file, which was never in this closure. Named by diffing
  * the two `local` lists rather than inferred from the total.
  *
- * `terminal-webview-html/document-style-scoping.ts` is in the reading on both sides and costs
+ * `style-scoping/document-style-scoping.ts` is in the reading on both sides and costs
  * nothing: the terminal's own mount already brings it, and the editor's mount imports the second
  * export it grew rather than a module of its own.
  *
