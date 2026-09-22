@@ -3,6 +3,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
+import type {
+  EmptyTerminalTabRetirementRequest,
+  EmptyTerminalTabRetirementResult
+} from '../../shared/empty-terminal-tab-retirement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   RemoteWorkspaceChangedEvent,
@@ -13,6 +17,9 @@ import type {
 
 export type WorkspaceSessionApi = {
   session: {
+    retireEmptyTerminalTab?: (
+      args: EmptyTerminalTabRetirementRequest
+    ) => Promise<EmptyTerminalTabRetirementResult>
     // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */
