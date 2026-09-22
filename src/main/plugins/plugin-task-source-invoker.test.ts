@@ -112,6 +112,25 @@ describe('invokeContributedTaskSource', () => {
     expect(activate).not.toHaveBeenCalled()
   })
 
+  it('accepts listFacetOptions and passes its facet and scope params to the proxy', async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: [{ id: 'sprint-42', label: 'Sprint 42' }] })
+    const params = { facetId: 'sprint', scopeIds: ['org/proj'] }
+
+    const result = await invokeContributedTaskSource({
+      resolveProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call }),
+      activate: vi.fn(),
+      pluginKey: 'acme.boards',
+      sourceId: 'azure-boards',
+      method: 'listFacetOptions',
+      params
+    })
+
+    expect(result).toEqual({ ok: true, data: [{ id: 'sprint-42', label: 'Sprint 42' }] })
+    expect(call).toHaveBeenCalledWith('listFacetOptions', params)
+  })
+
   it('reports unavailable, not a throw, when the pair still has no proxy after activation', async () => {
     const resolveProxy = vi.fn().mockReturnValue(null)
     const activate = vi.fn().mockResolvedValue(undefined)

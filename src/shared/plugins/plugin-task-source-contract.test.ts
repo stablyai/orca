@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   pluginTaskCommentSchema,
   pluginTaskCreateSchema,
+  pluginTaskFacetOptionQuerySchema,
+  pluginTaskFacetSchema,
   pluginTaskItemDetailSchema,
   pluginTaskItemSchema,
   pluginTaskItemTypeQuerySchema,
@@ -122,6 +124,165 @@ describe('plugin task source contract', () => {
     expect(pluginTaskQuerySchema.safeParse(query).success).toBe(true)
   })
 
+  describe('composable filter facets', () => {
+    const status = {
+      connected: true,
+      accountLabel: 'Ada Lovelace',
+      notice: null,
+      supports: {
+        create: false,
+        comment: true,
+        transition: true,
+        assign: false,
+        editTitle: false,
+        editDescription: false
+      }
+    }
+    const state = {
+      id: 'state',
+      label: 'State',
+      kind: 'multi',
+      options: [
+        { id: 'Active', label: 'Active' },
+        { id: 'Ready', label: 'Ready' }
+      ]
+    }
+    const query = { scopeIds: [], search: null, cursor: null, limit: 50 }
+
+    it('accepts a status declaring facets, one declaring only filters, and one declaring both', () => {
+      const filters = [{ id: 'assigned', label: 'Assigned to me' }]
+      const presetsOnly = pluginTaskSourceStatusSchema.safeParse({ ...status, filters })
+      const both = pluginTaskSourceStatusSchema.safeParse({ ...status, filters, facets: [state] })
+
+      expect(pluginTaskSourceStatusSchema.safeParse({ ...status, facets: [state] }).success).toBe(
+        true
+      )
+      // Carry-through, not acceptance: a dropped `filters` still parses, because
+      // the schema strips what it does not declare, and an older host sends
+      // nothing else.
+      expect(presetsOnly.success && presetsOnly.data.filters).toEqual(filters)
+      expect(both.success && both.data.filters).toEqual(filters)
+    })
+
+    it('accepts a dynamic facet that declares no options', () => {
+      expect(
+        pluginTaskFacetSchema.safeParse({
+          id: 'sprint',
+          label: 'Sprint',
+          kind: 'single',
+          dynamic: true
+        }).success
+      ).toBe(true)
+    })
+
+    it('rejects a facet or option id that is empty or past its cap', () => {
+      expect(pluginTaskFacetSchema.safeParse({ ...state, id: '' }).success).toBe(false)
+      expect(pluginTaskFacetSchema.safeParse({ ...state, id: 'x'.repeat(513) }).success).toBe(false)
+      expect(
+        pluginTaskFacetSchema.safeParse({ ...state, options: [{ id: '', label: 'Active' }] })
+          .success
+      ).toBe(false)
+      expect(
+        pluginTaskFacetSchema.safeParse({
+          ...state,
+          options: [{ id: 'Active', label: 'L'.repeat(257) }]
+        }).success
+      ).toBe(false)
+    })
+
+    it('rejects more facets than the cap, and more options within one than the cap', () => {
+      expect(
+        pluginTaskSourceStatusSchema.safeParse({
+          ...status,
+          facets: Array.from({ length: 9 }, (_, i) => ({ ...state, id: `f${i}` }))
+        }).success
+      ).toBe(false)
+      expect(
+        pluginTaskFacetSchema.safeParse({
+          ...state,
+          options: Array.from({ length: 201 }, (_, i) => ({ id: `o${i}`, label: `Option ${i}` }))
+        }).success
+      ).toBe(false)
+    })
+
+    it('accepts a query with facetSelections, one with only filterId, and one with both', () => {
+      const facetSelections = { state: ['Active', 'Ready'], sprint: ['s-42'] }
+      const filterOnly = pluginTaskQuerySchema.safeParse({ ...query, filterId: 'assigned' })
+      const both = pluginTaskQuerySchema.safeParse({
+        ...query,
+        filterId: 'assigned',
+        facetSelections
+      })
+
+      expect(pluginTaskQuerySchema.safeParse({ ...query, facetSelections }).success).toBe(true)
+      // Carry-through, not acceptance: a dropped `filterId` still parses, and an
+      // older client sends it alone.
+      expect(filterOnly.success && filterOnly.data.filterId).toBe('assigned')
+      expect(both.success && both.data.filterId).toBe('assigned')
+      expect(both.success && both.data.facetSelections).toEqual(facetSelections)
+    })
+
+    it('rejects facetSelections naming more facets than the cap', () => {
+      const facetSelections = Object.fromEntries(
+        Array.from({ length: 9 }, (_, i) => [`f${i}`, ['a']])
+      )
+
+      expect(pluginTaskQuerySchema.safeParse({ ...query, facetSelections }).success).toBe(false)
+    })
+
+    it('rejects more selections within one facet than the cap', () => {
+      const facetSelections = { state: Array.from({ length: 201 }, (_, i) => `o${i}`) }
+
+      expect(pluginTaskQuerySchema.safeParse({ ...query, facetSelections }).success).toBe(false)
+    })
+
+    it('rejects an empty facet id or option id in a selection', () => {
+      expect(
+        pluginTaskQuerySchema.safeParse({ ...query, facetSelections: { '': ['a'] } }).success
+      ).toBe(false)
+      expect(
+        pluginTaskQuerySchema.safeParse({ ...query, facetSelections: { state: [''] } }).success
+      ).toBe(false)
+    })
+
+    it('leaves a single-kind facet to the source: two selections still validate', () => {
+      const facetSelections = { sprint: ['s-41', 's-42'] }
+
+      expect(
+        pluginTaskSourceStatusSchema.safeParse({
+          ...status,
+          facets: [{ id: 'sprint', label: 'Sprint', kind: 'single', dynamic: true }]
+        }).success
+      ).toBe(true)
+      expect(pluginTaskQuerySchema.safeParse({ ...query, facetSelections }).success).toBe(true)
+    })
+
+    it('names the facet and the scope selection whose options to offer', () => {
+      expect(
+        pluginTaskFacetOptionQuerySchema.safeParse({ facetId: 'sprint', scopeIds: ['org/proj'] })
+          .success
+      ).toBe(true)
+      expect(
+        pluginTaskFacetOptionQuerySchema.safeParse({ facetId: 'sprint', scopeIds: [] }).success
+      ).toBe(true)
+      expect(pluginTaskFacetOptionQuerySchema.safeParse({ facetId: 'sprint' }).success).toBe(false)
+      expect(
+        pluginTaskFacetOptionQuerySchema.safeParse({ facetId: '', scopeIds: [] }).success
+      ).toBe(false)
+    })
+
+    it('binds listFacetOptions to a bounded option list', () => {
+      const schema = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS.listFacetOptions
+
+      expect(schema.safeParse([{ id: 'sprint-42', label: 'Sprint 42' }]).success).toBe(true)
+      expect(schema.safeParse([{ id: 'sprint-42', name: 'Sprint 42' }]).success).toBe(false)
+      expect(
+        schema.safeParse(Array.from({ length: 201 }, (_, i) => ({ id: `o${i}`, label: `O${i}` })))
+          .success
+      ).toBe(false)
+    })
+  })
+
   it('discriminates ok results from failures on a closed error code set', () => {
     const schema = pluginTaskSourceResultSchema(pluginTaskItemSchema.array())
 
@@ -155,6 +316,7 @@ describe('plugin task source contract', () => {
       'status',
       'listScopes',
       'listItemTypes',
+      'listFacetOptions',
       'listItems',
       'getItem',
       'createItem',
@@ -180,7 +342,8 @@ describe('plugin task source contract', () => {
     ['listScopes', [{ id: 'proj', name: 'Project' }], { id: 'proj' }],
     ['listTransitions', [{ id: '2', name: 'Active' }], [{ id: '2' }]],
     ['listAssignees', [{ id: 'ada', displayName: 'Ada' }], [{ id: 'ada' }]],
-    ['listItemTypes', [{ id: 'Bug', name: 'Bug' }], [{ id: 'Bug' }]]
+    ['listItemTypes', [{ id: 'Bug', name: 'Bug' }], [{ id: 'Bug' }]],
+    ['listFacetOptions', [{ id: 'sprint-42', label: 'Sprint 42' }], [{ id: 'sprint-42' }]]
   ] as const)('binds %s to a schema that rejects the wrong shape', (method, valid, invalid) => {
     const schema = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]
 
@@ -232,23 +395,20 @@ describe('plugin task source contract', () => {
     expect(pluginTaskCreateSchema.safeParse({ ...create, description: 'Steps' }).success).toBe(true)
   })
 
-  it.each([['scopeId'], ['typeId'], ['title']] as const)(
-    'rejects a create missing %s',
-    (field) => {
-      const create: Record<string, string> = {
-        scopeId: 'org/proj',
-        typeId: 'Bug',
-        title: 'Crash on resume'
-      }
-      delete create[field]
-
-      expect(pluginTaskCreateSchema.safeParse(create).success).toBe(false)
-      expect(
-        pluginTaskCreateSchema.safeParse({ ...create, [field]: '' }).success,
-        `an empty ${field} is as unusable as a missing one`
-      ).toBe(false)
+  it.each([['scopeId'], ['typeId'], ['title']] as const)('rejects a create missing %s', (field) => {
+    const create: Record<string, string> = {
+      scopeId: 'org/proj',
+      typeId: 'Bug',
+      title: 'Crash on resume'
     }
-  )
+    delete create[field]
+
+    expect(pluginTaskCreateSchema.safeParse(create).success).toBe(false)
+    expect(
+      pluginTaskCreateSchema.safeParse({ ...create, [field]: '' }).success,
+      `an empty ${field} is as unusable as a missing one`
+    ).toBe(false)
+  })
 
   describe('plugin task item detail schema', () => {
     const base = {
@@ -318,7 +478,8 @@ describe('plugin task source contract', () => {
     it('still accepts text and html bodies', () => {
       expect(pluginTaskCommentSchema.safeParse({ ...base, bodyFormat: 'text' }).success).toBe(true)
       expect(
-        pluginTaskCommentSchema.safeParse({ ...base, body: '<p>ok</p>', bodyFormat: 'html' }).success
+        pluginTaskCommentSchema.safeParse({ ...base, body: '<p>ok</p>', bodyFormat: 'html' })
+          .success
       ).toBe(true)
     })
 
@@ -400,6 +561,7 @@ describe('plugin task source contract', () => {
       // fails type-checking under the scope schema, which is otherwise the one
       // other schema a bare id/name pair satisfies.
       listItemTypes: [{ id: 'User Story', name: 'User Story', isDefault: 'not-a-boolean' }],
+      listFacetOptions: [{ id: 'sprint-42', label: 'Sprint 42' }],
       listItems: { items: [], nextCursor: null },
       getItem: {
         id: '4821',
@@ -457,9 +619,9 @@ describe('plugin task source contract', () => {
     it.each(PLUGIN_TASK_SOURCE_METHODS.map((method) => [method] as const))(
       '%s fixture satisfies its own schema',
       (method) => {
-        expect(
-          PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method].safeParse(fixtures[method]).success
-        ).toBe(true)
+        expect(PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method].safeParse(fixtures[method]).success).toBe(
+          true
+        )
       }
     )
 
@@ -476,10 +638,9 @@ describe('plugin task source contract', () => {
           const result = PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[otherMethod].safeParse(
             fixtures[ownMethod]
           )
-          expect(
-            result.success,
-            `${ownMethod}'s fixture must fail ${otherMethod}'s schema`
-          ).toBe(false)
+          expect(result.success, `${ownMethod}'s fixture must fail ${otherMethod}'s schema`).toBe(
+            false
+          )
         }
       }
     })

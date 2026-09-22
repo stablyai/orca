@@ -30,6 +30,14 @@ const LABEL_MAX = 128
 const LABELS_MAX = 32
 const FILTER_LABEL_MAX = 256
 const FILTERS_MAX = 16
+/** A facet is a control the user reads before filtering, not a chip they skim,
+ *  so the bar holds fewer of them than `filters` holds presets. */
+const FACETS_MAX = 8
+/** A pick list is not a paged surface: one facet's options are bounded by the
+ *  same budget core already accepts from a source for one page of items. A
+ *  selection can never name more options than a facet may declare, so the same
+ *  bound covers both sides. */
+const FACET_OPTIONS_MAX = PLUGIN_TASK_PAGE_LIMIT
 
 export const pluginTaskSourceErrorSchema = z.object({
   ok: z.literal(false),
@@ -122,6 +130,27 @@ export const pluginTaskItemTypeSchema = z.object({
   name: z.string().min(1).max(256)
 })
 
+export const pluginTaskFacetOptionSchema = z.object({
+  id: z.string().min(1).max(512),
+  label: z.string().min(1).max(FILTER_LABEL_MAX)
+})
+
+/** One filter dimension, combined AND across facets and OR within a `multi`
+ *  one. `dynamic` says the options vary per scope and must be fetched with
+ *  listFacetOptions, so such a facet may declare none.
+ *
+ *  `kind` binds the renderer and the source, not the query schema: a query is
+ *  validated without the declaration that names the kind, so nothing there can
+ *  hold a `single` facet to one option. Putting the kind on the wire to make it
+ *  checkable would let a client's stale copy of a declaration decide validity. */
+export const pluginTaskFacetSchema = z.object({
+  id: z.string().min(1).max(512),
+  label: z.string().min(1).max(FILTER_LABEL_MAX),
+  kind: z.enum(['single', 'multi']),
+  dynamic: z.boolean().optional(),
+  options: z.array(pluginTaskFacetOptionSchema).max(FACET_OPTIONS_MAX).optional()
+})
+
 export const pluginTaskSourceStatusSchema = z.object({
   connected: z.boolean(),
   accountLabel: z.string().max(TITLE_MAX).nullable(),
@@ -146,9 +175,14 @@ export const pluginTaskSourceStatusSchema = z.object({
   /** Named presets the source offers (Jira's Assigned/Reported/All Open/Done
    *  are Jira's own vocabulary), rendered as chips. Omitted when none apply. */
   filters: z
-    .array(z.object({ id: z.string().min(1).max(512), label: z.string().min(1).max(FILTER_LABEL_MAX) }))
+    .array(
+      z.object({ id: z.string().min(1).max(512), label: z.string().min(1).max(FILTER_LABEL_MAX) })
+    )
     .max(FILTERS_MAX)
-    .optional()
+    .optional(),
+  /** Composable dimensions, independent of `filters`: a host that predates
+   *  facets keeps sending only presets, and a source may declare both. */
+  facets: z.array(pluginTaskFacetSchema).max(FACETS_MAX).optional()
 })
 
 export const pluginTaskQuerySchema = z.object({
@@ -159,7 +193,16 @@ export const pluginTaskQuerySchema = z.object({
   limit: z.number().int().positive().max(PLUGIN_TASK_PAGE_LIMIT),
   /** Which declared status.filters entry is active. Absent/null means the
    *  source's own default. */
-  filterId: z.string().min(1).max(512).nullable().optional()
+  filterId: z.string().min(1).max(512).nullable().optional(),
+  /** Chosen option ids per declared facet id: AND across facets, OR within one.
+   *  Independent of `filterId`, which a client that predates facets still sends
+   *  on its own. */
+  facetSelections: z
+    .record(z.string().min(1).max(512), z.array(z.string().min(1).max(512)).max(FACET_OPTIONS_MAX))
+    .refine((selections) => Object.keys(selections).length <= FACETS_MAX, {
+      message: `no more than ${FACETS_MAX} facets`
+    })
+    .optional()
 })
 
 /** Which scope's types to offer. Required, not optional: a source's default
@@ -167,6 +210,15 @@ export const pluginTaskQuerySchema = z.object({
  *  about to create in. */
 export const pluginTaskItemTypeQuerySchema = z.object({
   scopeId: z.string().min(1).max(512)
+})
+
+/** Which facet's options, for the scope the caller is listing under. `scopeIds`
+ *  is required for the reason above, and carries the same selection
+ *  pluginTaskQuerySchema does — empty meaning the source's own default — so the
+ *  options always answer for the scope whose items are on screen. */
+export const pluginTaskFacetOptionQuerySchema = z.object({
+  facetId: z.string().min(1).max(512),
+  scopeIds: z.array(z.string().min(1).max(512)).max(64)
 })
 
 /** The minimum a provider needs to open a work item. `typeId` names one of
@@ -191,6 +243,7 @@ export const PLUGIN_TASK_SOURCE_METHODS = [
   'status',
   'listScopes',
   'listItemTypes',
+  'listFacetOptions',
   'listItems',
   'getItem',
   'createItem',
@@ -216,6 +269,7 @@ export const PLUGIN_TASK_SOURCE_RESULT_SCHEMAS: Record<PluginTaskSourceMethod, z
   status: pluginTaskSourceStatusSchema,
   listScopes: z.array(pluginTaskScopeSchema),
   listItemTypes: z.array(pluginTaskItemTypeSchema),
+  listFacetOptions: z.array(pluginTaskFacetOptionSchema).max(FACET_OPTIONS_MAX),
   listItems: pluginTaskPageSchema,
   getItem: pluginTaskItemDetailSchema,
   /** The created item, so a caller can show it without a second round trip. */
@@ -236,6 +290,9 @@ export type PluginTaskComment = z.infer<typeof pluginTaskCommentSchema>
 export type PluginTaskTransition = z.infer<typeof pluginTaskTransitionSchema>
 export type PluginTaskItemType = z.infer<typeof pluginTaskItemTypeSchema>
 export type PluginTaskItemTypeQuery = z.infer<typeof pluginTaskItemTypeQuerySchema>
+export type PluginTaskFacet = z.infer<typeof pluginTaskFacetSchema>
+export type PluginTaskFacetOption = z.infer<typeof pluginTaskFacetOptionSchema>
+export type PluginTaskFacetOptionQuery = z.infer<typeof pluginTaskFacetOptionQuerySchema>
 export type PluginTaskCreate = z.infer<typeof pluginTaskCreateSchema>
 export type PluginTaskSourceStatus = z.infer<typeof pluginTaskSourceStatusSchema>
 export type PluginTaskQuery = z.infer<typeof pluginTaskQuerySchema>
