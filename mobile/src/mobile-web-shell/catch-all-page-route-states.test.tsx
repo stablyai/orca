@@ -90,6 +90,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
+// The notice banner above a served page draws one icon; nothing here measures it.
+vi.mock('lucide-react-native', () => ({ X: 'Icon' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))
@@ -130,6 +132,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     pageRoutes: [],
     pageRouteGrants: [],
     routeGrants: [],
+    updateNotice: null,
     retry: vi.fn(),
     reportShellFailure: vi.fn(),
     reportDocumentLoaded: vi.fn(),

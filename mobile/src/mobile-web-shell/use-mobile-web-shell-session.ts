@@ -19,7 +19,8 @@ import {
 import type {
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
-  MobileWebShellSessionState
+  MobileWebShellSessionState,
+  MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 
 export type MobileWebShellSessionView = {
@@ -28,6 +29,9 @@ export type MobileWebShellSessionView = {
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
+  /** Non-null when this generation is a fallback from an update the shell refused, for the caller
+   *  to say so beside the page rather than instead of it. */
+  readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
   /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
   readonly reportShellFailure: (reason: MobileWebShellFailureReason) => void
@@ -264,6 +268,7 @@ export function useMobileWebShellSession(args: {
     pageRoutes: sessionRef.current.pageRoutes,
     pageRouteGrants: sessionRef.current.pageRouteGrants,
     routeGrants: sessionRef.current.routeGrants,
+    updateNotice: sessionRef.current.updateNotice,
     retry,
     reportShellFailure,
     reportDocumentLoaded,
