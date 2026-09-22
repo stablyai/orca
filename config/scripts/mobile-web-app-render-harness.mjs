@@ -439,6 +439,38 @@ export function installShellDouble({
   globalThis.orcaBridge = channel
 }
 
+/** How long a check waits for a mount's reads before it reports what the page did send. */
+const RECORDED_REQUEST_MS = 30_000
+
+/**
+ * The double's request log, once every method named is in it.
+ *
+ * A route issues its first reads from effects that run after the commit painting its chrome, so a
+ * snapshot taken where the awaited text lands is a race a loaded machine loses. The bound names
+ * what never arrived and what did.
+ */
+export async function waitForRecordedRequests(
+  page,
+  methods,
+  { boundMs = RECORDED_REQUEST_MS } = {}
+) {
+  const started = Date.now()
+  for (;;) {
+    const requests = await page.evaluate(() => globalThis.__orcaRenderCheckRequests ?? [])
+    const missing = methods.filter((method) => !requests.some((one) => one.method === method))
+    if (missing.length === 0) {
+      return requests
+    }
+    if (Date.now() - started > boundMs) {
+      throw new Error(
+        `[render-harness] the page never asked for ${missing.join(', ')} in ${String(boundMs)}ms; ` +
+          `it asked for ${JSON.stringify(requests.map((one) => one.method))}`
+      )
+    }
+    await page.waitForTimeout(25)
+  }
+}
+
 /**
  * The page server the render checks run against: the built bundle, under the shell's own policy.
  *

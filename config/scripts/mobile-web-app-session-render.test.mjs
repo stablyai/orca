@@ -11,7 +11,8 @@ import {
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
-  readShellCsp
+  readShellCsp,
+  waitForRecordedRequests
 } from './mobile-web-app-render-harness.mjs'
 
 /**
@@ -212,6 +213,9 @@ async function openRoute(route, awaitText, replies = {}, options = {}) {
 /** The session header renders it, so the chrome is on screen before this reads the tree. */
 const BACK_LABEL = 'Back to worktrees'
 
+/** The header's live title, the tab snapshot and the terminal inventory. */
+const SESSION_MOUNT_READS = ['worktree.show', 'session.tabs.list', 'terminal.list']
+
 describeRender(
   'the session route in a real browser',
   () => {
@@ -341,14 +345,12 @@ describeRender(
       // The precondition every assertion above needs: a screen that mounted and asked for nothing
       // would paint the same chrome. The three reads are the header's live title, the tab snapshot
       // and the terminal inventory, each carrying the workspace the route named.
+      //
+      // Waited for and not read at the paint: all three are issued from effects that run after the
+      // commit putting 'Terminal' on screen, which is why this case reds on CI's loaded job and
+      // never here. Under a 20x CPU throttle the snapshot at the paint holds none of them.
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
-      const requests = await opened.page.evaluate(() => globalThis.__orcaRenderCheckRequests ?? [])
-      for (const method of ['worktree.show', 'session.tabs.list', 'terminal.list']) {
-        expect(
-          requests.some((request) => request.method === method),
-          method
-        ).toBe(true)
-      }
+      const requests = await waitForRecordedRequests(opened.page, SESSION_MOUNT_READS)
       expect(JSON.stringify(requests)).toContain(WORKTREE)
       await opened.page.close()
     }, 120_000)
