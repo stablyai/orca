@@ -72,9 +72,8 @@ export class BridgeHostRequests {
     if (isBridgeNativeMethod(message.method)) {
       return this.deps.serveNative(message.id, message.method, message.params)
     }
-    // Substituted here and not at the page's own call site: this and `handleSubscribe` are the two
-    // doors to the client, and the placeholder must not survive either. Same object back when the
-    // page claimed nothing, so the arity replay below is unaffected.
+    // One of the two doors to the client, and the placeholder must not survive either. A throw
+    // here lands in `open`'s catch, which answers the page the way every other refusal does.
     const params = substituteBridgePageClientIdentity(
       message.params,
       this.deps.readClientIdentity()

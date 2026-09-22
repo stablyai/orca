@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   BRIDGE_PAGE_CLIENT_ID,
   BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+  BridgePageClientIdentityUnavailableError,
   substituteBridgePageClientIdentity
 } from './bridge-page-client-identity'
 import { HARNESS_CLIENT_IDENTITY, harness, ID, OTHER } from '../bridge-host-test-harness'
 import { bridgeId, clientFrame } from '../bridge-host-test-fakes'
+import {
+  createFakeBridgePortPair,
+  PORT_PAIR_CLIENT_IDENTITY
+} from './bridge-port-pair-test-harness'
 
 /**
  * The swap, and the two doors it has to cover.
@@ -72,15 +77,20 @@ describe('the placeholder a page claims', () => {
     expect(substituteBridgePageClientIdentity(list, 'device-token-a')).toBe(list)
   })
 
-  it('drops the field rather than forwarding a placeholder the shell cannot resolve', () => {
-    // The host reads a missing `client` as a pre-identity mobile caller, which is a degradation.
-    // The placeholder would be a refusal, and it is the one outcome this seam must never produce.
-    expect(
+  it('refuses a placeholder the shell cannot resolve rather than reshaping the call', () => {
+    // Stripping the field would forward a request the page did not make: the host reads a missing
+    // `client` as a different caller, so a shell-state bug would land as a silent degradation.
+    expect(() =>
       substituteBridgePageClientIdentity(
         { terminal: 'pty-1', client: { id: BRIDGE_PAGE_CLIENT_ID, type: 'mobile' } },
         null
       )
-    ).toEqual({ terminal: 'pty-1' })
+    ).toThrow(BridgePageClientIdentityUnavailableError)
+  })
+
+  it('lets a call that claims nothing through on a shell with no identity', () => {
+    const params = { terminal: 'pty-1', viewport: { cols: 80, rows: 24 } }
+    expect(substituteBridgePageClientIdentity(params, null)).toBe(params)
   })
 })
 
@@ -141,12 +151,37 @@ describe('the shell substitutes on both doors to the client', () => {
     ])
   })
 
-  it('serves a shell that cannot read the identity yet without leaking the placeholder', () => {
+  it('refuses a stream start when the shell has no identity, opening none', () => {
     const bridge = harness({ ready: true, clientIdentity: null })
     bridge.host.receive(identitySubscribe(ID))
-    expect(bridge.client.streams[0]?.params).toEqual({
-      terminal: 'pty-1',
-      viewport: { cols: 80, rows: 24 }
+    expect(bridge.client.streams).toHaveLength(0)
+    expect(bridge.last()).toMatchObject({
+      type: 'error',
+      id: ID,
+      error: { code: 'bridge_client_identity_unavailable' }
+    })
+  })
+
+  it('refuses a request when the shell has no identity, sending none', () => {
+    const bridge = harness({ ready: true, clientIdentity: null })
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: ID,
+        method: 'terminal.send',
+        params: { terminal: 'pty-1', client: { id: BRIDGE_PAGE_CLIENT_ID, type: 'mobile' } }
+      })
+    )
+    expect(bridge.client.requests).toHaveLength(0)
+    // An ordinary error frame, which is what the page's client rejects its own call with: the
+    // caller sees a failed RPC and not a send that quietly went out under another identity.
+    expect(bridge.last()).toMatchObject({
+      type: 'error',
+      id: ID,
+      error: {
+        category: 'BridgePageClientIdentityUnavailableError',
+        code: 'bridge_client_identity_unavailable'
+      }
     })
   })
 
@@ -154,5 +189,43 @@ describe('the shell substitutes on both doors to the client', () => {
     const bridge = harness({ ready: true })
     const init = bridge.frames().find((message) => message.type === 'init')
     expect(init?.accepts).toContain(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT)
+  })
+})
+
+describe('what the page hears when the shell has no identity', () => {
+  it("rejects the page's own call, as an ordinary RPC failure naming the reason", async () => {
+    const pair = createFakeBridgePortPair({ clientIdentity: null })
+    await pair.flush()
+
+    const call = pair.client.sendRequest('terminal.send', {
+      terminal: 'pty-1',
+      text: 'ls',
+      client: { id: BRIDGE_PAGE_CLIENT_ID, type: 'mobile' }
+    })
+    const settled = call.then(
+      () => null,
+      (error: unknown) => error
+    )
+    await pair.flush()
+
+    // The caller's promise rejects and nothing reached the desktop, so a composer that sent this
+    // shows "not sent" rather than believing a send that went out under a different identity.
+    expect(await settled).toMatchObject({ code: 'bridge_client_identity_unavailable' })
+    expect(pair.rpc.requests).toHaveLength(0)
+
+    // The precondition for that zero: the same call on a shell that has an identity does reach the
+    // desktop, so nothing above is passing because this pair forwards nothing at all.
+    const served = createFakeBridgePortPair()
+    await served.flush()
+    void served.client.sendRequest('terminal.send', {
+      terminal: 'pty-1',
+      text: 'ls',
+      client: { id: BRIDGE_PAGE_CLIENT_ID, type: 'mobile' }
+    })
+    await served.flush()
+    expect(served.rpc.requests).toHaveLength(1)
+    expect(served.rpc.requests[0]?.args[1]).toMatchObject({
+      client: { id: PORT_PAIR_CLIENT_IDENTITY, type: 'mobile' }
+    })
   })
 })

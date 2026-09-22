@@ -71,7 +71,8 @@ export function createBridgeHostStreamFrames(deps: {
         report({ kind: 'binary-lane-refused', id })
       }
       try {
-        // The other door to the client, which is the one `terminal.subscribe` goes through.
+        // The other door, which is the one `terminal.subscribe` goes through. A placeholder the
+        // shell cannot resolve throws here and is refused the way an ungranted method is.
         subscriptions.start(
           id,
           message.method,
