@@ -71,7 +71,8 @@ const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
   ['openclaw', 'openclaw'],
   ['aider', 'aider'],
   ['grok', 'grok'],
-  ['devin', 'devin']
+  ['devin', 'devin'],
+  ['zeroclaw', 'zeroclaw']
 ]
 
 /** Agents whose name is matched by a dedicated pattern rather than a plain token. */

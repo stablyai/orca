@@ -51,7 +51,8 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'PI_PROFILE',
   'PRIME_AGENT_CODING_AGENT_DIR',
   'PRIME_AGENT_CODING_AGENT_SESSION_DIR',
-  'PRIME_AGENT_SESSION_DIR',
+  'ZEROCLAW_HOME',
+  'ZEROCLAW_STATE_DIR',
   // Why: OpenCode and migrated OMP session stores use the XDG data dir,
   // so this one is an agent root here rather than generic runtime state.
   'XDG_DATA_HOME'

@@ -1,6 +1,5 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
-
 export type AgentPromptInjectionMode =
   | 'argv'
   | 'flag-prompt'
@@ -54,6 +53,13 @@ export type TuiAgentConfig = {
   ctrlEnterEncoding?: 'csi-u'
 }
 
+const stdinAgent = (cmd: string): TuiAgentConfig => ({
+  detectCmd: cmd,
+  launchCmd: cmd,
+  expectedProcess: cmd,
+  promptInjectionMode: 'stdin-after-start'
+})
+
 /** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */
 type TuiAgentConfigSource = Omit<TuiAgentConfig, 'launchCmd' | 'expectedProcess'> & {
   launchCmd?: string
@@ -105,10 +111,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  autohand: {
-    detectCmd: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  autohand: stdinAgent('autohand'),
   ante: {
     detectCmd: 'ante',
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
@@ -187,22 +190,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
     submitLineSettleMsPerLine: 45
   },
-  aider: {
-    detectCmd: 'aider',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  goose: {
-    detectCmd: 'goose',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  amp: {
-    detectCmd: 'amp',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  kilo: {
-    detectCmd: 'kilo',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  aider: stdinAgent('aider'),
+  goose: stdinAgent('goose'),
+  amp: stdinAgent('amp'),
+  kilo: stdinAgent('kilo'),
   kiro: {
     // Why: the Kiro installer (https://cli.kiro.dev/install) ships `kiro-cli`, not `kiro`; keep id 'kiro' for stored prefs.
     detectCmd: 'kiro-cli',
@@ -210,27 +201,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     launchCmd: 'kiro-cli chat --tui',
     promptInjectionMode: 'stdin-after-start'
   },
-  crush: {
-    detectCmd: 'crush',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  crush: stdinAgent('crush'),
   aug: {
     // Why: @augmentcode/auggie installs a binary named `auggie`, not `aug`; keep id 'aug' for stored prefs.
     detectCmd: 'auggie',
     promptInjectionMode: 'stdin-after-start'
   },
-  cline: {
-    detectCmd: 'cline',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  codebuff: {
-    detectCmd: 'codebuff',
-    promptInjectionMode: 'stdin-after-start'
-  },
-  freebuff: {
-    detectCmd: 'freebuff',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  cline: stdinAgent('cline'),
+  codebuff: stdinAgent('codebuff'),
+  freebuff: stdinAgent('freebuff'),
   'command-code': {
     // Why: use the full name (not its `cmd` alias) so detection doesn't collide with Windows' built-in cmd.exe.
     detectCmd: 'command-code',
@@ -274,10 +253,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
-  rovo: {
-    detectCmd: 'rovo',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  rovo: stdinAgent('rovo'),
   hermes: {
     detectCmd: 'hermes',
     // Why: bare `hermes` opens the classic REPL; `--tui` starts the full-screen agent UI Orca hosts.
@@ -285,10 +261,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: Hermes delivers the prompt via its startup-query contract, submitting only after the composer is ready.
     promptInjectionMode: 'hermes-query'
   },
-  openclaw: {
-    detectCmd: 'openclaw',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  openclaw: stdinAgent('openclaw'),
   copilot: {
     detectCmd: 'copilot',
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.
@@ -312,7 +285,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
-  }
+  },
+  zeroclaw: stdinAgent('zeroclaw')
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(
