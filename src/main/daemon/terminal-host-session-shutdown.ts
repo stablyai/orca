@@ -1,7 +1,7 @@
 import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
+import { sweepSessionFromSnapshot } from './terminal-session-descendant-sweep'
 
 async function disposeLiveSession(session: Session): Promise<void> {
   if (!session.beginTermination() && !session.isAlive) {
@@ -12,7 +12,8 @@ async function disposeLiveSession(session: Session): Promise<void> {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        sweepSessionFromSnapshot(session.processIdentity, snapshot),
       awaitEscalation: true
     })
   } finally {

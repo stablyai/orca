@@ -23,7 +23,8 @@ import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
-import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import { TerminalHostRetiredIncarnations } from './terminal-host-retired-incarnations'
+import { observeLiveSessionProcessIdentities } from './terminal-host-session-identity-observation'
 import {
   inspectTerminalHostProcess,
   type TerminalHostProcessInspection
@@ -43,7 +44,6 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
@@ -61,10 +61,8 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
-  private readonly retiredIncarnations = new Map<
-    string,
-    { incarnationId: string; code: number; expiresAt: number }
-  >()
+  private readonly stopObservingProcessTable = observeLiveSessionProcessIdentities(this.sessions)
+  private readonly retiredIncarnations = new TerminalHostRetiredIncarnations()
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
@@ -135,12 +133,10 @@ export class TerminalHost {
   private handleSessionExit(sessionId: string, generation: string | undefined): void {
     const session = this.sessions.get(sessionId)
     if (session) {
-      pruneRetiredPtyIncarnations(this.retiredIncarnations)
-      this.retiredIncarnations.set(sessionId, {
-        incarnationId: session.incarnationId,
-        code: session.exitCode ?? 0,
-        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-      })
+      this.retiredIncarnations.record(sessionId, session)
+      // Why before the reap below: the reap drops Orca's last handle on this
+      // session, and its identity is all that still names what the root spawned.
+      this.sessionTeardown.sweepExitedSession(sessionId, session)
     }
     this.agentSessionOwners.release(sessionId, generation)
     this.agentSessionGenerations.forget(sessionId, generation)
@@ -238,14 +234,10 @@ export class TerminalHost {
     sessionId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<TerminalHostProcessInspection> {
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
     if (
       (!session || !session.isAlive) &&
-      !(
-        (this.retiredIncarnations.get(sessionId)?.expiresAt ?? 0) > Date.now() &&
-        options?.expectedIncarnationId === this.retiredIncarnations.get(sessionId)?.incarnationId
-      )
+      !this.retiredIncarnations.answersFor(sessionId, options?.expectedIncarnationId)
     ) {
       // Preserve the historical synchronous missing-session failure.
       throw new SessionNotFoundError(sessionId)
@@ -318,6 +310,7 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
+    this.stopObservingProcessTable()
     if (this.disposePromise) {
       return this.disposePromise
     }

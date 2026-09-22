@@ -17,7 +17,7 @@ type ProcessRow = {
 }
 
 /** `ps` prints `ttys003` / `pts/3`; node-pty reports `/dev/ttys003` / `/dev/pts/3`. */
-function normalizeTty(value: string): string {
+export function normalizePtyTtyName(value: string): string {
   return value.replace(/^\/dev\//, '')
 }
 
@@ -103,7 +103,7 @@ export function getPosixPtyForegroundGroup(
   }
   // Why: `ps -p` answers for whatever owns the pid now. Without pinning the tty we
   // captured at spawn, a recycled pid could aim a group signal at a real terminal.
-  if (normalizeTty(root.tty) !== normalizeTty(ptsName)) {
+  if (normalizePtyTtyName(root.tty) !== normalizePtyTtyName(ptsName)) {
     return null
   }
   // Why: a development daemon can inherit its launch TTY. Never group-signal when

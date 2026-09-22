@@ -4,16 +4,14 @@ import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { openPtySessionIdentity, type PtySessionProcessIdentity } from '../pty-session-identity'
 
 import type {
   SessionState,
@@ -29,6 +27,9 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  /** Coordinates for the work this session owns, captured while its root is alive
+   *  so teardown can still reach that work after the root is reaped. */
+  readonly processIdentity: PtySessionProcessIdentity
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -48,6 +49,7 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
+    this.processIdentity = openPtySessionIdentity(this.subprocess)
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
       rows: opts.rows,
@@ -195,9 +197,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
