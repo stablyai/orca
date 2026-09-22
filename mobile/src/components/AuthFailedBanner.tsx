@@ -1,5 +1,5 @@
-import { View, Text, Pressable } from 'react-native'
-import { AuthFailedRemoveAction } from './AuthFailedRemoveAction'
+import { View, Text } from 'react-native'
+import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
 // Why: auth-failed is no longer necessarily terminal (issue #5200) — a
@@ -23,15 +23,12 @@ export function AuthFailedBanner({
         Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.
       </Text>
       <View style={styles.actions}>
-        {canRetry && (
-          <Pressable style={styles.action} onPress={onRetry}>
-            <Text style={styles.actionText}>Retry</Text>
-          </Pressable>
-        )}
-        <Pressable style={styles.action} onPress={onRepair}>
-          <Text style={styles.actionText}>Re-pair</Text>
-        </Pressable>
-        <AuthFailedRemoveAction onPress={onRemove} />
+        <AuthFailedBannerActions
+          canRetry={canRetry}
+          onRetry={onRetry}
+          onRepair={onRepair}
+          onRemove={onRemove}
+        />
       </View>
     </View>
   )

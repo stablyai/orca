@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 
-/** Shared with `AuthFailedRemoveAction`, which is a sibling file so that the page can drop it. */
+/** Shared with `AuthFailedBannerActions`, which is a sibling file so that the page can drop it. */
 export const authFailedBannerStyles = StyleSheet.create({
   banner: {
     backgroundColor: colors.bgPanel,
