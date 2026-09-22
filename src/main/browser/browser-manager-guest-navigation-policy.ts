@@ -121,6 +121,9 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      // Why: an offscreen page has no renderer to publish its row, so this commit is the only
+      // moment paired clients can learn the new url — every failure path above already announces.
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
 
     guest.on('will-navigate', navigationGuard)

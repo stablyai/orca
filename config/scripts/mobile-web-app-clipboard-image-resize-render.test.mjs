@@ -224,8 +224,9 @@ describeResize(
         expect(measured.decoded).toEqual(last.answered)
         expect(last.answered).toEqual(last.asked)
         expect(measured.decoded.width).toBeLessThan(FIXTURE.width)
-        // The policy admits the source: `img-src 'self' data:` is what the decode rests on, and a
-        // page that violated it would still resolve `decode()` on some browsers.
+        // The policy admits the source: the `data:` of `img-src 'self' data: https:` is what the
+        // decode rests on, and a page that violated it would still resolve `decode()` on some
+        // browsers.
         expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
         expect(consoleErrors).toEqual([])
       } finally {

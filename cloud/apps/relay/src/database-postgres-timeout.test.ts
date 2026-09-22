@@ -8,6 +8,14 @@ const fakes = vi.hoisted(() => ({
   lifecycle: [] as string[],
   query: vi.fn(async (_sql: string) => ({ rows: [], rowCount: 0 })),
   release: vi.fn(),
+  // A real pooled client is an EventEmitter, and the acquire path attaches an
+  // `error` listener to it before handing it to the caller.
+  client: () => ({
+    query: fakes.query,
+    release: fakes.release,
+    on: vi.fn(),
+    removeListener: vi.fn()
+  }),
   end: vi.fn(async () => undefined)
 }))
 
@@ -18,7 +26,7 @@ vi.mock('pg', () => ({
       idleCount = 1
       waitingCount = 0
       on = vi.fn()
-      connect = vi.fn(async () => ({ query: fakes.query, release: fakes.release }))
+      connect = vi.fn(async () => fakes.client())
       private readonly label: string
 
       constructor(config: Record<string, unknown>) {

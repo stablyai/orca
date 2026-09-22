@@ -31,22 +31,13 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
-vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
-
-// `firstParam` lives in the source-control barrel, which imports two dozen icons from a 1.14.0
-// lucide barrel that re-exports a `LucideProvider` its own context.mjs does not have. Metro and the
-// web builder each paper over it; nothing under test here renders an icon, so any name will do.
-vi.mock('lucide-react-native', () => ({
-  ArrowDown: vi.fn(),
-  ArrowDownUp: vi.fn(),
-  ArrowUp: vi.fn(),
-  Check: vi.fn(),
-  CloudUpload: vi.fn(),
-  GitBranch: vi.fn(),
-  GitPullRequestArrow: vi.fn(),
-  History: vi.fn(),
-  RefreshCw: vi.fn()
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
 }))
+
+vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
 vi.mock('../files/MobileFileExplorerPanel', () => ({
   MobileFileExplorerPanel: (props: { hostId: string; worktreeId: string; name?: string }) => {
@@ -120,14 +111,15 @@ describe('the native file explorer route that hands off to the shell', () => {
     ])
   })
 
-  it('renders the native panel while the flag read is still settling', async () => {
-    await renderExplorer()
-    expect(dependencies.panels[0]).toEqual({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      name: 'my worktree',
-      embedded: false
+  it('renders neither panel nor shell while the flag read is still settling', async () => {
+    // No `await` inside `act`, which leaves the read's promise pending: the native panel used to
+    // mount in this window and be replaced by the page the moment a flag-on read landed.
+    act(() => {
+      create(createElement(MobileFileExplorerScreen))
     })
+    expect(dependencies.panels).toEqual([])
+    expect(dependencies.routes).toEqual([])
+    await act(async () => {})
   })
 
   /**

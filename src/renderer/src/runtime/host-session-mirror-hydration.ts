@@ -16,6 +16,7 @@ type ParkedMirrorWaiter = { environmentId: string; worktreeId: string; run: () =
 const hydratedGenerationByEnvironment = new Map<string, number>()
 const hydratedGenerationByWorktree = new Map<string, number>()
 const parkedWaitersByWorktree = new Map<string, ParkedMirrorWaiter>()
+export const MAX_PARKED_HOST_SESSION_MIRROR_WAITERS = 512
 
 function worktreeKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}\0${worktreeId}`
@@ -113,11 +114,24 @@ export function parkUntilHostSessionMirrorHydrates(
   worktreeId: string,
   run: () => void
 ): void {
-  parkedWaitersByWorktree.set(worktreeKey(environmentId, worktreeId), {
+  const key = worktreeKey(environmentId, worktreeId)
+  parkedWaitersByWorktree.delete(key)
+  parkedWaitersByWorktree.set(key, {
     environmentId,
     worktreeId,
     run
   })
+  while (parkedWaitersByWorktree.size > MAX_PARKED_HOST_SESSION_MIRROR_WAITERS) {
+    const oldest = parkedWaitersByWorktree.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    parkedWaitersByWorktree.delete(oldest.value)
+  }
+}
+
+export function getParkedHostSessionMirrorWaiterCountForTests(): number {
+  return parkedWaitersByWorktree.size
 }
 
 export function resetHostSessionMirrorHydrationForTests(): void {

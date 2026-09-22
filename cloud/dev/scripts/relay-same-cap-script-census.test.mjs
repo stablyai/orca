@@ -336,6 +336,33 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.equal(workflow.split('POOL_ARGUMENTS=()').length, 3)
   })
 
+  // One cell's compute path and nothing else: the template and the MIG bound to it. The cell
+  // backend service stays out because the capacity role has no compute.backendServices.update,
+  // so naming it fails the apply after the MIG has already rolled.
+  it('targets exactly this cell template and MIG on every plan the job runs', () => {
+    const plans = workflow.split('terraform -chdir=infra/terraform plan').slice(1)
+    assert.equal(plans.length, 2)
+    for (const plan of plans) {
+      const lines = plan.split('\n')
+      const end = lines.findIndex((line) => !line.trimEnd().endsWith('\\'))
+      const call = lines.slice(0, end + 1).join('\n')
+      assert.deepEqual(
+        [...call.matchAll(/-target=([\w.]+)\[\\"\$\{TARGET_CELL_ID\}\\"\]/g)]
+          .map(([, resource]) => resource),
+        [
+          'google_compute_instance_template.relay_gce_cell',
+          'google_compute_instance_group_manager.relay_gce_cell'
+        ]
+      )
+      // Any target that is not one of those two, or not scoped to this cell, fails here.
+      assert.equal(call.split('-target=').length, 3)
+    }
+  })
+
+  it('never names a backend service on any plan or apply in the job', () => {
+    assert.equal(workflow.includes('google_compute_backend_service'), false)
+  })
+
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
@@ -693,6 +720,61 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     // Nothing else may reach the group, and the roll has to be waited on.
     assert.equal(apply.split('rolling-action').length, 2)
     assert.equal(apply.split('wait-until "${MIG_NAME}" --stable').length, 3)
+  })
+
+  // Run the predicate the job ships rather than restating it, because restating it is how the
+  // two drift apart. An unconverged resume accepts the template-and-MIG pair and nothing else,
+  // and it applies nothing: a backend change cannot reach this plan, which no longer targets one.
+  it('accepts only the template-and-MIG pair on an unconverged resume', () => {
+    const step = workflow.slice(
+      workflow.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
+      workflow.indexOf('- name: Apply only the selected same-cap template and MIG')
+    )
+    const accept = /jq -e '(\.changes == 2)' <<< "\$\{RESUME_REVIEW\}"/.exec(step)
+    assert.notEqual(accept, null, 'the resume step no longer gates on a validator verdict')
+    assert.equal(step.includes('terraform -chdir=infra/terraform apply'), false)
+    const outcome = (review) => {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', [
+        `RESUME_REVIEW=${JSON.stringify(JSON.stringify(review))}`,
+        `jq -e '${accept[1]}' <<< "\${RESUME_REVIEW}" >/dev/null || { echo refuse; exit 0; }`,
+        'echo accept'
+      ].join('\n')], { encoding: 'utf8' })
+      assert.equal(resolved.status, 0, resolved.stderr)
+      return resolved.stdout.trim()
+    }
+    assert.equal(outcome({ changes: 2 }), 'accept')
+    // Anything the validator did not bound to the reviewed rollback-image drift fails the step.
+    assert.equal(outcome({ changes: 0 }), 'refuse')
+    assert.equal(outcome({ changes: 0, backendUpdate: ['log_config.0'] }), 'refuse')
+    assert.equal(outcome({ changes: 1 }), 'refuse')
+    assert.equal(outcome({ changes: 3 }), 'refuse')
+  })
+
+  // The stranded cell's explicit MIG roll is the only thing that clears its drain flag, and
+  // `changes` is what decides it, so run the shipped predicate rather than restating it.
+  it('rolls a stranded MIG on the shipped predicate', () => {
+    const apply = workflow
+      .split('name: Apply only the selected same-cap template and MIG')[1]
+      .split('\n      - id:')[0]
+    const condition =
+      /if test "\$\{ROLLBACK_STAGE\}" = stranded \\\n\s+(&& test "\$\(jq -er '\.changes' <<< "\$\{PLAN_REVIEW\}"\)" = 0); then/
+        .exec(apply)
+    assert.notEqual(condition, null, 'the stranded roll no longer gates on the plan review')
+    const rolls = (stage, review) => {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', [
+        `ROLLBACK_STAGE=${stage}`,
+        `PLAN_REVIEW=${JSON.stringify(JSON.stringify(review))}`,
+        `if test "\${ROLLBACK_STAGE}" = stranded \\\n  ${condition[1]}; then`,
+        'echo replace; else echo no-replace; fi'
+      ].join('\n')], { encoding: 'utf8' })
+      assert.equal(resolved.status, 0, resolved.stderr)
+      return resolved.stdout.trim()
+    }
+    assert.equal(rolls('stranded', { changes: 0 }), 'replace')
+    // A real template replacement already restarts the instance; rolling again would be a second.
+    assert.equal(rolls('stranded', { changes: 2 }), 'no-replace')
+    assert.equal(rolls('resume', { changes: 0 }), 'no-replace')
+    assert.equal(rolls('none', { changes: 0 }), 'no-replace')
   })
 
   it('waits on the image a stranded cell actually serves', () => {

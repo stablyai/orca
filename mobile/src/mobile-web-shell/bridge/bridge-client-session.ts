@@ -15,10 +15,29 @@ export type BridgeShellSession = {
   /** The route patterns this page may keep for itself. Empty for a shell that names none, which
    *  hands every navigation back and is what a shell with no `navigate` grant can honour. */
   pageRoutes: readonly string[]
+  /**
+   * What each of those patterns declared, when the shell said.
+   *
+   * `null` for a shell that sent none, which is the only thing that separates "this route needs
+   * nothing" from "nobody told me". The handoff keeps its older rule on `null` and cannot invent a
+   * coverage verdict out of an absent field.
+   */
+  pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[] | null
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
   /** The allowlisted keys as the app held them when this page opened. */
   storage: Readonly<Record<string, string>>
+  /** The allowlisted keys `storage` could not carry because the app's value is over the page's cap
+   *  (ruling 33.6). Empty for a shell too old to name them, which is what it was before. */
+  storageOversize: readonly string[]
+  /**
+   * What this shell takes from the page beyond the frames every shell has taken (ruling 34).
+   *
+   * Empty for a shell that named none, which is every shell before this field: a page that posts
+   * one of these to one of those has the whole frame refused as `unrecognised-message`, so the
+   * check is the page's and it is made from here.
+   */
+  accepts: readonly string[]
 }
 
 /**
@@ -36,7 +55,10 @@ export function readShellSession(
     grants: message.grants,
     route: message.route ?? null,
     pageRoutes: message.pageRoutes ?? [],
+    pageRouteGrants: message.pageRouteGrants ?? null,
     host: message.host ?? null,
-    storage: message.storage ?? {}
+    storage: message.storage ?? {},
+    storageOversize: message.storageOversize ?? [],
+    accepts: message.accepts ?? []
   }
 }

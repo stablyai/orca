@@ -122,6 +122,34 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'session.tabs.activate') {
         return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
       }
+      if (args.method === 'session.tabs.list') {
+        // Why: the inventory — not activation's rejection — is what proves this leaf was removed,
+        // and a surviving sibling leaf is what makes the absence authoritative rather than a
+        // host that has not republished the tab yet.
+        return {
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 2,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-2'
+              }
+            ]
+          }
+        }
+      }
       if (args.method === 'terminal.recoverPane') {
         return {
           ok: true,

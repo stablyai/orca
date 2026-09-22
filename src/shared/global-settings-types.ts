@@ -174,6 +174,8 @@ export type GlobalSettings = {
   terminalWindowsShell: string
   /** Optional shell executable for new terminals on macOS and Linux. */
   terminalDefaultShell?: string
+  /** Optional argv passed to the configured Unix shell for ordinary interactive panes. */
+  terminalDefaultShellArgs?: string[]
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */

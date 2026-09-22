@@ -3,10 +3,11 @@ import { applyXtermSelection, cancelSelect } from './selection-range'
 import { notify } from './host-notify'
 import { getMouseTrackingMode, isSafeSgrMouseCoordinate } from './mouse-input-encoding'
 import { viewportToCell } from './viewport-cell'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { ESC } from './escape-introducers'
 import { notifyTerminalSurfaceTap } from './surface-tap'
 import { viewportToMouseReportCell } from './mouse-report-cell'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { dispatcherShouldBlockSurface, TAP_SLOP } from './tap-dispatch'
 
 /** A mouse press being tracked from pointerdown to pointerup. */
 export type TerminalMouseGesture = {
@@ -20,14 +21,17 @@ export type TerminalMouseGesture = {
   dismissedSelection: boolean
 }
 
-let mouseGesture: TerminalMouseGesture | null = null
-
 // One report per transition, built with the same encoding ladder as
 // buildMouseClickInput: SGR pixels (1016) > SGR (1006) > default. Returns ''
 // when the mode does not report this transition (x10 has no release, only
 // drag/any report motion) or the cell is not encodable.
-export function buildMouseButtonReport(kind: string, clientX: number, clientY: number) {
-  const mouseTrackingMode = getMouseTrackingMode()
+export function buildMouseButtonReport(
+  scope: TerminalDocumentScope,
+  kind: string,
+  clientX: number,
+  clientY: number
+) {
+  const mouseTrackingMode = getMouseTrackingMode(scope)
   if (mouseTrackingMode === 'none') {
     return ''
   }
@@ -37,7 +41,7 @@ export function buildMouseButtonReport(kind: string, clientX: number, clientY: n
   if (kind === 'release' && mouseTrackingMode === 'x10') {
     return ''
   }
-  const cell = viewportToMouseReportCell(clientX, clientY)
+  const cell = viewportToMouseReportCell(scope, clientX, clientY)
   if (!cell) {
     return ''
   }
@@ -47,7 +51,7 @@ export function buildMouseButtonReport(kind: string, clientX: number, clientY: n
     if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) {
       return ''
     }
-    return scope.ESC + '[<' + sgrButton + ';' + cell.x + ';' + cell.y + sgrFinal
+    return ESC + '[<' + sgrButton + ';' + cell.x + ';' + cell.y + sgrFinal
   }
   if (scope.sgrMouseMode) {
     // Why: xterm increments zero-based mouse cells before encoding reports.
@@ -56,7 +60,7 @@ export function buildMouseButtonReport(kind: string, clientX: number, clientY: n
     if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) {
       return ''
     }
-    return scope.ESC + '[<' + sgrButton + ';' + sgrCol + ';' + sgrRow + sgrFinal
+    return ESC + '[<' + sgrButton + ';' + sgrCol + ';' + sgrRow + sgrFinal
   }
   const button = kind === 'motion' ? 64 : kind === 'release' ? 35 : 32
   const col = cell.col + 1 + 32
@@ -67,52 +71,48 @@ export function buildMouseButtonReport(kind: string, clientX: number, clientY: n
     return ''
   }
   return (
-    scope.ESC +
-    '[M' +
-    String.fromCharCode(button) +
-    String.fromCharCode(col) +
-    String.fromCharCode(row)
+    ESC + '[M' + String.fromCharCode(button) + String.fromCharCode(col) + String.fromCharCode(row)
   )
 }
 
-export function mouseReportCellKey(clientX: number, clientY: number) {
-  const cell = viewportToMouseReportCell(clientX, clientY)
+export function mouseReportCellKey(scope: TerminalDocumentScope, clientX: number, clientY: number) {
+  const cell = viewportToMouseReportCell(scope, clientX, clientY)
   return cell ? cell.col + ',' + cell.row : null
 }
 
-export function abandonMouseGesture() {
-  const gesture = mouseGesture
-  mouseGesture = null
+export function abandonMouseGesture(scope: TerminalDocumentScope) {
+  const gesture = scope.mouseGesture
+  scope.mouseGesture = null
   if (!gesture) {
     return
   }
   if (gesture.mode === 'tracking') {
     // Why: the press report already went to the TUI; a lost pointer must not
     // leave the button latched down on the far side.
-    const release = buildMouseButtonReport('release', gesture.lastX, gesture.lastY)
+    const release = buildMouseButtonReport(scope, 'release', gesture.lastX, gesture.lastY)
     if (release) {
-      notify({ type: 'terminal-input', bytes: release })
+      notify(scope, { type: 'terminal-input', bytes: release })
     }
   } else if (gesture.mode === 'selecting') {
     if (scope.sel) {
       scope.sel.activeHandle = null
     }
-    stopEdgeScroll()
+    stopEdgeScroll(scope)
   }
 }
 
-export function beginMouseDrag(gesture: TerminalMouseGesture) {
+export function beginMouseDrag(scope: TerminalDocumentScope, gesture: TerminalMouseGesture) {
   gesture.moved = true
-  if (getMouseTrackingMode() !== 'none') {
+  if (getMouseTrackingMode(scope) !== 'none') {
     gesture.mode = 'tracking'
-    gesture.lastCellKey = mouseReportCellKey(gesture.startX, gesture.startY)
-    const press = buildMouseButtonReport('press', gesture.startX, gesture.startY)
+    gesture.lastCellKey = mouseReportCellKey(scope, gesture.startX, gesture.startY)
+    const press = buildMouseButtonReport(scope, 'press', gesture.startX, gesture.startY)
     if (press) {
-      notify({ type: 'terminal-input', bytes: press })
+      notify(scope, { type: 'terminal-input', bytes: press })
     }
     return
   }
-  const anchor = viewportToCell(gesture.startX, gesture.startY)
+  const anchor = viewportToCell(scope, gesture.startX, gesture.startY)
   if (!anchor) {
     gesture.mode = 'cancelled'
     return
@@ -124,25 +124,28 @@ export function beginMouseDrag(gesture: TerminalMouseGesture) {
   scope.selMode = 'select'
   scope.sel = { anchor: anchor, focus: anchor, activeHandle: 'end' }
   scope.selectionOverlay!.classList.add('active')
-  notify({ type: 'set-select-mode', enabled: true })
-  applyXtermSelection()
-  repositionOverlay()
+  notify(scope, { type: 'set-select-mode', enabled: true })
+  applyXtermSelection(scope)
+  repositionOverlay(scope)
 }
 
-export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
+export function attachSurfaceMouseClickDragHandler(
+  scope: TerminalDocumentScope,
+  targetSurface: HTMLElement
+) {
   targetSurface.addEventListener(
     'pointerdown',
     function (e) {
       if (e.pointerType !== 'mouse' || e.button !== 0) {
         return
       }
-      if (dispatcherShouldBlockSurface() || !scope.term) {
+      if (dispatcherShouldBlockSurface(scope) || !scope.term) {
         return
       }
       // Why: a pointerup lost outside the WebView must not leave the previous
       // gesture latched (tracking press with no release) when the next one lands.
-      if (mouseGesture) {
-        abandonMouseGesture()
+      if (scope.mouseGesture) {
+        abandonMouseGesture(scope)
       }
       // Why: mouse pointers have no implicit capture; without it a drag that
       // leaves the surface drops pointermove/pointerup and strands the gesture.
@@ -151,7 +154,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
           targetSurface.setPointerCapture(e.pointerId)
         }
       } catch {}
-      mouseGesture = {
+      scope.mouseGesture = {
         startX: e.clientX,
         startY: e.clientY,
         lastX: e.clientX,
@@ -164,8 +167,8 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
       if (scope.selMode === 'select') {
         // Why: touch parity — pressing outside the pill dismisses the current
         // selection; the same press may still start a new drag selection.
-        cancelSelect()
-        mouseGesture.dismissedSelection = true
+        cancelSelect(scope)
+        scope.mouseGesture.dismissedSelection = true
       }
     },
     true
@@ -174,7 +177,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'pointermove',
     function (e) {
-      const gesture = mouseGesture
+      const gesture = scope.mouseGesture
       if (e.pointerType !== 'mouse' || !gesture || gesture.mode === 'cancelled') {
         return
       }
@@ -188,30 +191,30 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
         // end the gesture here, or a tracked press stays latched at the TUI.
         // Coordinates first, so the synthesized release lands where the
         // pointer re-entered rather than at the previous cell.
-        abandonMouseGesture()
+        abandonMouseGesture(scope)
         return
       }
       if (!gesture.moved) {
         const dx = Math.abs(e.clientX - gesture.startX)
         const dy = Math.abs(e.clientY - gesture.startY)
-        if (dx + dy <= scope.TAP_SLOP) {
+        if (dx + dy <= TAP_SLOP) {
           return
         }
-        beginMouseDrag(gesture)
+        beginMouseDrag(scope, gesture)
       }
       if (gesture.mode === 'tracking') {
         // Why: one motion report per cell keeps drags bounded by grid size, not
         // by pointermove cadence, so the RN rate limiter is never the bottleneck.
-        const cellKey = mouseReportCellKey(e.clientX, e.clientY)
+        const cellKey = mouseReportCellKey(scope, e.clientX, e.clientY)
         if (cellKey && cellKey !== gesture.lastCellKey) {
           gesture.lastCellKey = cellKey
-          const motion = buildMouseButtonReport('motion', e.clientX, e.clientY)
+          const motion = buildMouseButtonReport(scope, 'motion', e.clientX, e.clientY)
           if (motion) {
-            notify({ type: 'terminal-input', bytes: motion })
+            notify(scope, { type: 'terminal-input', bytes: motion })
           }
         }
       } else if (gesture.mode === 'selecting') {
-        handleDragMove('end', e.clientX, e.clientY)
+        handleDragMove(scope, 'end', e.clientX, e.clientY)
       }
     },
     true
@@ -220,18 +223,18 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'pointerup',
     function (e) {
-      const gesture = mouseGesture
+      const gesture = scope.mouseGesture
       if (e.pointerType !== 'mouse' || !gesture || e.button !== 0) {
         return
       }
-      mouseGesture = null
+      scope.mouseGesture = null
       if (gesture.mode === 'cancelled' || !scope.term) {
         return
       }
       if (gesture.mode === 'tracking') {
-        const release = buildMouseButtonReport('release', e.clientX, e.clientY)
+        const release = buildMouseButtonReport(scope, 'release', e.clientX, e.clientY)
         if (release) {
-          notify({ type: 'terminal-input', bytes: release })
+          notify(scope, { type: 'terminal-input', bytes: release })
         }
         return
       }
@@ -239,11 +242,11 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
         if (scope.sel) {
           scope.sel.activeHandle = null
         }
-        stopEdgeScroll()
-        repositionOverlay()
+        stopEdgeScroll(scope)
+        repositionOverlay(scope)
         return
       }
-      if (dispatcherShouldBlockSurface()) {
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       // Why: a dismissing tap only clears the selection (touch parity); it must
@@ -252,7 +255,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
         return
       }
       // Pointer clicks keep their current link, file, TUI mouse, and focus priority.
-      notifyTerminalSurfaceTap(e.clientX, e.clientY, false)
+      notifyTerminalSurfaceTap(scope, e.clientX, e.clientY, false)
     },
     true
   )
@@ -263,7 +266,7 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
       if (e.pointerType !== 'mouse') {
         return
       }
-      abandonMouseGesture()
+      abandonMouseGesture(scope)
     },
     true
   )
@@ -274,8 +277,8 @@ export function attachSurfaceMouseClickDragHandler(targetSurface: HTMLElement) {
   targetSurface.addEventListener(
     'touchstart',
     function () {
-      if (mouseGesture) {
-        abandonMouseGesture()
+      if (scope.mouseGesture) {
+        abandonMouseGesture(scope)
       }
     },
     true

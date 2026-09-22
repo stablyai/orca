@@ -21,6 +21,8 @@ import {
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
 import { ownRetainedString } from '../../shared/own-retained-string'
+
+export const MAX_ADVERTISED_URL_SCAN_SNAPSHOTS = 512
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'
 
 export type AdvertisedUrl = {
@@ -268,7 +270,15 @@ export class AdvertisedUrlWatcher {
     }
 
     for (const worktreeId of worktreeSet) {
+      this.scanSnapshots.delete(worktreeId)
       this.scanSnapshots.set(worktreeId, new Map(observedByPort))
+      while (this.scanSnapshots.size > MAX_ADVERTISED_URL_SCAN_SNAPSHOTS) {
+        const oldest = this.scanSnapshots.keys().next()
+        if (oldest.done || oldest.value === worktreeId) {
+          break
+        }
+        this.scanSnapshots.delete(oldest.value)
+      }
     }
     for (const event of removedEvents) {
       this.emitChange(event)

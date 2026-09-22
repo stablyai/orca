@@ -1,6 +1,6 @@
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { join } from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
 import { RuntimeClientError } from './runtime-client-error'
+import { readMacosBundleId, resetMacosTccPermission } from '../macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from './macos-native-provider-paths'
 import { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
 import type {
@@ -107,10 +107,10 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }
 
-  const bundleId = readComputerUseBundleId(helperAppPath)
+  const bundleId = (await readMacosBundleId(helperAppPath)) ?? DEFAULT_COMPUTER_USE_BUNDLE_ID
   closeExistingPermissionHelpers()
-  resetTccPermission('Accessibility', bundleId)
-  resetTccPermission('ScreenCapture', bundleId)
+  await resetTccPermission('Accessibility', bundleId)
+  await resetTccPermission('ScreenCapture', bundleId)
 
   return {
     ...(await getComputerUsePermissionStatus()),
@@ -132,36 +132,16 @@ function closeExistingPermissionHelpers(): void {
   }
 }
 
-function readComputerUseBundleId(helperAppPath: string): string {
-  const infoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
-  try {
-    const bundleId = execFileSync(
-      '/usr/libexec/PlistBuddy',
-      ['-c', 'Print :CFBundleIdentifier', infoPlistPath],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      }
-    ).trim()
-    return bundleId || DEFAULT_COMPUTER_USE_BUNDLE_ID
-  } catch {
-    return DEFAULT_COMPUTER_USE_BUNDLE_ID
-  }
-}
-
-function resetTccPermission(service: string, bundleId: string): void {
+async function resetTccPermission(service: string, bundleId: string): Promise<void> {
   // Why: macOS keeps TCC rows after uninstall; users need an explicit way to
   // clear stale grants or denials for the helper's stable bundle identity.
-  const result = spawnSync('/usr/bin/tccutil', ['reset', service, bundleId], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  if (result.status === 0) {
-    return
+  const result = await resetMacosTccPermission(service, bundleId)
+  if (!result.ok) {
+    throw new RuntimeClientError(
+      'accessibility_error',
+      `Could not reset ${service}: ${result.detail}`
+    )
   }
-  const detail =
-    result.stderr?.trim() || result.stdout?.trim() || `exit ${result.status ?? 'unknown'}`
-  throw new RuntimeClientError('accessibility_error', `Could not reset ${service}: ${detail}`)
 }
 
 function nextPermissionStep(

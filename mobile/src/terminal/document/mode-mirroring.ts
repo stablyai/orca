@@ -1,14 +1,14 @@
 import { notify } from './host-notify'
 import { getMouseTrackingMode } from './mouse-input-encoding'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 
-export function emitModesIfChanged() {
+export function emitModesIfChanged(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
   const bp = !!(scope.term.modes && scope.term.modes.bracketedPasteMode)
   let alt = false
-  const mouseTrackingMode = getMouseTrackingMode()
+  const mouseTrackingMode = getMouseTrackingMode(scope)
   try {
     alt =
       scope.term.buffer && scope.term.buffer.active && scope.term.buffer.active.type === 'alternate'
@@ -27,7 +27,7 @@ export function emitModesIfChanged() {
       sgrMouseMode: scope.sgrMouseMode,
       sgrMousePixelsMode: scope.sgrMousePixelsMode
     }
-    notify({
+    notify(scope, {
       type: 'modes',
       bracketedPasteMode: bp,
       altScreen: alt,
@@ -36,11 +36,4 @@ export function emitModesIfChanged() {
       sgrMousePixelsMode: scope.sgrMousePixelsMode
     })
   }
-}
-scope.lastEmittedModes = {
-  bracketedPasteMode: false,
-  altScreen: false,
-  mouseTrackingMode: 'none',
-  sgrMouseMode: false,
-  sgrMousePixelsMode: false
 }

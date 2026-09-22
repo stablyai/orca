@@ -43,6 +43,20 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
+  it('materializes the requested Pi extension in the guest home', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        ORCA_WSL_HOOK_INSTANCE: 'inst-pi'
+      })
+      const source = '// @orca-managed-pi-extension\nexport default {}\n'
+      const res = install({ piExtensionSource: source, launchKind: 'pi' })
+      expect(res.overlayDirs.pi).toBe(join(home, '.pi', 'agent'))
+      const extension = join(home, '.pi', 'agent', 'extensions', 'orca-agent-status.ts')
+      expect(readFileSync(extension, 'utf8')).toContain(source)
+    })
+  })
+
   it('writes the OpenCode 2 plugin to its separate overlay', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
@@ -173,11 +187,10 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('does not mirror the XDG default config root', () => {
+  it('mirrors the XDG default config root when using an overlay', () => {
     withHome((home) => {
-      // Why: OpenCode APPENDS OPENCODE_CONFIG_DIR to its config-dir list rather than
-      // replacing it, so ~/.config/opencode is read anyway — mirroring it here would
-      // load the user's config and plugins twice.
+      // Why: OPENCODE_CONFIG_DIR replaces the default root, so the overlay must
+      // carry the user's default config and Orca's plugin together.
       const defaultConfig = join(home, '.config', 'opencode')
       mkdirSync(defaultConfig, { recursive: true })
       writeFileSync(join(defaultConfig, 'opencode.json'), '{"model":"default"}')
@@ -188,7 +201,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
 
-      expect(existsSync(join(dir, 'opencode.json'))).toBe(false)
+      expect(existsSync(join(dir, 'opencode.json'))).toBe(true)
       expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
     })
   })

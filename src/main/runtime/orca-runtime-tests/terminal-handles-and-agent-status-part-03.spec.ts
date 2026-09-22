@@ -236,7 +236,7 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
   })
 
-  it('rejects a later Antigravity header with a prompt but no model line', async () => {
+  it('recognizes a later Antigravity header with a prompt but no model line', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -263,7 +263,7 @@ describe('OrcaRuntimeService', () => {
       100
     )
 
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })
 
   it('uses the latest Antigravity header when checking readiness', async () => {

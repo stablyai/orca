@@ -13,6 +13,7 @@ type LocalGitCapabilityTarget = {
 }
 
 const localCapabilitiesByExecutionHost = new Map<string, GitCapabilityCache>()
+const MAX_LOCAL_GIT_CAPABILITY_HOSTS = 128
 // Why: reconnecting creates a new provider, while concurrent IPC/runtime users
 // of one SSH connection must share the same remote Git capability results.
 let sshCapabilitiesByProvider = new WeakMap<SshGitProvider, GitCapabilityCache>()
@@ -30,7 +31,15 @@ export function getLocalGitCapabilityCache(
   let cache = localCapabilitiesByExecutionHost.get(executionHost)
   if (!cache) {
     cache = new GitCapabilityCache()
-    localCapabilitiesByExecutionHost.set(executionHost, cache)
+  }
+  localCapabilitiesByExecutionHost.delete(executionHost)
+  localCapabilitiesByExecutionHost.set(executionHost, cache)
+  while (localCapabilitiesByExecutionHost.size > MAX_LOCAL_GIT_CAPABILITY_HOSTS) {
+    const oldest = localCapabilitiesByExecutionHost.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    localCapabilitiesByExecutionHost.delete(oldest)
   }
   return cache
 }

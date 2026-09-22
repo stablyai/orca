@@ -66,6 +66,17 @@ afterEach(() => {
 })
 
 describe('PluginWorkerManager capacity', () => {
+  it('releases generations for removed plugin keys', async () => {
+    const subject = manager(vi.fn<PluginWorkerFactory>(async () => worker()))
+
+    for (let index = 0; index < 600; index += 1) {
+      await subject.deactivate(`removed-${index}`)
+    }
+
+    expect(subject.generationCountForTests()).toBe(0)
+    await subject.disposeAll()
+  })
+
   it('atomically counts in-flight starts against maxActive', async () => {
     const starts: { key: string; resolve: (handle: TestWorker) => void }[] = []
     const factory = vi.fn<PluginWorkerFactory>(

@@ -175,6 +175,7 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
 final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
+  let onExternalNavigation = EventDispatcher()
 
   private let schemeHandler = MobileWebShellSchemeHandler()
   private let bridgeReceiver = MobileWebShellBridgeReceiver()
@@ -212,6 +213,13 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.navigationDelegate = self
     webView.uiDelegate = self
     webView.allowsBackForwardNavigationGestures = false
+    // Transparent, as the Android view is. A WKWebView is opaque by default and paints white
+    // before its document does, so a dark app opening a page flashed white for the whole of the
+    // page's boot; with no surface of its own, what shows through is the shell's own frame, which
+    // is the one thing that knows the app's colours.
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     webView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(webView)
@@ -421,6 +429,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private func loadWhenIsolated() {
     guard isolationReady, let url = pendingDocumentUrl else { return }
     pendingDocumentUrl = nil
+    // The only thing that tells the load the shell asked for from one a document asked for. The
+    // state machine drops it again on every way a document can end.
+    loadState.shellLoadStarted()
     webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
   }
 
@@ -457,13 +468,31 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationAction: WKNavigationAction,
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
-    if #available(iOS 14.5, *), navigationAction.shouldPerformDownload {
-      decisionHandler(.cancel)
-      return
+    var isDownload = false
+    if #available(iOS 14.5, *) {
+      isDownload = navigationAction.shouldPerformDownload
     }
-    let allowed = navigationAction.targetFrame?.isMainFrame == true &&
-      isDocumentUrl(navigationAction.request.url)
-    decisionHandler(allowed ? .allow : .cancel)
+    // `.linkActivated` is WebKit's own answer to "did a human start this". It decides only what may
+    // be offered to the opener; nothing is allowed on the strength of it, because a subframe can
+    // navigate the top frame with no gesture reported at all.
+    let verdict = MobileWebShellNavigationPolicy.verdict(
+      url: navigationAction.request.url?.absoluteString,
+      isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+      isFromSubframe: !navigationAction.sourceFrame.isMainFrame,
+      isDocumentUrl: isDocumentUrl(navigationAction.request.url),
+      isShellLoad: loadState.isShellLoad,
+      hasGesture: navigationAction.navigationType == .linkActivated,
+      isDownload: isDownload
+    )
+    if case let .cancelAndOffer(url) = verdict {
+      onExternalNavigation(["url": url])
+    }
+    if verdict == .allow {
+      // Spent here, before the decision is handed back: the next main-frame action gets no allow on
+      // the strength of a load that has already been given one.
+      loadState.shellLoadConsumed()
+    }
+    decisionHandler(verdict == .allow ? .allow : .cancel)
   }
 
   func webView(

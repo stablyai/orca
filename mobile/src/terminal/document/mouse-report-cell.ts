@@ -1,6 +1,6 @@
 import { getCellHeight } from './fit-scale'
 import { getCellWidth, getTotalScale } from './viewport-transform'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 
 /** Where a viewport point lands in the terminal's cell grid, for an xterm mouse report. */
 export type MouseReportCell = { col: number; row: number; x: number; y: number }
@@ -12,14 +12,15 @@ export type MouseReportCell = { col: number; row: number; x: number; y: number }
  * transformed layer, so its on-screen geometry is not the geometry xterm reports in.
  */
 export function viewportToMouseReportCell(
+  scope: TerminalDocumentScope,
   clientX: number,
   clientY: number
 ): MouseReportCell | null {
   if (!scope.term) {
     return null
   }
-  const cellW = getCellWidth()
-  const cellH = getCellHeight()
+  const cellW = getCellWidth(scope)
+  const cellH = getCellHeight(scope)
   if (cellW <= 0 || cellH <= 0) {
     return null
   }
@@ -29,7 +30,7 @@ export function viewportToMouseReportCell(
   if (typeof clientY !== 'number') {
     clientY = window.innerHeight / 2
   }
-  let total = getTotalScale()
+  let total = getTotalScale(scope)
   if (total <= 0) {
     total = 1
   }

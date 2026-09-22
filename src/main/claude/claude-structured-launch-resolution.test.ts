@@ -10,6 +10,7 @@ import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
+  CLAUDE_SESSION_STATE_EVENTS_ENV,
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeSessionIdForOrcaSession,
   createClaudeStructuredLaunchResolver
@@ -126,6 +127,7 @@ describe('claude structured launch resolution', () => {
     })
     expect(first.options.resume).toBeUndefined()
     expect(CLAUDE_STRUCTURED_BASE_OPTIONS.includePartialMessages).toBe(true)
+    expect(first.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
 
   it('resumes the session and leaf at the durable chain head', async () => {
@@ -152,6 +154,14 @@ describe('claude structured launch resolution', () => {
     expect(launch.options.resume).toBe('provider-current')
     expect(launch.options.resumeSessionAt).toBe('leaf-current')
     expect(launch.options.sessionId).toBeUndefined()
+  })
+
+  it('forces session-state events on when the inherited overlay disables them', async () => {
+    const launch = await resolverFor(record(), () => ({
+      [CLAUDE_SESSION_STATE_EVENTS_ENV]: '0'
+    }))({ identity: IDENTITY })
+
+    expect(launch.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
 
   it('refuses a durable journal leaf that diverged before resume resolution', async () => {

@@ -335,10 +335,23 @@ clients behind one NAT and is an abuse safeguard, not a global provider-spending
 and waiting work are bounded independently of HTTP concurrency.
 
 `push_events` backs quota accounting. `push_event_recipients` deduplicates fanout and
-`push_delivery_batches` retains its historical name and persists individual deliveries, worker
-leases, retries and outcomes. Identity metadata
-is retained for 24 hours. Payloads expire within five minutes and are cleared on completion or by
-minute-level expiry cleanup. FCM project-level provider quotas remain independent of host limits.
+`push_delivery_batches` retains its historical name and persists individual pending deliveries,
+worker leases and retries. A delivery row is deleted when it is sent, dead, dismissed or expired, so
+the table holds only live work. Event and recipient identity metadata is retained for 24 hours.
+Payloads expire within five minutes. Minute-level cleanup deletes in bounded batches, so a backlog
+drains over successive runs instead of in one long statement. FCM project-level provider quotas
+remain independent of host limits.
+
+A worker claims one device's oldest due delivery with a row lock that other claimers skip, and a
+non-blocking per-device lock keeps at most one delivery per phone in flight. Each claim also takes
+the previous revision's global claim lock in shared mode, so during a deploy overlap an old worker's
+claim waits for new leases to commit instead of re-leasing them. That shared lock can be removed one
+release after every worker runs this revision. The claim scan only
+reads rows due within the notification TTL, so an unpruned backlog does not slow it. Boot adds one
+queue index, a partial index of pending rows per device for the head check; it indexes no lease
+column, so lease and renew writes stay heap-only updates. Claim, finish and cleanup traffic may
+hold at most one fewer connection than the pool size, so request authentication always has a
+connection. Lease renewals skip that cap so they never queue behind claims.
 
 Logging is aggregate counters only. Never log a token, a title, a body, or a full fingerprint;
 the first four characters of a fingerprint are the most that may appear.

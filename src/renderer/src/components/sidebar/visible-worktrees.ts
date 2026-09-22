@@ -23,7 +23,13 @@ import {
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+export {
+  EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
+  getWorktreeIdsWithStructuredChat
+} from './visible-worktree-activity-inputs'
+// Runtime edge only one way: the builder imports VisibleWorktreeOptions as a type, which erases.
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
@@ -41,11 +47,7 @@ import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees
 } from './rendered-sidebar-worktree-order'
-import {
-  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
-} from './workspace-creator-visibility'
+import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -62,13 +64,14 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
  */
-type VisibleWorktreeOptions = {
+export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
   worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithStructuredChat?: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
@@ -153,7 +156,8 @@ export function computeVisibleWorktrees(
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,
-          opts.worktreeIdsWithLiveAgent
+          opts.worktreeIdsWithLiveAgent,
+          opts.worktreeIdsWithStructuredChat
         )
     )
   }
@@ -255,50 +259,6 @@ export function setVisibleWorktreeShortcutTargets(
   targets: VisibleWorktreeShortcutTarget[] | null
 ): void {
   _publishedVisibleShortcutTargets = targets
-}
-
-/**
- * Compute the visible worktree IDs on-demand from the current Zustand store
- * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
- * store snapshot at call time).
- *
- * If WorktreeList is mounted, returns the exact IDs it rendered. Otherwise
- * recomputes the order the sidebar *would* render from the same row pipeline,
- * so a closed sidebar numbers workspaces the same way an open one does (#9497).
- */
-export function buildVisibleWorktreeOptionsFromState(
-  state: ReturnType<typeof useAppStore.getState>,
-  repoMap: Map<string, Repo>
-): VisibleWorktreeOptions {
-  return {
-    filterRepoIds: state.filterRepoIds,
-    showSleepingWorkspaces: state.showSleepingWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: state.browserTabsByWorktree,
-    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      state.tabsByWorktree,
-      Date.now()
-    ),
-    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
-    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
-    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
-    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
-      ? getPairedDeviceIdsByEnvironment(
-          state.runtimeEnvironments,
-          state.runtimeStatusByEnvironmentId
-        )
-      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
-    repoMap,
-    workspaceHostScope: state.workspaceHostScope,
-    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
-    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById
-  }
 }
 
 export function getVisibleWorktreeIds(): string[] {

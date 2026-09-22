@@ -87,9 +87,10 @@ export function structuredAgentSessionsWorkingAtTeardown(input: {
     }
     const snapshot = session.journal.snapshot()
     const status = projectStructuredAgentSessionStatus(snapshot.items, snapshot.submissions)
-    // The product's own classification, so the marker rule cannot disagree with what the UI calls
-    // working. A turn blocked on an approval or a question projects as `attention`: the agent is
-    // waiting on the USER, and that is not interrupted work to hand back.
+    // Deliberately the LEAD-only projection, not the folded status the UI calls working: a marker
+    // hands back the lead's own in-flight turn, and child work this teardown is about to evict is
+    // not work to resume. A turn blocked on an approval or a question projects as `attention`: the
+    // agent is waiting on the USER, and that is not interrupted work to hand back.
     //
     // Provider tail events are re-derived after exit, before eviction cancels pending prompts.
     if (status !== 'working') {

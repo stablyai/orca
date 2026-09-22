@@ -8,6 +8,7 @@ import Foundation
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
 //     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
+//     ios/MobileWebShellNavigationPolicy.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -208,9 +209,9 @@ import Foundation
     precondition(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // A file preview is a `data:<mime>;base64,` URI the page composed from a reply it already
-    // holds; see MobileWebShellCsp.
-    precondition(directives.contains("img-src 'self' data:"))
+    // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
+    // page already renders, and the sealed preview frame. See MobileWebShellCsp.
+    precondition(directives.contains("img-src 'self' data: https:"))
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
     precondition(directives.contains("frame-src 'none'"))
@@ -223,8 +224,12 @@ import Foundation
     precondition(!header.contains("unsafe-eval"))
     // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
     // directive that grew one would fail here instead of passing a blanket absence check.
-    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data:"])
+    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: https:"])
     precondition(!header.contains("blob:"))
+    // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
+    // this still refuses a cleartext source anywhere in the header.
+    precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: https:"])
+    precondition(!header.contains("http:"))
     precondition(!header.contains("\r") && !header.contains("\n"))
   }
 
@@ -233,6 +238,23 @@ import Foundation
     precondition(MobileWebShellFailureReason.isolationUnavailable.rawValue == "isolation-unavailable")
     precondition(MobileWebShellFailureReason.documentLoadFailed.rawValue == "document-load-failed")
     precondition(MobileWebShellFailureReason.renderProcessGone.rawValue == "render-process-gone")
+
+    // The own-load flag's whole lifetime, which is what decides whether a navigation to the document
+    // may be allowed. Raised only by the view's own `load`, and dropped by anything that ends the
+    // document -- a commit, a failure, a dead renderer, a prop update that never loaded.
+    let ownLoad = MobileWebShellLoadStateMachine()
+    precondition(!ownLoad.isShellLoad)
+    ownLoad.shellLoadStarted()
+    precondition(ownLoad.isShellLoad)
+    ownLoad.committed()
+    precondition(!ownLoad.isShellLoad)
+    ownLoad.shellLoadStarted()
+    _ = ownLoad.failed(.documentLoadFailed)
+    precondition(!ownLoad.isShellLoad)
+    ownLoad.reset()
+    ownLoad.shellLoadStarted()
+    ownLoad.documentEnded()
+    precondition(!ownLoad.isShellLoad)
 
     let progress = MobileWebShellLoadStateMachine()
     precondition(progress.started()?.state == "loading")
@@ -302,6 +324,9 @@ import Foundation
     precondition(document["Content-Length"] == "12")
     precondition(document["Cache-Control"] == "no-store")
     precondition(document["X-Content-Type-Options"] == "nosniff")
+    // The document origin is the session id, and `img-src https:` gives the page somewhere to send
+    // it. See MobileWebShellResponseHeaders.
+    precondition(document["Referrer-Policy"] == "no-referrer")
 
     // The policy rides the document alone; on a subresource response it is inert.
     for path in ["/index.html", "/assets/aa.js", "/manifest.json", "/assets/bb.png"] {
@@ -311,6 +336,9 @@ import Foundation
         byteCount: 0
       )
       precondition(headers["Content-Security-Policy"] == nil)
+      // Rides the document with the policy: the referrer of a request is decided by the document
+      // that made it, so on a subresource response this would govern nothing.
+      precondition(headers["Referrer-Policy"] == nil)
       precondition(headers["Cache-Control"] == "no-store")
       precondition(headers["X-Content-Type-Options"] == "nosniff")
     }
@@ -507,6 +535,116 @@ import Foundation
     precondition(gate.refusedCount == 2)
   }
 
+  /// The whole navigation decision, which is one function so the allow half and the offer half
+  /// cannot drift. The rule is the frame and the gesture, not the scheme: TypeScript's
+  /// `readBridgeExternalLinkUrl` owns which URLs open, and a second scheme list here would be two
+  /// rules that drift.
+  static func checkNavigationVerdict() {
+    let foreign = "https://example.com/artifact-link"
+    let document = "orca-mobile-web://\(session)/"
+    func verdict(
+      _ url: String? = "https://example.com/artifact-link",
+      isMainFrame: Bool = true,
+      isFromSubframe: Bool = false,
+      isDocumentUrl: Bool = false,
+      isShellLoad: Bool = false,
+      hasGesture: Bool = true,
+      isDownload: Bool = false
+    ) -> MobileWebShellNavigationVerdict {
+      MobileWebShellNavigationPolicy.verdict(
+        url: url,
+        isMainFrame: isMainFrame,
+        isFromSubframe: isFromSubframe,
+        isDocumentUrl: isDocumentUrl,
+        isShellLoad: isShellLoad,
+        hasGesture: hasGesture,
+        isDownload: isDownload
+      )
+    }
+    precondition(verdict() == .cancelAndOffer(foreign))
+    // The shell's own load, which is the only navigation to the document this view ever performs.
+    // Measured on WebKit: `webView.load` arrives with target and source both the main frame.
+    precondition(verdict(document, isDocumentUrl: true, isShellLoad: true, hasGesture: false) == .allow)
+    // Everything else that names the document is refused, whatever the host says about a gesture,
+    // and is never offered -- handing the shell's own URL to the opener would bounce the user out.
+    // The host is not trusted to report the gesture: measured on WebKit, a sandboxed subframe
+    // navigating the top frame to the document URL arrives with no gesture at all.
+    precondition(verdict(document, isDocumentUrl: true, hasGesture: false) == .cancel)
+    precondition(verdict(document, isDocumentUrl: true, hasGesture: true) == .cancel)
+    precondition(
+      verdict(document, isFromSubframe: true, isDocumentUrl: true, isShellLoad: true, hasGesture: false)
+        == .cancel
+    )
+    // The second discriminator, on its own: a load the shell did not start is refused even when the
+    // initiating frame is the main one, which is the page rewriting its own document away.
+    precondition(verdict(document, isDocumentUrl: true, isShellLoad: false, hasGesture: false) == .cancel)
+    // A top-page meta refresh or a redirect to somewhere else: refused, and never opened.
+    precondition(verdict(hasGesture: false) == .cancel)
+    // A tap inside the sealed preview is exactly a subframe-initiated foreign navigation, and that
+    // is the one thing the artifact is allowed to ask for.
+    precondition(verdict(isFromSubframe: true) == .cancelAndOffer(foreign))
+    // A download is not a document load, so it is refused there rather than allowed; started by a
+    // tap it reaches the opener, which is what makes `<a download>` behave as it does natively.
+    precondition(
+      verdict(document, isDocumentUrl: true, isShellLoad: true, hasGesture: false, isDownload: true)
+        == .cancel
+    )
+    precondition(verdict(isDownload: true) == .cancelAndOffer(foreign))
+    // `<a href="/" download>`: a download that still names the shell's own document, which is the
+    // one thing never handed to the opener. Refused from either frame, gesture or not.
+    precondition(verdict(document, isDocumentUrl: true, isDownload: true) == .cancel)
+    precondition(
+      verdict(document, isFromSubframe: true, isDocumentUrl: true, isDownload: true) == .cancel
+    )
+    // A subframe is the sealed preview loading itself, which is not the user leaving the app.
+    precondition(verdict(isMainFrame: false) == .cancel)
+    precondition(verdict(isMainFrame: false, hasGesture: false) == .cancel)
+    precondition(verdict(nil) == .cancel)
+    precondition(verdict("") == .cancel)
+    // The crossing cap, at it and one past it.
+    let cap = MobileWebShellNavigationPolicy.maxCancelledNavigationUrlCharacters
+    let prefix = "https://example.com/"
+    let atCap = prefix + String(repeating: "a", count: cap - prefix.count)
+    precondition(atCap.count == cap)
+    precondition(MobileWebShellNavigationPolicy.offerableUrl(atCap) == atCap)
+    precondition(MobileWebShellNavigationPolicy.offerableUrl(atCap + "a") == nil)
+    precondition(verdict(atCap + "a") == .cancel)
+    // A scheme the opener will refuse still crosses: one filter, in the half that updates.
+    precondition(verdict("javascript:alert(1)") == .cancelAndOffer("javascript:alert(1)"))
+  }
+
+  /// The own-load flag against the policy that reads it: one load allowed, and only one.
+  ///
+  /// The flag and the rule are separate types, and the gap between them is where a second main-frame
+  /// action to the same URL before the first commits would have been allowed too. So the seam is
+  /// checked rather than each half on its own.
+  static func checkOwnLoadIsSpentOnce() {
+    let document = "orca-mobile-web://\(session)/"
+    func decide(_ machine: MobileWebShellLoadStateMachine) -> MobileWebShellNavigationVerdict {
+      MobileWebShellNavigationPolicy.verdict(
+        url: document,
+        isMainFrame: true,
+        isFromSubframe: false,
+        isDocumentUrl: true,
+        isShellLoad: machine.isShellLoad,
+        hasGesture: false,
+        isDownload: false
+      )
+    }
+    let machine = MobileWebShellLoadStateMachine()
+    machine.shellLoadStarted()
+    let first = decide(machine)
+    precondition(first == .allow)
+    // Spent by the allow itself, not by the commit that follows it: WebKit can decide a second action
+    // before the first one starts, and that one would have replaced the document.
+    machine.shellLoadConsumed()
+    precondition(decide(machine) == .cancel)
+    // And the endings still drop it, for a load that is allowed and then never commits.
+    machine.shellLoadStarted()
+    machine.documentEnded()
+    precondition(decide(machine) == .cancel)
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -517,6 +655,8 @@ import Foundation
     checkLoadStateMachine()
     checkResponseHeaders()
     checkNavigationErrors()
+    checkNavigationVerdict()
+    checkOwnLoadIsSpentOnce()
     checkAppliedProps()
     checkBridgeAcceptance()
     checkBridgePostTarget()

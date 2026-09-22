@@ -54,6 +54,24 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('forwards Antigravity worker model and effort without dropping permission defaults', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'antigravity',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'gemini-3.1-pro-high', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--dangerously-skip-permissions'
+    })
+    expect(plan?.launchCommand).toBe(
+      "agy '--dangerously-skip-permissions' '--model' 'gemini-3.1-pro-high' '--effort' 'high'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe("agy '--dangerously-skip-permissions'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gemini-3.1-pro-high', effort: 'high' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -138,6 +156,24 @@ describe('tui agent startup session options', () => {
     })
     expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
+  })
+
+  it('lets explicit worker preferences override configured arguments in draft launches', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'claude',
+      draft: 'review this',
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--model haiku --effort low',
+      sessionOptions: { model: 'opus', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+
+    expect(plan?.launchCommand).toContain(
+      "claude '--model' 'opus' '--effort' 'high' --prefill 'review this'"
+    )
+    expect(plan?.launchCommand).not.toContain('haiku')
+    expect(plan?.launchCommand).not.toContain("'low'")
   })
 
   it('applies explicit session options to resume commands', () => {

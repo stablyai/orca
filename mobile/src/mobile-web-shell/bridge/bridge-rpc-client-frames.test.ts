@@ -12,6 +12,9 @@ import {
   BRIDGE_ACK_INTERVAL_FRAMES
 } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
+import { BRIDGE_BACK_FRAME } from './bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
   BRIDGE_READY_RETRY_MIN_MS
@@ -39,9 +42,16 @@ afterEach(() => {
 })
 
 describe('bridge client handshake', () => {
-  it('asks for a session as soon as it exists', () => {
+  it('asks for a session as soon as it exists, naming what it can be sent and what it reports', () => {
     const page = createPageClient()
-    expect(page.frames()).toEqual([{ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }])
+    expect(page.frames()).toEqual([
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'ready',
+        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME],
+        reports: [BRIDGE_PAGE_PAINTED]
+      }
+    ])
   })
 
   it('keeps asking on a widening backoff until init answers', () => {
@@ -127,9 +137,14 @@ describe('bridge client handshake', () => {
       route: null,
       // And one that names no page routes, so the page hands every navigation back.
       pageRoutes: [],
+      pageRouteGrants: null,
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
-      storage: {}
+      storage: {},
+      storageOversize: [],
+      // And one that takes nothing from the page beyond the frames every shell has taken, which
+      // is what stops the page posting an erase it would refuse whole (ruling 34).
+      accepts: []
     })
   })
 
@@ -223,6 +238,41 @@ describe('bridge client before a session', () => {
     })
     expect(() => page.client.getState()).toThrow(BridgeClientNotReadyError)
     expect(page.diagnostics).toEqual([])
+  })
+})
+
+/**
+ * A frame the page received and then failed to handle (ruling 34 addendum).
+ *
+ * On iOS the host's post is `callAsyncJavaScript`, which rejects when the page's synchronous
+ * `onmessage` throws — with the document still mounted. That reads to the shell exactly like a
+ * frame that never arrived, and the shell tracks nothing about posts, so nothing would ever send
+ * it again. It is not a lost frame either: the page had it, its own listener failed, and a retry
+ * would fail the same way. The page catches it and says so.
+ */
+describe('a listener of the page that throws on a frame it received', () => {
+  it('is reported once, leaves the client usable, and never escapes the delivery', () => {
+    const page = createPageClient()
+    page.start()
+    const thrown = new Error('the pane hook could not apply it')
+    page.client.onRouteUpdate(() => {
+      throw thrown
+    })
+    const moved = {
+      ...INIT,
+      route: { pathname: '/h/host-a/session/wt-1', params: { paneKey: 'pane-1' } }
+    }
+    // What `__deliver` does on the device: one synchronous call, whose throw would reject the post.
+    expect(() => page.deliver(moved)).not.toThrow()
+    expect(page.diagnostics).toEqual([{ kind: 'inbound-listener-threw', error: thrown }])
+    // And the next frame is read: the failure was the listener's, not the channel's. This one is
+    // refused by the reader, which is a diagnostic the channel could only raise while it still
+    // works.
+    page.deliver(eventFrame('unknown-exchange-id-0', 1, 'x'))
+    expect(page.diagnostics.map((entry) => entry.kind)).toEqual([
+      'inbound-listener-threw',
+      'refused'
+    ])
   })
 })
 
@@ -528,8 +578,14 @@ describe('bridge client acks', () => {
     })
     const id = idOf(page, 0)
     for (let seq = 1; seq <= BRIDGE_ACK_INTERVAL_FRAMES; seq += 1) {
-      expect(() => page.deliver(eventFrame(id, seq, seq))).toThrow('listener bug')
+      // Reported rather than thrown (ruling 34 addendum), and counted either way: the window is
+      // the shell's to reopen, and a page that let the throw out would reject the host's post for
+      // a frame it had already taken.
+      expect(() => page.deliver(eventFrame(id, seq, seq))).not.toThrow()
     }
+    expect(
+      page.diagnostics.filter((entry) => entry.kind === 'inbound-listener-threw')
+    ).toHaveLength(BRIDGE_ACK_INTERVAL_FRAMES)
     expect(page.frames().filter((frame) => frame.type === 'ack')).toHaveLength(1)
   })
 

@@ -260,3 +260,28 @@ describe('a code this page has never heard of', () => {
     expect(caught instanceof NativeVerbError && caught.reason).toBe('unreported')
   })
 })
+
+describe('what the surface offers a screen', () => {
+  it('carries no capability flag with nothing behind it', async () => {
+    const pair = createFakeBridgePortPair({})
+    const verbs = await mount(pair)
+    // Pinned so an unread flag has to be added here on purpose. `canCaptureAudio` was one: four
+    // grants read and answered to nobody, where the fence that actually holds is the per-verb
+    // `ungranted` check every member already makes before a frame is sent. A flag no screen reads
+    // is a capability negotiation that exists only in this file.
+    expect(Object.keys(verbs).sort()).toEqual([
+      'canPickMedia',
+      'canReadClipboardText',
+      'canWriteClipboardText',
+      'granted',
+      'pickMedia',
+      'readAudio',
+      'readClipboardText',
+      'readMedia',
+      'releaseMedia',
+      'startAudio',
+      'stopAudio',
+      'writeClipboardText'
+    ])
+  })
+})

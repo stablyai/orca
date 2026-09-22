@@ -39,6 +39,15 @@ describe('order', () => {
     expect(rankSessionHits(sessions, scores, 'newest').map((e) => e.session.id)).toEqual([2, 1])
   })
 
+  it('hands a relevance tie to the newer session before falling back to id', () => {
+    const sessions = [
+      session(1, { updated_at: '2026-09-01T00:00:00.000Z' }),
+      session(2, { updated_at: '2026-09-09T00:00:00.000Z' })
+    ]
+    const scores = matches(match(1, 5), match(2, 5))
+    expect(rankSessionHits(sessions, scores, 'relevance').map((e) => e.session.id)).toEqual([2, 1])
+  })
+
   it.each(['relevance', 'newest'] as const)(
     'breaks a %s tie by session, whatever order retrieval handed them over in',
     (sort) => {

@@ -126,6 +126,7 @@
       "loadingHint": "Chargement de l'issue Linear…"
     },
     "renderCapOverflow": "{{value0}} autres — faites défiler ou continuez à taper pour affiner",
+    "seeMore": "Voir plus",
     "filter": {
       "emptyTitle": "Aucun résultat ne correspond au filtre actif",
       "emptySubtitle": "Effacez le filtre ci-dessus, ou élargissez-le à davantage d'hôtes et de projets.",
@@ -150,7 +151,8 @@
       "clearHosts": "Effacer les hôtes",
       "clearProjects": "Effacer les projets",
       "back": "Retour",
-      "ariaActive": "Filtre : {{value0}} actif(s)."
+      "ariaActive": "Filtre : {{value0}} actif(s).",
+      "scopedTo": "Portée :"
     },
     "taskUrl": {
       "loadingHint": "Chargement de {{value0}}…",
@@ -433,6 +435,7 @@
           "9e2a9bb87b": "Continuer",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -6018,8 +6021,6 @@
           "01af244097": "Annuler",
           "28c8e53176": "Force l'arrêt de tous les volets de terminal en cours d'exécution dans tous les espaces de travail. Tout travail non enregistré de ces sessions est perdu. Le daemon continue de tourner et de nouveaux terminaux peuvent être ouverts immédiatement. Irréversible.",
           "1bbea41a77": "Forcer l'arrêt de toutes les sessions de terminal ?",
-          "01d6b7c64e": "Tue tous les volets de terminal en cours d'exécution et redémarre le processus daemon. Les volets affichent \"Process exited\" et peuvent être rouverts immédiatement. Les sessions au protocole hérité d'une version précédente de l'application sont préservées. Irréversible.",
-          "922548bc66": "Redémarrer le daemon de terminal ?",
           "2b4efdc162": "Impossible de tuer les sessions.",
           "d18f3005c2": "Fermeture refusée pour {{value0}} session{{value1}}.",
           "baad8cd651": "Aucune session en cours.",
@@ -12503,8 +12504,6 @@
             "agentSessionQueued": "Session {{value0}} en file d'attente",
             "sessionHistory": "Historique des sessions d'agent",
             "agents": "Agents",
-            "shownRecent": "{{value0}} affichées · {{value1}} récentes",
-            "sessionsShownCompact": "{{value0}} affichées",
             "resumePastSessions": "Reprendre les sessions passées",
             "refreshSessionHistory": "Actualiser l'historique des sessions",
             "searchSessions": "Rechercher des sessions",
@@ -12541,7 +12540,6 @@
             "agents": "Agents",
             "selectAllAgents": "Tout sélectionner",
             "clearAgents": "Effacer",
-            "sort": "Trier",
             "lastUpdated": "Dernière mise à jour",
             "created": "Créé",
             "group": "Regroupement",

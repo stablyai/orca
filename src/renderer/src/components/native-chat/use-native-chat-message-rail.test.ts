@@ -37,6 +37,7 @@ function slotsOf(messages: NativeChatMessage[]) {
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     showTurnStatus: false,
+    expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false
   })

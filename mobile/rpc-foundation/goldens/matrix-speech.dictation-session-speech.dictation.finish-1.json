@@ -3,11 +3,11 @@
   "family": "speech.dictation-session",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
-  "scenarioSha256": "f3b57e7a3d46f7ee2761ecced03e74019758172fe0a040ef5df0612c8ac18358",
+  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
+  "scenarioSha256": "2cb8e1e5c1c4f9da7dcf68e3fcd51a3979966019b5872279b7347d5f09f381d5",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -18,7 +18,7 @@
       "status": "error",
       "transcripts": []
     },
-    "0f63960378c0": {
+    "07d3e2ed39d8": {
       "name": "speech.dictation.finish#1",
       "ordinal": 3,
       "args": [
@@ -29,234 +29,7 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "11c21b92d88c": {
-      "error": "No speech detected.",
-      "status": "error",
-      "transcripts": []
-    },
-    "16ac55dedee8": {
-      "name": "dictation-error",
-      "ordinal": 6,
-      "value": {
-        "message": "outer refused"
-      }
-    },
-    "17a71c088213": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
-    },
-    "1801aa692f8d": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "34d525e1126a": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
-      }
-    },
-    "3a5ade7d7bcd": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.cancel"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "4d21a93db98f": {
-      "error": "",
-      "status": "error",
-      "transcripts": []
-    },
-    "5067c3920820": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "5537a78c5a5d": {
-      "name": "dictation-error",
-      "ordinal": 6,
-      "value": {
-        "message": "Cannot read properties of null (reading 'text')"
-      }
-    },
-    "6bf21bf88103": {
-      "error": "outer refused",
-      "status": "error",
-      "transcripts": []
-    },
-    "7ea0bb369acb": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "828cda3e532f": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -279,19 +52,24 @@
         }
       }
     },
-    "855dd6b38d06": {
+    "11c21b92d88c": {
+      "error": "No speech detected.",
+      "status": "error",
+      "transcripts": []
+    },
+    "16ac55dedee8": {
       "name": "dictation-error",
-      "ordinal": 5,
+      "ordinal": 6,
       "value": {
-        "message": "No speech detected."
+        "message": "outer refused"
       }
     },
-    "889eee99a041": {
-      "name": "speech.dictation.start#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
+    "1bdc94d60271": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.finish\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
     },
-    "8dc52682edc0": {
+    "349e2cfd1a1f": {
       "name": "speech.dictation.finish#1",
       "ordinal": 3,
       "args": [
@@ -302,7 +80,129 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "4728ad10f92b": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "text": "  hello world  "
+          }
+        }
+      }
+    },
+    "4d21a93db98f": {
+      "error": "",
+      "status": "error",
+      "transcripts": []
+    },
+    "5537a78c5a5d": {
+      "name": "dictation-error",
+      "ordinal": 6,
+      "value": {
+        "message": "Cannot read properties of null (reading 'text')"
+      }
+    },
+    "6bf21bf88103": {
+      "error": "outer refused",
+      "status": "error",
+      "transcripts": []
+    },
+    "6c3d0754a1ff": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
+    },
+    "6d6bb34ce2ab": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "74617082bf69": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -328,6 +228,49 @@
         }
       }
     },
+    "855dd6b38d06": {
+      "name": "dictation-error",
+      "ordinal": 5,
+      "value": {
+        "message": "No speech detected."
+      }
+    },
+    "859d310e63d6": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
+    },
+    "88f795a14a21": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
     "97af9f7912fc": {
       "name": "dictation-error",
       "ordinal": 6,
@@ -335,19 +278,7 @@
         "message": "transport failure"
       }
     },
-    "a19279fc9c65": {
-      "error": {
-        "$rpc": "null"
-      },
-      "status": "idle",
-      "transcripts": ["hello world"]
-    },
-    "a1c4e9bebdd4": {
-      "error": "Unknown method",
-      "status": "error",
-      "transcripts": []
-    },
-    "a8c9e0d6d3a6": {
+    "9fce1a80008e": {
       "name": "speech.dictation.finish#1",
       "ordinal": 3,
       "args": [
@@ -358,118 +289,7 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "ad842c64ac48": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.finish\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
-    },
-    "aeaa22b0002e": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 75000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "b432c878c8da": {
-      "error": "Cannot read properties of undefined (reading 'text')",
-      "status": "error",
-      "transcripts": []
-    },
-    "b4ba2b410a8d": {
-      "name": "speech.dictation.start#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.start"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "started": true
-          }
-        }
-      }
-    },
-    "b5204024fd18": {
-      "name": "speech.dictation.finish#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.finish"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -493,14 +313,19 @@
         }
       }
     },
-    "bca75e8024b4": {
-      "name": "dictation-error",
-      "ordinal": 6,
-      "value": {
-        "message": "Unknown method"
-      }
+    "a19279fc9c65": {
+      "error": {
+        "$rpc": "null"
+      },
+      "status": "idle",
+      "transcripts": ["hello world"]
     },
-    "bedcb8de3834": {
+    "a1c4e9bebdd4": {
+      "error": "Unknown method",
+      "status": "error",
+      "transcripts": []
+    },
+    "a46c0f6c95b2": {
       "name": "speech.dictation.finish#1",
       "ordinal": 3,
       "args": [
@@ -511,7 +336,7 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -526,12 +351,120 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
           "id": "frame-2",
-          "ok": true,
-          "result": {
-            "text": "  hello world  "
+          "ok": false
+        }
+      }
+    },
+    "a7dbb6b2864f": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
           }
         }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "aca401ac072e": {
+      "name": "speech.dictation.start#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.start"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "started": true
+          }
+        }
+      }
+    },
+    "b41f74be4c3d": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b432c878c8da": {
+      "error": "Cannot read properties of undefined (reading 'text')",
+      "status": "error",
+      "transcripts": []
+    },
+    "bca75e8024b4": {
+      "name": "dictation-error",
+      "ordinal": 6,
+      "value": {
+        "message": "Unknown method"
       }
     },
     "cd49b339a081": {
@@ -539,6 +472,38 @@
       "ordinal": 6,
       "value": {
         "message": "Cannot read properties of undefined (reading 'text')"
+      }
+    },
+    "cf10282da8e0": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
     "d39fbe27003d": {
@@ -560,6 +525,41 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f4cf5aad78c0": {
+      "name": "speech.dictation.finish#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.finish"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 75000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -568,8 +568,8 @@
       {
         "id": "speech-dictation-session-transcript.normal:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "bedcb8de3834"],
-          "payloads": ["889eee99a041", "ad842c64ac48"],
+          "sender": ["aca401ac072e", "4728ad10f92b"],
+          "payloads": ["859d310e63d6", "1bdc94d60271"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -582,8 +582,8 @@
       {
         "id": "speech-dictation-session-transcript.result-absent:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "34d525e1126a", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "88f795a14a21", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -596,8 +596,8 @@
       {
         "id": "speech-dictation-session-transcript.result-null:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "0f63960378c0", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "349e2cfd1a1f", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -610,8 +610,8 @@
       {
         "id": "speech-dictation-session-transcript.inner-ok-missing:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "828cda3e532f"],
-          "payloads": ["889eee99a041", "ad842c64ac48"],
+          "sender": ["aca401ac072e", "07d3e2ed39d8"],
+          "payloads": ["859d310e63d6", "1bdc94d60271"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -624,8 +624,8 @@
       {
         "id": "speech-dictation-session-transcript.inner-false-string-error:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "1801aa692f8d"],
-          "payloads": ["889eee99a041", "ad842c64ac48"],
+          "sender": ["aca401ac072e", "f4cf5aad78c0"],
+          "payloads": ["859d310e63d6", "1bdc94d60271"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -638,8 +638,8 @@
       {
         "id": "speech-dictation-session-transcript.inner-false-object-error:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "8dc52682edc0"],
-          "payloads": ["889eee99a041", "ad842c64ac48"],
+          "sender": ["aca401ac072e", "74617082bf69"],
+          "payloads": ["859d310e63d6", "1bdc94d60271"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -652,8 +652,8 @@
       {
         "id": "speech-dictation-session-transcript.outer-refused:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "7ea0bb369acb", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "a46c0f6c95b2", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -666,8 +666,8 @@
       {
         "id": "speech-dictation-session-transcript.outer-refused-no-message:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "b5204024fd18", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "9fce1a80008e", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -680,8 +680,8 @@
       {
         "id": "speech-dictation-session-transcript.method-not-found:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "a8c9e0d6d3a6", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "b41f74be4c3d", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -694,8 +694,8 @@
       {
         "id": "speech-dictation-session-transcript.transport-rejection:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "aeaa22b0002e", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "cf10282da8e0", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",
@@ -708,8 +708,8 @@
       {
         "id": "speech-dictation-session-transcript.transport-rejection-no-message:transcribed",
         "observation": {
-          "sender": ["b4ba2b410a8d", "5067c3920820", "3a5ade7d7bcd"],
-          "payloads": ["889eee99a041", "ad842c64ac48", "17a71c088213"],
+          "sender": ["aca401ac072e", "6d6bb34ce2ab", "a7dbb6b2864f"],
+          "payloads": ["859d310e63d6", "1bdc94d60271", "6c3d0754a1ff"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",

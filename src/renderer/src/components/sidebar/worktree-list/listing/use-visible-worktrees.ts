@@ -12,7 +12,8 @@ import {
 } from '../../workspace-creator-visibility'
 import {
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs
+  getVisibleWorktreeTerminalActivityTabs,
+  getStructuredChatWorktreeIds
 } from '../../visible-worktree-activity-inputs'
 import type { SortBy } from '../../smart-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
@@ -70,6 +71,9 @@ export function useVisibleSidebarWorktrees(args: {
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
   )
+  const worktreeIdsWithStructuredChat = useAppStore((s) =>
+    getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
+  )
 
   const recomputedVisibleWorktrees = useMemo(() => {
     // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
@@ -81,6 +85,7 @@ export function useVisibleSidebarWorktrees(args: {
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
+      worktreeIdsWithStructuredChat,
       // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
       worktreeIdsWithLiveAgent: showSleepingWorkspaces
         ? EMPTY_WORKTREE_ID_SET
@@ -127,7 +132,8 @@ export function useVisibleSidebarWorktrees(args: {
     sortedIds,
     worktreeLineageById,
     worktreesByRepo,
-    pairedDeviceIdsByEnvironment
+    pairedDeviceIdsByEnvironment,
+    worktreeIdsWithStructuredChat
   ])
   // Why: agentStatusEpoch bumps recompute this memo even when membership and
   // order are unchanged; keeping the previous identity stops the whole

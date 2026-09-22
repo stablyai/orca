@@ -27,10 +27,40 @@ type GuestInstallState = {
   codexHomePath?: string
   opencodeOverlayDir?: string
   opencode2OverlayDir?: string
+  piAgentDir?: string
+  ompStatusExtension?: string
   lastInstallAt?: number
+  launchKinds?: Set<'pi' | 'omp'>
+  installation?: Promise<void>
+}
+
+function* requestedKinds(state: GuestInstallState): Generator<'pi' | 'omp' | undefined> {
+  if (!state.launchKinds?.size) {
+    yield undefined
+  }
+  if (state.launchKinds) {
+    yield* state.launchKinds
+  }
 }
 
 export async function runWslRelayGuestInstall(
+  deps: GuestInstallDeps,
+  state: GuestInstallState,
+  mux: SshChannelMultiplexer,
+  guestHome: string
+): Promise<void> {
+  if (state.installation) {
+    return state.installation
+  }
+  state.installation = installGuestHooksAndPlugins(deps, state, mux, guestHome)
+  try {
+    await state.installation
+  } finally {
+    state.installation = undefined
+  }
+}
+
+async function installGuestHooksAndPlugins(
   deps: GuestInstallDeps,
   state: GuestInstallState,
   mux: SshChannelMultiplexer,
@@ -49,12 +79,21 @@ export async function runWslRelayGuestInstall(
   })
   // Why: ship OpenCode's status plugin and record the guest overlay dir the
   // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
-  const overlay = await requestGuestOpenCodeOverlayDir(mux, deps, state.distro)
-  if (state.mux === mux && overlay.kind !== 'unavailable') {
-    // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
-    // present but plugin-less, and advertising it would hide the user's own config.
-    state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
-    state.opencode2OverlayDir = overlay.kind === 'dir' ? overlay.dir2 : undefined
+  const kinds = requestedKinds(state)
+  for (const kind of kinds) {
+    const overlay = await requestGuestOpenCodeOverlayDir(mux, deps, state.distro, kind)
+    if (state.mux !== mux) {
+      return
+    }
+    if (overlay.kind !== 'unavailable') {
+      state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
+      state.opencode2OverlayDir = overlay.kind === 'dir' ? overlay.dir2 : undefined
+      if (kind === 'pi') {
+        state.piAgentDir = overlay.kind === 'dir' ? overlay.piDir : undefined
+      } else if (kind === 'omp') {
+        state.ompStatusExtension = overlay.kind === 'dir' ? overlay.ompDir : undefined
+      }
+    }
   }
 }
 
@@ -63,6 +102,10 @@ export async function maybeRerunWslRelayGuestInstall(
   deps: GuestInstallDeps,
   state: GuestInstallState
 ): Promise<void> {
+  if (state.installation) {
+    await state.installation
+    return
+  }
   const mux = state.mux
   const guestHome = state.guestHome
   if (

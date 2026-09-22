@@ -1,5 +1,6 @@
 // Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
-// Dark: built by `build:mobile-web:app` into out/mobile-web-app, shipped by nothing until C1.
+// Built by `build:mobile-web` into the packaged bundle dir; mounted only by a build with
+// `EXPO_PUBLIC_MOBILE_SHELL=ota`.
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
@@ -11,9 +12,14 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
+import {
+  RouteScreenPaintProvider,
+  createRouteScreenPaintReporter
+} from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
+import { publishHapticsNotifier } from '../src/platform/haptics.web'
 // Named with its extension: this entry is the web build's and the provider it needs is the web
 // sibling's, which takes the page's client. The screens below still import `./client-context`
 // and reach the same module, because the builder resolves both specifiers to the same file.
@@ -28,13 +34,33 @@ import routeContext from './route-manifest'
 // and that is the boundary below's, not suspense's.
 // A factory because the client is not in scope until `init` lands, and ExpoRoot takes a component.
 function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
+  // A commit is not a paint, and an unpainted WebView shows the surface behind it and nothing else,
+  // so the shell keeps its own frame over this document until the second frame lands.
+  const reportRouteScreenPaint = createRouteScreenPaintReporter(
+    {
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        cancelAnimationFrame(handle)
+      }
+    },
+    () => {
+      client.notifyPagePainted()
+    }
+  )
   return function RootProviders({ children }: PropsWithChildren) {
     // Effects run child-first, so 'mounted' lands only after the router tree below this wrapper
-    // has committed. The tree is rendered once, with a ready client, so there is one such commit.
+    // has committed. That commit can be the suspense fallback of a route chunk still arriving,
+    // which is why the paint is reported from the screen and not from here.
     useEffect(() => {
       stampPageMountState(target, 'mounted')
     }, [])
-    return <RpcClientProvider client={client}>{children}</RpcClientProvider>
+    return (
+      <RpcClientProvider client={client}>
+        <RouteScreenPaintProvider report={reportRouteScreenPaint}>
+          {children}
+        </RouteScreenPaintProvider>
+      </RpcClientProvider>
+    )
   }
 }
 
@@ -82,12 +108,17 @@ bootstrapShellPage({
     // Same reason, and the same shape: the seam is a plain function in render trees the provider
     // does not wrap, so the client's notify is published rather than read from context.
     publishExternalLinkOpener((url) => client.notifyExternalLink(url))
+    // The same shape again, and for the same reason: every haptic on this page is played from a
+    // plain function inside a row's press handler, which no provider wraps.
+    publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Scoped to the host `init` named: with none, no key is writable, which is the right answer
     // for a shell too old to say whose list this is.
     publishPageStorage(
       session.storage,
       (key, value) => client.notifyStorageWrite(key, value),
-      session.host?.id ?? ''
+      session.host?.id ?? '',
+      session.route?.pathname ?? '',
+      session.storageOversize
     )
     createRoot(container).render(
       // Above `ExpoRoot`, not inside its wrapper: a route this bundle cannot resolve or import

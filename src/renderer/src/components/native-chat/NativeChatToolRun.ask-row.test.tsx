@@ -78,7 +78,7 @@ describe('NativeChatToolRun awaiting-input row', () => {
 
     expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
     expect(screen.getByText(QUESTION)).toBeInTheDocument()
-    // A run that is only the ask has no work left to head, so it draws no `1×`.
+    // A run that is only the ask has no work left to head, so it draws no header.
     expect(container.querySelector('button')).toBeNull()
   })
 
@@ -91,8 +91,8 @@ describe('NativeChatToolRun awaiting-input row', () => {
     render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
     expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-    // One call ran; being asked a question is not work to count.
-    expect(screen.getByText('1×')).toBeInTheDocument()
+    // One call ran; being asked a question is not work to summarize.
+    expect(screen.getByText('Read 1 file')).toBeInTheDocument()
   })
 
   it('draws the row from the tool name when the payload names no question', () => {

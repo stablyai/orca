@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from './test-support/census-source-files'
 
 const mobileDirectory = fileURLToPath(new URL('..', import.meta.url))
 const scanned = ['src', 'app']
@@ -28,16 +29,6 @@ const MAPPER_HOOKS = new Map([
   // are updaters.
   ['useAnimatedReaction', { updaters: [0, 1], dependencies: 2 }]
 ])
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return sourceExtensions.has(extname(entry.name)) ? [path] : []
-  })
-}
 
 /** Whether this `X.value` is being written rather than read. A write is an output, not an input. */
 function isWriteTarget(node: ts.PropertyAccessExpression): boolean {
@@ -200,11 +191,13 @@ describe('reanimated mapper hooks in the web bundle', () => {
   it('are all given a dependency array, because esbuild writes no worklet closure', () => {
     const found: string[] = []
     const missing = scanned.flatMap((directory) =>
-      sourceFiles(join(mobileDirectory, directory)).flatMap((path) =>
-        path.endsWith('.test.ts') || path.endsWith('.test.tsx')
-          ? []
-          : callsMissingDependencies(path, readFileSync(path, 'utf8'), found)
-      )
+      censusSourceFiles(join(mobileDirectory, directory))
+        .filter((path) => sourceExtensions.has(extname(path)))
+        .flatMap((path) =>
+          path.endsWith('.test.ts') || path.endsWith('.test.tsx')
+            ? []
+            : callsMissingDependencies(path, readFileSync(path, 'utf8'), found)
+        )
     )
     // The precondition the empty list above rests on. Binding resolution means a broken resolver
     // reports nothing at all, which would read exactly like a clean tree.

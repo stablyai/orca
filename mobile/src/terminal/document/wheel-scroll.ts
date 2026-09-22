@@ -6,11 +6,9 @@ import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 
-scope.wheelAccumDeltaY = 0
-
-export function wheelEventPixelDeltaY(e: WheelEvent) {
+export function wheelEventPixelDeltaY(scope: TerminalDocumentScope, e: WheelEvent) {
   const delta = e.deltaY
   if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) {
     return 0
@@ -18,7 +16,7 @@ export function wheelEventPixelDeltaY(e: WheelEvent) {
   // DOM_DELTA_LINE / DOM_DELTA_PAGE: Android WebView reports line-mode deltas
   // for external mouse wheels, iOS trackpads report pixels.
   if (e.deltaMode === 1) {
-    return delta * getCellHeight() * getTotalScale()
+    return delta * getCellHeight(scope) * getTotalScale(scope)
   }
   if (e.deltaMode === 2) {
     return delta * window.innerHeight
@@ -26,11 +24,14 @@ export function wheelEventPixelDeltaY(e: WheelEvent) {
   return delta
 }
 
-export function attachSurfaceWheelHandler(targetSurface: HTMLElement) {
+export function attachSurfaceWheelHandler(
+  scope: TerminalDocumentScope,
+  targetSurface: HTMLElement
+) {
   targetSurface.addEventListener(
     'wheel',
     function (e) {
-      if (dispatcherShouldBlockSurface()) {
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -48,14 +49,14 @@ export function attachSurfaceWheelHandler(targetSurface: HTMLElement) {
         return
       }
 
-      const deltaY = wheelEventPixelDeltaY(e)
+      const deltaY = wheelEventPixelDeltaY(scope, e)
       if (deltaY === 0) {
         return
       }
 
-      if (shouldRouteScrollToTerminalInput()) {
-        resetSmoothScrollOffset()
-        const effectiveCellH = getCellHeight() * getTotalScale()
+      if (shouldRouteScrollToTerminalInput(scope)) {
+        resetSmoothScrollOffset(scope)
+        const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
         if (!(effectiveCellH > 0)) {
           return
         }
@@ -63,12 +64,12 @@ export function attachSurfaceWheelHandler(targetSurface: HTMLElement) {
         const lines = Math.trunc(scope.wheelAccumDeltaY / effectiveCellH)
         if (lines !== 0) {
           scope.wheelAccumDeltaY -= lines * effectiveCellH
-          routeScrollLines(lines, e.clientX, e.clientY)
+          routeScrollLines(scope, lines, e.clientX, e.clientY)
         }
         return
       }
       scope.wheelAccumDeltaY = 0
-      enqueueNormalBufferScrollDelta(deltaY)
+      enqueueNormalBufferScrollDelta(scope, deltaY)
     },
     { capture: true, passive: false }
   )

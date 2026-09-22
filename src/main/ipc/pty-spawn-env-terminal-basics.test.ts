@@ -198,7 +198,7 @@ describe('registerPtyHandlers', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
       const ensureForDistro = vi
         .spyOn(wslHookRelayManager, 'ensureForDistro')
-        .mockImplementation(() => {})
+        .mockImplementation(async () => {})
 
       try {
         buildPtyHostEnv(
@@ -213,7 +213,7 @@ describe('registerPtyHandlers', () => {
             agentStatusHooksEnabled: true
           }
         )
-        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome)
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome, undefined)
       } finally {
         ensureForDistro.mockRestore()
       }

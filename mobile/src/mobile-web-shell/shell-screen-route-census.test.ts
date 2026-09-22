@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
@@ -38,7 +38,97 @@ function hostRouteFiles(directory: string = HOST_ROUTES, prefix = ''): string[] 
   })
 }
 
-const read = (name: string): string => readFileSync(join(HOST_ROUTES, name), 'utf8')
+/**
+ * A route file's body: the file itself, or the module its default export comes from.
+ *
+ * `[...page].tsx` is the reason: expo-router 55 reads a file's platform from the first dot of its
+ * stripped name, so a catch-all cannot carry a `.web.tsx` sibling under `app/` without registering
+ * a second route, and its body lives under `src/` where the stem is plain. Following the export
+ * keeps the walk derived from the tree rather than from a list beside it.
+ *
+ * Fails closed, which is the half that matters. A shape this cannot resolve is a file whose body
+ * it never read, and an unread body is exactly where a switch that skips `shellScreenRoute` would
+ * sit — so an unknown shape is named by the census rather than quietly treated as a non-switch.
+ */
+type RouteBody =
+  | { readonly kind: 'source'; readonly text: string }
+  | { readonly kind: 'unresolved'; readonly why: string }
+
+/** The module specifier a file's default export comes from, or null when the body is local. */
+function defaultExportSource(parsed: ts.SourceFile): string | null | undefined {
+  const importedFrom = new Map<string, string>()
+  for (const statement of parsed.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const clause = statement.importClause
+      if (clause?.name !== undefined) {
+        importedFrom.set(clause.name.text, statement.moduleSpecifier.text)
+      }
+      const bindings = clause?.namedBindings
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          importedFrom.set(element.name.text, statement.moduleSpecifier.text)
+        }
+      }
+    }
+  }
+  for (const statement of parsed.statements) {
+    // `export { default } from 'x'`, and `export { Body as default } from 'x'`.
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.exportClause !== undefined &&
+      ts.isNamedExports(statement.exportClause) &&
+      statement.exportClause.elements.some((element) => element.name.text === 'default')
+    ) {
+      return statement.moduleSpecifier.text
+    }
+    if (ts.isExportAssignment(statement) && statement.isExportEquals !== true) {
+      // `export default Body` where `Body` came from an import: the body is over there. Any other
+      // expression — a function, a class, a local — is this file's own.
+      return ts.isIdentifier(statement.expression)
+        ? (importedFrom.get(statement.expression.text) ?? null)
+        : null
+    }
+    // `export default function …` / `export default class …`: the body is here.
+    if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ===
+        true
+    ) {
+      return null
+    }
+  }
+  return undefined
+}
+
+function bodyOf(name: string): RouteBody {
+  const routeFile = join(HOST_ROUTES, name)
+  const source = readFileSync(routeFile, 'utf8')
+  const specifier = defaultExportSource(parse(source))
+  if (specifier === undefined) {
+    return { kind: 'unresolved', why: 'no default export this census recognises' }
+  }
+  if (specifier === null) {
+    return { kind: 'source', text: source }
+  }
+  if (!specifier.startsWith('.')) {
+    return { kind: 'unresolved', why: `default export comes from the package "${specifier}"` }
+  }
+  const base = resolve(dirname(routeFile), specifier)
+  for (const extension of ['.tsx', '.ts']) {
+    if (existsSync(`${base}${extension}`)) {
+      return { kind: 'source', text: readFileSync(`${base}${extension}`, 'utf8') }
+    }
+  }
+  return { kind: 'unresolved', why: `no module at "${specifier}"` }
+}
+
+/** The body text, for the rules below; an unresolved shape is caught by its own case first. */
+function read(name: string): string {
+  const body = bodyOf(name)
+  return body.kind === 'source' ? body.text : ''
+}
 
 /**
  * The one switch that hands over a route the rule refuses, on purpose.
@@ -119,12 +209,31 @@ describe('the switches that hand a route to the shell', () => {
     expect(pathnames.filter((pathname) => !pathname.startsWith('/h/[hostId]'))).toEqual([])
   })
 
+  /**
+   * Every route file's body was read, so `switches` is a census and not a sample.
+   *
+   * A shape this cannot resolve is a body it never opened, and every rule below would read that
+   * file as "not a switch" — the one answer a census must never give by default.
+   */
+  it('resolves every route file to a body, naming any shape it cannot', () => {
+    expect(
+      hostRouteFiles()
+        .map((name) => ({ name, body: bodyOf(name) }))
+        .filter((entry) => entry.body.kind === 'unresolved')
+        .map((entry) => `${entry.name}: ${entry.body.kind === 'unresolved' ? entry.body.why : ''}`)
+    ).toEqual([])
+  })
+
   it('walks the route tree and finds them, so the rules below cannot pass vacuously', () => {
     expect(switches.sort()).toEqual([
+      '[...page].tsx',
       'agent-history/[worktreeId].tsx',
       'files/[worktreeId].tsx',
       'files/preview/[worktreeId].tsx',
       'index.tsx',
+      'review/[worktreeId].tsx',
+      'session/[worktreeId].tsx',
+      'source-control/[worktreeId].tsx',
       'tasks.tsx',
       'web.tsx'
     ])

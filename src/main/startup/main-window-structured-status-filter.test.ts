@@ -30,7 +30,6 @@ vi.mock('../window/dashboard-popout-window', () => ({
 }))
 vi.mock('./synthetic-title-runtime', () => ({
   driveSyntheticTitleFromHook: vi.fn(),
-  shouldSuppressCodexAutoApprovalSyntheticTitleFromHook: () => false,
   stopAllSyntheticTitleSpinners: vi.fn()
 }))
 

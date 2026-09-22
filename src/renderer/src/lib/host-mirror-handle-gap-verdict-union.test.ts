@@ -244,4 +244,16 @@ describe('handle-gap verdict map, all rules on one tree', () => {
     expect(countHostMirrorHandleGapVerdictsForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('bounds permanently orphaned verdicts across distinct environments', () => {
+    for (let round = 0; round < 600; round += 1) {
+      const environmentId = `env-orphan-${round}`
+      setRuntimeEnvironmentConnectionGenerationForTests(environmentId, 1)
+      const tabId = `orphan-${round}`
+      setLiveTabs([tabId], { [tabId]: `remote:${environmentId}@@term_${round}` })
+      parkAndExpire(environmentId, tabId)
+    }
+
+    expect(countHostMirrorHandleGapVerdictsForTests()).toBeLessThanOrEqual(512)
+  })
 })

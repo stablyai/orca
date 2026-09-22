@@ -1,6 +1,7 @@
+import { elementInRoot } from './document-host-seams'
 import { disposeTermObservers } from './write-queue'
 import { attachSurfaceEventHandlers } from './surface-touch-gestures'
-import { scope, type TerminalDocumentTerminal } from './document-scope'
+import type { TerminalDocumentScope, TerminalDocumentTerminal } from './document-scope'
 
 /** The surfaces and terminal a swap is replacing, handed back to whoever commits it. */
 export type TerminalSurfaceSwap = {
@@ -9,48 +10,42 @@ export type TerminalSurfaceSwap = {
   nextSurface: HTMLElement
 }
 
-// Why: phone-fit startup can issue several init() calls before xterm finishes
-// replaying. Track the last painted surface separately from its replacement.
-let committedTerm: TerminalDocumentTerminal | null = null
-let committedSurface = scope.surface
-scope.pendingTerm = null
-let pendingSurface: HTMLElement | null = null
-
-export function beginTerminalSurfaceSwap() {
+export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
   // Why: a superseded hidden replacement must not remain between the last
   // painted surface and the newest one, or the newest commits below the viewport.
-  if (pendingSurface) {
+  if (scope.pendingSurface) {
     try {
-      pendingSurface.remove()
+      scope.pendingSurface.remove()
     } catch {}
     if (scope.pendingTerm) {
       try {
         scope.pendingTerm.dispose()
       } catch {}
     }
-    pendingSurface = null
+    scope.pendingSurface = null
     scope.pendingTerm = null
   }
   const swap = {
-    oldTerm: committedTerm,
-    oldSurface: committedSurface,
+    oldTerm: scope.committedTerm,
+    oldSurface: scope.committedSurface,
     nextSurface: document.createElement('div')
   }
-  disposeTermObservers()
+  disposeTermObservers(scope)
   swap.nextSurface.id = 'terminal-surface'
   swap.nextSurface.style.visibility = 'hidden'
   swap.nextSurface.style.position = 'absolute'
   swap.nextSurface.style.left = '0'
   swap.nextSurface.style.top = '0'
-  document.getElementById('terminal-container')!.appendChild(swap.nextSurface)
+  elementInRoot(scope.root, 'terminal-container')!.appendChild(swap.nextSurface)
   scope.surface = swap.nextSurface
-  pendingSurface = swap.nextSurface
-  attachSurfaceEventHandlers(scope.surface)
+  scope.pendingSurface = swap.nextSurface
+  attachSurfaceEventHandlers(scope, scope.surface)
   swap.oldSurface!.removeAttribute('id')
   return swap
 }
 
 export function commitTerminalSurfaceSwap(
+  scope: TerminalDocumentScope,
   swap: TerminalSurfaceSwap,
   nextTerm: TerminalDocumentTerminal
 ) {
@@ -62,8 +57,16 @@ export function commitTerminalSurfaceSwap(
   if (swap.oldTerm) {
     swap.oldTerm.dispose()
   }
-  committedTerm = nextTerm
-  committedSurface = swap.nextSurface
+  scope.committedTerm = nextTerm
+  scope.committedSurface = swap.nextSurface
   scope.pendingTerm = null
-  pendingSurface = null
+  scope.pendingSurface = null
+}
+
+// Why: phone-fit startup can issue several init() calls before xterm finishes replaying, so the
+// last painted surface is tracked apart from its replacement — on the scope (ruling 21), because
+// the page mounts this module more than once and a second mount must not inherit the first's.
+export function startSurfaceSwap(scope: TerminalDocumentScope) {
+  scope.surface = elementInRoot(scope.root, 'terminal-surface')
+  scope.committedSurface = scope.surface
 }

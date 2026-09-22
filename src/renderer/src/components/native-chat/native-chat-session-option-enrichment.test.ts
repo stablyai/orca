@@ -7,6 +7,8 @@ import {
 import {
   clearNativeChatModelEnrichmentForTests,
   ensureNativeChatModelEnrichment,
+  getNativeChatModelEnrichmentEntryCountForTests,
+  NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES,
   readNativeChatEnrichedModels,
   resolveNativeChatLaunchSessionOptions,
   subscribeNativeChatEnrichedModels
@@ -25,6 +27,22 @@ describe('native chat session option enrichment', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     mocks.discoverRuntimeCommitMessageModels.mockReset()
+  })
+
+  it('bounds settled host enrichment entries', async () => {
+    for (let index = 0; index < NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES + 4; index += 1) {
+      ensureNativeChatModelEnrichment({
+        agent: 'cursor',
+        hostKey: `ssh:${index}`,
+        discover: async () => []
+      })
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(getNativeChatModelEnrichmentEntryCountForTests()).toBe(
+      NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES
+    )
   })
 
   it('keeps reads synchronous while one host-scoped probe is in flight', async () => {

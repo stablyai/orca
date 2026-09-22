@@ -5,7 +5,6 @@ import {
   useWindowDimensions,
   ScrollView,
   Keyboard,
-  BackHandler,
   Modal,
   Platform
 } from 'react-native'
@@ -28,6 +27,7 @@ import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useBackClaim } from '../navigation/use-back-claim'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -193,21 +193,18 @@ export function MountedBottomDrawer({
     })
   }, [onClose, progress])
 
-  useEffect(() => {
-    // Native only: react-native-web's `BackHandler.addEventListener` logs "BackHandler is not
-    // supported on web and should not be used." and hands back an inert subscription, so inside the
-    // shell's page every drawer that opened put that line on the console and armed nothing. There
-    // is no hardware back to intercept in a WebView; the shell owns the one the phone has.
-    if (!visible || !interactive || Platform.OS === 'web') {
-      return
-    }
-
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss()
-      return true
-    })
-    return () => sub.remove()
-  }, [visible, interactive, dismiss])
+  // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
+  // a claim the shell hands one press over on. Every session sheet renders through this component,
+  // so this one claim is what makes Android Back close the sheet rather than leave the screen.
+  // Only the top interactive drawer claims; a sheet pinned under a fill picker does not own the key.
+  useBackClaim(
+    visible && interactive
+      ? () => {
+          dismiss()
+          return true
+        }
+      : null
+  )
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)

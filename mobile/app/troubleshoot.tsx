@@ -3,6 +3,7 @@ import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-pr
 import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
 import { TroubleshootView } from '../src/diagnostics/troubleshoot-view'
 import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-diagnostics'
+import { mobileWebShellFlagCanBeOn } from '../src/storage/preferences'
 
 // Same guard as push-token.ts: `__DEV__` is undefined outside the React Native runtime. The import
 // above is static, so a release bundle still carries the row's graph and evaluates its hoisted
@@ -23,9 +24,11 @@ export default function NativeTroubleshootRoute() {
       onBack={() => router.back()}
       onConnectionLog={() => router.push('/connection-log')}
       developerRow={
-        isDevelopmentBuild ? (
+        // The shell row wherever the flag can be on, which in an OTA build is the only way back to
+        // the native screens. The bundle probe stays development-only: it fetches.
+        mobileWebShellFlagCanBeOn() ? (
           <>
-            <MobileWebBundleProbeRow />
+            {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
             <MobileWebShellDevRow />
           </>
         ) : null

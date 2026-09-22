@@ -10,6 +10,7 @@ import type {
   RemoteServerUpdateSupport
 } from '../shared/remote-server-update'
 import type { ReleaseBuild, ReleaseChannel } from '../shared/release-channel'
+import type { ReleaseBuildListOptions } from './updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './updater/updater-setup'
 import type { UpdateInstallMode } from './updater/updater-state'
 
@@ -77,8 +78,11 @@ export async function showLinuxPackage(): Promise<void> {
   return updater.showLinuxPackage()
 }
 
-export async function listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
-  return updater.listAvailableReleaseBuilds(channel)
+export async function listAvailableReleaseBuilds(
+  channel: ReleaseChannel,
+  options?: ReleaseBuildListOptions
+): Promise<ReleaseBuild[]> {
+  return updater.listAvailableReleaseBuilds(channel, options)
 }
 
 export function dismissNudge(): void {

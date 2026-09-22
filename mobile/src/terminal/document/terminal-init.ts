@@ -1,17 +1,10 @@
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
-import {
-  terminalCursorBlink,
-  terminalCursorInactiveStyle,
-  terminalCursorStyle,
-  terminalShowCursorImmediately
-} from './document-constants'
+import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
+import { ESC } from './escape-introducers'
 import { notify } from './host-notify'
 import { fontPxForScale } from './text-scaling'
-import {
-  scope,
-  type TerminalDocumentTerminal,
-  type TerminalDocumentWebglAddon
-} from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale } from './fit-scale'
 import {
   isAltScreenActive,
@@ -28,18 +21,12 @@ import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
 
-declare global {
-  interface Window {
-    Unicode11Addon?: { Unicode11Addon: new () => TerminalDocumentWebglAddon }
-  }
-  const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
-}
-
 export function init(
+  scope: TerminalDocumentScope,
   cols: number,
   rows: number,
   initialData: unknown,
-  nextTheme: Parameters<typeof applyTerminalTheme>[0],
+  nextTheme: Parameters<typeof applyTerminalTheme>[1],
   nextFontScale: unknown,
   preserveScroll: boolean,
   nextOscLinks: unknown
@@ -59,11 +46,11 @@ export function init(
   const gen = scope.terminalGeneration
   // Why: snapshot replay can contain old queries whose replies must never
   // re-enter the live PTY. Each replacement terminal earns authority anew.
-  resetTerminalDataReplyAuthority()
-  cancelWebglContextRecovery()
+  resetTerminalDataReplyAuthority(scope)
+  cancelWebglContextRecovery(scope)
   scope.webglAddon = null
   scope.ready = false
-  resetWriteQueue()
+  resetWriteQueue(scope)
   scope.statusDotPendingSelector = false
   scope.writesDraining = false
   scope.afterDrainCallbacks = []
@@ -85,17 +72,17 @@ export function init(
   const replayData = normalizeInitialData(initialData)
   // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
   // mirrored modes aligned with exactly what this mobile xterm replays.
-  updateMouseModeFromData(replayData)
+  updateMouseModeFromData(scope, replayData)
   scope.activeAltScreenSnapshot = isAltScreenActive(replayData)
   scope.initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : []
   scope.initialOscLinkRowOffset = 0
   scope.initialOscLinkEvictionReady = false
-  const surfaceSwap = beginTerminalSurfaceSwap()
+  const surfaceSwap = beginTerminalSurfaceSwap(scope)
   // oxlint-disable-next-line no-unused-vars -- the document declares it here; removing it is a different program
   const nextSurface = surfaceSwap.nextSurface
 
-  applyTerminalTheme(nextTheme)
-  scope.term = new Terminal({
+  applyTerminalTheme(scope, nextTheme)
+  scope.term = scope.createTerminal({
     cols: cols || 80,
     rows: rows || 24,
     theme: scope.terminalTheme,
@@ -108,47 +95,48 @@ export function init(
     // Why: xterm suppresses parser-generated query replies when disableStdin
     // is true. Native accepts only validated reply grammars from onData.
     disableStdin: false,
-    cursorBlink: terminalCursorBlink,
-    cursorStyle: terminalCursorStyle,
+    cursorBlink: MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink,
+    cursorStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle,
     // Native TextInput owns focus; initialize xterm's otherwise-gated main-buffer caret.
-    showCursorImmediately: terminalShowCursorImmediately,
+    showCursorImmediately: MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately,
     // A full inactive cell remains visible under the terminal's phone-fit scale.
-    cursorInactiveStyle: terminalCursorInactiveStyle,
+    cursorInactiveStyle: MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle,
     convertEol: false,
     allowProposedApi: true
   })
   const nextTerm = scope.term
   scope.pendingTerm = nextTerm
   scope.term.open(scope.surface!)
-  attachWebglAddon(true)
-  if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) {
-    try {
-      scope.term.loadAddon(new window.Unicode11Addon.Unicode11Addon())
+  attachWebglAddon(scope, true)
+  try {
+    const unicodeAddon = scope.createUnicode11Addon()
+    if (unicodeAddon) {
+      scope.term.loadAddon(unicodeAddon)
       scope.term.unicode.activeVersion = '11'
-    } catch {}
-  }
+    }
+  } catch {}
   if (typeof replayData === 'string' && replayData.length > 0) {
     // Why no trailing reset: the snapshot pen belongs to the live host TUI receiving later output.
-    enqueueWrite(scope.ESC + '[0m' + replayData)
+    enqueueWrite(scope, ESC + '[0m' + replayData)
   }
 
   // Why: reset eviction tracking + attach observers for the new term.
-  resetEvictionCounter()
-  cancelSelect()
-  attachTermObservers()
-  attachTerminalQueryReplyBridge(scope.term, gen)
+  resetEvictionCounter(scope)
+  cancelSelect(scope)
+  attachTermObservers(scope)
+  attachTerminalQueryReplyBridge(scope, scope.term, gen)
 
-  requestAnimationFrame(function () {
+  scheduleDocumentFrame(scope, function () {
     if (gen !== scope.terminalGeneration) {
       return
     }
     scope.ready = true
     scope.everReady = true
-    afterWritesDrained(function () {
+    afterWritesDrained(scope, function () {
       if (gen !== scope.terminalGeneration) {
         return
       }
-      commitTerminalSurfaceSwap(surfaceSwap, nextTerm)
+      commitTerminalSurfaceSwap(scope, surfaceSwap, nextTerm)
       // Why: restore the reader's place after the rewrapped buffer replays.
       // Replay lands at bottom, so only act when they were scrolled up (rows>0).
       if (scrollAnchorRows > 0 && scope.term && scope.term.buffer && scope.term.buffer.active) {
@@ -158,19 +146,19 @@ export function init(
           )
         } catch {}
       }
-      captureInitialOscLinkTexts()
+      captureInitialOscLinkTexts(scope)
       scope.initialOscLinkRowOffset = 0
       scope.initialOscLinkEvictionReady = true
-      applyFitScale('init-replay')
-      notify({ type: 'ready', cols: cols, rows: rows })
+      applyFitScale(scope, 'init-replay')
+      notify(scope, { type: 'ready', cols: cols, rows: rows })
     })
   })
 }
 
-export function write(data: string) {
-  updateMouseModeFromData(data)
-  enqueueWrite(data)
-  pumpWrites(scope.terminalGeneration)
+export function write(scope: TerminalDocumentScope, data: string) {
+  updateMouseModeFromData(scope, data)
+  enqueueWrite(scope, data)
+  pumpWrites(scope, scope.terminalGeneration)
   // Why: first live data chunk after init may widen the buffer past
   // what the post-replay applyFitScale measured. Re-fit once after this
   // chunk drains to catch the wider line. Subsequent chunks don't re-fit
@@ -178,24 +166,45 @@ export function write(data: string) {
   if (scope.firstDataPending) {
     scope.firstDataPending = false
     const gen = scope.terminalGeneration
-    afterWritesDrained(function () {
+    afterWritesDrained(scope, function () {
       if (gen !== scope.terminalGeneration) {
         return
       }
-      applyFitScale('first-data')
+      applyFitScale(scope, 'first-data')
     })
   }
 }
 
-export function resize(cols: number, rows: number) {
+export function resize(scope: TerminalDocumentScope, cols: number, rows: number) {
   if (!scope.term) {
     return
   }
   scope.initRows = rows || scope.initRows
   scope.term.resize(cols || scope.term.cols, rows || scope.term.rows)
-  emitKeyboardAvoidanceMetrics()
-  applyFitScale('resize-msg')
-  notify({ type: 'ready', cols: cols, rows: rows })
+  emitKeyboardAvoidanceMetrics(scope)
+  applyFitScale(scope, 'resize-msg')
+  notify(scope, { type: 'ready', cols: cols, rows: rows })
 }
 
 // reflow(): see reflow.ts.
+
+/**
+ * Ruling 21: init's own frames carry the generation they were scheduled under, so bumping it is
+ * what abandons them — the same guard a re-init already uses against its predecessor.
+ *
+ * The engine goes too, because a stopped document's terminal is a WebGL context and a row buffer
+ * that nothing will read again. Both terminals, since a swap that never committed leaves two:
+ * `beginTerminalSurfaceSwap` opens a hidden replacement and `commitTerminalSurfaceSwap` disposes
+ * the one it replaced, so a stop in between leaves the committed one live with nothing pointing at
+ * it. They are the same object whenever no swap is open, which is what the set deduplicates.
+ */
+export function stopTerminalInit(scope: TerminalDocumentScope) {
+  scope.terminalGeneration++
+  for (const terminal of new Set([scope.term, scope.committedTerm])) {
+    try {
+      terminal?.dispose()
+    } catch {}
+  }
+  scope.term = null
+  scope.committedTerm = null
+}

@@ -31,6 +31,44 @@ function conptyDeniesCygwinBreakaway(addonPath) {
   return readFileSync(addonPath).includes(CYGWIN_BREAKAWAY_MARKER)
 }
 
+/** Where the patch adds the literal above, relative to node-pty's root. */
+const NODE_PTY_CONPTY_SOURCE = join('src', 'win', 'conpty.cc')
+
+/**
+ * The verdict on the source a Windows rebuild is about to compile.
+ *
+ * Why before compiling and not only after: pnpm materializes node_modules/node-pty
+ * from config/patches/node-pty@1.1.0.patch at install time, so an install that
+ * predates the denial holds source without it, and no rebuild of that source can
+ * yield an addon the post-rebuild gate accepts. Measured on a Windows dev
+ * checkout: `--force` compiled for minutes, rewrote conpty.node byte-identical
+ * and unpatched, and the gate then advised "rebuild from source" -- the step
+ * that had just run. The remedy is a reinstall, and that is what this says.
+ *
+ * An absent source file is not judged here: node-pty ships it, and the addon
+ * gate that follows the rebuild still reads the binary either way.
+ */
+function assertNodePtySourceDeniesMsysBreakaway({ nodePtyDir }) {
+  const sourcePath = join(nodePtyDir, NODE_PTY_CONPTY_SOURCE)
+  if (!existsSync(sourcePath)) {
+    return
+  }
+  if (readFileSync(sourcePath, 'utf8').includes(`L"${CYGWIN_BREAKAWAY_MARKER_TEXT}"`)) {
+    return
+  }
+  throw new Error(
+    [
+      `node-pty's source at ${sourcePath} does not carry the Cygwin/MSYS job-breakaway denial,`,
+      'so no rebuild of it can produce an addon that does; the compile was not started.',
+      'pnpm applies config/patches/node-pty@1.1.0.patch when it installs node-pty, so run',
+      '`pnpm install` to re-materialize it with the current patch, then rerun this command.',
+      `If that patch does not itself add L"${CYGWIN_BREAKAWAY_MARKER_TEXT}" to ${NODE_PTY_CONPTY_SOURCE},`,
+      'this checkout predates the denial and no reinstall can supply it.',
+      'See docs/reference/windows-msys-job-breakaway.md.'
+    ].join(' ')
+  )
+}
+
 /**
  * Why here and not only at packaging: a rebuild that did not honour `--arch`
  * leaves a binary the target cannot load, the app falls back to the published
@@ -181,6 +219,7 @@ module.exports = {
   CYGWIN_BREAKAWAY_MARKER_TEXT,
   assertNodePtyJobOwnership,
   assertCygwinBreakawayDenied,
+  assertNodePtySourceDeniesMsysBreakaway,
   assertRebuiltConptyDeniesMsysBreakaway,
   conptyDeniesCygwinBreakaway,
   nodePtyAddonPath,

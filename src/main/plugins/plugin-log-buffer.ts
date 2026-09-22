@@ -1,12 +1,17 @@
 export type PluginLogLine = { ts: number; level: 'info' | 'warn' | 'error'; line: string }
 
 const LOG_RING_LIMIT = 200
+export const PLUGIN_LOG_KEY_LIMIT = 256
 
 export class PluginLogBuffer {
   private readonly logs = new Map<string, { token: object; lines: PluginLogLine[] }>()
 
   get(pluginKey: string): PluginLogLine[] {
     return this.logs.get(pluginKey)?.lines ?? []
+  }
+
+  get size(): number {
+    return this.logs.size
   }
 
   capture(pluginKey: string): (level: PluginLogLine['level'], line: string) => void {
@@ -27,6 +32,13 @@ export class PluginLogBuffer {
     if (!entry) {
       entry = { token: {}, lines: [] }
       this.logs.set(pluginKey, entry)
+      while (this.logs.size > PLUGIN_LOG_KEY_LIMIT) {
+        const oldest = this.logs.keys().next()
+        if (oldest.done) {
+          break
+        }
+        this.logs.delete(oldest.value)
+      }
     }
     return entry
   }

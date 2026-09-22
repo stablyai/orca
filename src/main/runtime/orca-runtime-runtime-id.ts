@@ -326,7 +326,8 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
-    (ptyId) => this.getPtyWriteHostPlatform(ptyId)
+    (ptyId) => this.getPtyWriteHostPlatform(ptyId),
+    (ptyId) => this.getPtyAgent(ptyId)
   )
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
@@ -353,8 +354,8 @@ export class OrcaRuntimeWithRuntimeId {
       getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
       getFirstPartyAgentStatus: (ptyId) =>
         (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
-      startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
-        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
+      startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
+        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
     },
     this.terminalWaiters,
     this.terminalIdlePolls

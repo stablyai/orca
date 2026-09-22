@@ -18,6 +18,11 @@ import {
 } from './plugin-worker-startup'
 import { runPluginWorkerRestartLoop } from './plugin-worker-restart-loop'
 import { pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
+import {
+  forgetPluginWorkerGenerationIfIdle,
+  nextPluginWorkerGeneration
+} from './plugin-worker-generation-retention'
+import { finishPluginWorkerActivation, pluginWorkerErrorText } from './plugin-worker-lifecycle'
 
 export type { PluginWorkerFactory, PluginWorkerSpawnSpec } from './plugin-worker-startup'
 
@@ -72,6 +77,11 @@ export class PluginWorkerManager {
     return new Map(this.knownSpecs)
   }
 
+  /** @internal - exposed for lifecycle retention tests. */
+  generationCountForTests(): number {
+    return this.generations.size
+  }
+
   async ensureActive(
     spec: PluginWorkerSpawnSpec,
     assertApproved: () => void = () => undefined
@@ -118,16 +128,10 @@ export class PluginWorkerManager {
     const record: ActivationRecord = { spec, generation, controller, task }
     this.activations.set(spec.pluginKey, record)
     void task.then(
-      () => this.finishActivation(spec.pluginKey, record),
-      () => this.finishActivation(spec.pluginKey, record)
+      () => finishPluginWorkerActivation(this.activations, spec.pluginKey, record),
+      () => finishPluginWorkerActivation(this.activations, spec.pluginKey, record)
     )
     return task
-  }
-
-  private finishActivation(pluginKey: string, record: ActivationRecord): void {
-    if (this.activations.get(pluginKey) === record) {
-      this.activations.delete(pluginKey)
-    }
   }
 
   private async activate(
@@ -168,7 +172,7 @@ export class PluginWorkerManager {
       recordFailure: (error) => this.recordFailure(spec.pluginKey, 'worker failed to start', error),
       erroredError: (error) =>
         new Error(
-          `plugin ${spec.pluginKey} is errored after repeated failures: ${this.errorText(error)}`
+          `plugin ${spec.pluginKey} is errored after repeated failures: ${pluginWorkerErrorText(error)}`
         )
     })
   }
@@ -201,7 +205,7 @@ export class PluginWorkerManager {
     if (decision.restart) {
       this.options.log(pluginKey)(
         'warn',
-        `${context}${error ? `: ${this.errorText(error)}` : ''}; restart ${decision.attempt} in ${decision.delayMs}ms`
+        `${context}${error ? `: ${pluginWorkerErrorText(error)}` : ''}; restart ${decision.attempt} in ${decision.delayMs}ms`
       )
     } else if (decision.state === 'errored') {
       this.options.log(pluginKey)('error', `${context}; marked errored after repeated failures`)
@@ -238,6 +242,7 @@ export class PluginWorkerManager {
       record?.handle.dispose().catch(() => undefined)
     ])
     record?.lease.release()
+    this.forgetGenerationIfIdle(pluginKey)
   }
 
   reapIdle(now = Date.now()): void {
@@ -260,7 +265,10 @@ export class PluginWorkerManager {
         .catch(() => undefined)
         .finally(() => record.lease.release())
       this.stoppingWorkers.add(stopping)
-      void stopping.then(() => this.stoppingWorkers.delete(stopping))
+      void stopping.then(() => {
+        this.stoppingWorkers.delete(stopping)
+        this.forgetGenerationIfIdle(pluginKey)
+      })
     }
   }
 
@@ -291,9 +299,17 @@ export class PluginWorkerManager {
   }
 
   private nextGeneration(pluginKey: string): number {
-    const generation = (this.generations.get(pluginKey) ?? 0) + 1
-    this.generations.set(pluginKey, generation)
-    return generation
+    return nextPluginWorkerGeneration(pluginKey, this.generations)
+  }
+
+  private forgetGenerationIfIdle(pluginKey: string): void {
+    forgetPluginWorkerGenerationIfIdle(
+      pluginKey,
+      this.activations,
+      this.workers,
+      this.knownSpecs,
+      this.generations
+    )
   }
 
   private isCancelled(pluginKey: string, generation: number, signal?: AbortSignal): boolean {
@@ -306,9 +322,5 @@ export class PluginWorkerManager {
     if (this.isCancelled(pluginKey, generation, signal)) {
       throw new Error('plugin worker activation was cancelled')
     }
-  }
-
-  private errorText(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
   }
 }

@@ -49,6 +49,27 @@ import {
   removeWebSessionTabsEnvironment
 } from './tracking'
 
+const MAX_SESSION_TABS_TRACKING_GENERATIONS = 512
+let sessionTabsTrackingGenerationSequence = 0
+let evictedSessionTabsTrackingGeneration = 0
+
+function advanceSessionTabsTrackingGeneration(environmentId: string): void {
+  const next = ++sessionTabsTrackingGenerationSequence
+  sessionTabsTrackingGenerationByEnvironment.set(environmentId, next)
+  while (sessionTabsTrackingGenerationByEnvironment.size > MAX_SESSION_TABS_TRACKING_GENERATIONS) {
+    const oldest = sessionTabsTrackingGenerationByEnvironment.keys().next()
+    if (oldest.done) {
+      break
+    }
+    const oldestEnvironmentId = oldest.value
+    evictedSessionTabsTrackingGeneration = Math.max(
+      evictedSessionTabsTrackingGeneration,
+      sessionTabsTrackingGenerationByEnvironment.get(oldestEnvironmentId) ?? 0
+    )
+    sessionTabsTrackingGenerationByEnvironment.delete(oldestEnvironmentId)
+  }
+}
+
 export function getLastKnownHostTerminalTabCount(
   environmentId: string,
   worktreeId: string
@@ -97,6 +118,9 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
   hostWorkingClientBoundaryByPaneKey.clear()
+  sessionTabsTrackingGenerationByEnvironment.clear()
+  sessionTabsTrackingGenerationSequence = 0
+  evictedSessionTabsTrackingGeneration = 0
   resetWebSessionBrowserPlacementsForTests()
 }
 
@@ -157,10 +181,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
-  sessionTabsTrackingGenerationByEnvironment.set(
-    trimmedEnvironmentId,
-    (sessionTabsTrackingGenerationByEnvironment.get(trimmedEnvironmentId) ?? 0) + 1
-  )
+  advanceSessionTabsTrackingGeneration(trimmedEnvironmentId)
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
@@ -223,5 +244,6 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
 }
 
 export function getWebSessionTabsTrackingGeneration(environmentId: string): number {
-  return sessionTabsTrackingGenerationByEnvironment.get(environmentId.trim()) ?? 0
+  const key = environmentId.trim()
+  return sessionTabsTrackingGenerationByEnvironment.get(key) ?? evictedSessionTabsTrackingGeneration
 }

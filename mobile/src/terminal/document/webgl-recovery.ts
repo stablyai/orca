@@ -1,17 +1,8 @@
 import { flog } from './viewport-transform'
 import { applyTerminalTheme } from './terminal-theme'
-import { scope, type TerminalDocumentWebglAddon } from './document-scope'
+import type { TerminalDocumentScope, TerminalDocumentWebglAddon } from './document-scope'
 
-/** xterm's WebGL addon constructor, as the engine bundle puts it on `window`. */
-type WebglAddonGlobal = { WebglAddon?: new () => TerminalDocumentWebglAddon }
-
-declare global {
-  interface Window {
-    WebglAddon?: WebglAddonGlobal
-  }
-}
-
-export function refreshTerminalSurface() {
+export function refreshTerminalSurface(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
@@ -20,7 +11,7 @@ export function refreshTerminalSurface() {
   } catch {}
 }
 
-export function cancelWebglContextRecovery() {
+export function cancelWebglContextRecovery(scope: TerminalDocumentScope) {
   if (!scope.webglRecoveryTimer) {
     return
   }
@@ -28,31 +19,36 @@ export function cancelWebglContextRecovery() {
   scope.webglRecoveryTimer = null
 }
 
-export function attachWebglAddon(allowRecovery: boolean) {
-  if (!scope.term || !window.WebglAddon || !window.WebglAddon.WebglAddon) {
+export function attachWebglAddon(scope: TerminalDocumentScope, allowRecovery: boolean) {
+  if (!scope.term) {
     return false
   }
   let addon: TerminalDocumentWebglAddon | null = null
   try {
-    addon = new window.WebglAddon.WebglAddon()
+    addon = scope.createWebglAddon()
+    // Why: no addon is the DOM renderer, which is a fallback rather than a failure; the
+    // catch below is for an engine that has one and threw building it.
+    if (!addon) {
+      return false
+    }
     scope.webglAddon = addon
     if (addon.onContextLoss) {
       addon.onContextLoss(function () {
         if (scope.webglAddon !== addon) {
           return
         }
-        flog('webgl-context-loss', { retry: allowRecovery })
+        flog(scope, 'webgl-context-loss', { retry: allowRecovery })
         scope.webglAddon = null
         try {
           addon!.dispose()
         } catch {}
-        refreshTerminalSurface()
+        refreshTerminalSurface(scope)
         if (!allowRecovery) {
           return
         }
         // Why: one delayed retry handles transient iOS context loss without
         // entering a GPU crash loop; a second loss stays on the DOM renderer.
-        cancelWebglContextRecovery()
+        cancelWebglContextRecovery(scope)
         const recoveryTerm = scope.term
         const recoveryGeneration = scope.terminalGeneration
         scope.webglRecoveryTimer = setTimeout(function () {
@@ -60,7 +56,7 @@ export function attachWebglAddon(allowRecovery: boolean) {
           if (scope.term !== recoveryTerm || scope.terminalGeneration !== recoveryGeneration) {
             return
           }
-          attachWebglAddon(false)
+          attachWebglAddon(scope, false)
         }, 100)
       })
     }
@@ -71,11 +67,11 @@ export function attachWebglAddon(allowRecovery: boolean) {
           addon.clearTextureAtlas()
         }
       } catch {}
-      refreshTerminalSurface()
+      refreshTerminalSurface(scope)
     }
     return true
   } catch (e) {
-    flog('webgl-attach-failed', { retry: !allowRecovery, message: String(e) })
+    flog(scope, 'webgl-attach-failed', { retry: !allowRecovery, message: String(e) })
     if (scope.webglAddon === addon) {
       scope.webglAddon = null
     }
@@ -84,22 +80,38 @@ export function attachWebglAddon(allowRecovery: boolean) {
         addon.dispose()
       }
     } catch {}
-    refreshTerminalSurface()
+    refreshTerminalSurface(scope)
     return false
   }
 }
 
-document.addEventListener('visibilitychange', function () {
+function onDocumentVisibilityChange(scope: TerminalDocumentScope) {
   if (document.visibilityState !== 'visible') {
     return
   }
   // Why: iOS may restore the xterm model while discarding GPU pixels/theme
   // paint state, so visibility must rebuild the atlas and repaint every row.
-  applyTerminalTheme(scope.terminalThemeInput)
+  applyTerminalTheme(scope, scope.terminalThemeInput)
   try {
     if (scope.webglAddon && scope.webglAddon.clearTextureAtlas) {
       scope.webglAddon.clearTextureAtlas()
     }
   } catch {}
-  refreshTerminalSurface()
-})
+  refreshTerminalSurface(scope)
+}
+
+export function startWebglRecovery(scope: TerminalDocumentScope) {
+  const onVisibilityChange = () => onDocumentVisibilityChange(scope)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  scope.removeWebglRecovery = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
+}
+
+export function stopWebglRecovery(scope: TerminalDocumentScope) {
+  if (scope.removeWebglRecovery) {
+    scope.removeWebglRecovery()
+    scope.removeWebglRecovery = null
+  }
+  cancelWebglContextRecovery(scope)
+}

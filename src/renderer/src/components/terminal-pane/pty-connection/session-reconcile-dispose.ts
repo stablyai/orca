@@ -215,6 +215,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.startupGridSettleHandle?.cancel()
       session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
+      session.terminalSelectionFitGuard?.dispose()
+      session.terminalSelectionFitGuard = null
       if (session.pendingForegroundGridDriftCheckRaf !== null) {
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null

@@ -18,6 +18,10 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import {
+  resolveOpenCodeSharedServerEnvelope,
+  trackOpenCodePaneLaunchToken
+} from './agent-hook-listener/opencode-session-registry'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
@@ -31,9 +35,16 @@ export function normalizeHookPayload(
   if (!envelope) {
     return null
   }
-  const { record, paneKey, hookPayloadRecord, tabId, worktreeId, launchToken } = envelope
+  const {
+    record,
+    paneKey: stampedPaneKey,
+    hookPayloadRecord,
+    tabId: stampedTabId,
+    worktreeId: stampedWorktreeId,
+    launchToken: stampedLaunchToken
+  } = envelope
   if (source === 'claude') {
-    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
@@ -44,6 +55,25 @@ export function normalizeHookPayload(
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
+  // Why (#21359): the shared OpenCode server stamps every post with its own
+  // frozen pane. When the binder has mapped this session to its real pane,
+  // the stamp is replaced before anything downstream (status lookup, dispatch,
+  // fences) can act on the wrong owner. Unbound sessions keep the stamp.
+  const { paneKey, tabId, worktreeId, launchToken } = resolveOpenCodeSharedServerEnvelope({
+    state,
+    source,
+    stamped: {
+      paneKey: stampedPaneKey,
+      tabId: stampedTabId,
+      worktreeId: stampedWorktreeId,
+      launchToken: stampedLaunchToken
+    },
+    sessionId: providerSession?.id
+  })
+  // Why after the resolve: tracking the stamped token first would let a stale
+  // shared-server stamp overwrite the pane's live token; the resolved envelope
+  // carries the stored token (or nothing) for bound sessions instead.
+  trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   const providerPromptId =
     source === 'claude'
       ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)

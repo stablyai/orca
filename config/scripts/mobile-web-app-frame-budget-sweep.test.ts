@@ -88,6 +88,17 @@ let cdp: CDPSession | null = null
  */
 const describeSweep = mobileWebAppDependenciesPresent() ? describe : describe.skip
 
+/**
+ * The floor under real noise, in bytes per pixel.
+ *
+ * It separates noise the encoder saw pixel-for-pixel from noise averaged away by a layout at
+ * Chromium's default width: the averaged arm reads under 0.3, and the sweep's own minimum has read
+ * 0.543986 on the pinned Chromium (2026-09-20) and 0.480898 on the runner's Chrome 152
+ * (2026-09-21). A floor of 0.5 sat inside that encoder spread and failed the runner on a
+ * measurement that was noise; 0.4 keeps a margin on both sides of it.
+ */
+const NOISE_FLOOR_BYTES_PER_PIXEL = 0.4
+
 beforeAll(async () => {
   if (!mobileWebAppDependenciesPresent()) {
     return
@@ -118,6 +129,34 @@ function noiseDocument({ viewportMeta }: { viewportMeta: boolean }): string {
   const style =
     '<style>html,body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style>'
   return `<!doctype html><html><head>${meta}${style}</head><body><canvas id="noise"></canvas></body></html>`
+}
+
+/** One screencast frame: its encoded size, and when the browser captured it. */
+type CapturedFrame = { bytes: number; stamp: number | null }
+
+/**
+ * The frames this capture may be read from, which is the precondition the byte count needs.
+ *
+ * Two readings rather than an ordering. `rastered` is where the arrivals after the raster barrier
+ * begin, and `paintedAt` is the page's own clock at the moment its second animation frame ran after
+ * the noise was put on the canvas -- the clock `metadata.timestamp` is also on. A frame is admitted
+ * only if the browser captured it at or after that moment.
+ *
+ * Arrival order cannot stand in for it: frames do not reach the client in capture order. Measured on
+ * this rig at 20x CPU throttling, over six captures, every frame of the black canvas the resize left
+ * and every frame still in flight from the previous viewport was stamped 86 to 161 ms before the
+ * paint and yet arrived after the barrier, while every frame carrying the noise was stamped inside
+ * 150 ms after it. Admitting one of those stale frames is both readings this sweep has flaked on: a
+ * black 1400x1600 frame encodes to 13483 bytes, which is the 0.006 bytes/px of 2026-09-22, and a
+ * full frame of the previous and smaller viewport is the ~447 KB whose posted envelope was the
+ * 596462 that 2026-09-21 expected to be null.
+ */
+function framesCarryingTheNoise(
+  frames: CapturedFrame[],
+  rastered: number,
+  paintedAt: number
+): CapturedFrame[] {
+  return frames.slice(rastered).filter((one) => one.stamp !== null && one.stamp >= paintedAt)
 }
 
 /**
@@ -166,13 +205,22 @@ async function screencastNoiseJpegBytes(
     canvas.style.height = `${height}px`
   }, frame)
 
-  const sizes: number[] = []
-  const onFrame = (event: { data: string; sessionId: number }): void => {
-    sizes.push(Buffer.from(event.data, 'base64').length)
+  const frames: CapturedFrame[] = []
+  const onFrame = (event: {
+    data: string
+    sessionId: number
+    metadata: { timestamp?: number }
+  }): void => {
+    frames.push({
+      bytes: Buffer.from(event.data, 'base64').length,
+      // Seconds in the protocol, milliseconds here, so it compares against the page's own clock.
+      stamp: event.metadata.timestamp === undefined ? null : event.metadata.timestamp * 1000
+    })
     void session.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(() => {})
   }
   session.on('Page.screencastFrame', onFrame)
-  let painted = 0
+  let rastered = 0
+  let paintedAt = Number.POSITIVE_INFINITY
   try {
     await session.send('Page.startScreencast', {
       format: 'jpeg',
@@ -183,12 +231,11 @@ async function screencastNoiseJpegBytes(
     })
     // The noise is painted after the screencast is running, and through this same CDP session, so
     // the reply orders it against the frame events. Two animation frames are awaited inside it, so
-    // when it resolves the paint has been committed to the compositor and every later capture
-    // carries it. `painted` is how many frames had already arrived by then; only what comes after
-    // is a frame of the noise, which is what makes this a measurement of the canvas rather than of
-    // whatever the surface held when the capture began.
-    await session.send('Runtime.evaluate', {
+    // when it resolves the paint has been committed to the compositor -- and it hands back the
+    // page's own clock at that moment, which is what says which frames carry this noise.
+    const painting = await session.send('Runtime.evaluate', {
       awaitPromise: true,
+      returnByValue: true,
       expression: `(async () => {
         const canvas = document.getElementById('noise')
         const context = canvas.getContext('2d')
@@ -203,15 +250,32 @@ async function screencastNoiseJpegBytes(
         }
         context.putImageData(image, 0, 0)
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return Date.now()
       })()`
     })
-    painted = sizes.length
+    paintedAt = Number(painting.result.value)
 
-    // Nudged until a frame lands after that commit. A capture already in flight can still be the
-    // old surface, so two are taken and the larger is used: a blank frame is a fraction of a noise
-    // frame, so the maximum over the post-commit frames is the noise one whichever order they came.
+    // A commit is not a raster. The screencast hands over whatever the compositor has drawn so far,
+    // so after a resize it emits frames at the full size carrying only the tiles rastered yet.
+    // Measured 2026-09-21 under CPU starvation: 87 of 444 post-commit frames at 1400x1600 read
+    // under the noise floor, one of them 447491 bytes against the full frame's 1221117 — bytes the
+    // shell posts inside the cap, which is this sweep reading a budget as fitting when it does not.
+    // `Page.captureScreenshot` returns only once a compositor frame of the current content exists,
+    // so it is the raster this wants rather than a longer wait, and over the same rounds with it
+    // none read under the floor. Quality 0 because nothing reads its bytes; 17 ms a call.
+    await session.send('Page.captureScreenshot', { format: 'jpeg', quality: 0 })
+    rastered = frames.length
+
+    // Nudged until two frames the browser captured after this capture's own paint have landed. Two
+    // are taken and the larger is used, so a part-rastered frame cannot be the one this measures,
+    // and they are counted by `framesCarryingTheNoise` rather than by arrival for the reason it
+    // carries: a frame in flight from the previous viewport arrives here too.
     const deadline = Date.now() + 20_000
-    for (let nudge = 0; sizes.length - painted < 2 && Date.now() < deadline; nudge += 1) {
+    for (
+      let nudge = 0;
+      framesCarryingTheNoise(frames, rastered, paintedAt).length < 2 && Date.now() < deadline;
+      nudge += 1
+    ) {
       await session.send('Runtime.evaluate', {
         expression: `document.documentElement.style.background = ${nudge % 2 === 0 ? "'#000'" : "'#111'"}`
       })
@@ -221,15 +285,23 @@ async function screencastNoiseJpegBytes(
     await session.send('Page.stopScreencast').catch(() => {})
     session.off('Page.screencastFrame', onFrame)
   }
-  const afterPaint = sizes.slice(painted)
+  const afterPaint = framesCarryingTheNoise(frames, rastered, paintedAt)
   if (afterPaint.length === 0) {
-    // Never fall back to a frame from before the paint: that is the understatement this exists to
-    // rule out, and a silent one would look like a cheaper encoder.
+    // Never fall back to a frame from before the raster: that is the understatement this exists to
+    // rule out, and a silent one would look like a cheaper encoder. Every frame is printed with how
+    // long after the paint the browser captured it, so a window that held only stale ones is legible
+    // rather than inferred.
+    const seen = JSON.stringify(
+      frames.map((one) => ({
+        bytes: one.bytes,
+        afterPaintMs: one.stamp === null ? null : Math.round(one.stamp - paintedAt)
+      }))
+    )
     throw new Error(
-      `no screencast frame after the noise was committed for ${frame.width}x${frame.height}`
+      `no screencast frame carried the rastered noise for ${frame.width}x${frame.height}: ${seen}`
     )
   }
-  return Math.max(...afterPaint)
+  return Math.max(...afterPaint.map((one) => one.bytes))
 }
 
 function screencastFrame(image: Uint8Array, frame: { width: number; height: number }) {
@@ -335,7 +407,7 @@ describeSweep('the frame budget across the viewport range', () => {
     expect(worstBytesPerPixel).toBeLessThanOrEqual(sweep().WORST_CASE_JPEG_BYTES_PER_PIXEL)
     // The low end too, so a sweep that silently stopped encoding real images is visible: every
     // frame here is noise, and noise never compresses to a tenth of a byte per pixel.
-    expect(bestBytesPerPixel).toBeGreaterThan(0.5)
+    expect(bestBytesPerPixel).toBeGreaterThan(NOISE_FLOOR_BYTES_PER_PIXEL)
   }, 300_000)
 
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
@@ -372,11 +444,32 @@ describeSweep('the frame budget across the viewport range', () => {
 
       expect(bytesPerPixel).toBeLessThan(0.3)
       // And the floor the sweep asserts is above it, so that assertion is what fails first.
-      expect(bytesPerPixel).toBeLessThan(0.5)
+      expect(bytesPerPixel).toBeLessThan(NOISE_FLOOR_BYTES_PER_PIXEL)
     } finally {
       await context.close()
     }
   }, 120_000)
+
+  it('reads the frames this capture painted, never one left over from the last', () => {
+    // The four shapes measured on this rig at 20x CPU throttling, all arriving after the raster
+    // barrier: the black canvas the resize left, a full frame of the previous and larger viewport,
+    // and this capture's own two. Only the last two are this capture's, and the gap between the
+    // stale stamps and the paint was never under 86 ms.
+    const frames = [
+      { bytes: 13_483, stamp: 914 },
+      { bytes: 447_491, stamp: 939 },
+      { bytes: 997_489, stamp: 1005 },
+      { bytes: 997_489, stamp: 1024 }
+    ]
+    expect(framesCarryingTheNoise(frames, 0, 1000).map((one) => one.bytes)).toEqual([
+      997_489, 997_489
+    ])
+    // A frame the browser sent no capture time for is not admissible either: it cannot be told from
+    // the stale ones, and guessing it fresh is the understatement the gate exists to refuse.
+    expect(framesCarryingTheNoise([{ bytes: 997_489, stamp: null }], 0, 1000)).toEqual([])
+    // And the arrivals before the raster barrier stay out, which is the other half of the reading.
+    expect(framesCarryingTheNoise(frames, 3, 1000).map((one) => one.bytes)).toEqual([997_489])
+  })
 
   it('never asks for more density than native, anywhere in the range', () => {
     for (const viewport of VIEWPORTS) {

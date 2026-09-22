@@ -18,6 +18,7 @@ import { insertJournalRow } from '../agent-session-journal/journal-row-table'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'
@@ -35,6 +36,26 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('bounds retained turn activity across session churn', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'activity-churn-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+
+    for (let index = 0; index < MAX_RETAINED_SESSION_ACTIVITIES + 4; index += 1) {
+      subscribers.publish(`session-${index}`, journal, { turnId: `turn-${index}`, text: 'working' })
+    }
+
+    expect(subscribers.retainedActivityCountForTests).toBe(MAX_RETAINED_SESSION_ACTIVITIES)
+  })
+
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
     const journal = await journals.open({
       identity: {

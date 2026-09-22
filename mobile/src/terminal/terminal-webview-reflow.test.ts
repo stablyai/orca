@@ -1,18 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { generatedDocumentModule } from './document/generated-document-region.test-support'
-import { XTERM_HTML } from './terminal-webview-html'
+import {
+  documentModuleSource,
+  documentSourceText
+} from './document/document-module-source.test-support'
 
-// The reflow logic runs inside the WebView document; the message dispatch and handle wiring live
-// in terminal-webview-html.ts / TerminalWebView.tsx. Assert the load-bearing invariants from the
-// document the WebView runs, mirroring the other tests here.
-const reflowSource = await generatedDocumentModule('reflow')
-// Use the assembled document so the test covers what the WebView actually runs.
-const htmlSource = XTERM_HTML
-const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+const DOCUMENT_SOURCE = documentSourceText()
+
+// The reflow logic is the document's; the message dispatch and the handle wiring are the
+// component's. Both are read as source, because the document is source now.
+const reflowSource = documentModuleSource('reflow')
+// The handle is built by the controller both components share, which is where the wiring is read.
+const handleSource = readFileSync(
+  new URL('./use-terminal-webview-controller.ts', import.meta.url),
+  'utf8'
+)
 
 function reflowFnBody(): string {
-  const start = reflowSource.indexOf('function reflow(cols, rows) {')
+  const start = reflowSource.indexOf('export function reflow(scope: TerminalDocumentScope')
   expect(start).toBeGreaterThanOrEqual(0)
   return reflowSource.slice(start)
 }
@@ -21,18 +26,18 @@ describe('terminal WebView reflow', () => {
   it('skips the alternate screen so TUI snapshots are not mutated', () => {
     // Why: alt-screen snapshots are repainted by the PTY; a local resize there
     // can drop SGR attributes (white text). Reflow must early-return.
-    expect(reflowFnBody()).toContain('if (!scope.term || isAlternateBufferActive()) {')
+    expect(reflowFnBody()).toContain('if (!scope.term || isAlternateBufferActive(scope)) {')
   })
 
   it('rewraps the local buffer via term.resize to the new cols', () => {
-    expect(reflowFnBody()).toContain('scope.term.resize(nextCols, nextRows);')
+    expect(reflowFnBody()).toContain('scope.term.resize(nextCols, nextRows)')
   })
 
   it('preserves the user scroll position across the rewrap', () => {
     const body = reflowFnBody()
     // At the live bottom -> stay pinned; scrolled up -> hold distance-from-bottom.
-    expect(body).toContain('const wasAtBottom = buffer.viewportY >= buffer.baseY;')
-    expect(body).toContain('scope.term.scrollToBottom();')
+    expect(body).toContain('const wasAtBottom = buffer.viewportY >= buffer.baseY')
+    expect(body).toContain('scope.term.scrollToBottom()')
     expect(body).toContain('rewrapped.baseY - distanceFromBottom - rewrapped.viewportY')
   })
 
@@ -43,45 +48,39 @@ describe('terminal WebView reflow', () => {
   })
 
   it('is dispatched by the reflow WebView message and exposed on the handle', () => {
-    expect(htmlSource).toContain('} else if (msg.type === "reflow") {')
-    expect(htmlSource).toContain('reflow(msg.cols, msg.rows);')
+    expect(DOCUMENT_SOURCE).toContain("} else if (msg.type === 'reflow') {")
+    expect(DOCUMENT_SOURCE).toContain('reflow(scope, msg.cols!, msg.rows!)')
     expect(handleSource).toContain("postMessage({ type: 'reflow', cols, rows })")
   })
 
   it('does not locally resize hidden WebViews to a one-column grid', () => {
-    expect(htmlSource).toContain('scope.MIN_FIT_COLS = 20;')
-    expect(htmlSource).toContain('if (cols < scope.MIN_FIT_COLS) {')
-    expect(htmlSource).toContain('flog("measure-skip-small-width"')
-    expect(htmlSource).toContain('notify({ type: "measure-result", cols: null, rows: null });')
+    // The floor is a constant of the module that fits the grid, and both readers import it.
+    expect(DOCUMENT_SOURCE).toContain('export const MIN_FIT_COLS = 20')
+    expect(DOCUMENT_SOURCE).toContain('if (cols < MIN_FIT_COLS) {')
+    expect(DOCUMENT_SOURCE).toContain("flog(scope, 'measure-skip-small-width'")
+    expect(DOCUMENT_SOURCE).toContain(
+      "notify(scope, { type: 'measure-result', cols: null, rows: null })"
+    )
   })
 
   // Why: the assertions above read the reflow module's own emission, which still reads whole if
   // the generator drops the module from the document or emits it twice. That was the regression
   // class reported when a sibling refactor extracted the tap dispatcher next to reflow. Guard the
   // assembled document so the routine, once, and its dispatch are really in what the WebView runs.
-  describe('assembled XTERM_HTML', () => {
-    it('carries the reflow routine exactly once', () => {
-      expect(XTERM_HTML).toContain('function reflow(cols, rows) {')
-      expect(XTERM_HTML).toContain('scope.term.resize(nextCols, nextRows);')
-      expect(XTERM_HTML.split(reflowSource).length - 1).toBe(1)
+  describe('the document that carries it', () => {
+    it('declares the reflow routine exactly once', () => {
+      expect(DOCUMENT_SOURCE.split('export function reflow(').length - 1).toBe(1)
     })
 
-    it('still routes the reflow message to the injected routine', () => {
-      expect(XTERM_HTML).toContain('} else if (msg.type === "reflow") {')
-      expect(XTERM_HTML).toContain('reflow(msg.cols, msg.rows);')
-    })
-
-    it('still wires the message listener after the reflow routine and tap dispatcher', () => {
-      // Why: the reflow message only reaches reflow() if the document-level
-      // message listener actually attaches. The tap dispatcher is injected
-      // between them; if its IIFE-time code threw, the listener below would
-      // never bind and reflow messages would silently no-op.
-      const reflowAt = XTERM_HTML.indexOf('function reflow(cols, rows) {')
-      const dispatchAt = XTERM_HTML.indexOf('const dispatch = {\n    mode: "idle"')
-      const listenerAt = XTERM_HTML.indexOf('window.addEventListener("message"')
-      expect(reflowAt).toBeGreaterThanOrEqual(0)
-      expect(dispatchAt).toBeGreaterThan(reflowAt)
-      expect(listenerAt).toBeGreaterThan(dispatchAt)
+    it('starts the message bridge after the tap dispatcher', () => {
+      // Why: the reflow message only reaches reflow() if the document's transport attaches. The
+      // dispatcher starts before the bridge, and a start that throws is unwound by the document
+      // itself rather than leaving a half-started one, so the order is what this holds.
+      const sequence = documentModuleSource('create-terminal-document')
+      expect(sequence.indexOf('startTapDispatch(scope)')).toBeGreaterThan(0)
+      expect(sequence.indexOf('startMessageBridge(scope)')).toBeGreaterThan(
+        sequence.indexOf('startTapDispatch(scope)')
+      )
     })
   })
 })

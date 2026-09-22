@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from 'expo-router'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { firstParam } from '../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../src/navigation/route-param-reader'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
+import { ShellSwitchPendingScreen } from '../../../src/mobile-web-shell/ShellSwitchPendingScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { useShellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The worktree list, from the desktop's bundle or from this app.
@@ -15,8 +16,8 @@ import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobi
  * So the two ways to stay native are a flag that is off and a negotiation that said no, and the
  * second one covers every host whose desktop is older than the page.
  *
- * `enabled === null` is the flag read still settling, and it renders the native screen: a store
- * build never reaches storage at all, so that is the only frame it ever paints here.
+ * The flag read settling is a third answer, not a fourth spelling of native: see
+ * `shell-switch-decision.ts`.
  *
  * Encoded, not interpolated raw, for the reason `web.tsx` states: a deep-linked host id carrying
  * `?`, `#` or whitespace would build a pathname the page refuses, and a refusal here is a failure
@@ -30,14 +31,17 @@ function HostListScreen() {
   // truthy, so a bare read also builds `/h/` and hands that over; this answers `''` and stays.
   const params = useLocalSearchParams<{ hostId?: string | string[] }>()
   const hostId = firstParam(params.hostId)
-  const enabled = useMobileWebShellEnabled()
 
   // Asked here as every switch asks it: encoding does not save a `.` or `..` host id, which fails
   // the bridge's segment rule, and handing that over paints the page's failure screen over the
   // native list this route already has.
   const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
+  const decision = useShellSwitchDecision(hostId === '' ? null : route)
 
-  if (enabled !== true || !hostId || route === null) {
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return <HostScreen />
   }
   return (
@@ -46,7 +50,7 @@ function HostListScreen() {
       // so a host id change must be a remount rather than a prop update.
       key={hostId}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={<HostScreen />}
     />
   )

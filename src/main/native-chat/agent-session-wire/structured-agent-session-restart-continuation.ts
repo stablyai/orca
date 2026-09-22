@@ -1,10 +1,9 @@
-// Asking an interrupted agent to carry on — always, and only, on a deliberate user action.
+// Asking an interrupted agent to carry on, on the user's opt-in.
 //
-// Reconnecting and continuing are SEPARATE operations. Reconnect reattaches and sends nothing; this
-// adds one message on top of a reconnect, and only when the user pressed a control that says so.
-// The automatic-reconnect setting cannot reach this module — the resume surface it calls has no
-// send in it at all — so "the checkbox never continues" is structural rather than wiring
-// discipline.
+// Reattaching and continuing are SEPARATE operations: `resume` reattaches and sends nothing; this
+// adds one message on top of it. Both the restart prompt and an opted-in launch come here, so a
+// SETTING can reach this send — acceptable because the work is the user's own, the message asks the
+// agent to verify its last action before repeating it, and the launch toast reports what happened.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'

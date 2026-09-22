@@ -11,6 +11,7 @@ import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
@@ -237,6 +238,19 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       onBackgroundTasksChanged: (sessionId, state) =>
         host?.publishBackgroundTaskState(sessionId, state),
       onDispatchSettledLate,
+      onPrimaryThreadStoppedRunning: ({ sessionId }) => {
+        void host
+          ?.releaseUnansweredDispatches({
+            sessionId,
+            reason: DISPATCH_DOUBT_PROVIDER_IDLE
+          })
+          .catch((error) =>
+            deps.onError?.({
+              scope: `structured-agent-session-unanswered-dispatch:${sessionId}`,
+              error
+            })
+          )
+      },
       onEvent: (event) => {
         if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
           return

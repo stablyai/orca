@@ -21,6 +21,7 @@ import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
 import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
+import { resolveOpenCodeConfigDirectory } from '../../shared/opencode-config-directory'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -50,8 +51,13 @@ function toSafeDirName(id: string): string {
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
+// Both major versions install as `opencode`; let the loader choose server() or setup().
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
+  return getOpenCodeFamilyPluginSource('/hook/opencode', {
+    emitSessionStart: true,
+    emitNextEvents: true,
+    expectedAgent: 'opencode'
+  })
 }
 
 export function getOpenCode2PluginSource(): string {
@@ -63,7 +69,11 @@ export function getOpenCode2PluginSource(): string {
 
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
-  options: { emitSessionStart: boolean; emitNextEvents?: boolean }
+  options: {
+    emitSessionStart: boolean
+    emitNextEvents?: boolean
+    expectedAgent?: 'opencode' | 'opencode2'
+  }
 ): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
@@ -79,7 +89,7 @@ export function getOpenCodeFamilyPluginSource(
   ].join('\n')
 }
 
-// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
+// Why: installs the plugin into OpenCode's config discovery path so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini.
 export class OpenCodeHookService {
   private readonly pluginSource: () => string
   private readonly pluginFileName: string
@@ -117,32 +127,27 @@ export class OpenCodeHookService {
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
-    if (!existingConfigDir) {
-      // Why: share one config root so OpenCode's plugin deps don't churn node_modules per terminal.
-      const configDir = this.writeSharedPluginConfig()
-      if (!configDir) {
+    const managedConfigDir = this.getSharedConfigDir()
+    if (!existingConfigDir || existingConfigDir === managedConfigDir) {
+      try {
+        this.writePluginToConfigDir(resolveOpenCodeConfigDirectory())
+        return {}
+      } catch {
         return {}
       }
-      return { OPENCODE_CONFIG_DIR: configDir }
     }
-
-    // Why: don't mkdir the user's (possibly typoed) path — that's the config-replacement failure mode in docs/opencode-config-dir-collision.md; let OpenCode surface it.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
-
     const overlayDir = this.getSourceOverlayDir(existingConfigDir)
-
     try {
       mkdirSync(overlayDir, { recursive: true })
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
+      return { OPENCODE_CONFIG_DIR: overlayDir }
     } catch {
-      // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
-
-    return { OPENCODE_CONFIG_DIR: overlayDir }
   }
 
   private getOverlayRoot(): string {
@@ -260,17 +265,10 @@ export class OpenCodeHookService {
     writeFileSync(pluginPath, this.pluginSource())
   }
 
-  private writeSharedPluginConfig(): string | null {
-    const configDir = this.getSharedConfigDir()
+  private writePluginToConfigDir(configDir: string): void {
     const pluginsDir = join(configDir, 'plugins')
-    try {
-      mkdirSync(pluginsDir, { recursive: true })
-      writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
-    } catch {
-      // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
-      return null
-    }
-    return configDir
+    mkdirSync(pluginsDir, { recursive: true })
+    writeFileSync(join(pluginsDir, this.pluginFileName), this.pluginSource())
   }
 }
 

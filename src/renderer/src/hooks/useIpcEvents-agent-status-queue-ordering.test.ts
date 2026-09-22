@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusUpdate } from '../store/slices/agent-status'
-import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
   buildStoreState,
   expectWorktreeRouting,
@@ -420,90 +419,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('suppresses auto-approved Codex permission attention before status and title mutation', async () => {
-    const setAgentStatus = vi.fn()
-    const updateTabTitle = vi.fn()
-    const observeAgentHookCompletionForNotification = vi.fn()
-    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
-      metadata.launchToken === 'launch-yolo'
-        ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
-        : undefined
-    )
-    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
-      current: null
-    }
-
-    const storeState: StoreLike = buildStoreState({
-      setAgentStatus,
-      updateTabTitle,
-      getAgentLaunchConfigForStatusMetadata,
-      workspaceSessionReady: true,
-      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
-      },
-      terminalLayoutsByTabId: {
-        'tab-future': {
-          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
-          activeLeafId: FUTURE_LEAF_ID,
-          expandedLeafId: null
-        }
-      }
-    })
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
-    vi.doMock('./agent-hook-completion-notifications', () => ({
-      observeAgentHookCompletionForNotification,
-      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: (cb) => {
-          onSetListenerRef.current = cb
-          return () => {}
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-
-    useIpcEvents()
-    await Promise.resolve()
-
-    if (typeof onSetListenerRef.current !== 'function') {
-      throw new Error('Expected agentStatus.onSet listener to be registered')
-    }
-
-    onSetListenerRef.current({
-      paneKey: FUTURE_PANE_KEY,
-      tabId: 'tab-future',
-      worktreeId: 'wt-1',
-      state: 'waiting',
-      prompt: 'auto-approved permission',
-      agentType: 'codex',
-      launchToken: 'launch-yolo',
-      receivedAt: 1_700_000_000_300,
-      stateStartedAt: 1_699_999_999_300
-    })
-
-    expect(getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({ paneKey: FUTURE_PANE_KEY, launchToken: 'launch-yolo' })
-    )
-    expect(setAgentStatus).not.toHaveBeenCalled()
-    expect(updateTabTitle).not.toHaveBeenCalled()
-    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
-  })
-
-  it('keeps manual or missing-attribution Codex permission attention actionable', async () => {
+  it('keeps a Codex permission attention row actionable', async () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()

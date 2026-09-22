@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { z } from 'zod'
+import { persistMirrored } from '../storage/mirrored-storage-keys'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
@@ -86,11 +87,13 @@ function parseJournal(raw: string | null): OperationJournal {
 }
 
 async function writeEntries(entries: OperationEntry[]): Promise<void> {
-  if (entries.length === 0) {
-    await AsyncStorage.removeItem(STORAGE_KEY)
-    return
-  }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, entries }))
+  // Through the one write path, which notes the mirror on an accepted write and on nothing else
+  // (ruling 35). The rejection this can raise is the point of the key: a journal the device never
+  // wrote must not reach the page, and the composer above catches it as "Message not sent".
+  await persistMirrored(
+    STORAGE_KEY,
+    entries.length === 0 ? null : JSON.stringify({ v: 1, entries })
+  )
 }
 
 async function serialize<T>(action: () => Promise<T>): Promise<T> {

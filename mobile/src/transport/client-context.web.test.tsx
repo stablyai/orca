@@ -2,6 +2,10 @@ import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
+import {
+  BRIDGE_PAGE_CLIENT_ID,
+  BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
+} from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
@@ -31,7 +35,8 @@ const INIT = {
     lastInboundAt: 1800,
     generation: 5
   },
-  grants: { rpc: { maxPendingRequests: 64, maxSubscriptions: 32 }, native: [] }
+  grants: { rpc: { maxPendingRequests: 64, maxSubscriptions: 32 }, native: [] },
+  accepts: [BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT]
 }
 
 /** What the page mounted, and what it holds — the two things the provider decides. */
@@ -131,6 +136,59 @@ describe('the page provider', () => {
     expect(context.getKnownState('host-a')).toBe('connected')
     expect(context.getReconnectAttempt('host-a')).toBe(2)
     expect(context.getLastConnectedAt('host-a')).toBe(1700)
+  })
+
+  it('claims the placeholder the shell swaps, never the session id', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      create(render(client))
+    })
+
+    // What `terminal.subscribe` carries as `client.id` and what the send gate reads. Null was not a
+    // smaller answer — the session route refuses to subscribe without one, so no scrollback
+    // arrives, the terminal document never receives `init`, and live input never opens.
+    expect(readContext().getClientId('host-a')).toBe(BRIDGE_PAGE_CLIENT_ID)
+    expect(readContext().getClientId('host-a')).not.toBe(INIT.sessionId)
+  })
+
+  it('keeps the same identity across a remount, so a resent message keeps its caller', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      create(render(client))
+    })
+    const first = readContext().getClientId('host-a')
+
+    // A shell remount mints a new session id, which is what a per-document identity would follow.
+    // The composer's send journal refuses a retained operation whose caller fingerprint moved, and
+    // it has no expiry, so that would make "send it again" a permanent refusal for that message.
+    act(() => {
+      channel.deliver({ ...INIT, sessionId: 'session-b' })
+      create(render(client))
+    })
+
+    expect(readContext().getClientId('host-a')).toBe(first)
+    expect(first).toBe(BRIDGE_PAGE_CLIENT_ID)
+  })
+
+  it('claims nothing at all when the shell never said it performs the swap', () => {
+    const channel = installChannel()
+    const client = createShellPageClient()
+    if (client === null) {
+      throw new Error('no channel installed')
+    }
+    // An `init` that landed, naming no swap — not a client with no session at all, which would
+    // answer null for a reason that has nothing to do with the capability.
+    channel.deliver({ ...INIT, accepts: [] })
+    act(() => {
+      create(render(client))
+    })
+    expect(readContext().getState('host-a')).toBe('connected')
+
+    // An older shell forwards what the page sent, so a placeholder would reach the host and be
+    // refused as a spoof. Nothing claimed is the honest answer, and it is what shipped before.
+    expect(readContext().getClientId('host-a')).toBe(null)
   })
 
   it('carries a state change from the shell to the screens watching it', () => {

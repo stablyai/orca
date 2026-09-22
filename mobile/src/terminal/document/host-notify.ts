@@ -1,4 +1,9 @@
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalEngineError } from './document-host-seams'
+
+// Declared beside the seam that hands it out, and re-exported here because this is where the
+// document's readers name it.
+export type { TerminalEngineError } from './document-host-seams'
 
 /**
  * The postMessage bridge to the host, and the engine error reporting that rides on it.
@@ -7,20 +12,9 @@ import { scope } from './document-scope'
  * that both serve.
  */
 
-declare global {
-  interface Window {
-    __engineErrors: string[]
-  }
+export function notify(scope: TerminalDocumentScope, msg: Record<string, unknown>) {
+  scope.postToHost(msg)
 }
-
-export function notify(msg: Record<string, unknown>) {
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(msg))
-  }
-}
-
-/** What a thrown value can be here: an Error-shaped object, a string, or nothing. */
-export type TerminalEngineError = string | null | undefined | { message?: unknown }
 
 export function engineErrorText(err: TerminalEngineError) {
   if (!err) {
@@ -44,15 +38,18 @@ export function chromeVersionText() {
   return match ? 'Chrome ' + match[1] : 'Chrome version unknown'
 }
 
-let nonFatalErrorNotifies = 0
-
-export function reportEngineError(context: string, err: TerminalEngineError, fatal?: unknown) {
+export function reportEngineError(
+  scope: TerminalDocumentScope,
+  context: string,
+  err: TerminalEngineError,
+  fatal?: unknown
+) {
   const isFatal = fatal === undefined ? !scope.everReady : !!fatal
   if (!isFatal) {
     // Why: a constructed-but-degraded engine can throw per frame; cap
     // non-fatal notifies so RN isn't flooded. Fatal reports always emit.
-    nonFatalErrorNotifies++
-    if (nonFatalErrorNotifies > 5) {
+    scope.nonFatalErrorNotifies++
+    if (scope.nonFatalErrorNotifies > 5) {
       return
     }
   }
@@ -61,26 +58,39 @@ export function reportEngineError(context: string, err: TerminalEngineError, fat
   if (errText) {
     parts.push(errText)
   }
-  if (window.__engineErrors && window.__engineErrors.length) {
-    parts.push('captured: ' + window.__engineErrors.join(' | '))
+  const captured = scope.capturedEngineErrors()
+  if (captured.length) {
+    parts.push('captured: ' + captured.join(' | '))
   }
   parts.push(chromeVersionText())
-  notify({
+  notify(scope, {
     type: 'error',
     fatal: isFatal,
     message: parts.join(' - ')
   })
 }
 
-window.onerror = function (
-  msg: string | (Event & { message?: unknown }),
-  source,
-  line,
-  column,
-  err?: TerminalEngineError
-) {
-  if (window.__engineErrors.length < 20) {
-    window.__engineErrors.push(String(msg))
+export function startHostNotify(scope: TerminalDocumentScope) {
+  scope.uninstallErrorReporter = scope.installErrorReporter(function (
+    msg: string | (Event & { message?: unknown }),
+    source,
+    line,
+    column,
+    err?: TerminalEngineError
+  ) {
+    const captured = scope.capturedEngineErrors()
+    // Why: a degraded engine can throw per frame; cap so the buffer stays bounded for the
+    // document's lifetime, which is the same cap the shell's pre-document handler holds itself to.
+    if (captured.length < 20) {
+      captured.push(String(msg))
+    }
+    reportEngineError(scope, 'terminal runtime error', err || msg)
+  })
+}
+
+export function stopHostNotify(scope: TerminalDocumentScope) {
+  if (scope.uninstallErrorReporter) {
+    scope.uninstallErrorReporter()
+    scope.uninstallErrorReporter = null
   }
-  reportEngineError('terminal runtime error', err || msg)
 }

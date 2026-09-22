@@ -13,9 +13,9 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("script-src 'self'"))
     // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
     assertTrue(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // A file preview is a `data:<mime>;base64,` URI the page composed from a reply it already
-    // holds; see MobileWebShellCsp.
-    assertTrue(directives.contains("img-src 'self' data:"))
+    // A file preview is a `data:` URI; `https:` is the favicon, project icon and avatar the
+    // page already renders, and the sealed preview frame. See MobileWebShellCsp.
+    assertTrue(directives.contains("img-src 'self' data: https:"))
     // The bootstrap page reads ./manifest.json from its own origin, which is one read-only
     // directory behind the manifest map, so 'self' reaches nothing it cannot already read.
     assertTrue(directives.contains("connect-src 'self'"))
@@ -42,11 +42,17 @@ class MobileWebShellCspTest {
     // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
     // directive that grew one would fail here instead of passing a blanket absence check.
     assertEquals(
-      listOf("img-src 'self' data:"),
+      listOf("img-src 'self' data: https:"),
       directives.filter { it.contains("data:") }
     )
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("http"))
+    // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
+    // this still refuses a cleartext source anywhere in the header.
+    assertEquals(
+      listOf("img-src 'self' data: https:"),
+      directives.filter { it.contains("https:") }
+    )
+    assertFalse(MOBILE_WEB_SHELL_CSP.contains("http:"))
   }
 
   @Test

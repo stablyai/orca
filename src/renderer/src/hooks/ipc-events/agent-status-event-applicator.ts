@@ -6,7 +6,6 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
@@ -213,18 +212,6 @@ export function createAgentStatusEventApplicator(args: {
       shouldSuppressInheritedTerminalStatus({
         inheritedFromActivePane: identity.inheritedFromActivePane,
         incomingState: statusPayload.state
-      })
-    ) {
-      return 'dropped'
-    }
-    if (
-      shouldSuppressCodexAutoApprovalStatus(statusPayload, {
-        paneKey,
-        tabId: ownerTabId,
-        terminalHandle: data.terminalHandle,
-        launchToken: data.launchToken,
-        providerSession: data.providerSession,
-        existingProviderSession: existingStatus?.providerSession
       })
     ) {
       return 'dropped'

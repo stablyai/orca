@@ -4,9 +4,13 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   type BridgeClientMessage
 } from './bridge-envelope'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
 /** Every `notify` name the envelope accepts, so the table below cannot be asked about another. */
-type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
+export type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
 
 /**
  * Which grant each `notify` name rides, and `null` for the ones that ride none.
@@ -20,17 +24,31 @@ type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
  * new enters `MOBILE_WEB_SHELL_GRANTS`. Keyed on the notify name alone it would be refused by every
  * shell that exists.
  *
- * `foreground` and `terminalViewport` are the protocol's own and ride no grant. The other four are
+ * `foreground` and `terminalViewport` are the protocol's own and ride no grant. The other five are
  * inert while every page is offered all of them, and load-bearing the moment a grant is per-route.
+ *
+ * Haptics is the second whose name is not its grant, and for a different reason from
+ * `navigate-back`: every grant in this table is a token because a notify is not a verb, and the
+ * dotted names in `MOBILE_WEB_SHELL_GRANTS` come from the verb table alone.
  */
 const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = {
   foreground: null,
   terminalViewport: null,
+  // The protocol's own as well: it spends a request this shell handed the page, on a param closed
+  // to the one the shell hands over, so there is nothing here for a grant to gate.
+  [BRIDGE_ROUTE_PARAM_CLEAR]: null,
+  // The page reporting on its own document. Nothing here reaches the host or the device, and the
+  // shell acts on it only for a page that declared it in `ready.reports`.
+  [BRIDGE_PAGE_PAINTED]: null,
+  // The page reporting on its own document as well. A claim is not a capability: the shell decides
+  // whether to hand the key over, and it acts on this only for a page that declared it takes one.
+  [BRIDGE_BACK_CLAIM_NOTIFY]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',
   [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
-  [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
+  [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT,
+  [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT
 }
 
 export type BridgeNotifyRefusal = 'before-ready' | 'ungranted'

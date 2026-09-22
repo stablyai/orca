@@ -105,7 +105,10 @@ describe('the media verbs on the same seam', () => {
       'native.clipboard.read',
       'native.media.pick',
       'native.media.read',
-      'native.media.release'
+      'native.media.release',
+      'native.audio.start',
+      'native.audio.read',
+      'native.audio.stop'
     ])
   })
 

@@ -1,8 +1,0 @@
-{
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": ["../src/mobile-web/src/**/*"],
-  "compilerOptions": {
-    "composite": true,
-    "types": []
-  }
-}

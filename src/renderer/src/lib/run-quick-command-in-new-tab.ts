@@ -50,7 +50,8 @@ function resolveQuickCommandLaunchGroupId(
  * Terminal-command quick commands always append Enter — the split-button is
  * a "run" affordance, distinct from the right-click "Insert" mode where
  * `appendEnter: false` is honored. Agent-prompt quick commands use the
- * agent's normal prompt launch command instead of post-launch TUI paste.
+ * agent's prompt launch path; OpenCode2 submits through the ready-state TUI
+ * delivery path because its `--prompt` startup can leave text unsent.
  */
 export function runQuickCommandInNewTab({
   command,
@@ -68,6 +69,9 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
+      ...(command.agent === 'opencode' || command.agent === 'opencode2'
+        ? { promptDelivery: 'submit-after-ready' as const }
+        : {}),
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })

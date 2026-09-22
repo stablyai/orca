@@ -216,15 +216,17 @@ export function buildSecondaryCommitMessageAgentSpecs({
       // using `--print=<value>` so a leading-dash prompt binds to the flag instead of
       // being parsed as its own option, and --sandbox/--model stay separate options.
       promptDelivery: 'argv',
-      buildArgs: ({ prompt, model }) => [`--print=${prompt}`, '--sandbox', '--model', model],
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        `--print=${prompt}`,
+        '--sandbox',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+      ],
+      singletonOptions: [['--model'], ['--effort']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
-      models: [
-        { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-        { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-        { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
-      ],
-      defaultModelId: 'Gemini 3.5 Flash (Medium)'
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
     }
   }
 }

@@ -13,6 +13,7 @@ import {
   PTY_CONTROLLER_LIST_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { pruneOldestMapEntry } from './prune-oldest-map-entry'
 import { withTimeoutResult } from './runtime-async-boundaries'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import {
@@ -55,23 +56,18 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     }
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
-    const providerKey =
-      typeof connectionId === 'string'
-        ? toSshExecutionHostId(connectionId)
-        : LOCAL_EXECUTION_HOST_ID
+    const providerKey = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
     } else {
       this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
+      pruneOldestMapEntry(this.ptyControllerInventoryGenerationByProvider, 512)
     }
     const listBudgetMs =
       deadline === undefined
         ? PTY_CONTROLLER_LIST_TIMEOUT_MS
         : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
-    // Why: give each provider a deadline strictly inside our own, so a relay that
-    // never answers still leaves the aggregate time to return the providers that did
-    // — expiring at the same instant would discard the whole inventory instead.
     const providerListOpts = {
       deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS),
       ...(inventoryOptions?.includeForegroundProcessEvidence === undefined
@@ -90,7 +86,6 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           })
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
-      // Why: a transient controller failure is not evidence that retained PTYs exited.
       return null
     }
     const isCurrentInventory =
@@ -103,9 +98,6 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
             inventoryGeneration &&
           this.ptyControllerAggregateInventoryGeneration <= inventoryGeneration
     if (!isCurrentInventory) {
-      // A fleet census that began after this targeted poll must not turn a
-      // user-driven open into an empty result. Re-query the owning provider;
-      // the second generation is then fenced against both operations.
       if (targetWorktreeId !== null && !retryStale) {
         return this.refreshPtyWorktreeRecordsWithControllerInventory(
           resolvedWorktrees,

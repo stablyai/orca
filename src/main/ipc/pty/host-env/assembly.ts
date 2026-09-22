@@ -91,6 +91,7 @@ export function buildPtyHostEnv(
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
     const openCodeStatusService =
       openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
+    baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
     Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
@@ -136,7 +137,11 @@ export function buildPtyHostEnv(
     if (opts.isWsl === true) {
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
-      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath)
+      const wslLaunchKind =
+        explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
+          ? explicitPiAgentKind
+          : undefined
+      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
@@ -220,6 +225,21 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+  }
+
+  if (opts.isWsl && opts.agentStatusHooksEnabled) {
+    const distro = opts.wslDistro ?? null
+    if (explicitPiAgentKind === 'pi') {
+      const guestPiDir = wslHookRelayManager.getGuestAgentPath(distro, 'pi')
+      if (guestPiDir) {
+        baseEnv.ORCA_PI_SOURCE_AGENT_DIR = guestPiDir
+      }
+    } else if (explicitPiAgentKind === 'omp') {
+      const guestOmpExtension = wslHookRelayManager.getGuestAgentPath(distro, 'omp')
+      if (guestOmpExtension) {
+        baseEnv.ORCA_OMP_STATUS_EXTENSION = guestOmpExtension
+      }
+    }
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.

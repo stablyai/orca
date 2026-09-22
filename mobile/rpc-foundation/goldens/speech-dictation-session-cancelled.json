@@ -3,17 +3,17 @@
   "family": "speech.dictation-session",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "baseline": "bfcbc6feee10841425495fa2dafd2cbe9c12397a",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
-  "scenarioSha256": "cc8338e31b7a2dc232238281afd2e3240343bb817a652744789f58ace806325a",
+  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
+  "scenarioSha256": "5fe007d384731f954e086c16886055722fab45bafac23f4c4d52f0bb1f47acc9",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "442ccf691b93": {
+    "422e902e66a5": {
       "name": "speech.dictation.cancel#1",
       "ordinal": 3,
       "args": [
@@ -24,7 +24,7 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -47,11 +47,6 @@
         }
       }
     },
-    "4937d7c9906d": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
-    },
     "6b76435b6f3e": {
       "error": {
         "$rpc": "null"
@@ -59,12 +54,12 @@
       "status": "idle",
       "transcripts": []
     },
-    "889eee99a041": {
+    "859d310e63d6": {
       "name": "speech.dictation.start#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-dakoxjr8wun\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
     },
-    "b4ba2b410a8d": {
+    "aca401ac072e": {
       "name": "speech.dictation.start#1",
       "ordinal": 1,
       "args": [
@@ -75,7 +70,7 @@
         {
           "name": "params",
           "value": {
-            "dictationId": "mobile-dictation-1767225600000-dakoxjr8wun"
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
           }
         },
         {
@@ -105,6 +100,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ebdac948a90d": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
     }
   },
   "recording": {
@@ -113,8 +113,8 @@
       {
         "id": "cancelled",
         "observation": {
-          "sender": ["b4ba2b410a8d", "442ccf691b93"],
-          "payloads": ["889eee99a041", "4937d7c9906d"],
+          "sender": ["aca401ac072e", "422e902e66a5"],
+          "payloads": ["859d310e63d6", "ebdac948a90d"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "start": "eb79a9b3682a",

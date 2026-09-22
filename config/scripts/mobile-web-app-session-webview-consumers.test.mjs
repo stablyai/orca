@@ -5,9 +5,16 @@
  * where its consumer was, so a page does not go down over one — but nothing it was mounted for
  * works either, and the closure pays for a module that cannot do its job.
  *
- * C7.6 gives the two editors the plain states they already degrade to (`rulings-ota-c7.md` ruling
- * 8). The terminal is the third and is C7.5's, which drops the engine string and mounts xterm in
- * the document; it is listed here rather than left unsaid so the list is the work remaining.
+ * C7.6 gave the two editors the plain states they already degrade to (`rulings-ota-c7.md` ruling
+ * 8) and left the terminal listed as the work remaining, which was C7.5's. C7.5 has done it: the
+ * page mounts xterm in the document and drops the engine string, so the list is now empty and
+ * this closure reaches that package from nowhere at all.
+ *
+ * An empty list is also what a scan that read nothing reports, so the control below no longer
+ * uses the list — it runs the same walk over the four native modules that do import the package and
+ * over the four web siblings that replace them. The diagram is the fourth: its native component
+ * seals untrusted source in a `WebView` and its sibling renders the same diagram in the document
+ * (C7.10 item B), which is the same substitution the other three are.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,13 +28,23 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const SESSION = 'app/h/[hostId]/session/[worktreeId].tsx'
 
-/** Still on the native component, and whose PR it is. */
-const REMAINING = ['src/terminal/TerminalWebView.tsx']
+/** Nothing: every consumer this closure had now resolves to a web sibling that needs no WebView. */
+const REMAINING = []
 
-/** The two this PR answered, whose `.web.tsx` the builder resolves instead. */
+/** The four answered, whose `.web.tsx` the builder resolves instead of the native file. */
 const ANSWERED = [
   'src/components/MobileRichMarkdownEditor.web.tsx',
-  'src/components/MobileHtmlPreview.web.tsx'
+  'src/components/MobileHtmlPreview.web.tsx',
+  'src/components/pr-sidebar/MermaidDiagram.web.tsx',
+  'src/terminal/TerminalWebView.web.tsx'
+]
+
+/** The native files behind those four, which do import the package. The scan's own control. */
+const NATIVE_CONSUMERS = [
+  'src/components/MobileRichMarkdownEditor.tsx',
+  'src/components/MobileHtmlPreview.tsx',
+  'src/components/pr-sidebar/MermaidDiagram.tsx',
+  'src/terminal/TerminalWebView.tsx'
 ]
 
 const IMPORTS_WEBVIEW = /(?:from|import)\s*'[^']*react-native-webview'/
@@ -45,9 +62,15 @@ function webViewConsumers(closure) {
 describeClosure(
   'the session closure and react-native-webview',
   () => {
-    it('reaches it from the terminal and from nothing else', async () => {
+    it('reaches it from nothing at all', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
       expect(webViewConsumers(closure)).toEqual(REMAINING)
+      // The precondition an empty list needs: the walk read a closure, and read the very modules
+      // whose native halves are the ones that would have imported the package.
+      expect(closure.local.length).toBeGreaterThan(500)
+      for (const file of ANSWERED) {
+        expect(closure.local, file).toContain(file)
+      }
     })
 
     it('resolves both editors to their web siblings, not to the native files', async () => {
@@ -58,9 +81,10 @@ describeClosure(
       }
     })
 
-    it('finds a consumer when there is one, so the list above is a measurement', async () => {
-      // The control: the same walk over the module the list names, which does import it.
-      expect(webViewConsumers({ local: REMAINING })).toEqual(REMAINING)
+    it('finds a consumer when there is one, so the empty list above is a measurement', () => {
+      // The control, run over the native files rather than over the list: with the list empty,
+      // walking it would compare nothing against nothing and pass on a scan that reads no file.
+      expect(webViewConsumers({ local: NATIVE_CONSUMERS })).toEqual(NATIVE_CONSUMERS)
       expect(webViewConsumers({ local: ANSWERED })).toEqual([])
     })
   },

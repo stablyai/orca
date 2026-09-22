@@ -2,6 +2,14 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const REGION = 'asia-east2'
+// Mirrors local.relay_gce_topology in infra/terraform/relay-gce-cells.tf, which Terraform
+// cannot export to JS; the census test below the validator equates the two by reading the
+// .tf source, so this pair and the topology `check` assert cannot drift apart.
+export const RELAY_CELL_BACKEND_TIMEOUT_SECONDS = 86_400
+export const RELAY_CELL_CONNECTION_DRAIN_SECONDS = 60
+// Not a topology local: the default of var.relay_gce_cell_log_sample_rate, which no
+// environment overrides. The same census test equates it with variables.tf.
+export const RELAY_CELL_LOG_SAMPLE_RATE = 1
 const CELL_SHAPES = {
   production: {
     domain: 'relay.onorca.dev',
@@ -117,8 +125,8 @@ function requireCellBackend(change, config, cellId) {
   const hostname = cellId.split('-').at(-1)
   const name = `${relayGceName(config.environment)}-${hostname}`
   if (
-    after?.timeout_sec !== 86_400 ||
-    after?.connection_draining_timeout_sec !== 300 ||
+    after?.timeout_sec !== RELAY_CELL_BACKEND_TIMEOUT_SECONDS ||
+    after?.connection_draining_timeout_sec !== RELAY_CELL_CONNECTION_DRAIN_SECONDS ||
     after?.load_balancing_scheme !== 'EXTERNAL_MANAGED' ||
     after?.protocol !== 'HTTP' ||
     after?.port_name !== 'relay' ||

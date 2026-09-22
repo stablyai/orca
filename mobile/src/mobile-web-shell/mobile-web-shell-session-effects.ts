@@ -36,7 +36,12 @@ export async function openCache(
           buildId: active.buildId,
           directory: generationDirectoryPath(active.directory),
           totalBytes: active.manifest.totalBytes,
-          routes: active.manifest.routes
+          routes: active.manifest.routes,
+          compat: {
+            schemaVersion: active.manifest.schemaVersion,
+            runtimeProtocolVersion: active.manifest.runtimeProtocolVersion,
+            minCompatibleRuntimeProtocolVersion: active.manifest.minCompatibleRuntimeProtocolVersion
+          }
         }
   } catch {
     // A cache that cannot be read is not a cache that is wrong: nothing is deleted, and the flow
@@ -74,7 +79,8 @@ export async function readManifest(
         minCompatibleRuntimeProtocolVersion: manifest.minCompatibleRuntimeProtocolVersion,
         totalBytes: manifest.totalBytes,
         totalAssets: manifest.assets.length,
-        routes: manifest.routes
+        routes: manifest.routes,
+        wire: manifest
       }
     })
   } catch (error) {

@@ -1,128 +1,47 @@
-import { terminalDefaultTheme, terminalTextScalePresets } from './document-constants'
+import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
+import {
+  createEngineTerminal,
+  createEngineUnicode11Addon,
+  createEngineWebglAddon,
+  installWindowErrorReporter,
+  installWindowHostTransport,
+  paintWindowDocumentBackground,
+  postToReactNativeWebView,
+  windowCapturedEngineErrors,
+  windowHasEngine,
+  type TerminalDocumentHost,
+  type TerminalDocumentHostSeams
+} from './document-host-seams'
+import type {
+  TerminalDocumentDisposable,
+  TerminalDocumentTerminal,
+  TerminalDocumentTheme,
+  TerminalDocumentWebglAddon,
+  TerminalInitialOscLink
+} from './document-terminal-shape'
+import type { TerminalMouseGesture } from './mouse-click-drag'
+import type { TerminalTouchState } from './surface-touch-gestures'
+import type { TerminalTouchDispatch } from './tap-dispatch'
 import type { TerminalDocumentThemeMessage } from './terminal-theme'
+
+// Re-exported so every module that reads the scope names one import for both: the engine's shape is
+// a separate file for length, not a second place to look.
+export type * from './document-terminal-shape'
+export type { TerminalDocumentHost, TerminalDocumentHostSeams } from './document-host-seams'
 /**
- * The state the in-WebView terminal document shares across its parts.
+ * The state one terminal document shares across its modules.
  *
- * The document is one function scope: 2,758 lines around 100 `var` declarations, 57 of which are
- * written from more than one place. Moving its parts into modules is what lets the web page import
- * them instead of re-implementing them, and a variable assigned from another module cannot be an
- * import — assigning an imported binding is a syntax error. So the written ones become fields here,
- * and the group that owns each is named beside it.
+ * A field is here because more than one module writes it, and the module that owns it is named
+ * beside it. State written only inside the module that declares it stays a `let` there, however
+ * often it is written: `terminalDataRepliesEnabled` is written from four places and all four are in
+ * `query-reply`. A value nothing writes is that module's own `const`, not a field.
  *
- * Two things keep a variable out of this table. One the script never assigns again is an ordinary
- * local. One both declared and assigned inside a single group is that module's own state, however
- * often it is written — `terminalDataRepliesEnabled` is written from four places and all four are
- * in `query-reply`, so it stays a `let` there.
- *
- * Declared, not merely written: while the rest of the document is still strings, a variable the
- * main slice declares is shared even when every use of it is in one group, because the declaration
- * has nowhere else to live yet. `webglRecoveryTimer` is that case. Those can migrate out of this
- * table when the flip makes the main slice modules too, and doing it before then would emit a
- * second declaration beside the one the slice still carries.
- *
- * The table grows one group at a time as C7.1 extracts them; a field arrives with its group.
+ * One object per document, built by the call rather than shared by the modules, which is what lets
+ * two terminals sit on one page without one of them reading the other's state.
  */
 
-/** One cell of a buffer line, as the document inspects it. */
-/** xterm's OSC 8 link service, reached through internals and always guarded. */
-export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: string } | undefined }
-
-/** The xterm internals the OSC 8 lookup walks. */
-export type TerminalDocumentCore = {
-  _renderService?: { dimensions?: { css: { cell: { height: number; width: number } } } }
-  _oscLinkService?: TerminalOscLinkService
-  _inputHandler?: { _oscLinkService?: TerminalOscLinkService }
-}
-
-/** An OSC 8 link the host captured from scrollback before xterm replayed it. */
-export type TerminalInitialOscLink = {
-  uri?: string
-  row: number
-  startCol: number
-  endCol: number
-  text?: string
-}
-
-export type TerminalDocumentCell = {
-  isBgDefault: () => boolean
-  extended?: { urlId?: number }
-  isInverse: () => boolean
-  isUnderline?: () => boolean
-  isStrikethrough?: () => boolean
-  isOverline?: () => boolean
-}
-
-/** One buffer line, as the document inspects it. */
-export type TerminalDocumentLine = {
-  readonly length: number
-  translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
-  getCell?: (x: number, cell?: TerminalDocumentCell | null) => TerminalDocumentCell | null
-}
-
-/** One side of xterm's buffer, as the document reads it. */
-export type TerminalDocumentBuffer = {
-  readonly length: number
-  readonly viewportY: number
-  readonly baseY: number
-  readonly cursorY: number
-  readonly type: string
-  getNullCell?: () => TerminalDocumentCell
-  getLine: (index: number) => TerminalDocumentLine | undefined
-}
-
-/** As much of xterm's terminal as the document's own code touches. */
-/** A terminal colour theme: xterm reads it as a flat map of slot to CSS colour. */
-export type TerminalDocumentTheme = Record<string, string>
-
-/** The xterm options the document writes; each field is owned by the group that sets it. */
-export type TerminalDocumentTerminalOptions = {
-  theme: TerminalDocumentTheme
-  minimumContrastRatio: number
-  fontSize: number
-}
-
-export type TerminalDocumentTerminal = {
-  readonly cols: number
-  readonly rows: number
-  readonly buffer: { readonly active: TerminalDocumentBuffer }
-  options: TerminalDocumentTerminalOptions
-  write: (data: string, callback?: () => void) => void
-  open: (element: HTMLElement) => void
-  scrollToLine: (line: number) => void
-  clear: () => void
-  reset: () => void
-  selectAll: () => void
-  getSelection?: () => string
-  select: (col: number, row: number, length: number) => void
-  clearSelection: () => void
-  readonly unicode: { activeVersion: string }
-  attachCustomKeyEventHandler: (handler: () => boolean) => void
-  onData: (listener: (data: string) => void) => TerminalDocumentDisposable
-  readonly textarea?: {
-    readOnly: boolean
-    tabIndex: number
-    setAttribute: (name: string, value: string) => void
-  }
-  readonly element?: HTMLElement
-  readonly _core?: TerminalDocumentCore
-  readonly modes?: {
-    bracketedPasteMode?: boolean
-    mouseTrackingMode?: string
-    applicationCursorKeysMode?: boolean
-  }
-  onLineFeed?: (listener: () => void) => TerminalDocumentDisposable
-  onScroll?: (listener: () => void) => TerminalDocumentDisposable
-  onWriteParsed?: (listener: () => void) => TerminalDocumentDisposable
-  resize: (cols: number, rows: number) => void
-  refresh: (start: number, end: number) => void
-  dispose: () => void
-  loadAddon: (addon: TerminalDocumentWebglAddon) => void
-  scrollToBottom: () => void
-  scrollLines: (amount: number) => void
-}
-
-export type TerminalDocumentScope = {
-  /** `terminal-handle`: the live xterm terminal, or null before the first init. */
+export type TerminalDocumentState = {
+  /** `terminal-init`: the live xterm terminal, or null before the first init. */
   term: TerminalDocumentTerminal | null
   /** `viewport-transform`: the surface's pan offset, in viewport pixels. */
   panX: number
@@ -151,14 +70,10 @@ export type TerminalDocumentScope = {
   initialOscLinks: TerminalInitialOscLink[]
   /** `selection-overlay`: how far the captured rows have scrolled out of the buffer. */
   initialOscLinkRowOffset: number
-  /** `runtime-constants`: the escape byte every report is prefixed with. */
-  ESC: string
   /** `mode-mirroring`: the last mode set published to the host, to suppress repeats. */
   lastEmittedModes: TerminalDocumentModes
   /** `terminal-init`: whether the terminal has ever reached ready. */
   everReady: boolean
-  /** `runtime-constants`: the C1 form of the control sequence introducer. */
-  C1_CSI: string
   /** `mouse-mode-decset-scan`: the tail of the last chunk, in case a DECSET straddles two writes. */
   mouseModeScanTail: string
   /** `mouse-mode-decset-scan`: the mouse tracking mode the TUI last asked for. */
@@ -169,12 +84,6 @@ export type TerminalDocumentScope = {
   sgrMousePixelsMode: boolean
   /** `text-scaling`: the scroll indicator's hide timer. */
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
-  /** `text-scaling`: the narrowest grid a text-scale change will fit to. */
-  MIN_FIT_COLS: number
-  /** `text-scaling`: the smallest text-scale preset. */
-  MIN_TEXT_SCALE: number
-  /** `text-scaling`: the largest text-scale preset. */
-  MAX_TEXT_SCALE: number
   /** `viewport-transform`: host message ids already handled, to drop repeats. */
   handledMessageIds: number[]
   /** `text-scaling`: the text scale the user picked, as a preset index. */
@@ -189,18 +98,8 @@ export type TerminalDocumentScope = {
   currentScale: number
   /** `text-scaling`: the pinch zoom the user applied on top of the fit scale. */
   userScale: number
-  /** `runtime-constants`: Claude's record dot, which iOS WebKit would otherwise promote to emoji. */
-  CLAUDE_STATUS_DOT: string
-  /** `runtime-constants`: the variation selector that forces the text glyph. */
-  TEXT_PRESENTATION_SELECTOR: string
-  /** `runtime-constants`: the variation selector that forces the emoji glyph. */
-  EMOJI_PRESENTATION_SELECTOR: string
-  /** `runtime-constants`: the dot with any trailing selectors, as one pattern. */
-  CLAUDE_STATUS_DOT_PATTERN: RegExp
   /** `write-queue`: whether a chunk ended mid-selector, so the next one starts inside it. */
   statusDotPendingSelector: boolean
-  /** `write-queue`: how far a split DECSET may be carried before the scan gives up. */
-  PRIVATE_MODE_SCAN_TAIL_LIMIT: number
   /** `write-queue`: chunks and boundaries waiting for xterm. */
   writeQueue: TerminalWriteQueueEntry[]
   /** `write-queue`: how far the queue has been consumed, before compaction. */
@@ -217,12 +116,6 @@ export type TerminalDocumentScope = {
   pendingNormalScrollDeltaY: number
   /** `normal-buffer-smooth-scroll`: the frame request that will apply it, if one is pending. */
   normalScrollFrameId: number | null
-  /** `selection-state-and-eviction`: what counts as one word for select-all and word seeding. */
-  WORD_RE: RegExp
-  /** `selection-state-and-eviction`: how close to an edge a handle drag starts scrolling. */
-  EDGE_SCROLL_PX: number
-  /** `selection-state-and-eviction`: the edge-scroll tick, in milliseconds. */
-  EDGE_SCROLL_INTERVAL: number
   /** `selection-state-and-eviction`: the menu pill element. */
   selMenu: HTMLElement | null
   /** `selection-state-and-eviction`: the pill's copy button. */
@@ -239,14 +132,6 @@ export type TerminalDocumentScope = {
   edgeScrollClientY: number
   /** `selection-state-and-eviction`: whether captured OSC 8 rows may start shifting with eviction. */
   initialOscLinkEvictionReady: boolean
-  /** `selection-overlay`: the press duration that starts a selection, in milliseconds. */
-  LONG_PRESS_MS: number
-  /** `selection-overlay`: the travel that cancels a pending long press, in pixels. */
-  LONG_PRESS_SLOP: number
-  /** `selection-overlay`: the travel that disqualifies a tap, in pixels. */
-  TAP_SLOP: number
-  /** `selection-overlay`: the longest press still counted as a tap, in milliseconds. */
-  TAP_MAX_MS: number
   /** `selection-overlay`: the overlay element that carries the handles and the menu pill. */
   selectionOverlay: HTMLElement | null
   /** `selection-overlay`: the selection's leading handle element. */
@@ -267,9 +152,48 @@ export type TerminalDocumentScope = {
   surface: HTMLElement | null
   /** `surface-swap`: the terminal of a hidden replacement surface that has not committed. */
   pendingTerm: TerminalDocumentTerminal | null
+  /** `surface-swap`: the terminal the committed surface is showing. */
+  committedTerm: TerminalDocumentTerminal | null
+  /** `surface-swap`: the surface the committed terminal is mounted on. */
+  committedSurface: HTMLElement | null
+  /** `surface-swap`: the hidden replacement surface, until it commits. */
+  pendingSurface: HTMLElement | null
+  /** `text-scaling`: the scroll indicator's track and its thumb. */
+  scrollIndicator: HTMLElement | null
+  scrollThumb: HTMLElement | null
+  /** `query-reply`: whether the host asked for terminal data replies. */
+  terminalDataRepliesEnabled: boolean
+  /** `selection-state-and-eviction`: rows written since the terminal opened. */
+  linesEverWritten: number
+  /** `host-notify`: non-fatal reports already sent, against the flood cap. */
+  nonFatalErrorNotifies: number
+  /** `host-notify`: undoes the host's reporter install, or null before one. */
+  uninstallErrorReporter: (() => void) | null
+  /** `message-bridge`: undoes the host transport's install, or null before one. */
+  uninstallHostTransport: (() => void) | null
+  /** `fit-scale`: takes the viewport refit's listener off again, or null before one. */
+  removeViewportRefit: (() => void) | null
+  /** `tap-dispatch`: takes its four document listeners off again, or null before them. */
+  removeTapDispatch: (() => void) | null
+  /** `webgl-recovery`: takes the visibility listener off again, or null before one. */
+  removeWebglRecovery: (() => void) | null
+  /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
+  fitRetryToken: number
+  /** `mouse-click-drag`: the mouse gesture in progress, or null. */
+  mouseGesture: TerminalMouseGesture | null
+  /** `tap-dispatch`: what the document-level dispatcher has latched onto. */
+  touchDispatch: TerminalTouchDispatch
+  /** `surface-touch-gestures`: the surface touch, its velocity and its momentum frame. */
+  touchGesture: TerminalTouchState
+  /** Every animation frame the document has asked for and not yet run. */
+  scheduledFrames: number[]
+  /** Whether the document has been stopped, and so asks for no more frames. */
+  framesStopped: boolean
 }
 
-/** An xterm listener handle, as the document disposes of one. */
+/** The document's whole scope: its state, and the seams to whatever is hosting it. */
+export type TerminalDocumentScope = TerminalDocumentState & TerminalDocumentHostSeams
+
 /** The live selection; only the dragged handle is read outside the overlay slice. */
 export type TerminalDocumentSelection = {
   anchor: { row: number; col: number }
@@ -295,27 +219,14 @@ export type TerminalDocumentModes = {
 /** One entry of the write queue: a chunk, a boundary callback, or a consumed slot. */
 export type TerminalWriteQueueEntry = string | (() => void) | undefined
 
-export type TerminalDocumentDisposable = { dispose?: () => void }
-
-/** xterm's WebGL addon, as the document loads, repaints and disposes of it. */
-export type TerminalDocumentWebglAddon = {
-  onContextLoss?: (listener: () => void) => void
-  clearTextureAtlas?: () => void
-  dispose: () => void
-}
-
 /**
  * The initial values, which are the ones the document's own declarations carried.
  *
  * A factory rather than a shared literal so a second document — a test, or a page that remounts —
  * starts from its own state instead of inheriting what the last one left.
  */
-const textScalePresets = terminalTextScalePresets
-const statusDot = String.fromCharCode(0x23fa)
-const textPresentationSelector = String.fromCharCode(0xfe0e)
-const emojiPresentationSelector = String.fromCharCode(0xfe0f)
 
-export function createTerminalDocumentScope(): TerminalDocumentScope {
+function createTerminalDocumentState(): TerminalDocumentState {
   return {
     term: null,
     panX: 0,
@@ -326,12 +237,11 @@ export function createTerminalDocumentScope(): TerminalDocumentScope {
     webglAddon: null,
     webglRecoveryTimer: null,
     terminalThemeInput: null,
-    defaultTheme: terminalDefaultTheme,
-    terminalTheme: terminalDefaultTheme,
+    defaultTheme: DEFAULT_TERMINAL_THEME,
+    terminalTheme: DEFAULT_TERMINAL_THEME,
     terminalMinimumContrastRatio: 3,
     initialOscLinks: [],
     initialOscLinkRowOffset: 0,
-    ESC: String.fromCharCode(27),
     lastEmittedModes: {
       bracketedPasteMode: false,
       altScreen: false,
@@ -340,31 +250,19 @@ export function createTerminalDocumentScope(): TerminalDocumentScope {
       sgrMousePixelsMode: false
     },
     everReady: false,
-    C1_CSI: String.fromCharCode(155),
     mouseModeScanTail: '',
     trackedMouseTrackingMode: 'none',
     sgrMouseMode: false,
     sgrMousePixelsMode: false,
     scrollIndicatorHideTimer: null,
-    MIN_FIT_COLS: 20,
-    MIN_TEXT_SCALE: textScalePresets[0],
-    MAX_TEXT_SCALE: textScalePresets[textScalePresets.length - 1],
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
-    firstDataPending: true,
+    firstDataPending: false,
     activeAltScreenSnapshot: false,
     currentScale: 1,
     userScale: 1,
-    CLAUDE_STATUS_DOT: statusDot,
-    TEXT_PRESENTATION_SELECTOR: textPresentationSelector,
-    EMOJI_PRESENTATION_SELECTOR: emojiPresentationSelector,
-    CLAUDE_STATUS_DOT_PATTERN: new RegExp(
-      statusDot + '[' + textPresentationSelector + emojiPresentationSelector + ']*',
-      'g'
-    ),
     statusDotPendingSelector: false,
-    PRIVATE_MODE_SCAN_TAIL_LIMIT: 4096,
     writeQueue: [],
     writeQueueHead: 0,
     writesDraining: false,
@@ -373,9 +271,6 @@ export function createTerminalDocumentScope(): TerminalDocumentScope {
     smoothScrollOffsetY: 0,
     pendingNormalScrollDeltaY: 0,
     normalScrollFrameId: null,
-    WORD_RE: /[\p{L}\p{N}_./:@~+=?&#%-]/u,
-    EDGE_SCROLL_PX: 40,
-    EDGE_SCROLL_INTERVAL: 60,
     selMenu: null,
     btnCopy: null,
     btnSelAll: null,
@@ -384,10 +279,6 @@ export function createTerminalDocumentScope(): TerminalDocumentScope {
     edgeScrollClientX: 0,
     edgeScrollClientY: 0,
     initialOscLinkEvictionReady: false,
-    LONG_PRESS_MS: 500,
-    LONG_PRESS_SLOP: 10,
-    TAP_SLOP: 24,
-    TAP_MAX_MS: 700,
     selectionOverlay: null,
     handleStart: null,
     handleEnd: null,
@@ -398,9 +289,65 @@ export function createTerminalDocumentScope(): TerminalDocumentScope {
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     surface: null,
-    pendingTerm: null
+    pendingTerm: null,
+    committedTerm: null,
+    committedSurface: null,
+    pendingSurface: null,
+    scrollIndicator: null,
+    scrollThumb: null,
+    terminalDataRepliesEnabled: false,
+    linesEverWritten: 0,
+    nonFatalErrorNotifies: 0,
+    uninstallErrorReporter: null,
+    uninstallHostTransport: null,
+    removeViewportRefit: null,
+    removeTapDispatch: null,
+    removeWebglRecovery: null,
+    fitRetryToken: 0,
+    mouseGesture: null,
+    touchDispatch: {
+      mode: 'idle',
+      touchId: null,
+      touchIds: null,
+      longPressFingerInsideOverlay: false
+    },
+    scheduledFrames: [],
+    framesStopped: false,
+    touchGesture: {
+      lastX: 0,
+      lastY: 0,
+      lastTime: 0,
+      velY: 0,
+      accumDelta: 0,
+      momentumId: null,
+      isPinching: false,
+      pinchDist: 0,
+      pinchScale: 0,
+      pinchSurfX: 0,
+      pinchSurfY: 0
+    }
   }
 }
 
-/** The document's own scope. The generator emits this declaration at the top of the script. */
-export const scope: TerminalDocumentScope = createTerminalDocumentScope()
+/** The seams' defaults: the window reads and writes the document already did. */
+function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
+  return {
+    postToHost: postToReactNativeWebView,
+    createTerminal: createEngineTerminal,
+    createUnicode11Addon: createEngineUnicode11Addon,
+    createWebglAddon: createEngineWebglAddon,
+    installErrorReporter: installWindowErrorReporter,
+    capturedEngineErrors: windowCapturedEngineErrors,
+    paintDocumentBackground: paintWindowDocumentBackground,
+    installHostTransport: installWindowHostTransport,
+    hasEngine: windowHasEngine,
+    root: null
+  }
+}
+
+export function createTerminalDocumentScope(
+  host: TerminalDocumentHost = {}
+): TerminalDocumentScope {
+  const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== undefined))
+  return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams(), ...named }
+}

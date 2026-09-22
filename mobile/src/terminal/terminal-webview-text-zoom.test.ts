@@ -1,72 +1,57 @@
+// @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
-import { Script } from 'node:vm'
-import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import { createTerminalDocumentScope } from './document/document-scope'
+import { normalizeStatusDotPresentation } from './document/write-queue'
+import { startTextScaling } from './document/text-scaling'
 import {
-  documentScopePreamble,
-  generatedDocumentModule
-} from './document/generated-document-region.test-support'
-import { XTERM_HTML } from './terminal-webview-html'
+  documentModuleSource,
+  webviewPageSource
+} from './document/document-module-source.test-support'
 
-const terminalWebViewSource = readFileSync(
-  new URL('./TerminalWebView.tsx', import.meta.url),
-  'utf8'
-)
+const terminalWebViewSource = readFileSync(join(import.meta.dirname, 'TerminalWebView.tsx'), 'utf8')
 const terminalHtmlModuleSource = readFileSync(
-  new URL('./terminal-webview-html.ts', import.meta.url),
+  join(import.meta.dirname, 'terminal-webview-html.ts'),
   'utf8'
 )
 const terminalHtmlDocumentShellSource = readFileSync(
-  new URL('./terminal-webview-html/document-shell.ts', import.meta.url),
+  join(import.meta.dirname, 'terminal-webview-html', 'document-shell.ts'),
   'utf8'
 )
-// Read behavior from the assembled document: it is what the WebView runs, and the module source
-// alone cannot prove the generated script carries the code.
-const terminalHtmlSource = XTERM_HTML
+// The document's own source, which is what the WebView runs once bundled.
+const terminalHtmlSource = webviewPageSource()
 
-const terminalWebglRecoverySource = await generatedDocumentModule('webgl-recovery')
-
-function extractStatusDotNormalizer() {
-  const declarationStart = terminalHtmlSource.indexOf('  scope.CLAUDE_STATUS_DOT =')
-  const declarationEnd = terminalHtmlSource.indexOf('  scope.PRIVATE_MODE_SCAN_TAIL_LIMIT')
-  const functionStart = terminalHtmlSource.indexOf('  function isStatusDotPresentationSelector')
-  const functionEnd = terminalHtmlSource.indexOf('\n  function enqueueWrite', functionStart)
-  expect(declarationStart).toBeGreaterThanOrEqual(0)
-  expect(declarationEnd).toBeGreaterThan(declarationStart)
-  expect(functionStart).toBeGreaterThan(declarationEnd)
-  expect(functionEnd).toBeGreaterThan(functionStart)
-  return `${documentScopePreamble()}${terminalHtmlSource.slice(declarationStart, declarationEnd)}\n${terminalHtmlSource.slice(functionStart, functionEnd)}`
-}
+const terminalWebglRecoverySource = documentModuleSource('webgl-recovery')
 
 function normalizeStatusDotChunks(chunks: string[]) {
-  const context: { chunks: string[]; output?: string } = { chunks }
-  new Script(`
-${extractStatusDotNormalizer()}
-output = chunks.map(function(chunk) { return normalizeStatusDotPresentation(chunk); }).join('');
-`).runInNewContext(context)
-  return context.output ?? ''
+  const scope = createTerminalDocumentScope()
+  return chunks.map((chunk) => normalizeStatusDotPresentation(scope, chunk)).join('')
 }
 
+/**
+ * The font the document picks for this navigator.
+ *
+ * `startTextScaling` is what assigns it, and it also reads the two scroll elements, so the markup
+ * they live in is planted first. The navigator is stubbed rather than injected into an evaluation:
+ * the module reads the real one, which is the whole point of the case.
+ */
 function resolveTerminalFontFamily(navigatorValue: {
   userAgent: string
   platform: string
   maxTouchPoints: number
 }) {
-  // Slice only the font block itself (isIOSWebView + terminalFontFamily), anchored
-  // on font-related markers so unrelated edits below it can't break this extraction.
-  const functionStart = terminalHtmlSource.indexOf('  function isIOSWebView()')
-  const declarationLine = terminalHtmlSource.indexOf('  scope.terminalFontFamily =', functionStart)
-  const declarationEnd = terminalHtmlSource.indexOf(';\n', declarationLine) + 1
-  expect(functionStart).toBeGreaterThanOrEqual(0)
-  expect(declarationLine).toBeGreaterThan(functionStart)
-  expect(declarationEnd).toBeGreaterThan(declarationLine)
-  const context: { navigator: typeof navigatorValue; output?: string } = {
-    navigator: navigatorValue
+  document.body.innerHTML =
+    '<div id="scroll-indicator"><div id="scroll-thumb"></div></div>' +
+    '<div id="terminal-container"><div id="terminal-surface"></div></div>'
+  vi.stubGlobal('navigator', navigatorValue)
+  try {
+    const scope = createTerminalDocumentScope()
+    startTextScaling(scope)
+    return scope.terminalFontFamily
+  } finally {
+    vi.unstubAllGlobals()
   }
-  new Script(`
-${documentScopePreamble()}${terminalHtmlSource.slice(functionStart, declarationEnd)}
-output = scope.terminalFontFamily;
-`).runInNewContext(context)
-  return context.output ?? ''
 }
 
 describe('TerminalWebView text zoom', () => {
@@ -94,19 +79,20 @@ describe('TerminalWebView text zoom', () => {
 
   it('forces the Claude status dot to text presentation before xterm writes', () => {
     expect(terminalHtmlSource).toContain('font-variant-emoji: text')
-    expect(terminalHtmlSource).toContain('scope.CLAUDE_STATUS_DOT = String.fromCharCode(9210)')
+    // The dot and its two selectors are the write queue's own constants, and the pattern is a
+    // literal because a construction at a module's top level would be parse-time work (ruling 20).
+    expect(terminalHtmlSource).toContain("const CLAUDE_STATUS_DOT = '\\u23fa'")
+    expect(terminalHtmlSource).toContain("const TEXT_PRESENTATION_SELECTOR = '\\ufe0e'")
+    expect(terminalHtmlSource).toContain("const EMOJI_PRESENTATION_SELECTOR = '\\ufe0f'")
     expect(terminalHtmlSource).toContain(
-      'scope.TEXT_PRESENTATION_SELECTOR = String.fromCharCode(65038)'
+      'const CLAUDE_STATUS_DOT_PATTERN = /\\u23fa[\\ufe0e\\ufe0f]*/g'
+    )
+    expect(terminalHtmlSource).toContain('export function normalizeStatusDotPresentation(')
+    expect(terminalHtmlSource).toContain(
+      'CLAUDE_STATUS_DOT_PATTERN,\n    CLAUDE_STATUS_DOT + TEXT_PRESENTATION_SELECTOR'
     )
     expect(terminalHtmlSource).toContain(
-      'scope.EMOJI_PRESENTATION_SELECTOR = String.fromCharCode(65039)'
-    )
-    expect(terminalHtmlSource).toContain('function normalizeStatusDotPresentation(data)')
-    expect(terminalHtmlSource).toContain(
-      'data.replace(\n      scope.CLAUDE_STATUS_DOT_PATTERN,\n      scope.CLAUDE_STATUS_DOT + scope.TEXT_PRESENTATION_SELECTOR\n    )'
-    )
-    expect(terminalHtmlSource).toContain(
-      'scope.writeQueue.push(normalizeStatusDotPresentation(data))'
+      'scope.writeQueue.push(normalizeStatusDotPresentation(scope, data))'
     )
   })
 
@@ -137,12 +123,12 @@ describe('TerminalWebView text zoom', () => {
   })
 
   it('resets pending Claude status dot selector state when the terminal lifecycle resets', () => {
-    const initStart = terminalHtmlSource.indexOf('function init(')
+    const initStart = terminalHtmlSource.indexOf('export function init(')
     const initReplay = terminalHtmlSource.indexOf(
       'const replayData = normalizeInitialData(initialData)'
     )
-    const clearStart = terminalHtmlSource.indexOf('} else if (msg.type === "clear") {')
-    const clearEnd = terminalHtmlSource.indexOf('} else if (msg.type === "measure")', clearStart)
+    const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
+    const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
     expect(initReplay).toBeGreaterThan(initStart)
     expect(clearStart).toBeGreaterThanOrEqual(0)
@@ -158,9 +144,9 @@ describe('TerminalWebView text zoom', () => {
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
     expect(terminalHtmlDocumentShellSource).toContain('XTERM_ENGINE_JS')
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
-    const open = terminalHtmlSource.indexOf('scope.term.open(scope.surface)')
-    const unicode = terminalHtmlSource.indexOf('scope.term.unicode.activeVersion = "11"')
-    const replay = terminalHtmlSource.indexOf('enqueueWrite(scope.ESC + "[0m" + replayData)')
+    const open = terminalHtmlSource.indexOf('scope.term.open(scope.surface!)')
+    const unicode = terminalHtmlSource.indexOf("scope.term.unicode.activeVersion = '11'")
+    const replay = terminalHtmlSource.indexOf("enqueueWrite(scope, ESC + '[0m' + replayData)")
     expect(open).toBeGreaterThanOrEqual(0)
     expect(unicode).toBeGreaterThan(open)
     expect(replay).toBeGreaterThan(unicode)
@@ -168,12 +154,16 @@ describe('TerminalWebView text zoom', () => {
 
   it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {
     expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
-    expect(terminalWebglRecoverySource).toContain('window.WebglAddon.WebglAddon')
-    expect(terminalHtmlSource).toContain('function isIOSWebView()')
+    // C7.5 moved the engine constructors onto the scope so the page can set them; inside the
+    // document the default still reads the bundled engine, and it is now the preamble that
+    // carries the read rather than the recovery module.
+    expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
+    expect(terminalWebglRecoverySource).toContain('scope.createWebglAddon()')
+    expect(terminalHtmlSource).toContain('export function isIOSWebView(')
     expect(terminalHtmlSource).toContain('fontFamily: scope.terminalFontFamily')
-    expect(terminalHtmlSource).toContain('fontWeight: "300"')
-    expect(terminalHtmlSource).toContain('fontWeightBold: "500"')
-    expect(terminalWebglRecoverySource).toContain('new window.WebglAddon.WebglAddon()')
+    expect(terminalHtmlSource).toContain("fontWeight: '300'")
+    expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
+    expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
   })
 
   const IOS_IPHONE_NAVIGATOR = {
