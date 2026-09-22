@@ -4,9 +4,17 @@ import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
 // Why mocked: the win32 plain-shell teardown sweeps for real, and an unmocked run would put a
 // live process-table probe -- and, on a recycled pid, a taskkill /T /F -- behind these tests.
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const reapDescendantTreeMock = vi.hoisted(() =>
+  vi.fn(async (_pid: number, killRoot: () => void) => {
+    killRoot()
+    return 'exited' as const
+  })
+)
 vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+  killWithDescendantSweep: vi.fn()
+}))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: reapDescendantTreeMock
 }))
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']

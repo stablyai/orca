@@ -61,6 +61,17 @@ export class SessionNotFoundError extends Error {
   }
 }
 
+/** Kill finished without proving the agent/tool descendant tree is gone. */
+export class SessionDescendantReapError extends Error {
+  readonly verdict: 'live' | 'unverifiable'
+
+  constructor(sessionId: string, verdict: 'live' | 'unverifiable') {
+    super(`Session descendant tree ${verdict} after kill: ${sessionId}`)
+    this.name = 'SessionDescendantReapError'
+    this.verdict = verdict
+  }
+}
+
 export class TerminalSessionOwnerUnverifiedError extends Error {
   constructor(sessionId: string) {
     super(`Terminal session owner could not be verified: ${sessionId}`)

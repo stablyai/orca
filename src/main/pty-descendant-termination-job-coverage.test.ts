@@ -15,8 +15,8 @@ import { describe, expect, it } from 'vitest'
  * the fix engaged on neither of the paths that actually execute.
  */
 const SRC_DIR = join(__dirname, '..')
-const CALL = 'killWithDescendantSweep('
-// Local immediate and recognized-agent shutdown share one guarded call site.
+const CALLS = ['killWithDescendantSweep(', 'reapDescendantTree('] as const
+// Local immediate and recognized-agent shutdown share guarded call sites.
 const EXPECTED_MINIMUM_SITES = 4
 
 function collectTypeScriptFiles(dir: string): string[] {
@@ -38,9 +38,9 @@ function collectTypeScriptFiles(dir: string): string[] {
 }
 
 /** The call's argument text, brace-matched so a nested object literal stays whole. */
-function readCallArguments(source: string, callIndex: number): string {
+function readCallArguments(source: string, callIndex: number, callLength: number): string {
   let depth = 0
-  for (let index = callIndex + CALL.length - 1; index < source.length; index += 1) {
+  for (let index = callIndex + callLength - 1; index < source.length; index += 1) {
     const char = source[index]
     if (char === '(') {
       depth += 1
@@ -58,13 +58,22 @@ describe('pty job ownership covers every descendant sweep', () => {
   const sites: { file: string; args: string }[] = []
   for (const file of collectTypeScriptFiles(SRC_DIR)) {
     const source = readFileSync(file, 'utf8')
-    if (file.endsWith('pty-descendant-termination.ts')) {
-      continue // the implementation itself
+    if (
+      file.endsWith('pty-descendant-termination.ts') ||
+      file.endsWith('pty-descendant-tree-reap.ts')
+    ) {
+      // Implementation / composition layer — callers of these must pass the job.
+      continue
     }
-    let index = source.indexOf(CALL)
-    while (index !== -1) {
-      sites.push({ file: relative(SRC_DIR, file), args: readCallArguments(source, index) })
-      index = source.indexOf(CALL, index + CALL.length)
+    for (const call of CALLS) {
+      let index = source.indexOf(call)
+      while (index !== -1) {
+        sites.push({
+          file: relative(SRC_DIR, file),
+          args: readCallArguments(source, index, call.length)
+        })
+        index = source.indexOf(call, index + call.length)
+      }
     }
   }
 

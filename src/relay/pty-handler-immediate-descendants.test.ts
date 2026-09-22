@@ -4,14 +4,17 @@ import type { MockDispatcher } from './pty-handler-test-harness'
 import type { PtyHandler } from './pty-handler'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 
-const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe, sweep } = vi.hoisted(
+const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe, reap } = vi.hoisted(
   () => ({
     mockPtySpawn: vi.fn(),
     mockCreateShellPromptReadinessProbe: vi.fn(),
-    sweep:
-      vi.fn<
-        (pid: number, killRoot: () => void, deps?: { ownsRoot?: () => boolean }) => Promise<void>
-      >(),
+    reap: vi.fn<
+      (
+        pid: number,
+        killRoot: () => void,
+        deps?: { ownsRoot?: () => boolean }
+      ) => Promise<'exited' | 'live' | 'unverifiable'>
+    >(),
     mockPtyInstance: {
       pid: process.pid,
       onData: vi.fn(),
@@ -26,7 +29,7 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe, swee
   })
 )
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
-vi.mock('../main/pty-descendant-termination', () => ({ killWithDescendantSweep: sweep }))
+vi.mock('../main/pty-descendant-tree-reap', () => ({ reapDescendantTree: reap }))
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: (_pid: number, kill: () => void) => kill()
 }))
@@ -74,14 +77,14 @@ describe('relay immediate descendant cleanup', () => {
         exit = callback
       }
     })
-    sweep.mockReset()
-    sweep.mockImplementation(
+    reap.mockReset()
+    reap.mockImplementation(
       (_pid, killRoot) =>
-        new Promise<void>((resolve, reject) => {
+        new Promise<'exited'>((resolve, reject) => {
           release = () => {
             try {
               killRoot()
-              resolve()
+              resolve('exited')
             } catch (error) {
               reject(error)
             }
@@ -113,7 +116,7 @@ describe('relay immediate descendant cleanup', () => {
     const id = await spawn()
     const first = close(id)
     const second = close(id)
-    expect(sweep).toHaveBeenCalledTimes(1)
+    expect(reap).toHaveBeenCalledTimes(1)
     expect(kill).not.toHaveBeenCalled()
     await expect(dispatcher.callRequest('pty.attach', { id })).rejects.toThrow('terminating')
     release?.()
@@ -128,7 +131,7 @@ describe('relay immediate descendant cleanup', () => {
   it('does not signal a root that exits while its snapshot is pending', async () => {
     const id = await spawn()
     const closing = close(id)
-    const ownsRoot = sweep.mock.calls[0]?.[2]?.ownsRoot
+    const ownsRoot = reap.mock.calls[0]?.[2]?.ownsRoot
     expect(ownsRoot?.()).toBe(true)
     exit?.({ exitCode: 0 })
     expect(ownsRoot?.()).toBe(false)
@@ -173,28 +176,42 @@ describe('relay immediate descendant cleanup', () => {
     await rejected
     expect(handler.activePtyCount).toBe(1)
     const retry = close(id)
-    expect(sweep).toHaveBeenCalledTimes(2)
+    expect(reap).toHaveBeenCalledTimes(2)
     release?.()
     await vi.waitFor(() => expect(kill).toHaveBeenCalledTimes(2))
     exit?.({ exitCode: 137 })
     await retry
   })
 
-  it('keeps the Windows force-kill path and fences attachment until physical exit', async () => {
+  it('keeps Windows on the verifying reap path and fences attachment until physical exit', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const id = await spawn()
     const closing = close(id)
-    expect(sweep).not.toHaveBeenCalled()
-    expect(kill).toHaveBeenCalledWith()
+    expect(reap).toHaveBeenCalledTimes(1)
+    expect(kill).not.toHaveBeenCalled()
+    release?.()
+    await vi.waitFor(() => expect(kill).toHaveBeenCalled())
     await expect(dispatcher.callRequest('pty.attach', { id })).rejects.toThrow('terminating')
     exit?.({ exitCode: 137 })
     await closing
   })
 
+  it('retains ownership when the descendant tree is unverifiable after kill', async () => {
+    reap.mockImplementation(async (_pid, killRoot) => {
+      killRoot()
+      return 'unverifiable'
+    })
+    const id = await spawn()
+    const closing = close(id)
+    exit?.({ exitCode: 137 })
+    await expect(closing).rejects.toThrow(/descendant tree unverifiable/)
+    expect(handler.activePtyCount).toBe(1)
+  })
+
   it('keeps graceful shell shutdown off the descendant sweep', async () => {
     const id = await spawn()
     await dispatcher.callRequest('pty.shutdown', { id, immediate: false })
-    expect(sweep).not.toHaveBeenCalled()
+    expect(reap).not.toHaveBeenCalled()
     expect(kill).toHaveBeenCalledWith('SIGTERM')
   })
   it('refuses attach after close completes during source checkpoint wait', async () => {

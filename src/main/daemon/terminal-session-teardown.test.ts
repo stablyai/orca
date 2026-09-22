@@ -1,17 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
+import { SessionDescendantReapError } from './daemon-errors'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+const reapDescendantTreeMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: reapDescendantTreeMock
 }))
 
-function createPlainShellSession(overrides: Partial<Session> = {}): Session {
+type FakeSession = {
+  launchAgent: Session['launchAgent']
+  pid: number
+  isAlive: boolean
+  failedToReap: 'live' | 'unverifiable' | null
+  forceKillAndWaitForExit: ReturnType<typeof vi.fn>
+  beginTermination: ReturnType<typeof vi.fn>
+  kill: ReturnType<typeof vi.fn>
+  terminateOwnedTree: ReturnType<typeof vi.fn>
+  scheduleForceDisposeFallback: ReturnType<typeof vi.fn>
+  signalTerminationRoot: ReturnType<typeof vi.fn>
+}
+
+function createPlainShellSession(overrides: Partial<FakeSession> = {}): FakeSession {
   return {
     launchAgent: undefined,
     pid: 4242,
     isAlive: true,
+    failedToReap: null,
     forceKillAndWaitForExit: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
     kill: vi.fn(),
@@ -19,7 +34,12 @@ function createPlainShellSession(overrides: Partial<Session> = {}): Session {
     scheduleForceDisposeFallback: vi.fn(),
     signalTerminationRoot: vi.fn(),
     ...overrides
-  } as unknown as Session
+  }
+}
+
+function asSession(session: FakeSession): Session {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSession is a teardown stub with only the methods TerminalSessionTeardown reads.
+  return session as unknown as Session
 }
 
 describe('TerminalSessionTeardown plain-shell teardown', () => {
@@ -27,8 +47,11 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
 
   beforeEach(() => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    killWithDescendantSweepMock.mockReset()
-    killWithDescendantSweepMock.mockResolvedValue(undefined)
+    reapDescendantTreeMock.mockReset()
+    reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'exited'
+    })
   })
 
   afterEach(() => {
@@ -41,76 +64,70 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value })
   }
 
-  it('win32 immediate kill taskkills the descendant tree before force-kill', async () => {
-    // Why: a live pnpm/node child otherwise survives the ConPTY close, keeps the console
-    // non-empty, and holds the worktree cwd — failing destructive removal (#10004/#10100).
+  it('win32 immediate kill reaps the descendant tree before force-kill completes', async () => {
     setPlatform('win32')
     const session = createPlainShellSession()
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
 
-    await teardown.killSession('s1', session, true)
+    await teardown.killSession('s1', asSession(session), true)
 
-    expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+    expect(reapDescendantTreeMock).toHaveBeenCalledWith(
       4242,
       expect.any(Function),
       expect.objectContaining({ ownsRoot: expect.any(Function) })
     )
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
-    // The sweep owns the taskkill; the killRoot callback is a no-op so force-kill drives exit.
-    const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-    expect(() => killRoot()).not.toThrow()
   })
 
   it.each(['win32', 'linux', 'darwin'] as const)(
-    '%s immediate kill claims termination before awaiting the sweep',
+    '%s immediate kill claims termination before awaiting the reap',
     async (platform) => {
-      // Why: createOrAttach rejects a doomed plain shell only via isTerminating, so the claim
-      // must land before the taskkill await or an attach can bind a pane to a dying session.
       setPlatform(platform)
       const session = createPlainShellSession()
-      const beginTermination = session.beginTermination as unknown as ReturnType<typeof vi.fn>
-      let claimedBeforeSweep = false
-      killWithDescendantSweepMock.mockImplementation(async () => {
-        claimedBeforeSweep = beginTermination.mock.calls.length === 1
+      let claimedBeforeReap = false
+      reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        claimedBeforeReap = session.beginTermination.mock.calls.length === 1
+        killRoot()
+        return 'exited'
       })
-      const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+      const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
 
-      await teardown.killSession('s1', session, true)
+      await teardown.killSession('s1', asSession(session), true)
 
-      expect(claimedBeforeSweep).toBe(true)
+      expect(claimedBeforeReap).toBe(true)
     }
   )
 
   it.each(['win32', 'linux', 'darwin'] as const)(
-    '%s sweep ownsRoot guard requires the live session to still own the id',
+    '%s reap ownsRoot guard requires the live session to still own the id',
     async (platform) => {
       setPlatform(platform)
       const session = createPlainShellSession()
-      const sessions = new Map([['s1', session]])
+      const sessions = new Map([['s1', asSession(session)]])
       const teardown = new TerminalSessionTeardown(sessions)
 
-      await teardown.killSession('s1', session, true)
-      const ownsRoot = (killWithDescendantSweepMock.mock.calls[0][2] as { ownsRoot: () => boolean })
+      await teardown.killSession('s1', asSession(session), true)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vitest mock.calls is unknown[]; the third arg is the deps object we passed.
+      const ownsRoot = (reapDescendantTreeMock.mock.calls[0][2] as { ownsRoot: () => boolean })
         .ownsRoot
       expect(ownsRoot()).toBe(true)
 
-      // A natural exit or reap must stop us from taskkilling a recycled PID.
-      ;(session as unknown as { isAlive: boolean }).isAlive = false
+      session.isAlive = false
       expect(ownsRoot()).toBe(false)
       sessions.delete('s1')
-      ;(session as unknown as { isAlive: boolean }).isAlive = true
+      session.isAlive = true
       expect(ownsRoot()).toBe(false)
     }
   )
 
-  it('POSIX immediate close sweeps detached OMP tools before killing their parent', async () => {
+  it('POSIX immediate close reaps detached OMP tools before killing their parent', async () => {
     setPlatform('linux')
     const session = createPlainShellSession()
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
 
-    await teardown.killSession('s1', session, true)
+    await teardown.killSession('s1', asSession(session), true)
 
-    expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+    expect(reapDescendantTreeMock).toHaveBeenCalledWith(
       session.pid,
       expect.any(Function),
       expect.objectContaining({ ownsRoot: expect.any(Function) })
@@ -118,30 +135,60 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
   })
 
-  it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
+  it('non-immediate (graceful) kill uses the plain kill path without a reap', async () => {
     setPlatform('win32')
     const session = createPlainShellSession()
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
 
-    await teardown.killSession('s1', session, false)
+    await teardown.killSession('s1', asSession(session), false)
 
-    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(reapDescendantTreeMock).not.toHaveBeenCalled()
     expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
     expect(session.kill).toHaveBeenCalled()
+  })
+
+  it('marks failed-to-reap and throws when the descendant tree stays live', async () => {
+    setPlatform('linux')
+    const session = createPlainShellSession()
+    reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'live'
+    })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
+
+    await expect(teardown.killSession('s1', asSession(session), true)).rejects.toBeInstanceOf(
+      SessionDescendantReapError
+    )
+    expect(session.failedToReap).toBe('live')
+  })
+
+  it('marks failed-to-reap and throws when the descendant tree is unverifiable', async () => {
+    setPlatform('linux')
+    const session = createPlainShellSession()
+    reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'unverifiable'
+    })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
+
+    await expect(teardown.killSession('s1', asSession(session), true)).rejects.toThrow(
+      /descendant tree unverifiable/
+    )
+    expect(session.failedToReap).toBe('unverifiable')
   })
 })
 
 describe('pty job ownership reaches the daemon teardown path', () => {
-  // Why this test exists: worktree delete runs here, not in local-pty-provider
-  // (measured in #11047). A job wired only into the provider would never engage,
-  // so the detached grandchild that holds the worktree cwd survives the delete.
   let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    killWithDescendantSweepMock.mockReset()
-    killWithDescendantSweepMock.mockResolvedValue(undefined)
+    reapDescendantTreeMock.mockReset()
+    reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'exited'
+    })
   })
 
   afterEach(() => {
@@ -150,24 +197,26 @@ describe('pty job ownership reaches the daemon teardown path', () => {
     }
   })
 
-  function sweepTerminateOwnedTree(): () => string {
-    const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
+  function reapTerminateOwnedTree(): () => string {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: vitest mock.calls is unknown[]; the third arg is the deps object we passed.
+    const deps = reapDescendantTreeMock.mock.calls[0][2] as {
       terminateOwnedTree?: () => string
     }
-    expect(deps.terminateOwnedTree, 'sweep ran without job ownership').toBeTypeOf('function')
+    expect(deps.terminateOwnedTree, 'reap ran without job ownership').toBeTypeOf('function')
     return deps.terminateOwnedTree!
   }
 
   it.each([
     ['plain shell', undefined],
-    ['agent session', { agent: 'claude' } as unknown as Session['launchAgent']]
-  ])("hands the sweep this session's job on %s teardown", async (_case, launchAgent) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal launchAgent stub for the agent teardown branch.
+    ['agent session', { agent: 'claude' } as Session['launchAgent']]
+  ])("hands the reap this session's job on %s teardown", async (_case, launchAgent) => {
     const session = createPlainShellSession({ launchAgent })
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+    const teardown = new TerminalSessionTeardown(new Map([['s1', asSession(session)]]))
 
-    await teardown.killSession('s1', session, true)
+    await teardown.killSession('s1', asSession(session), true)
 
-    expect(sweepTerminateOwnedTree()()).toBe('terminated')
+    expect(reapTerminateOwnedTree()()).toBe('terminated')
     expect(session.terminateOwnedTree).toHaveBeenCalled()
   })
 })

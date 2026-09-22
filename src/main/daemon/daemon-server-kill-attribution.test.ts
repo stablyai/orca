@@ -93,6 +93,73 @@ describe('daemon kill attribution', () => {
     expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
   })
 
+  it('attributes Session not found as kill-failed when no pending spawn was canceled', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
+    const killLog = { log: vi.fn(), close: vi.fn() }
+    server = new DaemonServer({
+      socketPath: join(dir, 'daemon.sock'),
+      tokenPath: join(dir, 'daemon.token'),
+      log: killLog,
+      spawnSubprocess: () => {
+        throw new Error('not used')
+      }
+    })
+    const daemon = server as unknown as DaemonServerPrivate
+    vi.spyOn(daemon.host, 'kill').mockRejectedValue(new SessionNotFoundError('still-alive-session'))
+
+    await expect(
+      daemon.requestRouter.route('control-42', {
+        id: 'kill-1',
+        type: 'kill',
+        payload: { sessionId: 'still-alive-session', immediate: true }
+      })
+    ).rejects.toThrow('Session not found: still-alive-session')
+
+    expect(killLog.log).toHaveBeenCalledWith('session-kill-failed', {
+      sessionId: 'still-alive-session',
+      immediate: true,
+      clientId: 'control-42',
+      errorName: 'SessionNotFoundError',
+      error: 'Session not found: still-alive-session'
+    })
+    expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+  })
+
+  it('attributes a descendant-reap failure without claiming the session was killed', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
+    const killLog = { log: vi.fn(), close: vi.fn() }
+    server = new DaemonServer({
+      socketPath: join(dir, 'daemon.sock'),
+      tokenPath: join(dir, 'daemon.token'),
+      log: killLog,
+      spawnSubprocess: () => {
+        throw new Error('not used')
+      }
+    })
+    const daemon = server as unknown as DaemonServerPrivate
+    const { SessionDescendantReapError } = await import('./daemon-errors')
+    vi.spyOn(daemon.host, 'kill').mockRejectedValue(
+      new SessionDescendantReapError('agent-session', 'unverifiable')
+    )
+
+    await expect(
+      daemon.requestRouter.route('control-42', {
+        id: 'kill-1',
+        type: 'kill',
+        payload: { sessionId: 'agent-session', immediate: true }
+      })
+    ).rejects.toThrow(/descendant tree unverifiable/)
+
+    expect(killLog.log).toHaveBeenCalledWith(
+      'session-kill-failed',
+      expect.objectContaining({
+        sessionId: 'agent-session',
+        errorName: 'SessionDescendantReapError'
+      })
+    )
+    expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
+  })
+
   it('attributes a tolerated kill after canceling a pending spawn', async () => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
     const killLog = { log: vi.fn(), close: vi.fn() }

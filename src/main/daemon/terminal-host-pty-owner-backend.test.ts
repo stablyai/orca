@@ -2,9 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+  killWithDescendantSweep: vi.fn()
+}))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: async (_pid: number, killRoot: () => void) => {
+    killRoot()
+    return 'exited' as const
+  }
 }))
 
 type TestSubprocess = SubprocessHandle & {

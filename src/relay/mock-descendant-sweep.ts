@@ -6,3 +6,13 @@ vi.mock('../main/pty-descendant-termination', () => ({
     killRoot()
   }
 }))
+
+vi.mock('../main/pty-descendant-tree-reap', () => ({
+  reapDescendantTree: async (
+    _pid: number,
+    killRoot: () => void
+  ): Promise<'exited' | 'live' | 'unverifiable'> => {
+    killRoot()
+    return 'exited'
+  }
+}))

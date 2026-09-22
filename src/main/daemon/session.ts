@@ -40,6 +40,8 @@ export class Session {
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  /** Set when kill could not prove descendants gone; keeps the row listable. */
+  failedToReap: 'live' | 'unverifiable' | null = null
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId

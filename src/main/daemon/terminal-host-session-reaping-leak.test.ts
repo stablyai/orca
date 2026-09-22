@@ -15,9 +15,12 @@ import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const reapDescendantTreeMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+  killWithDescendantSweep: vi.fn()
+}))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: reapDescendantTreeMock
 }))
 
 function createMockSubprocess(): SubprocessHandle & {
@@ -63,8 +66,13 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     // Windows taskkill tree-kill path is covered in terminal-session-teardown.test.ts.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    killWithDescendantSweepMock.mockReset()
+    reapDescendantTreeMock.mockReset()
+    reapDescendantTreeMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'exited'
+    })
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
+    emulatorDispose.mockClear()
     const spawnFn = vi.fn(() => {
       lastSubprocess = createMockSubprocess()
       return lastSubprocess
@@ -131,15 +139,18 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     lastSubprocess.forceKill = vi.fn()
 
     let releaseSweep = (): void => {}
-    killWithDescendantSweepMock.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseSweep = resolve
+    reapDescendantTreeMock.mockImplementationOnce(
+      (_pid: number, killRoot: () => void) =>
+        new Promise<'exited'>((resolve) => {
+          releaseSweep = () => {
+            killRoot()
+            resolve('exited')
+          }
         })
     )
     const killed = host.kill('session-1', { immediate: true })
 
-    expect(killWithDescendantSweepMock).toHaveBeenCalledTimes(1)
+    expect(reapDescendantTreeMock).toHaveBeenCalledTimes(1)
     expect(lastSubprocess.kill).not.toHaveBeenCalled()
     expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
     expect(emulatorDispose).not.toHaveBeenCalled()
@@ -154,6 +165,35 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
     expect(host.isKilled('session-1')).toBe(true)
+  })
+
+  it('keeps a failed-to-reap session listed when descendants stay live', async () => {
+    await host.createOrAttach({
+      sessionId: 'session-1',
+      cols: 80,
+      rows: 24,
+      streamClient: streamClient(),
+      launchAgent: 'grok'
+    })
+    emulatorDispose.mockClear()
+    reapDescendantTreeMock.mockImplementationOnce(async (_pid: number, killRoot: () => void) => {
+      killRoot()
+      return 'live'
+    })
+
+    await expect(host.kill('session-1', { immediate: true })).rejects.toThrow(
+      /descendant tree live/
+    )
+
+    // Root may have exited during the kill; the session must still be listed so
+    // Resource Manager / worktree ps can see the unreaped descendant tree.
+    expect(host.listSessions()).toEqual([
+      expect.objectContaining({
+        sessionId: 'session-1',
+        isAlive: true,
+        failedToReap: 'live'
+      })
+    ])
   })
 
   it('retains a graceful-timeout session until the forced child physically exits', async () => {

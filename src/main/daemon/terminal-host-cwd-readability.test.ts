@@ -11,6 +11,12 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: async (_pid: number, killRoot: () => void) => {
+    killRoot()
+    return 'exited' as const
+  }
+}))
 
 const close = vi.fn(async () => {})
 

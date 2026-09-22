@@ -380,33 +380,24 @@ export type SessionInfo = {
   rows: number
   createdAt: number
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  failedToReap?: 'live' | 'unverifiable'
 }
 
-// Why: SessionInfo + source protocol version, so the Manage Sessions UI can
-// label legacy-backed sessions. Populated by the router/adapter at RPC time;
-// never transmitted over the daemon wire (daemon only speaks its own
-// protocol version and doesn't know about other versions).
-export type DaemonSessionInfo = SessionInfo & {
-  protocolVersion: number
-}
+/** SessionInfo + source protocol version for Manage Sessions legacy labeling. */
+export type DaemonSessionInfo = SessionInfo & { protocolVersion: number }
 
-// Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
-// existing importers keep one types entry point.
 export type * from './daemon-stream-events'
 
-// ─── Notify prefix ──────────────────────────────────────────────────
-// Requests with IDs starting with this prefix are fire-and-forget:
-// the daemon processes them but does not send a response.
+/** Fire-and-forget request id prefix: daemon processes these without a response. */
 export const NOTIFY_PREFIX = 'notify_'
 
-// ─── Error types ────────────────────────────────────────────────────
-// Re-exported so existing importers of `./types` keep working; the classes
-// live in daemon-errors.ts (this file is capped for wire-shape declarations).
+// Error classes live in daemon-errors.ts; re-exported for existing `./types` importers.
 export {
   TerminalAttachCanceledError,
   DaemonConnectionLostError,
   DaemonProtocolError,
   DaemonRequestTimeoutError,
   DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
-  SessionNotFoundError
+  SessionNotFoundError,
+  SessionDescendantReapError
 } from './daemon-errors'

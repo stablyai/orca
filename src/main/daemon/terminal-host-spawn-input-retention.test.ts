@@ -8,6 +8,12 @@ vi.mock('../pty-descendant-termination', () => ({
     throw new Error('The retention fixture must not signal real processes')
   }
 }))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: async (_pid: number, killRoot: () => void) => {
+    killRoot()
+    return 'exited' as const
+  }
+}))
 
 function subprocess() {
   let dataListener: ((data: string) => void) | undefined

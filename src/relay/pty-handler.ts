@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
-import { killWithDescendantSweep } from '../main/pty-descendant-termination'
+import { reapDescendantTree } from '../main/pty-descendant-tree-reap'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -242,6 +242,9 @@ type ManagedPty = {
   shellReadyArmed?: boolean
   physicalExit?: PhysicalExitTracker
   immediateClose?: Promise<void>
+  /** Root exited during immediate close; map removal waits on descendant proof (#21953). */
+  deferMapRemovalForDescendantProof?: boolean
+  failedDescendantReap?: 'live' | 'unverifiable'
   forceKillSent?: boolean
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
@@ -1035,6 +1038,14 @@ export class PtyHandler {
       pruneRetiredPtyIncarnations(this.retiredIncarnations)
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
+      // Why: an in-flight immediate close still owes a descendant-tree verdict. Dropping the
+      // map entry here would let listProcesses pretend the work was reaped while agent
+      // children may still hold the worktree (#21953).
+      if (managed.immediateClose) {
+        managed.deferMapRemovalForDescendantProof = true
+        disposeManagedPty(managed)
+        return
+      }
       this.agentSessionOwners.release(managed.id)
       this.removePty(managed.id)
       this.clearPtyInputState(managed.id)
@@ -2309,20 +2320,31 @@ export class PtyHandler {
     }
     const ownsRoot = (): boolean => this.ptys.get(managed.id) === managed && !managed.disposed
     const close = async (): Promise<void> => {
-      if (process.platform === 'win32') {
-        this.requestForceKill(managed)
-      } else {
-        await killWithDescendantSweep(
-          managed.pty.pid,
-          () => {
-            if (ownsRoot()) {
-              this.requestForceKill(managed)
-            }
-          },
-          { ownsRoot, terminateOwnedTree: () => terminatePtyJob(managed.pty) }
-        )
-      }
+      // Provider-neutral: prove the agent/tool tree is gone before treating the
+      // close as a successful reap. live/unverifiable keep the map entry so
+      // listProcesses still publishes the work (#21953; ssh-execution-boundary).
+      const verdict = await reapDescendantTree(
+        managed.pty.pid,
+        () => {
+          if (ownsRoot()) {
+            this.requestForceKill(managed)
+          }
+        },
+        { ownsRoot, terminateOwnedTree: () => terminatePtyJob(managed.pty) }
+      )
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+      if (verdict !== 'exited') {
+        managed.failedDescendantReap = verdict
+        process.stderr.write(
+          `[pty-handler] PTY ${managed.id} descendant tree ${verdict} after kill; ownership retained\n`
+        )
+        throw new Error(`PTY "${managed.id}" descendant tree ${verdict} after kill`)
+      }
+      if (managed.deferMapRemovalForDescendantProof && this.ptys.get(managed.id) === managed) {
+        this.agentSessionOwners.release(managed.id)
+        this.removePty(managed.id)
+        this.clearPtyInputState(managed.id)
+      }
     }
     const pending = close()
     managed.immediateClose = pending
@@ -2505,6 +2527,11 @@ export class PtyHandler {
    * (docs/reference/ssh-execution-boundary.md).
    */
   private reapPtyProvenExited(managed: ManagedPty): boolean {
+    // A failed or in-flight descendant proof keeps the row published even when
+    // the PTY root is gone (#21953; docs/reference/ssh-execution-boundary.md).
+    if (managed.deferMapRemovalForDescendantProof || managed.failedDescendantReap) {
+      return false
+    }
     if (!managed.pty.pid || isProcessAlive(managed.pty.pid)) {
       return false
     }
@@ -2860,7 +2887,11 @@ export class PtyHandler {
       }
     }
     for (const [entryIndex, [id, managed]] of managedEntries.entries()) {
-      if (managed.disposed) {
+      if (
+        managed.disposed &&
+        !managed.failedDescendantReap &&
+        !managed.deferMapRemovalForDescendantProof
+      ) {
         this.reapExitedPty(managed, 'record-torn-down')
         continue
       }

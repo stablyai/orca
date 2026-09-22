@@ -19,6 +19,12 @@ vi.mock('../pty/posix-pty-process-groups', () => ({
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: async (_pid: number, killRoot: () => void) => killRoot()
 }))
+vi.mock('../pty-descendant-tree-reap', () => ({
+  reapDescendantTree: async (_pid: number, killRoot: () => void) => {
+    killRoot()
+    return 'exited' as const
+  }
+}))
 
 function createFixture() {
   const proc = {

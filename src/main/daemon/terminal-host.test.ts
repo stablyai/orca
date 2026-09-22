@@ -8,10 +8,9 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
-}))
+const reapDescendantTreeMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
+vi.mock('../pty-descendant-tree-reap', () => ({ reapDescendantTree: reapDescendantTreeMock }))
 
 function createMockSubprocess(
   options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
@@ -74,7 +73,8 @@ describe('TerminalHost', () => {
     // the Windows taskkill /T /F tree-kill path is covered in terminal-session-teardown.test.ts.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    killWithDescendantSweepMock.mockReset()
+    reapDescendantTreeMock.mockReset()
+    reapDescendantTreeMock.mockImplementation(async () => 'exited')
     spawnFn = vi.fn(() => {
       const sub = createMockSubprocess() as ReturnType<typeof createMockSubprocess> & {
         _onDataCb: ((data: string) => void) | null
@@ -510,7 +510,7 @@ describe('TerminalHost', () => {
 
       // Why order matters: force-killing first would let orphans reparent to
       // pid 1 and escape the sweep's ppid walk entirely.
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+      expect(reapDescendantTreeMock).toHaveBeenCalledWith(
         99999,
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
@@ -518,7 +518,8 @@ describe('TerminalHost', () => {
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
       expect(host.isKilled('agent-1')).toBe(true)
 
-      const finish = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock.calls[1] is killRoot.
+      const finish = reapDescendantTreeMock.mock.calls[0][1] as () => void
       finish()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       expect(lastSubprocess.dispose).not.toHaveBeenCalled()
@@ -530,12 +531,12 @@ describe('TerminalHost', () => {
 
     it('defers a respawn until the agent immediate-kill snapshot completes', async () => {
       let finishSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
+      reapDescendantTreeMock.mockImplementation(
         (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
+          new Promise<'exited'>((resolve) => {
             finishSweep = () => {
               finish()
-              resolve()
+              resolve('exited')
             }
           })
       )
@@ -580,7 +581,7 @@ describe('TerminalHost', () => {
 
     it('coalesces duplicate immediate kill while descendant capture is pending', async () => {
       const sweep = new Promise<void>(() => {})
-      killWithDescendantSweepMock.mockReturnValue(sweep)
+      reapDescendantTreeMock.mockReturnValue(sweep)
       await host.createOrAttach({
         sessionId: 'agent-duplicate-kill',
         cols: 80,
@@ -595,19 +596,19 @@ describe('TerminalHost', () => {
       lastSubprocess._onExitCb?.(0)
       const second = host.kill('agent-duplicate-kill', { immediate: true })
 
-      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      expect(reapDescendantTreeMock).toHaveBeenCalledOnce()
       expect(second).toBe(first)
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
     })
 
     it('keeps a naturally-exited id reserved until teardown finishes without re-killing its pid', async () => {
       let completeSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
+      reapDescendantTreeMock.mockImplementation(
         (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
+          new Promise<'exited'>((resolve) => {
             completeSweep = () => {
               finish()
-              resolve()
+              resolve('exited')
             }
           })
       )
@@ -652,12 +653,12 @@ describe('TerminalHost', () => {
 
     it('upgrades a pending graceful agent teardown when immediate kill arrives', async () => {
       let completeSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
+      reapDescendantTreeMock.mockImplementation(
         (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
+          new Promise<'exited'>((resolve) => {
             completeSweep = () => {
               finish()
-              resolve()
+              resolve('exited')
             }
           })
       )
@@ -684,9 +685,10 @@ describe('TerminalHost', () => {
     })
 
     it('force-kills when immediate teardown follows a completed graceful snapshot', async () => {
-      killWithDescendantSweepMock.mockImplementation(async (_pid: number, finish: () => void) =>
+      reapDescendantTreeMock.mockImplementation(async (_pid: number, finish: () => void) => {
         finish()
-      )
+        return 'exited'
+      })
       await host.createOrAttach({
         sessionId: 'agent-post-snapshot-upgrade',
         cols: 80,

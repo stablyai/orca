@@ -19,6 +19,7 @@ import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
+import { killTerminalHostSession, reapTerminalHostSession } from './terminal-host-session-reap'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
@@ -48,7 +49,17 @@ export class TerminalHost {
   private sessions = new Map<string, Session>()
   // Serializes creates for one id across async spawn validation.
   private pendingCreations = new Map<string, Promise<void>>()
-  private sessionTeardown = new TerminalSessionTeardown(this.sessions)
+  private sessionTeardown = new TerminalSessionTeardown(this.sessions, (sessionId) =>
+    this.reapSession(sessionId)
+  )
+
+  private reapSession(sessionId: string): void {
+    reapTerminalHostSession(sessionId, {
+      sessions: this.sessions,
+      sessionTeardown: this.sessionTeardown,
+      ...(this.onSessionReaped ? { onSessionReaped: this.onSessionReaped } : {})
+    })
+  }
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
@@ -181,27 +192,11 @@ export class TerminalHost {
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = this.getAliveSession(sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
-  }
-
-  // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
-  private reapSession(sessionId: string): void {
-    const session = this.sessions.get(sessionId)
-    if (!session || session.isAlive) {
-      return
-    }
-    session.dispose()
-    this.sessions.delete(sessionId)
-    this.onSessionReaped?.(sessionId)
+    return killTerminalHostSession(sessionId, opts, {
+      sessionTeardown: this.sessionTeardown,
+      killedTombstones: this.killedTombstones,
+      getAliveSession: (id) => this.getAliveSession(id)
+    })
   }
 
   signal(sessionId: string, sig: string): void {

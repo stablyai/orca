@@ -8,7 +8,8 @@ export function listLiveTerminalHostSessions(
 ): SessionInfo[] {
   const result: SessionInfo[] = []
   for (const session of sessions.values()) {
-    if (!session.isAlive) {
+    // Failed-to-reap rows stay visible even after the PTY root exits (#21953).
+    if (!session.isAlive && !session.failedToReap) {
       continue
     }
     const size = session.getAppliedSize()
@@ -17,7 +18,9 @@ export function listLiveTerminalHostSessions(
       incarnationId: session.incarnationId,
       state: session.state,
       shellState: session.shellState,
-      isAlive: true,
+      // Inventory readers treat isAlive as "still owns host resources". A
+      // failed-to-reap session does, via its surviving descendant tree.
+      isAlive: session.isAlive || session.failedToReap !== null,
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
       wslDistro: session.wslDistro,
       pid: session.pid,
@@ -25,7 +28,8 @@ export function listLiveTerminalHostSessions(
       cols: size?.cols ?? 0,
       rows: size?.rows ?? 0,
       createdAt: 0,
-      agentSessionOwners: agentSessionOwners.listForPty(session.sessionId)
+      agentSessionOwners: agentSessionOwners.listForPty(session.sessionId),
+      ...(session.failedToReap ? { failedToReap: session.failedToReap } : {})
     })
   }
   return result

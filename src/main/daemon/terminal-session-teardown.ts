@@ -1,5 +1,7 @@
-import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { reapDescendantTree } from '../pty-descendant-tree-reap'
+import { SessionDescendantReapError } from './daemon-errors'
 import type { Session } from './session'
+import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 
 type TeardownOperation = {
   promise: Promise<void>
@@ -9,12 +11,16 @@ type TeardownOperation = {
   session: Session
 }
 
-/** Owns teardown by session id until descendant capture and root signalling
- * finish, even when the root exits and its Session is reaped. */
+/** Owns teardown by session id until descendant capture, root signalling, and
+ * descendant-exit proof finish — even when the root exits and would otherwise
+ * be reaped before the tree is proven gone. */
 export class TerminalSessionTeardown {
   private operations = new Map<string, TeardownOperation>()
 
-  constructor(private sessions: ReadonlyMap<string, Session>) {}
+  constructor(
+    private sessions: ReadonlyMap<string, Session>,
+    private onTreeExited?: (sessionId: string) => void
+  ) {}
 
   get(sessionId: string): Promise<void> | undefined {
     return this.operations.get(sessionId)?.promise
@@ -68,26 +74,49 @@ export class TerminalSessionTeardown {
       rootCompletion: Promise.resolve(),
       session
     }
-    const operation = run(entry)
-    entry.promise = operation
+    // Publish before run(): killRoot may exit the session synchronously, and
+    // reapSession must see this operation so it defers (#21953).
     this.operations.set(sessionId, entry)
-    const clearOperation = (): void => {
-      if (this.operations.get(sessionId) === entry) {
-        this.operations.delete(sessionId)
+    const operation = run(entry)
+    // Clear before onTreeExited so a deferred reapSession is not blocked by this entry.
+    entry.promise = operation.then(
+      () => {
+        if (this.operations.get(sessionId) === entry) {
+          this.operations.delete(sessionId)
+        }
+        this.onTreeExited?.(sessionId)
+      },
+      (error) => {
+        if (this.operations.get(sessionId) === entry) {
+          this.operations.delete(sessionId)
+        }
+        throw error
       }
-    }
-    void operation.then(clearOperation, clearOperation)
-    return operation
+    )
+    return entry.promise
   }
 
   /** Immediate close must reach detached tools even when startup did not identify an agent. */
   private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
     session.beginTermination()
-    await killWithDescendantSweep(session.pid, () => {}, {
-      ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-      terminateOwnedTree: () => session.terminateOwnedTree()
-    })
-    await session.forceKillAndWaitForExit()
+    let rootCompletion: Promise<void> | null = null
+    const verdict = await reapDescendantTree(
+      session.pid,
+      () => {
+        // Why during verification: a stopped parent can leave identity-matched
+        // zombie rows that block an exited verdict until the root is gone.
+        rootCompletion = session.forceKillAndWaitForExit()
+      },
+      {
+        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
+        terminateOwnedTree: () => session.terminateOwnedTree()
+      }
+    )
+    // Join physical exit even when a test double skips killRoot — production
+    // reapDescendantTree always invokes it, and immediate close must not return
+    // before the root is gone or the wait times out.
+    await (rootCompletion ?? session.forceKillAndWaitForExit())
+    this.assertTreeReaped(sessionId, session, verdict)
   }
 
   private killAgentSession(
@@ -117,7 +146,7 @@ export class TerminalSessionTeardown {
 
     return this.track(sessionId, session, immediate, (entry) => {
       const sweep = Promise.resolve(
-        killWithDescendantSweep(
+        reapDescendantTree(
           session.pid,
           () => {
             // Why: natural exit reaps the PID while ps is running. Never signal that
@@ -140,9 +169,25 @@ export class TerminalSessionTeardown {
           }
         )
       )
-      // Why: descendant capture completion only proves signals were requested;
-      // destructive callers must retain the native owner until OS-confirmed exit.
-      return sweep.then(() => entry.rootCompletion)
+      // Why: destructive callers must retain the native owner until OS-confirmed
+      // root exit AND a descendant-tree verdict of exited (#21953).
+      return sweep.then(async (verdict) => {
+        await entry.rootCompletion
+        this.assertTreeReaped(sessionId, session, verdict)
+      })
     })
+  }
+
+  private assertTreeReaped(
+    sessionId: string,
+    session: Session,
+    verdict: DescendantTreeVerdict
+  ): void {
+    if (verdict === 'exited') {
+      session.failedToReap = null
+      return
+    }
+    session.failedToReap = verdict
+    throw new SessionDescendantReapError(sessionId, verdict)
   }
 }

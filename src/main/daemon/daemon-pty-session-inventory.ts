@@ -47,7 +47,9 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       const processes: PtyProcessInfo[] = []
       const aliveSessionIds = new Set<string>()
       for (const session of result.sessions) {
-        if (!session.isAlive) {
+        // failedToReap sessions stay published so Resource Manager / worktree ps
+        // keep showing work that kill could not prove gone (#21953).
+        if (!session.isAlive && !session.failedToReap) {
           continue
         }
         aliveSessionIds.add(session.sessionId)
