@@ -114,6 +114,7 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
+  openzoo: CLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
   omp: OMP_COMMANDS
 }

@@ -21,6 +21,7 @@ describe('native chat agent picker profiles', () => {
       skillSourceOwner: 'claude'
     })
     expect(getNativeChatAgentProfile('openclaude')).toMatchObject({ skillSourceOwner: 'claude' })
+    expect(getNativeChatAgentProfile('openzoo')).toMatchObject({ skillSourceOwner: 'claude' })
     expect(getNativeChatAgentProfile('grok')).toMatchObject({
       skillPrefix: '/',
       skillSourceOwner: 'grok'
@@ -42,6 +43,7 @@ describe('host-claimed native chat commands', () => {
   it('claims nothing from the Claude-family catalog', () => {
     expect(names('claude')).toEqual([])
     expect(names('openclaude')).toEqual([])
+    expect(names('openzoo')).toEqual([])
   })
 
   it('keeps the Codex catalog claimed except the model-driven /goal', () => {

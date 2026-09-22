@@ -1,5 +1,6 @@
 import type { AppState } from '../store/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { collectLeafIdsInOrder } from '../components/terminal-pane/terminal-layout-leaf-ids'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../store/worktree-repo-index'
 
@@ -20,6 +21,7 @@ export function resolvePaneKey(
   titleUsesTabTitle: boolean
   /** The tab record's own title, which is the slot the hook-driven tab write actually overwrites. */
   tabTitle: string | undefined
+  launchAgent: TuiAgent | undefined
 } {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -31,7 +33,8 @@ export function resolvePaneKey(
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
       titleUsesTabTitle: false,
-      tabTitle: undefined
+      tabTitle: undefined,
+      launchAgent: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -40,12 +43,14 @@ export function resolvePaneKey(
   let tabTitle: string | undefined
   let unifiedTabLabel: string | undefined
   let owningWorktreeId: string | undefined
+  let launchAgent: TuiAgent | undefined
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree)) {
     for (const tab of tabs) {
       if (tab.id === tabId) {
         exists = true
         tabTitle = tab.title
         owningWorktreeId = worktreeId
+        launchAgent = tab.launchAgent
         const visibleTab = (store.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
         )
@@ -79,7 +84,8 @@ export function resolvePaneKey(
       repoConnectionResolved,
       owningWorktreeId,
       titleUsesTabTitle: false,
-      tabTitle: undefined
+      tabTitle: undefined,
+      launchAgent: undefined
     }
   }
   // Why: an empty layout snapshot from a worktree switch (tab/PTY still live) counts as missing metadata; a non-empty layout lacking the leaf still means closed.
@@ -93,7 +99,8 @@ export function resolvePaneKey(
       repoConnectionResolved,
       owningWorktreeId,
       titleUsesTabTitle: false,
-      tabTitle: undefined
+      tabTitle: undefined,
+      launchAgent: undefined
     }
   }
   // Why: inactive worktrees can have a durable tab and live PTY while the layout is unmounted; hook state must still land there.
@@ -109,7 +116,8 @@ export function resolvePaneKey(
     repoConnectionResolved,
     owningWorktreeId,
     titleUsesTabTitle: paneTitle === undefined,
-    tabTitle
+    tabTitle,
+    launchAgent
   }
 }
 

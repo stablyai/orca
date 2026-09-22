@@ -11,6 +11,7 @@ describe('OMP image references', () => {
   ])('quotes %s for file-mention parsing', (path, expected) => {
     expect(formatAgentImagePath('omp', path)).toBe(expected)
     expect(formatAgentImagePath('claude', path)).toBe(path)
+    expect(formatAgentImagePath('openzoo', path)).toBe(path)
   })
 
   it.each([

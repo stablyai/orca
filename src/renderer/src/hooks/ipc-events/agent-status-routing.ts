@@ -1,6 +1,7 @@
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-detection'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
@@ -92,15 +93,22 @@ export function shouldApplyResolvedAgentTerminalTitleToTab(
   return true
 }
 
+/** Re-attribute Claude-typed hooks to the wrapper that launched the pane (`openzoo` / OpenClaude). */
 export function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
-  terminalTitle: string | undefined
+  terminalTitle: string | undefined,
+  launchAgent?: TuiAgent | null
 ): ParsedAgentStatusPayload {
-  if (
-    payload.agentType !== 'claude' ||
-    !terminalTitle ||
-    !titleHasAgentName(terminalTitle, 'openclaude')
-  ) {
+  if (payload.agentType !== 'claude') {
+    return payload
+  }
+  // Why: openzoo runs the real Claude Code CLI, whose managed ~/.claude hooks post as
+  // `claude` and whose titles are Claude's own — the tab's launch intent is the only
+  // signal that keeps the pane attributed to openzoo instead of Claude-only status paths.
+  if (launchAgent === 'openzoo') {
+    return { ...payload, agentType: 'openzoo' }
+  }
+  if (!terminalTitle || !titleHasAgentName(terminalTitle, 'openclaude')) {
     return payload
   }
   // Why: OpenClaude emits Claude-compatible hooks; the title is the last renderer signal to keep it out of Claude-only status paths.
