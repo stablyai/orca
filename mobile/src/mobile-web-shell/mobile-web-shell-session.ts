@@ -320,7 +320,11 @@ export function reduceMobileWebShellSession(
     case 'document-started':
       // A replacement document inherits nothing: what the last one declared and painted says
       // nothing about this one, and leaving its paint latched uncovers the view over a blank tree.
-      return step(session, session.state.kind === 'ready' ? CLEAR_PAGE_DOCUMENT_STATE : {})
+      // The flow goes with it for the same reason `remounted` moves it — the retired document's
+      // readiness wait would otherwise expire onto a replacement that is still loading.
+      return session.state.kind === 'ready'
+        ? step(session, { ...CLEAR_PAGE_DOCUMENT_STATE, flow: session.flow + 1 })
+        : step(session, {})
     case 'document-loaded':
       // Nothing to wait on outside `ready`, and nothing to wait for once the page has spoken: the
       // two orders this can arrive in are a race, and the latch is what makes either one fine.

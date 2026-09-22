@@ -859,6 +859,22 @@ describe('the page reporting a frame on screen', () => {
     expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
   })
 
+  it('retires the wait the document it replaced armed', () => {
+    const loaded = run(readySession().session, { type: 'document-loaded' })
+    expect(loaded.effects).toEqual([{ kind: 'await-page-ready' }])
+    const armed = loaded.session.flow
+    const spoken = run(loaded.session, { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] })
+    const restarted = run(spoken.session, { type: 'document-started' })
+    // The replacement is still loading and has said nothing, which is exactly what the retired
+    // document's deadline reads as a document that never loaded.
+    const expired = run(restarted.session, { type: 'page-ready-deadline', flow: armed })
+    expect(expired.session.state.kind).toBe('ready')
+    // And the replacement arms a wait of its own, so a document that really never speaks still
+    // takes the session down.
+    const reloaded = run(restarted.session, { type: 'document-loaded' })
+    expect(reloaded.effects).toEqual([{ kind: 'await-page-ready' }])
+  })
+
   it('keeps the frame of a document that repeats its own handshake', () => {
     const painted = run(
       readySession().session,
