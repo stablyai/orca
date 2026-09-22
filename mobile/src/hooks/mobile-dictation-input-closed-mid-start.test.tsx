@@ -1,10 +1,15 @@
 /**
  * A tapped start that the composer's own send gate ends, while the microphone is still opening.
  *
- * On Android every mic tap used to raise the permission activity, and the resume behind it forces a
- * tabs reconciliation whose snapshot can briefly carry no active terminal — which is one of the two
- * inputs to `canSend`, the hook's `enabled`. The disable arrives inside `capture.open()`, so the tap
- * ended at idle with nothing said. Only the user's own cancel may end a tap in silence.
+ * Established: on Android every mic tap used to raise the permission activity, which pauses and
+ * resumes the React host inside `capture.open()`. `enabled` is the composer's `canSend`, and when
+ * it went false the `!enabled` Effect reached the same `cancel()` the user's own does, so a tapped
+ * start ended at idle with nothing said.
+ *
+ * Open: what flips `canSend` on that resume. `connState` does not move across a short background;
+ * `activeHandle` is the remaining input and nothing yet establishes what clears it. This case is
+ * written at the seam so it does not depend on the answer — whatever flips `enabled`, only the
+ * user's own cancel may end a tap in silence.
  */
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
