@@ -752,7 +752,7 @@ describe('createUISlice space navigation', () => {
       prefilledName: 'feat/siri-shortcuts',
       initialRepoId: 'wom7web',
       initialBaseBranch: 'main',
-      telemetrySource: 'shortcut'
+      telemetrySource: 'unknown'
     })
     expect(store.getState().pendingWorktreeDeepLink).toEqual({
       type: 'worktree-create',

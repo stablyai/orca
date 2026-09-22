@@ -76,7 +76,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
           prefilledName: link.name,
           initialRepoId: link.repo,
           initialBaseBranch: link.branch,
-          telemetrySource: 'shortcut'
+          telemetrySource: 'unknown'
         })
       }
     },

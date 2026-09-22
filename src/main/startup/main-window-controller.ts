@@ -205,6 +205,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('closed', () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
+      state.worktreeDeepLinkListenerReady = false
     }
     clearExpectedRendererReload(rendererWebContentsId)
     state.automations?.setWebContents(null)
