@@ -28,6 +28,9 @@ export async function readCloudSqlBackends(environment, startedAt, endedAt) {
     headers: { authorization: `Bearer ${accessToken()}` },
     redirect: 'error', signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error(`Cloud SQL metric query returned ${response.status}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`Cloud SQL metric query returned ${response.status}`)
+  }
   return await response.json()
 }
