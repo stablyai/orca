@@ -78,10 +78,12 @@ export type PluginTaskSourcesSlice = {
   /** Keyed by declared facet id. A facet missing from the record has not been
    *  asked for yet. */
   pluginTaskSourceFacetOptions: Record<string, PluginTaskSourceFacetOptions>
-  /** Whether the me-option seed has already been offered for this source, so a
-   *  facet the user deliberately cleared is not re-seeded by the next scope
-   *  change. Reset with the selection. */
-  pluginTaskSourceAssigneeSeeded: boolean
+  /** Which facets have already had their declared default applied for this
+   *  source, so one the user deliberately cleared is not re-seeded by the next
+   *  scope change. Per facet rather than per source: facets settle
+   *  independently, and one seeding must not silence the rest. Reset with the
+   *  selection. */
+  pluginTaskSourceSeededFacetIds: string[]
   /** Straight from `status().supports.create`. False until the probe answers,
    *  so a source is never offered a create control it did not declare. */
   pluginTaskSourceSupportsCreate: boolean

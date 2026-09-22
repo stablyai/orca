@@ -175,6 +175,40 @@ describe('plugin task source contract', () => {
       ).toBe(true)
     })
 
+    it('accepts a facet declaring default options, and one declaring none', () => {
+      const defaulted = pluginTaskFacetSchema.safeParse({
+        ...state,
+        defaultOptionIds: ['Active', 'Ready']
+      })
+
+      expect(defaulted.success && defaulted.data.defaultOptionIds).toEqual(['Active', 'Ready'])
+      expect(pluginTaskFacetSchema.safeParse(state).success).toBe(true)
+      expect(
+        pluginTaskFacetSchema.safeParse(state).success &&
+          pluginTaskFacetSchema.parse(state).defaultOptionIds
+      ).toBeUndefined()
+    })
+
+    // A `dynamic` facet resolves its options per scope, so the declaration
+    // cannot name them; cross-checking here would refuse every such default.
+    it('accepts a default naming an option the facet does not declare', () => {
+      expect(
+        pluginTaskFacetSchema.safeParse({ ...state, defaultOptionIds: ['Retired'] }).success
+      ).toBe(true)
+    })
+
+    it('rejects more default options than the cap, and an empty default option id', () => {
+      expect(
+        pluginTaskFacetSchema.safeParse({
+          ...state,
+          defaultOptionIds: Array.from({ length: 201 }, (_, i) => `o${i}`)
+        }).success
+      ).toBe(false)
+      expect(pluginTaskFacetSchema.safeParse({ ...state, defaultOptionIds: [''] }).success).toBe(
+        false
+      )
+    })
+
     it('rejects a facet or option id that is empty or past its cap', () => {
       expect(pluginTaskFacetSchema.safeParse({ ...state, id: '' }).success).toBe(false)
       expect(pluginTaskFacetSchema.safeParse({ ...state, id: 'x'.repeat(513) }).success).toBe(false)

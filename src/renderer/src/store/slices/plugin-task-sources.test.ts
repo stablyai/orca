@@ -601,6 +601,34 @@ const FACET_STATUS = {
   ]
 }
 
+/** Neither id is any provider's vocabulary: core reads the declaration, not the
+ *  spelling, and a fixture that borrowed a real one would hide a hardcoded id. */
+const OWNER_OPTIONS = [
+  { id: 'mine', label: 'Me' },
+  { id: 'nobody', label: 'Unassigned' }
+]
+
+function seededFacetStore(facet: {
+  defaultOptionIds?: string[]
+}): ReturnType<typeof createTestStore> {
+  const store = createTestStore()
+  const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
+    if (args.method === 'status') {
+      return {
+        ok: true,
+        data: {
+          ...FACET_STATUS,
+          facets: [{ id: 'owner', label: 'Owner', kind: 'multi', dynamic: true, ...facet }]
+        }
+      }
+    }
+    return { ok: true, data: OWNER_OPTIONS }
+  })
+  vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+  store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+  return store
+}
+
 describe('contributed task source facets in the store', () => {
   it('carries the chosen facet options into the list request', async () => {
     const store = createTestStore()
@@ -679,26 +707,61 @@ describe('contributed task source facets in the store', () => {
     })
   })
 
-  it('seeds the assignee facet to the signed-in user only until the user clears it', async () => {
-    const store = createTestStore()
-    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
-      if (args.method === 'status') {
-        return {
-          ok: true,
-          data: {
-            ...FACET_STATUS,
-            facets: [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
-          }
-        }
-      }
-      return { ok: true, data: [{ id: '@me', label: 'Me' }] }
-    })
-    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
-
-    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+  it('seeds a facet to the options its declaration names', async () => {
+    const store = seededFacetStore({ defaultOptionIds: ['mine'] })
     await store.getState().loadPluginTaskSourceStatus()
     await store.getState().loadPluginTaskSourceFacetOptions()
-    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ assignee: ['@me'] })
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ owner: ['mine'] })
+  })
+
+  it('seeds every declared default on a multi-select facet', async () => {
+    const store = seededFacetStore({ defaultOptionIds: ['mine', 'nobody'] })
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({
+      owner: ['mine', 'nobody']
+    })
+  })
+
+  it('opens unfiltered when the facet declares no default', async () => {
+    const store = seededFacetStore({})
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})
+  })
+
+  it('drops a declared default this scope does not offer and keeps the rest', async () => {
+    const store = seededFacetStore({ defaultOptionIds: ['retired', 'mine'] })
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ owner: ['mine'] })
+    expect(store.getState().pluginTaskSourceFacetOptions.owner).toEqual({
+      status: 'ready',
+      options: OWNER_OPTIONS
+    })
+  })
+
+  it('leaves the list unfiltered when no declared default survives the scope', async () => {
+    const store = seededFacetStore({ defaultOptionIds: ['retired'] })
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})
+    expect(store.getState().pluginTaskSourceFacetOptions.owner).toEqual({
+      status: 'ready',
+      options: OWNER_OPTIONS
+    })
+  })
+
+  it('does not re-apply a declared default the user has cleared', async () => {
+    const store = seededFacetStore({ defaultOptionIds: ['mine'] })
+    await store.getState().loadPluginTaskSourceStatus()
+    await store.getState().loadPluginTaskSourceFacetOptions()
+    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ owner: ['mine'] })
 
     store.getState().setPluginTaskSourceQuery({ search: null, filterId: null, facetSelections: {} })
     store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
@@ -733,29 +796,6 @@ describe('contributed task source facets in the store', () => {
       state: ['Active'],
       type: ['Bug']
     })
-  })
-
-  it('leaves the query unfiltered when the assignee facet offers no signed-in-user option', async () => {
-    const store = createTestStore()
-    const invokeTaskSource = vi.fn().mockImplementation(async (args: { method: string }) => {
-      if (args.method === 'status') {
-        return {
-          ok: true,
-          data: {
-            ...FACET_STATUS,
-            facets: [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
-          }
-        }
-      }
-      return { ok: true, data: [{ id: 'ada@example.com', label: 'Ada' }] }
-    })
-    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
-
-    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    await store.getState().loadPluginTaskSourceStatus()
-    await store.getState().loadPluginTaskSourceFacetOptions()
-
-    expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})
   })
 })
 

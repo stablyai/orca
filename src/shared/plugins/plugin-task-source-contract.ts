@@ -148,7 +148,17 @@ export const pluginTaskFacetSchema = z.object({
   label: z.string().min(1).max(FILTER_LABEL_MAX),
   kind: z.enum(['single', 'multi']),
   dynamic: z.boolean().optional(),
-  options: z.array(pluginTaskFacetOptionSchema).max(FACET_OPTIONS_MAX).optional()
+  options: z.array(pluginTaskFacetOptionSchema).max(FACET_OPTIONS_MAX).optional(),
+  /** Which options the facet opens on before the user has narrowed it. Bounded
+   *  like a selection, so a `multi` facet may name several. Absent means none.
+   *
+   *  Deliberately not cross-checked against `options`: a `dynamic` facet
+   *  resolves its options per scope, so only the reader holding the settled list
+   *  can tell a default this scope offers from one it does not. That reader
+   *  drops the ones it cannot resolve rather than refusing the declaration — a
+   *  default is a preference, and a stale one must never cost the user the
+   *  list. */
+  defaultOptionIds: z.array(z.string().min(1).max(512)).max(FACET_OPTIONS_MAX).optional()
 })
 
 export const pluginTaskSourceStatusSchema = z.object({

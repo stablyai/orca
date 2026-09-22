@@ -75,6 +75,14 @@ const FACETS = [
   { id: 'sprint', label: 'Sprint', kind: 'single', dynamic: true }
 ]
 
+/** Neither id is any provider's vocabulary: core reads the declaration, not the
+ *  spelling, and a fixture that borrowed a real one would hide a hardcoded id. */
+const OWNER_FACET = { id: 'owner', label: 'Owner', kind: 'multi', dynamic: true }
+const OWNER_OPTIONS = [
+  { id: 'mine', label: 'Me' },
+  { id: 'ada', label: 'Ada' }
+]
+
 const SCOPES = [
   { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
   { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
@@ -386,23 +394,15 @@ describe('TaskPage contributed source content', () => {
     )
   })
 
-  it('opens the assignee facet on the signed-in user when the source offers that option', async () => {
-    const invoke = stubFacetSource(
-      {
-        assignee: [
-          { id: '@me', label: 'Me' },
-          { id: 'ada@example.com', label: 'Ada' }
-        ]
-      },
-      [{ id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }]
-    )
+  it('opens a facet on the options its declaration defaults to', async () => {
+    const invoke = stubFacetSource({ owner: OWNER_OPTIONS }, [
+      { ...OWNER_FACET, defaultOptionIds: ['mine'] }
+    ])
     selectBoards()
 
     renderContent()
 
-    expect(await screen.findByRole('combobox', { name: 'Assignee' })).toHaveTextContent(
-      'Assignee: Me'
-    )
+    expect(await screen.findByRole('combobox', { name: 'Owner' })).toHaveTextContent('Owner: Me')
     await waitFor(
       () => {
         expect(invoke).toHaveBeenCalledWith({
@@ -413,7 +413,7 @@ describe('TaskPage contributed source content', () => {
             search: null,
             cursor: null,
             limit: 50,
-            facetSelections: { assignee: ['@me'] }
+            facetSelections: { owner: ['mine'] }
           }
         })
       },
@@ -421,15 +421,33 @@ describe('TaskPage contributed source content', () => {
     )
   })
 
-  it('opens unfiltered when the assignee facet offers no signed-in-user option', async () => {
-    const invoke = stubFacetSource({ assignee: [{ id: 'ada@example.com', label: 'Ada' }] }, [
-      { id: 'assignee', label: 'Assignee', kind: 'multi', dynamic: true }
+  it('opens unfiltered when the facet declares no default', async () => {
+    const invoke = stubFacetSource({ owner: OWNER_OPTIONS }, [OWNER_FACET])
+    selectBoards()
+
+    renderContent()
+
+    expect(await screen.findByRole('combobox', { name: 'Owner' })).toHaveTextContent('Owner')
+    expect(invoke).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'listItems',
+        params: expect.objectContaining({ facetSelections: expect.anything() })
+      })
+    )
+  })
+
+  // A default is a preference; the list is not. One naming an option this scope
+  // cannot resolve is dropped, and the facet still renders its real options.
+  it('renders the list when a declared default names an option the scope does not offer', async () => {
+    const invoke = stubFacetSource({ owner: OWNER_OPTIONS }, [
+      { ...OWNER_FACET, defaultOptionIds: ['retired'] }
     ])
     selectBoards()
 
     renderContent()
 
-    expect(await screen.findByRole('combobox', { name: 'Assignee' })).toHaveTextContent('Assignee')
+    expect(await screen.findByRole('combobox', { name: 'Owner' })).toHaveTextContent('Owner')
+    expect(await screen.findByText(ITEM.title)).toBeInTheDocument()
     expect(invoke).not.toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'listItems',

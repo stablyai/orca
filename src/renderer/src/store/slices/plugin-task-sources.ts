@@ -45,6 +45,7 @@ const UNFILTERED_QUERY: PluginTaskSourceQuery = {
   facetSelections: {}
 }
 const ALL_SCOPES: string[] = []
+const NO_SEEDED_FACETS: string[] = []
 
 const pluginTaskScopeListSchema = z.array(pluginTaskScopeSchema)
 const pluginTaskItemTypeListSchema = z.array(pluginTaskItemTypeSchema)
@@ -108,7 +109,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
   pluginTaskSourceFilters: [],
   pluginTaskSourceFacets: [],
   pluginTaskSourceFacetOptions: {},
-  pluginTaskSourceAssigneeSeeded: false,
+  pluginTaskSourceSeededFacetIds: NO_SEEDED_FACETS,
   pluginTaskSourceSupportsCreate: false,
   pluginTaskSourceSupportsComment: false,
   pluginTaskSourceQuery: UNFILTERED_QUERY,
@@ -131,7 +132,7 @@ export const createPluginTaskSourcesSlice: StateCreator<
       pluginTaskSourceFilters: [],
       pluginTaskSourceFacets: [],
       pluginTaskSourceFacetOptions: {},
-      pluginTaskSourceAssigneeSeeded: false,
+      pluginTaskSourceSeededFacetIds: NO_SEEDED_FACETS,
       pluginTaskSourceSupportsCreate: false,
       pluginTaskSourceSupportsComment: false,
       pluginTaskSourceQuery: UNFILTERED_QUERY,

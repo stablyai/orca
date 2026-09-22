@@ -1,4 +1,7 @@
-import type { PluginTaskFacetOption } from '../../../../shared/plugins/plugin-task-source-contract'
+import type {
+  PluginTaskFacet,
+  PluginTaskFacetOption
+} from '../../../../shared/plugins/plugin-task-source-contract'
 import type { PluginTaskSourceQuery } from './plugin-task-sources-slice-contract'
 
 /**
@@ -34,29 +37,24 @@ export function pruneFacetSelectionToOptions(
   return { ...query, facetSelections }
 }
 
-/** A shared spelling, not a contract field: a source that wants its assignee
- *  facet to open on the signed-in user names the facet `assignee` and offers
- *  `@me` among its options. Nothing else in core reads either id, and a source
- *  that spells them differently simply opens unfiltered. */
-export const ASSIGNEE_FACET_ID = 'assignee'
-export const ME_ASSIGNEE_OPTION_ID = '@me'
-
-/** Null whenever there is nothing to seed: another facet, a facet the user has
- *  already narrowed, or options carrying no me-option — an option list is per
- *  scope, so the same facet may offer one under one project and not another. */
-export function applyMeAssigneeSeed(
+/** Null whenever there is nothing to seed: a facet declaring no default, one the
+ *  user has already narrowed, or a declaration naming only options this scope
+ *  does not offer. A declared id the scope cannot resolve is dropped rather than
+ *  refused — an option list is per scope, and a source may offer a default under
+ *  one project and not another — so what survives still seeds and the list
+ *  renders either way. */
+export function applyDeclaredFacetDefault(
   query: PluginTaskSourceQuery,
-  facetId: string,
+  facet: PluginTaskFacet,
   options: readonly PluginTaskFacetOption[]
 ): PluginTaskSourceQuery | null {
-  if (facetId !== ASSIGNEE_FACET_ID || query.facetSelections[facetId] !== undefined) {
+  if (query.facetSelections[facet.id] !== undefined) {
     return null
   }
-  if (!options.some((option) => option.id === ME_ASSIGNEE_OPTION_ID)) {
+  const offered = new Set(options.map((option) => option.id))
+  const seeded = (facet.defaultOptionIds ?? []).filter((optionId) => offered.has(optionId))
+  if (seeded.length === 0) {
     return null
   }
-  return {
-    ...query,
-    facetSelections: { ...query.facetSelections, [facetId]: [ME_ASSIGNEE_OPTION_ID] }
-  }
+  return { ...query, facetSelections: { ...query.facetSelections, [facet.id]: seeded } }
 }

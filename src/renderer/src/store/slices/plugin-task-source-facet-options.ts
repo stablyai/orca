@@ -8,7 +8,10 @@ import {
   invokePluginTaskSource,
   isSamePluginTaskSourceSelection
 } from './plugin-task-source-bridge'
-import { applyMeAssigneeSeed, pruneFacetSelectionToOptions } from './plugin-task-source-facet-query'
+import {
+  applyDeclaredFacetDefault,
+  pruneFacetSelectionToOptions
+} from './plugin-task-source-facet-query'
 import type {
   PluginTaskSourceFacetOptions,
   PluginTaskSourcesSlice,
@@ -48,12 +51,12 @@ async function fetchFacetOptions({
   selection: SelectedPluginTaskSource
   facets: readonly PluginTaskFacet[]
   scopeIds: readonly string[]
-  onFacetSettled: (facetId: string, options: PluginTaskSourceFacetOptions) => void
+  onFacetSettled: (facet: PluginTaskFacet, options: PluginTaskSourceFacetOptions) => void
 }): Promise<void> {
   await Promise.all(
     facets.map(async (facet) => {
       if (!facet.dynamic) {
-        onFacetSettled(facet.id, { status: 'ready', options: declaredOptions(facet) })
+        onFacetSettled(facet, { status: 'ready', options: declaredOptions(facet) })
         return
       }
       const result = await invokePluginTaskSource(
@@ -63,7 +66,7 @@ async function fetchFacetOptions({
         { facetId: facet.id, scopeIds: [...scopeIds] }
       )
       onFacetSettled(
-        facet.id,
+        facet,
         result.ok
           ? { status: 'ready', options: result.data }
           : { status: 'failed', error: { code: result.code, message: result.message } }
@@ -89,7 +92,7 @@ export function createPluginTaskSourceFacetOptionsAction(
         selection,
         facets,
         scopeIds,
-        onFacetSettled: (facetId, options) => {
+        onFacetSettled: (facet, options) => {
           // A facet that settles after the user moved on describes a scope or a
           // source no longer on screen, so it is dropped rather than shown.
           if (
@@ -101,7 +104,7 @@ export function createPluginTaskSourceFacetOptionsAction(
           set({
             pluginTaskSourceFacetOptions: {
               ...get().pluginTaskSourceFacetOptions,
-              [facetId]: options
+              [facet.id]: options
             }
           })
           if (options.status !== 'ready') {
@@ -109,18 +112,26 @@ export function createPluginTaskSourceFacetOptionsAction(
           }
           const pruned = pruneFacetSelectionToOptions(
             get().pluginTaskSourceQuery,
-            facetId,
+            facet.id,
             options.options
           )
           if (pruned) {
             set({ pluginTaskSourceQuery: pruned })
           }
-          if (get().pluginTaskSourceAssigneeSeeded) {
+          const seededFacetIds = get().pluginTaskSourceSeededFacetIds
+          if (seededFacetIds.includes(facet.id)) {
             return
           }
-          const seeded = applyMeAssigneeSeed(get().pluginTaskSourceQuery, facetId, options.options)
+          const seeded = applyDeclaredFacetDefault(
+            get().pluginTaskSourceQuery,
+            facet,
+            options.options
+          )
           if (seeded) {
-            set({ pluginTaskSourceQuery: seeded, pluginTaskSourceAssigneeSeeded: true })
+            set({
+              pluginTaskSourceQuery: seeded,
+              pluginTaskSourceSeededFacetIds: [...seededFacetIds, facet.id]
+            })
           }
         }
       })
