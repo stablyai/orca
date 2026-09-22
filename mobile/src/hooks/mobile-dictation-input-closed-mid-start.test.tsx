@@ -12,12 +12,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE } from './mobile-dictation-session-state'
 
-const device = vi.hoisted(() => ({
-  calls: new Array<string>(),
-  screen: new Array<string>(),
+type DeviceLog = {
+  calls: string[]
+  screen: string[]
   /** Resolves the permission ask, which is what the activity holds open on the device. */
-  releasePermission: null as null | (() => void)
-}))
+  releasePermission: (() => void) | null
+}
+
+const device = vi.hoisted((): DeviceLog => ({ calls: [], screen: [], releasePermission: null }))
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
