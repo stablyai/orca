@@ -356,10 +356,11 @@ async function setContentWithin(page, markdown, selector) {
  * The plain paragraph a command case starts from, numbered so no two are the same.
  *
  * The content prop is what resets the document, and the controller only pushes when it differs
- * from what the editor last reported. One command breaks that: WebKit's `insertUnorderedList`
- * nests the `<ul>` inside the `<p>` it was given, and the serializer walks back out with the same
- * text — so re-setting the same string after it is a no-op, and the next command ran against the
- * list rather than against a paragraph.
+ * from what the editor last reported. Re-setting the same string is therefore a no-op, and the
+ * next command would run against the document the one before it left. Both list commands used to
+ * make that worse rather than better: `insertUnorderedList` nests the `<ul>` inside the `<p>` it
+ * was given on both engines, and the serializer read the paragraph inline, so pressing it reported
+ * the paragraph's own text back unchanged.
  */
 const bodyFor = (index) => `body text ${String(index)}`
 
@@ -495,6 +496,60 @@ describeEditor(
               null,
               { timeout: 15_000 }
             )
+
+            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
+            expect(consoleErrors).toEqual([])
+          } finally {
+            await page.close()
+          }
+        }, 600_000)
+
+        /**
+         * A list typed on the surface, read back as markdown, and rendered from that markdown.
+         *
+         * `insertUnorderedList` puts the `<ul>` inside the `<p>` it was given rather than replacing
+         * it — measured here on WebKit 26.4 and Chromium 147 both — and a serializer that read such
+         * a paragraph inline reported its own text with no marker, so the bullet the user pressed
+         * was gone the moment the host saved what the document reported.
+         */
+        it('reports a typed bullet list as a list, and renders that markdown back as one', async () => {
+          const { page, consoleErrors } = await openPage(browser)
+          try {
+            const body = 'bullet round trip'
+            await setContent(page, body, `<p>${body}</p>`)
+            await select(page, 'all')
+            await page.evaluate(() => {
+              globalThis.__orcaEditor.changes.length = 0
+            })
+            await press(page, 'Bullet list')
+            await page.waitForFunction(
+              () => document.querySelector('#first-surface #editor')?.querySelector('ul') !== null,
+              null,
+              { timeout: 15_000 }
+            )
+            await page.waitForFunction(() => globalThis.__orcaEditor.changes.length > 0, null, {
+              timeout: 15_000
+            })
+            // The precondition: the engine really did nest the list inside the paragraph. An engine
+            // that replaced the paragraph would leave this case measuring the flat shape, which the
+            // serializer never got wrong.
+            expect(
+              await page.evaluate(
+                () =>
+                  document.querySelector('#first-surface #editor ul')?.parentElement?.tagName ??
+                  null
+              )
+            ).toBe('P')
+            // What the host would save.
+            expect(await page.evaluate(() => globalThis.__orcaEditor.changes.at(-1))).toBe(
+              `- ${body}`
+            )
+
+            // And the trip closes: that markdown comes back in as a list rather than a paragraph.
+            // Through a different document first, because the prop already holds this string and
+            // re-setting the same one is a no-op.
+            await setContent(page, 'plain again', '<p>plain again</p>')
+            await setContent(page, `- ${body}`, `<ul><li><p>${body}</p></li></ul>`)
 
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])

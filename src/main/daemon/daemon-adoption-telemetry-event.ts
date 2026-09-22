@@ -1,7 +1,7 @@
 // App-side emitters for `daemon_adopted` and `daemon_pty_cwd_denied` (#17696). Both sit on the
 // daemon launch / PTY spawn path, so every failure dies here — telemetry can never cost a terminal.
 
-import { accessSync, constants as fsConstants, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
@@ -14,8 +14,14 @@ import { bucketDaemonLiveSessionCount } from '../../shared/daemon-lifecycle-tele
 import type { EventProps } from '../../shared/telemetry-events'
 import { track } from '../telemetry/client'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
+import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import type { MacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import {
+  clearDaemonFolderAccessMismatch,
+  recordDaemonFolderAccessMismatch
+} from './daemon-folder-access-mismatch'
 
 export type DaemonAdoptionOrigin = Pick<
   EventProps<'daemon_pty_cwd_denied'>,
@@ -56,19 +62,27 @@ export function trackDaemonAdopted(
 }
 
 /**
- * Emits only on proven divergence: the daemon reported the cwd unreadable AND this process can
- * read it. A cwd neither can read (chmod, ENOENT, unmounted volume) is not the #17696 shape.
+ * Proven divergence: the daemon reported the cwd unreadable AND this process can enumerate it.
+ * A cwd neither can read (chmod, ENOENT, unmounted volume) is not the #17696 shape. Single oracle
+ * for both the event below and the user-facing notice, so the app-side read happens once.
  */
-export function trackDaemonPtyCwdDeniedIfDiverged(
+export async function hasDaemonPtyCwdDenialDiverged(
   cwd: string | undefined,
-  cwdReadableByDaemon: boolean | undefined,
-  pidPath: string | null
-): void {
+  cwdReadableByDaemon: boolean | undefined
+): Promise<boolean> {
   try {
     if (process.platform !== 'darwin' || !cwd || cwdReadableByDaemon !== false) {
-      return
+      return false
     }
-    accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
+    return (await enumerateDirectoryOnce(cwd)) === 'ok'
+  } catch {
+    return false
+  }
+}
+
+/** Emits `daemon_pty_cwd_denied` for a cwd `hasDaemonPtyCwdDenialDiverged` already proved diverged. */
+export function trackDaemonPtyCwdDenied(cwd: string, pidPath: string | null): void {
+  try {
     // Why read now, not the adapter's startup snapshot: a respawn swaps the daemon under a
     // long-lived adapter, and the denial must be attributed to the daemon that just spawned.
     track('daemon_pty_cwd_denied', {
@@ -76,6 +90,39 @@ export function trackDaemonPtyCwdDeniedIfDiverged(
       ...classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath))
     })
   } catch {
-    // Either the app cannot read it (no divergence) or telemetry failed; neither may reach the caller.
+    // Telemetry is best-effort; a dropped event must not reach the caller.
+  }
+}
+
+/**
+ * The spawn path's single reader of the daemon's cwd verdict: one directory read feeds both the
+ * event and the user-facing notice. Local current-protocol daemons only — one that omits the
+ * verdict reports nothing. Every failure dies here; neither may ever cost a terminal.
+ *
+ * Never rejects, and the caller must not wait for it: the app-side read is what raises the macOS
+ * folder prompt, which holds the syscall for as long as the user leaves the sheet up.
+ */
+export async function reportDaemonPtyCwdVerdict(args: {
+  cwd: string | undefined
+  cwdReadableByDaemon: boolean | undefined
+  pidPath: string | null
+  daemonIdentity: DaemonEndpointIdentity | null
+}): Promise<void> {
+  try {
+    const { cwd } = args
+    if (!cwd) {
+      return
+    }
+    if (args.cwdReadableByDaemon === true) {
+      clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
+      return
+    }
+    if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
+      return
+    }
+    trackDaemonPtyCwdDenied(cwd, args.pidPath)
+    recordDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
+  } catch {
+    // Best-effort evidence; a spawn must not fail because the notice could not be recorded.
   }
 }

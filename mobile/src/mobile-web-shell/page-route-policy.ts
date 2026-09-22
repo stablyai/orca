@@ -1,4 +1,5 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
@@ -25,6 +26,10 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   // than the notify's dotted name, because a notify is not a verb: the dotted names below are the
   // verb table's, spread from it.
   BRIDGE_HAPTICS_GRANT,
+  // A gesture-started navigation off the shell's own document, cancelled and opened outside the
+  // app. Named where the rule that acts on it lives, and a third token that is neither verb nor
+  // notify: the page posts nothing for it, so only this list can tell a page a tap escapes.
+  BRIDGE_EXTERNAL_NAVIGATION_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES
@@ -71,6 +76,23 @@ function implementedPageRouteEntries(
   return (routes ?? []).filter((route) => route.grants.every(implementsGrant))
 }
 
+/**
+ * One route's effective grants: what it declared on either lane, narrowed to what this shell does.
+ *
+ * The one place a session's list is computed, because it is read twice -- once for the route the
+ * shell opened and once for every pattern the page is told it may keep -- and two spellings of
+ * "what this route gets" is how the page's handoff rule and the host's enforcement drift apart.
+ *
+ * `optionalGrants` is what the screen is better with and complete without, so it joins the list a
+ * session is granted without joining the list that decides whether the route is served at all. A
+ * name in it this shell does not implement simply is not granted: the page reads its own
+ * `init.grants.native`, finds the name absent, and hides the affordance -- the same answer it gets
+ * from a shell too old to have heard of the name, which is the answer ruling 37 rests on.
+ */
+function effectiveRouteGrants(route: MobileWebPageRoute): string[] {
+  return [...route.grants, ...(route.optionalGrants ?? [])].filter(implementsGrant)
+}
+
 /** The patterns alone, for the readers in this module that only name routes. */
 function implementedPageRoutes(routes: readonly MobileWebPageRoute[] | undefined): string[] {
   return implementedPageRouteEntries(routes).map((route) => route.pathname)
@@ -107,7 +129,7 @@ export function grantsForRoute(
   pathname: string
 ): string[] {
   const declared = (routes ?? []).find((route) => matchesRoutePattern(pathname, route.pathname))
-  return declared === undefined ? [] : declared.grants.filter(implementsGrant)
+  return declared === undefined ? [] : effectiveRouteGrants(declared)
 }
 
 /**
@@ -116,12 +138,26 @@ export function grantsForRoute(
  * Derived together because they are one reading of one list: the patterns the page may keep, what
  * each of them declared, and what this route itself was granted. Three sites used to spell this
  * out; a fourth spelling is how they drift.
+ *
+ * `pageRouteGrants` is built rather than passed through, and that is load-bearing. The phone reads
+ * a manifest route loosely, so an entry arrives carrying whatever the desktop that wrote it knew
+ * about; `BridgePageRouteGrantsSchema` is `.strict()`, so one unread key refuses the pairs, and
+ * `bridge-host.ts` refuses the whole session with them. A desktop field this build has never heard
+ * of must cost the page nothing, which means only the two members that cross may be handed over.
+ *
+ * Each pair carries the target's effective list, the same one `routeGrants` answers with, because
+ * the page compares the two: `route-handoff.web.ts` keeps a hop local when the target's pair is
+ * covered by what this session holds. A pair naming the required lane alone would keep a hop whose
+ * target then runs without the capability it asked for, which is the drift that rule exists against.
  */
 export function routeViewOf(routes: readonly MobileWebPageRoute[] | undefined, pathname: string) {
   const entries = implementedPageRouteEntries(routes)
   return {
     pageRoutes: entries.map((route) => route.pathname),
-    pageRouteGrants: entries,
+    pageRouteGrants: entries.map((route) => ({
+      pathname: route.pathname,
+      grants: effectiveRouteGrants(route)
+    })),
     routeGrants: grantsForRoute(routes, pathname)
   }
 }

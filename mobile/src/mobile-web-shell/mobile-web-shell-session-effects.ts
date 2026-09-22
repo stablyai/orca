@@ -74,7 +74,8 @@ export async function readManifest(
         minCompatibleRuntimeProtocolVersion: manifest.minCompatibleRuntimeProtocolVersion,
         totalBytes: manifest.totalBytes,
         totalAssets: manifest.assets.length,
-        routes: manifest.routes
+        routes: manifest.routes,
+        wire: manifest
       }
     })
   } catch (error) {

@@ -1,11 +1,10 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
+import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
-
-const BUILD_ID = 'a'.repeat(64)
 
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -38,7 +37,6 @@ function paramField(params: unknown, key: string): unknown {
 /** A host that serves a fixed asset table by the same rules the real one does. */
 function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
   const chunkBytes = options.chunkBytes ?? 4
-  const buildId = options.buildId ?? BUILD_ID
   const bytes = new Map(Object.entries(files).map(([path, text]) => [path, bytesOf(text)]))
   const assets = [...bytes.entries()]
     .map(([path, content]) => ({
@@ -48,6 +46,9 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
       contentType: 'text/plain'
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
+  // The id the reader now insists on: the digest of exactly this list. A test that wants a host
+  // publishing some other id still names one, which is how the mismatch cases below read.
+  const buildId = options.buildId ?? computeMobileWebBundleId(assets)
   const manifest = {
     schemaVersion: 1,
     buildId,
@@ -140,7 +141,7 @@ describe('fetchMobileWebBundle', () => {
     expect(new TextDecoder().decode(fetched.assets.get('index.html'))).toBe('<h1>orca</h1>')
     expect(new TextDecoder().decode(fetched.assets.get('assets/app.js'))).toBe('x=1')
     expect(fetched.totalBytes).toBe(16)
-    expect(fetched.manifest.buildId).toBe(BUILD_ID)
+    expect(fetched.manifest.buildId).toBe(host.manifest.buildId)
     expect(fetched.elapsedMs).toBeGreaterThanOrEqual(0)
     expect(progress).toHaveLength(2)
     expect(progress.at(-1)).toBe(16)
@@ -160,10 +161,10 @@ describe('fetchMobileWebBundle', () => {
         .filter((call) => call.method === 'mobileWeb.bundle.chunk')
         .map((call) => call.params)
     ).toEqual([
-      { buildId: BUILD_ID, path: 'index.html', offset: 0 },
-      { buildId: BUILD_ID, path: 'index.html', offset: 3 },
-      { buildId: BUILD_ID, path: 'index.html', offset: 6 },
-      { buildId: BUILD_ID, path: 'index.html', offset: 9 }
+      { buildId: host.manifest.buildId, path: 'index.html', offset: 0 },
+      { buildId: host.manifest.buildId, path: 'index.html', offset: 3 },
+      { buildId: host.manifest.buildId, path: 'index.html', offset: 6 },
+      { buildId: host.manifest.buildId, path: 'index.html', offset: 9 }
     ])
   })
 
@@ -175,7 +176,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'offset') === 3
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 3,
                 assetByteLength: 6,
@@ -224,7 +225,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'other.html',
                 offset: 0,
                 assetByteLength: 3,
@@ -251,7 +252,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk' && paramField(call.params, 'offset') === 3
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 0,
                 assetByteLength: 6,
@@ -320,7 +321,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 0,
                 assetByteLength: 6,
@@ -344,7 +345,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 0,
                 assetByteLength: 4,
@@ -369,7 +370,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 0,
                 assetByteLength: 6,
@@ -394,7 +395,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: 0,
                 assetByteLength: 6,
@@ -460,7 +461,7 @@ describe('fetchMobileWebBundle', () => {
         intercept: (call) =>
           call.method === 'mobileWeb.bundle.chunk'
             ? {
-                buildId: BUILD_ID,
+                buildId: host.manifest.buildId,
                 path: 'index.html',
                 offset: paramField(call.params, 'offset'),
                 assetByteLength: 6,

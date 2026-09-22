@@ -1,10 +1,10 @@
 /**
  * The eight grants this file pins, in six rows covering them (ruling 33.3).
  *
- * `haptics`, `screencastBinary` and the three audio grants already have call-site censuses of their
- * own; these eight did not, so removing any of them from a manifest entry reddened nothing. Each
- * row below gets its own named case, and each case's control is the same rule driven over the entry
- * that route would have had with the grant struck out.
+ * `haptics`, `screencastBinary`, `externalNavigation` and the three audio grants already have
+ * censuses of their own; these eight did not, so removing any of them from a manifest entry
+ * reddened nothing. Each row below gets its own named case, and each case's control is the same
+ * rule driven over the entry that route would have had with the grant struck out.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -51,7 +51,13 @@ const sessionGrants = MOBILE_WEB_PAGE_ROUTES.filter((route) => route.pathname ==
 )
 const pinnedHere = PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
 const pinnedHereForSession = pinnedHere.filter((grant) => sessionGrants.includes(grant))
+const sessionOptionalGrants = MOBILE_WEB_PAGE_ROUTES.filter(
+  (route) => route.pathname === SESSION
+).flatMap((route) => route.optionalGrants ?? [])
 const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(grant))
+const censusedElsewhere = [...sessionGrants, ...sessionOptionalGrants].filter(
+  (grant) => !pinnedHere.includes(grant)
+)
 
 /**
  * The split both this file and its census state in prose, counted off the two tables instead.
@@ -82,7 +88,9 @@ const SPELLED_COUNTS = {
     { precedes: 'rows pin', counted: PAGE_GRANT_CALL_SITES.length },
     { precedes: 'of the session', counted: pinnedHereForSession.length },
     { precedes: 'have censuses of their own', counted: pinnedElsewhere.length },
-    { precedes: 'are not repeated here', counted: pinnedElsewhere.length }
+    // One more than the row above: C8.1's optional grant is censused elsewhere as well, and the
+    // sentence here counts what has a census rather than what the route requires.
+    { precedes: 'are not repeated here', counted: censusedElsewhere.length }
   ],
   'mobile-web-app-page-grant-call-sites.test.mjs': [
     // Both the header's "eight grants this file pins" and the title's "eight grants".
@@ -174,7 +182,12 @@ describe('the call-site reader', () => {
       'native.media.read',
       'native.media.release'
     ])
-    for (const owned of ['haptics', 'screencastBinary', 'native.audio.start']) {
+    for (const owned of [
+      'haptics',
+      'screencastBinary',
+      'externalNavigation',
+      'native.audio.start'
+    ]) {
       expect(grants).not.toContain(owned)
     }
   })

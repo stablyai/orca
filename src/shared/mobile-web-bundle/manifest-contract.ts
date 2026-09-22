@@ -119,13 +119,48 @@ export function computeMobileWebBundleId(assets: readonly MobileWebBundleAsset[]
  * behalf; a shell that does not implement one of them renders the native screen instead, which is
  * the capability negotiation that keeps an old app against a new bundle on a working screen rather
  * than a dead tap.
+ *
+ * `optionalGrants` names what the screen is better with and complete without (ruling 37). Serving
+ * the route reads `grants` alone, so the all-or-nothing rule above is untouched and an author who
+ * cannot show a screen at all without a capability still keeps it native; only the session's
+ * granted list reads both. Which side a capability goes on is the desktop's call, because the
+ * desktop is what knows which screens it has proved.
+ *
+ * Optional rather than defaulted to `[]`: a desktop older than the field writes no key, and a shell
+ * whose policy predates the field never reads one, so it serves the route on its required set.
+ *
+ * What it does NOT get is a reader that strips the key. `pageRouteSchema` on the phone is
+ * `z.looseObject`, which passes unknown keys through rather than dropping them (measured on zod
+ * 4.4.3), so the entry an older shell holds still carries this field. That is why the publish path
+ * must build the pairs it hands the bridge instead of forwarding a manifest entry: the pair schema
+ * is `.strict()`, and an entry reaching it refuses the whole session rather than one field. See
+ * `page-route-policy.ts`'s `routeViewOf`.
  */
 export const MobileWebBundleRouteSchema = z
   .object({
     pathname: z.string().min(1).max(MAX_ROUTE_PATHNAME_LENGTH).regex(ROUTE_PATHNAME_PATTERN),
-    grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+    grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS),
+    optionalGrants: z
+      .array(MobileWebBundleGrantNameSchema)
+      .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+      .optional()
   })
   .strict()
+  // The ceiling is over the union, because the union is what a session's granted list is built
+  // from: two lists each under the cap would hand a page twice what the cap bounds. The per-array
+  // ceilings above stay, so the arrays are bounded before this runs.
+  .superRefine((route, context) => {
+    if (
+      route.grants.length + (route.optionalGrants?.length ?? 0) >
+      MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['optionalGrants'],
+        message: 'grants and optionalGrants together must not exceed the route grant ceiling'
+      })
+    }
+  })
 
 export type MobileWebBundleRoute = z.infer<typeof MobileWebBundleRouteSchema>
 

@@ -477,7 +477,18 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
       )
     }
   }
-  return declared.map((route) => ({ pathname: route.pathname, grants: [...route.grants] }))
+  // Mapped member by member rather than spread: the manifest is `.strict()`, so a field this
+  // declaration grows and this map does not name is dropped in silence -- which is how
+  // `optionalGrants` would have reached a phone as a route that declared nothing optional.
+  // `optionalGrants` is omitted when the route declares none, because absent and empty are the same
+  // answer to a shell and a key written empty would be a manifest field with no reader.
+  return declared.map((route) => ({
+    pathname: route.pathname,
+    grants: [...route.grants],
+    ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
+      ? {}
+      : { optionalGrants: [...route.optionalGrants] })
+  }))
 }
 
 /**

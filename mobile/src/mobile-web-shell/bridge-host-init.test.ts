@@ -8,6 +8,7 @@ import {
 } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
   it('answers ready with the getters, the caps it enforces, and the grants it honours', () => {
@@ -47,6 +48,7 @@ describe('init and state', () => {
           'externalLink',
           'screencastBinary',
           'haptics',
+          'externalNavigation',
           'native.clipboard.write',
           'native.clipboard.read',
           'native.media.pick',
@@ -84,6 +86,71 @@ describe('init and state', () => {
     // Every pattern the page is told it may keep has an entry saying what keeping it costs.
     expect((init.pageRouteGrants ?? []).map((entry) => entry.pathname)).toEqual([...PAGE_ROUTES])
     expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
+  })
+
+  /**
+   * The publish path end to end, because each half of it looks correct alone.
+   *
+   * The phone reads a manifest route loosely and this schema is `.strict()`, so an entry carrying a
+   * field a newer desktop wrote refuses the pairs -- and the refusal is not the field being dropped,
+   * it is `createBridgeHost` refusing the route and the page never getting an `init` at all. Driven
+   * through `routeViewOf` rather than by handing the harness a pair, because the publish is the
+   * thing under test and a hand-built pair proves nothing about it.
+   */
+  it('answers init for a route entry carrying a manifest field this build does not read', () => {
+    // A field no build here reads, which is the shape every later desktop field has.
+    const declared = [
+      {
+        pathname: '/h/[hostId]',
+        grants: ['navigate', 'storage', 'haptics'],
+        renderer: 'someLaterDesktopsField'
+      }
+    ]
+    const bridge = harness({
+      pageRouteGrants: routeViewOf(declared, ROUTE.pathname).pageRouteGrants
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.routeRefusals).toEqual([])
+    const init = bridge.last()
+    if (init.type !== 'init') {
+      throw new Error('expected an init frame')
+    }
+    // The pairs still cross, so the page keeps the handoff rule it was built with rather than
+    // falling back to "nobody told me" and handing every hop to the shell.
+    expect(init.pageRouteGrants).toEqual([
+      { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }
+    ])
+  })
+
+  /**
+   * One object for the measure and the measured, read off one `init`.
+   *
+   * `grants.native` is what this session may do and each pair is what the page compares a hop
+   * against (`route-handoff.web.ts`). Both come from `routeViewOf`, so the pair for the pattern the
+   * session was opened on must be the same list `grants.native` carries minus the protocol's own
+   * grant. Two computations here is how a hop is kept local whose target then runs without the
+   * capability it asked for.
+   */
+  it("grants a session exactly what it publishes as that pattern's pair", () => {
+    const declared = [
+      {
+        pathname: '/h/[hostId]',
+        grants: ['navigate', 'storage', 'haptics'],
+        optionalGrants: ['screencastBinary']
+      }
+    ]
+    const view = routeViewOf(declared, ROUTE.pathname)
+    const bridge = harness({ routeGrants: view.routeGrants, pageRouteGrants: view.pageRouteGrants })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    if (init.type !== 'init') {
+      throw new Error('expected an init frame')
+    }
+    expect(init.grants.native).toEqual([BRIDGE_FAULT_GRANT, ...view.routeGrants])
+    const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
+    expect(pair?.grants).toEqual(view.routeGrants)
+    // The optional name is in both, so the case is the lane and not two equal required lists.
+    expect(init.grants.native).toContain('screencastBinary')
   })
 
   it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {

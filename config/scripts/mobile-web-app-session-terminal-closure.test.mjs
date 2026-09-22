@@ -301,8 +301,31 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4359 -> 4360   (+1)
  *   local modules  1017 -> 1018   (+1)
+ *
+ * C8.1 then gave the HTML preview a capability to ask about, and three local modules join. Both
+ * sides measured with `mobileWebAppRouteClosure(SESSION_ROUTE)` at base `841d06a969` with all five
+ * postinstall generators run first, and the two `local` lists diffed rather than the total inferred:
+ *
+ *   modules        4359 -> 4362   (+3)
+ *   local modules  1017 -> 1020   (+3)
+ *
+ * Named, and all three local: `src/components/use-html-preview-link-grant.web.ts`, the page's read
+ * of `init.grants.native`; `src/components/html-preview-inert-links.ts`, the pass that turns the
+ * artifact's links back into text without it; and
+ * `src/mobile-web-shell/cancelled-navigation-target.ts`, which declares the grant token beside the
+ * rule that acts on it and is reached both by that hook and by `page-route-policy.ts`. The
+ * `bridge-caps.ts` it imports was already in this closure, and the hook's native sibling is
+ * replaced rather than joined. Nothing vendored: three source modules, no package.
+ *
+ * The merge of the two is measured rather than summed, which is what this reading keeps having to
+ * do. It agrees with the arithmetic this once, and only because the two additions are disjoint:
+ * main's one module is the option catalog and this branch's three are the preview's, so neither
+ * side counts the other's. Measured on the merged head with all five generators run first:
+ *
+ *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
+ *   local modules  1018 -> 1021   (+3)
  */
-const SESSION_ROUTE_MODULES = 4360
+const SESSION_ROUTE_MODULES = 4363
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

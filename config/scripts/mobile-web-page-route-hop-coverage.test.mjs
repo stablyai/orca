@@ -22,6 +22,19 @@ import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
  * made every declared route reachable and the filter inert.
  */
 
+/**
+ * One route's effective grants: both lanes, which is what a session is actually granted.
+ *
+ * `page-route-policy.ts` builds a session's list from `[...grants, ...optionalGrants]` and publishes
+ * that same list as the route's pair, and `route-handoff.web.ts` compares a target's pair against
+ * what the opener holds. So a census that read the required lane alone would judge a hop covered
+ * that the running rule hands off -- and the other way round once an optional grant is the only
+ * difference between two routes.
+ */
+function effectiveGrants(route) {
+  return [...route.grants, ...(route.optionalGrants ?? [])]
+}
+
 /** Whether a concrete pattern from the source names the same route as a manifest pattern. */
 function sameRoute(pushed, declared) {
   const a = pushed.split('/')
@@ -135,7 +148,8 @@ describe('in-page hops between page routes', () => {
         if (!reachable) {
           continue
         }
-        const covered = target.grants.every((grant) => opener.grants.includes(grant))
+        const held = effectiveGrants(opener)
+        const covered = effectiveGrants(target).every((grant) => held.includes(grant))
         if (!covered) {
           handedOff.push(`${opener.pathname} -> ${target.pathname}`)
         }
@@ -158,8 +172,12 @@ describe('in-page hops between page routes', () => {
     if (!explorer || !preview) {
       throw new Error('the manifest lost a route this census is written against')
     }
-    expect(preview.grants.length, 'the preview declares something to inherit').toBeGreaterThan(0)
-    expect(preview.grants.filter((grant) => !explorer.grants.includes(grant))).toEqual([])
+    const held = effectiveGrants(explorer)
+    expect(
+      effectiveGrants(preview).length,
+      'the preview declares something to inherit'
+    ).toBeGreaterThan(0)
+    expect(effectiveGrants(preview).filter((grant) => !held.includes(grant))).toEqual([])
   })
 
   it('keeps the file hops local from the two routes whose rows open them', () => {
@@ -171,7 +189,7 @@ describe('in-page hops between page routes', () => {
       if (!route) {
         throw new Error(`${pathname} is not registered`)
       }
-      return route.grants
+      return effectiveGrants(route)
     }
     const explorer = grantsOf('/h/[hostId]/files/[worktreeId]')
     const preview = grantsOf('/h/[hostId]/files/preview/[worktreeId]')
@@ -200,20 +218,26 @@ describe('in-page hops between page routes', () => {
     if (!session) {
       throw new Error('the manifest lost the session route this census is written against')
     }
+    const held = effectiveGrants(session)
     const uncovered = MOBILE_WEB_PAGE_ROUTES.filter(
       (target) => target.pathname !== session.pathname
     )
-      .filter((target) => target.grants.some((grant) => !session.grants.includes(grant)))
+      .filter((target) => effectiveGrants(target).some((grant) => !held.includes(grant)))
       .map((target) => target.pathname)
     expect(uncovered).toEqual([])
     // And the superset is strict, so the line above is not two equal lists.
-    expect(session.grants.length).toBeGreaterThan(
+    expect(held.length).toBeGreaterThan(
       Math.max(
-        ...MOBILE_WEB_PAGE_ROUTES.map((route) => route.grants.length).filter(
-          (length) => length !== session.grants.length
+        ...MOBILE_WEB_PAGE_ROUTES.map((route) => effectiveGrants(route).length).filter(
+          (length) => length !== held.length
         )
       )
     )
+    // The optional lane is inside that superset rather than beside it: the session route is the one
+    // route that declares `externalNavigation`, and it is an opener into every other, so the lane
+    // costs no handoff today. A route that grew an optional grant the session lacks would add a row
+    // to the list above, which is the change this census exists to surface before a device does.
+    expect(held).toContain('externalNavigation')
   })
 
   it('keeps the hub and review local to each other, in both directions', () => {
@@ -225,7 +249,7 @@ describe('in-page hops between page routes', () => {
       if (!route) {
         throw new Error(`${pathname} is not registered`)
       }
-      return [...route.grants].sort()
+      return [...effectiveGrants(route)].sort()
     }
     const hub = grantsOf('/h/[hostId]/source-control/[worktreeId]')
     expect(hub.length).toBeGreaterThan(0)
