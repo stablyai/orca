@@ -145,6 +145,12 @@ describe('serve update helper script', () => {
     const failFn = script.indexOf('fail() {')
     expect(script.slice(rejectFn, rejectFn + 200)).toContain('rm -f "$REQUEST"')
     expect(script.slice(failFn, failFn + 200)).toContain('rm -f "$REQUEST"')
+    // The success path is the fourth terminal verdict: consume before the ok verdict.
+    const successBlock = script.slice(script.lastIndexOf('rm -f "$BACKUP"'))
+    expect(successBlock).toContain('rm -f "$REQUEST"')
+    expect(successBlock.indexOf('rm -f "$REQUEST"')).toBeLessThan(
+      successBlock.indexOf('{phase: "ok"')
+    )
   })
 
   it('hashes the decoded sha512 digest bytes against the artifact, not the digest twice', () => {
