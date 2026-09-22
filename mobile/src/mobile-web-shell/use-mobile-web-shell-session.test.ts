@@ -155,7 +155,10 @@ function createFakeStore(): {
     persistActiveManifest: async (_hostKey, manifest) => {
       persisted.push(manifest)
       return 'persisted'
-    }
+    },
+    recordUpdateFailure: async () => undefined,
+    readUpdateFailures: async () => [],
+    forgetHostUpdateFailures: async () => undefined
   }
   return {
     store,

@@ -4,12 +4,17 @@ import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
-  MobileWebShellReadFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
+import {
+  readFailureSide,
+  type MobileWebShellUpdateFailureCause,
+  type MobileWebShellUpdateFailureFacts
+} from './mobile-web-shell-update-failure'
+import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
 import {
   awaitsGates,
   cachedGenerationWall,
@@ -39,6 +44,7 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     gates: null,
     cached: null,
     updateNotice: null,
+    requestedBuildId: null,
     flow: 0
   }
 }
@@ -57,7 +63,13 @@ function startFlow(
 ): MobileWebShellStep {
   // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
   // keeps a status refetch arriving mid-check from running the cache read and the download twice.
-  const base = { updateNotice: null, ...patch, gates, flow: session.flow + 1 }
+  const base = {
+    updateNotice: null,
+    requestedBuildId: null,
+    ...patch,
+    gates,
+    flow: session.flow + 1
+  }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
     return step(session, { ...base, state: gated }, before)
@@ -153,6 +165,7 @@ function onManifestRead(
       pageRoutes,
       pageRouteGrants,
       routeGrants,
+      requestedBuildId: manifest.buildId,
       state: {
         kind: 'fetching',
         completedAssets: 0,
@@ -208,6 +221,22 @@ function onShellFailed(
   ])
 }
 
+/** The decision below, plus one record of it: a release build logs nothing, so what the shell
+ *  refused and what it showed instead is written down for Troubleshoot. */
+function onDownloadFailed(
+  session: MobileWebShellSession,
+  cause: MobileWebShellUpdateFailureCause
+): MobileWebShellStep {
+  const decided = decideDownloadFailed(session, cause)
+  const failure: MobileWebShellUpdateFailureFacts = {
+    ...cause,
+    offeredBuildId: session.requestedBuildId,
+    cachedBuildId: session.cached?.buildId ?? null,
+    ...updateFailureOutcomeOf(decided.session.state)
+  }
+  return { ...decided, effects: [...decided.effects, { kind: 'record-update-failure', failure }] }
+}
+
 /**
  * The read did not produce a generation, and what follows is decided by what is already on disk.
  *
@@ -225,9 +254,9 @@ function onShellFailed(
  * Only the bundle-side refusal is named: a link that went says nothing about an update having been
  * there to fail, and the notice would be claiming a generation this phone never heard of.
  */
-function onDownloadFailed(
+function decideDownloadFailed(
   session: MobileWebShellSession,
-  failure: MobileWebShellReadFailure
+  cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
@@ -244,7 +273,7 @@ function onDownloadFailed(
     return step(session, { state: gated })
   }
   return openByOwnRoutes(session, cached, {
-    served: { updateNotice: failure === 'bundle' ? 'update-failed' : null },
+    served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
     wall: cachedGenerationWall(verdict, gates, cached.compat)
   })
 }
@@ -314,7 +343,7 @@ export function reduceMobileWebShellSession(
           })
         : step(session, {})
     case 'download-failed':
-      return onDownloadFailed(session, event.failure)
+      return onDownloadFailed(session, event.cause)
     case 'shell-failed':
       return onShellFailed(session, event.reason)
     case 'document-started':
@@ -346,6 +375,7 @@ export function reduceMobileWebShellSession(
             retriedOnce: false,
             remountedOnce: false,
             updateNotice: null,
+            requestedBuildId: null,
             state: CHECKING,
             flow: session.flow + 1
           })

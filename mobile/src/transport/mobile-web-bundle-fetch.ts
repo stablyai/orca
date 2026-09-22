@@ -8,6 +8,7 @@ import type {
   MobileWebBundleManifestRead
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
+import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { runRpcOperation } from './rpc-operation'
 
 /** The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
@@ -27,29 +28,6 @@ export type MobileWebBundleFetchResult = {
   readonly assets: ReadonlyMap<string, Uint8Array>
   readonly totalBytes: number
   readonly elapsedMs: number
-}
-
-/** What the fetch refused about the bytes that arrived. The message names asset paths and hashes;
- *  this is the part a caller may keep. */
-export type MobileWebBundleFetchRefusal =
-  | 'chunk-oversize'
-  | 'asset-overlong'
-  | 'asset-no-progress'
-  | 'asset-short'
-  | 'asset-checksum-mismatch'
-  | 'build-changed-mid-fetch'
-  | 'chunk-misrouted'
-  | 'asset-entry-changed'
-  | 'fetch-stopped'
-
-export class MobileWebBundleFetchError extends Error {
-  constructor(
-    readonly refusal: MobileWebBundleFetchRefusal,
-    message: string
-  ) {
-    super(message)
-    this.name = 'MobileWebBundleFetchError'
-  }
 }
 
 /**

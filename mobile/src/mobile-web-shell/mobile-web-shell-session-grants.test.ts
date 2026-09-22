@@ -10,7 +10,8 @@ import {
   PAGE_ROUTES,
   afterCacheRead,
   manifestFacts,
-  run
+  run,
+  LINK_LOST
 } from './mobile-web-shell-session-test-fixtures'
 
 /**
@@ -35,7 +36,7 @@ describe('falling back to the cached generation after a failed download', () => 
     const step = run(
       afterCacheRead(cachedOnlyNavigate).session,
       { type: 'manifest-read', manifest: manifestWithClipboard },
-      { type: 'download-failed', failure: 'transport' }
+      { type: 'download-failed', cause: LINK_LOST }
     )
     expect(step.session.state.kind).toBe('activating')
     expect([...step.session.routeGrants]).toEqual(['navigate'])
