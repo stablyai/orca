@@ -389,8 +389,18 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4209 -> 4211   (+2)
  *   local modules  1023 -> 1025   (+2)
+ *
+ * One joiner from outside `mobile/`: #22299 (9ece273056) added
+ * `src/shared/agent-session-journal-producer.ts`, and three shared modules this route already
+ * carries import it (`structured-agent-session-live-turn.ts`, `structured-agent-session-projection.ts`,
+ * `native-chat-turn-activity.ts`). That PR changed no file under `mobile/`, so the mobile job never
+ * ran and main landed one over this pin. Re-pinned here, on the head that merged it, by measuring
+ * the closure on 9ece273056 against the previous head and diffing the two lists.
+ *
+ *   modules        4211 -> 4212   (+1)
+ *   local modules  1025 -> 1026   (+1)
  */
-const SESSION_ROUTE_MODULES = 4211
+const SESSION_ROUTE_MODULES = 4212
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
