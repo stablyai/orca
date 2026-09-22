@@ -2,7 +2,6 @@ import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
-  MobileWebShellBlockedVerdict,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellReadFailure,
@@ -20,12 +19,10 @@ import {
   gateVerdict,
   NATIVE_ROUTE
 } from './mobile-web-shell-gates'
-import { matchesRoutePattern, routeViewOf } from './page-route-policy'
+import { routeViewOf } from './page-route-policy'
 import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
-
-function rendersRoute(pageRoutes: readonly string[], pathname: string): boolean {
-  return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
-}
+import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
+import { step } from './mobile-web-shell-session-step'
 
 export function createMobileWebShellSession(routePathname: string): MobileWebShellSession {
   return {
@@ -44,14 +41,6 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     updateNotice: null,
     flow: 0
   }
-}
-
-function step(
-  session: MobileWebShellSession,
-  patch: Partial<MobileWebShellSession>,
-  effects: readonly MobileWebShellSessionEffect[] = []
-): MobileWebShellStep {
-  return { session: { ...session, ...patch }, effects }
 }
 
 /**
@@ -80,54 +69,6 @@ function startFlow(
 
 /** Puts a generation that is already on disk on screen. The only producer of `open-generation`.
  *  `andThen` is the disk work that opening one may owe, which runs after the view has its bytes. */
-function openCached(
-  session: MobileWebShellSession,
-  generation: CachedGeneration,
-  patch: Partial<MobileWebShellSession> = {},
-  andThen: readonly MobileWebShellSessionEffect[] = []
-): MobileWebShellStep {
-  return step(session, { ...patch, state: { kind: 'activating' } }, [
-    {
-      kind: 'open-generation',
-      directory: generation.directory,
-      buildId: generation.buildId,
-      totalBytes: generation.totalBytes
-    },
-    ...andThen
-  ])
-}
-
-/**
- * Opens a generation already on disk under its own route list, or leaves the route native when that
- * list does not carry it. The only judge available when the newer manifest is absent or refused:
- * opening under a bundle this shell is not running would grant the page what other bytes declared.
- *
- * The route question comes first and `wall` is asked only on the served branch, the order
- * `onManifestRead` takes: a route this bundle never claimed is not a screen to refuse, and a
- * generation cached before routes were listed claims none at all. `patch` belongs to either answer;
- * `served` is what only an opened page gets, so the native one carries no notice about an update
- * for a screen it is not showing.
- */
-function openByOwnRoutes(
-  session: MobileWebShellSession,
-  generation: CachedGeneration,
-  options: {
-    patch?: Partial<MobileWebShellSession>
-    served?: Partial<MobileWebShellSession>
-    wall?: MobileWebShellBlockedVerdict | null
-  } = {}
-): MobileWebShellStep {
-  const { patch = {}, served = {}, wall = null } = options
-  const view = routeViewOf(generation.routes, session.routePathname)
-  if (!rendersRoute(view.pageRoutes, session.routePathname)) {
-    return step(session, { ...patch, ...view, state: NATIVE_ROUTE })
-  }
-  if (wall !== null) {
-    return step(session, { ...patch, ...view, state: { kind: 'wall', verdict: wall } })
-  }
-  return openCached(session, generation, { ...patch, ...served, ...view })
-}
-
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
