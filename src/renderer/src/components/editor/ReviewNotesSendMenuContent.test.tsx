@@ -390,6 +390,10 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(items.every((item) => item.props.disabled === false)).toBe(true)
     expect(collectText(items[0])).toContain('Claude')
     expect(collectText(items[1])).toContain('Codex')
+
+    const firstItemTextRows = findAllByType(items[0], 'span').slice(-2)
+    expect(collectText(firstItemTextRows[0])).toBe('Terminal 1')
+    expect(collectText(firstItemTextRows[1])).toBe('Claude · Idle')
   })
 
   it('orders send targets by the current worktree agent rows and shows status timing', () => {
