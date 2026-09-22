@@ -12,6 +12,7 @@ import {
   searchRuntimeFilePaths
 } from '@/runtime/runtime-file-client'
 import { createRuntimeRpcAbortError } from '@/runtime/abortable-runtime-environment-call'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
@@ -175,7 +176,7 @@ export function useRuntimeFileListForWorktree({
     }))
   )
   const operationOwner = useMemo(
-    () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId),
+    () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId, isWebClientLocation()),
     [operationOwnerState, worktreeId]
   )
   const operationOwnerKey = JSON.stringify(operationOwner)
