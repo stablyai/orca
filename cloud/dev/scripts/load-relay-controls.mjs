@@ -29,7 +29,10 @@ import {
   relayLoadRunHasDisallowedFailures,
   runRelayLoadWithShutdown
 } from './relay-load-run-lifecycle.mjs'
-import { createRelayLoadReaderEvidence } from './relay-load-reader-evidence.mjs'
+import {
+  createRelayLoadReaderEvidence,
+  readRelayLoadRuntimeQueuedBytes
+} from './relay-load-reader-evidence.mjs'
 import {
   parseRelayLoadArguments,
   relayLoadPrincipalIndex,
@@ -252,25 +255,6 @@ const state = {
 }
 const peers = new Map()
 const reconnectTimers = new Set()
-
-async function readRuntimeQueuedBytes(origin) {
-  const response = await fetch(`${origin}/v1/admin/runtime-status`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ v: 1 }),
-    signal: AbortSignal.timeout(5_000)
-  })
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('reader evidence identity was rejected')
-  }
-  if (!response.ok) throw new Error(`reader runtime status returned ${response.status}`)
-  const status = await response.json()
-  const queuedBytes = status?.runtime?.queuedBytes
-  if (!Number.isSafeInteger(queuedBytes) || queuedBytes < 0) {
-    throw new Error('reader runtime queued bytes are invalid')
-  }
-  return queuedBytes
-}
 
 async function observeReaderPressure(input) {
   if (!state.readerEvidence) throw new Error('reader evidence baseline is unavailable')
@@ -495,7 +479,7 @@ await runRelayLoadWithShutdown(async () => {
       : [peers.get(index).lastAssignment.cellUrl]
   )
   state.readerEvidence = await createRelayLoadReaderEvidence(readerOrigins, {
-    readQueuedBytes: readRuntimeQueuedBytes,
+    readQueuedBytes: (origin) => readRelayLoadRuntimeQueuedBytes(origin, adminToken),
     delay
   })
   if (config.phaseBarrierDir) {
