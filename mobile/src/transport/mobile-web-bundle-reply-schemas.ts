@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
+  computeMobileWebBundleId,
   MobileWebBundleAssetPathSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
@@ -64,17 +65,38 @@ export const MobileWebBundleManifestReadSchema = z
     assets: z.array(assetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
     routes: z.array(pageRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES).optional()
   })
-  // The allocation bound, and the reason it is the sum rather than `totalBytes`: the fetch
-  // allocates one buffer per asset from `byteLength` and holds them all, so a manifest declaring
-  // `totalBytes` 0 alongside 256 assets of 10 MiB each would pass every ceiling above and still
-  // cost 2560 MiB. The host pins sum === totalBytes; this client never trusts `totalBytes` for
-  // anything, so it bounds what it will actually allocate instead.
-  .refine(
-    (manifest) =>
-      manifest.assets.reduce((sum, asset) => sum + asset.byteLength, 0) <=
-      MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
-    'assets sum to more than the contract total'
-  )
+  // Cheapest first, and the first issue returns: the build id below is the only check here that
+  // hashes, and a manifest already over the allocation ceiling must not be hashed to be refused.
+  .superRefine((manifest, context) => {
+    // The allocation bound, and the reason it is the sum rather than `totalBytes`: the fetch
+    // allocates one buffer per asset from `byteLength` and holds them all, so a manifest declaring
+    // `totalBytes` 0 alongside 256 assets of 10 MiB each would pass every ceiling above and still
+    // cost 2560 MiB. The host pins sum === totalBytes; this client never trusts `totalBytes` for
+    // anything, so it bounds what it will actually allocate instead.
+    if (
+      manifest.assets.reduce((sum, asset) => sum + asset.byteLength, 0) >
+      MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets'],
+        message: 'assets sum to more than the contract total'
+      })
+      return
+    }
+    // The same rule the host writes the manifest under, read back here rather than trusted. The id
+    // is a cache key and a claim about content at once: the shell treats an id it already holds as
+    // the same bytes and opens the generation on disk without paging a byte, so a stale or forged
+    // id would put a bundle on screen under another one's manifest. `computeMobileWebBundleId` is
+    // pure JS for exactly this reader — Metro ships no `node:crypto`.
+    if (manifest.buildId !== computeMobileWebBundleId(manifest.assets)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['buildId'],
+        message: 'buildId must be the content hash of the asset list'
+      })
+    }
+  })
 
 /** `chunkBytes` is read, never assumed: the host may shrink it without a client release. Capped at
  *  the constant because a larger value would overshoot `dataBase64` above. */
