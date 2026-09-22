@@ -84,8 +84,8 @@ const OWNER_OPTIONS = [
 ]
 
 const SCOPES = [
-  { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
-  { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+  { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' },
+  { id: 'contoso-labs/platform', name: 'contoso-labs / Platform' }
 ]
 
 /** A source whose facets are all `dynamic`, so every option list is fetched for
@@ -174,22 +174,22 @@ describe('TaskPage contributed source content', () => {
   it('offers the scopes the source declares and reloads items in the picked one', async () => {
     const user = userEvent.setup()
     const invoke = stubSource({ items: [ITEM] }, STATUS, [
-      { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
-      { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+      { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' },
+      { id: 'contoso-labs/platform', name: 'contoso-labs / Platform' }
     ])
     selectBoards()
 
     renderContent()
 
     await user.click(await screen.findByRole('combobox', { name: 'Projects' }))
-    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await user.click(screen.getByRole('option', { name: 'FabrikamOps / Dashboards' }))
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith({
         ...BOARDS,
         method: 'listItems',
         params: {
-          scopeIds: ['NssfDevOps/dashboards'],
+          scopeIds: ['FabrikamOps/dashboards'],
           search: null,
           cursor: null,
           limit: 50
@@ -211,19 +211,19 @@ describe('TaskPage contributed source content', () => {
   it('refreshes items and scopes with the current selection when the refresh button is clicked', async () => {
     const user = userEvent.setup()
     const invoke = stubSource({ items: [ITEM] }, STATUS, [
-      { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' }
+      { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' }
     ])
     selectBoards()
 
     renderContent()
 
     await user.click(await screen.findByRole('combobox', { name: 'Projects' }))
-    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await user.click(screen.getByRole('option', { name: 'FabrikamOps / Dashboards' }))
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'listItems',
-          params: expect.objectContaining({ scopeIds: ['NssfDevOps/dashboards'] })
+          params: expect.objectContaining({ scopeIds: ['FabrikamOps/dashboards'] })
         })
       )
     })
@@ -236,7 +236,7 @@ describe('TaskPage contributed source content', () => {
         ...BOARDS,
         method: 'listItems',
         params: {
-          scopeIds: ['NssfDevOps/dashboards'],
+          scopeIds: ['FabrikamOps/dashboards'],
           search: null,
           cursor: null,
           limit: 50
@@ -306,14 +306,14 @@ describe('TaskPage contributed source content', () => {
     invoke.mockClear()
 
     await user.click(screen.getByRole('combobox', { name: 'Projects' }))
-    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await user.click(screen.getByRole('option', { name: 'FabrikamOps / Dashboards' }))
 
     await waitFor(
       () => {
         expect(invoke).toHaveBeenCalledWith({
           ...BOARDS,
           method: 'listFacetOptions',
-          params: { facetId: 'state', scopeIds: ['NssfDevOps/dashboards'] }
+          params: { facetId: 'state', scopeIds: ['FabrikamOps/dashboards'] }
         })
       },
       { timeout: 5000 }

@@ -111,7 +111,7 @@ describe('workspace source policy', () => {
     const contributed = buildPluginWorkspaceSource({
       key: 'AB-41',
       title: 'Ship the detail panel',
-      url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
       pluginKey: 'nssf.azure-boards',
       sourceId: 'boards'
     })
@@ -120,7 +120,7 @@ describe('workspace source policy', () => {
       type: 'issue',
       number: 0,
       title: 'AB-41 Ship the detail panel',
-      url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
       pluginKey: 'nssf.azure-boards',
       sourceId: 'boards'
     })
@@ -129,7 +129,7 @@ describe('workspace source policy', () => {
     expect(buildWorkspaceSourceSelection({ linkedWorkItem: contributed })).toEqual({
       kind: 'plugin',
       label: 'AB-41 Ship the detail panel',
-      url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
       pluginKey: 'nssf.azure-boards',
       sourceId: 'boards'
     })

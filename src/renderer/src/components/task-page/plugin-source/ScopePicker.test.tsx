@@ -14,9 +14,9 @@ import { TaskPagePluginSourceScopePicker } from './ScopePicker'
 afterEach(cleanup)
 
 const SCOPES: PluginTaskScope[] = [
-  { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
-  { id: 'NssfDevOps/redesign', name: 'NssfDevOps / NssfGo-Redesign' },
-  { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+  { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' },
+  { id: 'FabrikamOps/redesign', name: 'FabrikamOps / Portal-Redesign' },
+  { id: 'contoso-labs/platform', name: 'contoso-labs / Platform' }
 ]
 
 function renderPicker(
@@ -66,15 +66,15 @@ describe('TaskPage contributed source scope picker', () => {
   })
 
   it('names the one selected scope on the trigger', () => {
-    renderPicker({ selectedScopeIds: ['NssfDevOps/dashboards'] })
+    renderPicker({ selectedScopeIds: ['FabrikamOps/dashboards'] })
 
     expect(screen.getByRole('combobox', { name: 'Projects' })).toHaveTextContent(
-      'NssfDevOps / Dashboards'
+      'FabrikamOps / Dashboards'
     )
   })
 
   it('counts the selection on the trigger once it spans several scopes', () => {
-    renderPicker({ selectedScopeIds: ['NssfDevOps/dashboards', 'nssf-dolphin/platform'] })
+    renderPicker({ selectedScopeIds: ['FabrikamOps/dashboards', 'contoso-labs/platform'] })
 
     expect(screen.getByRole('combobox', { name: 'Projects' })).toHaveTextContent('2 projects')
   })
@@ -83,35 +83,35 @@ describe('TaskPage contributed source scope picker', () => {
     const { onScopeIdsChange } = renderPicker()
     const user = await openPicker()
 
-    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await user.click(screen.getByRole('option', { name: 'FabrikamOps / Dashboards' }))
 
-    expect(onScopeIdsChange).toHaveBeenCalledWith(['NssfDevOps/dashboards'])
+    expect(onScopeIdsChange).toHaveBeenCalledWith(['FabrikamOps/dashboards'])
   })
 
   it('adds a second scope to the selection rather than replacing the first', async () => {
-    const { onScopeIdsChange } = renderPicker({ selectedScopeIds: ['NssfDevOps/dashboards'] })
+    const { onScopeIdsChange } = renderPicker({ selectedScopeIds: ['FabrikamOps/dashboards'] })
     const user = await openPicker()
 
-    await user.click(screen.getByRole('option', { name: 'nssf-dolphin / Platform' }))
+    await user.click(screen.getByRole('option', { name: 'contoso-labs / Platform' }))
 
     expect(onScopeIdsChange).toHaveBeenCalledWith([
-      'NssfDevOps/dashboards',
-      'nssf-dolphin/platform'
+      'FabrikamOps/dashboards',
+      'contoso-labs/platform'
     ])
   })
 
   it('reports an empty selection when the last picked scope is unpicked', async () => {
-    const { onScopeIdsChange } = renderPicker({ selectedScopeIds: ['NssfDevOps/dashboards'] })
+    const { onScopeIdsChange } = renderPicker({ selectedScopeIds: ['FabrikamOps/dashboards'] })
     const user = await openPicker()
 
-    await user.click(screen.getByRole('option', { name: 'NssfDevOps / Dashboards' }))
+    await user.click(screen.getByRole('option', { name: 'FabrikamOps / Dashboards' }))
 
     expect(onScopeIdsChange).toHaveBeenCalledWith([])
   })
 
   it('reports an empty selection when all projects is chosen', async () => {
     const { onScopeIdsChange } = renderPicker({
-      selectedScopeIds: ['NssfDevOps/dashboards', 'nssf-dolphin/platform']
+      selectedScopeIds: ['FabrikamOps/dashboards', 'contoso-labs/platform']
     })
     const user = await openPicker()
 
@@ -126,8 +126,8 @@ describe('TaskPage contributed source scope picker', () => {
 
     await user.type(screen.getByPlaceholderText('Search projects...'), 'dashb')
 
-    expect(screen.getByText('NssfDevOps / Dashboards')).toBeInTheDocument()
-    expect(screen.queryByText('nssf-dolphin / Platform')).not.toBeInTheDocument()
+    expect(screen.getByText('FabrikamOps / Dashboards')).toBeInTheDocument()
+    expect(screen.queryByText('contoso-labs / Platform')).not.toBeInTheDocument()
   })
 
   it('renders no picker at all for a source that has no scopes', () => {

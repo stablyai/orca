@@ -18,16 +18,16 @@ import { TaskPagePluginSourceCreateButton } from './CreateItemDialog'
 afterEach(cleanup)
 
 const SCOPES: PluginTaskScope[] = [
-  { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
-  { id: 'nssf-dolphin/platform', name: 'nssf-dolphin / Platform' }
+  { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' },
+  { id: 'contoso-labs/platform', name: 'contoso-labs / Platform' }
 ]
 
 const TYPES_BY_SCOPE: Record<string, PluginTaskItemType[]> = {
-  'NssfDevOps/dashboards': [
+  'FabrikamOps/dashboards': [
     { id: 'Bug', name: 'Bug' },
     { id: 'Task', name: 'Task' }
   ],
-  'nssf-dolphin/platform': [{ id: 'Epic', name: 'Epic' }]
+  'contoso-labs/platform': [{ id: 'Epic', name: 'Epic' }]
 }
 
 function createdItem(): PluginTaskItem {
@@ -39,7 +39,7 @@ function createdItem(): PluginTaskItem {
     assignee: null,
     url: null,
     updatedAt: null,
-    scopeId: 'NssfDevOps/dashboards'
+    scopeId: 'FabrikamOps/dashboards'
   }
 }
 
@@ -55,7 +55,7 @@ function renderButton(
     <TooltipProvider>
       <TaskPagePluginSourceCreateButton
         scopes={SCOPES}
-        selectedScopeIds={props.selectedScopeIds ?? ['NssfDevOps/dashboards']}
+        selectedScopeIds={props.selectedScopeIds ?? ['FabrikamOps/dashboards']}
         listItemTypes={
           props.listItemTypes ??
           (async (scopeId) => ({ ok: true, data: TYPES_BY_SCOPE[scopeId] ?? [] }))
@@ -83,12 +83,12 @@ async function pickOption(
 describe('TaskPage contributed source create dialog', () => {
   it('defaults the project to the one selected scope', async () => {
     const user = userEvent.setup()
-    renderButton({ selectedScopeIds: ['nssf-dolphin/platform'] })
+    renderButton({ selectedScopeIds: ['contoso-labs/platform'] })
 
     await openDialog(user)
 
     expect(await screen.findByRole('combobox', { name: 'Project' })).toHaveTextContent(
-      'nssf-dolphin / Platform'
+      'contoso-labs / Platform'
     )
     await waitFor(() => {
       expect(screen.getByRole('combobox', { name: 'Type' })).toBeEnabled()
@@ -127,7 +127,7 @@ describe('TaskPage contributed source create dialog', () => {
       releaseSecond = resolve
     })
     const listItemTypes = vi.fn(async (scopeId: string) => {
-      if (scopeId === 'nssf-dolphin/platform') {
+      if (scopeId === 'contoso-labs/platform') {
         await secondCall
       }
       return { ok: true as const, data: TYPES_BY_SCOPE[scopeId] ?? [] }
@@ -138,7 +138,7 @@ describe('TaskPage contributed source create dialog', () => {
     await pickOption(user, 'Type', 'Bug')
     expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('Bug')
 
-    await pickOption(user, 'Project', 'nssf-dolphin / Platform')
+    await pickOption(user, 'Project', 'contoso-labs / Platform')
 
     const typeField = screen.getByRole('combobox', { name: 'Type' })
     expect(typeField).toBeDisabled()
@@ -166,7 +166,7 @@ describe('TaskPage contributed source create dialog', () => {
 
     await waitFor(() => {
       expect(createItem).toHaveBeenCalledWith({
-        scopeId: 'NssfDevOps/dashboards',
+        scopeId: 'FabrikamOps/dashboards',
         typeId: 'Task',
         title: 'Ship the create dialog',
         description: 'With a real type list.'

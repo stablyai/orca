@@ -328,7 +328,7 @@ describe('azureDevOps.boardsRequest', () => {
     const outcome = await executePluginHostCall({
       pluginId: 'acme.boards',
       method: 'azureDevOps.boardsRequest',
-      params: { method: 'GET', path: '/_apis/projects', organization: 'NssfDevOps' },
+      params: { method: 'GET', path: '/_apis/projects', organization: 'FabrikamOps' },
       viaPanel: false,
       grantedCapabilities: ['azure-devops:boards'],
       services,
@@ -337,7 +337,7 @@ describe('azureDevOps.boardsRequest', () => {
 
     expect(outcome).toMatchObject({ ok: true })
     expect(boardsRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ organization: 'NssfDevOps' })
+      expect.objectContaining({ organization: 'FabrikamOps' })
     )
   })
 
@@ -376,7 +376,7 @@ describe('azureDevOps.boardsRequest', () => {
       params: {
         method: 'PATCH',
         path: '/_apis/wit/workitems/42',
-        organization: 'NssfDevOps'
+        organization: 'FabrikamOps'
       },
       viaPanel: false,
       grantedCapabilities: ['azure-devops:boards'],
@@ -385,7 +385,7 @@ describe('azureDevOps.boardsRequest', () => {
     })
 
     expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: 'PATCH /_apis/wit/workitems/42 org=NssfDevOps' })
+      expect.objectContaining({ summary: 'PATCH /_apis/wit/workitems/42 org=FabrikamOps' })
     )
   })
 })
@@ -398,7 +398,7 @@ describe('azureDevOps.boardsOrganizations discovery', () => {
   it('returns exactly the configured organization names, with no credential material', async () => {
     vi.stubEnv(
       'ORCA_AZURE_DEVOPS_API_BASE_URL',
-      'https://dev.azure.com/nssf-dolphin, https://dev.azure.com/NssfDevOps'
+      'https://dev.azure.com/contoso-labs, https://dev.azure.com/FabrikamOps'
     )
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     vi.stubEnv('ORCA_AZURE_DEVOPS_USERNAME', 'someone@example.com')
@@ -414,7 +414,7 @@ describe('azureDevOps.boardsOrganizations discovery', () => {
 
     expect(outcome).toEqual({
       ok: true,
-      value: { organizations: ['nssf-dolphin', 'NssfDevOps'] }
+      value: { organizations: ['contoso-labs', 'FabrikamOps'] }
     })
     const serialized = JSON.stringify(outcome)
     expect(serialized).not.toContain('super-secret-pat')

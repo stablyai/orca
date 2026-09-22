@@ -15,7 +15,7 @@ const ITEM: PluginTaskItem = {
   title: 'Ship the source bar',
   state: { name: 'In Progress', category: 'in-progress' },
   assignee: null,
-  url: 'https://dev.azure.com/nssf/proj/_workitems/edit/7',
+  url: 'https://dev.azure.com/contoso/proj/_workitems/edit/7',
   updatedAt: null,
   scopeId: null
 }
@@ -52,7 +52,7 @@ describe('contributed task item workspace seed', () => {
           type: 'issue',
           number: 0,
           title: 'BOARD-7 Ship the source bar',
-          url: 'https://dev.azure.com/nssf/proj/_workitems/edit/7',
+          url: 'https://dev.azure.com/contoso/proj/_workitems/edit/7',
           pluginKey: 'nssf.azure-boards',
           sourceId: 'boards'
         }

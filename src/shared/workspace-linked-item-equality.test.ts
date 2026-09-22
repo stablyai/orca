@@ -51,7 +51,7 @@ describe('areWorkspaceLinkedItemsEqual', () => {
       type: 'issue',
       number: 0,
       title: 'AB-41 Ship the detail panel',
-      url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
       pluginKey: 'nssf.azure-boards',
       sourceId: 'boards'
     }

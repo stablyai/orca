@@ -14,12 +14,12 @@ import { TaskPagePluginSourceContent } from './Content'
 const BOARDS = { pluginKey: 'nssf.azure-boards', sourceId: 'boards' }
 
 const ITEM: PluginTaskItem = {
-  id: 'nssf/proj/41',
+  id: 'contoso/proj/41',
   key: 'AB-41',
   title: 'Ship the detail panel',
   state: { name: 'Active', category: 'in-progress' },
   assignee: { id: 'u1', displayName: 'David Mugisha', avatarUrl: null },
-  url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+  url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
   updatedAt: null,
   scopeId: null,
   labels: ['platform']
@@ -156,12 +156,12 @@ describe('TaskPage contributed source detail panel', () => {
     expect(invoke).toHaveBeenCalledWith({
       ...BOARDS,
       method: 'getItem',
-      params: { id: 'nssf/proj/41' }
+      params: { id: 'contoso/proj/41' }
     })
     expect(invoke).toHaveBeenCalledWith({
       ...BOARDS,
       method: 'listComments',
-      params: { id: 'nssf/proj/41' }
+      params: { id: 'contoso/proj/41' }
     })
   })
 
@@ -263,7 +263,7 @@ describe('TaskPage contributed source detail panel', () => {
       expect(invoke).toHaveBeenCalledWith({
         ...BOARDS,
         method: 'addComment',
-        params: { id: 'nssf/proj/41', body: 'Shipping today' }
+        params: { id: 'contoso/proj/41', body: 'Shipping today' }
       })
     })
   })
@@ -397,7 +397,7 @@ describe('TaskPage contributed source detail panel', () => {
           type: 'issue',
           number: 0,
           title: 'AB-41 Ship the detail panel',
-          url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+          url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
           pluginKey: 'nssf.azure-boards',
           sourceId: 'boards'
         }

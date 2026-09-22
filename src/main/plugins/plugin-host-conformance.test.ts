@@ -57,7 +57,7 @@ function createServices(): PluginHostServices {
     azureDevOpsBoardsRequest: vi
       .fn()
       .mockResolvedValue({ status: 200, body: { count: 0 }, code: null }),
-    azureDevOpsBoardsOrganizations: vi.fn().mockReturnValue(['nssf-dolphin'])
+    azureDevOpsBoardsOrganizations: vi.fn().mockReturnValue(['contoso-labs'])
   }
 }
 

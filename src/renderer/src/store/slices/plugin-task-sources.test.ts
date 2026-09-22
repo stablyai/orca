@@ -127,8 +127,8 @@ describe('createPluginTaskSourcesSlice', () => {
     const invokeTaskSource = vi.fn().mockResolvedValue({
       ok: true,
       data: [
-        { id: 'NssfDevOps/dashboards', name: 'NssfDevOps / Dashboards' },
-        { id: 'NssfDevOps/redesign', name: 'NssfDevOps / NssfGo-Redesign' }
+        { id: 'FabrikamOps/dashboards', name: 'FabrikamOps / Dashboards' },
+        { id: 'FabrikamOps/redesign', name: 'FabrikamOps / Portal-Redesign' }
       ]
     })
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
@@ -138,8 +138,8 @@ describe('createPluginTaskSourcesSlice', () => {
 
     expect(invokeTaskSource).toHaveBeenCalledWith({ ...BOARDS_SOURCE, method: 'listScopes' })
     expect(store.getState().pluginTaskSourceScopes.map((scope) => scope.name)).toEqual([
-      'NssfDevOps / Dashboards',
-      'NssfDevOps / NssfGo-Redesign'
+      'FabrikamOps / Dashboards',
+      'FabrikamOps / Portal-Redesign'
     ])
     expect(store.getState().pluginTaskSourceScopesError).toBeNull()
     expect(store.getState().pluginTaskSourceScopesLoading).toBe(false)
@@ -170,14 +170,14 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
     await store.getState().loadPluginTaskSourceItems()
 
     expect(invokeTaskSource).toHaveBeenCalledWith({
       ...BOARDS_SOURCE,
       method: 'listItems',
       params: {
-        scopeIds: ['NssfDevOps/dashboards'],
+        scopeIds: ['FabrikamOps/dashboards'],
         search: null,
         cursor: null,
         limit: 50
@@ -193,13 +193,13 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards', 'nssf-dolphin/platform'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards', 'contoso-labs/platform'])
     await store.getState().loadPluginTaskSourceItems()
 
     expect(invokeTaskSource).toHaveBeenCalledWith(
       expect.objectContaining({
         params: expect.objectContaining({
-          scopeIds: ['NssfDevOps/dashboards', 'nssf-dolphin/platform']
+          scopeIds: ['FabrikamOps/dashboards', 'contoso-labs/platform']
         })
       })
     )
@@ -213,7 +213,7 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
     await store.getState().loadPluginTaskSourceItems()
     store.getState().setPluginTaskSourceScopeIds([])
     await store.getState().loadPluginTaskSourceItems()
@@ -235,7 +235,7 @@ describe('createPluginTaskSourcesSlice', () => {
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
     const request = store.getState().loadPluginTaskSourceItems()
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
 
     resolveCall({ ok: true, data: { items: [taskItem('stale')], nextCursor: null } })
     await request
@@ -296,13 +296,13 @@ describe('createPluginTaskSourcesSlice', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    const result = await store.getState().listPluginTaskSourceItemTypes('NssfDevOps/dashboards')
+    const result = await store.getState().listPluginTaskSourceItemTypes('FabrikamOps/dashboards')
 
     expect(result).toEqual({ ok: true, data: [{ id: 'Bug', name: 'Bug' }] })
     expect(invokeTaskSource).toHaveBeenCalledWith({
       ...BOARDS_SOURCE,
       method: 'listItemTypes',
-      params: { scopeId: 'NssfDevOps/dashboards' }
+      params: { scopeId: 'FabrikamOps/dashboards' }
     })
   })
 
@@ -314,7 +314,7 @@ describe('createPluginTaskSourcesSlice', () => {
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
     store.setState({ pluginTaskSourceItems: [taskItem('existing')] })
     const input = {
-      scopeId: 'NssfDevOps/dashboards',
+      scopeId: 'FabrikamOps/dashboards',
       typeId: 'Bug',
       title: 'Ship the create dialog'
     }
@@ -436,7 +436,7 @@ describe('createPluginTaskSourcesSlice', () => {
       store
         .getState()
         .setPluginTaskSourceQuery({ search: 'bar', filterId: 'open', facetSelections: {} })
-      store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+      store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
       invokeTaskSource.mockClear()
 
       await store.getState().refreshPluginTaskSource()
@@ -445,7 +445,7 @@ describe('createPluginTaskSourcesSlice', () => {
         ...BOARDS_SOURCE,
         method: 'listItems',
         params: {
-          scopeIds: ['NssfDevOps/dashboards'],
+          scopeIds: ['FabrikamOps/dashboards'],
           search: 'bar',
           cursor: null,
           limit: 50,
@@ -669,17 +669,17 @@ describe('contributed task source facets in the store', () => {
     vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
 
     store.getState().selectPluginTaskSource(BOARDS_SOURCE)
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
     await store.getState().loadPluginTaskSourceStatus()
     await store.getState().loadPluginTaskSourceFacetOptions()
 
     expect(invokeTaskSource).toHaveBeenCalledWith({
       ...BOARDS_SOURCE,
       method: 'listFacetOptions',
-      params: { facetId: 'state', scopeIds: ['NssfDevOps/dashboards'] }
+      params: { facetId: 'state', scopeIds: ['FabrikamOps/dashboards'] }
     })
     expect(invokeTaskSource).not.toHaveBeenCalledWith(
-      expect.objectContaining({ params: { facetId: 'type', scopeIds: ['NssfDevOps/dashboards'] } })
+      expect.objectContaining({ params: { facetId: 'type', scopeIds: ['FabrikamOps/dashboards'] } })
     )
     expect(store.getState().pluginTaskSourceFacetOptions).toEqual({
       state: { status: 'ready', options: [{ id: 'Active', label: 'Active' }] },
@@ -764,7 +764,7 @@ describe('contributed task source facets in the store', () => {
     expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({ owner: ['mine'] })
 
     store.getState().setPluginTaskSourceQuery({ search: null, filterId: null, facetSelections: {} })
-    store.getState().setPluginTaskSourceScopeIds(['NssfDevOps/dashboards'])
+    store.getState().setPluginTaskSourceScopeIds(['FabrikamOps/dashboards'])
     await store.getState().loadPluginTaskSourceFacetOptions()
 
     expect(store.getState().pluginTaskSourceQuery.facetSelections).toEqual({})

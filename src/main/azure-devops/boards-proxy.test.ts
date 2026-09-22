@@ -161,7 +161,7 @@ describe('executeBoardsProxyRequest', () => {
   })
 
   it('sends a request with no organization to the only configured base URL', async () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/nssf-dolphin')
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', 'https://dev.azure.com/contoso-labs')
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     const fetchMock = vi.fn(
       async (_url: string | URL) => new Response(JSON.stringify({ count: 1 }), { status: 200 })
@@ -172,14 +172,14 @@ describe('executeBoardsProxyRequest', () => {
 
     expect(result).toMatchObject({ status: 200, code: null })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      'https://dev.azure.com/nssf-dolphin/_apis/projects'
+      'https://dev.azure.com/contoso-labs/_apis/projects'
     )
   })
 
   it('sends a request with no organization to the first entry of a configured list', async () => {
     vi.stubEnv(
       'ORCA_AZURE_DEVOPS_API_BASE_URL',
-      'https://dev.azure.com/nssf-dolphin, https://dev.azure.com/NssfDevOps'
+      'https://dev.azure.com/contoso-labs, https://dev.azure.com/FabrikamOps'
     )
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     const fetchMock = vi.fn(
@@ -190,18 +190,18 @@ describe('executeBoardsProxyRequest', () => {
     await executeBoardsProxyRequest({ method: 'GET', path: '/_apis/projects' })
 
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      'https://dev.azure.com/nssf-dolphin/_apis/projects'
+      'https://dev.azure.com/contoso-labs/_apis/projects'
     )
   })
 
   it.each([
-    ['nssf-dolphin', 'https://dev.azure.com/nssf-dolphin/_apis/projects'],
-    ['NssfDevOps', 'https://dev.azure.com/NssfDevOps/_apis/projects'],
-    ['NSSFDEVOPS', 'https://dev.azure.com/NssfDevOps/_apis/projects']
+    ['contoso-labs', 'https://dev.azure.com/contoso-labs/_apis/projects'],
+    ['FabrikamOps', 'https://dev.azure.com/FabrikamOps/_apis/projects'],
+    ['FABRIKAMOPS', 'https://dev.azure.com/FabrikamOps/_apis/projects']
   ])('sends organization %s to its own configured base URL', async (organization, expected) => {
     vi.stubEnv(
       'ORCA_AZURE_DEVOPS_API_BASE_URL',
-      'https://dev.azure.com/nssf-dolphin,https://dev.azure.com/NssfDevOps'
+      'https://dev.azure.com/contoso-labs,https://dev.azure.com/FabrikamOps'
     )
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     const fetchMock = vi.fn(
@@ -222,7 +222,7 @@ describe('executeBoardsProxyRequest', () => {
   it('refuses an unconfigured organization as validation without any fetch', async () => {
     vi.stubEnv(
       'ORCA_AZURE_DEVOPS_API_BASE_URL',
-      'https://dev.azure.com/nssf-dolphin,https://dev.azure.com/NssfDevOps'
+      'https://dev.azure.com/contoso-labs,https://dev.azure.com/FabrikamOps'
     )
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     const fetchMock = vi.fn(
@@ -249,7 +249,7 @@ describe('executeBoardsProxyRequest', () => {
     const result = await executeBoardsProxyRequest({
       method: 'GET',
       path: '/_apis/projects',
-      organization: 'nssf-dolphin'
+      organization: 'contoso-labs'
     })
 
     expect(result).toMatchObject({ status: 412, code: 'not_configured' })

@@ -8,8 +8,8 @@ import {
   resolveAzureDevOpsApiBaseUrl
 } from './azure-devops-organization-base-urls'
 
-const DOLPHIN = 'https://dev.azure.com/nssf-dolphin'
-const DEVOPS = 'https://dev.azure.com/NssfDevOps'
+const CONTOSO = 'https://dev.azure.com/contoso-labs'
+const FABRIKAM = 'https://dev.azure.com/FabrikamOps'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -17,25 +17,25 @@ afterEach(() => {
 
 describe('parseAzureDevOpsApiBaseUrls', () => {
   it('reads a single entry unchanged', () => {
-    expect(parseAzureDevOpsApiBaseUrls(DOLPHIN)).toEqual([DOLPHIN])
+    expect(parseAzureDevOpsApiBaseUrls(CONTOSO)).toEqual([CONTOSO])
   })
 
   it('splits a comma-separated list and tolerates surrounding whitespace', () => {
-    expect(parseAzureDevOpsApiBaseUrls(`  ${DOLPHIN} ,\t${DEVOPS}  `)).toEqual([DOLPHIN, DEVOPS])
+    expect(parseAzureDevOpsApiBaseUrls(`  ${CONTOSO} ,\t${FABRIKAM}  `)).toEqual([CONTOSO, FABRIKAM])
   })
 
   it('normalizes trailing slashes and a trailing /_apis', () => {
-    expect(parseAzureDevOpsApiBaseUrls(`${DOLPHIN}/_apis/,${DEVOPS}///`)).toEqual([DOLPHIN, DEVOPS])
+    expect(parseAzureDevOpsApiBaseUrls(`${CONTOSO}/_apis/,${FABRIKAM}///`)).toEqual([CONTOSO, FABRIKAM])
   })
 
   it('deduplicates entries that differ only in case or trailing slash', () => {
     expect(
-      parseAzureDevOpsApiBaseUrls(`${DOLPHIN},${DOLPHIN}/,https://dev.azure.com/NSSF-Dolphin`)
-    ).toEqual([DOLPHIN])
+      parseAzureDevOpsApiBaseUrls(`${CONTOSO},${CONTOSO}/,https://dev.azure.com/Contoso-Labs`)
+    ).toEqual([CONTOSO])
   })
 
   it('drops empty entries rather than yielding a blank base URL', () => {
-    expect(parseAzureDevOpsApiBaseUrls(`,,${DOLPHIN}, ,`)).toEqual([DOLPHIN])
+    expect(parseAzureDevOpsApiBaseUrls(`,,${CONTOSO}, ,`)).toEqual([CONTOSO])
     expect(parseAzureDevOpsApiBaseUrls('')).toEqual([])
     expect(parseAzureDevOpsApiBaseUrls(null)).toEqual([])
   })
@@ -43,7 +43,7 @@ describe('parseAzureDevOpsApiBaseUrls', () => {
 
 describe('azureDevOpsOrganizationName', () => {
   it('reads the final path segment', () => {
-    expect(azureDevOpsOrganizationName(DOLPHIN)).toBe('nssf-dolphin')
+    expect(azureDevOpsOrganizationName(CONTOSO)).toBe('contoso-labs')
     expect(azureDevOpsOrganizationName('https://ado.example.com/tfs/DefaultCollection')).toBe(
       'DefaultCollection'
     )
@@ -57,34 +57,34 @@ describe('azureDevOpsOrganizationName', () => {
 
 describe('resolveAzureDevOpsApiBaseUrl', () => {
   it('serves the single configured base URL when no organization is named', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', DOLPHIN)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', CONTOSO)
 
-    expect(resolveAzureDevOpsApiBaseUrl()).toEqual({ ok: true, baseUrl: DOLPHIN })
-    expect(resolveAzureDevOpsApiBaseUrl(undefined)).toEqual({ ok: true, baseUrl: DOLPHIN })
+    expect(resolveAzureDevOpsApiBaseUrl()).toEqual({ ok: true, baseUrl: CONTOSO })
+    expect(resolveAzureDevOpsApiBaseUrl(undefined)).toEqual({ ok: true, baseUrl: CONTOSO })
   })
 
   it('serves the first entry of a list when no organization is named', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
 
-    expect(resolveAzureDevOpsApiBaseUrl()).toEqual({ ok: true, baseUrl: DOLPHIN })
+    expect(resolveAzureDevOpsApiBaseUrl()).toEqual({ ok: true, baseUrl: CONTOSO })
   })
 
   it('resolves each configured organization to its own base URL', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
 
-    expect(resolveAzureDevOpsApiBaseUrl('nssf-dolphin')).toEqual({ ok: true, baseUrl: DOLPHIN })
-    expect(resolveAzureDevOpsApiBaseUrl('NssfDevOps')).toEqual({ ok: true, baseUrl: DEVOPS })
+    expect(resolveAzureDevOpsApiBaseUrl('contoso-labs')).toEqual({ ok: true, baseUrl: CONTOSO })
+    expect(resolveAzureDevOpsApiBaseUrl('FabrikamOps')).toEqual({ ok: true, baseUrl: FABRIKAM })
   })
 
   it('matches an organization name case-insensitively', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
 
-    expect(resolveAzureDevOpsApiBaseUrl('NSSFDEVOPS')).toEqual({ ok: true, baseUrl: DEVOPS })
-    expect(resolveAzureDevOpsApiBaseUrl('NSSF-Dolphin')).toEqual({ ok: true, baseUrl: DOLPHIN })
+    expect(resolveAzureDevOpsApiBaseUrl('FABRIKAMOPS')).toEqual({ ok: true, baseUrl: FABRIKAM })
+    expect(resolveAzureDevOpsApiBaseUrl('Contoso-Labs')).toEqual({ ok: true, baseUrl: CONTOSO })
   })
 
   it('refuses an organization outside the configured set instead of falling back', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
 
     expect(resolveAzureDevOpsApiBaseUrl('attacker')).toEqual({
       ok: false,
@@ -96,7 +96,7 @@ describe('resolveAzureDevOpsApiBaseUrl', () => {
     vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', '')
 
     expect(resolveAzureDevOpsApiBaseUrl()).toEqual({ ok: false, reason: 'not-configured' })
-    expect(resolveAzureDevOpsApiBaseUrl('nssf-dolphin')).toEqual({
+    expect(resolveAzureDevOpsApiBaseUrl('contoso-labs')).toEqual({
       ok: false,
       reason: 'not-configured'
     })
@@ -105,13 +105,13 @@ describe('resolveAzureDevOpsApiBaseUrl', () => {
 
 describe('listConfiguredAzureDevOpsOrganizations', () => {
   it('lists the configured names in configured order', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN}, ${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO}, ${FABRIKAM}`)
 
-    expect(listConfiguredAzureDevOpsOrganizations()).toEqual(['nssf-dolphin', 'NssfDevOps'])
+    expect(listConfiguredAzureDevOpsOrganizations()).toEqual(['contoso-labs', 'FabrikamOps'])
   })
 
   it('exposes no base URL and no credential material', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
     vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'super-secret-pat')
     vi.stubEnv('ORCA_AZURE_DEVOPS_USERNAME', 'someone@example.com')
 
@@ -132,11 +132,11 @@ describe('listConfiguredAzureDevOpsOrganizations', () => {
 
 describe('getAzureDevOpsAuthConfig compatibility', () => {
   it('returns one usable base URL when the env var holds a list', () => {
-    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${DOLPHIN},${DEVOPS}`)
+    vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', `${CONTOSO},${FABRIKAM}`)
 
     // Pull-request lookup, PR creation and build-status checks all address a
     // single origin through this field.
-    expect(getAzureDevOpsAuthConfig().apiBaseUrl).toBe(DOLPHIN)
+    expect(getAzureDevOpsAuthConfig().apiBaseUrl).toBe(CONTOSO)
   })
 
   it('is null when nothing is configured', () => {
