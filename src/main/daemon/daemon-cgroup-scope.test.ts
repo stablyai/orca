@@ -354,6 +354,21 @@ describe('legacy daemon scope migration', () => {
     })
   })
 
+  it('lets busctl discover the resolved user bus when service hardening disables the inherited address', () => {
+    const runtimeDir = fakeRuntimeDirWithBus()
+    const command = buildLegacyScopeMigrationCommand(
+      'disabled-address',
+      [321],
+      {
+        XDG_RUNTIME_DIR: '/run/orca_serve/factory',
+        DBUS_SESSION_BUS_ADDRESS: 'disabled:'
+      },
+      runtimeDir
+    )
+
+    expect(command.env).toEqual({ XDG_RUNTIME_DIR: runtimeDir })
+  })
+
   it('migrates only a proven legacy scope and fails closed when systemd rejects it', () => {
     const runtimeDir = fakeRuntimeDirWithBus()
     const runMigration = vi.fn(() => ({ code: 0, timedOut: false }))
