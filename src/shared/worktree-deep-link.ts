@@ -36,7 +36,7 @@ function sanitizeGitRefField(value: string | null, maxLength = 256): string | un
   if (candidate.includes('\0')) {
     return undefined
   }
-  if (candidate.split('/').some((segment) => segment === '..')) {
+  if (candidate.split(/[\\/]/).some((segment) => segment === '..')) {
     return undefined
   }
   return candidate

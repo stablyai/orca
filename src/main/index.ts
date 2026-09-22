@@ -31,7 +31,15 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.worktreeDeepLinks.capture(argv, (link) => {
-    state.mainWindow?.webContents.send('ui:openWorktreeDeepLink', link)
+    if (
+      !state.worktreeDeepLinkListenerReady ||
+      !state.mainWindow ||
+      state.mainWindow.isDestroyed()
+    ) {
+      return false
+    }
+    state.mainWindow.webContents.send('ui:openWorktreeDeepLink', link)
+    return true
   })
   state.osOpenedMarkdownFiles.capture(argv, publishOsOpenedMarkdownFiles)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).

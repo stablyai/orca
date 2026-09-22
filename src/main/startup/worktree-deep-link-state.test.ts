@@ -37,6 +37,22 @@ describe('WorktreeDeepLinkState', () => {
     })
   })
 
+  it('clears pending link when publish confirms live delivery', () => {
+    const state = new WorktreeDeepLinkState()
+    const publish = vi.fn().mockReturnValue(true)
+
+    expect(state.capture(['orca', 'orca://worktree/create?name=Live&repo=wom7web'], publish)).toBe(
+      true
+    )
+
+    expect(publish).toHaveBeenCalledWith({
+      type: 'worktree-create',
+      name: 'Live',
+      repo: 'wom7web'
+    })
+    expect(state.consume()).toBeNull()
+  })
+
   it('ignores untrusted URLs without replacing a pending intent', () => {
     const state = new WorktreeDeepLinkState()
     state.capture(['orca', 'orca://worktree/create?name=safe'])

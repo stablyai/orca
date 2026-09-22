@@ -100,6 +100,9 @@ export const mainProcessState = {
   // attached the ui:openMarkdownFiles listener yet, and a push into that gap is dropped by
   // Electron with no error. Only the renderer's own pull proves the listener is live.
   markdownFileOpenListenerReady: false,
+  // Why a latch: a window can exist while starting or reloading before its ui:openWorktreeDeepLink
+  // listener attaches. The renderer's ui:consumePendingWorktreeDeepLink pull proves it is ready.
+  worktreeDeepLinkListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
   // Why published: the default-session proxy must be applied before the first app-owned fetcher,
   // but window creation has no reason to queue behind it (the request guard already fences it).

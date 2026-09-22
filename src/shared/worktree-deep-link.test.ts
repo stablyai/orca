@@ -64,8 +64,12 @@ describe('parseWorktreeDeepLink', () => {
     expect(
       parseWorktreeDeepLink('orca://worktree/create?name=-x&branch=--upload-pack=evil')
     ).toEqual({ type: 'worktree-create' })
-    // `..` path-traversal segments and embedded NULs are dropped too.
+    // `..` path-traversal segments and embedded NULs are dropped too (supporting both / and \).
     expect(parseWorktreeDeepLink('orca://worktree/create?name=../../etc&branch=main')).toEqual({
+      type: 'worktree-create',
+      branch: 'main'
+    })
+    expect(parseWorktreeDeepLink('orca://worktree/create?name=..\\..\\evil&branch=main')).toEqual({
       type: 'worktree-create',
       branch: 'main'
     })

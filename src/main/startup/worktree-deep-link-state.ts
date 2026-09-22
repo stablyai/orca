@@ -6,13 +6,15 @@ import {
 export class WorktreeDeepLinkState {
   private pendingDeepLink: WorktreeDeepLink | null = null
 
-  capture(argv: readonly string[], publish?: (link: WorktreeDeepLink) => void): boolean {
+  capture(argv: readonly string[], publish?: (link: WorktreeDeepLink) => boolean | void): boolean {
     const link = worktreeDeepLinkFromArguments(argv)
     if (!link) {
       return false
     }
     this.pendingDeepLink = link
-    publish?.(link)
+    if (publish?.(link)) {
+      this.pendingDeepLink = null
+    }
     return true
   }
 

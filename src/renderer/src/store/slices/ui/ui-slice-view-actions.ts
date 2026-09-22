@@ -72,7 +72,12 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     openWorktreeDeepLink: (link) => {
       set({ pendingWorktreeDeepLink: link })
       if (link.type === 'worktree-create') {
-        get().openModal('worktree-palette')
+        get().openModal('new-workspace-composer', {
+          prefilledName: link.name,
+          initialRepoId: link.repo,
+          initialBaseBranch: link.branch,
+          telemetrySource: 'shortcut'
+        })
       }
     },
     clearPendingWorktreeDeepLink: () => set({ pendingWorktreeDeepLink: null }),

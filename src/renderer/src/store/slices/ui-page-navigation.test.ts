@@ -737,7 +737,7 @@ describe('createUISlice space navigation', () => {
     expect(store.getState().activeView).toBe('artifacts')
   })
 
-  it('opens worktree palette modal and stores intent when handling worktree-create deep link', () => {
+  it('opens new workspace composer with prefilled parameters when handling worktree-create deep link', () => {
     const store = createUIStore()
 
     store.getState().openWorktreeDeepLink({
@@ -747,7 +747,13 @@ describe('createUISlice space navigation', () => {
       branch: 'main'
     })
 
-    expect(store.getState().activeModal).toBe('worktree-palette')
+    expect(store.getState().activeModal).toBe('new-workspace-composer')
+    expect(store.getState().modalData).toEqual({
+      prefilledName: 'feat/siri-shortcuts',
+      initialRepoId: 'wom7web',
+      initialBaseBranch: 'main',
+      telemetrySource: 'shortcut'
+    })
     expect(store.getState().pendingWorktreeDeepLink).toEqual({
       type: 'worktree-create',
       repo: 'wom7web',
