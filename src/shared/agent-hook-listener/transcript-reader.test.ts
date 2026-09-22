@@ -1,5 +1,12 @@
+import { execFileSync } from 'node:child_process'
+import { constants, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { findLastExtractedTranscriptLineText } from './transcript-reader'
+import {
+  findLastExtractedTranscriptLineText,
+  readLastAssistantFromTranscriptOnce
+} from './transcript-reader'
 import { extractAssistantTextFromLine } from './transcript-entry-text'
 
 function expectedLines(text: string): string[] {
@@ -67,4 +74,51 @@ describe('backward transcript line extraction', () => {
     ).toBe('')
     expect(seen).toEqual(['latest'])
   })
+})
+
+const hasNoFollow = typeof constants.O_NOFOLLOW === 'number' && constants.O_NOFOLLOW !== 0
+
+describe('agent transcript open', () => {
+  it('reads the newest assistant line from a regular file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-tr-'))
+    try {
+      const file = join(dir, 't.jsonl')
+      writeFileSync(
+        file,
+        '{"role":"assistant","content":"secret-target"}\n{"role":"assistant","content":"visible"}\n'
+      )
+      expect(readLastAssistantFromTranscriptOnce(file)).toBe('visible')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(!hasNoFollow)('does not follow a symlink swapped in for the transcript', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-tr-link-'))
+    try {
+      const secret = join(dir, 'secret.txt')
+      const link = join(dir, 't.jsonl')
+      writeFileSync(secret, '{"role":"assistant","content":"leaked"}\n')
+      symlinkSync(secret, link)
+      expect(readLastAssistantFromTranscriptOnce(link)).toBeUndefined()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'does not block when the transcript path is a FIFO',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-tr-fifo-'))
+      const fifo = join(dir, 't.jsonl')
+      try {
+        execFileSync('mkfifo', [fifo])
+        const started = Date.now()
+        expect(readLastAssistantFromTranscriptOnce(fifo)).toBeUndefined()
+        expect(Date.now() - started).toBeLessThan(1_000)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 })

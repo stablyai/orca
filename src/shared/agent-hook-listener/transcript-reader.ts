@@ -1,10 +1,47 @@
-import { closeSync, openSync, readSync, statSync } from 'node:fs'
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
 
 import { extractAssistantTextFromLine } from './transcript-entry-text'
 
 export const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 export const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 export const EMPTY_TRANSCRIPT_REGION = Buffer.alloc(0)
+
+/** Open a transcript without following a swapped symlink or blocking on a FIFO.
+ *  Windows has no O_NOFOLLOW (the constant is 0). A pre-open lstat refuses a
+ *  symlink we can already see; POSIX still fails a swap between that check and
+ *  open because O_NOFOLLOW is set. Returning undefined whenever no-follow is
+ *  missing would stop every Windows transcript read. */
+export function openAgentTranscriptRead(
+  transcriptPath: string,
+  options?: { allowEmpty?: boolean }
+): { fd: number; size: number } | undefined {
+  try {
+    if (lstatSync(transcriptPath).isSymbolicLink()) {
+      return undefined
+    }
+  } catch {
+    return undefined
+  }
+  const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+  let fd: number
+  try {
+    fd = openSync(transcriptPath, flags)
+  } catch {
+    return undefined
+  }
+  try {
+    const stats = fstatSync(fd)
+    if (!stats.isFile() || (!options?.allowEmpty && stats.size <= 0)) {
+      closeSync(fd)
+      return undefined
+    }
+    return { fd, size: stats.size }
+  } catch {
+    closeSync(fd)
+    return undefined
+  }
+}
+
 export function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
   return readLastTextFromTranscriptOnce(transcriptPath, extractAssistantTextFromLine)
 }
@@ -14,12 +51,11 @@ export function readLastTextFromTranscriptOnce(
   extractLineText: (line: string) => string | undefined
 ): string | undefined {
   try {
-    const stats = statSync(transcriptPath)
-    const size = stats.size
-    if (size <= 0) {
+    const opened = openAgentTranscriptRead(transcriptPath)
+    if (!opened) {
       return undefined
     }
-    const fd = openSync(transcriptPath, 'r')
+    const { fd, size } = opened
     try {
       // Why a chunk list: carry holds a partial line, and re-joining it per block
       // made one oversized line (a big tool result or pasted prompt) cost O(line^2).

@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { closeSync, openSync, readSync, statSync } from 'node:fs'
+import { closeSync, readSync } from 'node:fs'
 
 import { parseAgentHookJson } from './request-body'
 import { extractAssistantContentText } from './transcript-entry-text'
 import {
   EMPTY_TRANSCRIPT_REGION,
+  openAgentTranscriptRead,
   readLastTextFromTranscriptOnce,
   TRANSCRIPT_CHUNK_BYTES,
   TRANSCRIPT_MAX_SCAN_BYTES
@@ -60,12 +61,11 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
     return undefined
   }
   try {
-    const stats = statSync(transcriptPath)
-    const size = stats.size
-    if (size <= 0) {
+    const opened = openAgentTranscriptRead(transcriptPath)
+    if (!opened) {
       return undefined
     }
-    const fd = openSync(transcriptPath, 'r')
+    const { fd, size } = opened
     try {
       // Why scan backward: the answer is the LAST user line, so walking up from
       // EOF returns on the first hit instead of parsing every line of a
