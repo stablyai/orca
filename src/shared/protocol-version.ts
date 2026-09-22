@@ -218,6 +218,10 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
+// Why: same enum-widening hazard as kimi above — an older host rejects the unknown
+// junie member with invalid_argument, so clients probe before the host-authority path.
+export const AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY =
+  'agent-session.junie-resume.v1' as const
 export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
   'agent-session.opencode2-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
@@ -366,6 +370,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,

@@ -30,6 +30,7 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { wrapWindowsCmdShellHookCommand } from './windows-cmd-shell-hook-command'
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import {
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
@@ -730,6 +731,23 @@ describe('wrapWindowsCmdHookCommand', () => {
   it('falls back to the encoded launcher when cmd.exe would split or expand the path', () => {
     const scriptPath = 'C:\\Users\\Jane Doe\\%ORCA_TEST%\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  })
+})
+
+describe('wrapWindowsCmdShellHookCommand', () => {
+  it('quotes a safe path and drains stdin when the script is missing', () => {
+    const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\junie-hook.cmd'
+    const command = wrapWindowsCmdShellHookCommand(scriptPath)
+    expect(command).toBe(
+      `if exist "${scriptPath}" (call "${scriptPath}") else ("%SystemRoot%\\System32\\more.com" >nul 2>nul)`
+    )
+  })
+
+  it('falls back to the encoded launcher when the path contains percent signs', () => {
+    const scriptPath = 'C:\\Users\\%ORCA_TEST%\\agent-hooks\\junie-hook.cmd'
+    const command = wrapWindowsCmdShellHookCommand(scriptPath)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })

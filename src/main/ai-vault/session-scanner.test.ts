@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  jsonLines,
+  writeJunieScannerFixture
+} from './session-scanner-test-fixtures'
 import { writeEveryAgentVault } from './session-scanner-every-agent-fixture'
 
 // Why: the SQLite worker bundle does not exist in the test runtime; route the
@@ -395,7 +399,9 @@ describe('scanAiVaultSessions', () => {
     const { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile } =
       await writeEveryAgentVault(root)
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    const junieSessionId = await writeJunieScannerFixture(roots.junieSessionsDir)
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 21 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -446,6 +452,14 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+    // Pinned by id: bare `--resume` would reopen the globally most-recent session.
+    expect(commandByAgent.get('junie')).toBe(
+      `cd '/tmp/junie' && junie --resume --session-id '${junieSessionId}'`
+    )
+
+    const junieSession = result.sessions.find((session) => session.agent === 'junie')
+    expect(junieSession?.title).toBe('Junie vault title')
+    expect(junieSession?.cwd).toBe('/tmp/junie')
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')

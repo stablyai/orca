@@ -45,9 +45,9 @@ describe('managed-hook local filesystem', () => {
     const cold = await installRemoteManagedAgentHooks(filesystem, home, options)
     const warm = await installRemoteManagedAgentHooks(filesystem, home, options)
 
-    expect(cold).toHaveLength(14)
+    expect(cold).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(cold.filter((result) => result.state === 'error')).toEqual([])
-    expect(warm).toHaveLength(14)
+    expect(warm).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(warm.filter((result) => result.state === 'error')).toEqual([])
     const files = await listFiles(home)
     expect(files.filter((path) => path.endsWith('.tmp'))).toEqual([])
@@ -71,10 +71,11 @@ describe('managed-hook local filesystem', () => {
       agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
     })
 
-    expect(results).toHaveLength(14)
+    expect(results).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(results.find((result) => result.agent === 'claude')?.state).toBe('error')
     expect(results.find((result) => result.agent === 'openclaude')?.state).toBe('installed')
     expect(results.find((result) => result.agent === 'kimi')?.state).toBe('installed')
+    expect(results.find((result) => result.agent === 'junie')?.state).toBe('installed')
     expect(await readFile(claudeConfig, 'utf8')).toBe('{"hooks": }')
   })
 })

@@ -17,7 +17,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
-  'kimi'
+  'kimi',
+  'junie'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -226,6 +227,13 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: Junie carries session_id only on SessionStart/UserPromptSubmit; the listener's
+    // per-pane cache preserves it across the id-less events (PreToolUse/Stop/...).
+    case 'junie': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
+    // Why: OMP's managed extension reports the authoritative CLI resume id.
     // OMP keeps id-based resume while optionally locating its native-chat transcript.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
@@ -298,5 +306,9 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    // Why: `--resume` alone picks the globally most-recent session; pin the id so the
+    // right pane's session comes back.
+    case 'junie':
+      return providerSession.key === 'session_id' ? ['junie', '--resume', '--session-id', id] : null
   }
 }
