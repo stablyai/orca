@@ -36,7 +36,7 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  * refused asset on a phone. Splitting barely moves it — the same code is emitted in more files —
  * so shrinking this still means cutting code.
  *
- * This head reads 8,053,438 bytes of the 9,437,184 here, 85.3%, leaving 1,383,746. A reading and
+ * This head reads 8,055,568 bytes of the 9,437,184 here, 85.4%, leaving 1,381,616. A reading and
  * not a pin: nothing asserts it, because the number moves with every build. It is here so the
  * generation that spends the rest can see it was already this close.
  */
@@ -126,7 +126,7 @@ export function mobileWebAppBundleMaxChunks(routeCount) {
 /**
  * What the browser must parse before the first route can paint: the entry plus every chunk it
  * reaches by static import. This is the budget splitting exists to hold — it was 8.16 MB as one
- * chunk and measures 1,612,006 bytes split on this head, 1.54 of the 3 MiB — so a route
+ * chunk and measures 1,612,253 bytes split on this head, 1.54 of the 3 MiB — so a route
  * re-imported statically, or `splitting` dropped, fails the build here instead of arriving as a
  * slow first open on a phone.
  *

@@ -69,13 +69,14 @@ const censusedElsewhere = [...sessionGrants, ...sessionOptionalGrants].filter(
  * Two counts, and which one a row takes is what its sentence is about. Exactly one row takes the
  * intersection: the `.mjs` sentence for how many of the session route's grants these rows cover,
  * which a row pinning a grant no route declares -- the shell can serve a verb before a screen asks
- * for it -- would otherwise make the census demand overstates the session route's list.
+ * for it -- would otherwise make the census demand a comment overstate the session route's list.
  *
- * Every other row counts the rows here, the title about reaching them through the session route
- * included. That title names the session route but is not a claim about it: the assertion under it
- * compares `grantsNeeded` with every row's grants, so it has to move when the rows move and not
- * when the route does. A census holding it at the intersection would have kept the title below the
- * assertion it heads.
+ * Of the rows that could take either, every other one counts the rows here, the title about
+ * reaching them through the session route included. That title names the session route but is not
+ * a claim about it: the assertion under it compares `grantsNeeded` with every row's grants, so it
+ * has to move when the rows move and not when the route does. A census holding it at the
+ * intersection would have kept the title below the assertion it heads. The remaining rows count
+ * neither: they read the route's own list, or the grants on it that no row pins.
  *
  * The rows read the whole file, titles included: a count in a JSDoc and the same count in an `it`
  * title go stale together, and pinning only the first leaves a green suite describing itself
