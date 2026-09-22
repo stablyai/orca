@@ -40,13 +40,16 @@ export async function awaitStructuredWorkerSetupGate(args: {
   if (!setupTerminal) {
     return null
   }
+  const abort = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      args.runtime.waitForSetupTerminalCompletion(setupTerminal).then((completion) => ({
-        satisfied: completion.exitCode === 0,
-        status: 'exited'
-      })),
+      args.runtime
+        .waitForSetupTerminalCompletion(setupTerminal, abort.signal)
+        .then((completion) => ({
+          satisfied: completion.exitCode === 0,
+          status: 'exited'
+        })),
       new Promise<StructuredWorkerSetupGate>((resolve) => {
         timer = setTimeout(() => resolve({ satisfied: false, status: 'timeout' }), args.timeoutMs)
       })
@@ -63,5 +66,6 @@ export async function awaitStructuredWorkerSetupGate(args: {
     return null
   } finally {
     clearTimeout(timer)
+    abort.abort()
   }
 }
