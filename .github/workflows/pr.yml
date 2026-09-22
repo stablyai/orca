@@ -816,6 +816,12 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
+      # The checkout must pass without depending on a historical baseline that leaks.
+      - name: Verify Linux daemon shutdown descendant cleanup
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: node config/scripts/run-daemon-shutdown-descendants-docker.mjs
+
       # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
       # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
       # past those deadlines; serial, every probe owns the runner.
