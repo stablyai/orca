@@ -222,7 +222,12 @@ type Mounted = {
 
 let warned: MockInstance<typeof console.warn>
 
-async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
+async function mount(
+  session: MobileWebShellSessionState,
+  /** Overrides the reducer model below, for the cases that need a rebuilt host's pre-handshake
+   *  gate already open so the declaration is the only thing left that can refuse a press. */
+  sessionEstablished?: boolean
+): Promise<Mounted> {
   const posted: PostedFrame[] = []
   const probe: Probe = {
     view: null,
@@ -239,7 +244,14 @@ async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
   const readies: string[] = []
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   const render = (next: MobileWebShellSessionState): ReactElement =>
-    createElement(Harness, { session: next, posted, probe, faults, readies })
+    createElement(Harness, {
+      session: next,
+      ...(sessionEstablished === undefined ? {} : { sessionEstablished }),
+      posted,
+      probe,
+      faults,
+      readies
+    })
   await act(async () => {
     rendered.tree = create(render(session))
   })
@@ -642,30 +654,74 @@ describe('client changes', () => {
   /**
    * The Back key across a host rebuild, which is the one the page cannot see.
    *
-   * A rebuilt host starts with no claim and no `accepts`, and disposing the old one reports the
-   * drop, so the screen stops taking the key even though the document still holds a sheet. What
-   * puts the two back in step is the page's own re-assert on the `init` that answers its next
-   * `ready` — and that `ready` is also what gives the rebuilt host the `accepts` it needs to
-   * deliver a press at all.
+   * A client swapped under a live page is not a new document: the WebView stays mounted, the
+   * session id does not move, and the page neither handshakes again nor hears that anything
+   * happened. What it declared and what it is holding therefore belong to the session, the way
+   * `sessionEstablished` already does — a rebuilt host that started over would answer every press
+   * with "I cannot deliver this" and pop the screen out from under an open sheet.
    */
-  it('takes the claim again from the page after the host is rebuilt under it', async () => {
+  it('keeps delivering Back to an open sheet after the host is rebuilt under it', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
     await mounted.deliver(
       clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
     )
     expect(mounted.probe.backClaims).toEqual([true])
-    // A new client under the same session: the host is rebuilt and the page is never told.
+    // A new client under the same session. Nothing here makes the page re-ask: two clients on the
+    // same generation leave the page's connection cache with nothing to refuse.
     doubles.client = createFakeRpcClient()
     await mounted.update(readyState('session-one'))
-    expect(mounted.probe.backClaims).toEqual([true, false])
-    // The page re-asks, and says again what it is holding. Both frames are needed: the `ready`
-    // hands the new host the declaration, and the re-assert hands it the claim.
+    // The claim did not go with the host that learned it, so the screen keeps the key.
+    expect(mounted.probe.backClaims).toEqual([true])
+    const before = mounted.frames('session-one').length
+    await act(async () => {
+      expect(mounted.probe.view?.sendBack()).toBe(true)
+    })
+    expect(mounted.frames('session-one').slice(before)).toEqual([{ v: 1, type: BRIDGE_BACK_FRAME }])
+  })
+
+  /** The other half of the same seed: a page that never said it takes a press is still one the
+   *  rebuilt host will not send to. An empty declaration is a declaration. */
+  it('sends nothing after a rebuild to a page that never declared the frame', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    const before = mounted.frames('session-one').length
+    expect(mounted.probe.view?.sendBack()).toBe(false)
+    expect(mounted.frames('session-one')).toHaveLength(before)
+  })
+
+  /** The seed is the session's, not the hook's. A different session id is a different document,
+   *  which has declared nothing and is holding nothing until it says so itself. */
+  it('carries nothing into a host built for a different session', async () => {
+    // Both mounts stand for an established session, so the rebuilt host's own pre-handshake gate
+    // is already open and the declaration is the only thing left that can refuse the press.
+    const mounted = await mount(readyState('session-one'), true)
     await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
     await mounted.deliver(
       clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
     )
-    expect(mounted.probe.backClaims).toEqual([true, false, true])
+    // The control: the same rebuild inside the session does keep delivering.
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    expect(mounted.probe.view?.sendBack()).toBe(true)
+    await mounted.update(readyState('session-two'))
+    expect(mounted.probe.view?.sendBack()).toBe(false)
+  })
+
+  /** A new document inside the same session still starts over: its own `ready` is what the host
+   *  reads, and the seed is not a latch. */
+  it('drops the carried claim when the next document says ready', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    expect(mounted.probe.backClaims).toEqual([true, false])
   })
 
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {

@@ -44,12 +44,47 @@ describe('the claim a host holds on the device Back key', () => {
     expect(bridge.backClaims).toEqual([true, false])
   })
 
-  it('drops it when the host is disposed, which no frame from the page announces', () => {
+  /**
+   * A host ending is not a document ending. A client swapped under a live page rebuilds the host
+   * while the WebView stays mounted, so a teardown that reported the claim gone would take the key
+   * off an open sheet; what ends a session is the session leaving `ready`, which the screen's own
+   * reader answers (`shell-page-back-claim.ts`) and `mobile-web-shell-back-claim-state.test.ts`
+   * pins.
+   */
+  it('reports nothing when the host itself ends: the claim belongs to the session', () => {
     const bridge = harness()
     bridge.host.receive(ready([BRIDGE_BACK_FRAME]))
     bridge.host.receive(claim(true))
     bridge.host.dispose()
-    expect(bridge.backClaims).toEqual([true, false])
+    expect(bridge.backClaims).toEqual([true])
+  })
+
+  it('hands what the session established to the host that takes over from it', () => {
+    const bridge = harness()
+    bridge.host.receive(ready([BRIDGE_BACK_FRAME]))
+    bridge.host.receive(claim(true))
+    bridge.host.dispose()
+    expect(bridge.host.readSessionBack()).toEqual({ accepts: [BRIDGE_BACK_FRAME], claimed: true })
+  })
+
+  it('takes that seed without announcing a claim the screen never heard go', () => {
+    const rebuilt = harness({
+      sessionBack: { accepts: [BRIDGE_BACK_FRAME], claimed: true },
+      sessionEstablished: true
+    })
+    expect(rebuilt.backClaims).toEqual([])
+    // And it delivers on it: the page said it takes a press, over a session that is still open.
+    expect(rebuilt.host.sendBack()).toBe(true)
+    expect(rebuilt.last()).toEqual({ v: 1, type: BRIDGE_BACK_FRAME })
+  })
+
+  it('lets the next document reset a carried claim, so the seed is not a latch', () => {
+    const rebuilt = harness({
+      sessionBack: { accepts: [BRIDGE_BACK_FRAME], claimed: true },
+      sessionEstablished: true
+    })
+    rebuilt.host.receive(ready([BRIDGE_BACK_FRAME]))
+    expect(rebuilt.backClaims).toEqual([false])
   })
 
   it('says nothing on a document that never claimed, so a drop is always a real one', () => {

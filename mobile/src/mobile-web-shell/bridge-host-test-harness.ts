@@ -7,6 +7,7 @@ import {
   type FakeRpcClient
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
+import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
@@ -102,6 +103,8 @@ export function harness(
     serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
     /** Drives the held-stream silence clock, so a case fires it instead of waiting on it. */
     terminalTimers?: TerminalBacklogTimers
+    /** Stands for a host rebuilt over a session that already declared and claimed the Back key. */
+    sessionBack?: BridgeSessionBack
   } = {}
 ): Harness {
   const client = options.client ?? createFakeRpcClient()
@@ -136,6 +139,7 @@ export function harness(
     pageRouteGrants: options.pageRouteGrants ?? PAGE_ROUTE_GRANTS,
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,
+    ...(options.sessionBack === undefined ? {} : { sessionBack: options.sessionBack }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? HARNESS_CLIENT_IDENTITY : options.clientIdentity,
     host: HOST,

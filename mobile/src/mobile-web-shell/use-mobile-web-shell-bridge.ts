@@ -9,6 +9,7 @@ import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
+import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
@@ -31,6 +32,8 @@ class BridgeViewGoneError extends Error {
  */
 type MountedView = { sessionId: string; handle: OrcaMobileWebShellViewHandle }
 type MountedHost = { sessionId: string; host: BridgeHost }
+/** What a retiring host established, and the session it established it for. */
+type EstablishedBack = { sessionId: string; back: BridgeSessionBack }
 
 /** Exactly the field the handler reads. The view's own `NativeSyntheticEvent` prop type is
  *  assignable to this, and a handler declared this narrowly is one a test can call honestly. */
@@ -133,6 +136,15 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
   /**
+   * The device Back key across a host rebuild, which is the one thing here that outlives a host.
+   *
+   * A client swapped under a live page is not a new document: the WebView stays mounted, the
+   * session id does not move, and the page neither handshakes again nor hears that anything
+   * happened. Stamped with its session for the reason the two refs above are — a record left by
+   * one session must not seed the next one's host.
+   */
+  const establishedBackRef = useRef<EstablishedBack | null>(null)
+  /**
    * Every prop, held rather than depended on: the host is built once per session, and a caller's
    * fresh closures and inline objects every render must not tear one down and settle its pendings.
    *
@@ -178,6 +190,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
       sessionEstablished: latest.sessionEstablished,
+      ...(establishedBackRef.current?.sessionId === sessionId
+        ? { sessionBack: establishedBackRef.current.back }
+        : {}),
       host: snapshot.host,
       readClientIdentity: () => clientIdRef.current,
       post: (json) => {
@@ -208,6 +223,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     // which reads as frames coming back rather than as a fresh count.
     latest.onBinaryFramesDropped(0)
     return () => {
+      // Read before the teardown and stamped with the session, so a replacement built for this
+      // same document takes the key over rather than refusing the first press on it.
+      establishedBackRef.current = { sessionId, back: host.readSessionBack() }
       hostRef.current = null
       host.dispose()
     }

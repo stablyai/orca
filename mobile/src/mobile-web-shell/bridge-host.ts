@@ -16,7 +16,7 @@ import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { BRIDGE_SHELL_ACCEPTS, createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
 import { createBridgeHostFrames } from './bridge-host-frames'
-import { createBridgeHostBack } from './bridge-host-back'
+import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import type { BridgeHostOptions } from './bridge-host-contract'
@@ -44,6 +44,14 @@ export type BridgeHost = {
    * every page older than the frame; the caller then leaves the key to the navigator.
    */
   sendBack: () => boolean
+  /**
+   * What this session has established about the Back key, for the host that takes over.
+   *
+   * A host is rebuilt when the client under it changes and the page document does not move, so
+   * what the page declared and what it is holding outlive this object. Read at teardown and handed
+   * to the replacement; a caller that is ending the session simply drops it.
+   */
+  readSessionBack: () => BridgeSessionBack
   dispose: () => void
 }
 
@@ -201,7 +209,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     // The same three the outbound frames are gated on, read here as well: the caller spends the
     // answer on a hardware key, and a `true` for a frame that never left is a dead press.
     deliverable: () => !closed && serving && initSent,
-    onClaim: (claimed) => options.onPageBackClaim(claimed)
+    onClaim: (claimed) => options.onPageBackClaim(claimed),
+    ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
 
   const forwardNotify = createBridgeNotifyForwarder({
@@ -225,7 +234,6 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     }
     settleAll(true)
     closed = true
-    back.drop()
     unsubscribeState()
   }
 
@@ -320,6 +328,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       routes.publish(next, serving && initSent)
     },
     sendBack: back.send,
+    readSessionBack: back.read,
     dispose
   }
 }
