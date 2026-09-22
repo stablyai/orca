@@ -22,7 +22,7 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
   getLeafKey: (tabId: string, leafId: string) => string
   getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
-  /** Whether the pane is settled enough to type the pointer plus Enter into it. */
+  /** Returns whether the pane is settled and arms the runtime's retry when it is not. */
   isAgentSettledForDelivery: (leaf: OrchestrationMailboxLeaf) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getTabTitle: (tabId: string) => string | null | undefined
