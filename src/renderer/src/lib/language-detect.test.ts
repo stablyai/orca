@@ -47,6 +47,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
   })
 
+  it('maps CUDA C/C++ files to the dedicated cuda-cpp language id', () => {
+    expect(detectLanguage('kernels/vector_add.cu')).toBe('cuda-cpp')
+    expect(detectLanguage('kernels/vector_types.CUH')).toBe('cuda-cpp')
+  })
+
   it('maps .cts/.mts files to the Monaco built-in typescript language id (case-insensitive)', () => {
     expect(detectLanguage('config/vitest.config.mts')).toBe('typescript')
     expect(detectLanguage('scripts/postinstall.cts')).toBe('typescript')
