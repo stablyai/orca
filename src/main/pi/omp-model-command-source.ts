@@ -7,7 +7,7 @@ export function getOmpModelCommandSourceLines(): string[] {
 		'        const wanted = selector.trim()',
 		"        const findModel = () => ctx.modelRegistry.getAvailable().find((candidate) => candidate.provider + '/' + candidate.id === wanted)",
 		'        let model = findModel()',
-		'        // Why: the picker is `omp models`, which waits for discovery. The session registry fills in the background, so a listed model is missing until that refresh settles.',
+		"        // Why: `omp models` has already waited for discovery. This session's registry is still filling in.",
 		"        if (!model && typeof ctx.modelRegistry.awaitBackgroundRefresh === 'function') {",
 		'          await ctx.modelRegistry.awaitBackgroundRefresh()',
 		'          model = findModel()',
