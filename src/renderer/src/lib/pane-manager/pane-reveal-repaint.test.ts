@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
@@ -55,18 +56,9 @@ function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): Manag
   }
 }
 
-function createVisibilityProbeManager(onValues: () => void): PaneManager {
-  const manager = Object.create(PaneManager.prototype) as PaneManager
-  Object.assign(manager as unknown as Record<string, unknown>, {
-    destroyed: false,
-    atlasRecoveryVisible: true,
-    panes: {
-      values: () => {
-        onValues()
-        return []
-      }
-    }
-  })
+function createVisibilityProbeManager(): PaneManager {
+  const manager = new PaneManager(document.createElement('div'), { linkOpenHint: () => '' })
+  unregisterLivePaneManager(manager)
   return manager
 }
 
@@ -232,14 +224,8 @@ describe('schedulePaneRevealRepaint', () => {
   })
 
   it('skips delayed repaint and present when the manager hides before settle', () => {
-    let repaintValuesRead = 0
-    let presentValuesRead = 0
-    const repaintManager = createVisibilityProbeManager(() => {
-      repaintValuesRead += 1
-    })
-    const presentManager = createVisibilityProbeManager(() => {
-      presentValuesRead += 1
-    })
+    const repaintManager = createVisibilityProbeManager()
+    const presentManager = createVisibilityProbeManager()
 
     repaintManager.scheduleRevealRepaint()
     presentManager.scheduleRevealPresent()
@@ -249,8 +235,7 @@ describe('schedulePaneRevealRepaint', () => {
     flushFrame()
     flushFrame()
 
-    expect(repaintValuesRead).toBe(0)
-    expect(presentValuesRead).toBe(0)
+    expect(vi.mocked(globalThis.cancelAnimationFrame)).toHaveBeenCalledTimes(2)
   })
 
   describe('schedulePaneRevealPresent', () => {

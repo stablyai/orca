@@ -6,26 +6,40 @@ import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 type PaneGetter = () => Iterable<ManagedPaneInternal>
 
 const pendingRevealRepaints = new Set<PaneGetter>()
-let revealRepaintScheduled = false
+let cancelRevealRepaintFrame: (() => void) | null = null
 
-function scheduleSettledFrame(callback: () => void): void {
+function scheduleSettledFrame(callback: () => void): () => void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
-    globalThis.setTimeout(callback, 0)
-    return
+    const timer = globalThis.setTimeout(callback, 0)
+    return () => globalThis.clearTimeout(timer)
   }
   // Why: the first frame after a reveal can still be laying out the tab
   // overlay; the WebGL renderer silently drops redraw requests until the pane
   // is attached and measured, so repaint on the frame after layout settles.
-  globalThis.requestAnimationFrame(() => {
-    globalThis.requestAnimationFrame(callback)
+  let cancelled = false
+  let frameId: number | undefined
+  frameId = globalThis.requestAnimationFrame(() => {
+    if (!cancelled) {
+      frameId = globalThis.requestAnimationFrame(() => {
+        if (!cancelled) {
+          callback()
+        }
+      })
+    }
   })
+  return () => {
+    cancelled = true
+    if (frameId !== undefined) {
+      globalThis.cancelAnimationFrame(frameId)
+    }
+  }
 }
 
 function forEachPaneOnSettledFrame(
   getPanes: () => Iterable<ManagedPaneInternal>,
   visit: (pane: ManagedPaneInternal) => void
-): void {
-  scheduleSettledFrame(() => {
+): () => void {
+  return scheduleSettledFrame(() => {
     for (const pane of getPanes()) {
       try {
         visit(pane)
@@ -37,7 +51,7 @@ function forEachPaneOnSettledFrame(
 }
 
 function flushPaneRevealRepaints(): void {
-  revealRepaintScheduled = false
+  cancelRevealRepaintFrame = null
   const paneGetters = Array.from(pendingRevealRepaints)
   pendingRevealRepaints.clear()
   const livePanes = new Set<ManagedPaneInternal>()
@@ -75,18 +89,30 @@ function flushPaneRevealRepaints(): void {
  * registry-wide atlas reset so no delayed pane-local clear can invalidate a
  * sibling terminal's rebuilt model.
  */
-export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneInternal>): void {
+export function schedulePaneRevealRepaint(getPanes: PaneGetter): () => void {
   pendingRevealRepaints.add(getPanes)
-  if (revealRepaintScheduled) {
-    return
+  if (cancelRevealRepaintFrame === null) {
+    let completed = false
+    const cancel = scheduleSettledFrame(() => {
+      completed = true
+      flushPaneRevealRepaints()
+    })
+    if (!completed) {
+      cancelRevealRepaintFrame = cancel
+    }
   }
-  revealRepaintScheduled = true
-  scheduleSettledFrame(flushPaneRevealRepaints)
+  return () => {
+    pendingRevealRepaints.delete(getPanes)
+    if (pendingRevealRepaints.size === 0) {
+      cancelRevealRepaintFrame?.()
+      cancelRevealRepaintFrame = null
+    }
+  }
 }
 
 /** Presents panes without clearing the shared glyph atlas or bypassing DEC 2026. */
-export function schedulePaneRevealPresent(getPanes: () => Iterable<ManagedPaneInternal>): void {
-  forEachPaneOnSettledFrame(getPanes, (pane) => {
+export function schedulePaneRevealPresent(getPanes: PaneGetter): () => void {
+  return forEachPaneOnSettledFrame(getPanes, (pane) => {
     reattachWebglIfNeeded(pane)
     presentPaneViewportPreservingSynchronizedOutput(pane)
   })

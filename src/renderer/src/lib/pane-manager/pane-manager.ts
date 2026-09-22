@@ -35,7 +35,7 @@ import {
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
-import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { PaneRevealFrameOwner } from './pane-reveal-frame-owner'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { PaneReparentFrameTracker } from './pane-reparent-frame-tracker'
 import {
@@ -79,6 +79,7 @@ export class PaneManager {
   private destroyed = false
   private renderingSuspended: boolean
   private atlasRecoveryVisible: boolean
+  private revealFrames = new PaneRevealFrameOwner(this, this.panes)
   private identities = new PaneIdentityRegistry()
   private reparentFrames = new PaneReparentFrameTracker(() => this.destroyed)
 
@@ -293,24 +294,16 @@ export class PaneManager {
 
   setAtlasRecoveryVisible(visible: boolean): void {
     this.atlasRecoveryVisible = visible
+    this.revealFrames.cancelIfHidden(visible)
   }
 
   isVisibleForAtlasRecovery(): boolean {
     return this.atlasRecoveryVisible && !this.destroyed
   }
 
-  scheduleRevealRepaint(): void {
-    // Why: the settled-frame callback can fire after hide/destroy; repainting
-    // hidden or disposed panes can revive WebGL contexts and latch attach
-    // backoff, downgrading unrelated new panes to the DOM renderer.
-    schedulePaneRevealRepaint(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
-  }
+  scheduleRevealRepaint = (): void => this.revealFrames.scheduleRepaint()
 
-  scheduleRevealPresent(): void {
-    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases;
-    // skip the delayed present if the surface was hidden again meanwhile.
-    schedulePaneRevealPresent(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
-  }
+  scheduleRevealPresent = (): void => this.revealFrames.schedulePresent()
 
   suspendRendering(): void {
     this.renderingSuspended = true
@@ -343,6 +336,7 @@ export class PaneManager {
 
   destroy(): void {
     this.destroyed = true
+    this.setAtlasRecoveryVisible(false)
     unregisterLivePaneManager(this)
     releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)
