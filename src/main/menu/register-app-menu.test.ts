@@ -299,6 +299,22 @@ describe('registerAppMenu', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('pastes through a focused guest webview', () => {
+    const send = vi.fn()
+    const guestContents = { paste: vi.fn() }
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    getFocusedWebContentsMock.mockReturnValue(guestContents)
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    editSubmenu
+      .find((item) => item.label === 'Paste')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(guestContents.paste).toHaveBeenCalledOnce()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'routes Edit selection actions through the focused Orca window on %s',
     (platform) => {
