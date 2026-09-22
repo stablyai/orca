@@ -167,3 +167,17 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
   })
 })
+
+describe('Kiro title detection', () => {
+  it('resolves Kiro CLI native titles ("kiro: <session title>") to kiro', () => {
+    expect(resolveTerminalTitleAgentType('kiro: projects/brain')).toBe('kiro')
+    expect(resolveTerminalTitleAgentType('kiro: Fix the flaky test suite')).toBe('kiro')
+    expect(resolveExplicitTerminalTitleAgentType('kiro: projects/brain')).toBe('kiro')
+  })
+
+  it('does not claim cwd/path titles that merely contain kiro', () => {
+    expect(resolveTerminalTitleAgentType('~/kiro')).toBe(null)
+    expect(resolveTerminalTitleAgentType('user@host: ~/projects/kiro-scratch')).toBe(null)
+    expect(resolveTerminalTitleAgentType('.kiro/settings')).toBe(null)
+  })
+})
