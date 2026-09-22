@@ -29,6 +29,8 @@ export function registerLegacyBinaryControlFrames(
     registerBinaryStreamHandler,
     ptyId,
     clientId,
+    pairedDeviceId,
+    clientKind,
     isMobile,
     supportsDesktopViewportClaims,
     supportsWriteUnavailable
@@ -56,7 +58,8 @@ export function registerLegacyBinaryControlFrames(
           terminal: params.terminal,
           text,
           client: params.client,
-          isMobile
+          isMobile,
+          inputSource: { pairedDeviceId, clientKind }
         })
         if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
           controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)

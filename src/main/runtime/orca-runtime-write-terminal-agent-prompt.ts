@@ -68,6 +68,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, initialWrite)) {
         throw new Error('terminal_not_writable')
       }
+      await options.afterWrite?.(ptyId)
     } catch (error) {
       renderGate?.dispose()
       throw error
@@ -116,6 +117,9 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }
+    // Why: same contract as RuntimeTerminalWriter, which fires afterWrite once the PTY accepted
+    // each write; a caller tracking write order needs the submit's position, not the paste's.
+    await options.afterWrite?.(ptyId)
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({

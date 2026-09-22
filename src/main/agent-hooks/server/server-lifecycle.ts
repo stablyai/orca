@@ -13,10 +13,56 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
 import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
+import { parseTerminalInputSourcePath } from './terminal-input-source-route'
+import { isValidPaneKey } from './server-status-identity'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
+  // Why a read route on the hook listener: a hook already holds this port and token in its env,
+  // and the pane key it was launched with, so it can ask which device typed the prompt it is
+  // handling without any new credential. The token is per process, not per pane, so any holder
+  // can read any pane here, the same way it can already post status for any pane.
+  private handleTerminalInputSourceRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    paneKey: string
+  ): void {
+    if (req.headers['x-orca-agent-hook-token'] !== this.token) {
+      res.writeHead(403)
+      res.end()
+      return
+    }
+    // Why no alias resolution: the PTY registry is keyed by the physical key the pane was
+    // spawned with, which is the key the hook holds in ORCA_PANE_KEY, so the lookup is direct.
+    try {
+      const resolution = isValidPaneKey(paneKey)
+        ? this.onResolveTerminalInputSource?.(paneKey)
+        : undefined
+      if (!resolution || resolution.pane === 'unknown') {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      if (!resolution.source) {
+        res.writeHead(204)
+        res.end()
+        return
+      }
+      // Why serialize first: once the 200 header is out, the catch below could not answer 500.
+      const body = JSON.stringify(resolution.source)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(body)
+    } catch (error) {
+      // Why: this handler runs outside the POST path's try, and an unhandled throw here would
+      // reject the void-ed request promise and take the process down. Log it, since a hook
+      // that ignores status codes would otherwise see only "no device info".
+      console.error('[agent-hooks] last-input resolver error', error)
+      res.writeHead(500)
+      res.end()
+    }
+  }
+
   /** Start the loopback listener after hydration and spool replay have settled. */
   async start(options?: {
     env?: string
@@ -55,6 +101,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       this.ownerStateInitialized = true
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+      if (req.method === 'GET') {
+        // Why parse before anything else: only the last-input route answers GET; every other
+        // GET keeps the unauthenticated 404 it always had. Node accepts absolute-form targets
+        // that WHATWG URL rejects, so the parse itself must not be allowed to throw.
+        const paneKey = parseTerminalInputSourcePath(safeRequestPathname(req))
+        if (paneKey !== null) {
+          this.handleTerminalInputSourceRequest(req, res, paneKey)
+          return
+        }
+      }
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
@@ -73,7 +129,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         destroyedBySlowlorisCap = true
         req.destroy()
       })
-      const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+      const pathname = safeRequestPathname(req)
       try {
         const body = await readRequestBody(req)
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
@@ -197,6 +253,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.env = 'production'
     this.onAgentStatus = null
     this.onClaudeStatusLine = null
+    this.onResolveTerminalInputSource = null
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
@@ -239,5 +296,13 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.providerSessionChangeListeners.clear()
     this.enrichedStatusListeners.clear()
     this.statusRowMutationListeners.clear()
+  }
+}
+
+function safeRequestPathname(req: IncomingMessage): string {
+  try {
+    return new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+  } catch {
+    return ''
   }
 }

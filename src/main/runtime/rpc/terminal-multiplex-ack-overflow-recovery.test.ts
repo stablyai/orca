@@ -413,11 +413,11 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'still interactive\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        { text: 'still interactive\r', enter: false, interrupt: false },
+        { inputSource: expect.any(Object) }
+      )
     )
 
     binaryFrames.splice(0)

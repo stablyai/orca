@@ -206,11 +206,11 @@ describe('terminal multiplex RPC', () => {
         )
       )
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-          text: 'ls\r',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenCalledWith(
+          'terminal-1',
+          { text: 'ls\r', enter: false, interrupt: false },
+          { inputSource: expect.any(Object) }
+        )
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
       vi.mocked(runtime.updateRemoteDesktopViewer).mockResolvedValueOnce(false)
@@ -248,11 +248,11 @@ describe('terminal multiplex RPC', () => {
         )
       }
       await vi.waitFor(() =>
-        expect(runtime.sendTerminal).toHaveBeenLastCalledWith('terminal-1', {
-          text: 'retry',
-          enter: false,
-          interrupt: false
-        })
+        expect(runtime.sendTerminal).toHaveBeenLastCalledWith(
+          'terminal-1',
+          { text: 'retry', enter: false, interrupt: false },
+          { inputSource: expect.any(Object) }
+        )
       )
 
       dataListenerRef.current?.('a')
