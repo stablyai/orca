@@ -818,4 +818,67 @@ describe('deriveContributedPluginTaskSources', () => {
       { pluginKey: 'orca-samples.issues', sourceId: 'boards', title: 'Boards', icon: 'kanban' }
     ])
   })
+  it('reloads facet options for the scopes that survived a scope drop', async () => {
+    // Without this the facet load already in flight discards its own callbacks
+    // (their scope set moved on) and every facet stays on `loading` forever.
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'status') {
+        return {
+          ok: true,
+          data: {
+            connected: true,
+            supports: { create: false, comment: false },
+            facets: [{ id: 'state', label: 'State', kind: 'multi', dynamic: true }]
+          }
+        }
+      }
+      if (method === 'listScopes') {
+        return { ok: true, data: [{ id: 'org/kept', name: 'org / kept' }] }
+      }
+      if (method === 'listFacetOptions') {
+        return { ok: true, data: [{ id: 'Active', label: 'Active' }] }
+      }
+      return { ok: true, data: [] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.setState({
+      selectedPluginTaskSourceScopeIds: ['org/kept', 'org/gone'],
+      pluginTaskSourceFacets: [{ id: 'state', label: 'State', kind: 'multi', dynamic: true }]
+    })
+    await store.getState().loadPluginTaskSourceScopes()
+
+    expect(store.getState().selectedPluginTaskSourceScopeIds).toEqual(['org/kept'])
+    const facetCalls = invokeTaskSource.mock.calls.filter(
+      ([args]) => args.method === 'listFacetOptions'
+    )
+    expect(facetCalls.length).toBeGreaterThan(0)
+  })
+
+  it('does not reload facet options when every selected scope survives', async () => {
+    const store = createTestStore()
+    const invokeTaskSource = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'listScopes') {
+        return { ok: true, data: [{ id: 'org/kept', name: 'org / kept' }] }
+      }
+      return { ok: true, data: [] }
+    })
+    vi.stubGlobal('window', { api: { plugins: { invokeTaskSource } } })
+
+    store.getState().selectPluginTaskSource(BOARDS_SOURCE)
+    store.setState({
+      selectedPluginTaskSourceScopeIds: ['org/kept'],
+      pluginTaskSourceFacets: [{ id: 'state', label: 'State', kind: 'multi', dynamic: true }]
+    })
+    await store.getState().loadPluginTaskSourceScopes()
+
+    expect(
+      invokeTaskSource.mock.calls.filter(
+        ([args]) => args.method === 'listFacetOptions'
+      )
+    ).toEqual([])
+  })
+
 })

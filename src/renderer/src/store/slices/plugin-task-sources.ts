@@ -208,6 +208,13 @@ export const createPluginTaskSourcesSlice: StateCreator<
         pluginTaskSourceScopesLoading: false,
         ...(retainedScopeIds ? { selectedPluginTaskSourceScopeIds: retainedScopeIds } : {})
       })
+      if (retainedScopeIds) {
+        // Dropping a scope strands any facet load already in flight: its
+        // callbacks see a scope set that moved on and discard themselves,
+        // leaving every facet stuck on `loading`. Reload for the scopes that
+        // survived rather than settling the ones that did not.
+        await get().loadPluginTaskSourceFacetOptions()
+      }
     } else {
       set({
         pluginTaskSourceScopes: [],
