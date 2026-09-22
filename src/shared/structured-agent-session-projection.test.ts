@@ -7,6 +7,7 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
+  projectStructuredItemsToNativeChat,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
@@ -451,6 +452,36 @@ describe('structured agent session status projection', () => {
 })
 
 describe('notice projection for desktop and mobile consumers', () => {
+  it('keeps transient retry status beside compaction while a queued send remains pending', () => {
+    const transient = {
+      category: 'overloaded',
+      code: '529',
+      message: 'overloaded',
+      retry: { state: 'active' as const, attempt: 1, maxRetries: 3, nextRetryAt: 2_000 },
+      recovery: { state: 'provider-retrying' as const }
+    }
+    const messages = projectStructuredItemsToNativeChat([
+      item('retry', 1, {
+        kind: 'status',
+        text: 'Retry 1/3 scheduled',
+        presentation: 'provider-transient-failure',
+        tone: 'warning',
+        providerTransientFailure: transient
+      }),
+      item('compaction', 2, {
+        kind: 'status',
+        text: 'Context compacted',
+        presentation: 'compaction'
+      })
+    ])
+
+    expect(messages.map((message) => message.id)).toEqual(['retry', 'compaction'])
+    expect(messages[0]?.blocks[0]).toMatchObject({ providerTransientFailure: transient })
+    expect(
+      hasUnansweredStructuredAgentSessionDispatch([submission('queued-send', 'pending')])
+    ).toBe(true)
+  })
+
   it.each([
     { presentation: 'compaction' },
     { presentation: 'plan-document' },

@@ -127,6 +127,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
         text: body.text,
         ...(body.presentation !== undefined ? { presentation: body.presentation } : {}),
         ...(body.tone !== undefined ? { tone: body.tone } : {}),
+        ...(body.providerTransientFailure
+          ? { providerTransientFailure: body.providerTransientFailure }
+          : {}),
         ...(body.providerFrame ? { providerFrame: body.providerFrame } : {})
       }
     ]

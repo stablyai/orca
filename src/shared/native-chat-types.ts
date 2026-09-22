@@ -32,6 +32,22 @@ export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
 export const NATIVE_CHAT_ROLES = ['user', 'assistant', 'tool', 'reasoning', 'system'] as const
 export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
+export type NativeChatProviderTransientFailure = {
+  category: string
+  code?: string
+  message: string
+  retry: {
+    state: 'active' | 'exhausted'
+    attempt?: number
+    maxRetries?: number
+    nextRetryAt?: number
+  }
+  recovery: {
+    state: 'provider-retrying' | 'successor-required' | 'fallback-active' | 'handed-off'
+    detail?: string
+  }
+}
+
 /** Plain prose / markdown. The assistant body, a user prompt, reasoning text. */
 export type NativeChatTextBlock = {
   type: 'text'
@@ -39,6 +55,8 @@ export type NativeChatTextBlock = {
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string
   tone?: string
+  /** Durable, provider-neutral recovery state for a retryable provider failure. */
+  providerTransientFailure?: NativeChatProviderTransientFailure
   /** Optional structured detail for an otherwise ordinary fallback line. */
   providerFrame?: {
     provider: string

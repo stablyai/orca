@@ -9,7 +9,11 @@
 
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
-import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatProviderTransientFailure,
+  NativeChatRole
+} from './native-chat-types'
 
 export { type AgentType }
 
@@ -219,6 +223,7 @@ export type AgentJournalStatusItem = {
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   tone?: string
+  providerTransientFailure?: NativeChatProviderTransientFailure
   /** Legacy carrier of a turn record: written by hosts before v3, and published
    *  to clients that predate the `turn` item. New code reads turns through
    *  `readAgentJournalTurn`, never this field. */

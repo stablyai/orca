@@ -475,10 +475,17 @@ describe('Claude structured journal translation', () => {
       })
     )
 
-    expect(providerFrameKinds(state.items)).toEqual(['message:result:success'])
+    expect(providerFrameKinds(state.items)).toEqual([])
     expect(state.items.at(-1)?.body).toMatchObject({
       kind: 'status',
-      text: 'API Error: 529 upstream overloaded'
+      presentation: 'provider-transient-failure',
+      tone: 'error',
+      providerTransientFailure: {
+        category: 'overloaded',
+        code: '529',
+        retry: { state: 'exhausted' },
+        recovery: { state: 'successor-required' }
+      }
     })
     // The turn still settles: the error is an extra row, not a stuck lifecycle.
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])

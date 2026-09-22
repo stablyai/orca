@@ -32,6 +32,7 @@ import { ClaudeOpenTurn } from './claude-open-turn'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
+import { createClaudeTransientFailureJournal } from './claude-provider-transient-failure'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -83,6 +84,10 @@ export function createClaudeJournalTranslator(
     settleChildren: (groupKey) => subagents.settleTurn(groupKey)
   })
   const providerFallback = createClaudeProviderFrameFallback(
+    deps.sink,
+    deps.fallbackIdPrefix ?? 'acquisition'
+  )
+  const transientFailures = createClaudeTransientFailureJournal(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
@@ -198,7 +203,10 @@ export function createClaudeJournalTranslator(
         }
         const kind = claudeProviderFrameKind(event.message)
         const failure = claudeResultFailure(event.message)
-        if (failure || !isSettledClaudeResultKind(kind)) {
+        const transientFailure = failure?.text
+          ? transientFailures.appendExhausted(failure.text)
+          : false
+        if ((!transientFailure && failure) || !isSettledClaudeResultKind(kind)) {
           providerFallback.append(kind, event.message, failure?.text)
         }
       } else if (event.type === 'message') {
@@ -208,7 +216,12 @@ export function createClaudeJournalTranslator(
           event.observedAt ?? Date.now()
         )
         const kind = claudeProviderFrameKind(event.message)
+        const transientRetry = transientFailures.observeRetry(
+          event.message,
+          event.observedAt ?? Date.now()
+        )
         if (
+          !transientRetry &&
           !handleMessage(
             event.message,
             event.startsTurn === true,

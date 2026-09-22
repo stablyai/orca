@@ -34,6 +34,22 @@ const ProviderFrame = z.object({
   payload: BoundedPayload
 })
 
+const ProviderTransientFailure = z.object({
+  category: z.string().min(1),
+  code: z.string().optional(),
+  message: z.string(),
+  retry: z.object({
+    state: z.string().min(1),
+    attempt: z.number().int().positive().optional(),
+    maxRetries: z.number().int().nonnegative().optional(),
+    nextRetryAt: z.number().finite().positive().optional()
+  }),
+  recovery: z.object({
+    state: z.string().min(1),
+    detail: z.string().optional()
+  })
+})
+
 const ToolMetadata = {
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
   exitCode: z.number().int().optional(),
@@ -76,6 +92,7 @@ const Block = z.union([
       text: z.string(),
       presentation: z.string().optional(),
       tone: z.string().optional(),
+      providerTransientFailure: ProviderTransientFailure.optional(),
       providerFrame: ProviderFrame.optional()
     }),
     // `input: undefined` loses its key under JSON.stringify, so a persisted
@@ -207,6 +224,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     text: z.string(),
     presentation: z.string().optional(),
     tone: z.string().optional(),
+    providerTransientFailure: ProviderTransientFailure.optional(),
     turnLifecycle: z
       .object({
         turnId: z.string(),
