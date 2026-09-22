@@ -13,6 +13,7 @@ import {
   claudeTaskId,
   isBoundedClaudeTaskId
 } from './claude-background-task-tracker'
+import { isAgentChildWorkKind } from '../../shared/agent-status-child-work-liveness'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
 const TASK_SUBTYPES: ReadonlySet<string> = new Set([
@@ -59,7 +60,7 @@ export type ClaudeSubagentTaskFrame = {
 /** True when the task Claude announced is a subagent rather than a backgrounded
  *  shell command or a workflow. */
 export function isClaudeSubagentTask(message: Record<string, unknown>): boolean {
-  if (classifyClaudeBackgroundTaskKind(message.task_type) === 'agent') {
+  if (isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(message.task_type))) {
     return true
   }
   // Releases predating `task_type` still name the child in `subagent_type`. A

@@ -331,14 +331,6 @@ export function projectStructuredAgentSessionStatusSummary(
   }
 }
 
-/** The agent-status state one projected session status stands for. Shared across the process
- *  boundary so `worktree ps` and the sidebar cannot disagree about the same session. */
-export function structuredAgentSessionStatusState(
-  status: StructuredAgentSessionProjectedStatus
-): 'working' | 'blocked' | 'done' {
-  return status === 'working' ? 'working' : status === 'attention' ? 'blocked' : 'done'
-}
-
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')

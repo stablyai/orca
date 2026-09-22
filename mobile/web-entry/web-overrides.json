@@ -10,6 +10,10 @@
       "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
     },
     {
+      "file": "src/navigation/use-back-claim.web.ts",
+      "reason": "There is no hardware Back key inside a WebView: react-native-web answers BackHandler.addEventListener with a console warning and an inert subscription, so every sheet that claimed the key on the page armed nothing and one press left the whole session route. The native file registers the key; this one claims it from the shell over the bridge, and the shell hands one press back for the newest claim to spend."
+    },
+    {
       "file": "src/navigation/route-handoff.web.ts",
       "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
     },
@@ -164,6 +168,10 @@
     {
       "file": "src/terminal/terminal-live-input-text-write.web.ts",
       "reason": "setNativeProps does not exist on React Native Web, where a TextInput ref is the DOM node, so the native write threw out of the session route's mount effect and faulted the page instead of clearing the field; this one sets value on the <input> or <textarea> RN Web rendered."
+    },
+    {
+      "file": "src/terminal/terminal-text-field-submit-binding.web.ts",
+      "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition \u2014 nativeEvent.isComposing, or the Android keyCode 229 that stands for it \u2014 which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
     },
     {
       "file": "src/transport/host-app-version-store.web.ts",

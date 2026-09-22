@@ -8,6 +8,7 @@ import {
 } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
 import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import { routeViewOf } from './page-route-policy'
@@ -29,7 +30,12 @@ describe('init and state', () => {
       sessionId: 'session-a',
       buildId: 'build-a',
       // What this shell takes from the page, which is the page's own check before it posts one.
-      accepts: [BRIDGE_ROUTE_PARAM_CLEAR, BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT, BRIDGE_PAGE_PAINTED],
+      accepts: [
+        BRIDGE_ROUTE_PARAM_CLEAR,
+        BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+        BRIDGE_PAGE_PAINTED,
+        BRIDGE_BACK_CLAIM_NOTIFY
+      ],
       connection: {
         state: 'reconnecting',
         reconnectAttempt: 3,

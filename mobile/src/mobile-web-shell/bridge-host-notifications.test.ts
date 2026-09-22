@@ -7,6 +7,7 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
 import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
@@ -471,7 +472,8 @@ describe('the page erasing a one-shot route param', () => {
     expect(init.type === 'init' && init.accepts).toEqual([
       BRIDGE_ROUTE_PARAM_CLEAR,
       BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
-      BRIDGE_PAGE_PAINTED
+      BRIDGE_PAGE_PAINTED,
+      BRIDGE_BACK_CLAIM_NOTIFY
     ])
   })
 })

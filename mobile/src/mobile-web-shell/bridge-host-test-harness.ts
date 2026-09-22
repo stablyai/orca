@@ -7,6 +7,7 @@ import {
   type FakeRpcClient
 } from './bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
+import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
@@ -46,6 +47,8 @@ export type Harness = {
   storageWrites: { key: string; value: string | null }[]
   pageReadyCount: () => number
   pagePaintCount: () => number
+  /** Every claim the host reported, in order, including the false it sends when a document ends. */
+  backClaims: boolean[]
   /** What each answered `ready` declared it reports, in order. */
   pageReports: () => readonly (readonly string[])[]
   /** One entry per `ready` answered, saying whether its `init` reached the page. Filled as each
@@ -100,6 +103,8 @@ export function harness(
     serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
     /** Drives the held-stream silence clock, so a case fires it instead of waiting on it. */
     terminalTimers?: TerminalBacklogTimers
+    /** Stands for a host rebuilt over a session that already declared and claimed the Back key. */
+    sessionBack?: BridgeSessionBack
   } = {}
 ): Harness {
   const client = options.client ?? createFakeRpcClient()
@@ -111,6 +116,7 @@ export function harness(
   const clipboardWrites: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
+  const backClaims: boolean[] = []
   let pageReadies = 0
   let pagePaints = 0
   /** What each answered `ready` declared it reports, in order. */
@@ -133,6 +139,7 @@ export function harness(
     pageRouteGrants: options.pageRouteGrants ?? PAGE_ROUTE_GRANTS,
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,
+    ...(options.sessionBack === undefined ? {} : { sessionBack: options.sessionBack }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? HARNESS_CLIENT_IDENTITY : options.clientIdentity,
     host: HOST,
@@ -143,6 +150,7 @@ export function harness(
       pageReadies += 1
       pageReports.push(reports)
     },
+    onPageBackClaim: (claimed) => backClaims.push(claimed),
     onPagePainted: () => {
       pagePaints += 1
     },
@@ -203,6 +211,7 @@ export function harness(
     storageWrites,
     pageReadyCount: () => pageReadies,
     pagePaintCount: () => pagePaints,
+    backClaims,
     pageReports: () => pageReports,
     routeParamClears: () => routeParamClears,
     routeRefusals,

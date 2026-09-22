@@ -13,6 +13,7 @@ import {
   type BridgeHapticsKind
 } from './bridge-haptics-notify'
 import { captureBridgeError } from './bridge-error-capture'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 
 /**
@@ -59,6 +60,7 @@ export type BridgeClientNotifications = {
   notifyHaptics: (kind: BridgeHapticsKind) => boolean
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
+  notifyBackClaim: (claimed: boolean) => void
 }
 
 export function createBridgeClientNotifications(
@@ -144,6 +146,18 @@ export function createBridgeClientNotifications(
     notifyPagePainted: () => {
       if (deps.shellAccepts(BRIDGE_PAGE_PAINTED)) {
         post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
+      }
+    },
+    // Gated the same way, for the same reason, and answering nothing: a shell that will not hear
+    // the claim keeps the key, which is what every shell did before this frame existed.
+    notifyBackClaim: (claimed) => {
+      if (deps.shellAccepts(BRIDGE_BACK_CLAIM_NOTIFY)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_BACK_CLAIM_NOTIFY,
+          claimed
+        })
       }
     }
   }

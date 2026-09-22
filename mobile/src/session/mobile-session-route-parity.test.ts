@@ -79,10 +79,21 @@ const HOST_COMPONENT_NAMES = new Set([
 // and a height one), +1 effect, -2 registrations and -2 removals for the listener pair, and -6
 // strings: the four event names and the two `'ios'` guards that chose between them. Re-recorded
 // against the merged tree, since neither side's hash covers the other's change.
-const HEAD_MAIN_HOOK_SHA256 = '6f170722259dda22657333fa57b2b3e47ac2667a0e1aa8c9b08e773fe92866da'
-const HEAD_HOOK_BINDING_SHA256 = 'd483de1f08a63e4d32016e599e0038320f48478b16246617537bc2275fa92706'
+//
+// Refreshed for the terminal fields' submit seam: react-native-web withholds `onSubmitEditing`
+// when the Enter keydown reports an open composition, which is a soft keyboard's normal mid-word
+// state, so both of the dock's fields also bind the page's own line-break signal. +4 hooks and +2
+// callbacks in the send actions — `submitLiveInput` and `submitBufferedDraft`, each with a
+// `useTerminalTextFieldSubmitBinding` beside it — and both fields moved their ref, the live one
+// its submit handler too.
+// Moved once more, -1 hook and -1 callback: `submitBufferedDraft` stopped being a `useCallback`.
+// Memoizing it on `[]` froze the per-render `handleSend` it reads, whose guard needs a `client`
+// and an `activeHandle` the first render does not have, so the page's line-break submit could
+// never pass it. Found by pullfrog on #22300.
+const HEAD_MAIN_HOOK_SHA256 = 'a0f3b900d1b8393e63d7fb36725983eac5d82c23fe2cdf9d2c9fe9f4a8ce4b4e'
+const HEAD_HOOK_BINDING_SHA256 = '926af4ae57bc061697faf38b457ceb53acf4acac51ee463661dda225852c1572'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'dc189c0b5e5a6e060393382fa2d92d8754d6d14068cb4728d6a79a50599e401c'
+  'e396ab759b2401acef45dea428e97c7f8f24fff41aae7fb7858da5a5b145c64c'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -102,7 +113,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-const HEAD_CALLBACK_BODY_SHA256 = '7449a84d321ce698bc5a2ab6bf204b2047dcfaaebf15f05ec924ba95cec9121a'
+const HEAD_CALLBACK_BODY_SHA256 = '349ad6f766da14b3bce23a13f3a67f2b013efadd8896f63b7b68e724b9726d9b'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -149,7 +160,8 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // with the listener pair.
 const HEAD_RUNTIME_STRING_SHA256 =
   '98516a198e530b037132f3f4b2f916d5beb577a7a97e20106d0a7891c7370545'
-const HEAD_HOST_JSX_SHA256 = '3ba319e8823e304b1024b5f583ddb340ae583010e522e50ac276231d3658180f'
+// Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
+const HEAD_HOST_JSX_SHA256 = '7f2354a8af416f20add2a525ee5e8aa0664a62d34adaf9750d8af5bc75f9f3e6'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
@@ -541,10 +553,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(278)
+    expect(main.hooks).toHaveLength(281)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(78)
+    expect(main.callbacks).toHaveLength(79)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(25)
