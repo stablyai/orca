@@ -489,4 +489,32 @@ describe('TaskPage contributed source content', () => {
     )
   })
 
+  it('applies a restored facet filter to the list once its options settle', async () => {
+    // The first load runs before any facet has settled, so it carries no
+    // selections. A restored selection that is valid needs no pruning and no
+    // seeding, so the query never changes — only the settling signal can bring
+    // the list back in line with the chip.
+    const invoke = stubFacetSource({ state: [{ id: 'Active', label: 'Active' }], sprint: [] })
+    selectBoards()
+    useAppStore.setState({
+      pluginTaskSourceQuery: { search: null, filterId: null, facetSelections: { state: ['Active'] } }
+    })
+
+    renderContent()
+
+    await screen.findByRole('combobox', { name: 'State' })
+    await waitFor(
+      () => {
+        const withState = invoke.mock.calls.filter(
+          ([args]) =>
+            args.method === 'listItems' &&
+            JSON.stringify(args.params?.facetSelections ?? {}) ===
+              JSON.stringify({ state: ['Active'] })
+        )
+        expect(withState.length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 }
+    )
+  })
+
 })
