@@ -138,6 +138,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     try {
       opened = await capture.open()
     } catch (err) {
+      // Same check the arm below makes, for the same reason: a refusal this start no longer owns
+      // must not idle what replaced it, nor toast over the closure the disable already reported.
+      if (generationRef.current !== generation || !enabledRef.current) {
+        return
+      }
       // A capture the host refused outright, which on the page is a route that was never granted
       // the audio verbs. Back to idle before it is rethrown: the caller toasts the shell's own
       // message, and a control left on 'starting' has no way back short of a remount.
@@ -271,11 +276,17 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       const client = clientRef.current
       const dictationId = activeIdRef.current
       const wasUnderway = statusRef.current === 'starting' || statusRef.current === 'recording'
-      generationRef.current += 1
+      const generation = generationRef.current + 1
+      generationRef.current = generation
       activeIdRef.current = null
       closeDictationAudio()
       if (client && dictationId) {
         await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+      }
+      // The cancel is a desktop round trip, and a start that landed inside it owns the status by
+      // now: reporting here would toast over a live recording, and resetting would idle one.
+      if (generationRef.current !== generation) {
+        return
       }
       if (reason !== null && wasUnderway) {
         reportError(new Error(reason))
