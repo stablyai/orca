@@ -36,6 +36,7 @@ import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
 } from './verify-mobile-web-bundle.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   hashedAsset,
   readDesktopVersion,
@@ -450,9 +451,11 @@ describe('the Phase C budget', () => {
       join(projectDir, 'config', 'scripts', 'verify-mobile-web-app-bundle.mjs'),
       'utf8'
     )
-    // The bound reads like a per-route escape hatch and is not one: 5 of the 14 routes break it
-    // on their own. What keeps it survivable is that expo-router wants a synchronous export off
-    // layout nodes only, so the note has to name the layout and the export that drives it.
+    // The bound reads like a per-route escape hatch and is not one: of the fourteen routes in the
+    // tree, session breaks it outright at 3.32 MiB and five more spend most of it, so the hatch is
+    // one route away from unusable rather than free. What keeps it survivable is that expo-router
+    // wants a synchronous export off layout nodes only, so the note has to name the layout and the
+    // export that drives it.
     const doc = source.slice(
       0,
       source.indexOf('export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES')
@@ -460,6 +463,21 @@ describe('the Phase C budget', () => {
     const note = doc.slice(doc.lastIndexOf('/**'))
     expect(note).toContain('h/_layout.tsx')
     expect(note).toContain('unstable_settings')
+  })
+
+  /** The one count above that must follow the tree, spelled so the census reads it. The sweep is
+   *  a row per route plus `h/_layout.tsx`, which is no screen, so it is that length less one. */
+  it('spells the route count off the sweep it is a count of', async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'build-mobile-web-app-bundle.test.mjs'),
+      'utf8'
+    )
+    const rows = [
+      { precedes: 'routes in the tree', counted: MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length - 1 }
+    ]
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
+      expect(spelled, precedes).toEqual(counts)
+    }
   })
 
   it('budgets what loads first well under what the whole page weighs', () => {
@@ -510,21 +528,19 @@ describe('the Phase C budget', () => {
   })
 
   it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
-    // The two builds this ceiling has to tell apart, both measured at 14 routes and both still
-    // told apart by the envelope, which is tighter than the 4r + 16 they were first read against.
+    // The two builds the ceiling must tell apart: mermaid through one pre-bundled artifact
+    // emitted 69 scripts, importing the package emitted 172, esbuild splitting along the diagram
+    // types mermaid lazily imports. Both frozen at the head that measured them, because this case
+    // pins the discrimination and not either build's size.
     //
-    // The page reaches mermaid through one pre-bundled artifact and the bundle emits 69 scripts
-    // (68 of them the page's own split, one the deferred engine). Importing the package instead
-    // emitted 172: mermaid lazily imports each of its own diagram types and esbuild splits along
-    // those boundaries, all of it inside the generation the phone has already downloaded. The
-    // route term is the only term precisely so that the second of those fails here -- a ceiling
-    // raised to admit 172 would have admitted any split at all.
+    // 69 now sits just under the envelope: a sweep that falls further means re-measure, not raise.
     const ROUTES = 14
     const WITH_ONE_ARTIFACT = 69
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // And the assets that came with it: 215 against 112, of the 256 the shell will load.
+    // And the assets that came with it: 215 against the 113 this head's envelope allows, of the
+    // 256 the shell will load.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
@@ -570,9 +586,9 @@ describe('the Phase C budget', () => {
     // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
     // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(30, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(249)
+    expect(assertAssetCeilingFitsShell(30, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(248)
     expect(() => assertAssetCeilingFitsShell(31, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /258 .*256/
+      /257 .*256/
     )
   })
 })

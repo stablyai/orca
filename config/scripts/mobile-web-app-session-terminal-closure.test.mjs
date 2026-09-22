@@ -325,8 +325,16 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
  *   local modules  1018 -> 1021   (+3)
+ *
+ * The C6.5 follow-up then aliased `zod` in the builder, so the four modules under `src/shared` that
+ * this route reaches stop pulling the root's second copy in. The only reading here that has ever
+ * fallen, and the only one where the two lists were diffed and every entry on the difference was
+ * vendored: 94 gone, all of them `zod@4.5.4`, none added, because mobile's 79 were already here.
+ *
+ *   modules        4363 -> 4269   (-94)
+ *   local modules  1021 -> 1021   (unchanged)
  */
-const SESSION_ROUTE_MODULES = 4363
+const SESSION_ROUTE_MODULES = 4269
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
