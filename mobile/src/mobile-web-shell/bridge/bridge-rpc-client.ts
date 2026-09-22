@@ -39,7 +39,6 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeHostMessage,
   type BridgeInitRoute
 } from './bridge-envelope'
 
@@ -283,11 +282,6 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
-  function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
-    handshake.stop()
-    shellSession.accept(message)
-  }
-
   /** A shell rebuilt under the page: what the cache holds is for a client that is already gone. */
   function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
     if (cache.apply(snapshotFromShell) !== 'stale') {
@@ -298,7 +292,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const back = createPageBackConsumers({
-    onClaimedChange: (claimed) => notifications.notifyBackClaim(claimed),
+    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
     onUnclaimed: () => {
       report({ kind: 'back-unclaimed' })
       notifications.notifyNavigateBack()
@@ -309,7 +303,14 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     requests,
     subscriptions,
     report,
-    acceptInit,
+    // Declared here rather than beside the others: the re-assert has to run after the session has
+    // taken this frame, so the claim's own gate reads this `init`'s `accepts` and a shell that
+    // never named it still hears nothing.
+    acceptInit: (message) => {
+      handshake.stop()
+      shellSession.accept(message)
+      back.reassert()
+    },
     acceptState,
     acceptBack: back.press
   })

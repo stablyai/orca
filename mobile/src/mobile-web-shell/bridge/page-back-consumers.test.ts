@@ -8,7 +8,7 @@ function consumers() {
     claims,
     unclaimed,
     stack: createPageBackConsumers({
-      onClaimedChange: (claimed) => claims.push(claimed),
+      publishClaim: (claimed) => claims.push(claimed),
       onUnclaimed: unclaimed
     })
   }
@@ -99,6 +99,34 @@ describe('who in the page is holding the device Back key', () => {
     expect(claims).toEqual([true, false, true])
     other()
     expect(claims).toEqual([true, false, true, false])
+  })
+
+  /**
+   * The shell drops the claim on every `ready` and when its host is torn down, so an edge this
+   * document posted before that shell arrived is one it never heard. `init` is the shell saying it
+   * is here now, and this is the page answering with the state rather than with a transition.
+   */
+  it('says again what it is holding when the shell asks, without a second edge', () => {
+    const { claims, stack } = consumers()
+    stack.claim(() => true)
+    stack.reassert()
+    expect(claims).toEqual([true, true])
+  })
+
+  /**
+   * Nothing to say. Every `init` that answers a `ready` is sent by a host that dropped the claim
+   * first, so it already holds false; the only other one carries a rewritten route, where a stale
+   * true needs a `false` the page posted to have never left — and a port that refused that one
+   * refuses this too. A `false` here would be a frame per document boot asserting what the shell
+   * already holds.
+   */
+  it('says nothing when it is holding nothing, because the shell already holds that', () => {
+    const { claims, stack } = consumers()
+    stack.reassert()
+    const release = stack.claim(() => true)
+    release()
+    stack.reassert()
+    expect(claims).toEqual([true, false])
   })
 
   it('gives the key back when the client closes, whoever was still holding it', () => {

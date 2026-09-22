@@ -50,7 +50,7 @@ beforeEach(() => {
   page.claims.length = 0
   page.unclaimed.mockClear()
   page.consumers = createPageBackConsumers({
-    onClaimedChange: (claimed) => page.claims.push(claimed),
+    publishClaim: (claimed) => page.claims.push(claimed),
     onUnclaimed: page.unclaimed
   })
 })

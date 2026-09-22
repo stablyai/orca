@@ -15,6 +15,7 @@ import {
   type BridgeHapticsKind
 } from './bridge/bridge-haptics-notify'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
@@ -636,6 +637,35 @@ describe('client changes', () => {
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(next.requests).toHaveLength(1)
     expect(first.requests).toHaveLength(0)
+  })
+
+  /**
+   * The Back key across a host rebuild, which is the one the page cannot see.
+   *
+   * A rebuilt host starts with no claim and no `accepts`, and disposing the old one reports the
+   * drop, so the screen stops taking the key even though the document still holds a sheet. What
+   * puts the two back in step is the page's own re-assert on the `init` that answers its next
+   * `ready` — and that `ready` is also what gives the rebuilt host the `accepts` it needs to
+   * deliver a press at all.
+   */
+  it('takes the claim again from the page after the host is rebuilt under it', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    expect(mounted.probe.backClaims).toEqual([true])
+    // A new client under the same session: the host is rebuilt and the page is never told.
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    expect(mounted.probe.backClaims).toEqual([true, false])
+    // The page re-asks, and says again what it is holding. Both frames are needed: the `ready`
+    // hands the new host the declaration, and the re-assert hands it the claim.
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    expect(mounted.probe.backClaims).toEqual([true, false, true])
   })
 
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {

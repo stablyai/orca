@@ -68,6 +68,38 @@ describe('a Back press crossing from the shell to the page', () => {
     expect(pair.diagnostics).toContainEqual({ kind: 'back-unclaimed' })
   })
 
+  /**
+   * The shell forgets on purpose — `readReady` drops the claim and a rebuilt host starts with
+   * none — so a claim the page took before that shell existed is one nothing over there knows
+   * about. `init` is the shell saying it is here now, and the page answers it with the state.
+   *
+   * Without this the page keeps a sheet open, the shell believes nothing is claimed, and the next
+   * press pops the screen out from under it.
+   */
+  it('says the claim again on the init that answers a re-asked ready', async () => {
+    const pair = await opened()
+    pair.client.claimBack(() => true)
+    await pair.flush()
+    expect(pair.backClaims).toEqual([true])
+    // The page re-asks, which is what a stale `state` frame makes it do; the host drops the claim
+    // answering it, and the page's re-assert is what puts the two back in step.
+    pair.host.receive(
+      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
+    )
+    await pair.flush()
+    expect(pair.backClaims).toEqual([true, false, true])
+  })
+
+  it('says nothing again when this document is holding nothing', async () => {
+    const pair = await opened()
+    pair.host.receive(
+      JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_BACK_FRAME] })
+    )
+    await pair.flush()
+    expect(notifies(pair)).toEqual([])
+    expect(pair.backClaims).toEqual([])
+  })
+
   it('gives the key back when the page client closes', async () => {
     const pair = await opened()
     pair.client.claimBack(() => true)
@@ -106,6 +138,11 @@ describe('a shell and a page built either side of the Back lane', () => {
     await pair.flush()
     expect(notifies(pair)).toEqual([])
     expect(pair.backClaims).toEqual([])
+    // And the re-assert is held to the same declaration: a second `init` from a shell that never
+    // named the claim is still one the page says nothing back to.
+    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
+    await pair.flush()
+    expect(notifies(pair)).toEqual([])
   })
 
   it('new shell, old page: the shell never sends a press the page would refuse', async () => {

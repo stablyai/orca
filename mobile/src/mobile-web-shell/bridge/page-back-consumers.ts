@@ -18,13 +18,27 @@ export type PageBackConsumers = {
   readonly claim: (consumer: PageBackConsumer) => () => void
   /** One press, offered newest first, and handed back to the shell when nothing here took it. */
   readonly press: () => void
+  /**
+   * Says the claim again, without an edge to hang it on.
+   *
+   * The shell forgets on purpose: it drops the claim on every `ready`, and a host rebuilt under a
+   * live page starts with none at all. A claim taken before that shell arrived is one it never
+   * heard, so the page answers each `init` with the state rather than with a transition.
+   *
+   * Nothing is said while nothing is held. Every `init` that answers a `ready` comes from a host
+   * that dropped the claim first, so it already holds false; the only other one carries a
+   * rewritten route, where a stale true needs a `false` the page posted to have never left — and
+   * a port that refused that frame refuses this one too.
+   */
+  readonly reassert: () => void
   /** The client is closing: the key is the shell's own again. */
   readonly clear: () => void
 }
 
 export function createPageBackConsumers(args: {
-  /** Told only when the stack empties or stops being empty, never per consumer. */
-  onClaimedChange: (claimed: boolean) => void
+  /** Told on each edge — the stack emptying or stopping being empty, never per consumer — and
+   *  again for each `reassert`. */
+  publishClaim: (claimed: boolean) => void
   /** Nothing here took the press. The claim and the press cross on separate frames, so a sheet
    *  that closed between the two must not leave the key doing nothing at all. */
   onUnclaimed: () => void
@@ -33,7 +47,7 @@ export function createPageBackConsumers(args: {
 
   function publish(before: number): void {
     if ((before === 0) !== (held.length === 0)) {
-      args.onClaimedChange(held.length > 0)
+      args.publishClaim(held.length > 0)
     }
   }
 
@@ -58,6 +72,11 @@ export function createPageBackConsumers(args: {
     press: () => {
       if (!held.toReversed().some((entry) => entry.consumer())) {
         args.onUnclaimed()
+      }
+    },
+    reassert: () => {
+      if (held.length > 0) {
+        args.publishClaim(true)
       }
     },
     clear: () => {
