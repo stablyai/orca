@@ -102,7 +102,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     const run = createBoundRun(db, 'Real Codex completion')
     let queuedMail = false
     let stops = 0
-    hooks.setListener((event) => {
+    hooks.subscribeEnrichedStatus((event) => {
       record('hook', { event: event.hookEventName, state: event.payload.state })
       if (event.hookEventName === 'UserPromptSubmit' && !queuedMail && arrival === 'before') {
         queuedMail = true

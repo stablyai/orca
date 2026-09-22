@@ -231,7 +231,7 @@ describe('Endpoint file lifecycle', () => {
   it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
     const server = new AgentHookServer()
     const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
-    server.setListener((evt) => {
+    const unsubscribe = server.subscribeEnrichedStatus((evt) => {
       events.push({
         paneKey: evt.paneKey,
         connectionId: evt.connectionId,
@@ -262,14 +262,14 @@ describe('Endpoint file lifecycle', () => {
         agentType: 'claude'
       })
     } finally {
-      server.setListener(null)
+      unsubscribe()
     }
   })
 
   it('ingestRemote ignores malformed envelopes (fail-open)', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    const unsubscribe = server.subscribeEnrichedStatus(listener)
     try {
       // Missing paneKey
       server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
@@ -286,7 +286,7 @@ describe('Endpoint file lifecycle', () => {
       )
       expect(listener).not.toHaveBeenCalled()
     } finally {
-      server.setListener(null)
+      unsubscribe()
     }
   })
 

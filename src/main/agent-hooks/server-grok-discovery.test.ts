@@ -59,7 +59,7 @@ describe('AgentHookServer Grok discovery retries', () => {
       const env = server.buildPtyEnv()
       const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       await postGrokHook(endpoint, { hookEventName: 'UserPromptSubmit', prompt: 'delayed result' })
       await postGrokHook(endpoint, { hookEventName: 'Stop', sessionId, cwd })

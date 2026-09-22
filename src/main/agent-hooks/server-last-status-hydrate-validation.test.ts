@@ -75,7 +75,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       expect(listener).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalled()
     } finally {
@@ -146,7 +146,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       expect(listener).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('version mismatch'))
     } finally {
@@ -195,7 +195,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({

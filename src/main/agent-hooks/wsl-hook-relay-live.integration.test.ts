@@ -66,7 +66,7 @@ describe.skipIf(process.platform === 'win32')(
 
       orcaServer = new AgentHookServer()
       const events: { paneKey: string; payload: unknown; connectionId: string | null }[] = []
-      orcaServer.setListener((event) => {
+      orcaServer.subscribeEnrichedStatus((event) => {
         events.push({
           paneKey: event.paneKey,
           payload: event.payload,

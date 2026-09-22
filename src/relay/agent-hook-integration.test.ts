@@ -91,7 +91,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
     orcaServer = new AgentHookServer()
     // Why: Orca-side never starts an HTTP server in this test — `ingestRemote`
-    // is the entry point we exercise. setListener registers the IPC fanout
+    // is the entry point we exercise. subscribeEnrichedStatus registers the IPC fanout
     // sink we assert against. Server is otherwise inert.
     mux.onNotification((method, params) => {
       if (method === AGENT_HOOK_NOTIFICATION_METHOD) {
@@ -126,7 +126,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     }
   ])('forwards a $agent prompt through the relay to ingestRemote', async ({ agent, input }) => {
     const events: { paneKey: string; payload: unknown; connectionId: string | null }[] = []
-    orcaServer.setListener((event) => {
+    orcaServer.subscribeEnrichedStatus((event) => {
       events.push({
         paneKey: event.paneKey,
         payload: event.payload,
@@ -170,7 +170,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
   it('sheds an oversized assistant message through the production publication path', async () => {
     const events: { payload: { state: string; lastAssistantMessage?: string } }[] = []
-    orcaServer.setListener((event) => {
+    orcaServer.subscribeEnrichedStatus((event) => {
       events.push({ payload: event.payload })
     })
     const { port, token } = hookServer.getCoordinates()
@@ -362,11 +362,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
   it('replays the cached last-status on agent_hook.requestReplay', async () => {
     // Why: register the listener BEFORE the initial POST so live notifications
-    // are observed. setListener on a non-empty cache replays cached entries
+    // are observed. Subscribing with replay on a non-empty cache replays cached entries
     // synchronously; if we set it AFTER the POST drains, the assertion below
     // would pass without the relay's replay actually crossing the wire.
     const events: { paneKey: string; payload: unknown }[] = []
-    orcaServer.setListener((event) => {
+    orcaServer.subscribeEnrichedStatus((event) => {
       events.push({ paneKey: event.paneKey, payload: event.payload })
     })
 

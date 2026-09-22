@@ -14,6 +14,7 @@ import type {
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload,
+  EnrichedStatusListener,
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
@@ -26,7 +27,6 @@ const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
-    this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
         listener(enriched)
@@ -75,21 +75,6 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     listener: ((report: HookTransportInterferenceReport) => void) | null
   ): void {
     this.onTransportInterference = listener
-  }
-
-  setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
-    this.onAgentStatus = listener
-    if (!listener) {
-      return
-    }
-    // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
-    for (const payload of this.combinedStatusEntries()) {
-      try {
-        listener({ ...payload, isReplay: true })
-      } catch (err) {
-        console.error('[agent-hooks] replay listener threw', err)
-      }
-    }
   }
 
   // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.
@@ -156,9 +141,26 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  /** Multi-subscriber tap on every enriched status change (no replay). */
-  subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
+  /**
+   * Subscribe to every enriched status change. `replay: true` first re-delivers the cached
+   * rows, which is what a freshly created window — or a host that just hydrated `last-status.json`
+   * — needs to catch up. Returns the unsubscribe; a subscription that cannot end is a leak.
+   */
+  subscribeEnrichedStatus(
+    listener: EnrichedStatusListener,
+    options?: { replay?: boolean }
+  ): () => void {
     this.enrichedStatusListeners.add(listener)
+    if (options?.replay === true) {
+      // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
+      for (const payload of this.combinedStatusEntries()) {
+        try {
+          listener({ ...payload, isReplay: true })
+        } catch (err) {
+          console.error('[agent-hooks] replay listener threw', err)
+        }
+      }
+    }
     return () => {
       this.enrichedStatusListeners.delete(listener)
     }
@@ -171,13 +173,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  setPaneStatusClearListener(listener: ((clear: AgentStatusClearIpcPayload) => void) | null): void {
-    this.onPaneStatusCleared = listener
-  }
-
-  /** Multi-subscriber tap on pane status clears. Unlike `setPaneStatusClearListener`
-   *  (a single slot the main window owns and drops on close) this survives window
-   *  teardown and exists at all under headless serve, which never opens one. */
+  /** Subscribe to pane status clears. Survives window teardown and exists at all under
+   *  headless serve, which never opens one. Returns the unsubscribe. */
   subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void {
     this.paneStatusClearListeners.add(listener)
     return () => {
@@ -186,7 +183,6 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   }
 
   protected emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
-    this.onPaneStatusCleared?.(clear)
     for (const listener of this.paneStatusClearListeners) {
       // Why: callers are pane/connection teardown paths; one throwing subscriber must
       // not strand the rest, matching every other fan-out here.

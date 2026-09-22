@@ -22,7 +22,7 @@ type Observed = { paneKey: string; observation?: AgentStatusObservation }
 
 function collectObservations(server: AgentHookServer): Observed[] {
   const seen: Observed[] = []
-  server.setListener((payload) => {
+  server.subscribeEnrichedStatus((payload) => {
     seen.push({ paneKey: payload.paneKey, observation: payload.observation })
   })
   return seen

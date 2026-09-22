@@ -31,6 +31,7 @@ function ingest(
 describe('the observation clock a relay replay must not restamp', () => {
   let server: AgentHookServer
   let emitted: EnrichedAgentHookEventPayload[]
+  let unsubscribe: () => void
 
   beforeEach(() => {
     _internals.resetCachesForTests()
@@ -38,13 +39,13 @@ describe('the observation clock a relay replay must not restamp', () => {
     vi.setSystemTime(T0)
     server = new AgentHookServer()
     emitted = []
-    server.setListener((payload) => {
+    unsubscribe = server.subscribeEnrichedStatus((payload) => {
       emitted.push(payload)
     })
   })
 
   afterEach(() => {
-    server.setListener(null)
+    unsubscribe()
     vi.useRealTimers()
     vi.restoreAllMocks()
   })

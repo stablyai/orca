@@ -195,9 +195,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.stopOpenCodeBinderLoop()
     this.rollbackTransportStart()
     this.env = 'production'
-    this.onAgentStatus = null
     this.onClaudeStatusLine = null
-    this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
     for (const timer of this.assistantMessageRetryTimers.values()) {

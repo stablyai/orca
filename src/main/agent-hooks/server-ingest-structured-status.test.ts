@@ -257,7 +257,7 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     const server = new AgentHookServer()
     const cleared: unknown[] = []
     const dropped: string[] = []
-    server.setPaneStatusClearListener((clear) => cleared.push(clear))
+    server.subscribePaneStatusClear((clear) => cleared.push(clear))
     server.subscribeStatusDrop((paneKey) => dropped.push(paneKey))
 
     server.ingestStructuredStatus(summary(), SUBJECT)

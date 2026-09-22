@@ -32,6 +32,7 @@ import type {
   AgentHookStatusFreshnessObservation,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
+  EnrichedStatusListener,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
   PaneKeyAliasPersistenceListener,
@@ -39,7 +40,6 @@ import type {
   ProviderSessionChangeListener,
   RetiredPaneAlias,
   RetiredPaneFence,
-  ServerAgentStatusListener,
   ServerStatusLineListener,
   StatusChangeListener,
   StatusDropListener,
@@ -86,9 +86,7 @@ export abstract class AgentHookServerState {
   protected token = ''
   // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
   protected env = 'production'
-  protected onAgentStatus: ServerAgentStatusListener = null
   protected onClaudeStatusLine: ServerStatusLineListener = null
-  protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
   protected statusChangeListeners = new Set<StatusChangeListener>()
@@ -100,10 +98,9 @@ export abstract class AgentHookServerState {
   // Runtime terminal handles are stable across pane remints, unlike tab/leaf keys. This index is
   // deliberately in-memory only and contains no rows of its own.
   protected paneKeyByTerminalHandle = new Map<string, string>()
-  // Why: setListener is a single slot owned by the main-window fanout; the
-  // plugin event bus (and future consumers) need an additive subscription
-  // that also works in headless serve, where no window listener exists.
-  protected enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
+  // Why: every status consumer is a subscriber, including the desktop window's fan-out. A
+  // host that never opens one (headless serve, orcad) therefore still has status subscribers.
+  protected enrichedStatusListeners = new Set<EnrichedStatusListener>()
   // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
   protected endpointDir: string | null = null
   protected endpointFilePathCache: string | null = null

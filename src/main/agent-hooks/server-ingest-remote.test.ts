@@ -39,7 +39,7 @@ describe('AgentHookServer ingestRemote', () => {
       const server = new AgentHookServer()
       const rendererListener = vi.fn()
       const statusChangeListener = vi.fn()
-      server.setListener(rendererListener)
+      server.subscribeEnrichedStatus(rendererListener)
       server.subscribeStatusChanges(statusChangeListener)
 
       server.ingestRemote(
@@ -82,7 +82,7 @@ describe('AgentHookServer ingestRemote', () => {
       expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
 
       const replayListener = vi.fn()
-      server.setListener(replayListener)
+      server.subscribeEnrichedStatus(replayListener, { replay: true })
       expect(replayListener).toHaveBeenCalledWith(
         expect.objectContaining({ paneKey: PANE, providerSessionOnly: true, isReplay: true })
       )
@@ -95,7 +95,7 @@ describe('AgentHookServer ingestRemote', () => {
     const server = new AgentHookServer()
     const rendererListener = vi.fn()
     const pluginListener = vi.fn()
-    server.setListener(rendererListener)
+    server.subscribeEnrichedStatus(rendererListener)
     server.subscribeEnrichedStatus(pluginListener)
 
     server.ingestRemote(
@@ -126,7 +126,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('rejects invalid remote metadata-only session envelopes', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
 
     server.ingestRemote(
       {
@@ -178,7 +178,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
     expect(listener).toHaveBeenCalledTimes(1)
     expect(listener).toHaveBeenCalledWith(
@@ -200,7 +200,7 @@ describe('AgentHookServer ingestRemote', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       server.ingestRemote(
         {
           paneKey: PANE,
@@ -261,7 +261,7 @@ describe('AgentHookServer ingestRemote', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       server.ingestRemote(
         {
           paneKey: PANE,
@@ -462,7 +462,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('drops envelopes whose payload state is not in AGENT_STATUS_STATES', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     // Why: bypass parseAgentStatusPayload with an invalid payload — ingestRemote is the trust boundary under test, not the parser.
     server.ingestRemote(
       {
@@ -485,7 +485,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     // 201 chars — one past the listener's 200-char cap.
     const oversized = 'a'.repeat(201)
     server.ingestRemote(
@@ -504,7 +504,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote(
       { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
       'conn-1'
@@ -523,7 +523,7 @@ describe('AgentHookServer ingestRemote', () => {
     }
     const listener = vi.fn()
     server.registerPaneKeyAlias('tab-1:0', PANE)
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote(
       { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
       'conn-1'
@@ -556,7 +556,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote(
       { paneKey: PANE, tabId: 'tab-other', worktreeId: 'wt-1', payload },
       'conn-1'
@@ -574,7 +574,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
     expect(listener).not.toHaveBeenCalled()
   })
@@ -588,7 +588,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '   ')
     expect(listener).not.toHaveBeenCalled()
   })
@@ -602,7 +602,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote(
       { paneKey: PANE, tabId: 123 as unknown as string, worktreeId: 'wt-1', payload },
       'conn-1'
@@ -619,7 +619,7 @@ describe('AgentHookServer ingestRemote', () => {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote({ paneKey: '   ', tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
     expect(listener).not.toHaveBeenCalled()
     expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
@@ -631,7 +631,7 @@ describe('AgentHookServer ingestRemote', () => {
     // Why: a buggy/malicious relay could forward an over-cap field, so ingestRemote re-runs the normalizer to enforce the AGENT_STATUS_MAX_FIELD_LENGTH cap at the trust boundary.
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.ingestRemote(
       {
         paneKey: PANE,

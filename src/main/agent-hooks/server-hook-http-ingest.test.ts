@@ -99,7 +99,7 @@ describe('AgentHookServer listener replay', () => {
         originalCodexRetry(...args)
       })
     const unsubscribeStatus = server.subscribeStatusChanges(() => order.push('status-change'))
-    server.setListener(() => {
+    server.subscribeEnrichedStatus(() => {
       expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
       order.push('main-listener')
     })
@@ -128,18 +128,22 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('fails open after a throwing callback with cache retained and retries skipped', async () => {
+  it('fails open after a throwing callback without starving the rest of the hook', async () => {
+    // Was: a throwing callback also skipped the retries. That was an artefact of the renderer
+    // fan-out being an unguarded single slot whose throw unwound the whole hook. Every status
+    // consumer is a guarded subscriber now, so one broken consumer costs the agent nothing.
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const internal = server as unknown as {
       scheduleAssistantMessageRetry: (...args: unknown[]) => void
-      scheduleCodexSubagentPoll: (...args: unknown[]) => void
     }
     const assistantRetry = vi.spyOn(internal, 'scheduleAssistantMessageRetry')
-    const codexRetry = vi.spyOn(internal, 'scheduleCodexSubagentPoll')
-    server.setListener(() => {
+    const survivor = vi.fn()
+    server.subscribeEnrichedStatus(() => {
       throw new Error('listener failed')
     })
+    server.subscribeEnrichedStatus(survivor)
     try {
       const response = await postClaudeHook(server, {
         hook_event_name: 'UserPromptSubmit',
@@ -147,11 +151,11 @@ describe('AgentHookServer listener replay', () => {
       })
       expect(response.status).toBe(204)
       expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
-      expect(assistantRetry).not.toHaveBeenCalled()
-      expect(codexRetry).not.toHaveBeenCalled()
+      expect(survivor).toHaveBeenCalledOnce()
+      expect(assistantRetry).toHaveBeenCalledOnce()
     } finally {
       assistantRetry.mockRestore()
-      codexRetry.mockRestore()
+      consoleError.mockRestore()
       server.stop()
     }
   })
@@ -161,7 +165,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       const postHook = async (
         source: 'codex' | 'claude',
         payload: Record<string, unknown>
@@ -281,7 +285,7 @@ describe('AgentHookServer listener replay', () => {
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -322,7 +326,7 @@ describe('AgentHookServer listener replay', () => {
         )
       })
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       expect(response.status).toBe(204)
       expect(listener).not.toHaveBeenCalled()
@@ -341,7 +345,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       server.ingestRemote(
         {
@@ -405,7 +409,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
       const remotePane = makePaneKey('tab-3', LEAF_3)
@@ -473,7 +477,7 @@ describe('AgentHookServer listener replay', () => {
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -501,7 +505,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       const postCodexHook = async (payload: Record<string, unknown>): Promise<void> => {
         const params = new URLSearchParams({
           paneKey: PANE,
@@ -620,7 +624,7 @@ describe('AgentHookServer listener replay', () => {
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -646,7 +650,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/amp`, {
         method: 'POST',

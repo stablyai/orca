@@ -46,7 +46,7 @@ function fixture() {
       }
     }
   })
-  server.setListener((event) =>
+  server.subscribeEnrichedStatus((event) =>
     emitted.push({
       ...toAgentStatusIpcPayload(event),
       ...(event.authorityRestartId ? { authorityRestartId: event.authorityRestartId } : {})
@@ -107,7 +107,7 @@ describe('OMP host-authorized renderer retirement recovery', () => {
       expect(f.store.getState().recentlyRetiredAgentStatusPaneKeys[paneKey]).toBeUndefined()
       expect(f.server.getStatusSnapshot()[0]).not.toHaveProperty('authorityRestartId')
       const replay = vi.fn()
-      f.server.setListener(replay)
+      f.server.subscribeEnrichedStatus(replay, { replay: true })
       expect(replay.mock.calls[0][0]).not.toHaveProperty('authorityRestartId')
       f.server.stop()
     }

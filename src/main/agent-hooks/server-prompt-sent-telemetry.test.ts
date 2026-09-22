@@ -550,7 +550,7 @@ describe('AgentHookServer prompt-sent telemetry', () => {
     trackMock.mockImplementationOnce(() => {
       throw new Error('telemetry unavailable')
     })
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
 
     server.ingestRemote(
       {

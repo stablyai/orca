@@ -57,7 +57,7 @@ describe('AgentHookServer startup failure lifecycle', () => {
     const freshness = vi.fn()
     const enrichedStatuses = vi.fn()
     const rowMutations = vi.fn()
-    server.setListener(rendererListener)
+    server.subscribeEnrichedStatus(rendererListener)
     server.subscribeStatusChanges(statusChanges)
     server.subscribeStatusFreshness(freshness)
     server.subscribeEnrichedStatus(enrichedStatuses)

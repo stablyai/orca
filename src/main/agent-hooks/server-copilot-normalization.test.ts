@@ -317,7 +317,7 @@ describe('Copilot hook normalization', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
@@ -350,7 +350,7 @@ describe('Copilot hook normalization', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
@@ -433,7 +433,7 @@ describe('Copilot hook normalization', () => {
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
         method: 'POST',

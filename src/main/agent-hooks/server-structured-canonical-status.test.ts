@@ -76,7 +76,7 @@ describe('structured canonical production slice', () => {
     ])
     expect(enriched).toHaveBeenCalledOnce()
     const replay = vi.fn()
-    server.setListener(replay)
+    server.subscribeEnrichedStatus(replay, { replay: true })
     expect(replay).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ paneKey: PANE_KEY, isReplay: true })
     )
@@ -106,7 +106,7 @@ describe('structured canonical production slice', () => {
     expect(listing()).toEqual([...baseline])
     expect(server.getStatusChangeSnapshot().map((row) => row.paneKey)).toEqual([...baseline.keys()])
     const replay: string[] = []
-    server.setListener((entry) => replay.push(entry.paneKey))
+    server.subscribeEnrichedStatus((entry) => replay.push(entry.paneKey), { replay: true })
     expect(replay).toEqual([...baseline.keys()])
     server.dropStructuredStatus(SUBJECT)
     baseline.delete(PANE_KEY)

@@ -75,7 +75,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -136,7 +136,7 @@ describe('Last-status persistence', () => {
     await server.start({ env: 'production', userDataPath })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({ paneKey: PANE, restoredUnconfirmed: true })
       )

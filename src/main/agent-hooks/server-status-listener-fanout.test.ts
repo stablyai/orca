@@ -102,13 +102,12 @@ describe('AgentHookServer listener replay', () => {
     ])
   })
 
-  it('keeps status-change subscribers when renderer fanout listener is cleared', () => {
+  it('keeps status-change subscribers when the renderer fanout unsubscribes', () => {
     const server = new AgentHookServer()
     const statusChangeListener = vi.fn()
     const rendererListener = vi.fn()
     server.subscribeStatusChanges(statusChangeListener)
-    server.setListener(rendererListener)
-    server.setListener(null)
+    server.subscribeEnrichedStatus(rendererListener)()
 
     server.ingestRemote(
       {
@@ -137,7 +136,7 @@ describe('AgentHookServer listener replay', () => {
     )
 
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener, { replay: true })
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -346,7 +345,7 @@ describe('AgentHookServer listener replay', () => {
   it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setPaneStatusClearListener(listener)
+    server.subscribePaneStatusClear(listener)
 
     server.ingestRemote(
       {
@@ -414,7 +413,7 @@ describe('AgentHookServer listener replay', () => {
     const internals = server as unknown as AgentHookServerCacheInternals
     const persistSpy = vi.spyOn(internals, 'scheduleStatusPersist')
     server.subscribeStatusChanges(statusListener)
-    server.setPaneStatusClearListener(clearListener)
+    server.subscribePaneStatusClear(clearListener)
     for (const paneKey of targetPaneKeys) {
       server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-a')
     }
@@ -449,7 +448,7 @@ describe('AgentHookServer listener replay', () => {
     vi.setSystemTime(1_700_000_000_000)
     const server = new AgentHookServer()
     const clearListener = vi.fn()
-    server.setPaneStatusClearListener(clearListener)
+    server.subscribePaneStatusClear(clearListener)
     server.ingestRemote(
       { paneKey: PANE, payload: { state: 'working', agentType: 'claude' } },
       'ssh-a'
@@ -539,7 +538,7 @@ describe('AgentHookServer listener replay', () => {
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
 
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(

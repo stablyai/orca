@@ -667,7 +667,7 @@ describe('AgentHookServer listener replay', () => {
 
       server.clearPaneState(PANE)
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       expect(listener).not.toHaveBeenCalled()
     } finally {

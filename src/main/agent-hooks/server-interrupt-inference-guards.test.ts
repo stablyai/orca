@@ -33,7 +33,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       server.ingestRemote(
         {
           paneKey: PANE,
@@ -420,7 +420,7 @@ describe('AgentHookServer listener replay', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       server.ingestRemote(
         {
           paneKey: PANE,

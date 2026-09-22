@@ -182,8 +182,18 @@ async function waitForStatusCount(events: CapturedStatus[], count: number): Prom
   await vi.waitFor(() => expect(events).toHaveLength(count), { timeout: 1500 })
 }
 
+// Why: the hook server is a module singleton here, so each test's subscriptions have to be
+// released by hand between cases — nothing nulls a shared slot for us any more.
+const agentHookSubscriptions: (() => void)[] = []
+
+function releaseAgentHookSubscriptions(): void {
+  for (const unsubscribe of agentHookSubscriptions.splice(0)) {
+    unsubscribe()
+  }
+}
+
 function captureAgentStatuses(events: CapturedStatus[]): void {
-  agentHookServer.setListener((event) => {
+  const unsubscribe = agentHookServer.subscribeEnrichedStatus((event) => {
     events.push({
       paneKey: event.paneKey,
       tabId: event.tabId,
@@ -198,6 +208,7 @@ function captureAgentStatuses(events: CapturedStatus[]): void {
       }
     })
   })
+  agentHookSubscriptions.push(unsubscribe)
 }
 
 function makeEnvelope(overrides: Partial<AgentHookRelayEnvelope> = {}): AgentHookRelayEnvelope {
@@ -232,7 +243,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     previousRemoteHooksFlag = process.env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
     process.env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV] = '1'
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    agentHookServer.setListener(null)
+    releaseAgentHookSubscriptions()
     agentHookInternals.resetCachesForTests()
   })
 
@@ -241,8 +252,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay?.dispose()
     session = null
     relay = null
-    agentHookServer.setListener(null)
-    agentHookServer.setPaneStatusClearListener(null)
+    releaseAgentHookSubscriptions()
     agentHookInternals.resetCachesForTests()
     warnSpy.mockRestore()
     if (previousRemoteHooksFlag === undefined) {
@@ -427,7 +437,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         platform: 'linux-x64'
       })
     const clearListener = vi.fn()
-    agentHookServer.setPaneStatusClearListener(clearListener)
+    agentHookSubscriptions.push(agentHookServer.subscribePaneStatusClear(clearListener))
     session = createSession('conn-clear')
     await session.establish({} as SshConnection)
     initialRelay.notifyAgentHook(makeEnvelope())

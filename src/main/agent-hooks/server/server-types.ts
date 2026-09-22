@@ -139,4 +139,4 @@ export type NormalizedLocalHook = {
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null
-export type ServerAgentStatusListener = ((payload: EnrichedAgentHookEventPayload) => void) | null
+export type EnrichedStatusListener = (payload: EnrichedAgentHookEventPayload) => void

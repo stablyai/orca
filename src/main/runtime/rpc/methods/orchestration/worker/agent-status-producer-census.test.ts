@@ -360,11 +360,10 @@ describe('agent status producer census', () => {
     const runtime = censusRuntime()
     const sent: { channel: string; payload: AgentStatusIpcPayload }[] = []
     const listeners: ((entry: EnrichedAgentHookEventPayload) => void)[] = []
-    vi.spyOn(agentHookServer, 'setListener').mockImplementation(((
-      listener: (entry: EnrichedAgentHookEventPayload) => void
-    ) => {
+    vi.spyOn(agentHookServer, 'subscribeEnrichedStatus').mockImplementation((listener) => {
       listeners.push(listener)
-    }) as never)
+      return () => {}
+    })
     const window = {
       isDestroyed: () => false,
       webContents: {

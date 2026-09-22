@@ -56,7 +56,7 @@ describe('OpenCode MessagePart flood benchmark', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-bench-'))
     server = new AgentHookServer()
     listenerEvents = 0
-    server.setListener(() => {
+    server.subscribeEnrichedStatus(() => {
       listenerEvents++
     })
     await server.start({ env: 'production', userDataPath: tempDir })

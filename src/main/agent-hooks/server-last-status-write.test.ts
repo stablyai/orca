@@ -231,7 +231,7 @@ describe('Last-status persistence', () => {
     const firstServer = new AgentHookServer()
     const firstRendererListener = vi.fn()
     const statusChangeListener = vi.fn()
-    firstServer.setListener(firstRendererListener)
+    firstServer.subscribeEnrichedStatus(firstRendererListener)
     firstServer.subscribeStatusChanges(statusChangeListener)
     await firstServer.start({ env: 'production', userDataPath })
     try {
@@ -277,7 +277,7 @@ describe('Last-status persistence', () => {
     await hydratedServer.start({ env: 'production', userDataPath })
     try {
       const hydratedListener = vi.fn()
-      hydratedServer.setListener(hydratedListener)
+      hydratedServer.subscribeEnrichedStatus(hydratedListener, { replay: true })
       expect(hydratedListener).toHaveBeenCalledWith(
         expect.objectContaining({
           paneKey: PANE,

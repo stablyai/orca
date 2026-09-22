@@ -16,10 +16,13 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
-    setListener: (listener: ((payload: EnrichedAgentHookEventPayload) => void) | null) => {
+    subscribeEnrichedStatus: (listener: (payload: EnrichedAgentHookEventPayload) => void) => {
       hooks.listener = listener
+      return () => {
+        hooks.listener = null
+      }
     },
-    setPaneStatusClearListener: vi.fn()
+    subscribePaneStatusClear: () => () => {}
   }
 }))
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({

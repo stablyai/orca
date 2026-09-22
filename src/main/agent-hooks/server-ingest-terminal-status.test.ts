@@ -76,7 +76,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
 
     server.ingestRemote(
       {
@@ -127,7 +127,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('accepts an identical-prompt hook boundary after a stamped turn', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
 
     server.ingestRemote(
       {
@@ -246,7 +246,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       server.ingestTerminalStatus({
         paneKey: PANE,
@@ -345,7 +345,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
       const event = {
         paneKey: PANE,
         tabId: 'tab-1',
@@ -383,7 +383,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener)
 
       server.ingestTerminalStatus({
         paneKey: PANE,
@@ -426,7 +426,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('rejects runtime terminal status with mismatched tab identity', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
 
     server.ingestTerminalStatus({
       paneKey: PANE,

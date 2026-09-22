@@ -302,7 +302,7 @@ describe('Last-status persistence', () => {
     await server.start({ env: 'production', userDataPath })
     try {
       const clearListener = vi.fn()
-      server.setPaneStatusClearListener(clearListener)
+      server.subscribePaneStatusClear(clearListener)
       server.ingestRemote(
         { paneKey: PANE, payload: { state: 'working', agentType: 'codex' } },
         'ssh-a'
@@ -369,7 +369,7 @@ describe('Last-status persistence', () => {
     await server.start({ env: 'production', userDataPath })
     try {
       const listener = vi.fn()
-      server.setListener(listener)
+      server.subscribeEnrichedStatus(listener, { replay: true })
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -16,7 +16,7 @@ describe('OMP retirement acknowledgement', () => {
   it('emits a single live acknowledgement and never trusts one in hook input', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.retirePaneAuthority(PANE, ID)
     server.ingestRemote(JSON.parse(JSON.stringify({ ...hook, authorityRestartId: 'forged' })), null)
     expect(listener.mock.calls[0][0].authorityRestartId).toBe(ID)
@@ -29,7 +29,7 @@ describe('OMP retirement acknowledgement', () => {
   it.each(['attach', 'replacement', 'close'])('revokes recovery after %s', (operation) => {
     const server = new AgentHookServer()
     const listener = vi.fn()
-    server.setListener(listener)
+    server.subscribeEnrichedStatus(listener)
     server.retirePaneAuthority(PANE, ID)
     if (operation === 'attach') {
       server.restorePaneAuthority(PANE)
@@ -60,7 +60,7 @@ it.each([false, true])('keeps repeated detached retirement coherent (closed=%s)'
   const listener = vi.fn()
   const ownerPane = 'owner:22222222-2222-4222-8222-222222222222'
   const latestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-  server.setListener(listener)
+  server.subscribeEnrichedStatus(listener)
   try {
     server.transferPaneAuthority(PANE, ownerPane, 'pty')
     server.retirePaneAuthority(ownerPane, ID)
