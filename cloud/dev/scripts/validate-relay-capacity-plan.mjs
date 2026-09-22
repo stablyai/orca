@@ -301,11 +301,12 @@ function requireDesiredStartupScript(script, config) {
   }
 }
 
-// The same-cap job targets this cell's backend service so the two declared-but-unapplied
-// settings land one cell at a time: an unindexed root plan pulls the whole MIG and template
-// resources in as dependencies, which standing image drift turns into a 29-cell roll. Each
-// attribute is optional because a cell that already has it plans no change for it.
-// Splitting the backend out here keeps `changes` the template-and-MIG count both callers read.
+// The same-cap job no longer targets this cell's backend service (the capacity role has no
+// compute.backendServices.update), so a wave plan carries no backend change and this reports an
+// empty list. It stays as the bound on any caller that does target one: exactly this cell's
+// backend, exactly the reviewed drain and request-logging attributes, each optional because a
+// cell that already has one plans no change for it. Splitting the backend out keeps `changes`
+// the template-and-MIG count both callers read.
 function takeCellBackendUpdate(changes, config) {
   const backends = changes.filter(
     ({ address }) => typeof address === 'string' && address.startsWith(`${CELL_BACKEND_RESOURCE}[`)
