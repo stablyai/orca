@@ -30,6 +30,28 @@ const NAMESPACE_METHODS = {
 
 type BoardsNamespace = keyof typeof NAMESPACE_METHODS
 
+// A namespace-wide write rule is too wide: _apis/wit also carries
+// classificationnodes (area and iteration structure) and queries (stored
+// queries), both of which Azure documents as mutating POST endpoints. Consent
+// to "Azure DevOps Boards" does not imply reshaping a project's Boards
+// metadata, so writes are matched by route. Reads stay namespace-wide.
+const WIT_WRITE_ROUTES: readonly { method: BoardsProxyMethod; route: RegExp }[] = [
+  // WIQL is a read expressed as a POST.
+  { method: 'POST', route: /^\/_apis\/wit\/wiql$/i },
+  // Create a work item of a named type: /_apis/wit/workitems/$User%20Story.
+  { method: 'POST', route: /^\/_apis\/wit\/workitems\/\$[^/]+$/i },
+  // Comment on a work item.
+  { method: 'POST', route: /^\/_apis\/wit\/workitems\/\d+\/comments$/i },
+  // Update a work item's fields.
+  { method: 'PATCH', route: /^\/_apis\/wit\/workitems\/\d+$/i }
+]
+
+/** Drops the optional leading project segment so a route matches either form. */
+function apiSuffix(path: string): string {
+  const index = path.indexOf('/_apis/')
+  return index === -1 ? path : path.slice(index)
+}
+
 function isProxyMethod(value: string): value is BoardsProxyMethod {
   return BOARDS_PROXY_METHODS.some((allowed) => allowed === value)
 }
@@ -144,6 +166,18 @@ export function checkBoardsProxyRequest(input: {
     return {
       code: 'forbidden',
       message: `method ${method} is not permitted on _apis/${namespace}`
+    }
+  }
+  if (method !== 'GET') {
+    const suffix = apiSuffix(path)
+    const permitted = WIT_WRITE_ROUTES.some(
+      (allowed) => allowed.method === method && allowed.route.test(suffix)
+    )
+    if (!permitted) {
+      return {
+        code: 'forbidden',
+        message: `method ${method} is not permitted on this _apis/${namespace} route`
+      }
     }
   }
 

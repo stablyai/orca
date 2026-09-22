@@ -192,3 +192,47 @@ describe('checkBoardsProxyRequest', () => {
     ).toEqual({ code: 'validation', message: 'api-version is chosen by the host' })
   })
 })
+
+describe('write routes within the wit namespace', () => {
+  const allow = (method: string, path: string) =>
+    expect(checkBoardsProxyRequest({ method, path, body: {} })).toBeNull()
+  const refuse = (method: string, path: string) =>
+    expect(checkBoardsProxyRequest({ method, path, body: {} })).toEqual({
+      code: 'forbidden',
+      message: `method ${method} is not permitted on this _apis/wit route`
+    })
+
+  it('permits the writes the Boards source actually makes', () => {
+    allow('POST', '/_apis/wit/wiql')
+    allow('POST', '/proj/_apis/wit/wiql')
+    allow('POST', '/proj/_apis/wit/workitems/$Bug')
+    allow('POST', '/proj/_apis/wit/workitems/$User%20Story')
+    allow('POST', '/proj/_apis/wit/workItems/41/comments')
+    allow('PATCH', '/_apis/wit/workitems/41')
+  })
+
+  it('refuses a write that reshapes Boards metadata', () => {
+    // Both are documented mutating endpoints inside the same namespace.
+    refuse('POST', '/proj/_apis/wit/classificationnodes/Areas')
+    refuse('POST', '/proj/_apis/wit/classificationnodes/Iterations')
+    refuse('PATCH', '/proj/_apis/wit/classificationnodes/Areas')
+  })
+
+  it('refuses a write to stored queries', () => {
+    refuse('POST', '/proj/_apis/wit/queries/Shared%20Queries')
+    refuse('PATCH', '/proj/_apis/wit/queries/abc')
+  })
+
+  it('refuses a work item write that names no type or id', () => {
+    refuse('POST', '/proj/_apis/wit/workitems')
+    refuse('PATCH', '/_apis/wit/workitems')
+    refuse('POST', '/_apis/wit/workitems/41')
+  })
+
+  it('leaves reads namespace-wide', () => {
+    expect(
+      checkBoardsProxyRequest({ method: 'GET', path: '/proj/_apis/wit/classificationnodes/Iterations' })
+    ).toBeNull()
+    expect(checkBoardsProxyRequest({ method: 'GET', path: '/proj/_apis/wit/workitemtypes' })).toBeNull()
+  })
+})
