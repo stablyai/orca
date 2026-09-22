@@ -4,8 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { View } from 'react-native'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import type { RpcResponse } from '../transport/types'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
 // The screen-state module these loaders share with the panel pulls the icon set in; none of it is
