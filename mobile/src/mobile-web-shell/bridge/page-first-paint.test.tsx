@@ -111,15 +111,21 @@ describe('a route that leaves before its frame lands', () => {
     const report = createRouteScreenPaintReporter(clock.scheduler, () => {
       posted += 1
     })
-    const leaving = report()
-    // The replacement commits inside the two frames the first screen is owed, then that one goes.
     report()
-    leaving()
+    // One of the first screen's two frames has passed.
     clock.tick()
+    // The replacement commits, and the screen it replaces stays mounted behind it.
+    report()
     clock.tick()
-    // Exactly one, and from the screen still on screen: the first one's frame would have left the
-    // cover up for good once its own take-back freed the latch nobody was going to use again.
+    // The frame that just ran was the replacement's first, not the one the screen behind it was
+    // still owed: that frame would report a document the view is no longer showing.
+    expect(posted).toBe(0)
+    clock.tick()
     expect(posted).toBe(1)
+    clock.tick()
+    // And nothing is left over to report a second time.
+    expect(posted).toBe(1)
+    expect(clock.pending()).toBe(0)
   })
 
   it('leaves the next screen free to report, because a frame taken back was never spent', () => {
