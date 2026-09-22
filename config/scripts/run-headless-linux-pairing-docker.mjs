@@ -19,6 +19,7 @@ if (!existsSync(appImage)) {
 const suffix = `${process.pid}-${Date.now()}`
 const artifactVolume = `orca-headless-pairing-artifact-${suffix}`
 const network = `orca-headless-pairing-${suffix}`
+// Keep every name until final cleanup can retry a failed stop or removal.
 const containers = new Set()
 const images = [
   {
@@ -95,10 +96,13 @@ function buildImage(image) {
 
 function extractAppImage(image) {
   console.log('Extracting AppImage once without FUSE...')
+  const name = reserveContainerName()
   // Why: AppImage extraction creates a root-only directory, while launch cases intentionally run as the service user.
   docker([
     'run',
     '--rm',
+    '--name',
+    name,
     '--entrypoint',
     'bash',
     '-v',
@@ -247,7 +251,7 @@ async function startAndWait({
   noPairing = false,
   startupTimeoutMs = STARTUP_TIMEOUT_MS
 }) {
-  const name = `orca-pairing-${suffix}-${containers.size}`
+  const name = reserveContainerName()
   const args = [
     'run',
     '-d',
@@ -278,7 +282,6 @@ async function startAndWait({
     launch
   ]
   docker(args)
-  containers.add(name)
   const stdout = await waitForReady(name, startupTimeoutMs)
   return { name, stdout }
 }
@@ -369,10 +372,13 @@ function readyJsonObjects(logs) {
 }
 
 function runPairingClient(pairingUrl) {
+  const name = reserveContainerName()
   return docker(
     [
       'run',
       '--rm',
+      '--name',
+      name,
       '--network',
       network,
       '--entrypoint',
@@ -404,10 +410,15 @@ function parseJson(value) {
   }
 }
 
+function reserveContainerName() {
+  const name = `orca-pairing-${suffix}-${containers.size}`
+  containers.add(name)
+  return name
+}
+
 function stopContainer(name) {
   docker(['stop', '--time', '5', name], { allowFailure: true })
   docker(['rm', name], { allowFailure: true })
-  containers.delete(name)
 }
 
 function docker(args, options = {}) {
