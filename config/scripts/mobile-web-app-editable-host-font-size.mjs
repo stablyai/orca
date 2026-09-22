@@ -67,29 +67,13 @@ export function editableHostsIn(mobileDir, closure) {
   )
 }
 
-/**
- * The rule a selector opens in a stylesheet string, with where it opens, or null for none.
- *
- * The selector has to be the whole of a rule's selector, so the character before it is a line
- * start, the end of the rule before it, a comma, or the backtick the template literal opens with.
- * A descendant rule that merely mentions the surface is a different rule and is not this one.
- *
- * Textual, and flat: the sheets this reads have no at-rules and no nesting, which is the same
- * assumption `document-style-scoping.ts` makes and refuses to exceed.
- */
-function ruleFor(source, selector) {
-  const pattern = new RegExp(
-    `(?:^|[},\`])[^\\S\\n]*${selector.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&')}\\s*\\{`,
-    'm'
-  )
-  const match = pattern.exec(source)
-  if (match === null) {
-    return null
-  }
-  // Counted rather than matched to the first `}`: a declaration reading the seam is written
-  // `${TEXT_INPUT_FONT_SIZE}px`, whose own closing brace would have ended the block one
-  // declaration early and left the size looking absent.
-  const open = match.index + match[0].length
+/** The selector as a pattern, with the boundary that keeps `#editor` off `#editor-notes`. */
+function selectorPattern(selector) {
+  return `${selector.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&')}(?![\\w-])`
+}
+
+/** The declarations of the rule whose block opens at `open`, or null for one that never closes. */
+function blockFrom(source, open) {
   let depth = 1
   for (let at = open; at < source.length; at += 1) {
     if (source[at] === '{') {
@@ -99,11 +83,56 @@ function ruleFor(source, selector) {
     if (source[at] === '}') {
       depth -= 1
       if (depth === 0) {
-        return { declarations: source.slice(open, at), index: match.index }
+        return source.slice(open, at)
       }
     }
   }
   return null
+}
+
+/**
+ * Every rule in a stylesheet string whose selector list mentions the selector, in source order.
+ *
+ * The list runs from a line start, the end of the rule before it, a comma, or the backtick the
+ * template literal opens with, up to the `{`; requiring the selector somewhere inside it is what
+ * keeps the surrounding TypeScript's own braces out of the walk. Kept as a list rather than
+ * collapsed to one selector because a comma binds every selector in it to the same declarations,
+ * so the host can be hiding in any of them.
+ *
+ * Textual, and flat: the sheets this reads have no at-rules and no nesting, which is the same
+ * assumption `document-style-scoping.ts` makes and refuses to exceed.
+ */
+function rulesMentioning(source, selector) {
+  const pattern = new RegExp(
+    `(?:^|[},\`])([^{};\`]*${selectorPattern(selector)}[^{};\`]*)\\{`,
+    'dgm'
+  )
+  const rules = []
+  for (let match = pattern.exec(source); match !== null; match = pattern.exec(source)) {
+    // Counted rather than matched to the first `}`: a declaration reading the seam is written
+    // `${TEXT_INPUT_FONT_SIZE}px`, whose own closing brace would have ended the block one
+    // declaration early and left the size looking absent.
+    const declarations = blockFrom(source, match.index + match[0].length)
+    if (declarations === null) {
+      continue
+    }
+    const list = match[1]
+    rules.push({
+      selectors: list
+        .split(',')
+        .map((one) => one.trim())
+        .filter((one) => one !== ''),
+      declarations,
+      // The selector's own start, not the anchor's: the anchor is the previous rule's `}`, a line up.
+      index: match.indices[1][0] + (list.length - list.trimStart().length)
+    })
+  }
+  return rules
+}
+
+/** The last compound of a selector — the element the rule is about, not one of its ancestors. */
+function subjectCompound(selector) {
+  return selector.split(/[\s>+~]+/).at(-1) ?? ''
 }
 
 /**
@@ -171,6 +200,40 @@ function readFontSize(mobileDir, source, declarations) {
 }
 
 /**
+ * Every rule in a sheet that applies exactly this selector, in source order.
+ *
+ * All of them rather than the first: rules of equal specificity are ranked by source order, so a
+ * sheet that declares 16 px and then 14 px renders at 14 px, and reading only the first one called
+ * that surface compliant.
+ */
+function exactRules(source, selector) {
+  return rulesMentioning(source, selector).filter((rule) => rule.selectors.includes(selector))
+}
+
+/**
+ * Every rule in a sheet that sizes the host through a selector this walk cannot rank against the
+ * exact one.
+ *
+ * A subject of higher specificity that still targets the host (`main#editor`, `#editor.x`,
+ * `div > #editor`, `#editor:empty`) beats the exact rule, and this census does no specificity
+ * arithmetic: such a rule declaring `font-size` makes the host unresolved rather than compliant. A
+ * descendant (`#editor p`) is about another element and a pseudo-element (`#editor:empty::before`)
+ * is a box the host generates, so neither one is in the way.
+ */
+function unrankableHostRules(source, selector) {
+  return rulesMentioning(source, selector).filter(
+    (rule) =>
+      winningFontSize(rule.declarations) !== null &&
+      rule.selectors.some(
+        (one) =>
+          one !== selector &&
+          !one.includes('::') &&
+          new RegExp(selectorPattern(selector)).test(subjectCompound(one))
+      )
+  )
+}
+
+/**
  * Where each editable host's size is declared, as `{ at, size }`.
  *
  * The size is looked for in the same module the markup came from and in the modules directly beside
@@ -191,18 +254,28 @@ function editableHostSizes(mobileDir, closure) {
     const siblings = closure.local.filter(
       (file) => file.slice(0, file.lastIndexOf('/')) === directory
     )
+    const selector = `#${host.id}`
     let resolved = null
     for (const file of siblings) {
       const source = readOrNull(join(mobileDir, file))
       if (source === null) {
         continue
       }
-      const rule = ruleFor(source, `#${host.id}`)
-      if (rule === null) {
+      const exact = exactRules(source, selector)
+      if (exact.length === 0) {
         continue
       }
-      const line = source.slice(0, rule.index).split('\n').length
-      resolved = { at: `${file}:${line}`, size: readFontSize(mobileDir, source, rule.declarations) }
+      const unrankable = unrankableHostRules(source, selector)
+      const named = unrankable[0] ?? exact[0]
+      resolved = {
+        at: `${file}:${source.slice(0, named.index).split('\n').length}`,
+        // Joined in source order because that is the cascade among rules of equal specificity, and
+        // `winningFontSize` already reads the last of equal importance out of a declaration string.
+        size:
+          unrankable.length > 0
+            ? null
+            : readFontSize(mobileDir, source, exact.map((one) => one.declarations).join(';'))
+      }
       break
     }
     resolutions.push(resolved ?? { at: `${host.file} (#${host.id})`, size: null })
@@ -213,8 +286,9 @@ function editableHostSizes(mobileDir, closure) {
 /**
  * Every editable host whose size this walk could not follow to a rule, as it names it.
  *
- * A hole rather than a pass: an editable planted with no id, or one whose selector no stylesheet
- * beside it opens, is a surface the rule cannot judge and has to say so.
+ * A hole rather than a pass: an editable planted with no id, one whose selector no stylesheet
+ * beside it opens, or one a higher-specificity rule sizes out of this walk's reach, is a surface
+ * the rule cannot judge and has to say so.
  */
 export function unresolvedEditableHostStyles(mobileDir, closure) {
   return editableHostSizes(mobileDir, closure)

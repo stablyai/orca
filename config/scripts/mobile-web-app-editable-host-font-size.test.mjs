@@ -215,4 +215,79 @@ describe('the editable-host font-size rule', () => {
     // Not an offender either: an offender is a size this walk read and found under the floor.
     expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
   })
+
+  it('reads every exact rule in the sheet, in source order, as the cascade does', async () => {
+    // Equal specificity, so the last rule wins. Reading only the first called a 14 px surface
+    // compliant because a compliant rule happened to sit above it.
+    const later = await fixture(
+      'later-exact',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 18px;\n    }\n' +
+        '    #editor {\n      font-size: 14px;\n    }`\n}\n'
+    )
+    expect(editableHostFontSizeOffenders(later.root, later.closure)).toEqual(['src/doc/style.ts:2'])
+  })
+
+  it('takes source order rather than the lowest exact rule in the sheet', async () => {
+    // The control the reading above needs: the same two rules the other way round are compliant,
+    // so the verdict is the cascade rather than "any rule under the floor anywhere in the sheet".
+    const earlier = await fixture(
+      'earlier-exact',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 14px;\n    }\n' +
+        '    #editor {\n      font-size: 18px;\n    }`\n}\n'
+    )
+    expect(editableHostFontSizeOffenders(earlier.root, earlier.closure)).toEqual([])
+  })
+
+  it('cannot rank a higher-specificity subject rule, and says so rather than passing', async () => {
+    // `main#editor` outranks `#editor` and this census does no specificity arithmetic, so a rule
+    // like it declaring a size is a hole, named at its own line.
+    const { root, closure } = await fixture(
+      'subject-specificity',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 18px;\n    }\n' +
+        '    main#editor {\n      font-size: 14px;\n    }`\n}\n'
+    )
+    expect(unresolvedEditableHostStyles(root, closure)).toEqual(['src/doc/style.ts:5'])
+    // Not an offender either: an offender is a size this walk read and could rank.
+    expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
+  })
+
+  it('splits a selector list, so a host riding in one still reaches the verdict', async () => {
+    const { root, closure } = await fixture(
+      'subject-in-list',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 18px;\n    }\n' +
+        '    h1, main#editor {\n      font-size: 14px;\n    }`\n}\n'
+    )
+    expect(unresolvedEditableHostStyles(root, closure)).toEqual(['src/doc/style.ts:5'])
+  })
+
+  it('reads the host’s own id, not a longer one that starts with it', async () => {
+    // The selector list is now read whole, so `#editor` has to stop at an id boundary: without one,
+    // a rule for the element beside the host would have made the host unresolved.
+    const { root, closure } = await fixture(
+      'neighbour-id',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 18px;\n    }\n' +
+        '    #editor-notes {\n      font-size: 14px;\n    }`\n}\n'
+    )
+    expect(unresolvedEditableHostStyles(root, closure)).toEqual([])
+    expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
+  })
+
+  it('leaves a descendant rule and a pseudo-element rule out of the way', async () => {
+    // Neither one is the host: `#editor p` is about another element, and `::before` is a box the
+    // host generates. Counting either as a hole would report the shipped sheet unresolved.
+    const { root, closure } = await fixture(
+      'not-the-host',
+      'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+      'export function style() {\n  return `    #editor {\n      font-size: 18px;\n    }\n' +
+        '    #editor::before {\n      font-size: 12px;\n    }\n' +
+        '    #editor p {\n      font-size: 0.9em;\n    }`\n}\n'
+    )
+    expect(unresolvedEditableHostStyles(root, closure)).toEqual([])
+    expect(editableHostFontSizeOffenders(root, closure)).toEqual([])
+  })
 })
