@@ -24,6 +24,8 @@ import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { isWorktreePathAdmissibleForHost } from '../../shared/worktree/worktree-host-path-admissibility'
+import { warnIfHostsShareGitCommonDir } from '../ipc/worktrees/listing/worktree-shared-git-warning'
 
 /**
  * Per-repo budget for one resolution pass. Why: mobile startup shares this path, so one slow repo
@@ -76,7 +78,10 @@ export function listStoredWorktreeRowsForRepo(
       continue
     }
     // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
-    if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
+    if (
+      (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) ||
+      !isWorktreePathAdmissibleForHost(parsed.worktreePath, repo)
+    ) {
       continue
     }
     byWorktreeId.set(worktreeId, {
@@ -133,7 +138,10 @@ export async function resolveRepoWorktreeRows(
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
-  const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
+  warnIfHostsShareGitCommonDir(store, repo, scan.worktrees)
+  const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees).filter(
+    (gitWorktree) => !gitWorktree.prunable && isWorktreePathAdmissibleForHost(gitWorktree.path, repo)
+  )
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
@@ -203,6 +211,9 @@ export async function resolveScopedWorktreeIdRow(
     return null
   }
   const repo = owners[0]
+  if (!isWorktreePathAdmissibleForHost(parsed.worktreePath, repo)) {
+    return null
+  }
   const rows = await resolveRepoWorktreeRows(
     deps,
     repo,

@@ -22,6 +22,7 @@ import {
   loggedWorktreeListFailures,
   warnOnce
 } from './worktree-listing-diagnostics'
+import { warnIfHostsShareGitCommonDir } from './worktree-shared-git-warning'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
   readAllWorktreeMetaForHost,
@@ -139,6 +140,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
             }
           )
         }
+        warnIfHostsShareGitCommonDir(store, repo, gitWorktrees)
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         const metadata = metadataForRepo(repo)
         return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
@@ -226,6 +228,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
           ...(hygieneDue === undefined ? {} : { hygieneDue })
         })
       }
+      warnIfHostsShareGitCommonDir(store, repo, gitWorktrees)
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       const metadata = allMeta ?? readAllWorktreeMetaForRepo(store, repo)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)

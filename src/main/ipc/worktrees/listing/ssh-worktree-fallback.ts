@@ -31,6 +31,7 @@ import {
   getProjectHostSetupMetaUpdates,
   resolveWorktreeMetaWithDiscoveryBackfill
 } from './worktree-discovery-metadata'
+import { isWorktreePathAdmissibleForHost } from '../../../../shared/worktree/worktree-host-path-admissibility'
 
 export type SshWorktreeMetaCandidate = {
   id: string
@@ -106,7 +107,8 @@ export function listDisconnectedSshWorktrees(
   for (const candidate of metaIndex.get(repo.id) ?? []) {
     if (
       (candidate.meta.hostId && candidate.meta.hostId !== expectedHostId) ||
-      (!candidate.meta.hostId && repoOwners.length > 1)
+      (!candidate.meta.hostId && repoOwners.length > 1) ||
+      !isWorktreePathAdmissibleForHost(candidate.path, repo)
     ) {
       continue
     }
@@ -146,7 +148,7 @@ export function buildDetectedGitWorktrees(
   // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
   const liveWorktrees = dedupeWorktreesByPath(
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
-      (gitWorktree) => !gitWorktree.prunable
+      (gitWorktree) => !gitWorktree.prunable && isWorktreePathAdmissibleForHost(gitWorktree.path, repo)
     )
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(

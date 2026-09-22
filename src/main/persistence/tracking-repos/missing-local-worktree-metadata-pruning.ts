@@ -5,6 +5,7 @@ import { getRepoKind } from '../../../shared/repo-kind'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
+import { isWorktreePathAdmissibleForHost } from '../../../shared/worktree/worktree-host-path-admissibility'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
@@ -106,15 +107,25 @@ function isValidCandidateId(
   platform: NodeJS.Platform
 ): boolean {
   const parsed = splitWorktreeId(worktreeId)
-  return Boolean(
-    parsed?.repoId === repoId &&
-    parsed.worktreePath.length > 0 &&
-    !isWslUncPath(parsed.worktreePath) &&
-    (platform === 'win32'
+  if (
+    !parsed ||
+    parsed.repoId !== repoId ||
+    parsed.worktreePath.length === 0 ||
+    isWslUncPath(parsed.worktreePath) ||
+    worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  ) {
+    return false
+  }
+  const nativeAbsolute =
+    platform === 'win32'
       ? isWindowsAbsolutePathLike(parsed.worktreePath)
-      : parsed.worktreePath.startsWith('/')) &&
-    !worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+      : parsed.worktreePath.startsWith('/')
+  const inadmissible = !isWorktreePathAdmissibleForHost(
+    parsed.worktreePath,
+    { path: undefined },
+    platform
   )
+  return nativeAbsolute || inadmissible
 }
 
 /**

@@ -115,4 +115,22 @@ describe('selectProbeableLocalWorktreeMetadataCandidates', () => {
 
     expect(selected.map(({ worktreeId }) => worktreeId)).toEqual(removed)
   })
+
+  it('keeps an inadmissible foreign path as a probeable candidate and allows removal', () => {
+    const state = makeState()
+    const foreignId = `${REPO_ID}::C:/Users/alice/project`
+    state.worktreeMeta[foreignId] = makeMeta(foreignId)
+
+    expect(probeableIds(state)).toEqual([foreignId])
+
+    const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
+    const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepo(
+      state,
+      scan,
+      scan.metadata,
+      'linux'
+    )
+    expect(removed).toEqual([foreignId])
+    expect(state.worktreeMeta[foreignId]).toBeUndefined()
+  })
 })

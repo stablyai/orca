@@ -9,6 +9,8 @@ import {
 } from '../../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
 import { randomUUID } from 'node:crypto'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
+import { isWorktreePathAdmissibleForHost } from '../../../../shared/worktree/worktree-host-path-admissibility'
 
 export function getProjectHostSetupMetaUpdates(
   store: Store,
@@ -51,6 +53,11 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
       allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {}),
       repoOwnerCount
     )
+  const parsed = splitWorktreeId(worktreeId)
+  if (parsed && !isWorktreePathAdmissibleForHost(parsed.worktreePath, repo)) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Inadmissible worktrees never persist metadata rows.
+    return existing ?? ({} as WorktreeMeta)
+  }
   const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, existing)
   if (existing) {
     const updates = {

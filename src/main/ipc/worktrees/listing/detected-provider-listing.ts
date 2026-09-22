@@ -32,6 +32,7 @@ import {
 } from './worktree-listing-diagnostics'
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
+import { warnIfHostsShareGitCommonDir } from './worktree-shared-git-warning'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -117,6 +118,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    warnIfHostsShareGitCommonDir(store, repo, gitWorktrees)
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
     if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
       return {

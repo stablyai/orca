@@ -7,6 +7,7 @@ import {
   splitWorktreeId
 } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import { isWorktreePathAdmissibleForHost } from '../../../../shared/worktree/worktree-host-path-admissibility'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
@@ -83,7 +84,9 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   const livePathKeys = new Set([
     // Why: Git can canonicalize a symlinked main checkout differently from the configured path.
     worktreeRetentionPathComparisonKey(repo.path, platform),
-    ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
+    ...gitWorktrees
+      .filter((worktree) => !worktree.prunable && isWorktreePathAdmissibleForHost(worktree.path, repo, platform))
+      .map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
   ])
   // Why: only rows a delete could still accept are worth a filesystem probe. This is advisory —
   // `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks authoritatively — so it can only
@@ -98,9 +101,10 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
         ? isWindowsAbsolutePathLike(parsed.worktreePath)
         : parsed.worktreePath.startsWith('/')
       : false
+    const inadmissible = parsed ? !isWorktreePathAdmissibleForHost(parsed.worktreePath, repo, platform) : false
     if (
       parsed?.repoId !== repo.id ||
-      !nativeAbsolute ||
+      (!nativeAbsolute && !inadmissible) ||
       isWslUncPath(parsed.worktreePath) ||
       worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR) ||
       livePathKeys.has(worktreeRetentionPathComparisonKey(parsed.worktreePath, platform))
