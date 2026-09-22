@@ -157,9 +157,8 @@ type Mounted = {
 /**
  * One cold start of the route: a fresh store over the tree already on disk, as a relaunch gets.
  *
- * `createStore` mints a new store per mount rather than sharing one, because a store holds a
- * serialisation queue and nothing else — a shared one would let the second mount read a manifest
- * the first had in memory instead of the one that reached the file.
+ * Production hands every mount the one process store; this cold start builds its own per mount, as
+ * a relaunch does, so the second mount reads the manifest that reached the file, not a queued one.
  */
 async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted> {
   const latest: {
