@@ -5,20 +5,19 @@
  * importing it runs a codegen lookup that throws, and the route manifest imports every route, so
  * one such import takes the whole bundle down rather than one editor.
  *
- * The two are no longer in the same state. Ruling 26 makes C7.6's fallbacks debt rather than done,
- * and C7.10's PR A has already paid it for the HTML preview: it renders the artifact in a sealed
- * `srcdoc` frame with the toggle intact, so what is pinned for it here is the frame's shape and the
- * toggle's two positions. What a browser does with that frame is not a question this renderer can
- * answer and is measured in `mobile-web-app-html-preview-render.test.mjs` instead. The rich Markdown
- * editor is still the plain field, and its degradation is still what is pinned below.
+ * Ruling 26 makes C7.6's fallbacks debt rather than done, and both are paid now. The preview
+ * renders the artifact in a sealed `srcdoc` frame with the toggle intact; the rich Markdown editor
+ * mounts the same document program the WebView runs, under the same fifteen-command toolbar. What a
+ * browser does with either — the frame's sandbox, the editor's commands, its listeners across a
+ * remount — is not a question this renderer can answer, and is measured in
+ * `mobile-web-app-html-preview-render.test.mjs` and
+ * `mobile-web-app-rich-markdown-render.test.mjs` instead. What is pinned here is the shape above
+ * the document: that the plain field is gone, that the toolbar is the one both siblings render, and
+ * that the two props the page answers differently are answered differently.
  */
-import { createElement, createRef } from 'react'
+import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// The unsuffixed path, which is what the component imports: under vitest that is the native
-// module, and the page's `.web.ts` is what the C7.2 closure census judges against the 16px floor.
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-
 vi.mock('react-native', async () => {
   const React = await import('react')
   const host =
@@ -46,9 +45,33 @@ vi.mock('react-native', async () => {
 // The preview's toggle carries two icons, and `lucide-react-native` imports a `LucideProvider` its
 // own context module does not export, so the real barrel does not load under vitest at all.
 vi.mock('lucide-react-native', () => ({
+  Bold: () => null,
   Code: () => null,
-  Eye: () => null
+  Code2: () => null,
+  Eye: () => null,
+  FileCode2: () => null,
+  Heading1: () => null,
+  Heading2: () => null,
+  Heading3: () => null,
+  ImageIcon: () => null,
+  Italic: () => null,
+  Link: () => null,
+  List: () => null,
+  ListOrdered: () => null,
+  ListTodo: () => null,
+  Pilcrow: () => null,
+  Quote: () => null,
+  Strikethrough: () => null
 }))
+
+// The modal is a bottom drawer with an animation and a portal, none of which this file is about:
+// what it pins is that the editor carries one and that it is shut.
+vi.mock('./TextInputModal', async () => {
+  const React = await import('react')
+  return {
+    TextInputModal: (props: Record<string, unknown>) => React.createElement('TextInputModal', props)
+  }
+})
 
 // Mocked so the native sibling can be rendered beside the web one for the toggle case below: the real
 // import is the codegen lookup this whole file exists because of.
@@ -63,7 +86,6 @@ vi.mock('react-native-webview', async () => {
 import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview.web'
 import { MobileHtmlPreview as PhoneHtmlPreview } from './MobileHtmlPreview'
 import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor.web'
-import type { MobileRichMarkdownEditorHandle } from './MobileRichMarkdownEditor'
 
 const renderers: ReactTestRenderer[] = []
 
@@ -94,27 +116,20 @@ afterEach(() => {
 })
 
 describe('the rich markdown editor on the page', () => {
-  it('renders the source in one editable field and reports every edit', () => {
-    const onChange = vi.fn()
+  it('renders no plain field, because the document it degraded to is gone', () => {
     const renderer = render(
       createElement(MobileRichMarkdownEditor, {
         content: '# Title\n\nbody',
         editable: true,
-        onChange
+        onChange: vi.fn()
       })
     )
-
-    const inputs = findHosts(renderer, 'TextInput')
-    expect(inputs).toHaveLength(1)
-    expect(inputs[0]?.props.value).toBe('# Title\n\nbody')
-    expect(inputs[0]?.props.editable).toBe(true)
-    act(() => inputs[0]?.props.onChangeText('# Title\n\nedited'))
-    expect(onChange.mock.calls).toEqual([['# Title\n\nedited']])
+    // The whole of C7.6's sibling: one `TextInput` holding the Markdown source, and a notice bar
+    // over it saying so. Both go, because the page runs the real document now.
+    expect(findHosts(renderer, 'TextInput')).toEqual([])
   })
 
-  it('renders no toolbar, which is the degradation rather than an omission', () => {
-    // Fifteen commands drive a rich document this page does not have; a toolbar that could not
-    // run them would be fifteen controls that do nothing.
+  it('renders the fifteen-command toolbar the phone renders', () => {
     const renderer = render(
       createElement(MobileRichMarkdownEditor, {
         content: 'body',
@@ -122,11 +137,13 @@ describe('the rich markdown editor on the page', () => {
         onChange: vi.fn()
       })
     )
-    expect(findHosts(renderer, 'Pressable')).toEqual([])
-    expect(findHosts(renderer, 'ScrollView')).toEqual([])
+    const buttons = findHosts(renderer, 'Pressable')
+    expect(buttons).toHaveLength(15)
+    expect(buttons.map((node) => node.props.accessibilityLabel)).toContain('Image')
+    expect(buttons.filter((node) => node.props.disabled === true)).toEqual([])
   })
 
-  it('locks the field when the document is not editable', () => {
+  it('disables every command against a document that cannot be edited', () => {
     const renderer = render(
       createElement(MobileRichMarkdownEditor, {
         content: 'body',
@@ -134,12 +151,15 @@ describe('the rich markdown editor on the page', () => {
         onChange: vi.fn()
       })
     )
-    expect(findHosts(renderer, 'TextInput')[0]?.props.editable).toBe(false)
+    const buttons = findHosts(renderer, 'Pressable')
+    expect(buttons).toHaveLength(15)
+    expect(buttons.filter((node) => node.props.disabled !== true)).toEqual([])
   })
 
-  it('sits on the text-input seam rather than on a size of its own', () => {
-    // The floor itself is the `.web.ts` sibling's and is judged by the closure census; what is
-    // pinned here is that this field is bound to the seam at all, which is what makes it move.
+  it('keeps the URL modal mounted and closed until a command asks for one', () => {
+    // The seam `window.prompt` could not be: both shells cancel the dialog without showing it, so
+    // Link and Image did nothing at all on the phone. Whether the modal opens on a command is the
+    // render check's to measure; that the page carries one, shut, is this file's.
     const renderer = render(
       createElement(MobileRichMarkdownEditor, {
         content: 'body',
@@ -147,28 +167,12 @@ describe('the rich markdown editor on the page', () => {
         onChange: vi.fn()
       })
     )
-    expect(findHosts(renderer, 'TextInput')[0]?.props.style.fontSize).toBe(TEXT_INPUT_FONT_SIZE)
+    const modals = findHosts(renderer, 'TextInputModal')
+    expect(modals).toHaveLength(1)
+    expect(modals[0]?.props.visible).toBe(false)
   })
 
-  it('dismisses the keyboard by blurring the field the caret is actually in', () => {
-    // The native handle calls into the WebView's document; here the caret is in this field, and
-    // react-native-web's `Keyboard.dismiss` is a stub that would have done nothing.
-    const ref = createRef<MobileRichMarkdownEditorHandle>()
-    const blur = vi.fn()
-    render(
-      createElement(MobileRichMarkdownEditor, {
-        ref,
-        content: 'body',
-        editable: true,
-        onChange: vi.fn()
-      }),
-      { blur }
-    )
-    act(() => ref.current?.dismissKeyboard())
-    expect(blur).toHaveBeenCalledTimes(1)
-  })
-
-  it('never calls onKeyboardInsetChange, because there is no WebView to measure', () => {
+  it('never calls onKeyboardInsetChange, because the screen measures the same viewport', () => {
     const onKeyboardInsetChange = vi.fn()
     render(
       createElement(MobileRichMarkdownEditor, {

@@ -37,7 +37,7 @@ export type TuiAgentConfig = {
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
+  preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
@@ -178,6 +178,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   antigravity: {
     detectCmd: 'agy',
     promptInjectionMode: 'flag-prompt-interactive',
+    // Why: agy's first-launch trust menu consumes the bracketed paste, and its trust is
+    // exact-path rather than inherited, so every freshly created child worktree raises it
+    // again — a supervised worker would otherwise always fail at agent_readiness
+    // (agent-trust-presets.ts).
+    preflightTrust: 'antigravity',
     // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
     // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
     submitLineSettleMsPerLine: 45

@@ -16,7 +16,9 @@ import type { RichMarkdownEditorDocument } from './document-host-seams'
  */
 const started: RichMarkdownEditorDocument[] = []
 
-function runtime(options: { caret?: 'paragraph-3' | null } = {}) {
+function runtime(
+  options: { caret?: 'paragraph-3' | null; promptForUrl?: () => Promise<string | null> } = {}
+) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const editor = document.getElementById('editor')!
   editor.innerHTML =
@@ -47,7 +49,8 @@ function runtime(options: { caret?: 'paragraph-3' | null } = {}) {
 
   const document_ = createRichMarkdownEditorDocument({
     postToHost: () => {},
-    keyboardInsetSource: () => null
+    keyboardInsetSource: () => null,
+    ...(options.promptForUrl ? { promptForUrl: options.promptForUrl } : {})
   })
   started.push(document_)
 
@@ -143,5 +146,55 @@ describe('the editor document caret, across a keyboard dismissal', () => {
     editor.detachContent()
     await editor.handle.runCommand('bold')
     expect(editor.selectedContainer()).toBe('editor-end')
+  })
+})
+
+describe('the editor document caret, across the host’s URL dialog', () => {
+  /** A host that answers the way a modal does: it takes the focus, then it answers. */
+  const modalThatTakesTheFocus = () => {
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    field.focus()
+    window.getSelection()?.removeAllRanges()
+    return Promise.resolve('https://example.com/a')
+  }
+
+  it('puts the caret back where the dialog found it, so the command has one to act on', async () => {
+    // The page's modal focuses its own field, and `execCommand` on a document that does not hold
+    // the selection inserts nothing: measured in both engines, Link and Image did nothing at all.
+    const editor = runtime({ caret: 'paragraph-3', promptForUrl: modalThatTakesTheFocus })
+    await editor.handle.runCommand('link')
+    expect(editor.focused()).toBe(true)
+    expect(editor.selectedContainer()).toBe('paragraph-3')
+  })
+
+  it('falls back to the end when the dialog outlived the content it was opened over', async () => {
+    // The host can replace the content while its dialog is open, which detaches the nodes the
+    // remembered caret was in.
+    let replaceContent = () => {}
+    const editor = runtime({
+      caret: 'paragraph-3',
+      promptForUrl: () => {
+        replaceContent()
+        return modalThatTakesTheFocus()
+      }
+    })
+    replaceContent = editor.detachContent
+    await editor.handle.runCommand('link')
+    expect(editor.selectedContainer()).toBe('editor-end')
+  })
+
+  it('runs no command when the dialog is cancelled, and leaves the caret alone', async () => {
+    const editor = runtime({
+      caret: 'paragraph-3',
+      promptForUrl: () => {
+        window.getSelection()?.removeAllRanges()
+        return Promise.resolve(null)
+      }
+    })
+    await editor.handle.runCommand('link')
+    // Nothing restored, because nothing is going to run: the restore is the command's, not the
+    // dialog's.
+    expect(editor.selectedContainer()).toBe(null)
   })
 })

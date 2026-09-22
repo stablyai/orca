@@ -75,10 +75,34 @@ export function restoreSelectionOrEnd(scope: RichMarkdownEditorScope) {
   if (selection.rangeCount > 0) {
     return
   }
+  collapseToEnd(scope)
+}
+
+/** The caret at the end of the document, which is where a command with nothing to act on goes. */
+function collapseToEnd(scope: RichMarkdownEditorScope) {
   const range = scope.getDocument().createRange()
   range.selectNodeContents(editorElement(scope))
   range.collapse(false)
   applySelectionRange(scope, range)
+}
+
+/**
+ * Puts the caret back where the host's dialog found it.
+ *
+ * A command that has to ask for a URL gives the caret up while it waits: the page's modal takes
+ * focus into its own field, and `execCommand` on a document that does not hold the selection
+ * inserts nothing at all — measured in both engines, with Link and Image doing nothing on a page
+ * whose modal had just answered. Unconditional, unlike `restoreSelectionOrEnd`, because the wait
+ * itself is the blur and there is nothing for a flag to tell it.
+ */
+export function restoreRememberedSelection(scope: RichMarkdownEditorScope) {
+  focusEditor(scope)
+  const saved = scope.savedSelectionRange
+  if (saved && editorElement(scope).contains(saved.commonAncestorContainer)) {
+    applySelectionRange(scope, saved)
+    return
+  }
+  collapseToEnd(scope)
 }
 
 /**
