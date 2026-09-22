@@ -25,7 +25,14 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({ ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight' }))
-vi.mock('../transport/client-context', () => ({ useForceReconnect: () => vi.fn() }))
+const transport = vi.hoisted(
+  (): { forceReconnect: ((hostId: string) => Promise<void>) | null } => ({
+    forceReconnect: () => Promise.resolve()
+  })
+)
+vi.mock('../transport/client-context', () => ({
+  useForceReconnect: () => transport.forceReconnect
+}))
 
 // Captured at module scope: the list renders rows against Date.now() a few ms later,
 // so a 3h offset stays inside the '3h' relative-time bucket.
@@ -176,5 +183,43 @@ describe('MobileGitHistoryList', () => {
       commitId: 'commit-1'
     })
     expect(tree()).toContain('src/app.ts')
+  })
+
+  describe('Retry while the host is unreachable', () => {
+    function retryControls() {
+      return (
+        renderer?.root.findAll(
+          (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Retry'
+        ) ?? []
+      )
+    }
+
+    async function renderUnreachable(): Promise<void> {
+      await act(async () => {
+        renderer = create(listElement(null, 'reconnecting'))
+        await Promise.resolve()
+      })
+    }
+
+    afterEach(() => {
+      transport.forceReconnect = () => Promise.resolve()
+    })
+
+    it('is absent on the page, where nothing can re-dial', async () => {
+      transport.forceReconnect = null
+      await renderUnreachable()
+      expect(tree()).toContain('Waiting for desktop...')
+      expect(retryControls()).toHaveLength(0)
+    })
+
+    it('still renders natively and re-dials this host', async () => {
+      const forceReconnect = vi.fn(() => Promise.resolve())
+      transport.forceReconnect = forceReconnect
+      await renderUnreachable()
+      await act(async () => {
+        retryControls()[0]?.props.onPress()
+      })
+      expect(forceReconnect.mock.calls).toEqual([['host-1']])
+    })
   })
 })

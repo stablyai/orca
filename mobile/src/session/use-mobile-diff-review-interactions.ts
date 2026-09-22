@@ -20,6 +20,7 @@ import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 
 type InteractionInput = {
   client: RpcClient | null
@@ -49,7 +50,7 @@ type InteractionInput = {
   setShowCompletion: Dispatch<SetStateAction<boolean>>
   loadReviewData: () => Promise<void>
   onOpenSession: () => void
-  onReconnect: (hostId: string) => void | Promise<void>
+  onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
 
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
@@ -198,13 +199,12 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       onOpenSession()
     },
     openSendSheet,
-    retryAction: () => {
-      if (connState !== 'connected' && hostId) {
-        void onReconnect(hostId)
-        return
-      }
-      void loadReviewData()
-    },
+    retryAction: connectionRetryAction({
+      hostId,
+      needsReconnect: connState !== 'connected',
+      forceReconnect: onReconnect,
+      reload: () => void loadReviewData()
+    }),
     runGitMutation,
     saveComposer,
     selectFilter: (nextFilter: MobileDiffReviewQueueFilter) => {
