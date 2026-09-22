@@ -50,6 +50,7 @@ const sessionGrants = MOBILE_WEB_PAGE_ROUTES.filter((route) => route.pathname ==
   (route) => route.grants
 )
 const pinnedHere = PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
+const pinnedHereForSession = pinnedHere.filter((grant) => sessionGrants.includes(grant))
 const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(grant))
 
 /**
@@ -58,13 +59,19 @@ const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(gra
  * The rows here pin some of the session route's grants and named censuses pin the rest; the
  * sentences that say how many were written when a fourteenth grant existed and did not move when
  * #22072 removed it.
+ *
+ * Two counts, and which one a row takes is what its sentence is about. A sentence about the
+ * session route takes the intersection, because a row pinning a grant no route declares -- the
+ * shell can serve a verb before a screen asks for it -- would otherwise make the census demand
+ * the comment overstate what the session route has. A sentence about this file's own rows takes
+ * all of them, because that one really does move.
  */
 const SPELLED_COUNTS = {
   'mobile-web-app-page-grant-call-sites.mjs': [
     { precedes: 'grants', counted: sessionGrants.length },
     { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
     { precedes: 'rows pin', counted: PAGE_GRANT_CALL_SITES.length },
-    { precedes: 'of the session', counted: pinnedHere.length },
+    { precedes: 'of the session', counted: pinnedHereForSession.length },
     { precedes: 'have censuses of their own', counted: pinnedElsewhere.length },
     { precedes: 'are not repeated here', counted: pinnedElsewhere.length }
   ],
