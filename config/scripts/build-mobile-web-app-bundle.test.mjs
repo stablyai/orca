@@ -570,9 +570,9 @@ describe('the Phase C budget', () => {
     // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
     // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(30, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(249)
+    expect(assertAssetCeilingFitsShell(30, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(248)
     expect(() => assertAssetCeilingFitsShell(31, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /258 .*256/
+      /257 .*256/
     )
   })
 })
