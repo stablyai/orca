@@ -6,6 +6,10 @@ import type { ClaudeBackgroundAgentTask } from './claude-background-task-invento
  *  invisible in the emitted snapshots (which drop such ids). */
 const CLAUDE_SUBAGENT_ID_MAX_LENGTH = 64
 
+// A missing SubagentStop must not pin a pane forever, but an active child can
+// legitimately run for several minutes without another lifecycle event.
+export const CLAUDE_SUBAGENT_STALE_AFTER_MS = 30 * 60 * 1000
+
 /** Live subagents/teammates tracked for one Claude pane, keyed by the
  *  provider-assigned `agent_id` from SubagentStart/SubagentStop payloads.
  *  One-shot children (hyphen-free ids) are tracked only while working — their
@@ -22,6 +26,8 @@ export type TrackedClaudeSubagent = {
   agentType?: string
   description?: string
   startedAt: number
+  /** Most recent evidence that this child is still alive. */
+  lastActivityAt?: number
   /** 'idle' = teammate between mailbox turns: alive/resumable, row stays
    *  visible but must not gate the pane 'working'. */
   state: 'working' | 'idle'
@@ -74,6 +80,7 @@ export function upsertWorkingClaudeSubagent(
     existing.state = 'working'
     existing.agentType = fields.agentType ?? existing.agentType
     existing.description = fields.description ?? existing.description
+    existing.lastActivityAt = now
     // Why: live activity proves the lifecycle stream owns this id again;
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
@@ -91,6 +98,7 @@ export function upsertWorkingClaudeSubagent(
   roster.set(id, {
     state: 'working',
     startedAt: now,
+    lastActivityAt: now,
     agentType: fields.agentType,
     description: fields.description
   })
@@ -157,6 +165,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
   now: number,
   options?: { inventoryComplete?: boolean }
 ): void {
+  pruneStaleClaudeSubagents(roster, now)
   if (tasks.length === 0) {
     if (options?.inventoryComplete !== false) {
       roster.clear()
@@ -183,6 +192,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
       existing.state = 'working'
       existing.agentType = task.agentType ?? existing.agentType
       existing.description = task.description ?? existing.description
+      existing.lastActivityAt = now
       existing.listedAsSubagentTask = true
       // Why: a live inventory listed the id as running — the restored claim is
       // now confirmed by the current process, so liveness can't reap it.
@@ -259,12 +269,29 @@ export function reapUnconfirmedRestoredClaudeSubagents(roster: ClaudeSubagentRos
   return changed
 }
 
+/** Remove working rows that have outlived their last lifecycle evidence. */
+export function pruneStaleClaudeSubagents(roster: ClaudeSubagentRoster, now = Date.now()): boolean {
+  let changed = false
+  for (const [id, tracked] of roster) {
+    if (tracked.state !== 'working' || tracked.restoredFromSnapshot === true) {
+      continue
+    }
+    const lastActivityAt = tracked.lastActivityAt ?? tracked.startedAt
+    if (now - lastActivityAt > CLAUDE_SUBAGENT_STALE_AFTER_MS) {
+      roster.delete(id)
+      changed = true
+    }
+  }
+  return changed
+}
+
 export function claudeRosterHasRestoredSnapshotSubagent(
   roster: ClaudeSubagentRoster | undefined
 ): boolean {
   if (!roster) {
     return false
   }
+  pruneStaleClaudeSubagents(roster)
   for (const tracked of roster.values()) {
     if (tracked.restoredFromSnapshot === true) {
       return true
@@ -305,10 +332,14 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
 
 /** Only WORKING children gate the pane 'working' — idle teammates are
  *  alive-but-parked and must not pin a finished pane's spinner (#8825). */
-export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | undefined): boolean {
+export function claudeRosterHasWorkingSubagent(
+  roster: ClaudeSubagentRoster | undefined,
+  now = Date.now()
+): boolean {
   if (!roster) {
     return false
   }
+  pruneStaleClaudeSubagents(roster, now)
   for (const tracked of roster.values()) {
     if (tracked.state === 'working') {
       return true
@@ -319,11 +350,13 @@ export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | un
 
 /** A working child observed in this listener runtime, not merely restored from disk. */
 export function claudeRosterHasRuntimeWorkingSubagent(
-  roster: ClaudeSubagentRoster | undefined
+  roster: ClaudeSubagentRoster | undefined,
+  now = Date.now()
 ): boolean {
   if (!roster) {
     return false
   }
+  pruneStaleClaudeSubagents(roster, now)
   for (const tracked of roster.values()) {
     if (tracked.state === 'working' && tracked.restoredFromSnapshot !== true) {
       return true
