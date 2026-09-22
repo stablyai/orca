@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -31,6 +32,16 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 }))
 
 beforeEach(resetWorktreeSliceModuleMemory)
+
+const CONTRIBUTED_LINKED_WORK_ITEM = {
+  provider: 'plugin' as const,
+  type: 'issue' as const,
+  number: 0,
+  title: 'AB-41 Contributed item',
+  url: 'https://boards.example.com/AB-41',
+  pluginKey: 'azure-boards',
+  sourceId: 'board-1'
+}
 
 describe('worktree remote runtime mutations', () => {
   beforeEach(() => {
@@ -207,6 +218,151 @@ describe('worktree remote runtime mutations', () => {
 
     await expect(createWorktree(...args)).rejects.toThrow('Update the remote runtime to link Jira')
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('sends a contributed linked item to a host advertising the plugin provider capability', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/plugin-link',
+      repoId: 'repo1',
+      path: '/path/plugin-link'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'plugin-link']
+    args[25] = { linkedWorkItem: CONTRIBUTED_LINKED_WORK_ITEM }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ linkedWorkItem: CONTRIBUTED_LINKED_WORK_ITEM })
+      })
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('creates the workspace without the contributed link when the host lacks the plugin provider capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.linked-work-item-plugin-provider.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/plugin-link',
+      repoId: 'repo1',
+      path: '/path/plugin-link'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'plugin-link']
+    args[25] = { linkedWorkItem: CONTRIBUTED_LINKED_WORK_ITEM }
+
+    await expect(createWorktree(...args)).resolves.toEqual({ worktree: wt })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+    const createRequest = runtimeEnvironmentCall.mock.calls[0][0]
+    expect(createRequest.method).toBe('worktree.create')
+    expect(createRequest.params).not.toHaveProperty('linkedWorkItem')
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Linked item left off this workspace',
+      expect.objectContaining({
+        description: expect.stringContaining('too old to store links from installed plugins')
+      })
+    )
+  })
+
+  it('keeps a GitHub linked item when the host lacks the plugin provider capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.linked-work-item-plugin-provider.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/github-link',
+      repoId: 'repo1',
+      path: '/path/github-link'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const linkedWorkItem = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: 41,
+      title: 'Broken link',
+      url: 'https://github.com/acme/orca/issues/41'
+    }
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'github-link']
+    args[25] = { linkedWorkItem }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ linkedWorkItem })
+      })
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('sends a contributed linked item through local worktree creation', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/local-plugin-link',
+      repoId: 'repo1',
+      path: '/path/local-plugin-link'
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+    store.setState({ worktreesByRepo: { repo1: [] } })
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'local-plugin-link']
+    args[25] = { linkedWorkItem: CONTRIBUTED_LINKED_WORK_ITEM }
+
+    await createWorktree(...args)
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({ linkedWorkItem: CONTRIBUTED_LINKED_WORK_ITEM })
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('passes startup commands through remote runtime worktree creation', async () => {

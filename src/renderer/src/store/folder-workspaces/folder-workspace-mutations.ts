@@ -17,6 +17,7 @@ import {
 import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { resolveHostSupportedLinkedWorkItem } from '../plugin-linked-item-host-support'
 import {
   folderWorkspaceUpdateInvalidatesPathStatus,
   getFolderWorkspacePathStatusRouteSettings,
@@ -75,14 +76,22 @@ export function createFolderWorkspaceMutationActions(
             'Update the remote runtime to link Jira'
           )
         }
+        const supportedLinkedTask = await resolveHostSupportedLinkedWorkItem(
+          target,
+          args.linkedTask
+        )
+        const createArgs =
+          supportedLinkedTask === args.linkedTask
+            ? args
+            : { ...args, linkedTask: supportedLinkedTask }
         const workspace =
           target.kind === 'local'
-            ? await window.api.folderWorkspaces.create(args)
+            ? await window.api.folderWorkspaces.create(createArgs)
             : (
                 await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
                   target,
                   'folderWorkspace.create',
-                  args,
+                  createArgs,
                   { timeoutMs: 15_000 }
                 )
               ).folderWorkspace

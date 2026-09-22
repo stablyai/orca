@@ -13,6 +13,7 @@ import {
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { resolveHostSupportedLinkedWorkItem } from '../../../plugin-linked-item-host-support'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -125,7 +126,7 @@ export function createCreateWorktree(
     compareBaseRef,
     options
   ) => {
-    const request: WorktreeCreateRequest = {
+    let request: WorktreeCreateRequest = {
       repoId,
       name,
       baseBranch,
@@ -180,6 +181,13 @@ export function createCreateWorktree(
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
         )
+      }
+      const supportedLinkedWorkItem = await resolveHostSupportedLinkedWorkItem(
+        target,
+        options?.linkedWorkItem
+      )
+      if (supportedLinkedWorkItem !== options?.linkedWorkItem) {
+        request = { ...request, options: { ...options, linkedWorkItem: supportedLinkedWorkItem } }
       }
       if (options?.provisionedRoot && target.kind !== 'local') {
         throw new Error('Provisioned-root recipes currently require a direct SSH connection.')

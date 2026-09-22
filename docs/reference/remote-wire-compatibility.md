@@ -195,6 +195,21 @@ The harness covers the terminal stream and the structured agent-session surface.
 RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
 own reasoning against the three rules above.
 
+## Worked example: the `'plugin'` linked-work-item provider
+
+`WorkspaceLinkedItemSchema` is a **param** schema, on `worktree.create`, `worktree.set` and
+`folderWorkspace.create`. It rejects a provider it does not know rather than nulling the item, so
+an older host refuses the whole create — the user loses the workspace, not just the link. This is
+the write-direction half of Rule 4: the read path already degrades, because an old normalizer
+returns `null` and only the link is lost.
+
+The client gates on `worktree.linked-work-item-plugin-provider.v1`, next to the Jira gate at the
+same two create sites. Jira refuses, because a Jira link the host cannot store is the whole point
+of that create; a contributed link degrades instead — `resolveHostSupportedLinkedWorkItem` in
+`src/renderer/src/store/plugin-linked-item-host-support.ts` drops the item, the workspace is still
+created, and a toast says the link was left off. The capability is advertised unconditionally:
+every build carrying the constant accepts the arm.
+
 ## Worked example: `agentWait` on terminal and worker reads
 
 `terminal.show`, `orchestration.workerShow` and `orchestration.federationShow` carry an

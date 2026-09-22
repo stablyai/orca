@@ -567,6 +567,18 @@
             }
           }
         }
+      },
+      "plugin": {
+        "linked": {
+          "item": {
+            "host": {
+              "support": {
+                "droppedTitle": "Linked item left off this workspace",
+                "droppedDescription": "This remote Orca server is too old to store links from installed plugins. Update the server to keep them."
+              }
+            }
+          }
+        }
       }
     },
     "lib": {
