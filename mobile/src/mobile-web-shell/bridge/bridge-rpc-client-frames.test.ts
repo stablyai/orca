@@ -12,6 +12,7 @@ import {
   BRIDGE_ACK_INTERVAL_FRAMES
 } from './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
@@ -40,10 +41,15 @@ afterEach(() => {
 })
 
 describe('bridge client handshake', () => {
-  it('asks for a session as soon as it exists, naming what it can be sent', () => {
+  it('asks for a session as soon as it exists, naming what it can be sent and what it reports', () => {
     const page = createPageClient()
     expect(page.frames()).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] }
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'ready',
+        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT],
+        reports: [BRIDGE_PAGE_PAINTED]
+      }
     ])
   })
 

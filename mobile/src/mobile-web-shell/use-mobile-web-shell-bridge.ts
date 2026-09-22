@@ -97,8 +97,11 @@ export type MobileWebShellBridgeArgs = {
   onStorageWrite: (key: string, value: string | null) => void
   /** The page could not render the generation on screen. Reported, never recovered from here. */
   onPageFault: (error: BridgeErrorCapture) => void
-  /** The page asked for a session. Reported so the screen can stop waiting for it. */
-  onPageReady: () => void
+  /** The page asked for a session, and what it declared it reports. Reported so the screen can
+   *  stop waiting for it, and so it knows whether a paint report is coming. */
+  onPageReady: (reports: readonly string[]) => void
+  /** The page has a frame on screen, from a page that said it would report one. */
+  onPagePainted: () => void
   /** The page applied a one-shot route param and asks for it to be erased (ruling 34). */
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /** This shell named a screen the protocol does not allow, so no session is served. */
@@ -187,7 +190,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
       onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
       onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      onPageReady: () => argsRef.current.onPageReady()
+      onPageReady: (reports) => argsRef.current.onPageReady(reports),
+      onPagePainted: () => argsRef.current.onPagePainted()
     })
     hostRef.current = { sessionId, host }
     // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps

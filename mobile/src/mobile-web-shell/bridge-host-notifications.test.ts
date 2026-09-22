@@ -7,6 +7,7 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
 import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
   BRIDGE_HAPTICS_GRANT,
@@ -469,5 +470,38 @@ describe('the page erasing a one-shot route param', () => {
       BRIDGE_ROUTE_PARAM_CLEAR,
       BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
     ])
+  })
+})
+
+/**
+ * The page's word about its own document, which is the only thing that says the view is worth
+ * uncovering: a document commit is the WebView's, and `ready` is posted before a tree is built.
+ */
+describe('the page reporting its first frame', () => {
+  it('hands the report to the session and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(1)
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.client.foregroundCalls).toHaveLength(0)
+  })
+
+  it('forwards what each ready declared, including a name this shell does not implement', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED, 'weather'] }))
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.pageReports()).toEqual([[BRIDGE_PAGE_PAINTED, 'weather'], []])
+  })
+
+  it('refuses a report from a document nothing has answered', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(0)
+    expect(bridge.diagnostics).toContainEqual({
+      kind: 'notify-refused',
+      name: BRIDGE_PAGE_PAINTED,
+      why: 'before-ready'
+    })
   })
 })

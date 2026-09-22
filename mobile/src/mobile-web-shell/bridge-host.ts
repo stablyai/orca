@@ -16,6 +16,7 @@ import {
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
 import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
@@ -221,6 +222,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         options.onPageFault(message.error)
         return
       }
+      if (message.name === BRIDGE_PAGE_PAINTED) {
+        // Local, like `navigate`: nothing about the page's own frame reaches the desktop.
+        options.onPagePainted()
+        return
+      }
       if (message.name === 'foreground') {
         if (message.reason === undefined) {
           client.notifyForeground()
@@ -326,7 +332,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       // with the route the shell holds now. That is the whole repair path for a frame that never
       // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
       sendInit()
-      options.onPageReady()
+      // Forwarded verbatim, including a name this shell has never implemented: what each report
+      // means is the caller's, and this host's job is that the list belongs to the document that
+      // just spoke rather than to the one before it.
+      options.onPageReady(message.reports ?? [])
       return
     }
     if (!serving) {

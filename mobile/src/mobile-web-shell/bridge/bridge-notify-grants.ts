@@ -5,6 +5,7 @@ import {
   type BridgeClientMessage
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
 /** Every `notify` name the envelope accepts, so the table below cannot be asked about another. */
@@ -35,6 +36,9 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   // The protocol's own as well: it spends a request this shell handed the page, on a param closed
   // to the one the shell hands over, so there is nothing here for a grant to gate.
   [BRIDGE_ROUTE_PARAM_CLEAR]: null,
+  // The page reporting on its own document. Nothing here reaches the host or the device, and the
+  // shell acts on it only for a page that declared it in `ready.reports`.
+  [BRIDGE_PAGE_PAINTED]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',

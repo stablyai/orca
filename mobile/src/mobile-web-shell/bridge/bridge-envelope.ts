@@ -163,6 +163,23 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     accepts: z
       .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
       .max(BRIDGE_MAX_PAGE_ACCEPTS)
+      .optional(),
+    /**
+     * What this page will post that the shell may have to wait for, which today is
+     * `BRIDGE_PAGE_PAINTED` and nothing else.
+     *
+     * `accepts` runs the other way and cannot stand in for this: it says what may be sent *to* the
+     * page. A shell waiting on a frame has to know the page will send one, because the generation
+     * is served by a desktop that updates independently of the installed shell — an undeclared
+     * wait would hide a working page built before the frame existed.
+     *
+     * Optional and additive in both directions, on the same bounds as `accepts`: a page that
+     * declares none is waited for by nothing, and an unknown name is a report this shell does not
+     * act on.
+     */
+    reports: z
+      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
+      .max(BRIDGE_MAX_PAGE_ACCEPTS)
       .optional()
   }),
   z.object({

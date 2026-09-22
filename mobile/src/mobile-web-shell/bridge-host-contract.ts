@@ -186,7 +186,13 @@ export type BridgeHostOptions = {
    * the same reason as the fault: the shell bounds the wait for it, and a host built without this
    * would leave a document that never spoke looking exactly like one still starting up.
    */
-  onPageReady: () => void
+  onPageReady: (reports: readonly string[]) => void
+  /**
+   * The page has a frame on screen. Only pages whose `ready` listed `BRIDGE_PAGE_PAINTED` post it,
+   * which is why `onPageReady` carries that list: a caller covering the view until this arrives
+   * has to know whether it is coming, and a page served from an older desktop never sends one.
+   */
+  onPagePainted: () => void
   /**
    * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
    * the value it applied. The holder of that param compares before it clears: a tap that has moved

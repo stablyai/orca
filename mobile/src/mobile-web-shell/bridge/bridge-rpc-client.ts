@@ -24,6 +24,7 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
@@ -106,6 +107,12 @@ export type BridgeRpcClient = RpcClient & {
    * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
    */
   callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+  /**
+   * Tells the shell this document has a frame on screen, which is the only thing that does: the
+   * shell sees a document commit and a page say `ready`, and neither of those is a painted tree.
+   * Declared in `ready.reports`, so a shell waiting for it is one this page will answer.
+   */
+  notifyPagePainted: () => void
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -212,7 +219,14 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   const handshake = createBridgeInitHandshake(() => {
     // Declared on every ask, because the shell reads it off whichever `ready` it answers: this
     // page build knows how to take a second `init` for the session it already holds.
-    sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] })
+    // `reports` runs the other way from `accepts`: it is what a shell may wait for this page to
+    // post, and the shell holds a frame over the view until the one below arrives.
+    sendFrame({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'ready',
+      accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT],
+      reports: [BRIDGE_PAGE_PAINTED]
+    })
   })
 
   /**
@@ -434,6 +448,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
+    notifyPagePainted: notifications.notifyPagePainted,
     close,
     onReady: shellSession.onReady,
     onRouteUpdate: shellSession.onRouteUpdate,

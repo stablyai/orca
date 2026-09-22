@@ -27,6 +27,7 @@ import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
+import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -51,8 +52,7 @@ function Centered({ children }: { children: ReactNode }) {
 function Waiting({ label }: { label: string }) {
   return (
     <Centered>
-      <ActivityIndicator color={colors.textSecondary} accessibilityLabel={label} />
-      <Text style={styles.waitingLabel}>{label}</Text>
+      <ShellWaitingFrame label={label} />
     </Centered>
   )
 }
@@ -167,7 +167,9 @@ export function MobileWebShellScreen({
     reportShellFailure,
     reportDocumentLoaded,
     reportPageReady,
-    pageReady
+    reportPagePainted,
+    pageReady,
+    pageFrame
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
     hostId,
@@ -212,10 +214,13 @@ export function MobileWebShellScreen({
     // the map as they are made. This re-seats that map on the store afterwards, for the key whose
     // write never persisted, and it runs on every ask because a document that reloads inside this
     // mount asks again.
-    onPageReady: () => {
-      reportPageReady()
+    onPageReady: (reports) => {
+      reportPageReady(reports)
       void refreshStorage()
     },
+    // The one thing that says the page is something to look at. The cover below stays up until it
+    // lands, for a page that declared it would send one.
+    onPagePainted: reportPagePainted,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
     },
@@ -299,7 +304,7 @@ export function MobileWebShellScreen({
     return <Fetching state={state} />
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? 'Opening workspace' : 'Checking host'} />
+    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
   }
   return (
     <View
@@ -338,6 +343,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
+      <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       <DevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

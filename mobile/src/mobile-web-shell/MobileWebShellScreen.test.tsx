@@ -3,12 +3,14 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import type { ShellPageFrame } from './shell-page-frame'
 
 type ScreenDependencies = {
   retry: Mock
   reportShellFailure: Mock
   reportDocumentLoaded: Mock
   reportPageReady: Mock
+  reportPagePainted: Mock
   /** The profile read rejected, which is the one state that has no host to build against. */
   snapshotUnreadable: boolean
   storageRefreshes: number
@@ -30,6 +32,8 @@ type ScreenDependencies = {
   state: MobileWebShellSessionState
   /** What the session reducer says about the page's handshake; true only for the fence's case. */
   pageReady: boolean
+  /** How far the document on screen has got, which is what decides whether the cover is up. */
+  pageFrame: ShellPageFrame
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
   client: FakeRpcClient | null
 }
@@ -54,6 +58,7 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     reportShellFailure: vi.fn(),
     reportDocumentLoaded: vi.fn(),
     reportPageReady: vi.fn(),
+    reportPagePainted: vi.fn(),
     snapshotUnreadable: false,
     storageRefreshes: 0,
     openUrl: vi.fn(),
@@ -69,16 +74,29 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     postFails: false,
     state: { kind: 'checking' },
     pageReady: false,
+    pageFrame: 'pending',
     client: null
   }
 })
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  // Enough of it for the cover to mount, fade and unmount. What the fade looks like is not this
+  // test's business; that the cover is up until the page paints is, and that is the `visible` prop.
+  Animated: {
+    View: 'Animated.View',
+    Value: class {
+      setValue(): void {}
+    },
+    timing: () => ({
+      start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
+      stop: () => {}
+    })
+  },
   Linking: { openURL: dependencies.openUrl },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
-  StyleSheet: { create: (styles: unknown) => styles },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Text: 'Text',
   View: 'View'
 }))
@@ -203,11 +221,14 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     reportShellFailure: dependencies.reportShellFailure,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
     reportPageReady: dependencies.reportPageReady,
-    pageReady: dependencies.pageReady
+    reportPagePainted: dependencies.reportPagePainted,
+    pageReady: dependencies.pageReady,
+    pageFrame: dependencies.pageFrame
   })
 }))
 
 import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -303,6 +324,7 @@ beforeEach(() => {
   dependencies.reportShellFailure.mockReset()
   dependencies.reportDocumentLoaded.mockReset()
   dependencies.reportPageReady.mockReset()
+  dependencies.reportPagePainted.mockReset()
   dependencies.snapshotUnreadable = false
   dependencies.storageRefreshes = 0
   dependencies.lifecycle.length = 0
@@ -311,6 +333,7 @@ beforeEach(() => {
   dependencies.postFails = false
   dependencies.client = null
   dependencies.pageReady = false
+  dependencies.pageFrame = 'pending'
   dependencies.routeGrants = DEFAULT_ROUTE_GRANTS
   dependencies.back.mockReset()
   dependencies.openUrl.mockReset()
@@ -812,5 +835,61 @@ describe('what one case mutates does not reach the next', () => {
       grants: DEFAULT_ROUTE_GRANTS,
       client: null
     })
+  })
+})
+
+/**
+ * What is on screen between the generation being mounted and the page having a frame.
+ *
+ * Before this the answer was nothing: the shell tore its own frame down at `ready` and the WebView
+ * draws nothing until its document paints, so the surface behind it was the whole picture for the
+ * length of the page's boot — measured at 1.42 s on a cached generation.
+ */
+describe('the frame under a page that has not painted', () => {
+  it('keeps the shell frame over a mounted view, with the view underneath it', async () => {
+    dependencies.pageFrame = 'unpainted'
+    const tree = await render(readyState('session-a'))
+    expect(
+      tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-cover')
+    ).toHaveLength(1)
+    // Over, not instead of: the document is loading the whole time the cover is up.
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
+    expect(textOf(tree)).toContain('Opening workspace')
+  })
+
+  it('carries the same label the screen was already painting while it opened the generation', async () => {
+    const opening = await render({ kind: 'activating' })
+    expect(textOf(opening)).toContain('Opening workspace')
+    dependencies.pageFrame = 'unpainted'
+    await update(opening, readyState('session-a'))
+    // The frame does not change when the state does, which is what makes the handover invisible.
+    expect(textOf(opening)).toContain('Opening workspace')
+  })
+
+  it('takes the frame down once the page reports one of its own', async () => {
+    dependencies.pageFrame = 'unpainted'
+    const tree = await render(readyState('session-a'))
+    dependencies.pageFrame = 'painted'
+    await update(tree, readyState('session-a'))
+    expect(tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-cover')).toEqual([])
+  })
+
+  it('hands the page report to the session', async () => {
+    dependencies.pageFrame = 'unpainted'
+    dependencies.client = createFakeRpcClient()
+    const tree = await render(readyState('session-a'))
+    const probe = byName(tree, 'ShellViewProbe')[0]
+    await act(async () => {
+      probe.props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }) }
+      })
+    })
+    expect(dependencies.reportPageReady).toHaveBeenCalledWith([BRIDGE_PAGE_PAINTED])
+    await act(async () => {
+      probe.props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }) }
+      })
+    })
+    expect(dependencies.reportPagePainted).toHaveBeenCalledTimes(1)
   })
 })

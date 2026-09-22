@@ -13,6 +13,7 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { awaitsGates, gateKey, gateVerdict } from './mobile-web-shell-gates'
 import { matchesRoutePattern, routeViewOf } from './page-route-policy'
+import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
 
 const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
 const NATIVE_ROUTE: MobileWebShellSessionState = { kind: 'native-route' }
@@ -31,6 +32,8 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     retriedOnce: false,
     remountedOnce: false,
     pageReady: false,
+    pageReportsPaint: false,
+    pagePainted: false,
     gates: null,
     cached: null,
     flow: 0
@@ -321,7 +324,7 @@ export function reduceMobileWebShellSession(
         : step(session, {})
     case 'activated':
       return step(session, {
-        pageReady: false,
+        ...CLEAR_PAGE_DOCUMENT_STATE,
         state: {
           kind: 'ready',
           generationDirectory: event.generationDirectory,
@@ -338,7 +341,7 @@ export function reduceMobileWebShellSession(
       // healthy page that is still inside its own, and take a working workspace off screen.
       return session.state.kind === 'ready'
         ? step(session, {
-            pageReady: false,
+            ...CLEAR_PAGE_DOCUMENT_STATE,
             flow: session.flow + 1,
             state: { ...session.state, sessionId: event.sessionId }
           })
@@ -354,7 +357,8 @@ export function reduceMobileWebShellSession(
         ? step(session, {}, [{ kind: 'await-page-ready' }])
         : step(session, {})
     case 'page-ready':
-      return session.state.kind === 'ready' ? step(session, { pageReady: true }) : step(session, {})
+    case 'page-painted':
+      return step(session, pageDocumentStatePatch(session, event))
     case 'page-ready-deadline':
       // A document that finished and never said a word is a document that did not load, whatever
       // the WebView reported: `document-load-failed` is what drops the generation and fetches once.

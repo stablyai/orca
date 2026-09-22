@@ -1,0 +1,40 @@
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
+import type {
+  MobileWebShellSession,
+  MobileWebShellSessionEvent
+} from './mobile-web-shell-session-contract'
+
+/** Everything one document told the shell about itself, which the next one has to say again. */
+export const CLEAR_PAGE_DOCUMENT_STATE = {
+  pageReady: false,
+  pageReportsPaint: false,
+  pagePainted: false
+} as const
+
+/** The two things a document reports about itself, as the reducer receives them. */
+export type PageDocumentEvent = Extract<
+  MobileWebShellSessionEvent,
+  { type: 'page-ready' } | { type: 'page-painted' }
+>
+
+/**
+ * What one of those events leaves on the session, and nothing outside `ready` changes anything:
+ * the view exists only under the generation on screen, so a frame from a retired document is a
+ * frame about a document this session is no longer showing.
+ */
+export function pageDocumentStatePatch(
+  session: Pick<MobileWebShellSession, 'state' | 'pageReportsPaint'>,
+  event: PageDocumentEvent
+): Partial<MobileWebShellSession> {
+  if (session.state.kind !== 'ready') {
+    return {}
+  }
+  if (event.type === 'page-ready') {
+    // Re-read on every ask rather than latched: a document that reloads inside this mount asks
+    // again, and it is the newest ask that says whether a paint report is coming.
+    return { pageReady: true, pageReportsPaint: event.reports.includes(BRIDGE_PAGE_PAINTED) }
+  }
+  // Kept off a page that never said it would report: acting on an unasked-for frame would make
+  // the wait depend on a name arriving instead of on a claim the page made.
+  return session.pageReportsPaint ? { pagePainted: true } : {}
+}

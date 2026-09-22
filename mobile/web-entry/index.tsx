@@ -12,6 +12,7 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
+import { reportAfterFirstPaint } from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
@@ -33,8 +34,18 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
   return function RootProviders({ children }: PropsWithChildren) {
     // Effects run child-first, so 'mounted' lands only after the router tree below this wrapper
     // has committed. The tree is rendered once, with a ready client, so there is one such commit.
+    // The shell holds a frame over this document until the report below, because a commit is not a
+    // paint and an unpainted WebView shows the surface behind it and nothing else.
     useEffect(() => {
       stampPageMountState(target, 'mounted')
+      reportAfterFirstPaint(
+        (callback) => {
+          requestAnimationFrame(callback)
+        },
+        () => {
+          client.notifyPagePainted()
+        }
+      )
     }, [])
     return <RpcClientProvider client={client}>{children}</RpcClientProvider>
   }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_CLEARABLE_ROUTE_PARAMS, BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 import {
   isPageStorageKey,
@@ -101,6 +102,14 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     name: z.literal(BRIDGE_ROUTE_PARAM_CLEAR),
     param: z.enum(BRIDGE_CLEARABLE_ROUTE_PARAMS),
     value: z.string().min(1).max(BRIDGE_MAX_ROUTE_PARAM_CHARS)
+  }),
+  // Ungranted, and carrying nothing: the page is reporting on its own document, which no grant
+  // gates. The shell waits for it only from a page whose `ready` listed it, so a name an older
+  // shell refuses is one a newer page was never waited on for.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_PAGE_PAINTED)
   })
 ])
 

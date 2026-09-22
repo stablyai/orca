@@ -45,6 +45,9 @@ export type Harness = {
   backPops: BridgeNavigateBackOutcome[]
   storageWrites: { key: string; value: string | null }[]
   pageReadyCount: () => number
+  pagePaintCount: () => number
+  /** What each answered `ready` declared it reports, in order. */
+  pageReports: () => readonly (readonly string[])[]
   /** One entry per `ready` answered, saying whether its `init` reached the page. Filled as each
    *  post settles, so a case reads it after awaiting the turn the post resolves on. */
   /** Every clear the page asked for, in order. */
@@ -109,6 +112,9 @@ export function harness(
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   let pageReadies = 0
+  let pagePaints = 0
+  /** What each answered `ready` declared it reports, in order. */
+  const pageReports: (readonly string[])[] = []
   /** One entry per `ready` answered, saying whether an `init` actually went out for it. */
   const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
@@ -133,8 +139,12 @@ export function harness(
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
-    onPageReady: () => {
+    onPageReady: (reports) => {
       pageReadies += 1
+      pageReports.push(reports)
+    },
+    onPagePainted: () => {
+      pagePaints += 1
     },
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
@@ -192,6 +202,8 @@ export function harness(
     backPops,
     storageWrites,
     pageReadyCount: () => pageReadies,
+    pagePaintCount: () => pagePaints,
+    pageReports: () => pageReports,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     pageFaults,
