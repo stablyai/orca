@@ -85,6 +85,12 @@ describe('the page telling the shell it has a frame', () => {
     )
     expect(entry).toContain('reportAfterFirstPaint(')
     expect(entry).toContain('client.notifyPagePainted()')
+    // Handed to the route screen rather than called from the wrapper's own effect, which commits
+    // while the route's chunk is still arriving and the body is empty.
+    expect(entry).toContain('RouteScreenPaintProvider')
+    expect(entry).not.toMatch(
+      /stampPageMountState\(target, 'mounted'\)\s*\n\s*reportAfterFirstPaint/
+    )
   })
 
   it('costs the shell nothing to hear: no request, no subscription, no reply', async () => {

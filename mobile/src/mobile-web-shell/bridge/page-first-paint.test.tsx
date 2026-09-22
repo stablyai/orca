@@ -1,5 +1,11 @@
+import { Suspense, lazy, useEffect, type ComponentType, type PropsWithChildren } from 'react'
+import { act, create } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import { reportAfterFirstPaint } from './page-first-paint'
+import {
+  RouteScreenPaintProvider,
+  reportAfterFirstPaint,
+  withRouteScreenPaintReport
+} from './page-first-paint'
 
 /** Frames the caller drains by hand, so "one frame later" is a step rather than a wait. */
 function frames() {
@@ -38,5 +44,86 @@ describe('when the page says it has a frame', () => {
     clock.tick()
     clock.tick()
     expect(clock.pending()).toBe(0)
+  })
+})
+
+/** A route chunk the case releases by hand, so "still arriving" is a state and not a race. */
+function deferredRouteChunk() {
+  let arrive: (() => void) | null = null
+  const chunk = new Promise<{ default: ComponentType<Record<string, unknown>> }>((resolve) => {
+    arrive = () => {
+      resolve({ default: () => null })
+    }
+  })
+  return {
+    chunk,
+    arrive: () => {
+      arrive?.()
+    }
+  }
+}
+
+describe('which commit the page reports its frame from', () => {
+  it('says nothing while the route chunk is still arriving', async () => {
+    const route = deferredRouteChunk()
+    const Screen = lazy(() => route.chunk.then(withRouteScreenPaintReport))
+    let reports = 0
+    let commitsAboveTheRouter = 0
+    // Shaped like the page: the entry's wrapper sits above expo-router, which puts every screen
+    // behind a suspense boundary of its own.
+    function WrapperAboveTheRouter({ children }: PropsWithChildren) {
+      useEffect(() => {
+        commitsAboveTheRouter += 1
+      }, [])
+      return children
+    }
+    await act(async () => {
+      create(
+        <RouteScreenPaintProvider
+          report={() => {
+            reports += 1
+          }}
+        >
+          <WrapperAboveTheRouter>
+            <Suspense fallback={null}>
+              <Screen />
+            </Suspense>
+          </WrapperAboveTheRouter>
+        </RouteScreenPaintProvider>
+      )
+    })
+    // The gap this seam exists for: the wrapper has committed, against a fallback that drew
+    // nothing, and a report hung there would uncover the shell's view over an empty body.
+    expect(commitsAboveTheRouter).toBe(1)
+    expect(reports).toBe(0)
+
+    await act(async () => {
+      route.arrive()
+    })
+    expect(reports).toBe(1)
+  })
+
+  it('reports the screen that arrived and not the one that replaced it', async () => {
+    const route = deferredRouteChunk()
+    const Screen = lazy(() => route.chunk.then(withRouteScreenPaintReport))
+    let reports = 0
+    await act(async () => {
+      create(
+        <RouteScreenPaintProvider
+          report={() => {
+            reports += 1
+          }}
+        >
+          <Suspense fallback={null}>
+            <Screen />
+          </Suspense>
+        </RouteScreenPaintProvider>
+      )
+    })
+    await act(async () => {
+      route.arrive()
+    })
+    // Once per screen that commits: the shell latches the first, and a re-render is not a new one.
+    expect(reports).toBe(1)
   })
 })

@@ -199,6 +199,19 @@ export async function readBridgeFaultGrant() {
   return match[1]
 }
 
+/** The name the page posts its first frame under, read where the page and the shell both read it. */
+export async function readBridgePagePainted() {
+  const source = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
+    'utf8'
+  )
+  const match = /BRIDGE_PAGE_PAINTED = '([a-zA-Z]+)'/.exec(source)
+  if (!match) {
+    throw new Error('could not read BRIDGE_PAGE_PAINTED from bridge-page-painted.ts')
+  }
+  return match[1]
+}
+
 /**
  * The shell's half of the bridge, as the page's channel sees it.
  *
