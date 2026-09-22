@@ -335,23 +335,27 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  // Rejection source changed by STA-3049: a sibling tool event during a pending permission is now
+  // accepted (it re-commits the held `waiting` row), so this pins the same `onAccepted` contract
+  // against late tool progress after an interrupt, which is still refused outright.
   it('does not apply Claude background metadata from a rejected remote status', () => {
     const server = new AgentHookServer()
     server.ingestRemote(
       {
         paneKey: PANE,
-        hookEventName: 'PermissionRequest',
+        hookEventName: 'Stop',
         claudeRunningNonAgentTask: true,
         payload: {
-          state: 'waiting',
+          state: 'done',
           prompt: 'approve shell',
           agentType: 'claude',
-          toolName: 'Bash'
+          interrupted: true
         }
       },
       'conn-1'
     )
-    const waiting = server.getStatusSnapshot()[0]
+    const interruptedRow = server.getStatusSnapshot()[0]
+    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
 
     server.ingestRemote(
       {
@@ -368,7 +372,7 @@ describe('AgentHookServer listener replay', () => {
       'conn-1'
     )
 
-    expect(server.getStatusSnapshot()[0]).toEqual(waiting)
+    expect(server.getStatusSnapshot()[0]).toEqual(interruptedRow)
     expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
   })
 

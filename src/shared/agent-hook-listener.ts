@@ -29,7 +29,7 @@ export function normalizeHookPayload(
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: { deferCompactOwnershipToClient?: boolean } = {}
+  options: { deferCompactOwnershipToClient?: boolean; isReplay?: boolean } = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -146,7 +146,8 @@ export function normalizeHookPayload(
     paneKey,
     hookPayload: hookPayloadRecord,
     envelope: record,
-    extractedPrompt
+    extractedPrompt,
+    isReplay: options.isReplay === true
   })
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent') &&

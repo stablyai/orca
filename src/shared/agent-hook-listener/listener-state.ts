@@ -10,6 +10,7 @@ import type { AgentStatusLegacyIngressCaller } from '../agent-status-legacy-ingr
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
+import type { ClaudeAnnouncedCalls, ClaudeApprovalRecord } from './providers/claude-approval-ledger'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   moveOpenCodeSessionBindings,
@@ -70,10 +71,14 @@ export type GrokActiveTurn = {
 export type ClaudeLeadTurnState = {
   state: AgentStatusState
   interrupted?: true
-  /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
-  waitingAgentId?: string
-  /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
-  waitingToolUseId?: string
+  /** Prompts Claude raised on this pane and has not been observed answering for. The pane is
+   *  paused for exactly as long as this is non-empty, so a sibling call of a parallel batch (or a
+   *  child's unrelated churn) can never dismiss the card of the prompt still on screen. Swept at
+   *  every turn boundary, so an entry can never outlive the turn that raised it. */
+  approvals?: readonly ClaudeApprovalRecord[]
+  /** Per-call `tool_use_id`s this turn announced, so a prompt that carries none can still refuse
+   *  a sibling's completion. Turn-scoped: replaced wholesale at every boundary. */
+  announcedCalls?: ClaudeAnnouncedCalls
   /** End time of the lead turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
   turnCompletedAt?: number
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */

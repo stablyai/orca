@@ -9,6 +9,7 @@ import {
 } from '../../claude-subagent-roster'
 import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
+import { claudeApprovalOwnedBy } from './claude-approval-ledger'
 import {
   clearClaudePendingWaitForAgent,
   getOrCreateClaudeSubagentRoster,
@@ -32,10 +33,11 @@ export function normalizeClaudeSubagentLifecycleEvent(
   const ownsUnbackedWait =
     cachedLead?.state === 'waiting' &&
     cachedLead.stateBeforeWait === undefined &&
-    cachedLead.waitingAgentId !== undefined &&
-    (eventName === 'TeammateIdle'
-      ? claudeTeammateIdMatchesName(cachedLead.waitingAgentId, lifecycleId)
-      : cachedLead.waitingAgentId === lifecycleId)
+    claudeApprovalOwnedBy(cachedLead.approvals, (waitingAgentId) =>
+      eventName === 'TeammateIdle'
+        ? claudeTeammateIdMatchesName(waitingAgentId, lifecycleId)
+        : waitingAgentId === lifecycleId
+    )
   const hasCachedLeadEvidence = cachedLead !== undefined && !ownsUnbackedWait
   let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   let endedChildWork = false

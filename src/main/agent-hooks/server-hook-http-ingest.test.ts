@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
+
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
+
+/** Reaches the protected tab-close marker without `dropStatusEntriesByTabPrefix`, whose pane-cache
+ *  clear would erase the background-work evidence a refusal test is asserting about. */
+class TabClosableAgentHookServer extends AgentHookServer {
+  closeTabForTest(tabId: string): void {
+    this.markTabClosedForAgentStatus(tabId)
+  }
+}
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -215,7 +224,7 @@ describe('AgentHookServer listener replay', () => {
   })
 
   it('does not apply Claude background evidence from a rejected local status', async () => {
-    const server = new AgentHookServer()
+    const server = new TabClosableAgentHookServer()
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
@@ -239,6 +248,12 @@ describe('AgentHookServer listener replay', () => {
         session_crons: [{ id: 'cron-1', status: 'running' }]
       })
       const waiting = server.getStatusSnapshot()[0]
+
+      // Rejection source changed by STA-3049: a sibling tool event during a pending permission is
+      // now accepted (it re-commits the held `waiting` row and its live inventory is authoritative),
+      // so a closed tab supplies the refusal this contract is really about — a status the server
+      // will not apply must not move the background-work gate either.
+      server.closeTabForTest('tab-1')
 
       await postClaudeHook({
         hook_event_name: 'PreToolUse',

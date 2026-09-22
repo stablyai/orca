@@ -388,7 +388,10 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude permission clear when same explicit agent type starts the approved tool', async () => {
+  // Changed for STA-3049: Claude emits a call's PreToolUse BEFORE raising its PermissionRequest
+  // (measured on CLI 2.1.270), so a PreToolUse arriving after the prompt is a reordered delivery
+  // of that same announcement, never proof the user approved. Only the call's completion is.
+  it('keeps Claude permission visible until the approved tool completes for an explicit agent type', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -417,6 +420,16 @@ describe('AgentHookServer listener replay', () => {
         tool_use_id: 'toolu-approved-1'
       })
 
+      expect(server.getStatusSnapshot()[0]?.state).toBe('waiting')
+
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_type: 'main',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-subagent-repro' },
+        tool_use_id: 'toolu-approved-1'
+      })
+
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
@@ -431,7 +444,8 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets Claude subagent permission clear when the same agent starts the approved tool', async () => {
+  // Changed for STA-3049: same emission-order reason as the lead case above.
+  it('keeps a Claude subagent permission visible until its approved tool completes', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -462,6 +476,17 @@ describe('AgentHookServer listener replay', () => {
         tool_use_id: 'toolu-approved-subagent'
       })
 
+      expect(server.getStatusSnapshot()[0]?.state).toBe('waiting')
+
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'agent-subagent-a',
+        agent_type: 'Review',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-approved-subagent'
+      })
+
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
@@ -476,7 +501,9 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('lets same Claude subagent clear an unknown approved tool without an input preview', async () => {
+  // Changed for STA-3049: same emission-order reason. The unpreviewable input still pairs, because
+  // the call key digests the FULL tool input rather than Orca's clipped preview.
+  it('keeps an unpreviewable Claude subagent permission visible until its tool completes', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -500,6 +527,17 @@ describe('AgentHookServer listener replay', () => {
       })
       await postClaudeHook({
         hook_event_name: 'PreToolUse',
+        agent_id: 'agent-custom-tool',
+        agent_type: 'Review',
+        tool_name: 'BespokeTool',
+        tool_input: { request_id: 'pending-1' },
+        tool_use_id: 'toolu-custom-approved'
+      })
+
+      expect(server.getStatusSnapshot()[0]?.state).toBe('waiting')
+
+      await postClaudeHook({
+        hook_event_name: 'PostToolUse',
         agent_id: 'agent-custom-tool',
         agent_type: 'Review',
         tool_name: 'BespokeTool',

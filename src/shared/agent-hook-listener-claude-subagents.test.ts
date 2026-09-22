@@ -441,8 +441,19 @@ describe('shared agent-hook-listener', () => {
       })
       expect(blocked?.payload.state).toBe('waiting')
 
-      const approved = claudeEvent({
+      // Changed for STA-3049: Claude announces a call's PreToolUse BEFORE raising its
+      // PermissionRequest, so a PreToolUse arriving after the prompt is that same announcement
+      // re-delivered, not an approval. The child's card survives it and clears on its completion.
+      const announced = claudeEvent({
         hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(announced?.payload.state).toBe('waiting')
+
+      const approved = claudeEvent({
+        hook_event_name: 'PostToolUse',
         agent_id: 'a1',
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf build' }

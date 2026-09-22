@@ -44,6 +44,10 @@ import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-ho
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { MAX_CACHED_PANES, selectReplayableCachedPanes } from './agent-hook-cached-pane-status'
 
+/** A spool record is durable re-delivery, never a live observation: ownership stays the client's,
+ *  and no provider fold may read it as evidence that something is happening right now. */
+const SPOOL_REPLAY = { deferCompactOwnershipToClient: true, isReplay: true } as const
+
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
 export type RelayHookServerOptions = {
@@ -341,9 +345,7 @@ export class RelayAgentHookServer {
       return
     }
     const body = buildSpoolHookBody(record)
-    const event = normalizeHookPayload(this.state, record.source, body, this.env, {
-      deferCompactOwnershipToClient: true
-    })
+    const event = normalizeHookPayload(this.state, record.source, body, this.env, SPOOL_REPLAY)
     if (!event) {
       return
     }

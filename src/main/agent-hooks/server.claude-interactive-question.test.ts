@@ -87,30 +87,52 @@ describe('Claude interactive-question status transitions', () => {
     ])
   })
 
-  it('keeps an actual permission request sticky during unrelated tool work', () => {
+  // Driven through the hook route rather than a hand-written relay row: since STA-3049 the pending
+  // prompt is held by the execution host's Claude fold, which only the real payloads reach.
+  it('keeps an actual permission request sticky during unrelated tool work', async () => {
     const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-question',
+            worktreeId: 'worktree-question',
+            env: 'production',
+            payload
+          })
+        })
 
-    ingestClaudeStatus(server, {
-      state: 'waiting',
-      hookEventName: 'PermissionRequest',
-      toolName: 'Bash',
-      toolUseId: 'tool-needs-permission'
-    })
-    ingestClaudeStatus(server, {
-      state: 'working',
-      hookEventName: 'PreToolUse',
-      toolName: 'Read',
-      toolUseId: 'tool-unrelated'
-    })
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({
-        paneKey: PANE_KEY,
-        state: 'waiting',
-        agentType: 'claude',
-        toolName: 'Bash'
+      await postClaudeHook({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf /tmp/orca-question-repro' }
       })
-    ])
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/unrelated.txt' },
+        tool_use_id: 'tool-unrelated'
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE_KEY,
+          state: 'waiting',
+          agentType: 'claude',
+          toolName: 'Bash'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
   })
 })
 

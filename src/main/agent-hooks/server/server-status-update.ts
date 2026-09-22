@@ -12,9 +12,7 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
 import {
   attachClaudeChildOnlyBoundary,
-  attachClaudePermissionToolUseId,
-  invalidateClaudeChildOnlyBoundary,
-  shouldKeepClaudePermissionVisible
+  invalidateClaudeChildOnlyBoundary
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
@@ -164,12 +162,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    const effectivePayload = identityResolvedPayload
     const boundaryAwarePayload = attachClaudeChildOnlyBoundary(previous, effectivePayload)
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
-    }
     // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
     if (
       previous?.payload.state === 'done' &&

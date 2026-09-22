@@ -204,7 +204,10 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     expect(dispatcher.activeClientIds()).toHaveLength(1)
   })
 
-  it('clears remote Claude permission when the approved tool starts with matching identity', async () => {
+  // Changed for STA-3049: Claude announces a call's PreToolUse BEFORE raising its PermissionRequest,
+  // so a PreToolUse after the prompt is that announcement re-delivered, not an approval. This now
+  // pins the release across the relay wire, which is the SSH path for the same fix.
+  it('clears remote Claude permission when the approved tool completes with matching identity', async () => {
     const { port, token } = hookServer.getCoordinates()
     const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -235,6 +238,16 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     await expect(
       postClaude({
         hook_event_name: 'PreToolUse',
+        agent_id: 'agent-subagent-a',
+        agent_type: 'Review',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' },
+        tool_use_id: 'toolu-approved-remote'
+      })
+    ).resolves.toMatchObject({ status: 204 })
+    await expect(
+      postClaude({
+        hook_event_name: 'PostToolUse',
         agent_id: 'agent-subagent-a',
         agent_type: 'Review',
         tool_name: 'Bash',
