@@ -18,6 +18,7 @@ if (token) {
 async function fetchJson(url) {
   const response = await fetch(url, { headers })
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
     throw new Error(`GitHub API request failed: ${response.status} ${response.statusText}`)
   }
 

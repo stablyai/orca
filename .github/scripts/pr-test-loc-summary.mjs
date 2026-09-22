@@ -35,6 +35,7 @@ export async function listPullFiles({ owner, repo, pullNumber, token, fetchImpl 
   while (url != null) {
     const response = await fetchImpl(url, { headers: githubHeaders(token) })
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
       throw new Error(
         `Failed to list PR #${pullNumber} files: ${response.status} ${response.statusText}`
       )
@@ -80,6 +81,9 @@ export async function updatePullRequest({
   const headers = githubHeaders(token)
   const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
   const response = await fetchImpl(url, { headers })
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+  }
   if (response.status === 403) {
     console.log('Skipping PR body update: token cannot write (likely a fork PR).')
     return 0
@@ -106,6 +110,7 @@ export async function updatePullRequest({
   let update
   for (let attempt = 0; attempt < 3; attempt += 1) {
     update = await fetchImpl(url, updateRequest)
+    await update.body?.cancel().catch(() => undefined)
     if (update.ok || ![500, 502, 503, 504].includes(update.status) || attempt === 2) {
       break
     }
