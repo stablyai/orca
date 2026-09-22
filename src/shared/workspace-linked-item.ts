@@ -1,5 +1,8 @@
 import type { WorkspaceLinkedItem } from './worktree/types'
 
+/** Compares every field the normalizer preserves. A field left out here would
+ *  let a stored item whose only difference is that field pass as unchanged, so
+ *  the corrected value would never be written back. */
 export function areWorkspaceLinkedItemsEqual(
   a: WorkspaceLinkedItem | null | undefined,
   b: WorkspaceLinkedItem | null | undefined
@@ -18,6 +21,8 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
+    (a.pluginKey ?? null) === (b.pluginKey ?? null) &&
+    (a.sourceId ?? null) === (b.sourceId ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -31,7 +36,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'plugin'
   ) {
     return null
   }
@@ -59,6 +65,12 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.pluginKey === 'string' && raw.pluginKey.trim().length > 0
+      ? { pluginKey: raw.pluginKey.trim() }
+      : {}),
+    ...(typeof raw.sourceId === 'string' && raw.sourceId.trim().length > 0
+      ? { sourceId: raw.sourceId.trim() }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }

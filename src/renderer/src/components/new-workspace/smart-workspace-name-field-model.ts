@@ -7,6 +7,7 @@ import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { WorkspaceSourceSelection } from '../../../../shared/new-workspace/workspace-source'
 import type { SmartNameMode, SmartWorkspaceSourceRow } from './smart-workspace-source-results'
 
 export type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
@@ -62,11 +63,9 @@ export type NormalizedSmartWorkspaceNameFieldProps = Omit<
   crossRepoSwitchTarget: 'project' | 'task-source'
 }
 
-export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
-  label: string
-  url?: string
-}
+/** The pill the field shows for the picked source. An alias, not a copy: a new
+ *  source kind must reach the pill's icon rather than stop at a second union. */
+export type SmartWorkspaceNameSelection = WorkspaceSourceSelection
 
 export type RowEntry =
   | SmartWorkspaceSourceRow

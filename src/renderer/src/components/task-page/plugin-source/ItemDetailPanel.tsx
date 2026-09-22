@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LoaderCircle, X } from 'lucide-react'
+import { ArrowRight, LoaderCircle, X } from 'lucide-react'
 import { VisuallyHidden } from 'radix-ui'
 
 import { CommentMarkdownAsync } from '@/components/sidebar/comment-markdown-lazy'
@@ -19,6 +19,7 @@ import { getPluginTaskItemDetailActions } from './item-detail-actions'
 import { usePluginTaskItemDetail } from './item-detail-load'
 import { TaskPagePluginSourceItemComments } from './ItemDetailComments'
 import { getPluginTaskStateTone } from './task-state-tone'
+import { usePluginTaskItemWorkspaceSeed } from './workspace-seed'
 
 function unassignedLabel(): string {
   return translate('auto.components.TaskPage.pluginTaskSourceUnassigned', 'Unassigned')
@@ -32,13 +33,20 @@ function DetailHeader({
   displayed,
   type,
   loading,
+  onStartWorkspace,
   onClose
 }: {
   displayed: PluginTaskItem
   type: string | null
   loading: boolean
+  onStartWorkspace: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const startLabel = translate(
+    'auto.components.TaskPage.ff90d0abc7',
+    'Start workspace from {{value0}}',
+    { value0: displayed.key }
+  )
   return (
     <div className="flex-none border-b border-border/50 bg-muted/30 px-4 py-3">
       <div className="flex items-start gap-3">
@@ -54,6 +62,22 @@ function DetailHeader({
             {displayed.title}
           </h2>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0"
+              onClick={onStartWorkspace}
+              aria-label={startLabel}
+            >
+              <ArrowRight className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -214,6 +238,7 @@ function DetailBody({
   onClose: () => void
 }): React.JSX.Element {
   const state = usePluginTaskItemDetail(item.id)
+  const seedWorkspace = usePluginTaskItemWorkspaceSeed()
   const supportsComment = useAppStore((store) => store.pluginTaskSourceSupportsComment)
   const addComment = useAppStore((store) => store.addPluginTaskSourceComment)
   // The row's snapshot stands in until the fetch lands, so the panel opens on
@@ -256,6 +281,12 @@ function DetailBody({
         displayed={displayed}
         type={state.detail?.type ?? null}
         loading={state.detailLoading}
+        onStartWorkspace={() => {
+          // The composer opens as a modal over this sheet; leaving the sheet
+          // behind it would bury the form the user now has to fill in.
+          onClose()
+          seedWorkspace(displayed)
+        }}
         onClose={onClose}
       />
       <DetailChips displayed={displayed} />

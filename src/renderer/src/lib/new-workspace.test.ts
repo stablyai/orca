@@ -110,6 +110,12 @@ describe('linked-item issue commands', () => {
     expect(canUseIssueCommandForLinkedItemProvider('jira')).toBe(false)
     expect(canUseIssueCommandForLinkedItemProvider('linear')).toBe(false)
   })
+
+  it('keeps a contributed item out of the repository issue template', () => {
+    // The template names an issue in the repo's own tracker; a contributed
+    // item's identity means nothing there and its number is always 0.
+    expect(canUseIssueCommandForLinkedItemProvider('plugin')).toBe(false)
+  })
 })
 
 describe('getWorkspaceSeedName', () => {

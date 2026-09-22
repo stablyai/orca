@@ -379,6 +379,36 @@ describe('TaskPage contributed source detail panel', () => {
     )
   })
 
+  it('offers Start workspace in the detail header and links the item to the composer', async () => {
+    const { user } = await openPanel()
+    const openModal = vi.fn()
+    useAppStore.setState({ openModal })
+
+    await user.click(
+      await screen.findByRole('button', { name: `Start workspace from ${ITEM.key}` })
+    )
+
+    expect(openModal).toHaveBeenCalledWith(
+      'new-workspace-composer',
+      expect.objectContaining({
+        prefilledName: expect.stringContaining('ab-41'),
+        linkedWorkItem: {
+          provider: 'plugin',
+          type: 'issue',
+          number: 0,
+          title: 'AB-41 Ship the detail panel',
+          url: 'https://dev.azure.com/nssf/proj/_workitems/edit/41',
+          pluginKey: 'nssf.azure-boards',
+          sourceId: 'boards'
+        }
+      })
+    )
+    // The composer is a modal; leaving the sheet open would bury it.
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
   it('returns to the list when the panel is closed', async () => {
     const { user } = await openPanel()
 
