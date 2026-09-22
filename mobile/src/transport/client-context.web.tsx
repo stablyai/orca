@@ -52,7 +52,9 @@ export function RpcClientProvider({
       release: () => {},
       releaseAndCloseIfUnused: () => {},
       closeIfUnused: () => {},
-      forceReconnect: () => Promise.resolve(),
+      // Absent rather than inert: a Retry or Reconnect wired to it would be a control that can only
+      // do nothing, so callers read null as "offer none" and wait for the shell's own reconnect.
+      forceReconnect: null,
       refreshHostClient: () => {},
       forgetHostClient: () => {},
       disconnectHostClient: () => {},

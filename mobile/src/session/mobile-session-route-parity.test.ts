@@ -147,9 +147,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 //
 // 536 -> 530 for the keyboard seam above: the four event names and the two `'ios'` guards left
 // with the listener pair.
+//
+// The host-JSX hash moved for the header's reconnect tap, which now also checks the re-dial exists:
+// the page's provider hands out none. Nothing a phone renders or does changed.
 const HEAD_RUNTIME_STRING_SHA256 =
   '98516a198e530b037132f3f4b2f916d5beb577a7a97e20106d0a7891c7370545'
-const HEAD_HOST_JSX_SHA256 = '3ba319e8823e304b1024b5f583ddb340ae583010e522e50ac276231d3658180f'
+const HEAD_HOST_JSX_SHA256 = '0d541f06e4581fd372f4908b39cffc0858864442c67c67fe2b9f2210f0526068'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'

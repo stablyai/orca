@@ -79,7 +79,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             style={styles.sessionMetaRow}
             disabled={!showConnectionRetry}
             onPress={() => {
-              if (hostId) {
+              if (hostId && forceReconnectHost) {
                 void forceReconnectHost(hostId)
               }
             }}
