@@ -93,6 +93,11 @@ function collectBodyDigests(body: unknown, into: Set<string>): void {
   }
   if (record['kind'] === 'diff') {
     add(into, boundedPayloadReferenceDigest(record['patch']))
+    return
+  }
+  if (record['kind'] === 'status') {
+    // unhandled-provider-frame.ts writes its bounded original here, on the status body.
+    add(into, boundedPayloadReferenceDigest(asRecord(record['providerFrame'])?.['payload']))
   }
 }
 

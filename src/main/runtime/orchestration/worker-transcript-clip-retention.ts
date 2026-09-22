@@ -41,7 +41,9 @@ export function retainClippedTranscriptText(
   const byteLength = Buffer.byteLength(redacted, 'utf8')
   const digest = journalPayloadDigest(redacted)
   let retrievable = false
-  if (state.retention !== null) {
+  // Without a scope, a retained payload cannot be authorized for readback:
+  // `readLocalDispatchPayload` checks `dispatch:<id>` and would deny it anyway.
+  if (state.retention !== null && state.payloadScope !== undefined) {
     try {
       retrievable = state.retention.retain(digest, redacted, state.payloadScope) === true
     } catch {

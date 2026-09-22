@@ -4,7 +4,8 @@ import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  NO_PAYLOAD_RETENTION
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -30,6 +31,12 @@ export {
 
 // Codex thread items → journal item bodies.
 
+/** Clips to the inline head with nothing retained: none of these sites carry a
+ *  `clipped` or `providerFrame` reference for a retained original to answer to. */
+function clipNoRetention(payload: string): string {
+  return boundInlineText(payload, DEFAULT_JOURNAL_PAYLOAD_LIMITS, NO_PAYLOAD_RETENTION).text
+}
+
 /** `userMessage` carries structured content parts; `agentMessage` a flat text. */
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
@@ -37,7 +44,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))
       : readString(item, 'text')
   if (text !== null) {
-    return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    return [{ type: 'text', text: clipNoRetention(text) }]
   }
   const content = item.content
   if (!Array.isArray(content)) {
@@ -50,10 +57,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     }
     const partText = readString(part as Record<string, unknown>, 'text')
     if (partText !== null) {
-      blocks.push({
-        type: 'text',
-        text: boundInlineText(partText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-      })
+      blocks.push({ type: 'text', text: clipNoRetention(partText) })
       continue
     }
     const record = part as Record<string, unknown>
@@ -268,11 +272,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       body:
         text === null
           ? null
-          : {
-              kind: 'status',
-              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
-              presentation: 'plan-document'
-            },
+          : { kind: 'status', text: clipNoRetention(text), presentation: 'plan-document' },
       handled: true
     }
   }
@@ -282,10 +282,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       readTextContent(item, 'summary') ??
       readTextContent(item, 'content')
     return {
-      body:
-        text === null
-          ? null
-          : reasoningMessageBody(boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text),
+      body: text === null ? null : reasoningMessageBody(clipNoRetention(text)),
       handled: true
     }
   }
@@ -302,7 +299,7 @@ export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    blocks: [{ type: 'text', text: clipNoRetention(text) }]
   }
 }
 
@@ -326,20 +323,16 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
   }
   if (item.type === 'plan') {
     return {
-      body: {
-        kind: 'status',
-        text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
-        presentation: 'plan-document'
-      },
+      body: { kind: 'status', text: clipNoRetention(text), presentation: 'plan-document' },
       handled: true
     }
   }
-  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const clippedText = clipNoRetention(text)
   return {
     body:
       item.type === 'reasoning'
-        ? reasoningMessageBody(bounded.text)
-        : { kind: 'status', text: bounded.text },
+        ? reasoningMessageBody(clippedText)
+        : { kind: 'status', text: clippedText },
     handled: true
   }
 }
