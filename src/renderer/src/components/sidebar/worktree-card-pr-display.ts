@@ -21,7 +21,7 @@ export function isCachedMergedBranchPRCurrentForWorktree(
   )
 }
 
-type LinkedReviewNumbers = {
+export type LinkedReviewNumbers = {
   linkedPR: number | null
   linkedGitLabMR: number | null
   linkedBitbucketPR: number | null
@@ -47,7 +47,7 @@ type WorktreeCardPrDisplayOptions = {
   suppressedGitHubPR?: number | null
 }
 
-function getLinkedReviewNumber(
+export function getLinkedReviewNumber(
   provider: LinkedReviewMetadataProvider,
   links: LinkedReviewNumbers
 ): number | null {
