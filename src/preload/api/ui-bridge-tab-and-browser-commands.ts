@@ -60,14 +60,19 @@ export const uiTabAndBrowserCommandsApi = {
     return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
   },
   onFindInBrowserPage: browserFindSubscriptions.subscribe,
-  onReloadBrowserPage: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onReloadBrowserPage: (callback: (target: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: { browserPageId: string }): void =>
+      callback(target)
     ipcRenderer.on('ui:reloadBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
   },
-  onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
-      callback(direction)
+  onBrowserHistoryNavigate: (
+    callback: (target: { browserPageId: string; direction: 'back' | 'forward' }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      target: { browserPageId: string; direction: 'back' | 'forward' }
+    ): void => callback(target)
     ipcRenderer.on('ui:browserHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
   },
@@ -87,8 +92,11 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:scrollBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:scrollBrowserPage', listener)
   },
-  onHardReloadBrowserPage: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onHardReloadBrowserPage: (
+    callback: (target: { browserPageId: string }) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: { browserPageId: string }): void =>
+      callback(target)
     ipcRenderer.on('ui:hardReloadBrowserPage', listener)
     return () => ipcRenderer.removeListener('ui:hardReloadBrowserPage', listener)
   },

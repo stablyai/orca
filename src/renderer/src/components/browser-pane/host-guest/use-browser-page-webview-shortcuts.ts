@@ -71,7 +71,10 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    return window.api.ui.onBrowserHistoryNavigate((direction) => {
+    return window.api.ui.onBrowserHistoryNavigate(({ browserPageId, direction }) => {
+      if (browserPageId !== browserTabId) {
+        return
+      }
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
@@ -79,7 +82,7 @@ export function useBrowserPageWebviewShortcuts({
         webviewRef.current?.goForward()
       }
     })
-  }, [isActive, webviewRef])
+  }, [browserTabId, isActive, webviewRef])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
@@ -116,19 +119,23 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    return window.api.ui.onReloadBrowserPage(() => {
-      reloadWebviewOrRecoverGuest(false)
+    return window.api.ui.onReloadBrowserPage(({ browserPageId }) => {
+      if (browserPageId === browserTabId) {
+        reloadWebviewOrRecoverGuest(false)
+      }
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
-    return window.api.ui.onHardReloadBrowserPage(() => {
-      reloadWebviewOrRecoverGuest(true)
+    return window.api.ui.onHardReloadBrowserPage(({ browserPageId }) => {
+      if (browserPageId === browserTabId) {
+        reloadWebviewOrRecoverGuest(true)
+      }
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {

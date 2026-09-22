@@ -44,9 +44,9 @@ let contextMenu = paneChannel<BrowserContextMenuRequestedEvent>()
 let contextMenuDismissed = paneChannel<{ browserPageId: string }>()
 let permissionDenied = paneChannel<BrowserPermissionDeniedEvent>()
 let findRequests = paneChannel<void>()
-let historyNavigate = paneChannel<'back' | 'forward'>()
-let reloadRequests = paneChannel<void>()
-let hardReloadRequests = paneChannel<void>()
+let historyNavigate = paneChannel<{ browserPageId: string; direction: 'back' | 'forward' }>()
+let reloadRequests = paneChannel<{ browserPageId: string }>()
+let hardReloadRequests = paneChannel<{ browserPageId: string }>()
 let zoomRequests = paneChannel<'in' | 'out' | 'reset'>()
 let openDevTools = vi.fn(async () => true)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
@@ -79,8 +79,8 @@ beforeEach(() => {
       onFindInBrowserPage: (_source: unknown, callback: () => void) =>
         findRequests.subscribe(callback),
       onBrowserHistoryNavigate: historyNavigate.subscribe,
-      onReloadBrowserPage: (callback: () => void) => reloadRequests.subscribe(callback),
-      onHardReloadBrowserPage: (callback: () => void) => hardReloadRequests.subscribe(callback),
+      onReloadBrowserPage: reloadRequests.subscribe,
+      onHardReloadBrowserPage: hardReloadRequests.subscribe,
       onZoomBrowserPage: zoomRequests.subscribe,
       writeClipboardText
     },
@@ -134,22 +134,35 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
   })
 
-  it('reloads and hard-reloads the retained guest from the forwarded chords', () => {
+  it('reloads only when the forwarded chord names the retained guest', () => {
     const { webview } = renderPane()
 
-    act(() => reloadRequests.emit(undefined))
+    act(() => reloadRequests.emit({ browserPageId: 'page-b' }))
+    expect(webview.reload).not.toHaveBeenCalled()
+
+    act(() => reloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('hard-reloads only when the forwarded chord names the retained guest', () => {
+    const { webview } = renderPane()
+
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-b' }))
     expect(webview.reloadIgnoringCache).not.toHaveBeenCalled()
 
-    act(() => hardReloadRequests.emit(undefined))
+    act(() => hardReloadRequests.emit({ browserPageId: 'page-a' }))
     expect(webview.reloadIgnoringCache).toHaveBeenCalledTimes(1)
   })
 
-  it('walks history from the forwarded chords', () => {
+  it('walks history only when the forwarded chord names the retained guest', () => {
     const { webview } = renderPane()
 
-    act(() => historyNavigate.emit('back'))
-    act(() => historyNavigate.emit('forward'))
+    act(() => historyNavigate.emit({ browserPageId: 'page-b', direction: 'back' }))
+    expect(webview.goBack).not.toHaveBeenCalled()
+    expect(webview.goForward).not.toHaveBeenCalled()
+
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'back' }))
+    act(() => historyNavigate.emit({ browserPageId: 'page-a', direction: 'forward' }))
 
     expect(webview.goBack).toHaveBeenCalledTimes(1)
     expect(webview.goForward).toHaveBeenCalledTimes(1)
