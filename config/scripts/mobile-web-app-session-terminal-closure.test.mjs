@@ -292,8 +292,17 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * icon above joined beside the row splitter and was not counted. #22119 (`197550c952`) repinned
  * main to 4,333 with the paragraph above, and folding it here moves nothing — the icon was already
  * on both sides of the +26, so the pin below is this merge's own measurement, unchanged.
+ *
+ * Then #21705 (`eb92222e7f`) taught the agent option catalog Antigravity, and
+ * `src/shared/agent-session-option-catalog-antigravity.ts` entered through the catalog the session
+ * page already reaches. One module, string constants, no package; the one line that differs between
+ * the closure at `841d06a969` and at `eb92222e7f`. It landed beside C2's merge, so main read one
+ * short again.
+ *
+ *   modules        4359 -> 4360   (+1)
+ *   local modules  1017 -> 1018   (+1)
  */
-const SESSION_ROUTE_MODULES = 4359
+const SESSION_ROUTE_MODULES = 4360
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
