@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
@@ -19,6 +20,10 @@ import { describe, expect, it } from 'vitest'
  * rather than the call, because a `.web.ts(x)` sibling is what the page bundler resolves in its
  * place, and that substitution is per module.
  *
+ * Both trees the bundler resolves out of are scanned, and `app` is judged more strictly: a route
+ * file may not make the call at all, because expo-router registers a `.web.tsx` beside a route as
+ * a second route rather than as a platform sibling, so the split has to live in `src`.
+ *
  * Two offences this caught, both invisible natively and both now fixed by one seam:
  * `use-terminal-live-pending-input-flush.ts` cleared the live-input field from the session route's
  * mount effect, and `use-terminal-live-accessory-input-commit.ts` wrote the shortened text into it
@@ -26,7 +31,15 @@ import { describe, expect, it } from 'vitest'
  * `src/terminal/terminal-live-input-text-write.ts`, which ships the sibling.
  */
 
-const mobileSrcDir = join(fileURLToPath(new URL('../../', import.meta.url)), 'mobile', 'src')
+const mobileDir = join(fileURLToPath(new URL('../../', import.meta.url)), 'mobile')
+
+/**
+ * Both trees the page bundler resolves modules out of. `app` is the route tree the shell serves,
+ * and it is judged by a stricter rule: expo-router registers a `.web.tsx` beside a route as a
+ * second route rather than as a platform sibling, so a route file cannot own a platform split at
+ * all and the write has to move into a `src` module that can.
+ */
+const SCANNED = ['src', 'app']
 
 const SOURCE = /\.tsx?$/
 const WEB_SIBLING = /\.web\.tsx?$/
@@ -59,24 +72,30 @@ const exists = (path) =>
   )
 
 /** Takes the root so the census can be run against a scratch tree and shown to fail. */
-export async function nativePropsWriteSites(srcDir) {
+export async function nativePropsWriteSites(rootDir) {
   const found = []
-  for (const file of await listFiles(srcDir)) {
-    if (NATIVE_WRITE.test(await readFile(file, 'utf8'))) {
-      found.push(posix(relative(srcDir, file)))
+  for (const tree of SCANNED) {
+    const directory = join(rootDir, tree)
+    if (!existsSync(directory)) {
+      continue
+    }
+    for (const file of await listFiles(directory)) {
+      if (NATIVE_WRITE.test(await readFile(file, 'utf8'))) {
+        found.push(posix(relative(rootDir, file)))
+      }
     }
   }
   return found.sort()
 }
 
-/** Every native module that writes this way and has no `.web.ts(x)` to be replaced by. */
-export async function nativePropsWritesWithoutWebSibling(srcDir) {
+/** Every `src` module that writes this way and has no `.web.ts(x)` to be replaced by. */
+export async function nativePropsWritesWithoutWebSibling(rootDir) {
   const offenders = []
-  for (const site of await nativePropsWriteSites(srcDir)) {
-    if (WEB_SIBLING.test(site)) {
+  for (const site of await nativePropsWriteSites(rootDir)) {
+    if (WEB_SIBLING.test(site) || !site.startsWith('src/')) {
       continue
     }
-    const base = join(srcDir, site).replace(SOURCE, '')
+    const base = join(rootDir, site).replace(SOURCE, '')
     const hasSibling = (await exists(`${base}.web.ts`)) || (await exists(`${base}.web.tsx`))
     if (!hasSibling) {
       offenders.push(site)
@@ -85,25 +104,36 @@ export async function nativePropsWritesWithoutWebSibling(srcDir) {
   return offenders
 }
 
+/** Every route file that writes this way, which no sibling can rescue. */
+export async function routeTreeNativePropsWrites(rootDir) {
+  return (await nativePropsWriteSites(rootDir)).filter((site) => site.startsWith('app/'))
+}
+
 describe('the setNativeProps writes the mobile app makes', () => {
   it('gives every one of them a web sibling for the page to resolve instead', async () => {
-    expect(await nativePropsWritesWithoutWebSibling(mobileSrcDir)).toEqual([])
+    expect(await nativePropsWritesWithoutWebSibling(mobileDir)).toEqual([])
+  })
+
+  it('makes none of them from a route file, which can carry no platform sibling', async () => {
+    expect(await routeTreeNativePropsWrites(mobileDir)).toEqual([])
   })
 
   it('makes none of them from a web sibling, where the method does not exist at all', async () => {
     // The other half of the same rule. A sibling that kept the native call would satisfy the case
     // above — the file it replaces has one — and still throw on the page.
     expect(
-      (await nativePropsWriteSites(mobileSrcDir)).filter((site) => WEB_SIBLING.test(site))
+      (await nativePropsWriteSites(mobileDir)).filter((site) => WEB_SIBLING.test(site))
     ).toEqual([])
   })
 
   it('reads writes at all, so the two rules above are not vacuous', async () => {
     // An empty offender list is also what a tree with no `setNativeProps` in it produces. These
-    // are the two seams that own every such write today, each beside its own `.web.ts`.
-    expect(await nativePropsWriteSites(mobileSrcDir)).toEqual([
-      'browser/browser-frame-layer-paint.ts',
-      'terminal/terminal-live-input-text-write.ts'
+    // are the three seams that own every such write today, each beside its own `.web.ts`, and
+    // the list spans both scanned trees so `app` having none is a reading rather than a gap.
+    expect(await nativePropsWriteSites(mobileDir)).toEqual([
+      'src/browser/browser-frame-layer-paint.ts',
+      'src/terminal/terminal-live-input-text-write.ts',
+      'src/terminal/terminal-settings-scroll-lock.ts'
     ])
   })
 })
@@ -129,29 +159,41 @@ const WRITES = 'export const paint = (ref) => ref.current?.setNativeProps({ text
 describe('the census scan', () => {
   it('names a native module that writes with no sibling beside it', async () => {
     await withScratch(async (scratch) => {
-      await plant(scratch, 'terminal/use-terminal-live-pending-input-flush.ts', WRITES)
-      await plant(scratch, 'terminal/use-terminal-live-accessory-input-commit.ts', WRITES)
+      await plant(scratch, 'src/terminal/use-terminal-live-pending-input-flush.ts', WRITES)
+      await plant(scratch, 'src/terminal/use-terminal-live-accessory-input-commit.ts', WRITES)
       expect(await nativePropsWritesWithoutWebSibling(scratch)).toEqual([
-        'terminal/use-terminal-live-accessory-input-commit.ts',
-        'terminal/use-terminal-live-pending-input-flush.ts'
+        'src/terminal/use-terminal-live-accessory-input-commit.ts',
+        'src/terminal/use-terminal-live-pending-input-flush.ts'
       ])
     })
   })
 
   it('clears a native module once its sibling is on disk, for .ts and for .tsx', async () => {
     await withScratch(async (scratch) => {
-      await plant(scratch, 'terminal/write.ts', WRITES)
-      await plant(scratch, 'terminal/write.web.ts', 'export const paint = () => {}\n')
-      await plant(scratch, 'browser/Pane.tsx', WRITES)
-      await plant(scratch, 'browser/Pane.web.tsx', 'export const paint = () => {}\n')
+      await plant(scratch, 'src/terminal/write.ts', WRITES)
+      await plant(scratch, 'src/terminal/write.web.ts', 'export const paint = () => {}\n')
+      await plant(scratch, 'src/browser/Pane.tsx', WRITES)
+      await plant(scratch, 'src/browser/Pane.web.tsx', 'export const paint = () => {}\n')
+      expect(await nativePropsWritesWithoutWebSibling(scratch)).toEqual([])
+    })
+  })
+
+  it('names a route file that writes, and is not satisfied by a sibling beside it', async () => {
+    await withScratch(async (scratch) => {
+      await plant(scratch, 'app/terminal-settings.tsx', WRITES)
+      // Planted to show the stricter rule is not the sibling rule wearing a different name: a
+      // route with a `.web.tsx` next to it is still an offence, because expo-router reads that
+      // file as a second route.
+      await plant(scratch, 'app/terminal-settings.web.tsx', 'export default () => null\n')
+      expect(await routeTreeNativePropsWrites(scratch)).toEqual(['app/terminal-settings.tsx'])
       expect(await nativePropsWritesWithoutWebSibling(scratch)).toEqual([])
     })
   })
 
   it('skips tests, which write this way to prove the native call throws', async () => {
     await withScratch(async (scratch) => {
-      await plant(scratch, 'terminal/write.test.ts', WRITES)
-      await plant(scratch, 'terminal/write.spec.tsx', WRITES)
+      await plant(scratch, 'src/terminal/write.test.ts', WRITES)
+      await plant(scratch, 'src/terminal/write.spec.tsx', WRITES)
       expect(await nativePropsWriteSites(scratch)).toEqual([])
     })
   })
