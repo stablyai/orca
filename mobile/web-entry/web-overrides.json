@@ -148,6 +148,14 @@
     {
       "file": "src/session/use-notification-pane-navigation.web.ts",
       "reason": "The native hook reads `paneKey` off the app's route with `useLocalSearchParams` and clears it with `setParams`. Inside the page neither exists: the document is served at `/` with one history entry, so `setParams` would rewrite the page's own URL while the app's route kept the spent tap, and the pane request never reaches the page as a param at all. It arrives as a re-sent `init` for the session this page already holds (ruling 33.1), which this sibling reads off the client's standing route-update listener; the shell clears the native param once the page has been handed one."
+    },
+    {
+      "file": "src/terminal/terminal-settings-scroll-lock.web.ts",
+      "reason": "setNativeProps does not exist on React Native Web, where an Animated.ScrollView ref is the DOM node, so the drag's scroll lock threw instead of landing; this one sets overflowY inline and clears it again, which RN Web's own class then takes back over."
+    },
+    {
+      "file": "src/terminal/terminal-live-input-text-write.web.ts",
+      "reason": "setNativeProps does not exist on React Native Web, where a TextInput ref is the DOM node, so the native write threw out of the session route's mount effect and faulted the page instead of clearing the field; this one sets value on the <input> or <textarea> RN Web rendered."
     }
   ]
 }

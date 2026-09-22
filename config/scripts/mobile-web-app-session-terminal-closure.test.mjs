@@ -326,22 +326,29 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
  *   local modules  1018 -> 1021   (+3)
  *
- * The C6.5 follow-up then aliased `zod` in the builder, so the four modules under `src/shared` that
- * this route reaches stop pulling the root's second copy in. The only reading here that has ever
- * fallen, and the only one where the two lists were diffed and every entry on the difference was
- * vendored: 94 gone, all of them `zod@4.5.4`, none added, because mobile's 79 were already here.
+ * The C6.5 follow-up then aliased `zod` in the builder, so the four `src/shared` modules this route
+ * reaches stop pulling the root's second copy in. The only reading here that has ever fallen: both
+ * lists diffed, 94 gone and every one of them vendored `zod@4.5.4`, none added.
  *
  *   modules        4363 -> 4269   (-94)
  *   local modules  1021 -> 1021   (unchanged)
  *
- * The page's client identity then joins: `src/mobile-web-shell/bridge/bridge-page-client-identity.ts`
- * declares the placeholder `client-context.web.tsx` claims, so the provider every screen reads
- * imports it. One local module, nothing vendored. Measured on the merged head, generators first:
+ * The live-input seam then adds one: the two hooks that write the terminal's hidden field now go
+ * through `src/terminal/terminal-live-input-text-write.ts`, and the page resolves its `.web.ts`.
+ * One module, not two — the sibling replaces the native file, and both hooks were already here.
  *
  *   modules        4269 -> 4270   (+1)
  *   local modules  1021 -> 1022   (+1)
+ *
+ * The page's client identity joins beside it:
+ * `src/mobile-web-shell/bridge/bridge-page-client-identity.ts` declares the placeholder
+ * `client-context.web.tsx` claims, so the provider every screen reads imports it. One local module,
+ * nothing vendored. Measured on this merged head rather than summed, all five generators run first:
+ *
+ *   modules        4270 -> 4271   (+1)
+ *   local modules  1022 -> 1023   (+1)
  */
-const SESSION_ROUTE_MODULES = 4270
+const SESSION_ROUTE_MODULES = 4271
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
