@@ -859,12 +859,14 @@ export class RelayLoadControlPeer {
   }
 
   scheduleRefresh(delayMs) {
-    if (this.stopped) return
+    const socket = this.socket
+    if (this.stopped || !socket || socket.readyState !== socket.OPEN) return
+    const scheduleNext = () => {
+      if (this.socket === socket) this.scheduleRefresh(this.phase.refreshIntervalMs)
+    }
     this.refreshTimer = setTimeout(() => {
-      void this.refresh().then(
-        () => this.scheduleRefresh(this.phase.refreshIntervalMs),
-        () => this.scheduleRefresh(this.phase.refreshIntervalMs)
-      )
+      this.refreshTimer = null
+      void this.refresh().then(scheduleNext, scheduleNext)
     }, delayMs)
   }
 
