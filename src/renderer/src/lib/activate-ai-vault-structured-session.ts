@@ -85,6 +85,8 @@ const defaultDeps: StructuredSessionActivationDeps = {
  * @param session anything carrying the row's structured pointer — an Agent Session History row or
  * the drag payload built from one. Only `structuredSession` is read, and both surfaces must reach
  * the same reveal, or the same row answers a click and a drop differently.
+ * @returns whether a local structured session is active. `gone`, `host-cannot-open`,
+ * `unreachable`, and a reveal that never mounts still toast, but they are not active.
  */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'>,
@@ -135,12 +137,14 @@ async function activateStructuredSession(
           // Unreachable: we never got an answer, so this is the one case waiting can still fix.
           deps.unavailable()
         }
-        return true
+        // Why: the toast is the remedy. True here would close a surface on a chat that is not open.
+        return false
       }
       await refreshedWithoutThrowing(deps, structured.workspaceId)
       if (!deps.activate(target)) {
         deps.unavailable()
-        return true
+        // Why: republish finished, but no local session is active.
+        return false
       }
     }
   }

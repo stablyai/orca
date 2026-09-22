@@ -61,7 +61,7 @@ describe('activateAiVaultStructuredSession', () => {
       reveal: vi.fn(async () => 'gone' as const)
     })
 
-    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(false)
 
     expect(parts.gone).toHaveBeenCalledOnce()
     expect(parts.unavailable).not.toHaveBeenCalled()
@@ -70,7 +70,7 @@ describe('activateAiVaultStructuredSession', () => {
   it('falls back to the retryable message when a revealed tab still does not arrive', async () => {
     const parts = deps({ activate: vi.fn(() => false) })
 
-    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(false)
 
     expect(parts.reveal).toHaveBeenCalledOnce()
     expect(parts.unavailable).toHaveBeenCalledOnce()
@@ -117,7 +117,7 @@ describe('activateAiVaultStructuredSession', () => {
       reveal: vi.fn(async () => 'host-cannot-open' as const)
     })
 
-    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(false)
 
     expect(parts.hostCannotOpen).toHaveBeenCalledOnce()
     expect(parts.gone).not.toHaveBeenCalled()
@@ -131,7 +131,7 @@ describe('activateAiVaultStructuredSession', () => {
       reveal: vi.fn(async () => 'unreachable' as const)
     })
 
-    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(false)
 
     expect(parts.unavailable).toHaveBeenCalledOnce()
     expect(parts.gone).not.toHaveBeenCalled()
@@ -152,7 +152,7 @@ describe('activateAiVaultStructuredSession', () => {
       activateAiVaultStructuredSession(structuredSession, parts)
     ]
     release('gone')
-    await Promise.all(clicks)
+    await expect(Promise.all(clicks)).resolves.toEqual([false, false, false])
 
     expect(parts.reveal).toHaveBeenCalledOnce()
     expect(parts.gone).toHaveBeenCalledOnce()

@@ -97,11 +97,46 @@ describe('revealDashboardAgent', () => {
     expect(mocks.activateAiVaultStructuredSession).not.toHaveBeenCalled()
   })
 
-  it('asks the host to republish an unmounted host-owned structured chat', () => {
+  it('reports success only after an unmounted host-owned chat is actually activated', async () => {
     mocks.activateStructuredAgentSessionById.mockReturnValue(false)
     mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
+    let resolveActivation: ((active: boolean) => void) | undefined
+    const activation = new Promise<boolean>((resolve) => {
+      resolveActivation = resolve
+    })
+    mocks.activateAiVaultStructuredSession.mockReturnValue(activation)
 
-    expect(
+    const opened = revealDashboardAgent({
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      tabId: structuredAgentSessionTabId('session-1'),
+      leafId: null,
+      surfaceKind: 'structured-chat'
+    })
+
+    expect(opened).toBe(activation)
+    expect(mocks.activateAiVaultStructuredSession).toHaveBeenCalledWith({
+      structuredSession: { workspaceId: 'worktree-1', sessionId: 'session-1' }
+    })
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    let settled = false
+    void Promise.resolve(opened).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    resolveActivation?.(true)
+    await expect(opened).resolves.toBe(true)
+  })
+
+  it('does not report success when host republish never activates a session', async () => {
+    mocks.activateStructuredAgentSessionById.mockReturnValue(false)
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
+    mocks.activateAiVaultStructuredSession.mockResolvedValue(false)
+
+    await expect(
       revealDashboardAgent({
         repoId: 'repo-1',
         worktreeId: 'worktree-1',
@@ -109,11 +144,8 @@ describe('revealDashboardAgent', () => {
         leafId: null,
         surfaceKind: 'structured-chat'
       })
-    ).toBe(true)
+    ).resolves.toBe(false)
 
-    expect(mocks.activateAiVaultStructuredSession).toHaveBeenCalledWith({
-      structuredSession: { workspaceId: 'worktree-1', sessionId: 'session-1' }
-    })
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 

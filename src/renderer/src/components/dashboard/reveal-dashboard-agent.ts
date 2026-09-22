@@ -18,8 +18,11 @@ import { structuredAgentSessionIdFromTabId } from '../../../../shared/structured
  *
  * Structured/native chat cards have no PTY by design. Routing them through
  * `activateTabAndFocusPane` forces the terminal surface and looks like a closed pane.
+ *
+ * The host-republish fallback is async. Its promise resolves true only once a
+ * local session is active; callers must not treat the promise itself as success.
  */
-export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
+export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean | Promise<boolean> {
   const activated = activateAndRevealWorkspace(
     args.worktreeId,
     args.executionHostId ? { executionHostId: args.executionHostId } : undefined
@@ -48,8 +51,7 @@ export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
   if (!sessionId) {
     return false
   }
-  void activateAiVaultStructuredSession({
+  return activateAiVaultStructuredSession({
     structuredSession: { workspaceId: args.worktreeId, sessionId }
   })
-  return true
 }
