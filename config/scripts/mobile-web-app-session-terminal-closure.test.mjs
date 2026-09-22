@@ -399,8 +399,15 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4211 -> 4212   (+1)
  *   local modules  1025 -> 1026   (+1)
+ *
+ * The page's Retry decision joins after those: `src/transport/connection-retry-action.ts` says
+ * whether a failed screen's Retry re-dials, re-reads or is not offered, and the session route
+ * reaches it through the explorer, source control and git history it docks. One local module.
+ *
+ *   modules        4212 -> 4213   (+1)
+ *   local modules  1026 -> 1027   (+1)
  */
-const SESSION_ROUTE_MODULES = 4212
+const SESSION_ROUTE_MODULES = 4213
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

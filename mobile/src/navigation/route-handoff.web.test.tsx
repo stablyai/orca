@@ -28,7 +28,7 @@ vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' 
 // imports the Expo runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},

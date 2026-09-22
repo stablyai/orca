@@ -60,7 +60,7 @@ vi.mock('../transport/client-context', async () => await import('../transport/cl
 // runtime this test does not have. The panel reads `client`/`state` off `useHostClient`.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},

@@ -148,13 +148,15 @@ describe('CodexUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(85.7208)
-    expect(breakdown.find((row) => row.key === 'gpt-5.6-sol')?.estimatedCostUsd).toBeCloseTo(50.424)
+    expect(summary.estimatedCostUsd).toBeCloseTo(57.06976)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-sol')?.estimatedCostUsd).toBeCloseTo(
+      34.8832
+    )
     expect(breakdown.find((row) => row.key === 'gpt-5.6-terra')?.estimatedCostUsd).toBeCloseTo(
-      25.212
+      20.1696
     )
     expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(
-      10.0848
+      2.01696
     )
   })
 
@@ -180,11 +182,11 @@ describe('CodexUsageStore', () => {
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
     expect(breakdown.find((row) => row.key === 'gpt-5.6-terra-high')?.estimatedCostUsd).toBeCloseTo(
-      0.5125
+      0.41
     )
     expect(
       breakdown.find((row) => row.key === 'gpt-5.6-luna(medium)')?.estimatedCostUsd
-    ).toBeCloseTo(0.205)
+    ).toBeCloseTo(0.041)
   })
 
   it('prices the bare gpt-5.6 alias at Sol rates without shadowing the tier IDs', async () => {
@@ -208,8 +210,8 @@ describe('CodexUsageStore', () => {
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    expect(breakdown.find((row) => row.key === 'gpt-5.6')?.estimatedCostUsd).toBeCloseTo(1.025)
-    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(0.205)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6')?.estimatedCostUsd).toBeCloseTo(0.72)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(0.041)
   })
 
   it('prices GPT-6 Astra with current OpenAI rates', async () => {
@@ -265,6 +267,94 @@ describe('CodexUsageStore', () => {
     expect(
       breakdown.find((row) => row.key === 'gpt-6-astra-2026-09-01')?.estimatedCostUsd
     ).toBeCloseTo(1.8)
+  })
+
+  it('prices GPT-6 Sol and Luna with current OpenAI rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-6-sol', 'gpt-6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 2_000_000,
+        cachedInputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        reasoningOutputTokens: 100_000,
+        totalTokens: 3_000_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.hasUnpricedModels).toBe(false)
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol')?.estimatedCostUsd).toBeCloseTo(17.4416)
+    expect(breakdown.find((row) => row.key === 'gpt-6-luna')?.estimatedCostUsd).toBeCloseTo(0.87208)
+  })
+
+  it('normalizes GPT-6 Sol and Luna reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-6-sol-high', 'gpt-6-luna(low)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol-high')?.estimatedCostUsd).toBeCloseTo(
+      0.36
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-6-luna(low)')?.estimatedCostUsd).toBeCloseTo(
+      0.018
+    )
+  })
+
+  it('prices gpt-5.2-pro at its own rate and accepts parenthesized max/ultra tiers', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.2-pro', 'gpt-6-sol(ultra)', 'gpt-5.6-luna(max)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.hasUnpricedModels).toBe(false)
+    expect(breakdown.find((row) => row.key === 'gpt-5.2-pro')?.estimatedCostUsd).toBeCloseTo(6.3)
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol(ultra)')?.estimatedCostUsd).toBeCloseTo(
+      0.36
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna(max)')?.estimatedCostUsd).toBeCloseTo(
+      0.041
+    )
   })
 
   it('flags a named model with no pricing entry so its missing tokens are declared', async () => {

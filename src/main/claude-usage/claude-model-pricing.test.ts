@@ -12,9 +12,27 @@ describe('model pricing name matching', () => {
     ['claude-sonnet-50', null],
     ['claude-sonnet-5-thinking', 2],
     ['claude-sonnet-5-opus-5', 5],
+    ['claude-opus-5-5', 4],
+    ['claude-opus-5.5[1m]', 4],
+    ['claude-opus-5-50', 5],
+    ['claude-fable-5-1', 10],
+    ['claude-opus-5-5-thinking', 4],
     ['claude-3.5-sonnet-20241022', 3]
   ])('preserves version boundaries and match priority for %s', (model, inputPrice) => {
     expect(estimateCostUsd(model, 1_000_000, 0, 0, 0)).toBe(inputPrice)
+  })
+})
+
+describe('point-release rates that differ from their major', () => {
+  it('bills Opus 5.5 below Opus 5 across every bucket', () => {
+    expect(estimateCostUsd('claude-opus-5-5', 1_000_000, 1_000_000, 1_000_000, 0)).toBeCloseTo(24.2)
+    expect(estimateCostUsd('claude-opus-5-5', 0, 0, 0, 1_000_000, 400_000)).toBeCloseTo(6.2)
+  })
+
+  it('bills Fable 5.1 cache reads at a quarter of Fable 5', () => {
+    expect(estimateCostUsd('claude-fable-5-1', 0, 0, 1_000_000, 0)).toBeCloseTo(0.25)
+    expect(estimateCostUsd('claude-fable-5', 0, 0, 1_000_000, 0)).toBeCloseTo(1)
+    expect(estimateCostUsd('claude-fable-5-1m', 0, 0, 1_000_000, 0)).toBeCloseTo(1)
   })
 })
 
