@@ -133,7 +133,7 @@ export async function getDefaultLocalPtyShell(
   if (process.platform === 'win32') {
     return getOptions().getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
   }
-  return process.env.SHELL || '/bin/zsh'
+  return process.env.SHELL?.trim() || '/bin/zsh'
 }
 
 export async function getLocalPtyProfiles(): Promise<{ name: string; path: string }[]> {

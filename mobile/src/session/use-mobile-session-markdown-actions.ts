@@ -1,12 +1,39 @@
 import { useEffect, useCallback } from 'react'
-import { BackHandler, Keyboard } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { BackHandler, Keyboard, Platform } from 'react-native'
+import { useClipboardWriter } from '../platform/clipboard'
+import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
 
-export function useMobileSessionMarkdownActions(scope: MobileSessionDiffCommentsModel) {
+/**
+ * What these actions read, which is fourteen of the session model's two hundred and sixty-eight.
+ *
+ * Declared rather than taking the whole model, so the hook can be rendered on its own: the gate
+ * below is the only `BackHandler` registration in this tree without a unit test of its own
+ * (ruling 33.2), and a probe that had to build the whole session to reach it would be testing the
+ * session. `MobileSessionDiffCommentsModel` satisfies this by construction, so the one caller is
+ * unchanged.
+ */
+export type MobileSessionMarkdownActionsScope = Pick<
+  MobileSessionDiffCommentsModel,
+  | 'hostId'
+  | 'worktreeId'
+  | 'router'
+  | 'client'
+  | 'sessionTabs'
+  | 'setMarkdownDocs'
+  | 'markdownDocs'
+  | 'setDiscardMarkdownTarget'
+  | 'discardMarkdownTarget'
+  | 'setLeaveDrafts'
+  | 'markdownSaveSeqRef'
+  | 'markdownSaveInFlightRef'
+  | 'showToast'
+  | 'readMarkdownTab'
+>
+
+export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActionsScope) {
   const {
     hostId,
     worktreeId,
@@ -23,6 +50,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     showToast,
     readMarkdownTab
   } = scope
+  const clipboard = useClipboardWriter()
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
@@ -46,11 +74,20 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await Clipboard.setStringAsync(current.localContent)
+      // Caught here because the only caller is `void copyMarkdownLocalContent(...)`: the seam
+      // rejects when the pasteboard refused the text, and an uncaught rejection would leave
+      // "Copied" as the last word on a copy that did not happen.
+      try {
+        await clipboard.writeText(current.localContent)
+      } catch {
+        triggerError()
+        showToast("Couldn't copy", 1500)
+        return
+      }
       triggerSuccess()
       showToast('Copied')
     },
-    [markdownDocs, showToast]
+    [clipboard, markdownDocs, showToast]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {
@@ -84,6 +121,15 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
   }, [getDirtyMarkdownDrafts, leaveSession])
 
   useEffect(() => {
+    // Native only, as the drawers and the file preview already are: react-native-web's
+    // `BackHandler.addEventListener` logs "BackHandler is not supported on web and should not be
+    // used." and hands back an inert subscription, and this effect re-registers whenever the
+    // dirty-draft list changes — two lines on the console at mount, measured. There is no hardware
+    // back to intercept in a WebView; the shell owns the phone's, and the page's own Back control
+    // is where the unsaved-draft prompt lives.
+    if (Platform.OS === 'web') {
+      return
+    }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       requestLeaveSession()
       return true
@@ -138,20 +184,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
-        const response = await client.sendRequest('markdown.saveTab', {
+        const response = await markdownTabSave.request(client, {
           worktree: `id:${worktreeId}`,
           tabId: tab.id,
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        const result = (response as RpcSuccess).result as {
-          content: string
-          version: string
-          isDirty: false
-        }
+        const result = markdownTabSave.interpret(response)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }

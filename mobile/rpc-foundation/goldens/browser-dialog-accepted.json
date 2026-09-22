@@ -3,9 +3,9 @@
   "family": "browser.dialog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "95f377bc4d8bf1248cafed26b2e9f425ad37e8d3c99e354bd6a8c67eb9bd9b1b",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2a884fbac9d5": {
+    "93f4e9f3ead2": {
       "name": "browser.dialogAccept#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogAccept\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}"
     },
     "9855d4ec3415": {
@@ -28,16 +29,9 @@
       "keyboardValue": "hello",
       "pointerModifiers": []
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f23289a40300": {
+    "cd44f29d755e": {
       "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -69,6 +63,14 @@
           }
         }
       }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -77,8 +79,8 @@
       {
         "id": "dismissed",
         "observation": {
-          "sender": ["f23289a40300"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["cd44f29d755e"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"

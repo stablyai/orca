@@ -11,6 +11,64 @@ import { scanSourceTree, stripComments } from './source-scan/source-tree-scan'
 const SOURCE_ROOT = resolve(__dirname, '..')
 const ADMISSION_CALL = /admitLegacyAgentStatus\(\s*(?:this\.)?state\s*,\s*['"]([^'"]+)['"]/gs
 
+function describeBypasses(source: string): string[] {
+  return findAgentStatusLegacyMutationBypasses(source).map(
+    (bypass) => `${bypass.kind}: ${bypass.detail}`
+  )
+}
+
+// Why: `passed-map` has two independent producing sites, so a deduplicated kind set
+// stayed green whenever only one of them broke. Pin each planted form to its own case.
+const PLANTED_MUTATION_BYPASSES = [
+  {
+    bypass: 'direct mutator on the legacy map',
+    source: `state.lastStatusByPaneKey.set('pane', row)`,
+    expected: ['direct-mutation: lastStatusByPaneKey mutator call']
+  },
+  {
+    bypass: 'mutator via the bracket-indexed key',
+    source: `state['lastStatusByPaneKey'].set('pane', row)`,
+    expected: ['direct-mutation: lastStatusByPaneKey mutator call']
+  },
+  {
+    bypass: 'mutator on an assigned alias',
+    source: `
+      const alias = state.lastStatusByPaneKey
+      alias.delete('pane')
+    `,
+    expected: ['alias-mutation: alias mutates an aliased status map']
+  },
+  {
+    bypass: 'mutator on a destructured alias',
+    source: `
+      const { lastStatusByPaneKey } = state
+      lastStatusByPaneKey.clear()
+    `,
+    expected: [
+      'direct-mutation: lastStatusByPaneKey mutator call',
+      'alias-mutation: lastStatusByPaneKey mutates an aliased status map'
+    ]
+  },
+  {
+    bypass: 'cast back to a mutable Map',
+    source: `;(state.lastStatusByPaneKey as unknown as Map<string, Row>).clear()`,
+    expected: ['map-cast: lastStatusByPaneKey cast back to a mutable Map']
+  },
+  {
+    bypass: 'raw map passed to a function',
+    source: `mutateStatusMap(state.lastStatusByPaneKey)`,
+    expected: ['passed-map: lastStatusByPaneKey is passed to another function']
+  },
+  {
+    bypass: 'aliased map passed to a function',
+    source: `
+      const { lastStatusByPaneKey: passed } = state
+      mutateStatusMap(passed)
+    `,
+    expected: ['passed-map: passed is passed to another function']
+  }
+] as const
+
 describe('legacy agent-status ingress ratchet', () => {
   const productionFiles = scanSourceTree(SOURCE_ROOT)
 
@@ -51,29 +109,37 @@ describe('legacy agent-status ingress ratchet', () => {
     const bypasses = productionFiles
       .filter((file) => file.source.includes('lastStatusByPaneKey'))
       .flatMap((file) =>
-        findAgentStatusLegacyMutationBypasses(file.source).map(
-          (bypass) => `${file.relativePath}: ${bypass.kind}: ${bypass.detail}`
-        )
+        describeBypasses(file.source).map((bypass) => `${file.relativePath}: ${bypass}`)
       )
     expect(bypasses).toEqual([])
   })
 
-  it('detects direct, aliased, cast, and passed-map mutation bypasses', () => {
-    const planted = findAgentStatusLegacyMutationBypasses(`
-      state.lastStatusByPaneKey.set('pane', row)
-      const alias = state.lastStatusByPaneKey
-      alias.delete('pane')
-      const { lastStatusByPaneKey } = state
-      lastStatusByPaneKey.clear()
-      ;(state.lastStatusByPaneKey as unknown as Map<string, Row>).clear()
-      state['lastStatusByPaneKey'].set('pane', row)
-      mutateStatusMap(state.lastStatusByPaneKey)
-      const { lastStatusByPaneKey: passed } = state
-      mutateStatusMap(passed)
-    `)
-    expect(new Set(planted.map((bypass) => bypass.kind))).toEqual(
-      new Set(['direct-mutation', 'alias-mutation', 'map-cast', 'passed-map'])
-    )
+  it.each(PLANTED_MUTATION_BYPASSES)('detects $bypass', ({ source, expected }) => {
+    expect(describeBypasses(source)).toEqual(expected)
+  })
+
+  it('detects every planted shape together, with none masking another', () => {
+    expect(
+      describeBypasses(`
+        state.lastStatusByPaneKey.set('pane', row)
+        const alias = state.lastStatusByPaneKey
+        alias.delete('pane')
+        const { lastStatusByPaneKey } = state
+        lastStatusByPaneKey.clear()
+        ;(state.lastStatusByPaneKey as unknown as Map<string, Row>).clear()
+        state['lastStatusByPaneKey'].set('pane', row)
+        mutateStatusMap(state.lastStatusByPaneKey)
+        const { lastStatusByPaneKey: passed } = state
+        mutateStatusMap(passed)
+      `)
+    ).toEqual([
+      'direct-mutation: lastStatusByPaneKey mutator call',
+      'map-cast: lastStatusByPaneKey cast back to a mutable Map',
+      'alias-mutation: alias mutates an aliased status map',
+      'alias-mutation: lastStatusByPaneKey mutates an aliased status map',
+      'passed-map: passed is passed to another function',
+      'passed-map: lastStatusByPaneKey is passed to another function'
+    ])
   })
 
   it('keeps the manifest immutable, descriptive, and partitioned by its exit gate', () => {

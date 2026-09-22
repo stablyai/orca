@@ -78,40 +78,48 @@ function parseDevinSessionRecord(
 }
 
 function extractDevinStepText(step: Record<string, unknown>): string | null {
+  // ATIF-v1.7 carries `message` as a plain string; older shapes wrap it as {content}.
+  const messageText = extractString(step.message)
+  if (messageText) {
+    return messageText
+  }
   const message = asRecord(step.message)
   if (message) {
     return extractContentText(message.content) ?? extractString(message.content)
   }
-  return extractString(step.text)
+  // ATIF also allows `message` as an array of content parts.
+  return extractContentText(step.message) ?? extractString(step.text)
 }
 
+// Each bucket resolves from the first source that reports it. ATIF
+// `prompt_tokens` already includes `cached_tokens`, so only the Claude-style
+// cache keys (which sit outside input_tokens) are summed.
 function devinStepTokenTotal(
   metadata: Record<string, unknown> | null,
-  metrics: Record<string, unknown> | null
+  metrics: Record<string, unknown> | null,
+  stepMetrics: Record<string, unknown> | null
 ): number {
+  const sources = [metadata, metrics, stepMetrics]
   return (
-    numberFromDevinMetadata(metadata, metrics, ['total_input_tokens', 'input_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, ['output_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, ['cache_read_tokens', 'cache_read_input_tokens']) +
-    numberFromDevinMetadata(metadata, metrics, [
-      'cache_creation_tokens',
-      'cache_creation_input_tokens'
-    ])
+    firstDevinMetricValue(sources, ['total_input_tokens', 'input_tokens', 'prompt_tokens']) +
+    firstDevinMetricValue(sources, ['output_tokens', 'completion_tokens']) +
+    firstDevinMetricValue(sources, ['cache_read_tokens', 'cache_read_input_tokens']) +
+    firstDevinMetricValue(sources, ['cache_creation_tokens', 'cache_creation_input_tokens'])
   )
 }
 
-function numberFromDevinMetadata(
-  metadata: Record<string, unknown> | null,
-  metrics: Record<string, unknown> | null,
+function firstDevinMetricValue(
+  sources: readonly (Record<string, unknown> | null)[],
   keys: readonly string[]
 ): number {
-  for (const source of [metadata, metrics]) {
+  for (const source of sources) {
     if (!source) {
       continue
     }
     for (const key of keys) {
-      const value = numberValue(source[key])
-      if (value > 0) {
+      const rawValue = source[key]
+      const value = numberValue(rawValue)
+      if (value > 0 || (value === 0 && typeof rawValue === 'number' && Number.isFinite(rawValue))) {
         return value
       }
     }
@@ -125,12 +133,23 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
     return
   }
   const metadata = asRecord(stepRecord.metadata)
-  updateTimeline(accumulator, extractString(metadata?.created_at))
+  updateTimeline(
+    accumulator,
+    extractString(stepRecord.timestamp) ?? extractString(metadata?.created_at)
+  )
   const metrics = asRecord(metadata?.metrics)
+  const extra = asRecord(stepRecord.extra)
   accumulator.model ??=
-    extractString(metadata?.generation_model) ?? extractString(metrics?.generation_model)
-  accumulator.totalTokens += devinStepTokenTotal(metadata, metrics)
-  const isUser = metadata?.is_user_input === true
+    extractString(stepRecord.model_name) ??
+    extractString(extra?.generation_model) ??
+    extractString(metadata?.generation_model) ??
+    extractString(metrics?.generation_model)
+  accumulator.totalTokens += devinStepTokenTotal(metadata, metrics, asRecord(stepRecord.metrics))
+  // ATIF `source` is 'user' | 'agent' | 'system'; system steps are setup noise
+  // that must not count as messages or feed title/preview.
+  const source = extractString(stepRecord.source)
+  const isSystem = source === 'system'
+  const isUser = !isSystem && (source === 'user' || metadata?.is_user_input === true)
   if (isUser) {
     accumulator.messageCount++
     const text =
@@ -142,7 +161,10 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
       accumulator.title ??= titleCandidate
     }
     addPreviewContent(accumulator, 'user', text ?? stepRecord.content)
-  } else if (extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls) {
+  } else if (
+    !isSystem &&
+    (source === 'agent' || extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls)
+  ) {
     accumulator.messageCount++
     addPreviewContent(
       accumulator,

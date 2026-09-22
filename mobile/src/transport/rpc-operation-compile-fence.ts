@@ -9,6 +9,7 @@ import {
 } from './rpc-operation'
 import { rpcResultVariants } from './rpc-operation-result-reader'
 import {
+  pushTestWithoutParams,
   workspaceListAtBarrier,
   workspaceListOrNull,
   workspaceRowsReader,
@@ -144,6 +145,17 @@ export async function fenceBarrierAndParams(): Promise<void> {
     // @ts-expect-error worktree.ps takes a numeric limit
     { limit: 'ten' }
   )
+}
+
+// A method the catalog declares params-less keeps every shape a shipped sender may use. An
+// explicit `null` is the one that matters: `params: null` is not the frame that omits the key,
+// so narrowing this to omission would rewrite bytes main already puts on the wire.
+export async function fenceParamlessSend(): Promise<void> {
+  await runRpcOperation(client, pushTestWithoutParams, null)
+  await runRpcOperation(client, pushTestWithoutParams, undefined)
+  await runRpcOperation(client, pushTestWithoutParams)
+  // @ts-expect-error a method that declares no params accepts none
+  await runRpcOperation(client, pushTestWithoutParams, { path: 'main.js' })
 }
 
 export async function fenceVerdictTypes(): Promise<void> {

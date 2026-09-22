@@ -9,6 +9,7 @@ import {
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
+import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   GITLAB_VIEW_OPTIONS,
@@ -169,8 +170,8 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
         if (client) {
-          void client
-            .sendRequest('linear.selectWorkspace', { workspaceId })
+          void linearWorkspaceSelect
+            .request(client, { workspaceId })
             .then(() => loadLinearContext())
             .catch((err) => {
               setError(err instanceof Error ? err.message : 'Failed to switch workspace')

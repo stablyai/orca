@@ -189,6 +189,8 @@ export type TerminalActions = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  /** Client-local park scrollback for a tab. Never uploaded; read via `resolveLeafScrollback`. */
+  setTabLocalOnlyScrollback: (tabId: string, buffersByLeafId: Record<string, string> | null) => void
   syncPaneDetachPtyOwnership: (args: {
     detachedLeafId: string
     detachedPtyId: string | null

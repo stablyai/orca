@@ -23,6 +23,7 @@ export function mergeDetectedWorktreesForHost(
     current.authoritative === refreshed.authoritative &&
     current.source === refreshed.source &&
     current.unavailableReason === refreshed.unavailableReason &&
+    current.failureKind === refreshed.failureKind &&
     current.worktrees === worktrees
   ) {
     return current

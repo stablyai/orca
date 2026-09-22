@@ -3,9 +3,9 @@
   "family": "browser.wheel",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "e1bc21248ccff45ff217e385a51618b6f5724c037bfbefa03bb76a48dd4d793b",
   "platform": "darwin",
@@ -13,48 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3ae1d19b9c51": {
-      "name": "browser.mouseMove#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
-    },
-    "56a99047a121": {
-      "name": "browser.mouseMove#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.mouseMove"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1",
-            "x": 40,
-            "y": 80
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "moved": true
-          }
-        }
-      }
-    },
-    "71b1fb55eafa": {
+    "0ea51271b822": {
       "name": "browser.mouseWheel#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}"
+    },
+    "4ee27ce5e118": {
+      "name": "browser.mouseWheel#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -89,9 +55,47 @@
         }
       }
     },
-    "8bf9a97ea141": {
-      "name": "browser.mouseWheel#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseWheel\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"dx\":0,\"dy\":-120}}"
+    "5099a516ef10": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
+    "5972986e0d80": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseMove"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "moved": true
+          }
+        }
+      }
     },
     "9855d4ec3415": {
       "busy": false,
@@ -119,8 +123,8 @@
       {
         "id": "scrolled",
         "observation": {
-          "sender": ["56a99047a121", "71b1fb55eafa"],
-          "payloads": ["3ae1d19b9c51", "8bf9a97ea141"],
+          "sender": ["5972986e0d80", "4ee27ce5e118"],
+          "payloads": ["5099a516ef10", "0ea51271b822"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "wheel": "eb79a9b3682a"

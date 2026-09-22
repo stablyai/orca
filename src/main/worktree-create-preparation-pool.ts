@@ -1,3 +1,4 @@
+import { worktreePreparationGit } from './git/worktree-create-git-executor'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -83,7 +84,7 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
 
 function discardEntryInBackground(entry: PreparationEntry): void {
   // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
-  trackPreparationDiscard(discardEntry(entry))
+  trackPreparationDiscard(worktreePreparationGit.run(() => discardEntry(entry)))
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -151,7 +152,11 @@ export function takePreparation(entry: PreparationEntry): void {
   clearTimeout(entry.expiration)
 }
 
-export function startPreparation({
+export function startPreparation(args: StartPreparationArgs): Promise<void> {
+  return worktreePreparationGit.run(() => startBackgroundPreparation(args))
+}
+
+function startBackgroundPreparation({
   repoPath,
   workspaceRoot,
   baseBranch,

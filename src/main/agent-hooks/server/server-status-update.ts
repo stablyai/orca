@@ -10,8 +10,6 @@ import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -24,12 +22,16 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    payload: AgentHookEventPayload,
+    incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload {
+  ): EnrichedAgentHookEventPayload | undefined {
+    const { authorityRestartId, ...payload } = incoming
+    if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
       this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
@@ -72,7 +74,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      this.writeLegacyStatusRow(enriched)
+      if (!this.writeLegacyStatusRow(enriched)) {
+        return undefined
+      }
       this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -125,7 +129,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (boundaryReconciledPrevious !== previous) {
       previous = boundaryReconciledPrevious
       if (previous) {
-        this.writeLegacyStatusRow(previous)
+        if (!this.writeLegacyStatusRow(previous)) {
+          return undefined
+        }
         this.scheduleStatusPersist()
       }
     }
@@ -224,7 +230,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     } else {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
-    this.writeLegacyStatusRow(enriched)
+    if (!this.writeLegacyStatusRow(enriched)) {
+      return undefined
+    }
     this.commitStatusRowMutation(rowBefore, enriched)
     // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
     // can only ever reproduce the last file — once per debounce window for a streaming chat.
@@ -232,84 +240,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.scheduleStatusPersist()
     }
     this.notifyStatusChangeListeners()
-    this.emitEnrichedStatus(enriched)
-    return enriched
-  }
-
-  protected refreshTerminalStatusEvidence(
-    previous: EnrichedAgentHookEventPayload,
-    mutationBefore?: EnrichedAgentHookEventPayload,
-    emitEnrichedStatus = false
-  ): void {
-    const connectionClearWatermark = previous.connectionId
-      ? this.connectionTimestampWatermarkById.get(previous.connectionId)
-      : undefined
-    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
-    if (previous.connectionId) {
-      this.connectionTimestampWatermarkById.set(previous.connectionId, now)
-    }
-    const {
-      receivedAt: _receivedAt,
-      evidenceObservedAt: _evidenceObservedAt,
-      stateStartedAt,
-      observation: _observation,
-      restoredUnconfirmed: _restoredUnconfirmed,
-      isReplay: _isReplay,
-      ...payload
-    } = previous
-    const refreshed: EnrichedAgentHookEventPayload = {
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }
-    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
-    this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
-    this.writeLegacyStatusRow(refreshed)
-    this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
-    this.scheduleStatusPersist()
-    // A dismissed row may retain only provider resume identity. Its preserved payload can still
-    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
-    // mobile freshness leases.
-    if (refreshed.providerSessionOnly === true) {
-      return
-    }
-    if (firstRuntimeObservation) {
-      this.notifyStatusChangeListeners()
-    }
-    this.emitStatusFreshnessObservation({
-      paneKey: refreshed.paneKey,
-      state: refreshed.payload.state,
-      receivedAt: refreshed.receivedAt,
-      observedInCurrentRuntime: true,
-      ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
-      ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
-    })
-    if (emitEnrichedStatus) {
-      this.emitEnrichedStatus(refreshed)
-    }
-  }
-
-  // Why: every status emit must reach plugins too, so a new early-return path
-  // upstream cannot silently leave the plugin tap behind the main-window fanout.
-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
-    this.onAgentStatus?.(enriched)
-    for (const listener of this.enrichedStatusListeners) {
-      try {
-        listener(enriched)
-      } catch (err) {
-        console.error('[agent-hooks] enriched status listener threw', err)
-      }
-    }
-  }
-
-  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): void {
-    admitLegacyAgentStatus(
-      this.state,
-      'main-status-update',
-      entry,
-      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+    this.emitEnrichedStatus(
+      authorityRestartId && payload.isReplay !== true
+        ? { ...enriched, authorityRestartId }
+        : enriched
     )
+    return enriched
   }
 }

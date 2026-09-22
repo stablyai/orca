@@ -1,6 +1,5 @@
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from './mobile-tasks-dependencies'
-import type { GitHubAssignableUser } from './mobile-tasks-legacy-foundation'
 import {
   githubAssignableUserListRead,
   githubRepoLabelListRead
@@ -52,8 +51,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
           if (stale) {
             return
           }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          setItemAvailableLabels(githubRepoLabelListRead.interpret(response) as string[])
+          setItemAvailableLabels(githubRepoLabelListRead.interpret(response))
         })
         .catch((err) => {
           if (!stale) {
@@ -80,10 +78,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
         if (stale) {
           return
         }
-        setItemAssignableUsers(
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          githubAssignableUserListRead.interpret(response) as GitHubAssignableUser[]
-        )
+        setItemAssignableUsers(githubAssignableUserListRead.interpret(response))
       })
       .catch((err) => {
         if (!stale) {

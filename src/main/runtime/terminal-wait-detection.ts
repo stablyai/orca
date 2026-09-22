@@ -5,11 +5,8 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import {
-  isTerminalWaitWhitespace,
-  startOfLastLines,
-  startOfLastNonBlankLines
-} from './terminal-wait-tail-window'
+import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
+import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -125,46 +122,6 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   const readySegment = normalized.slice(headerIndex)
   // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
-}
-
-function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
-    return null
-  }
-  let lineStart = headerIndex
-  let modelIndex: number | null = null
-  let promptIndex: number | null = null
-
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
-    }
-    let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
-      trimmedStart += 1
-    }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
-      trimmedEnd -= 1
-    }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
-        promptIndex = trimmedStart
-      }
-    }
-    lineStart = cursor + 1
-  }
-
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =

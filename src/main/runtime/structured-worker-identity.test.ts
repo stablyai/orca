@@ -149,6 +149,15 @@ describe('structured worker identity', () => {
     expect(parsed!.tabId).toBe(`structured-agent-session-${SESSION_ID}`)
   })
 
+  it('rejects a public status pane even though its leaf is a valid terminal UUID', () => {
+    const paneKey = structuredAgentSessionPaneKey(
+      `structured-agent-session-${SESSION_ID}`,
+      SESSION_ID
+    )
+    expect(isTerminalLeafId(parsePaneKey(paneKey)!.leafId)).toBe(true)
+    expect(structuredWorkerPaneKeyBelongsToSession(paneKey, SESSION_ID)).toBe(false)
+  })
+
   it('round-trips the session id through the process incarnation', () => {
     const incarnation = structuredWorkerProcessIncarnation(SESSION_ID)
     expect(sessionIdFromStructuredWorkerIncarnation(incarnation)).toBe(SESSION_ID)
@@ -230,6 +239,24 @@ describe('structured worker identity registry', () => {
         host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
       })
     ).toBeNull()
+  })
+
+  it('cannot rehydrate a worker credential from a public status subject', () => {
+    const handle = mintStructuredWorkerHandle()
+    expect(
+      registry.rehydrate({
+        terminal_handle: handle,
+        pane_key: structuredAgentSessionPaneKey(
+          `structured-agent-session-${SESSION_ID}`,
+          SESSION_ID
+        ),
+        process_incarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+        worktree_id: 'wt_1',
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })
+    ).toBeNull()
+    expect(registry.get(handle)).toBeNull()
+    expect(registry.getBySessionId(SESSION_ID)).toBeNull()
   })
 
   it('forgets both indexes', () => {

@@ -23,6 +23,12 @@ import {
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
+import {
+  StructuredAgentSessionStatusOwnership,
+  type StructuredAgentSessionStatusSink
+} from './structured-agent-session-status-ownership'
+
+export type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
 
 export type StructuredAgentSessionStatusSubscriber = {
   id: string
@@ -31,17 +37,9 @@ export type StructuredAgentSessionStatusSubscriber = {
 
 type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
+  params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
   hasProviderChild?: boolean
   fence?: number
-}
-
-/** Where the host's projections land for readers that see every agent alike (`worktree ps`,
- *  mobile, the hook store's own fanout). `forget` is the roster edge the broadcast cache
- *  deliberately never has. */
-export type StructuredAgentSessionStatusSink = {
-  publish: (summary: AgentSessionStatusSummary) => void
-  forget: (sessionId: string) => void
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -108,6 +106,9 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
 }
 
 export class StructuredAgentSessionStatusFeed {
+  private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
+    this.deps.statusSink?.()
+  )
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
   private readonly published = new Map<string, AgentSessionStatusSummary>()
   // Task progress must not sort and scan an unchanged conversation. Journal identity owns cleanup.
@@ -146,7 +147,7 @@ export class StructuredAgentSessionStatusFeed {
   /** The sink lists what is running; a forgotten session must not be in it. */
   forget(sessionId: string): void {
     try {
-      this.deps.statusSink?.()?.forget(sessionId)
+      this.ownership.forget(sessionId)
     } catch (error) {
       console.warn('[structured-session-status] status sink forget failed', error)
     }
@@ -173,11 +174,11 @@ export class StructuredAgentSessionStatusFeed {
     }
     const { hostExecutionOwned: _hostExecutionOwned, ...retained } = previous
     this.published.set(sessionId, retained)
+    this.sink(retained)
     this.broadcast({
       type: 'status',
       session: retained
     })
-    this.sink(retained)
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -189,11 +190,14 @@ export class StructuredAgentSessionStatusFeed {
     const summary = this.summaryFor(sessionId, session, journal ?? session.journal)
     const previous = this.published.get(sessionId)
     if (previous && summariesEqual(previous, summary)) {
+      if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
+        this.sink(summary, session.params.location)
+      }
       return
     }
     this.published.set(sessionId, summary)
+    this.sink(summary, session.params.location)
     this.broadcast({ type: 'status', session: summary })
-    this.sink(summary)
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
@@ -262,9 +266,12 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   /** A failing sink must never cost the subscribers their status event. */
-  private sink(summary: AgentSessionStatusSummary): void {
+  private sink(
+    summary: AgentSessionStatusSummary,
+    location?: AgentSessionRecord['location']
+  ): void {
     try {
-      this.deps.statusSink?.()?.publish(summary)
+      this.ownership.publish(summary, location)
     } catch (error) {
       console.warn('[structured-session-status] status sink publish failed', error)
     }

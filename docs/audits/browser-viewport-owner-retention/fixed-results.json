@@ -1,0 +1,260 @@
+{
+  "testFiles": 4,
+  "total": 42,
+  "passed": 42,
+  "failed": 0,
+  "cases": [
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride returns false when the tab is not registered",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride applies device metrics, touch emulation, and a mobile UA for mobile presets",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride keeps the session UA for native-mode profiles when mobile=false",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride keeps the session UA for native-mode profiles when mobile=true",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride presents the Firefox UA for a preset applied on a Google auth host (mobile=false)",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride presents the Firefox UA for a preset applied on a Google auth host (mobile=true)",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride re-issues the standing UA override when navigating onto and back off an auth host",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not leave the Chrome preset UA standing when a mobile preset lands mid-navigation onto an auth host",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not leave the Firefox UA standing when a preset lands mid-navigation off an auth host",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride falls back to the committed URL once a navigation commits or fails",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not let a superseded navigation failure revert a newer target",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride switches identity for a server redirect and restores it if the redirect fails",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride preserves the auth identity when a viewport preset is cleared after a redirect",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not inherit a mobile owner UA in a desktop popup",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride reapplies a preset when navigation starts during its final UA write",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not reinstall a preset while its final UA clear is in flight",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride keeps tracking the standing override when the CDP clear fails",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride does not touch the UA override on navigation when no preset is standing",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride stops re-issuing the UA override once the preset is cleared",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride leaves the UA override alone on navigation for native-UA profiles",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride clears device metrics and disables touch for override=null",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride attaches the debugger if not already attached and does not detach after",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-override.test.ts",
+      "title": "browserManager setViewportOverride returns false when debugger.attach throws (e.g. DevTools already open)",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership does not recreate closed-tab UA intent after a late touch completion",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership does not restore closed-tab UA intent after a failed clear",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership preserves replacement desktop intent after an old clear fails",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership preserves replacement mobile intent after an old clear resumes",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership same-owner clear failure still restores the legitimate earlier intent",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership old apply cannot overwrite a replacement guest desktop intent",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership an old native profile cannot write UA intent after replacement with a default profile",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership old queued operations cannot remove or join a replacement promise tail",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership normal same-owner toggles preserve last-requested order and remove the promise tail",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership native UA mode remains unchanged with mobile=false",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership native UA mode remains unchanged with mobile=true",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-ownership.test.ts",
+      "title": "browser viewport operation ownership late rejected clears cannot repopulate all registries after unregisterAll",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-partial-failure.test.ts",
+      "title": "browserManager viewport partial failure keeps wheel routing active when follow-up setup fails after metrics apply",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-manager-viewport-partial-failure.test.ts",
+      "title": "browserManager viewport partial failure keeps host panning available when metrics setup fails",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-viewport-user-agent.test.ts",
+      "title": "buildViewportUserAgentOverride presents the Firefox UA on Google auth hosts regardless of the preset",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-viewport-user-agent.test.ts",
+      "title": "buildViewportUserAgentOverride keeps the clean desktop UA off the auth hosts",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-viewport-user-agent.test.ts",
+      "title": "buildViewportUserAgentOverride splices the real Chrome major into the mobile UA and its client hints",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-viewport-user-agent.test.ts",
+      "title": "buildViewportUserAgentOverride falls back to a known Chrome major when the base UA carries none",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "file": "src/main/browser/browser-viewport-user-agent.test.ts",
+      "title": "buildViewportUserAgentOverride treats an unparseable URL as a non-auth host",
+      "status": "passed",
+      "failures": []
+    }
+  ]
+}

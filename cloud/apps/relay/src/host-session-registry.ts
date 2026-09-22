@@ -18,6 +18,9 @@ import {
   RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS,
   RELAY_CLOSE_CODE,
+  type IdleRegionalRehomeCommit,
+  type IdleRegionalRehomeDeferReason,
+  type IdleRegionalRehomeResult,
   type RelayHostCloseReason,
   type RelayRegion
 } from '@orca-cloud/relay-contract'
@@ -26,6 +29,7 @@ import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
+import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
@@ -179,6 +183,10 @@ export class HostSessionRegistry {
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
+  private readonly drainTimers = new Set<ReturnType<typeof setTimeout>>()
+  // Hosts whose drain has been sent. Paced sends land minutes apart, so "this cell is
+  // draining" is not the same question as "this host has been told to leave".
+  private readonly drainSentHosts = new Set<string>()
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -186,7 +194,7 @@ export class HostSessionRegistry {
     {
       attemptId: string
       authorityKey: string
-      promise: Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>
+      promise: Promise<IdleRegionalRehomeResult>
     }
   >()
 
@@ -200,9 +208,9 @@ export class HostSessionRegistry {
       sourceCellIncarnation: string
       targetCellId: string
     },
-    commit: () => Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>,
+    commit: () => Promise<IdleRegionalRehomeCommit>,
     reconcile: () => Promise<'committed' | 'not-committed' | 'stale'>
-  ): Promise<{ outcome: 'busy' | 'committed' | 'deferred' | 'stale' }> {
+  ): Promise<IdleRegionalRehomeResult> {
     const authorityKey = JSON.stringify([
       input.userId,
       input.sourceAssignmentEpoch,
@@ -231,7 +239,7 @@ export class HostSessionRegistry {
       !session.socket ||
       !this.hostCapabilities.get(session.socket)?.has(RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME)
     )
-      return { outcome: 'deferred' }
+      return { outcome: 'deferred', reason: 'host-unsupported' }
     if (
       (this.idleWork.get(input.relayHostId) ?? 0) !== 0 ||
       session.activeConnIds.size !== 0 ||
@@ -241,12 +249,18 @@ export class HostSessionRegistry {
       return { outcome: 'busy' }
     const revision = session.authorityRevision
     const promise = Promise.resolve().then(async () => {
-      let outcome: 'committed' | 'deferred' | 'stale'
+      let outcome: IdleRegionalRehomeCommit['outcome']
+      // The commit's reason survives only while the outcome stays deferred;
+      // a reconcile that finds a durable outcome answers with that instead.
+      let reason: IdleRegionalRehomeDeferReason | undefined
       try {
-        outcome = (await commit()).outcome
+        const commitResult = await commit()
+        outcome = commitResult.outcome
+        reason = commitResult.reason
         if (outcome === 'deferred') {
           const durable = await reconcile()
           outcome = durable === 'not-committed' ? 'deferred' : durable
+          if (outcome !== 'deferred') reason = undefined
         }
       } catch {
         let delay = 100
@@ -254,6 +268,7 @@ export class HostSessionRegistry {
           try {
             const durable = await reconcile()
             outcome = durable === 'not-committed' ? 'deferred' : durable
+            reason = undefined
             break
           } catch {
             await new Promise<void>((resolve) => {
@@ -271,7 +286,7 @@ export class HostSessionRegistry {
       }
       if (this.idleAttempts.get(input.relayHostId)?.promise === promise)
         this.idleAttempts.delete(input.relayHostId)
-      return { outcome }
+      return reason === undefined ? { outcome } : { outcome, reason }
     })
     this.idleAttempts.set(input.relayHostId, { attemptId: input.attemptId, authorityKey, promise })
     return promise
@@ -298,6 +313,15 @@ export class HostSessionRegistry {
     private readonly random: () => number = Math.random,
     private readonly cellIncarnation?: string
   ) {}
+
+  // Renewals leave the heartbeat as an enqueue: one statement per cell per
+  // window replaces one write transaction per host, which is what keeps the
+  // shared PostgreSQL instance out of buffer-header contention.
+  private readonly controlRenewals = new ControlRenewalBatch(
+    async (rows) => await this.assignments.renewControlActivities(rows),
+    () => this.logIdentity(),
+    (flush) => this.observer.recordControlRenewalFlush?.(flush)
+  )
 
   // Uniform over [CONTROL_LEASE_MS - jitter, CONTROL_LEASE_MS + jitter).
   private controlLeaseExpiresAt(): number {
@@ -330,7 +354,10 @@ export class HostSessionRegistry {
     credential: string,
     capacityReservation?: PendingHostDataReservation
   ): Promise<void> {
-    if (this.draining) {
+    // Not `this.draining`: a paced drain tells hosts minutes apart, and the director keeps
+    // pointing phones here until their own host has moved. Refusing them for the whole
+    // window would turn a 2 min drain into a 2 min outage for hosts not yet told.
+    if (this.drainSentHosts.has(hostId)) {
       capacityReservation?.release()
       this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
       return
@@ -450,7 +477,7 @@ export class HostSessionRegistry {
     }
     // Admission may have crossed a drain or control replacement while persisting activity.
     if (
-      this.draining ||
+      this.drainSentHosts.has(hostId) ||
       this.sessions.get(sessionKey) !== session ||
       session.state !== 'active' ||
       session.socket !== admittingSocket ||
@@ -592,7 +619,7 @@ export class HostSessionRegistry {
     }
     // Already admitted attachments may finish a regional drain, but never a retired generation.
     if (
-      this.draining ||
+      this.drainSentHosts.has(identity.relayHostId) ||
       this.sessions.get(this.key(identity.userId, identity.relayHostId)) !== session ||
       this.get(identity)?.state === 'closed' ||
       !session.activeConnIds.has(connId) ||
@@ -846,15 +873,47 @@ export class HostSessionRegistry {
     return { controls, splices, pendingSplices }
   }
 
-  drain(graceMs: number): void {
+  drain(graceMs: number, options: { paceWindowMs?: number } = {}): void {
     this.draining = true
-    for (const session of this.sessions.values()) {
-      if (session.state === 'closed') continue
-      session.authorityRevision += 1
-      session.state = 'drain-only'
-      if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
-      setTimeout(() => this.closeDrainedSession(session), graceMs)
+    // A later drain (an emergency one, or shutdown) owns every session again, so nothing
+    // queued by an earlier paced drain may still fire: it would re-send and, worse, keep
+    // the event loop alive for the rest of a window the operator just cut short.
+    for (const timer of this.drainTimers) clearTimeout(timer)
+    this.drainTimers.clear()
+    const paceWindowMs = Math.max(0, Math.trunc(options.paceWindowMs ?? 0))
+    const targets = [...this.sessions.values()].filter((session) => session.state !== 'closed')
+    // The desktop re-dials the director as soon as it reads `drain`, whatever graceMs says,
+    // so spreading the send is the only thing that spreads the reconnect load.
+    const step = paceWindowMs > 0 && targets.length > 1 ? paceWindowMs / (targets.length - 1) : 0
+    for (const [index, session] of targets.entries()) {
+      const delay = Math.round(step * index)
+      if (delay === 0) {
+        this.sendDrain(session, graceMs)
+        continue
+      }
+      this.scheduleDrainTimer(delay, () => this.sendDrain(session, graceMs))
     }
+  }
+
+  // A session is only fenced when it is told, not when the drain starts: until its send
+  // lands it is an ordinary live host, and its phones have to keep being able to reach it.
+  private sendDrain(session: HostSession, graceMs: number): void {
+    if (session.state === 'closed') return
+    session.authorityRevision += 1
+    session.state = 'drain-only'
+    this.drainSentHosts.add(session.relayHostId)
+    if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
+    this.scheduleDrainTimer(graceMs, () => this.closeDrainedSession(session))
+  }
+
+  // Unref'd so a drain in flight never holds the process open past its own work.
+  private scheduleDrainTimer(delayMs: number, run: () => void): void {
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+      this.drainTimers.delete(timer)
+      run()
+    }, delayMs)
+    timer.unref?.()
+    this.drainTimers.add(timer)
   }
 
   drainHost(input: {
@@ -1345,15 +1404,13 @@ export class HostSessionRegistry {
         session.controlActivityId === controlActivityId &&
         session.authorityRevision === authorityRevision &&
         attempt > session.activityRenewalCompletedAttempt
-      void this.assignments
-        .renewControlActivity(
-          { userId: session.identity.sub, relayHostId: session.relayHostId },
-          {
-            activityId: controlActivityId,
-            cellId: this.config.cellId,
-            expiresAt: startedAt + CONTROL_ACTIVITY_LEASE_MS
-          }
-        )
+      void this.controlRenewals
+        .enqueue({
+          identity: { userId: session.identity.sub, relayHostId: session.relayHostId },
+          activityId: controlActivityId,
+          cellId: this.config.cellId,
+          expiresAt: startedAt + CONTROL_ACTIVITY_LEASE_MS
+        })
         .then(() => {
           if (!current()) return
           session.activityRenewalCompletedAttempt = attempt
@@ -1417,6 +1474,13 @@ export class HostSessionRegistry {
           }
           if (error instanceof Error && error.message === 'control_activity_moved') {
             session.socket?.close(RELAY_CLOSE_CODE.DRAINING, 'control activity moved')
+            return
+          }
+          if (error instanceof Error && error.message === 'assignment_lock_unavailable') {
+            // A per-host transaction held the row, so the batch passed over it
+            // rather than making every other host in the flush wait. The next
+            // tick is 15s away against a 105s lease, and the flush line already
+            // reports the count, so this needs no line of its own.
             return
           }
           console.warn('[orca-relay] control activity renewal failed')

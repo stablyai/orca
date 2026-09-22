@@ -1,0 +1,42 @@
+diff --git a/src/shared/runtime-rpc-call-queue.ts b/src/shared/runtime-rpc-call-queue.ts
+index dcf4015078..7a3c184260 100644
+--- a/src/shared/runtime-rpc-call-queue.ts
++++ b/src/shared/runtime-rpc-call-queue.ts
+@@ -30,9 +30,9 @@ type QueuedRuntimeCall<T> = {
+ type RuntimeCallQueue = {
+   active: number
+   backgroundActive: number
+-  foreground: QueuedRuntimeCall<unknown>[]
++  foreground: (QueuedRuntimeCall<unknown> | undefined)[]
+   foregroundHead: number
+-  background: QueuedRuntimeCall<unknown>[]
++  background: (QueuedRuntimeCall<unknown> | undefined)[]
+   backgroundHead: number
+ }
+ 
+@@ -202,6 +202,7 @@ export class RuntimeRpcCallQueuePool {
+       return undefined
+     }
+     const call = queue.foreground[queue.foregroundHead]
++    queue.foreground[queue.foregroundHead] = undefined
+     queue.foregroundHead += 1
+     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+     this.compactForeground(queue)
+@@ -213,6 +214,7 @@ export class RuntimeRpcCallQueuePool {
+       return undefined
+     }
+     const call = queue.background[queue.backgroundHead]
++    queue.background[queue.backgroundHead] = undefined
+     queue.backgroundHead += 1
+     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+     this.compactBackground(queue)
+@@ -223,8 +225,7 @@ export class RuntimeRpcCallQueuePool {
+     if (queue.foregroundHead <= 32 || queue.foregroundHead * 2 < queue.foreground.length) {
+       return
+     }
+-    // Why: large remote-runtime refresh bursts can queue many calls;
+-    // head indexes avoid O(n) shift costs while compaction releases closures.
++    // Head indexes avoid repeated shifts; compaction bounds the consumed prefix.
+     queue.foreground.splice(0, queue.foregroundHead)
+     queue.foregroundHead = 0
+   }

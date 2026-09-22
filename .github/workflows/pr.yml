@@ -29,6 +29,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
+      mobile_web_app: ${{ steps.filter.outputs.mobile_web_app }}
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
@@ -142,24 +143,11 @@ jobs:
       - name: Enforce type-aware code-quality baseline
         run: pnpm run audit:code-quality:type-aware
 
-      # Why: the changed-code gate lints mobile files too, and its type-aware pass
-      # resolves types from mobile/node_modules. Mobile is a separate pnpm project,
-      # so the root install above leaves it empty and every mobile type degrades to
-      # an `error` type — reported as phantom findings against the changed lines.
-      # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates
-      # the gitignored terminal/mermaid webview engine modules that tracked source imports,
-      # and skipping it degrades those very types the step exists to resolve. The drift
-      # guard mirrors the root install so a stale mobile lockfile fails by name — mobile's
-      # lockfile carries patchedDependencies that a silent rewrite would drop.
-      - name: Install mobile dependencies
+      # Why here: the changed-code gate lints mobile files too, and its type-aware pass
+      # resolves types from mobile/node_modules. Without the install every mobile type
+      # degrades to an `error` type — reported as phantom findings against the changed lines.
+      - uses: ./.github/actions/install-mobile-dependencies
         if: needs.code_paths.outputs.mobile_dependencies == 'true'
-        working-directory: mobile
-        run: |
-          pnpm install --frozen-lockfile
-          if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
-            git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
-              mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
-          fi
 
       - name: Enforce changed-code quality
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
@@ -661,6 +649,79 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts \
             src/main/orcad/external-chromium-browser-process.integration.test.ts
 
+  # Why its own job: it needs mobile/node_modules and a real browser, and the sharded `test`
+  # matrix would pay for both on every shard to run two files. Dark through Phase C: this proves
+  # `build:mobile-web:app` on every PR that touches the page, and ships nothing -- packaging still
+  # builds the Phase A bootstrap via build:mobile-web.
+  mobile_web_app:
+    name: mobile web app bundle
+    needs: [code_paths]
+    if: needs.code_paths.outputs.mobile_web_app == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why no native-runtime: the builder is esbuild and the render check is a browser. Nothing
+      # in this job loads node-pty.
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      # Why the runner's Google Chrome and not a downloaded chromium: same reason as the orcad
+      # browser job -- Ubuntu 24.04 only ships an AppArmor userns profile for the Chrome .deb.
+      # Why fail instead of skip: a silently skipped render check is the failure this job exists
+      # to prevent.
+      - name: Resolve Chrome for the render check
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::No Google Chrome on the runner; the render check would silently skip."
+            exit 1
+          fi
+          "$chrome" --version
+          echo "ORCA_MOBILE_WEB_RENDER_BROWSER=$chrome" >> "$GITHUB_ENV"
+
+      # The drawer check runs on WebKit as well as Chrome, because the shell's iOS WebView is
+      # WebKit and the Chrome above cannot stand in for it. Downloaded rather than resolved from
+      # the runner: Ubuntu ships no WebKit build to point at.
+      - name: Install WebKit for the drawer check
+        run: pnpm exec playwright install --with-deps webkit
+
+      - name: Build and verify the app bundle
+        run: pnpm run build:mobile-web:app
+
+      # The bundling tests skip themselves where mobile dependencies are absent, which is how they
+      # stay green in the sharded `test` job. This is the job that installs them, so here a missing
+      # install has to fail rather than skip everything the job exists to run.
+      # Why a prefix and not a file list: the list this replaces had gone stale twice without
+      # anyone noticing, because a census whose closure block skips without the env flag below is
+      # green in the sharded `test` job whether or not it ever runs here. The prefix is the same
+      # one `pr-code-change-scope.mjs` fires this job on, so naming a test into the family is all
+      # it takes to have it run. Quoted because these are vitest filename filters, matched as
+      # substrings against the discovered files, and the shell must not touch them.
+      #
+      # Cost: 18 files in 25-30s wall, of which the frame-budget sweep is 2.5s. That sweep encodes
+      # 111 noise JPEGs in Chromium, so it is the one step here whose cost grows with its viewport
+      # set; adding rows to that set is a decision about this job's runtime.
+      - name: Builder, override census and render checks
+        env:
+          ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            'config/scripts/mobile-web-app-' \
+            'config/scripts/build-mobile-web-app-bundle.test.mjs'
+
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
@@ -695,6 +756,8 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
           tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
@@ -746,6 +809,13 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
       # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
@@ -779,6 +849,12 @@ jobs:
 
       - name: Project web client from renderer build
         run: pnpm run build:web-from-renderer
+
+      # Why here and not inside "Build package inputs": this job assembles packaging inputs step by
+      # step instead of calling build:release, and electron-builder's beforePack guard hard-fails
+      # without out/mobile-web.
+      - name: Build mobile web bundle
+        run: pnpm run build:mobile-web
 
       - name: Build native components
         run: pnpm run build:native
@@ -853,6 +929,13 @@ jobs:
         with:
           native-runtime: node
           persist-native-cache: 'false'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Save compiled Node native modules
         if: steps.deps.outputs.native-cache-hit != 'true'
@@ -871,6 +954,11 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
+          config/scripts/rebuild-native-deps-node-pty.test.mjs
+          config/scripts/ensure-native-runtime-job-ownership.test.mjs
+          config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
+          config/scripts/windows-pe-machine.test.mjs
+          config/scripts/script-module-dependencies.test.mjs
           src/main/windows-registry-addon.test.ts
           config/scripts/windows-process-tree-gyp-path.test.mjs
           config/scripts/windows-process-tree-gyp-rebuild.test.mjs
@@ -888,6 +976,8 @@ jobs:
           src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
+          src/main/codex/windows-hook-command.test.ts
+          src/main/codex/windows-hook-upgrade.test.ts
           src/main/windows/windows-pty-job.win32.test.ts
           src/main/windows/windows-msys-job.win32.test.ts
           src/main/windows/windows-host-job.win32.test.ts
@@ -1004,6 +1094,7 @@ jobs:
       - shell_contracts
       - test
       - orcad_browser
+      - mobile_web_app
       - cross-version-wire
       - managed_hook_node18
       - package
@@ -1040,6 +1131,8 @@ jobs:
           TEST_SHOULD_RUN: ${{ needs.code_paths.outputs.test }}
           ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
           ORCAD_BROWSER_SHOULD_RUN: ${{ needs.code_paths.outputs.orcad_browser }}
+          MOBILE_WEB_APP: ${{ needs.mobile_web_app.result }}
+          MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
@@ -1082,6 +1175,7 @@ jobs:
           check_job shell_contracts "$SHELL_CONTRACTS" "$SHELL_CONTRACTS_SHOULD_RUN"
           check_job test "$TEST" "$TEST_SHOULD_RUN"
           check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
+          check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"

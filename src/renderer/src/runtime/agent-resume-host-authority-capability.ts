@@ -2,6 +2,7 @@ import type { ResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
@@ -19,6 +20,7 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   gemini: undefined,
   antigravity: undefined,
   opencode: undefined,
+  opencode2: AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   pi: undefined,
   'mimo-code': undefined,
   droid: undefined,

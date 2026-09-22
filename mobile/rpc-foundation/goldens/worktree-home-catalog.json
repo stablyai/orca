@@ -3,18 +3,51 @@
   "family": "worktree.home-catalog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
-  "adapterSha256": "6119d409e1958877e4a04b3901f94a3609ac0420f5ca02af20eb8dae5cbf3408",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "4749bb3b871275ba08f026f9b6bcfd383605f443e7bba70a7f89175b91db6fa5",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2e82f8bbb1f1": {
+    "0809e2178d5a": {
+      "name": "info",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeCount": 1,
+          "countsProvenAt": 1767225600000,
+          "hostId": "host-1",
+          "lastActiveWorktree": {
+            "displayName": "One",
+            "repo": "Repo",
+            "status": "working",
+            "worktreeId": "w-1"
+          },
+          "totalWorktrees": 2
+        }
+      }
+    },
+    "39b7354b00f4": {
+      "host-1": {
+        "activeCount": 1,
+        "countsProvenAt": 1767225600000,
+        "hostId": "host-1",
+        "lastActiveWorktree": {
+          "displayName": "One",
+          "repo": "Repo",
+          "status": "working",
+          "worktreeId": "w-1"
+        },
+        "totalWorktrees": 2
+      }
+    },
+    "3b32328e5154": {
       "name": "worktree.ps#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -59,48 +92,10 @@
         }
       }
     },
-    "39b7354b00f4": {
-      "host-1": {
-        "activeCount": 1,
-        "countsProvenAt": 1767225600000,
-        "hostId": "host-1",
-        "lastActiveWorktree": {
-          "displayName": "One",
-          "repo": "Repo",
-          "status": "working",
-          "worktreeId": "w-1"
-        },
-        "totalWorktrees": 2
-      }
-    },
     "44136fa355b3": {},
-    "4912be5d956f": {
+    "4cebf6258ec1": {
       "name": "worktree.ps#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
-    "8944b50988b9": {
-      "name": "info",
-      "value": {
-        "host-1": {
-          "activeCount": 1,
-          "countsProvenAt": 1767225600000,
-          "hostId": "host-1",
-          "lastActiveWorktree": {
-            "displayName": "One",
-            "repo": "Repo",
-            "status": "working",
-            "worktreeId": "w-1"
-          },
-          "totalWorktrees": 2
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "bc1a8e138f82": {
-      "name": "worktree.ps#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -124,6 +119,15 @@
         "startedAt": 0
       }
     },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "ab49c180f672": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -139,8 +143,8 @@
       {
         "id": "catalog-pending",
         "observation": {
-          "sender": ["bc1a8e138f82"],
-          "payloads": ["4912be5d956f"],
+          "sender": ["4cebf6258ec1"],
+          "payloads": ["ab49c180f672"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -151,13 +155,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["2e82f8bbb1f1"],
-          "payloads": ["4912be5d956f"],
+          "sender": ["3b32328e5154"],
+          "payloads": ["ab49c180f672"],
           "settlements": {
             "load": "eb79a9b3682a"
           },
           "state": "39b7354b00f4",
-          "effects": ["8944b50988b9"]
+          "effects": ["0809e2178d5a"]
         }
       }
     ]

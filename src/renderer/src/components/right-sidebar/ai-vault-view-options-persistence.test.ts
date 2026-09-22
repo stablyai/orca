@@ -32,6 +32,7 @@ describe('AI Vault view option persistence', () => {
     ).toEqual({
       disabledAgents: ['codex'],
       sort: 'updated',
+      searchSort: 'relevance',
       group: 'agent',
       hideEmptySessions: false,
       sessionLimit: 250
@@ -50,6 +51,7 @@ describe('AI Vault view option persistence', () => {
     ).toEqual({
       disabledAgents: [],
       sort: 'updated',
+      searchSort: 'relevance',
       group: 'project',
       hideEmptySessions: false,
       sessionLimit: 250
@@ -58,6 +60,7 @@ describe('AI Vault view option persistence', () => {
       normalizeAiVaultViewOptions({
         disabledAgents: [],
         sort: 'created',
+        searchSort: 'newest',
         group: 'folder',
         hideEmptySessions: true,
         sessionLimit: 1000
@@ -65,11 +68,13 @@ describe('AI Vault view option persistence', () => {
     ).toEqual({
       disabledAgents: [],
       sort: 'created',
+      searchSort: 'newest',
       group: 'folder',
       hideEmptySessions: true,
       sessionLimit: 1000
     })
     expect(normalizeAiVaultViewOptions({ group: 'agent' }).group).toBe('agent')
+    expect(normalizeAiVaultViewOptions({ searchSort: 'oldest' }).searchSort).toBe('relevance')
     expect(normalizeAiVaultViewOptions({ sessionLimit: 'unlimited' }).sessionLimit).toBe(
       'unlimited'
     )
@@ -122,6 +127,7 @@ describe('AI Vault view option persistence', () => {
         {
           disabledAgents: ['codex'],
           sort: 'created',
+          searchSort: 'newest',
           group: 'folder',
           hideEmptySessions: true,
           sessionLimit: 500
@@ -134,6 +140,7 @@ describe('AI Vault view option persistence', () => {
       JSON.stringify({
         disabledAgents: ['codex'],
         sort: 'created',
+        searchSort: 'newest',
         group: 'folder',
         hideEmptySessions: true,
         sessionLimit: 500

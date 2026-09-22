@@ -186,16 +186,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       toast.error(agentArgsPlan.error)
       return false
     }
-    // launchAgentInNewTab below creates the surface; seeding here would add a stray shell.
-    if (!activateAndRevealWorktree(targetWorktreeId, { providesInitialSurface: true })) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.03c1d61f83',
-          'Unable to open the workspace attached to these checks.'
-        )
-      )
-      return false
-    }
+    let revealFailed = false
     const result = launchAgentInNewTab({
       agent,
       worktreeId: targetWorktreeId,
@@ -204,19 +195,32 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       agentArgs: recipe.agentArgs,
       promptDelivery: 'submit-after-ready',
       launchPlatform,
-      launchSource: args.launchSource
+      launchSource: args.launchSource,
+      beforeSurfaceOpen: () => {
+        // Why: the launcher owns the initial surface, so revealing must not seed a sibling shell.
+        const revealed = activateAndRevealWorktree(targetWorktreeId, {
+          providesInitialSurface: true
+        })
+        revealFailed = revealed === false
+        return !revealFailed
+      }
     })
     if (!result) {
       toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.fb6c294e85',
-          'Could not build the agent launch command.'
-        )
+        revealFailed
+          ? translate(
+              'auto.lib.fix.checks.agent.launch.03c1d61f83',
+              'Unable to open the workspace attached to these checks.'
+            )
+          : translate(
+              'auto.lib.fix.checks.agent.launch.fb6c294e85',
+              'Could not build the agent launch command.'
+            )
       )
       return false
     }
-    if (result.tabId) {
-      focusTerminalTabSurface(result.tabId)
+    if (result.surface.kind === 'local-terminal') {
+      focusTerminalTabSurface(result.surface.tabId)
     }
     return true
   }

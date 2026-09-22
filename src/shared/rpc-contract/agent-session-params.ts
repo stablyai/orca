@@ -126,6 +126,7 @@ export const ExplicitEnsure = z
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,
     ompResumeFilePath: OmpResumeFilePath.optional(),
+    terminalKittyKeyboardProtocol: z.boolean().optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
@@ -154,6 +155,7 @@ export const EnsureAgentSessionParams: z.ZodType<RuntimeEnsureAgentSessionReques
 
 export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionRequest> = z
   .object({
+    terminalKittyKeyboardProtocol: z.boolean().optional(),
     clientOperationId: z
       .string()
       .refine(

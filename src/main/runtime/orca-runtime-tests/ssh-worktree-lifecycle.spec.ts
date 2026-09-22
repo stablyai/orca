@@ -337,7 +337,9 @@ describe('OrcaRuntimeService', () => {
       created.path,
       'folder-child',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(result.lineage).toBeNull()
     expect(result.workspaceLineage).toMatchObject({

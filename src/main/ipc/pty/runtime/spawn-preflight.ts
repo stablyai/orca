@@ -1,3 +1,4 @@
+import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { PtySpawnResult } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -41,6 +42,7 @@ import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function prepareRuntimePtySpawn(
@@ -72,15 +74,27 @@ export async function prepareRuntimePtySpawn(
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
+  // `args.shellOverride` is the per-request pick (`terminal create --shell`), read here the way
+  // the renderer twin (ipc/spawn-preflight.ts) reads a tab's override. Without it a runtime create
+  // could only ever get the host default shell, so a caller asking for cmd/PowerShell got the
+  // default shell with the request typed into it. Still Windows-only: the override names a
+  // Windows shell, and spawn-options applies it under the same platform gate.
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
       ? resolveLocalWindowsTerminalRuntimeOptions({
-          requestedShellOverride: undefined,
+          requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
-      : { shellOverride: undefined, terminalWindowsWslDistro: null }
+      : {
+          shellOverride:
+            args.shellOverride ??
+            (process.platform === 'win32'
+              ? undefined
+              : ctx.deps.getSettings?.()?.terminalDefaultShell || undefined),
+          terminalWindowsWslDistro: null
+        }
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.isDaemonHostSpawn =
     !args.connectionId &&
@@ -246,6 +260,19 @@ export async function prepareRuntimePtySpawn(
       throw new Error('Invalid PTY session id')
     }
     try {
+      ctx.env ??= {}
+      await inheritOmpLaunchEnvironment(ctx.env, {
+        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
+        launchAgent: args.launchAgent,
+        launchCommand: ctx.launchCommand
+      })
+      await awaitExplicitPiOmpGuestReadiness({
+        isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
+        distro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
+        codexHomePath: ctx.selectedCodexHomePath,
+        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+        launchCommand: ctx.launchCommand
+      })
       ctx.env = buildPtyHostEnv(ctx.sessionId, ctx.env ?? {}, {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,
@@ -258,6 +285,7 @@ export async function prepareRuntimePtySpawn(
         isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd),
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+        disabledTuiAgents: ptySettings?.disabledTuiAgents,
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),

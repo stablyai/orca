@@ -1,10 +1,20 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  linearCommentWrittenSchema,
+  reviewThreadResolvedSchema,
+  taskCommentWrittenSchema
+} from './task-item-comment-reply-schema'
 
 // Writing comments and replies on a task item, over all three providers. Every one of these
 // answers with an accepted `{ ok, error, comment }` envelope the call site reads itself, and every
 // one keeps its own fallback copy for an envelope that carries no error text — so the acceptance
 // policy here only decides whether there is an envelope to read at all.
+//
+// The five that answer with a comment share one reader, because they share one reply convention;
+// each schema lives in task-item-comment-reply-schema.ts with the consumer line behind it.
+
+const taskCommentWrittenReader = rpcResultVariant('task-comment-written', taskCommentWrittenSchema)
 
 export const githubIssueCommentWrite = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -12,7 +22,7 @@ export const githubIssueCommentWrite = bindDeferredRpcOperation(
     method: 'github.addIssueComment',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-issue-comment')
+    read: taskCommentWrittenReader
   })
 )
 
@@ -22,7 +32,7 @@ export const githubReviewCommentWrite = bindDeferredRpcOperation(
     method: 'github.addPRReviewComment',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-review-comment')
+    read: taskCommentWrittenReader
   })
 )
 
@@ -32,7 +42,7 @@ export const githubReviewCommentReplyWrite = bindDeferredRpcOperation(
     method: 'github.addPRReviewCommentReply',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-review-comment-reply')
+    read: taskCommentWrittenReader
   })
 )
 
@@ -42,7 +52,7 @@ export const gitlabIssueCommentWrite = bindDeferredRpcOperation(
     method: 'gitlab.addIssueComment',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-issue-comment')
+    read: taskCommentWrittenReader
   })
 )
 
@@ -52,7 +62,7 @@ export const gitlabMergeRequestCommentWrite = bindDeferredRpcOperation(
     method: 'gitlab.addMRComment',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-mr-comment')
+    read: taskCommentWrittenReader
   })
 )
 
@@ -63,7 +73,7 @@ export const linearIssueCommentWrite = bindDeferredRpcOperation(
     method: 'linear.addIssueComment',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-issue-comment')
+    read: rpcResultVariant('linear-comment-written', linearCommentWrittenSchema)
   })
 )
 
@@ -74,6 +84,6 @@ export const githubReviewThreadResolve = bindDeferredRpcOperation(
     method: 'github.resolveReviewThread',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-review-thread-resolved')
+    read: rpcResultVariant('github-review-thread-resolved', reviewThreadResolvedSchema)
   })
 )

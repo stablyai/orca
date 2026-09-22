@@ -1,5 +1,10 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../shared/browser-user-agent-mode'
+import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
 } from '../../shared/browser-client-page-metadata-protocol'
@@ -33,7 +38,6 @@ import type {
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
@@ -140,12 +144,12 @@ export type BrowserApi = {
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
-  sessionCreateProfile: (
-    args: {
-      scope: BrowserSessionProfileScope
-      label: string
-    } & BrowserSessionProfileCreateOptions
-  ) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (args: {
+    scope: BrowserSessionProfileScope
+    label: string
+  }) => Promise<BrowserSessionProfile | null>
+  identityGet: () => Promise<BrowserIdentityModeStatus | null>
+  identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>

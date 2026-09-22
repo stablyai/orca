@@ -23,8 +23,6 @@ import type {
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
@@ -245,20 +243,6 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
-  }
-
-  getAgentStatusLaunchConfigForPaneKey(
-    paneKey: string,
-    args?: { launchToken?: string }
-  ): SleepingAgentLaunchConfig | undefined {
-    const pty = this.getPtyRecordForPaneKey(paneKey)
-    if (!pty?.launchConfig) {
-      return undefined
-    }
-    if (pty.launchToken === null || pty.launchToken !== args?.launchToken) {
-      return undefined
-    }
-    return copySleepingAgentLaunchConfig(pty.launchConfig)
   }
 
   getTerminalHandleForPaneKey(paneKey: string): string | null {

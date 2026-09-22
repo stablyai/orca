@@ -1,3 +1,4 @@
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,6 +25,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: 'repo-1::/workspace/app',
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
 const TAB = structuredAgentSessionTabId(SESSION)
 const STRUCTURED_PANE = structuredAgentSessionPaneKey(TAB, SESSION)
 const OBSERVED_AT = 1_757_030_400_000
@@ -59,7 +69,7 @@ afterEach(() => {
 describe('AgentHookServer ingestStructuredStatus', () => {
   it('stores the projection as a row under the pane key the renderer derives', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary())
+    server.ingestStructuredStatus(summary(), SUBJECT)
 
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({
@@ -86,22 +96,25 @@ describe('AgentHookServer ingestStructuredStatus', () => {
   // The same mapping the sidebar applies, so the two surfaces cannot disagree about one session.
   it('maps attention to blocked and idle to done', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: 'attention' }))
+    server.ingestStructuredStatus(summary({ status: 'attention' }), SUBJECT)
     expect(server.getStatusSnapshot()[0]?.state).toBe('blocked')
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 1 }))
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 1 }), SUBJECT)
     expect(server.getStatusSnapshot()[0]?.state).toBe('done')
   })
 
   it('marks a session whose provider child is gone as held, not owned', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ hostExecutionOwned: undefined }))
+    server.ingestStructuredStatus(summary({ hostExecutionOwned: undefined }), SUBJECT)
     expect(server.getStatusSnapshot()[0]?.structuredHost).toBe('held')
   })
 
   it('keeps the state start while later evidence of the same state arrives', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary())
-    server.ingestStructuredStatus(summary({ toolName: 'read', updatedAt: OBSERVED_AT + 5_000 }))
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.ingestStructuredStatus(
+      summary({ toolName: 'read', updatedAt: OBSERVED_AT + 5_000 }),
+      SUBJECT
+    )
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       toolName: 'read',
@@ -113,18 +126,18 @@ describe('AgentHookServer ingestStructuredStatus', () => {
   // Null status means no turn has been persisted; the chat shows nothing, so neither does this.
   it('holds no row for a session without a persisted turn, and drops one that regresses to none', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: null }))
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
     expect(server.getStatusSnapshot()).toEqual([])
 
-    server.ingestStructuredStatus(summary())
-    server.ingestStructuredStatus(summary({ status: null }))
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
   it('drops the row when the host stops holding the session', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary())
-    server.dropStructuredStatus(SESSION)
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.dropStructuredStatus(SUBJECT)
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
@@ -136,13 +149,13 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     const withProviderSession = summary({
       providerSession: { key: 'session_id', id: 'codex-thread-1' }
     })
-    server.ingestStructuredStatus(withProviderSession)
+    server.ingestStructuredStatus(withProviderSession, SUBJECT)
     expect(server.getStatusSnapshot()[0]?.providerSession).toEqual({
       key: 'session_id',
       id: 'codex-thread-1'
     })
 
-    server.dropStructuredStatus(SESSION)
+    server.dropStructuredStatus(SUBJECT)
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
@@ -157,8 +170,8 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     server.setPaneStatusClearListener((clear) => cleared.push(clear))
     server.subscribeStatusDrop((paneKey) => dropped.push(paneKey))
 
-    server.ingestStructuredStatus(summary())
-    server.dropStructuredStatus(SESSION)
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.dropStructuredStatus(SUBJECT)
 
     expect(server.getStatusSnapshot()).toEqual([])
     expect(cleared).toEqual([])
@@ -175,7 +188,7 @@ describe('AgentHookServer ingestStructuredStatus', () => {
       original()
     }
 
-    server.ingestStructuredStatus(summary())
+    server.ingestStructuredStatus(summary(), SUBJECT)
     expect(persists).toHaveLength(0)
 
     server.ingestTerminalStatus({
@@ -193,7 +206,7 @@ describe('AgentHookServer ingestStructuredStatus', () => {
       connectionId: null,
       payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
     })
-    server.ingestStructuredStatus(summary())
+    server.ingestStructuredStatus(summary(), SUBJECT)
 
     const byPane = new Map(server.getStatusSnapshot().map((row) => [row.paneKey, row]))
     expect(byPane.get(PANE)?.structuredHost).toBeUndefined()
@@ -227,7 +240,7 @@ describe('structured rows and last-status.json', () => {
         connectionId: null,
         payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
       })
-      server.ingestStructuredStatus(summary())
+      server.ingestStructuredStatus(summary(), SUBJECT)
       server.flushStatusPersistSync()
     } finally {
       server.stop()

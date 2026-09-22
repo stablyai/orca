@@ -3,21 +3,19 @@
   "family": "notifications.push-registration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
-  "adapterSha256": "bbfb0f3d8a68ccdd6f354db9ed57076060c32fc7effcf66fa09ee3c2de82a724",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
   "scenarioSha256": "ac2b214ece34dc25aef2b73d020e04343f81cd48b3d243508be92cfdba01eb45",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2e71f48d7fa1": {
-      "register": false
-    },
-    "50a69e8e4ac9": {
+    "2d5e96e12ea5": {
       "name": "notifications.registerPush#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -56,15 +54,19 @@
         }
       }
     },
+    "2e71f48d7fa1": {
+      "register": false
+    },
+    "70a555b8bb94": {
+      "name": "notifications.registerPush#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+    },
     "7ed3d39f0607": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": false
-    },
-    "95f8386a206f": {
-      "name": "notifications.registerPush#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
     }
   },
   "recording": {
@@ -73,8 +75,8 @@
       {
         "id": "not-registered",
         "observation": {
-          "sender": ["50a69e8e4ac9"],
-          "payloads": ["95f8386a206f"],
+          "sender": ["2d5e96e12ea5"],
+          "payloads": ["70a555b8bb94"],
           "settlements": {
             "register": "7ed3d39f0607"
           },

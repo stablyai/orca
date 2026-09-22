@@ -21,6 +21,7 @@ import {
   type PinchGesture
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
 import {
   browserGoBack,
   browserGoForward,
@@ -32,6 +33,7 @@ import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserPaneLayers } from './use-mobile-browser-pane-layers'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
+import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -61,11 +63,6 @@ type PanGesture = {
   y: number
   offsetX: number
   offsetY: number
-}
-
-type BrowserDialogState = {
-  dialogType: string
-  message: string
 }
 
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
@@ -202,8 +199,11 @@ export function MobileBrowserPane({
     setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
   }, [tab.browserPageId, tab.url, worktreeId])
 
+  const binaryScreencastGranted = useBrowserBinaryScreencastGrant()
+
   const { frameGeometry, pageParams, sendBrowserRequest } = useMobileBrowserStream({
     appActive,
+    binaryScreencastGranted,
     browserImageRefs,
     browserLayerRefs,
     browserViewMode,
@@ -248,11 +248,9 @@ export function MobileBrowserPane({
         browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
       { showBusy: true, timeoutMs: 30_000 }
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const result = settled as { url?: string } | null
-    if (typeof result?.url === 'string') {
-      setAddressValue(displayBrowserUrl(result.url))
-      lastZoomResetUrlRef.current = result.url
+    if (settled?.url !== undefined) {
+      setAddressValue(displayBrowserUrl(settled.url))
+      lastZoomResetUrlRef.current = settled.url
       resetBrowserZoomState()
     }
   }, [addressValue, resetBrowserZoomState, sendBrowserRequest])

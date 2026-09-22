@@ -15,6 +15,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
       this.markPtyStopRequested(ptyId)
+      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
@@ -24,6 +25,15 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             ptyId,
             error instanceof Error ? error.message : String(error)
           )
+        }
+        // Preserve an observed exit when a broader inventory check could not finish.
+        if (
+          !stopped &&
+          expectedIncarnationId &&
+          this.ptysById.get(ptyId)?.incarnationId === expectedIncarnationId &&
+          this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
+        ) {
+          stopped = true
         }
         if (!stopped) {
           const verdict = this.getPtyLivenessVerdict(ptyId)

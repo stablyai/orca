@@ -2,8 +2,8 @@
 //
 // Every other release in the wire needs a probe, because every other release is about a process
 // somebody else started and nobody watched die. This one is different: the host stopped its own
-// child through the adapter and the adapter proved the exit before this runs, so the evidence is
-// `exit-observed` rather than an adjudicated absence.
+// lease-owning provider root through the adapter. Its observed exit is sufficient because the
+// lease follows that root, even when descendants remain `unverifiable`.
 //
 // The fence still moves. A released lease at the old fence would let a mutation a client queued
 // against the dead generation land on the next one.

@@ -3,9 +3,9 @@
   "family": "browser.dialog",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "9cae732e4227d4c2fe874a5fb2e104552c16cbc91b59523de8fd46454660cde8",
   "platform": "darwin",
@@ -13,12 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2a884fbac9d5": {
+    "0473e0c1da49": {
       "name": "browser.dialogAccept#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogAccept\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}"
-    },
-    "5aec187274b4": {
-      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -48,152 +45,9 @@
         }
       }
     },
-    "7a4be66fde79": {
+    "096afd032e4b": {
       "name": "browser.dialogAccept#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.dialogAccept"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "8533958036cf": {
-      "name": "browser.dialogAccept#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.dialogAccept"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "8cb6223a7fb0": {
-      "name": "browser.dialogAccept#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.dialogAccept"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "953ba6dbc96d": {
-      "name": "browser.dialogAccept#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.dialogAccept"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "9855d4ec3415": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "hello",
-      "pointerModifiers": []
-    },
-    "c5aedd728f13": {
-      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -219,16 +73,17 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": "outer refused"
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "c7183380b73f": {
+    "204561057053": {
       "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -261,8 +116,77 @@
         }
       }
     },
-    "cb0512cac66f": {
+    "25eab3fb6d92": {
       "name": "browser.dialogAccept#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.dialogAccept"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2892a12f6573": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.dialogAccept"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7b681d500e43": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -296,8 +220,58 @@
         }
       }
     },
-    "cfb5f50809ac": {
+    "93f4e9f3ead2": {
       "name": "browser.dialogAccept#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.dialogAccept\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\"}}"
+    },
+    "9492d2516bda": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.dialogAccept"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "a4d92589fee6": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -333,51 +307,9 @@
         }
       }
     },
-    "df5eefc7ff6e": {
+    "cd44f29d755e": {
       "name": "browser.dialogAccept#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "browser.dialogAccept"
-        },
-        {
-          "name": "params",
-          "value": {
-            "page": "page-1",
-            "worktree": "id:worktree-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f23289a40300": {
-      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -409,6 +341,86 @@
           }
         }
       }
+    },
+    "d69b32b40889": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.dialogAccept"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "dc3697b28859": {
+      "name": "browser.dialogAccept#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.dialogAccept"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -417,8 +429,8 @@
       {
         "id": "browser-dialog-accepted.normal:dismissed",
         "observation": {
-          "sender": ["f23289a40300"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["cd44f29d755e"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -430,8 +442,8 @@
       {
         "id": "browser-dialog-accepted.result-absent:dismissed",
         "observation": {
-          "sender": ["5aec187274b4"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["0473e0c1da49"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -443,8 +455,8 @@
       {
         "id": "browser-dialog-accepted.result-null:dismissed",
         "observation": {
-          "sender": ["8533958036cf"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["25eab3fb6d92"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -456,8 +468,8 @@
       {
         "id": "browser-dialog-accepted.inner-ok-missing:dismissed",
         "observation": {
-          "sender": ["c7183380b73f"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["204561057053"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -469,8 +481,8 @@
       {
         "id": "browser-dialog-accepted.inner-false-string-error:dismissed",
         "observation": {
-          "sender": ["953ba6dbc96d"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["dc3697b28859"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -482,8 +494,8 @@
       {
         "id": "browser-dialog-accepted.inner-false-object-error:dismissed",
         "observation": {
-          "sender": ["cfb5f50809ac"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["a4d92589fee6"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -495,8 +507,8 @@
       {
         "id": "browser-dialog-accepted.outer-refused:dismissed",
         "observation": {
-          "sender": ["df5eefc7ff6e"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["096afd032e4b"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -508,8 +520,8 @@
       {
         "id": "browser-dialog-accepted.outer-refused-no-message:dismissed",
         "observation": {
-          "sender": ["cb0512cac66f"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["7b681d500e43"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -521,8 +533,8 @@
       {
         "id": "browser-dialog-accepted.method-not-found:dismissed",
         "observation": {
-          "sender": ["c5aedd728f13"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["d69b32b40889"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -534,8 +546,8 @@
       {
         "id": "browser-dialog-accepted.transport-rejection:dismissed",
         "observation": {
-          "sender": ["8cb6223a7fb0"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["9492d2516bda"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"
@@ -547,8 +559,8 @@
       {
         "id": "browser-dialog-accepted.transport-rejection-no-message:dismissed",
         "observation": {
-          "sender": ["7a4be66fde79"],
-          "payloads": ["2a884fbac9d5"],
+          "sender": ["2892a12f6573"],
+          "payloads": ["93f4e9f3ead2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "dialog": "eb79a9b3682a"

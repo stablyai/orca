@@ -32,7 +32,16 @@ relay_gce_subnetwork_cidr = "10.42.0.0/24"
 relay_gce_additional_region_subnetwork_cidrs = {
   "asia-east2" = "10.42.1.0/24"
 }
-relay_gce_fenced_cells = ["production-gce-c1", "production-gce-c2", "production-gce-c3", "production-gce-c6", "production-gce-c11", "production-gce-c12"]
+# Fenced cells are retired existing-only capacity: the selector can never place on them again,
+# so their MIGs run at zero rather than holding a VM and 10 Postgres connections each.
+relay_gce_fenced_cells = [
+  "production-gce-c1",
+  "production-gce-c2",
+  "production-gce-c3",
+  "production-gce-c6",
+  "production-gce-c11",
+  "production-gce-c12"
+]
 # Initial cells stay admission-disabled until production preflight and go-live approval.
 relay_gce_cells = {
   "production-gce-c1" = {
@@ -350,7 +359,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 3000
@@ -364,7 +373,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 3000
@@ -378,7 +387,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 3000

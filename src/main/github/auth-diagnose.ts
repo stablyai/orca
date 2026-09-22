@@ -90,13 +90,21 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
   return accounts
 }
 
-export async function diagnoseGhAuth(requiredHost?: string): Promise<GhAuthDiagnostic> {
+export async function diagnoseGhAuth(
+  requiredHost?: string,
+  execOptions: { cwd?: string; wslDistro?: string } = {}
+): Promise<GhAuthDiagnostic> {
   let raw = ''
   let ghAvailable = true
   try {
     // `gh auth status` exits non-zero when no host is logged in but still
     // prints the same diagnostic text we want, so capture both streams.
-    const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'])
+    // Why: auth is ambient (no Repo.ghAccount) but must still run on the
+    // repo's WSL/native execution host so inventory matches token resolution.
+    const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], {
+      ...(execOptions.cwd ? { cwd: execOptions.cwd } : {}),
+      ...(execOptions.wslDistro ? { wslDistro: execOptions.wslDistro } : {})
+    })
     raw = `${stdout}\n${stderr}`
   } catch (err) {
     const stderr =

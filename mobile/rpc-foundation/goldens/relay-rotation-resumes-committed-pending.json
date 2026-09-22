@@ -3,9 +3,9 @@
   "family": "relay.credential-rotation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "651e75383caf1b30c329dec2d5d4f0da5358c410402d03cbb087f39600d7a4d2",
   "scenarioSha256": "96df784c1d56de3bdd04afe20ab019339c7d9a616528ca2617e2fffe4f0157c8",
   "platform": "darwin",
@@ -21,47 +21,9 @@
       "pending": false,
       "version": 5
     },
-    "760bb6245333": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "bundle": {
-          "current": {
-            "expiresAt": 1767830400000,
-            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
-            "token": "pending00000000000000000000000000000000001x",
-            "version": 5
-          },
-          "deviceToken": "device-token-1",
-          "grace": {
-            "expiresAt": 1767398400000,
-            "hash": "r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30",
-            "token": "current00000000000000000000000000000000001x",
-            "version": 3
-          },
-          "hostId": "host-1",
-          "pending": {
-            "$rpc": "undefined"
-          },
-          "v": 1
-        },
-        "relay": {
-          "assignmentEpoch": 1,
-          "cellUrl": "https://cell.example",
-          "directorUrl": "https://director.example",
-          "e2eeFraming": 2,
-          "relayHostId": "relay-host-0001x",
-          "v": 1
-        }
-      }
-    },
-    "beafd16aeb22": {
+    "49e785379d97": {
       "name": "pairing.getEndpoints#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
-    },
-    "c623ac0f092b": {
-      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -114,13 +76,54 @@
         }
       }
     },
-    "ccd5d48f1632": {
+    "760bb6245333": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "bundle": {
+          "current": {
+            "expiresAt": 1767830400000,
+            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "token": "pending00000000000000000000000000000000001x",
+            "version": 5
+          },
+          "deviceToken": "device-token-1",
+          "grace": {
+            "expiresAt": 1767398400000,
+            "hash": "r_9byaBlTZTXS3aLLlWTKwss-nmx4vGRrjKskxWyP30",
+            "token": "current00000000000000000000000000000000001x",
+            "version": 3
+          },
+          "hostId": "host-1",
+          "pending": {
+            "$rpc": "undefined"
+          },
+          "v": 1
+        },
+        "relay": {
+          "assignmentEpoch": 1,
+          "cellUrl": "https://cell.example",
+          "directorUrl": "https://director.example",
+          "e2eeFraming": 2,
+          "relayHostId": "relay-host-0001x",
+          "v": 1
+        }
+      }
+    },
+    "b56e90125f8d": {
       "name": "bundle-written",
+      "ordinal": 3,
       "value": {
         "grace": 1767398400000,
         "pending": false,
         "version": 5
       }
+    },
+    "c5d28dd067e4": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
     }
   },
   "recording": {
@@ -129,13 +132,13 @@
       {
         "id": "pending-install-adopted",
         "observation": {
-          "sender": ["c623ac0f092b"],
-          "payloads": ["beafd16aeb22"],
+          "sender": ["49e785379d97"],
+          "payloads": ["c5d28dd067e4"],
           "settlements": {
             "rotate": "760bb6245333"
           },
           "state": "351d2bec2471",
-          "effects": ["ccd5d48f1632"]
+          "effects": ["b56e90125f8d"]
         }
       }
     ]

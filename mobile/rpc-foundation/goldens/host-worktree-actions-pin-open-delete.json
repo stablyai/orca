@@ -3,9 +3,9 @@
   "family": "host.worktree-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "92c29bd78ca0c0d5917e9386fc447bb9a1698b1d1ffaba0db7546eaac60da639",
   "scenarioSha256": "720add498c79425ca8efc9764fd5d8307fe33bc891842604cfc899f770b79811",
   "platform": "darwin",
@@ -13,8 +13,64 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "04938673cbf5": {
+    "047f5e4dfc2b": {
+      "name": "optimisticActiveWorktreeIdentity",
+      "ordinal": 6,
+      "value": "|wt-1"
+    },
+    "04adcc2c4239": {
+      "name": "lastKnownWorktrees",
+      "ordinal": 10,
+      "value": []
+    },
+    "0eb00a9a894a": {
+      "name": "worktree.rm#1",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
+    },
+    "14ce9f03298e": {
+      "name": "pinnedIds",
+      "ordinal": 3,
+      "value": ["wt-1"]
+    },
+    "1c5bb0f1882e": {
+      "name": "worktree.set#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "isPinned": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "40f6e6f5e2cd": {
       "name": "worktree.activate#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -48,110 +104,10 @@
         }
       }
     },
-    "0ebfc1859f18": {
-      "name": "pinnedIds",
-      "value": ["wt-1"]
-    },
-    "2b635c2a4fbb": {
-      "name": "worktree.rm#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.rm"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "4caf7515e224": {
-      "name": "worktree.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
-    },
-    "56b6d4fb8c56": {
-      "name": "worktree.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "isPinned": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "5c186d67b84c": {
-      "name": "lastKnownWorktrees",
-      "value": []
-    },
-    "69d698d4f352": {
-      "name": "worktree.rm#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
-    },
-    "6cfdae6737f2": {
-      "name": "lastKnownWorktrees",
-      "value": [
-        {
-          "branch": "feature/pin",
-          "displayName": "marlin",
-          "hasAttachedPty": false,
-          "isPinned": true,
-          "linkedPR": {
-            "$rpc": "null"
-          },
-          "liveTerminalCount": 0,
-          "path": "/repos/marlin/wt-1",
-          "preview": "",
-          "repo": "marlin",
-          "repoId": "repo-1",
-          "unread": false,
-          "worktreeId": "wt-1"
-        }
-      ]
+    "47602c8e53e9": {
+      "name": "worktree.activate#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
     },
     "6e959a9dd70e": {
       "confirmRemoveHost": false,
@@ -164,6 +120,16 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "989153283864": {
+      "name": "worktrees",
+      "ordinal": 9,
+      "value": []
+    },
+    "9a2d39ba928f": {
+      "name": "worktree.set#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
     },
     "9a9b0d6699b2": {
       "confirmRemoveHost": false,
@@ -209,12 +175,9 @@
         }
       ]
     },
-    "b1509905fc66": {
-      "name": "optimisticActiveWorktreeIdentity",
-      "value": "|wt-1"
-    },
-    "bf2b36bda2d2": {
+    "ab935dad4cfb": {
       "name": "worktree.set#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -239,12 +202,9 @@
         "startedAt": 0
       }
     },
-    "c3eecb0c6e96": {
-      "name": "worktree.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
-    },
-    "cbf8280fdbe7": {
+    "ca91c555e48e": {
       "name": "worktrees",
+      "ordinal": 1,
       "value": [
         {
           "branch": "feature/pin",
@@ -264,12 +224,74 @@
         }
       ]
     },
-    "d440bd87d1ce": {
-      "name": "worktrees",
-      "value": []
+    "da6c9e1a507d": {
+      "name": "lastKnownWorktrees",
+      "ordinal": 2,
+      "value": [
+        {
+          "branch": "feature/pin",
+          "displayName": "marlin",
+          "hasAttachedPty": false,
+          "isPinned": true,
+          "linkedPR": {
+            "$rpc": "null"
+          },
+          "liveTerminalCount": 0,
+          "path": "/repos/marlin/wt-1",
+          "preview": "",
+          "repo": "marlin",
+          "repoId": "repo-1",
+          "unread": false,
+          "worktreeId": "wt-1"
+        }
+      ]
     },
-    "e3e3c397a66a": {
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ec185de41563": {
       "name": "worktree.rm#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.rm"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": true,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "f2dc0532d090": {
+      "name": "worktree.rm#1",
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -293,14 +315,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -309,21 +323,21 @@
       {
         "id": "pin-optimistic",
         "observation": {
-          "sender": ["bf2b36bda2d2"],
-          "payloads": ["4caf7515e224"],
+          "sender": ["ab935dad4cfb"],
+          "payloads": ["9a2d39ba928f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a"
           },
           "state": "9a9b0d6699b2",
-          "effects": ["cbf8280fdbe7", "6cfdae6737f2", "0ebfc1859f18"]
+          "effects": ["ca91c555e48e", "da6c9e1a507d", "14ce9f03298e"]
         }
       },
       {
         "id": "delete-optimistic",
         "observation": {
-          "sender": ["56b6d4fb8c56", "04938673cbf5", "e3e3c397a66a"],
-          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
+          "sender": ["1c5bb0f1882e", "40f6e6f5e2cd", "f2dc0532d090"],
+          "payloads": ["9a2d39ba928f", "47602c8e53e9", "0eb00a9a894a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -332,20 +346,20 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "ca91c555e48e",
+            "da6c9e1a507d",
+            "14ce9f03298e",
+            "047f5e4dfc2b",
+            "989153283864",
+            "04adcc2c4239"
           ]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["56b6d4fb8c56", "04938673cbf5", "2b635c2a4fbb"],
-          "payloads": ["4caf7515e224", "c3eecb0c6e96", "69d698d4f352"],
+          "sender": ["1c5bb0f1882e", "40f6e6f5e2cd", "ec185de41563"],
+          "payloads": ["9a2d39ba928f", "47602c8e53e9", "0eb00a9a894a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a",
@@ -354,12 +368,12 @@
           },
           "state": "6e959a9dd70e",
           "effects": [
-            "cbf8280fdbe7",
-            "6cfdae6737f2",
-            "0ebfc1859f18",
-            "b1509905fc66",
-            "d440bd87d1ce",
-            "5c186d67b84c"
+            "ca91c555e48e",
+            "da6c9e1a507d",
+            "14ce9f03298e",
+            "047f5e4dfc2b",
+            "989153283864",
+            "04adcc2c4239"
           ]
         }
       }

@@ -1,5 +1,11 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  agentHistoryHostStatusSchema,
+  agentHistorySessionScanSchema,
+  resumeMetadataListSchema,
+  resumeRepoListSchema
+} from './agent-history-reply-schema'
 
 // The agent-history screen's own reads: the capability gate and session scan it runs on open, and
 // the workspace metadata the resume sheet loads once the user asks to resume a session.
@@ -16,7 +22,7 @@ export const agentHistoryHostStatusRead = bindDeferredRpcOperation(
     method: 'status.get',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('host-status')
+    read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
   })
 )
 
@@ -26,7 +32,7 @@ export const agentHistorySessionScan = bindDeferredRpcOperation(
     method: 'aiVault.listSessions',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('agent-sessions')
+    read: rpcResultVariant('agent-sessions', agentHistorySessionScanSchema)
   })
 )
 
@@ -42,7 +48,7 @@ export const resumeRepoListRead = bindDeferredRpcOperation(
     method: 'repo.list',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('resume-repos')
+    read: rpcResultVariant('resume-repos', resumeRepoListSchema)
   })
 )
 
@@ -56,7 +62,7 @@ export const resumeFolderWorkspaceListRead = bindDeferredRpcOperation(
     method: 'folderWorkspace.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('resume-folder-workspaces')
+    read: rpcResultVariant('resume-folder-workspaces', resumeMetadataListSchema)
   })
 )
 
@@ -66,7 +72,7 @@ export const resumeProjectGroupListRead = bindDeferredRpcOperation(
     method: 'projectGroup.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('resume-project-groups')
+    read: rpcResultVariant('resume-project-groups', resumeMetadataListSchema)
   })
 )
 
@@ -76,6 +82,6 @@ export const resumeWorktreeListRead = bindDeferredRpcOperation(
     method: 'worktree.ps',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('resume-worktrees')
+    read: rpcResultVariant('resume-worktrees', resumeMetadataListSchema)
   })
 )

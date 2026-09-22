@@ -15,44 +15,14 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionStatusState
 } from '../../../../shared/structured-agent-session-projection'
-import type { Tab } from '../../../../shared/tab-types'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
-type StructuredTab = Tab & { contentType: 'agent-session' }
-
-function isStructuredTab(tab: Tab): tab is StructuredTab {
-  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
-}
-
-const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
-  Record<string, Tab[]>,
-  readonly StructuredTab[]
->()
-
-/** Project structured-session tabs once per immutable tab-map snapshot. */
-export function getStructuredAgentSessionTabs(
-  unifiedTabsByWorktree: Record<string, Tab[]>
-): readonly StructuredTab[] {
-  const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
-  if (cached) {
-    return cached
-  }
-
-  const tabs: StructuredTab[] = []
-  for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
-    for (const tab of worktreeTabs) {
-      if (isStructuredTab(tab)) {
-        tabs.push(tab)
-      }
-    }
-  }
-  structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
-  return tabs
-}
+// Re-exported so the bridge stays the one import site its consumers already know.
+export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
 /** The host's projected status for one session, live while the caller is mounted. */
 function useStructuredAgentSessionStatusSummary(

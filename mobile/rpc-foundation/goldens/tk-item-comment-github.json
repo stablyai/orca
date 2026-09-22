@@ -3,9 +3,9 @@
   "family": "tasks.item-comment-github",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "fb0cdff9e02bac37b0bd8e1c47922474823d46fa735f3069ed70cdad41800be6",
   "platform": "darwin",
@@ -13,9 +13,65 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "066ce15717c8": {
+    "064357f4a198": {
+      "name": "detailPayload",
+      "ordinal": 6,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          },
+          {
+            "author": "You",
+            "body": "a comment",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 902
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "14949c71727e": {
       "name": "mutatingStatus",
-      "value": true
+      "ordinal": 7,
+      "value": false
     },
     "35cd4f653b4b": {
       "draft": "",
@@ -86,8 +142,19 @@
         "reviewRequests": []
       }
     },
-    "7297a232d830": {
+    "59b03dcdb55e": {
+      "name": "itemCommentDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "700390b3c879": {
       "name": "github.addIssueComment#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"body\":\"a comment\",\"type\":\"issue\"}}"
+    },
+    "a77d082f5f48": {
+      "name": "github.addIssueComment#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -128,72 +195,6 @@
         }
       }
     },
-    "79a7f51f2a84": {
-      "name": "github.addIssueComment#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.addIssueComment\",\"params\":{\"repo\":\"id:repo-1\",\"number\":9,\"body\":\"a comment\",\"type\":\"issue\"}}"
-    },
-    "81e65eb25119": {
-      "name": "detailPayload",
-      "value": {
-        "assignees": ["octocat"],
-        "baseSha": "base-sha",
-        "body": "body",
-        "checks": [],
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "please fix",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 501,
-            "isResolved": false,
-            "line": 12,
-            "path": "src/index.ts",
-            "threadId": "thread-1"
-          },
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          },
-          {
-            "author": "You",
-            "body": "a comment",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": 902
-          }
-        ],
-        "files": [
-          {
-            "additions": 2,
-            "deletions": 1,
-            "oldPath": {
-              "$rpc": "undefined"
-            },
-            "path": "src/index.ts",
-            "status": "modified",
-            "viewerViewedState": "UNVIEWED"
-          }
-        ],
-        "headSha": "head-sha",
-        "labels": ["bug"],
-        "latestReviews": [],
-        "provider": "github",
-        "pullRequestId": "PR_kwDO",
-        "reviewDecision": {
-          "$rpc": "null"
-        },
-        "reviewRequests": []
-      }
-    },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "a36b80f7b048": {
-      "name": "itemCommentDraft",
-      "value": ""
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -202,9 +203,15 @@
         "$rpc": "undefined"
       }
     },
-    "f02550278f6a": {
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fd2fad47bec2": {
       "name": "mutatingStatus",
-      "value": false
+      "ordinal": 1,
+      "value": true
     }
   },
   "recording": {
@@ -213,19 +220,19 @@
       {
         "id": "comment-settled",
         "observation": {
-          "sender": ["7297a232d830"],
-          "payloads": ["79a7f51f2a84"],
+          "sender": ["a77d082f5f48"],
+          "payloads": ["700390b3c879"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
           },
           "state": "35cd4f653b4b",
           "effects": [
-            "066ce15717c8",
-            "82cd71d524c8",
-            "a36b80f7b048",
-            "81e65eb25119",
-            "f02550278f6a"
+            "fd2fad47bec2",
+            "ed3a7d6bc894",
+            "59b03dcdb55e",
+            "064357f4a198",
+            "14949c71727e"
           ]
         }
       }

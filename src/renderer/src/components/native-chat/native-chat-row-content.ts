@@ -7,10 +7,18 @@
 // pays once per revision rather than once per consumer.
 
 import {
+  backgroundTaskBlocks,
+  claimBackgroundTaskTwins
+} from '../../../../shared/native-chat-background-task-row'
+import {
   isSubagentGroupFallbackText,
   subagentGroupBlocks
 } from '../../../../shared/native-chat-subagent-summary'
-import { isSubagentGroupBlock, type NativeChatBlock } from '../../../../shared/native-chat-types'
+import {
+  isBackgroundTaskBlock,
+  isSubagentGroupBlock,
+  type NativeChatBlock
+} from '../../../../shared/native-chat-types'
 import { splitNativeChatBlocks } from './native-chat-tool-fold'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
 
@@ -22,21 +30,28 @@ const derivations = new WeakMap<object, NativeChatRowContent>()
 function derive(blocks: readonly NativeChatBlock[]) {
   const split = splitNativeChatBlocks(blocks)
   const groups = subagentGroupBlocks(split.prose)
-  // A spawn-group row carries a plain-text twin so a client without the block type
-  // still reads the roster. This draws the block, so only the twin is dropped —
-  // never real text beside it, which a lane folding a roster into a message keeps.
+  const tasks = backgroundTaskBlocks(split.prose)
+  // Both row kinds carry a plain-text twin so a client without the block type
+  // still reads them. This draws the blocks, so only the twins are dropped —
+  // never real text beside them, which a lane folding a roster into a message
+  // keeps. A task row's twin is claimed by exact text, because its sentence is
+  // often the provider's own and has no shape to match.
+  const taskTwins = claimBackgroundTaskTwins(split.prose)
   const prose =
-    groups.length === 0
+    groups.length === 0 && tasks.length === 0
       ? split.prose
       : split.prose.filter(
-          (block) =>
+          (block, index) =>
             !isSubagentGroupBlock(block) &&
-            !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
+            !isBackgroundTaskBlock(block) &&
+            !taskTwins.twinTextIndexes.has(index) &&
+            !(groups.length > 0 && block.type === 'text' && isSubagentGroupFallbackText(block.text))
         )
   return {
     prose,
     tools: split.tools,
     subagentGroups: groups,
+    backgroundTasks: tasks,
     markdown: nativeChatProseToMarkdown(prose),
     hasImages: prose.some((block) => block.type === 'image-ref')
   }
@@ -56,6 +71,13 @@ export function deriveNativeChatRowContent(
 
 /** Whether the row draws anything. An empty row takes no slot in the transcript. */
 export function nativeChatRowRendersContent(blocks: readonly NativeChatBlock[]): boolean {
-  const { markdown, hasImages, tools, subagentGroups } = deriveNativeChatRowContent(blocks)
-  return markdown.length > 0 || hasImages || tools.length > 0 || subagentGroups.length > 0
+  const { markdown, hasImages, tools, subagentGroups, backgroundTasks } =
+    deriveNativeChatRowContent(blocks)
+  return (
+    markdown.length > 0 ||
+    hasImages ||
+    tools.length > 0 ||
+    subagentGroups.length > 0 ||
+    backgroundTasks.length > 0
+  )
 }

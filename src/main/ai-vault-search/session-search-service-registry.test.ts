@@ -51,7 +51,7 @@ describe('session search service registry', () => {
       'ipc'
     )
     expect(service.reconcile).not.toHaveBeenCalled()
-    expect(service.search).toHaveBeenCalledWith({ query: 'needle', limit: 20 })
+    expect(service.search).toHaveBeenCalledWith({ query: 'needle', limit: 20 }, undefined)
     expect(result).not.toHaveProperty('debug')
     expect(await searchSessionService({ query: 'needle', debug: true }, 'ipc')).toHaveProperty(
       'debug'

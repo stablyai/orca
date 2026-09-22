@@ -226,7 +226,6 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
-      structuredLaunchRecoveryWorktreeId?: string
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this

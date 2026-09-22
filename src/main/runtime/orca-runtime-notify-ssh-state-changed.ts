@@ -13,6 +13,8 @@ import type { BrowserBackend } from '../browser/browser-backend'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 
 export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStatus {
+  private static readonly MAX_SSH_RELAY_RECOVERY_GENERATIONS = 512
+  private sshRelayRecoveryGenerationSequence = 0
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
@@ -63,8 +65,18 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
   }
 
   protected bumpSshRelayRecoveryGeneration(targetId: string): number {
-    const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
+    const generation = ++this.sshRelayRecoveryGenerationSequence
     this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
+    while (
+      this.sshRelayRecoveryGenerationByTargetId.size >
+      OrcaRuntimeWithNotifySshStateChanged.MAX_SSH_RELAY_RECOVERY_GENERATIONS
+    ) {
+      const oldest = this.sshRelayRecoveryGenerationByTargetId.keys().next()
+      if (oldest.done) {
+        break
+      }
+      this.sshRelayRecoveryGenerationByTargetId.delete(oldest.value)
+    }
     return generation
   }
 

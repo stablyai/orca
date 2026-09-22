@@ -3,9 +3,9 @@
   "family": "components.codex-reset-capability",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "88570b9d2376863c7f88d7ed8c745a5fb771deddbc7409f8944fa861dd4bdce9",
   "platform": "darwin",
@@ -13,15 +13,12 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
     "578b9d38ecc7": {
       "supported": true
     },
-    "6a0093a8288b": {
+    "83aeff886309": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -58,6 +55,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -66,8 +68,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["6a0093a8288b"],
-          "payloads": ["1e5b32902af7"],
+          "sender": ["83aeff886309"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "84e5ca07cb7a"
           },

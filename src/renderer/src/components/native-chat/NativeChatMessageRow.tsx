@@ -37,8 +37,8 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick,
   allowFileUriLinks = false,
   deliveryFailed = false,
-  activityExpandOverride,
   structuredActivityUi = true,
+  folded = false,
   runtimeContext
 }: {
   message: NativeChatMessage
@@ -52,16 +52,16 @@ export const MessageRow = memo(function MessageRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryFailed?: boolean
-  activityExpandOverride?: boolean
   structuredActivityUi?: boolean
+  /** Behind a folded turn: the row keeps only what outlives the turn. */
+  folded?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
-  const { hasImages, markdown, prose, subagentGroups, tools } = deriveNativeChatRowContent(
-    message.blocks
-  )
+  const { backgroundTasks, hasImages, markdown, prose, subagentGroups, tools } =
+    deriveNativeChatRowContent(message.blocks)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -76,7 +76,19 @@ export const MessageRow = memo(function MessageRow({
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0 && subagentGroups.length === 0) {
+  if (
+    markdown.length === 0 &&
+    !hasImages &&
+    tools.length === 0 &&
+    subagentGroups.length === 0 &&
+    backgroundTasks.length === 0
+  ) {
+    return null
+  }
+
+  // Behind a folded turn this row is the work, not the answer. Rows that outlive
+  // their turn never reach here — the fold leaves them out.
+  if (folded) {
     return null
   }
 
@@ -183,7 +195,7 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {tools.length > 0 || subagentGroups.length > 0 ? (
+      {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}
           previousTodoWrite={previousTodoWrite}
@@ -192,8 +204,8 @@ export const MessageRow = memo(function MessageRow({
           onRevealDiff={onScrollMessageToTop}
           onLinkClick={onLinkClick}
           subagentGroups={subagentGroups}
+          backgroundTasks={backgroundTasks}
           expandSignal={expandSignal}
-          expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
           structuredActivityUi={structuredActivityUi}
           disclosureId={message.id}

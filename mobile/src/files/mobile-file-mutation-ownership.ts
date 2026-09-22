@@ -1,6 +1,5 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
-import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
 import {
   fileOwnershipRuntimeStatusRead,
@@ -17,9 +16,16 @@ export type MobileFileMutationOwnership = SshMutationExpectation & {
   expectedExecutionHostId: 'local' | `ssh:${string}`
 }
 
+// The two members the ownership gate routes on, as the reply reader hands them back. Absence and
+// an explicit `null` stay distinct: the host omits `state` for a target it holds no connection for.
+export type MobileFileMutationSshState =
+  | (Pick<SshConnectionState, 'connectionGeneration'> & { targetId?: string })
+  | null
+  | undefined
+
 export function buildMobileFileMutationOwnership(
   worktreeHostId: string | null | undefined,
-  sshState: SshConnectionState | null = null
+  sshState: MobileFileMutationSshState = null
 ): MobileFileMutationOwnership {
   const host = parseExecutionHostId(worktreeHostId)
   if (worktreeHostId !== undefined && !host) {
@@ -45,11 +51,7 @@ export async function captureMobileFileMutationOwnership(
   const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
     timeoutMs: FILE_MUTATION_TIMEOUT_MS
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply) as Pick<
-    RuntimeStatus,
-    'capabilities'
-  >
+  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply)
   assertFileMutationOwnershipCapability(status)
 
   const worktreeReply = await fileOwnershipWorktreeRead.request(
@@ -57,24 +59,20 @@ export async function captureMobileFileMutationOwnership(
     { worktree },
     { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply) as
-    | { hostId?: string | null }
-    | undefined
+  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply)
   if (!summary) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
 
   const host = parseExecutionHostId(summary.hostId)
-  let sshState: SshConnectionState | null = null
+  let sshState: MobileFileMutationSshState = null
   if (host?.kind === 'ssh') {
     const stateReply = await fileOwnershipSshStateRead.request(
       client,
       { targetId: host.targetId },
       { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    sshState = fileOwnershipSshStateRead.interpret(stateReply) as SshConnectionState | null
+    sshState = fileOwnershipSshStateRead.interpret(stateReply)
   }
   return buildMobileFileMutationOwnership(summary.hostId, sshState)
 }

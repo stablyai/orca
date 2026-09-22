@@ -9,6 +9,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -52,6 +53,7 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
   ]
 }
 
+/** Adds the host environment values required by a WSL PTY and its guest relay. */
 export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why set here: every WSL spawn path funnels through this helper, and the
   // in-guest login script needs the resolved wrapper root. Windows/WSL wrappers
@@ -82,6 +84,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    // The guest plugin uses this marker to select the OpenCode variant that
+    // owns the pane when both native and WSL installations are present.
+    'ORCA_OPENCODE_AGENT/u',
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
@@ -97,7 +102,10 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
-    'ORCA_OMP_STATUS_EXTENSION/p',
+    `ORCA_OMP_STATUS_EXTENSION/${env.ORCA_OMP_STATUS_EXTENSION?.startsWith('/') ? 'u' : 'p'}`,
+    ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
+    `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
+    'ORCA_OMP_FRESH_CONFIG/p',
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)

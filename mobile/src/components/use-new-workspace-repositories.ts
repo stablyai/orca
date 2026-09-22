@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { nativeChatRepoListRead } from '../session/mobile-session-read-operations'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
 import {
@@ -50,19 +50,24 @@ export function useNewWorkspaceRepositories(args: {
     }
     let stale = false
     setLoading(true)
-    void client
-      .sendRequest('repo.list')
+    void nativeChatRepoListRead
+      .request(client)
       .then((response) => {
-        if (stale || !response.ok) {
+        if (stale) {
           return
         }
-        const result = (response as RpcSuccess).result as { repos: MobileWorkspaceRepo[] }
-        setRepos(result.repos)
+        const listed = nativeChatRepoListRead.interpret(response)
+        if (!listed.accepted) {
+          return
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        const listedRepos = listed.value as MobileWorkspaceRepo[]
+        setRepos(listedRepos)
         if (hostId) {
-          setCachedRepos(hostId, result.repos)
+          setCachedRepos(hostId, listedRepos)
         }
         setSelectedRepo((current) =>
-          refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
+          refreshMobileNewWorkspaceDialogSelectedRepo(listedRepos, current)
         )
       })
       .catch(() => undefined)

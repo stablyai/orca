@@ -16,8 +16,9 @@ import {
   isWorkspaceSessionRecord,
   mergeWorkspaceSessionArrayField,
   mergeWorkspaceSessionRecordField,
+  worktreeIdForPaneKey,
   type WorkspaceSessionRecord
-} from './workspace-session-host-records'
+} from '../../../shared/workspace-session-host-records'
 
 /**
  * Split / merge the unified WorkspaceSessionState across per-host partitions.
@@ -110,16 +111,13 @@ function assignVisitRecencyByHost(
     return
   }
   for (const [key, entry] of Object.entries(value)) {
-    // Why: boot hydration reads only local + runtime:* partitions, and SSH worktree
-    // session state deliberately stays in the local partition (see buildHostIdByWorktreeId);
-    // routing ssh-qualified keys to an ssh partition would strand them across restarts.
+    // Why the qualified host wins: the key already names the host that owns the visit, so routing
+    // it anywhere else separates the recency row from the workspace it describes.
     const qualifiedHost = isWorktreeHostIdentity(key)
       ? parseExecutionHostId(key.slice(0, key.indexOf('|')))
       : null
     const host = isWorktreeHostIdentity(key)
-      ? qualifiedHost?.kind === 'runtime'
-        ? qualifiedHost.id
-        : LOCAL_EXECUTION_HOST_ID
+      ? (qualifiedHost?.id ?? LOCAL_EXECUTION_HOST_ID)
       : ctx.hostIdByWorktreeId(key)
     const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
     const target = (slice.lastVisitedAtByWorktreeId ??= {}) as WorkspaceSessionRecord
@@ -149,11 +147,13 @@ function assignKeyedByResolvedWorktree(
 
 /** Partition a unified session into per-host slices keyed by ExecutionHostId.
  *  Global fields are copied to the 'local' slice; worktree-scoped data is routed
- *  to its owner host. Entries whose owning worktree is unknown (orphan tabs,
- *  files, pages) stay in 'local' so they are never silently dropped. */
+ *  to its owner host. Entries whose owning worktree is unknown to the payload and
+ *  to `worktreeIdByTabId` (orphan tabs, files, pages) stay in 'local' so they are
+ *  never silently dropped. */
 export function splitWorkspaceSessionByHost(
   state: WorkspaceSessionState,
-  hostIdByWorktreeId: HostIdByWorktreeId
+  hostIdByWorktreeId: HostIdByWorktreeId,
+  options: { worktreeIdByTabId?: Map<string, string> } = {}
 ): HostSessionSlices {
   // Template carries only the global fields; per-field assigners add the rest.
   // Why: copy only own-keys so a partial patch (where most globals are absent)
@@ -178,7 +178,7 @@ export function splitWorkspaceSessionByHost(
 
   const ctx: SplitContext = {
     hostIdByWorktreeId,
-    worktreeIdByTabId: buildWorktreeIdByTabId(state),
+    worktreeIdByTabId: options.worktreeIdByTabId ?? buildWorktreeIdByTabId(state),
     worktreeIdByFileId: buildWorktreeIdByFileId(state)
   }
 
@@ -277,12 +277,7 @@ export function splitWorkspaceSessionByHost(
           templates,
           field,
           value,
-          (paneKey) => {
-            const separator = paneKey.lastIndexOf(':')
-            return separator > 0
-              ? ctx.worktreeIdByTabId.get(paneKey.slice(0, separator))
-              : undefined
-          },
+          (paneKey) => worktreeIdForPaneKey(ctx.worktreeIdByTabId, paneKey),
           ctx
         )
         break

@@ -3,9 +3,9 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "6c71b0f217a464dffbc6f5736605b840edac74ebaf0664edc0ab85984bb64328",
   "platform": "darwin",
@@ -21,10 +21,6 @@
         "itemKey": "branch:src/app.ts",
         "kind": "binary"
       }
-    },
-    "37ae1f091153": {
-      "name": "git.branchDiff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
     },
     "38fb361f406c": {
       "status": "rejected",
@@ -44,8 +40,14 @@
       },
       "snapshot": "unloaded"
     },
-    "ce89618d90b4": {
+    "551c785629a1": {
       "name": "git.branchDiff#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
+    },
+    "714ef7b515d2": {
+      "name": "git.branchDiff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -91,8 +93,8 @@
       {
         "id": "branch",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["37ae1f091153"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76"
           },
@@ -103,8 +105,8 @@
       {
         "id": "no-compare",
         "observation": {
-          "sender": ["ce89618d90b4"],
-          "payloads": ["37ae1f091153"],
+          "sender": ["714ef7b515d2"],
+          "payloads": ["551c785629a1"],
           "settlements": {
             "branch": "365c17523d76",
             "no-compare": "38fb361f406c"

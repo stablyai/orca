@@ -381,6 +381,38 @@ describe('unknown help command surfaces a suggestion', () => {
   })
 })
 
+describe('nested command group help', () => {
+  it.each([
+    ['browser', ['browser'], ['identity get', 'identity set']],
+    ['browser identity', ['browser', 'identity'], ['get', 'set']]
+  ])(
+    'prints successful help for %s without constructing a runtime client',
+    async (_, path, commands) => {
+      const previousExitCode = process.exitCode
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      runtimeClientConstructorMock.mockClear()
+      process.exitCode = 0
+
+      try {
+        await main([...path, '--help'], '/tmp/repo')
+
+        expect(process.exitCode).toBe(0)
+        const output = logSpy.mock.calls.flat().join('\n')
+        expect(output).toContain(`orca ${path.join(' ')}`)
+        for (const command of commands) {
+          expect(output).toContain(command)
+        }
+        expect(output).not.toContain('Unknown command')
+        expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+        expect(callMock).not.toHaveBeenCalled()
+      } finally {
+        process.exitCode = previousExitCode
+        logSpy.mockRestore()
+      }
+    }
+  )
+})
+
 describe('orca root help', () => {
   it('advertises machine-readable agent discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

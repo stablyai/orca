@@ -1,0 +1,86 @@
+{
+  "source": "src/main/daemon/daemon-stream-data-batcher.ts",
+  "bundleSha256": "7555dbf7f6020022aca2a0d75f5d9eae2e2c3cf1586e0c1e66fbc357f3a3143e",
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "cases": [
+    {
+      "droppable": false,
+      "samples": [
+        {
+          "fedMiB": 0,
+          "socketBufferedBytes": 0,
+          "batcherQueuedChars": 0,
+          "rssBytes": 53968896
+        },
+        {
+          "fedMiB": 32,
+          "socketBufferedBytes": 131321,
+          "batcherQueuedChars": 32636928,
+          "rssBytes": 59834368
+        },
+        {
+          "fedMiB": 64,
+          "socketBufferedBytes": 32809583,
+          "batcherQueuedChars": 33554432,
+          "rssBytes": 1241956352
+        },
+        {
+          "fedMiB": 96,
+          "socketBufferedBytes": 66406511,
+          "batcherQueuedChars": 33554432,
+          "rssBytes": 1381416960
+        }
+      ],
+      "finalRetainedQueuedPayloadBytes": 99960943,
+      "queuedBytesPerProducedByteAfter64MiB": 1.0012664794921875,
+      "afterDrain": {
+        "fedMiB": 96,
+        "socketBufferedBytes": 0,
+        "batcherQueuedChars": 0,
+        "rssBytes": 327680000
+      },
+      "drainMs": 74.25875000000042,
+      "receivedBytes": 100791448
+    },
+    {
+      "droppable": true,
+      "samples": [
+        {
+          "fedMiB": 0,
+          "socketBufferedBytes": 0,
+          "batcherQueuedChars": 0,
+          "rssBytes": 327974912
+        },
+        {
+          "fedMiB": 32,
+          "socketBufferedBytes": 137492,
+          "batcherQueuedChars": 786432,
+          "rssBytes": 390053888
+        },
+        {
+          "fedMiB": 64,
+          "socketBufferedBytes": 144389,
+          "batcherQueuedChars": 720896,
+          "rssBytes": 454852608
+        },
+        {
+          "fedMiB": 96,
+          "socketBufferedBytes": 151286,
+          "batcherQueuedChars": 655360,
+          "rssBytes": 519733248
+        }
+      ],
+      "finalRetainedQueuedPayloadBytes": 806646,
+      "queuedBytesPerProducedByteAfter64MiB": -0.0017475783824920654,
+      "afterDrain": {
+        "fedMiB": 96,
+        "socketBufferedBytes": 0,
+        "batcherQueuedChars": 0,
+        "rssBytes": 520437760
+      },
+      "drainMs": 5.139125000000149,
+      "receivedBytes": 1595433
+    }
+  ]
+}

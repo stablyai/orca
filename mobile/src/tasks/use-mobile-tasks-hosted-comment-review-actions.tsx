@@ -1,6 +1,6 @@
+import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
 import {
-  Clipboard,
   buildGitHubCheckSummary,
   scheduleMobileTaskCopyFeedbackReset,
   useCallback
@@ -8,7 +8,6 @@ import {
 import {
   type DetailComment,
   type GitHubAssignableUser,
-  type GitHubDetailCheck,
   type TaskItem,
   splitReviewerList
 } from './mobile-tasks-legacy-foundation'
@@ -23,6 +22,10 @@ import {
 } from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is, so that path would work on
+  // one platform and silently not on the other.
+  const clipboard = useClipboardWriter()
   const {
     client,
     copiedLinkResetTimerRef,
@@ -94,16 +97,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
                     { timeoutMs: 30_000 }
                   )
                 )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = written as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
+        if (written.ok === false) {
+          throw new Error(written.error ?? 'Failed to add comment')
         }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to add comment')
-        }
-        const comment: DetailComment = result.comment ?? {
+        const comment: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -126,25 +123,31 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
     [client, itemCommentDraft, mutatingStatus]
   )
 
-  const copyTaskLink = useCallback(async (key: string, url: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(url)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy link')
-    }
-  }, [])
+  const copyTaskLink = useCallback(
+    async (key: string, url: string): Promise<void> => {
+      try {
+        await clipboard.writeText(url)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy link')
+      }
+    },
+    [clipboard]
+  )
 
-  const copyTextToClipboard = useCallback(async (key: string, value: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(value)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy text')
-    }
-  }, [])
+  const copyTextToClipboard = useCallback(
+    async (key: string, value: string): Promise<void> => {
+      try {
+        await clipboard.writeText(value)
+        setCopiedLinkKey(key)
+        scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to copy text')
+      }
+    },
+    [clipboard]
+  )
 
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {
@@ -167,8 +170,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubReviewerRequest.interpret(reply) as { ok?: boolean; error?: string }
+        const result = githubReviewerRequest.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
@@ -247,12 +249,9 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        const payload = githubPullRequestChecksRead.interpret(reply)
-        if (!Array.isArray(payload)) {
-          throw new Error('Invalid checks response')
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const checks = payload as GitHubDetailCheck[]
+        // The reader answers an array of readable rows, so the hand-rolled shape test this call
+        // site kept is gone: a reply that is not one now names the method it came from.
+        const checks = githubPullRequestChecksRead.interpret(reply)
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current

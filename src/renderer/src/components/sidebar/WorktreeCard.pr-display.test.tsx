@@ -61,6 +61,10 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
 }))
 
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
+}))
+
 vi.mock('./CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownStartedAt: () => null

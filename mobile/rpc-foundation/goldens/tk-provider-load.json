@@ -3,9 +3,9 @@
   "family": "tasks.provider-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "21b6272878cba5f2b41c89378c178933ffc9406fe69b9c693fc5021a265ef2c9",
   "platform": "darwin",
@@ -13,47 +13,38 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0182b1872be2": {
-      "name": "selectedLinearWorkspaceId",
-      "value": "linear-workspace"
+    "084da53ea1e3": {
+      "name": "linear.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
     },
-    "0f9c77bd54ee": {
-      "name": "github.countWorkItems#1",
-      "args": [
+    "0d5034d2e543": {
+      "name": "linearTeams",
+      "ordinal": 8,
+      "value": [
         {
-          "name": "method",
-          "value": "github.countWorkItems"
-        },
-        {
-          "name": "params",
-          "value": {
-            "query": "is:issue bug",
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
         }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": 4
-        }
-      }
+      ]
     },
     "413e4f429e18": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": 4
+    },
+    "470893ebd4a7": {
+      "name": "linearWorkspaces",
+      "ordinal": 4,
+      "value": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ]
     },
     "49c5fd241816": {
       "status": "fulfilled",
@@ -95,13 +86,15 @@
         }
       }
     },
-    "50941ff8a9e3": {
-      "name": "linearConnected",
-      "value": true
+    "5e1882223b41": {
+      "name": "linear.listTeams#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
     },
-    "50f6d11bf12d": {
-      "name": "selectedLinearTeamIds",
-      "value": ["team-1"]
+    "5efa1426d38f": {
+      "name": "selectedLinearWorkspaceId",
+      "ordinal": 5,
+      "value": "linear-workspace"
     },
     "67b5ebc67646": {
       "connected": true,
@@ -122,8 +115,68 @@
         }
       ]
     },
-    "775d7e2fb99d": {
+    "7a279381c58b": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+    },
+    "9050cedbf1cf": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
+    },
+    "91220356fb85": {
+      "name": "selectedLinearTeamIds",
+      "ordinal": 9,
+      "value": ["team-1"]
+    },
+    "93695401e4f8": {
+      "name": "linear.listTeams#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listTeams"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "a3b6191b3861": {
+      "name": "settings.update#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "b972a52a94fe": {
       "name": "linear.status#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -162,8 +215,76 @@
         }
       }
     },
-    "7dabd82642ac": {
+    "bd4e7772cf07": {
+      "name": "settings.update#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultLinearTeamSelection": ["team-1"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "de7bfe07e04b": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": 4
+        }
+      }
+    },
+    "e93bedf82315": {
       "name": "github.listWorkItems#1",
+      "ordinal": 12,
       "args": [
         {
           "name": "method",
@@ -217,117 +338,6 @@
         }
       }
     },
-    "89bbb50f70ec": {
-      "name": "linearTeams",
-      "value": [
-        {
-          "id": "team-1",
-          "key": "ENG",
-          "name": "Engineering",
-          "workspaceId": "linear-workspace"
-        }
-      ]
-    },
-    "a6bfe3e8ec00": {
-      "name": "settings.update#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultLinearTeamSelection": ["team-1"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "a9c001a4d8d2": {
-      "name": "linear.listTeams#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.listTeams"
-        },
-        {
-          "name": "params",
-          "value": {
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": [
-            {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering",
-              "workspaceId": "linear-workspace"
-            }
-          ]
-        }
-      }
-    },
-    "b13993ed8b00": {
-      "name": "settings.update#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
-    },
-    "ba929d11c91c": {
-      "name": "linearWorkspaces",
-      "value": [
-        {
-          "id": "linear-workspace",
-          "name": "Workspace"
-        }
-      ]
-    },
-    "bfba52c22ce2": {
-      "name": "linear.listTeams#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "c1e3ae5492e1": {
-      "name": "github.countWorkItems#1",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
-    },
-    "cf53e1835dc8": {
-      "name": "github.listWorkItems#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
-    },
-    "e19509ebde55": {
-      "name": "linear.status#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -335,6 +345,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f57b6504f168": {
+      "name": "linearConnected",
+      "ordinal": 3,
+      "value": true
     }
   },
   "recording": {
@@ -343,27 +358,27 @@
       {
         "id": "linear-context-settled",
         "observation": {
-          "sender": ["775d7e2fb99d", "a9c001a4d8d2"],
-          "payloads": ["e19509ebde55", "bfba52c22ce2"],
+          "sender": ["b972a52a94fe", "93695401e4f8"],
+          "payloads": ["084da53ea1e3", "5e1882223b41"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a"
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
           ]
         }
       },
       {
         "id": "persist-teams-settled",
         "observation": {
-          "sender": ["775d7e2fb99d", "a9c001a4d8d2", "a6bfe3e8ec00"],
-          "payloads": ["e19509ebde55", "bfba52c22ce2", "b13993ed8b00"],
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
@@ -371,19 +386,19 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
           ]
         }
       },
       {
         "id": "github-page-settled",
         "observation": {
-          "sender": ["775d7e2fb99d", "a9c001a4d8d2", "a6bfe3e8ec00", "7dabd82642ac"],
-          "payloads": ["e19509ebde55", "bfba52c22ce2", "b13993ed8b00", "cf53e1835dc8"],
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07", "e93bedf82315"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861", "7a279381c58b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
@@ -392,11 +407,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
           ]
         }
       },
@@ -404,18 +419,18 @@
         "id": "github-count-settled",
         "observation": {
           "sender": [
-            "775d7e2fb99d",
-            "a9c001a4d8d2",
-            "a6bfe3e8ec00",
-            "7dabd82642ac",
-            "0f9c77bd54ee"
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "de7bfe07e04b"
           ],
           "payloads": [
-            "e19509ebde55",
-            "bfba52c22ce2",
-            "b13993ed8b00",
-            "cf53e1835dc8",
-            "c1e3ae5492e1"
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -426,11 +441,11 @@
           },
           "state": "67b5ebc67646",
           "effects": [
-            "50941ff8a9e3",
-            "ba929d11c91c",
-            "0182b1872be2",
-            "89bbb50f70ec",
-            "50f6d11bf12d"
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
           ]
         }
       }

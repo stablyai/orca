@@ -47,7 +47,7 @@ describe('recording boundaries', () => {
 
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
@@ -80,7 +80,7 @@ describe('recording boundaries', () => {
 
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
@@ -106,7 +106,7 @@ describe('recording boundaries', () => {
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
@@ -441,6 +441,60 @@ describe('recording boundaries', () => {
     expect({ missing, imported }).toEqual({ missing: [], imported: [] })
   })
 
+  it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {
+    const subscribeFirst = await payloadsFrom((client) => {
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+    })
+    const sendFirst = await payloadsFrom((client) => {
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+    })
+    // The published order is identical either way, because a subscribe publishes synchronously
+    // while a request first waits for connected. Without the ordinal the swap moves no recorded
+    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
+    expect(sendFirst.map((payload) => payload.name)).toEqual(
+      subscribeFirst.map((payload) => payload.name)
+    )
+    expect(subscribeFirst.map((payload) => payload.ordinal)).toEqual([1, 3])
+    expect(sendFirst.map((payload) => payload.ordinal)).toEqual([2, 3])
+  })
+
+  it('orders a subscribe against an effect in an operation that sends no requests', async () => {
+    // The gap the request count left: with no request to count, every stamp was `0`, so the two
+    // independent lists had nothing ordering them against each other.
+    const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'request-free',
+          operation: 'op',
+          version: 1,
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
+        },
+        ({ client, effect }) => ({
+          action: () => {
+            if (subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+            effect('device.write', { key: 'seen' })
+            if (!subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+          },
+          state: () => ({}),
+          dispose: () => {}
+        }),
+        vitestRecordingScheduler()
+      )
+      const observed = recording.checkpoints[0]!.observation
+      return { payloads: observed.payloads, effects: observed.effects }
+    }
+    expect(await drive(true)).not.toEqual(await drive(false))
+  })
+
   it('refuses a mutation anchor that matches more than once', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
     try {
@@ -467,6 +521,26 @@ describe('recording boundaries', () => {
     }
   })
 })
+
+const CLIENT_EVENTS = 'runtime.clientEvents.subscribe'
+
+/** The payloads one scripted client publishes, with the transport torn down either way. */
+async function payloadsFrom(
+  drive: (client: ScriptedRpcTransport['client']) => void
+): Promise<ScriptedRpcTransport['payloads']> {
+  const clock = vitestRecordingScheduler()
+  await clock.start()
+  const transport = new ScriptedRpcTransport(clock.elapsed)
+  try {
+    drive(transport.client)
+    await clock.flush()
+    return [...transport.payloads]
+  } finally {
+    transport.dispose()
+    await clock.flush()
+    clock.stop()
+  }
+}
 
 function entryHash(name: string): string {
   return valueHash({ name })
@@ -511,6 +585,7 @@ function sampleGolden(id: string): GoldenRecording {
     baseline: 'a'.repeat(40),
     lockfileSha256: 'b'.repeat(64),
     recorderSha256: 'c'.repeat(64),
+    adapterSha256: 'f'.repeat(64),
     scenarioSha256: 'd'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,

@@ -3,35 +3,19 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
-  "adapterSha256": "e0aa5e8577ec2a61e89c27b6578f9c6819e635e4be990834c039089acf40c697",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "ec16931c5431d3dbb05729d4670c381a434bff71648d334b7b5224db188fdccb",
   "scenarioSha256": "10011c7c75e74d9c2e880c5458c9156264ae07e91956a80946ede1d4e684952a",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "33d053404f10": {
-      "activeWorktreePath": {
-        "$rpc": "null"
-      },
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "loading"
-      }
-    },
-    "38364726a135": {
+    "05215ca2ea35": {
       "name": "aiVault.listSessions#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -72,8 +56,22 @@
         }
       }
     },
-    "6e50957443ea": {
+    "33d053404f10": {
+      "activeWorktreePath": {
+        "$rpc": "null"
+      },
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "loading"
+      }
+    },
+    "4a76a58cbdac": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -105,8 +103,9 @@
         }
       }
     },
-    "9cac597c56da": {
+    "4e35efd1ee45": {
       "name": "status.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -138,9 +137,10 @@
         }
       }
     },
-    "c0c86e67c300": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "72d9a278aca3": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
     },
     "cd739a80b7a8": {
       "activeWorktreePath": "/repo/feature",
@@ -161,6 +161,11 @@
         ]
       }
     },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -169,9 +174,10 @@
         "$rpc": "undefined"
       }
     },
-    "f191cc9d24e3": {
-      "name": "aiVault.listSessions#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -180,8 +186,8 @@
       {
         "id": "held",
         "observation": {
-          "sender": ["6e50957443ea"],
-          "payloads": ["1e5b32902af7"],
+          "sender": ["4a76a58cbdac"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -192,8 +198,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["6e50957443ea", "9cac597c56da", "38364726a135"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300", "f191cc9d24e3"],
+          "sender": ["4a76a58cbdac", "4e35efd1ee45", "05215ca2ea35"],
+          "payloads": ["d08f74d65ee6", "f1834177e593", "72d9a278aca3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"

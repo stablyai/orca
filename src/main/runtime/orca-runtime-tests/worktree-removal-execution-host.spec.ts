@@ -9,6 +9,8 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-host-home'
+
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -17,6 +19,10 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+
+// Why: these fixtures register an SSH provider, which models a connected relay session — and a
+// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+beforeEach(resetWorktreeTestSshHostHome)
 
 const REMOTE_REPO_PATH = '/remote/repo'
 

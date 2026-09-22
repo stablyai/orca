@@ -79,6 +79,7 @@ export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-title
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+export const BROWSER_IDENTITY_RUNTIME_CAPABILITY = 'browser.identity.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: older hosts discard browser.tabCreate's page field, so clients may only
@@ -130,9 +131,18 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
+// Why: an older host strips terminal.create's unknown `shell` and answers with a terminal running
+// the host default shell. That reply is indistinguishable from success, so a client asking for a
+// shell must refuse rather than create the wrong one.
+export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
+  'terminal.create-shell-selection.v1' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
+// Why: this proves both headed and runtime-owned host paths place after a complete split parent.
+// Legacy host paths disagree, so clients without this capability defer placement to the snapshot.
+export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
+  'session-tabs.split-group-placement.v1' as const
 // Why: a client advertising this retains every terminal retirement proof it receives until the
 // surface is published live again, so a session-tabs stream sends each proof once instead of
 // repeating the host's whole bounded list on every title tick.
@@ -143,6 +153,8 @@ export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
+// Older launch schemas reject unknown fields; advertise before clients send keyboard support.
+export const AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY = 'agent-session.keyboard.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not
@@ -176,6 +188,11 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 // advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
 // probe before subscribing or they reconnect forever and never show any status at all.
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
+// Why separate from the status feed: a host can carry the status feed and not this stream, and a
+// decoder drops an unknown stream opcode in silence. A client that subscribed without probing
+// would wait forever for completions the host never sends and report nothing wrong.
+export const AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY =
+  'agent-session.turn-completion.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
@@ -201,6 +218,8 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
+export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
+  'agent-session.opencode2-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -230,6 +249,30 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
+/**
+ * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
+ * surface, instead of each client routing for itself.
+ *
+ * Negotiated rather than assumed because a client that cannot see it must keep using
+ * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
+ * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
+ * requested, so a host that quietly routed that call to a structured session would hand an old
+ * client a response with no handle and no error.
+ *
+ * Advertising it is a statement that the client understands EITHER outcome, since the host is what
+ * picks: a structured session it can open, or a terminal agent. A client that renders only one of
+ * the two keeps using the surface-specific methods.
+ */
+// v2 makes prompt delivery an outcome union and top-level warnings the only supported shape.
+export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v2' as const
+
+// Optional identity support on agent.launch; mobile replay across replacement hosts requires the new method.
+export const AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY = 'agent.launch.replay.v1' as const
+
+// agent.launchReplay requires the ledger; older replacement hosts must reject the method.
+export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
+  'agent.launch.replay-required.v1' as const
+
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -239,7 +282,8 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page
@@ -253,7 +297,11 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ] as const
 
+export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
+  'git.antigravity-configured-model.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
@@ -296,24 +344,29 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
@@ -333,7 +386,10 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
+  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

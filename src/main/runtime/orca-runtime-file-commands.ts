@@ -200,7 +200,8 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
   })
 
   protected readonly repositoryIssueCommand = new RuntimeRepositoryIssueCommand({
-    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
   protected readonly orchestrationPointerAdmissionByPtyId = new Map<

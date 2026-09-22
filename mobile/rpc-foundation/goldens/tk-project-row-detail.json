@@ -3,9 +3,9 @@
   "family": "tasks.project-row-detail",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
   "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
   "platform": "darwin",
@@ -13,50 +13,31 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "057a0b5a420b": {
-      "name": "projectRowDetailError",
-      "value": ""
-    },
-    "086a41047c19": {
-      "name": "projectCommentDraft",
-      "value": ""
-    },
-    "0c85499cb425": {
-      "name": "prFileLoadingPath",
+    "0216abb9c43b": {
+      "name": "projectTitleDraft",
+      "ordinal": 1,
       "value": {
-        "$rpc": "null"
+        "$rpc": "undefined"
       }
     },
-    "1057be813592": {
-      "name": "expandedPrFilePath",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "1782d901730e": {
-      "name": "projectEditingCommentDraft",
-      "value": ""
-    },
-    "188585c3859c": {
+    "0679b27a119b": {
       "name": "projectFieldDrafts",
+      "ordinal": 11,
       "value": {}
     },
-    "1ca3c6b62543": {
-      "name": "projectRowDetailLoading",
-      "value": true
+    "0ad63b01155a": {
+      "name": "prFileContents",
+      "ordinal": 8,
+      "value": {}
     },
-    "347cc433c473": {
+    "118d9662d37f": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    },
+    "1e161db29c89": {
       "name": "projectRowDetail",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "3befcdf8b535": {
-      "name": "projectReviewersDraft",
-      "value": ""
-    },
-    "4f9b2f35c45f": {
-      "name": "projectRowDetail",
+      "ordinal": 17,
       "value": {
         "assignees": [],
         "baseSha": "base-sha",
@@ -75,22 +56,47 @@
         "reviewRequests": []
       }
     },
-    "5e884949c856": {
-      "name": "prFileCommentDrafts",
-      "value": {}
+    "2e6edf535ef3": {
+      "name": "prFileLoadingPath",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
     },
-    "6918d0b7aab9": {
-      "name": "prFileContents",
-      "value": {}
+    "2ee1c7329449": {
+      "name": "projectRowDetail",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
     },
-    "8f0c8ca9f6fc": {
-      "name": "projectBodyDraft",
+    "4ad8bb2f6308": {
+      "name": "projectReviewersDraft",
+      "ordinal": 6,
       "value": ""
     },
-    "9348720697e0": {
-      "name": "projectTitleDraft",
+    "561861a537bb": {
+      "name": "projectRowDetailLoading",
+      "ordinal": 18,
+      "value": false
+    },
+    "6545686833e4": {
+      "name": "expandedPrFilePath",
+      "ordinal": 7,
       "value": {
-        "$rpc": "undefined"
+        "$rpc": "null"
+      }
+    },
+    "742985d99709": {
+      "name": "projectEditingCommentDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "9f0108368fff": {
+      "name": "projectEditingCommentId",
+      "ordinal": 4,
+      "value": {
+        "$rpc": "null"
       }
     },
     "b2a01ad6d4fe": {
@@ -114,8 +120,9 @@
       "error": "",
       "loading": false
     },
-    "d1f95449bb04": {
+    "b4e65ea8b72c": {
       "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 15,
       "args": [
         {
           "name": "method",
@@ -164,15 +171,15 @@
         }
       }
     },
-    "d33f5097e2ec": {
-      "name": "projectEditingCommentId",
-      "value": {
-        "$rpc": "null"
-      }
+    "b63d5911050c": {
+      "name": "projectRowDetailError",
+      "ordinal": 13,
+      "value": ""
     },
-    "e27d1a246a98": {
-      "name": "github.project.workItemDetailsBySlug#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    "da1a7926872e": {
+      "name": "projectBodyDraft",
+      "ordinal": 2,
+      "value": ""
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -182,9 +189,20 @@
         "$rpc": "undefined"
       }
     },
-    "f78c32654fc4": {
+    "eec8081f6290": {
+      "name": "projectCommentDraft",
+      "ordinal": 3,
+      "value": ""
+    },
+    "f6a5085dd8e9": {
       "name": "projectRowDetailLoading",
-      "value": false
+      "ordinal": 14,
+      "value": true
+    },
+    "fdcd0ea3f000": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 10,
+      "value": {}
     }
   },
   "recording": {
@@ -193,29 +211,29 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["d1f95449bb04"],
-          "payloads": ["e27d1a246a98"],
+          "sender": ["b4e65ea8b72c"],
+          "payloads": ["118d9662d37f"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "b2a01ad6d4fe",
           "effects": [
-            "9348720697e0",
-            "8f0c8ca9f6fc",
-            "086a41047c19",
-            "d33f5097e2ec",
-            "1782d901730e",
-            "3befcdf8b535",
-            "1057be813592",
-            "6918d0b7aab9",
-            "0c85499cb425",
-            "5e884949c856",
-            "188585c3859c",
-            "347cc433c473",
-            "057a0b5a420b",
-            "1ca3c6b62543",
-            "4f9b2f35c45f",
-            "f78c32654fc4"
+            "0216abb9c43b",
+            "da1a7926872e",
+            "eec8081f6290",
+            "9f0108368fff",
+            "742985d99709",
+            "4ad8bb2f6308",
+            "6545686833e4",
+            "0ad63b01155a",
+            "2e6edf535ef3",
+            "fdcd0ea3f000",
+            "0679b27a119b",
+            "2ee1c7329449",
+            "b63d5911050c",
+            "f6a5085dd8e9",
+            "1e161db29c89",
+            "561861a537bb"
           ]
         }
       }

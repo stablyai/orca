@@ -18,15 +18,24 @@ export function translateCodexNotification(input: {
   method: string
   params: unknown
   observedAt?: number
+  dispatchSequenceAtReceipt?: number
   turnCancellation: Pick<CodexStructuredTurnCancellation, 'handleNotification'>
   emit: EmitCodexEvent
 }): CodexJournalTranslationAdmission {
-  const { sessionId, session, method, params, observedAt } = input
+  const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
   codexRewind.observeCodexRewindActivity(session, method, params)
   if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
     return { accepted: true }
   }
-  return deliverCodexNotification(sessionId, session, method, params, input.emit, observedAt)
+  return deliverCodexNotification(
+    sessionId,
+    session,
+    method,
+    params,
+    input.emit,
+    observedAt,
+    dispatchSequenceAtReceipt
+  )
 }
 
 export function deliverCodexNotification(
@@ -35,7 +44,8 @@ export function deliverCodexNotification(
   method: string,
   params: unknown,
   emit: EmitCodexEvent,
-  observedAt?: number
+  observedAt?: number,
+  dispatchSequenceAtReceipt?: number
 ): CodexJournalTranslationAdmission {
   if (!session) {
     return { accepted: true }
@@ -49,7 +59,8 @@ export function deliverCodexNotification(
     threadId,
     method,
     params,
-    ...(observedAt !== undefined ? { observedAt } : {})
+    ...(observedAt !== undefined ? { observedAt } : {}),
+    ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
   })
 }
 

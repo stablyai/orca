@@ -855,6 +855,25 @@ describe('connectPanePty', () => {
     expect(manager.closePane).toHaveBeenCalledWith(2)
   })
 
+  it('removes the agent row when an established PTY exits through EOF (#12907)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect(onPtyExit).toBeTypeOf('function')
+
+    onPtyExit?.('pty-pane-2')
+
+    expect(mockStoreState.removeAgentStatus).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_2))
+  })
+
   it('closes a split pane when an established PTY exits after terminal input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(2)

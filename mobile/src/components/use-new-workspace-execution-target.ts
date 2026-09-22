@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   localAgentDetectionRead,
@@ -7,7 +6,11 @@ import {
   sshRepoConnectRun,
   sshRepoStateRead
 } from '../tasks/mobile-workspace-source-operations'
-import { deriveWorkspaceSshGate, type WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
+import {
+  deriveWorkspaceSshGate,
+  type WorkspaceSshGate,
+  type WorkspaceSshRecord
+} from '../tasks/workspace-ssh-gate'
 
 type DetectedAgentIdsState = {
   connectionId: string | null
@@ -16,9 +19,9 @@ type DetectedAgentIdsState = {
 
 function fallbackSshState(
   targetId: string,
-  status: SshConnectionState['status'],
+  status: WorkspaceSshRecord['status'],
   error: string | null
-): SshConnectionState {
+): WorkspaceSshRecord {
   return { targetId, status, error, reconnectAttempt: 0 }
 }
 
@@ -32,7 +35,7 @@ export function useNewWorkspaceExecutionTarget(args: {
   connect: () => Promise<void>
 } {
   const { client, connectionId, visible } = args
-  const [sshState, setSshState] = useState<SshConnectionState | null>(null)
+  const [sshState, setSshState] = useState<WorkspaceSshRecord | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null
@@ -59,8 +62,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const state = sshRepoStateRead.interpret(reply) as SshConnectionState | null | undefined
+        const state = sshRepoStateRead.interpret(reply)
         setSshState(state ?? fallbackSshState(connectionId, 'disconnected', null))
       })
       .catch((error) => {
@@ -94,8 +96,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         if (!stale) {
           setDetectedAgentIdsState({
             connectionId,
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-            ids: detected.accepted ? new Set(detected.value as string[]) : new Set()
+            ids: detected.accepted ? new Set(detected.value) : new Set()
           })
         }
       } catch {
@@ -121,8 +122,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         { targetId: connectionId },
         { timeoutMs: 120_000 }
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const state = sshRepoConnectRun.interpret(reply) as SshConnectionState | null | undefined
+      const state = sshRepoConnectRun.interpret(reply)
       setSshState(state ?? fallbackSshState(connectionId, 'connected', null))
     } catch (error) {
       setSshState(

@@ -13,7 +13,8 @@ import {
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
-import { applyPublishedAiVaultList, EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
+import { EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
+import { useAppliedAiVaultScan } from './ai-vault-applied-scan'
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
@@ -84,8 +85,11 @@ export function useAiVaultSessionRefresh(
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
   sessions: readonly AiVaultSession[]
+  /** The depth the sessions on screen came from, which trails the selected one during a rescan. */
+  loadedSessionLimit: AiVaultSessionLimit | null
 } {
-  const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
+  const { scan, applyScan } = useAppliedAiVaultScan()
+  const scanResult = scan?.result ?? null
   const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,7 +122,6 @@ export function useAiVaultSessionRefresh(
       )}\n${sessionLimitRef.current}`,
     []
   )
-
   const refresh = useCallback(
     async (args: AiVaultRefreshArgs = {}): Promise<void> => {
       const hostScope = executionHostScopeRef.current
@@ -137,7 +140,7 @@ export function useAiVaultSessionRefresh(
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
         setError(null)
         publicationGateRef.current.publish(cachedResult, (published) => {
-          applyPublishedAiVaultList(published, setScanResult)
+          applyScan(published, selectedLimit)
         })
         setLoading(false)
         return
@@ -211,7 +214,7 @@ export function useAiVaultSessionRefresh(
         })
         publicationGateRef.current.publish(result, (published) => {
           if (mountedRef.current && scanKey === currentScanScopeKey()) {
-            applyPublishedAiVaultList(published, setScanResult)
+            applyScan(published, selectedLimit)
           }
         })
       } catch (err) {
@@ -244,7 +247,7 @@ export function useAiVaultSessionRefresh(
       // Deps intentionally avoid changing scope values: refresh reads them
       // through refs and recurses on itself, so its identity must stay stable.
     },
-    [currentScanScopeKey]
+    [applyScan, currentScanScopeKey]
   )
 
   // Forced rescans triggered by new agent sessions run
@@ -359,5 +362,5 @@ export function useAiVaultSessionRefresh(
     requestForcedRescan()
   }, [agentSessionIdsKey, requestForcedRescan])
 
-  return { error, loading, refresh, scanResult, sessions }
+  return { error, loading, refresh, scanResult, sessions, loadedSessionLimit: scan?.limit ?? null }
 }

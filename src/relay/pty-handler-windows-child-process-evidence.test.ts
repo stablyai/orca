@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 // Regression guard for the Windows SSH child-process answer. The relay used to return a hardcoded
 // `false` here, which every close guard reads as "nothing is running in this pane" -- so a Windows
 // SSH pane running a build closed with no prompt. The answer now comes from the process table, and

@@ -102,9 +102,11 @@ export type RuntimePtySpawnArgs = {
   tabId?: string
   leafId?: string
   sessionId?: string
+  shellOverride?: string
   isNewSession?: boolean
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim

@@ -3,10 +3,10 @@
   "family": "speech.dictation-chunk",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
-  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
   "scenarioSha256": "08b583790d858a4cb7cf7377126818b6d05766c02587343ec89a167f94094082",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -17,25 +17,14 @@
       "failures": [],
       "pending": 0
     },
-    "90af24dc404f": {
+    "12521d219054": {
       "name": "speech.dictation.chunk#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.chunk\",\"params\":{\"dictationId\":\"dictation-1\",\"audioBase64\":\"ACVKb5S53gM=\",\"sampleRate\":16000}}"
     },
-    "bc459c132276": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": [
-        {
-          "status": "fulfilled",
-          "value": {
-            "$rpc": "undefined"
-          }
-        }
-      ]
-    },
-    "c0d15d1b2941": {
+    "182109450de8": {
       "name": "speech.dictation.chunk#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -68,6 +57,19 @@
           }
         }
       }
+    },
+    "bc459c132276": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "status": "fulfilled",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ]
     }
   },
   "recording": {
@@ -76,8 +78,8 @@
       {
         "id": "acknowledged",
         "observation": {
-          "sender": ["c0d15d1b2941"],
-          "payloads": ["90af24dc404f"],
+          "sender": ["182109450de8"],
+          "payloads": ["12521d219054"],
           "settlements": {
             "chunk": "bc459c132276"
           },

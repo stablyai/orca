@@ -1,3 +1,4 @@
+import { matrixSites } from './reply-matrix'
 import type { RecordingScenario } from './recording-scenario'
 
 /**
@@ -68,9 +69,11 @@ export function replyMatrixNormalResult(
 ): unknown {
   let recorded: { found: boolean; result: unknown } = { found: false, result: undefined }
   for (const scenario of scenarios) {
-    for (const step of scenario.steps) {
-      if ('complete' in step && step.complete === request && !recorded.found) {
-        recorded = fulfilledResult(step.reply)
+    // Read through the same site list the matrix drives, so a frame's replayed success is found
+    // where a frame's site is: by payload name and occurrence, not by request name.
+    for (const site of matrixSites(scenario)) {
+      if (site.id === request && !recorded.found) {
+        recorded = fulfilledResult(site.reply)
       }
     }
   }

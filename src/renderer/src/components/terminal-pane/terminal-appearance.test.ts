@@ -142,6 +142,7 @@ describe('applyTerminalAppearance theme assignment', () => {
   // panes that can measure; unmeasurable panes defer them until fit/reveal.
   function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
     const measurable = overrides?.measurable ?? true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members exercised by appearance logic.
     return {
       id,
       terminal: { options: {}, cols: 80, rows: 24 },
@@ -156,11 +157,13 @@ describe('applyTerminalAppearance theme assignment', () => {
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance logic.
     return {
       // Mirrors the real getPanes(), which allocates a fresh toPublicPane()
       // wrapper per call over a shared terminal — per-pane state must survive that.
       getPanes: () => panes.map((pane) => ({ ...pane })),
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }
@@ -434,9 +437,11 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
       expect(publishMock).toHaveBeenCalledTimes(1)
 
       // Identical app-global snapshot, so the publisher dedupe keeps it a single push.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance publication.
       const manager = {
         getPanes: () => [],
         setPaneLigaturesEnabled: vi.fn(),
+        setPaneInlineImagesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
       applyTerminalAppearance(

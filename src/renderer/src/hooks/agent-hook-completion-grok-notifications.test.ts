@@ -43,7 +43,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -78,8 +77,7 @@ describe('Grok hook completion notifications', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 

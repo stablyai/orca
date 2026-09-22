@@ -41,7 +41,7 @@ describe('launchAgentSessionContinuation', () => {
     store.ensureRemoteDetectedAgents.mockResolvedValue(['claude', 'codex'])
     store.ensureRuntimeDetectedAgents.mockResolvedValue(['claude', 'codex'])
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     })
     vi.stubGlobal('window', {
@@ -72,7 +72,7 @@ describe('launchAgentSessionContinuation', () => {
         worktreeId: 'wt-1',
         groupId: 'group-1',
         initialCwd: '/repo/worktree/packages/app',
-        promptDelivery: 'submit-after-ready'
+        promptDelivery: 'draft'
       })
     )
   })
@@ -116,7 +116,7 @@ describe('launchAgentSessionContinuation', () => {
 
   it('distinguishes prompt delivery failure from terminal launch failure', async () => {
     launchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-new',
+      surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
     })
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
@@ -129,6 +129,9 @@ describe('launchAgentSessionContinuation', () => {
       launchSource: 'sidebar'
     })
 
+    expect(launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', promptDelivery: 'submit-after-ready' })
+    )
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
         'The new Codex session started, but its context could not be sent.'

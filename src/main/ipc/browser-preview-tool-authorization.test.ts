@@ -141,7 +141,10 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:clientRouteImportSources',
   'browser:session:detectBrowsers',
   'browser:session:detectBrowsersForClientHost',
-  'browser:session:importFromBrowser'
+  'browser:session:importFromBrowser',
+  // Process-wide identity: reads/writes the host's own user-agent choice, never a viewed guest.
+  'browser:identity:get',
+  'browser:identity:set'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown

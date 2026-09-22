@@ -437,6 +437,11 @@ export class SshRelaySession {
     return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
   }
 
+  /** The host's own `$HOME`, read on the host during relay deploy — never this client's. */
+  getRemoteHomeDirectory(): string | null {
+    return this.remoteCliBridgeEnv?.remoteHome ?? null
+  }
+
   getAiVaultHostInfo(): SshRelayAiVaultHostInfo | null {
     const env = this.remoteCliBridgeEnv
     if (!env) {
@@ -1525,6 +1530,7 @@ export class SshRelaySession {
     try {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
+        opencode2PluginSource: openCodeInternals.getOpenCode2PluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
         ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
         primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
@@ -1569,7 +1575,11 @@ export class SshRelaySession {
         return
       }
       const envelope = params
-      if (typeof envelope.paneKey !== 'string') {
+      if (
+        typeof envelope.paneKey !== 'string' ||
+        (envelope.isReplay !== undefined && typeof envelope.isReplay !== 'boolean') ||
+        (envelope.launchToken !== undefined && typeof envelope.launchToken !== 'string')
+      ) {
         return
       }
       // Why: forward the agent CLI's env/version verbatim (not the relay's) so warn-once protocol-mismatch diagnostics fire for remote events too.

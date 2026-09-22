@@ -1,5 +1,11 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  filePreviewImageSchema,
+  filePreviewTextSchema,
+  terminalArtifactWriteSchema,
+  terminalPathResolutionSchema
+} from './file-preview-reply-schema'
 
 /**
  * The preview screen's reads and writes.
@@ -10,9 +16,16 @@ import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
  * the failure is a stale terminal-artifact grant worth refreshing. No acceptance policy exposes a
  * refusal code, and only these two consumers want one.
  *
- * The payloads are unchecked here because the shape depends on the path, not on the method:
- * `normalizeMobileFilePreviewResult` picks the image or text projection from the file name, which
- * a module-level reader cannot see.
+ * What a *malformed* accepted reply does is what changes here. A skip's reader is consulted only
+ * after the policy has already admitted the reply, so an unreadable payload throws
+ * `RpcIncompatibleReplyError` naming the method; the preview screen's own try/catch runs it back
+ * through `previewError`, which lands on 'Unable to load preview' — the copy main already showed
+ * for an unreadable text payload, and a truer one than the 'Binary preview unavailable' main gave
+ * an unreadable image payload.
+ *
+ * The text and image readers are split by method rather than by path: `createMobileFilePreviewRequest`
+ * picks the method from `classifyMobileArtifact`, and `loadMobileFilePreview` normalizes with the
+ * same predicate over the same path, so each method has exactly one projection behind it.
  */
 
 /** files.read for a preview. The tab doc asks the same method under a throwing policy. */
@@ -22,7 +35,7 @@ export const filePreviewTextRead = bindDeferredRpcOperation(
     method: 'files.read',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('file-preview')
+    read: rpcResultVariant('file-preview-text', filePreviewTextSchema)
   })
 )
 
@@ -33,7 +46,7 @@ export const filePreviewImageRead = bindDeferredRpcOperation(
     method: 'files.readPreview',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('file-preview')
+    read: rpcResultVariant('file-preview-image', filePreviewImageSchema)
   })
 )
 
@@ -43,7 +56,7 @@ export const terminalArtifactTextRead = bindDeferredRpcOperation(
     method: 'files.readTerminalArtifact',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('file-preview')
+    read: rpcResultVariant('file-preview-text', filePreviewTextSchema)
   })
 )
 
@@ -53,7 +66,7 @@ export const terminalArtifactImageRead = bindDeferredRpcOperation(
     method: 'files.readTerminalArtifactPreview',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('file-preview')
+    read: rpcResultVariant('file-preview-image', filePreviewImageSchema)
   })
 )
 
@@ -64,7 +77,7 @@ export const terminalArtifactWrite = bindDeferredRpcOperation(
     method: 'files.writeTerminalArtifact',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('artifact-written')
+    read: rpcResultVariant('artifact-written', terminalArtifactWriteSchema)
   })
 )
 
@@ -75,7 +88,7 @@ export const terminalArtifactPathResolve = bindDeferredRpcOperation(
     method: 'files.resolveTerminalPath',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-path-resolution')
+    read: rpcResultVariant('terminal-path-resolution', terminalPathResolutionSchema)
   })
 )
 

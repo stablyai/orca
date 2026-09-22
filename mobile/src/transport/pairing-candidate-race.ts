@@ -1,4 +1,4 @@
-import { hostStatusProbe } from './host-status-probe-operations'
+import { hostAnsweredStatusProbe, hostStatusProbe } from './host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 
 export type PairingCandidatePath = 'direct' | 'relay'
@@ -19,7 +19,7 @@ export function racePairingCandidates(
     for (const candidate of candidates) {
       void hostStatusProbe.request(candidate.client).then(
         (reply) => {
-          if (!hostStatusProbe.interpret(reply).accepted) {
+          if (!hostAnsweredStatusProbe(reply)) {
             failures++
             rejectIfFinished()
             return

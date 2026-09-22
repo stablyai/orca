@@ -22,6 +22,15 @@ import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-pr
 
 export type TerminalCreateOptions = {
   command?: string
+  /**
+   * Windows shell to spawn AS the PTY process, instead of the host default shell.
+   *
+   * Distinct from `command`, which is typed into whatever shell the host spawns: a caller asking
+   * for cmd or PowerShell through `command` gets it as a CHILD of the default shell, so the
+   * terminal's own process is still the default shell and leaving that child lands back on a
+   * prompt the caller never asked for.
+   */
+  shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
@@ -31,7 +40,23 @@ export type TerminalCreateOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
+  /**
+   * Initial text folded into `startupAgent`'s launch command, for an agent whose CLI takes a prompt
+   * argument. Not a general prompt channel: an agent that takes its text only after start has no
+   * launch command to carry it, and a caller that sets this for one is refused rather than having
+   * the prompt silently dropped. Post-start delivery belongs to whoever owns the live PTY.
+   */
+  startupPrompt?: string
+  /**
+   * Replaces the Settings launch arguments for this `startupAgent` only; `null` means none at all.
+   *
+   * Not part of `callerSuppliedLaunch`: that guard refuses a caller that brought its own *command*,
+   * which would contradict the agent the runtime is resolving. Arguments are an input to the plan
+   * the runtime still builds, so overriding them does not take the launch away from it.
+   */
+  agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -176,6 +201,8 @@ export type RuntimeProviderSnapshotReadOptions = {
 
 /** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */
 export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
+  /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
+  promptForSchedule?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
   acceptQueued?: boolean
   observationTimeoutMs?: number

@@ -10,6 +10,7 @@ import {
   normalizeMobileFilePreviewResult,
   previewErrorFromRefusal
 } from './mobile-file-preview-response'
+import { RPC_INCOMPATIBLE_REPLY_CODE } from '../transport/rpc-incompatible-reply-error'
 
 function ok(result: unknown): RpcSuccess {
   return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -501,7 +502,7 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
-  it('reports a malformed refreshed artifact read instead of treating it as changed desktop content', async () => {
+  it('names the unreadable reply on a refreshed artifact read instead of treating it as changed desktop content', async () => {
     const client = clientWithResponses([
       fail('terminal_file_grant_stale'),
       ok({
@@ -532,10 +533,9 @@ describe('mobile-file-preview-request', () => {
         '{"ok":false}',
         { baseContent: '{"ok":true}' }
       )
-    ).resolves.toEqual({
-      status: 'error',
-      message: 'Unable to load preview',
-      reconnect: false
+    ).rejects.toMatchObject({
+      code: RPC_INCOMPATIBLE_REPLY_CODE,
+      method: 'files.readTerminalArtifact'
     })
 
     expect(client.sendRequest).toHaveBeenCalledTimes(3)

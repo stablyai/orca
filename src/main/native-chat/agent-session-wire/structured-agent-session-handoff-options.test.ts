@@ -280,12 +280,15 @@ describe('structured session handoff options', () => {
     })
 
     expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
+    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 5000 }
     )
     expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 5000 }
     )
 
     expect(launchedOptions).toEqual([

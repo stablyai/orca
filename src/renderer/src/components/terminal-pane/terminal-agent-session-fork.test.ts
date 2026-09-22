@@ -95,10 +95,13 @@ describe('forkAgentSessionFromPane', () => {
         id: 'wt-fork'
       }
     })
-    mockLaunchAgentInNewTab.mockReturnValue({
-      tabId: 'tab-2',
-      startupPlan: {},
-      pasteDraftAfterLaunch: true
+    mockLaunchAgentInNewTab.mockImplementation((args) => {
+      args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
+      return {
+        surface: { kind: 'local-terminal', tabId: 'tab-2' },
+        startupPlan: {},
+        pasteDraftAfterLaunch: true
+      }
     })
     mockWriteClipboardText.mockResolvedValue(undefined)
     mockMarkTrusted.mockResolvedValue(undefined)
@@ -161,86 +164,42 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  it('waits for a structured settlement before announcing the fork and seeds no shell', async () => {
+  it('announces the provisional chat without waiting for structured settlement', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
-    let settle!: (settlement: unknown) => void
-    mockLaunchAgentInNewTab.mockReturnValue({
-      tabId: null,
+    const result = {
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'structured-agent-session-session-1',
+        sessionId: 'session-1'
+      },
       startupPlan: {},
       pasteDraftAfterLaunch: false,
-      structuredSettlement: new Promise((resolve) => (settle = resolve))
-    })
+      structuredSettlement: new Promise(() => {})
+    }
+    mockLaunchAgentInNewTab.mockImplementationOnce(
+      (args: {
+        beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
+      }) => {
+        args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+        return result
+      }
+    )
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
-    const fork = forkAgentSessionFromPane({
+    await forkAgentSessionFromPane({
       pane: makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
-    await vi.waitFor(() => expect(mockActivateAndRevealWorktree).toHaveBeenCalled())
-
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
       sidebarRevealBehavior: 'auto',
       providesInitialSurface: true
     })
-    expect(mockToast.success).not.toHaveBeenCalled()
-    settle({ kind: 'structured', sessionId: 'session-1' })
-    await fork
-
     expect(mockToast.success).toHaveBeenCalledWith(
       'Top-level session fork opened in a new workspace'
-    )
-  })
-
-  it('announces the fork when a refused structured launch fell back to a terminal tab', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    mockLaunchAgentInNewTab.mockReturnValue({
-      tabId: null,
-      startupPlan: {},
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: Promise.resolve({ kind: 'refused-then-legacy', primaryTabId: 'tab-2' })
-    })
-    const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
-      await import('./terminal-agent-session-fork')
-
-    const prepared = prepareAgentSessionForkFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-    await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
-    expect(mockToast.success).toHaveBeenCalledOnce()
-    expect(mockWriteClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('copies context when the refusal fallback opened no terminal tab', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
-    }
-    mockLaunchAgentInNewTab.mockReturnValue({
-      tabId: null,
-      startupPlan: {},
-      pasteDraftAfterLaunch: false,
-      structuredSettlement: Promise.resolve({ kind: 'refused-then-legacy', primaryTabId: null })
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('Assistant: current implementation notes'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockToast.success).not.toHaveBeenCalled()
-    expect(mockWriteClipboardText).toHaveBeenCalledWith(
-      expect.stringContaining('Assistant: current implementation notes')
     )
   })
 
@@ -249,17 +208,29 @@ describe('forkAgentSessionFromPane', () => {
     ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }, true],
     ['visibility-unknown', { kind: 'visibility-unknown', sessionId: 'session-1' }, false]
   ])(
-    'closes the dialog without a success toast on a %s structured settlement',
-    async (_kind, settlement, copiesContext) => {
+    'keeps the provisional chat open on a later %s structured settlement',
+    async (_kind, settlement, _keepsOpen) => {
       store.agentStatusByPaneKey = {
         [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
       }
-      mockLaunchAgentInNewTab.mockReturnValue({
-        tabId: null,
+      const result = {
+        surface: {
+          kind: 'local-agent-session',
+          tabId: 'structured-agent-session-session-1',
+          sessionId: 'session-1'
+        },
         startupPlan: {},
         pasteDraftAfterLaunch: false,
         structuredSettlement: Promise.resolve(settlement)
-      })
+      }
+      mockLaunchAgentInNewTab.mockImplementationOnce(
+        (args: {
+          beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
+        }) => {
+          args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+          return result
+        }
+      )
       const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
         await import('./terminal-agent-session-fork')
 
@@ -271,8 +242,10 @@ describe('forkAgentSessionFromPane', () => {
       })
       // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
       await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
-      expect(mockToast.success).not.toHaveBeenCalled()
-      expect(mockWriteClipboardText).toHaveBeenCalledTimes(copiesContext ? 1 : 0)
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'Top-level session fork opened in a new workspace'
+      )
+      expect(mockWriteClipboardText).not.toHaveBeenCalled()
       expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
         sidebarRevealBehavior: 'auto',
         providesInitialSurface: true

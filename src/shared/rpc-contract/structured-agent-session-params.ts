@@ -18,6 +18,9 @@ export const MAX_BLOCKS = 64
 
 export const MAX_OPTION_LABEL = 512
 
+/** One relaunch cannot offer more chats than a profile plausibly holds. */
+export const MAX_RESTART_RESUME_SESSIONS = 512
+
 export const SessionId = z
   .string()
   .max(MAX_ID_LENGTH)
@@ -225,6 +228,16 @@ export const ConversationCommandParams = z
  *  the other's. */
 export const HoldParams = z
   .object({ sessionId: SessionId, holderId: Identifier('Invalid holder id') })
+  .strict()
+
+/** A launch's offer to resume what the last teardown recorded as working. No arguments: the set is
+ *  the host's to derive, never a client's to assert. */
+export const RestartResumableParams = z.object({}).strict()
+
+/** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
+ *  host re-derives eligibility, so an id a client invents is simply not in the set. */
+export const RestartResumeParams = z
+  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
 export const HistoryParams = z

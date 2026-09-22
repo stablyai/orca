@@ -162,6 +162,9 @@ export async function applyExactAdmissionSelector(post, membership, options = {}
       ...(before.selector.generation === 0
         ? { expectedMembershipSha256: membershipSha256(before.selector.membership) }
         : {}),
+      // Only a same-cap roll's isolate passes this; every other caller omits it
+      // and leaves the cell's hosts pinned, which is the pre-existing behaviour.
+      ...(options.rollIsolatedCells ? { rollIsolatedCells: options.rollIsolatedCells } : {}),
       membership: desired
     })
   } catch (error) {

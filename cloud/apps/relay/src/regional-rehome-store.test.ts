@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readAssignmentInventorySnapshot } from './assignment-inventory-snapshot.js'
+import { REGIONAL_REHOME_ARRIVAL_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   RelayAssignmentStore as BaseRelayAssignmentStore,
   type RegionalRehomeAttempt,
@@ -34,8 +36,12 @@ const target = {
   connectionHardCap: 1_000 as const,
   connectionUnobservedBound: 60
 }
+// A third general cell in the source region: never a source or target here,
+// but it is in the fleet whose safety the gate reads.
+const bystander = { ...source, id: 'us-c2', url: 'https://us-c2.relay.example.test' }
 const sourceIncarnation = '11111111-1111-4111-8111-111111111111'
 const targetIncarnation = '22222222-2222-4222-8222-222222222222'
+const bystanderIncarnation = '33333333-3333-4333-8333-333333333333'
 
 describe('regional rehome assignment state', () => {
   it('advances past a full candidate page whose destination lacks capacity', async () => {
@@ -409,7 +415,8 @@ describe('regional rehome assignment state', () => {
     const warnings = collectDisableWarnings()
     try {
       expect(await context.store.commitIdleRegionalRehome(candidate!, safety)).toEqual({
-        outcome: 'deferred'
+        outcome: 'deferred',
+        reason: 'fleet-safety'
       })
     } finally {
       warnings.restore()
@@ -424,7 +431,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('latches off on sustained pool pressure and logs the disable exactly once', async () => {
+  it('defers on target pool pressure without disabling, and claims once it clears', async () => {
     const context = await setup()
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -448,20 +455,64 @@ describe('regional rehome assignment state', () => {
 
     const warnings = collectDisableWarnings()
     try {
+      // Per-cell, so it excludes this target rather than stopping the poll.
       expect(await context.store.commitIdleRegionalRehome(candidate!, safety)).toEqual({
-        outcome: 'deferred'
+        outcome: 'deferred',
+        reason: 'candidate-ineligible'
       })
-      // Already disabled: the next tick returns before the gate and stays silent.
-      expect(await context.store.tryIdleRehome()).toBeNull()
     } finally {
       warnings.restore()
     }
+    // A pool bar crossed between the scan and the commit skips the cell; it must
+    // not turn the durable switch off, or the worker never comes back.
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
-      generation: 2,
-      enabled: false
+      generation: 1,
+      enabled: true
     })
-    expect(warnings.entries).toMatchObject([
-      { reason: 'database_pool_pressure', databasePoolWaitersMax: 17 }
+    expect(warnings.entries).toEqual([])
+
+    await context.database.query(
+      `UPDATE relay_cell_rehome_safety SET database_pool_waiters_max = 0 WHERE cell_id = ?`,
+      [target.id]
+    )
+    expect(await context.store.tryIdleRehome()).toMatchObject({
+      userId: 'user-1',
+      sourceCellId: source.id,
+      targetCellId: target.id
+    })
+    await context.database.close()
+  })
+
+  it('keeps selecting candidates while an unrelated cell is over the pool bar', async () => {
+    // Production case: the fleet snapshot is a Math.max, so one cell with a
+    // narrow client pool used to empty every page.
+    const context = await setup()
+    await activatePreferredSource(context, {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop'
+    })
+    await context.store.reconcileCells([source, target, bystander])
+    await heartbeat(context.store, bystander, bystanderIncarnation, 3, 2, {
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 150,
+      databasePoolWaitersMax: 150,
+      databasePoolWaitMsMax: 2_005
+    })
+
+    const safety: RegionalRehomeSafetySnapshot = {
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 0,
+      databasePoolWaitersMax: 0,
+      databasePoolWaitMsMax: 0
+    }
+    expect(await context.store.selectIdleRegionalRehomeCandidates(safety)).toMatchObject([
+      { sourceCellId: source.id, targetCellId: target.id }
     ])
     await context.database.close()
   })
@@ -732,7 +783,8 @@ describe('regional rehome assignment state', () => {
     )
 
     expect(await context.store.commitIdleRegionalRehome(candidate!, safety)).toEqual({
-      outcome: 'deferred'
+      outcome: 'deferred',
+      reason: 'fleet-safety'
     })
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
       generation: 2,
@@ -1036,6 +1088,112 @@ describe('regional rehome assignment state', () => {
 
     probe.failNoWait = false
     expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
+    await context.database.close()
+  })
+
+  it('rolls a host that never reached its target back to the source at the arrival window', async () => {
+    const context = await setup()
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    expect(await context.store.tryIdleRehome()).not.toBeNull()
+    await context.store.releaseActivity(identity, sourceControl)
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+
+    context.advance(REGIONAL_REHOME_ARRIVAL_WINDOW_MS - 1)
+    await freshHeartbeats(context)
+    expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(0)
+
+    context.advance(1)
+    await freshHeartbeats(context)
+    expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(1)
+    // Where the host was, so its next reconnect lands on the source it left.
+    expect(await context.store.resolve(identity)).toMatchObject({
+      cellId: source.id,
+      assignmentEpoch: 3
+    })
+    expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(0)
+    await context.database.close()
+  })
+
+  it('leaves the durable switch alone when it rolls back an unarrived host', async () => {
+    const context = await setup()
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    expect(await context.store.tryIdleRehome()).not.toBeNull()
+    await context.store.releaseActivity(identity, sourceControl)
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+    const before = await context.store.inspectRegionalRehomeControl()
+    context.advance(REGIONAL_REHOME_ARRIVAL_WINDOW_MS)
+    await freshHeartbeats(context)
+
+    expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(1)
+
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: before.generation,
+      enabled: true
+    })
+    const [attempt] = await context.database.query(
+      'SELECT abort_reason FROM relay_region_rehome_attempts'
+    )
+    expect(attempt!.abort_reason).toBe('host_not_arrived')
+    // What the rollout tracker reads to see a leak before it fills the budget.
+    const preview = await context.store.previewRegionalRehomeEligibility()
+    expect(preview.abortedLast24Hours).toEqual({ host_not_arrived: 1 })
+    expect(
+      (await readAssignmentInventorySnapshot(context.database, context.now())).regionalRehomes
+    ).toMatchObject({ abortedLast24Hours: 1, hostNotArrivedLast24Hours: 1 })
+    await context.database.close()
+  })
+
+  it('leaves a host that did reach its target for the completion sweep', async () => {
+    const context = await setup()
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    expect(await context.store.tryIdleRehome()).not.toBeNull()
+    // Past the window, but present at the target: the sweep reads live
+    // ownership, not the attempt's age alone.
+    context.advance(REGIONAL_REHOME_ARRIVAL_WINDOW_MS)
+    await freshHeartbeats(context)
+    await context.store.activateControl(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2,
+      generation: 1,
+      cellIncarnation: targetIncarnation
+    })
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+    await context.store.releaseActivity(identity, sourceControl)
+
+    expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(0)
+    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
+    expect(await context.store.resolve(identity)).toMatchObject({ cellId: target.id })
+    await context.database.close()
+  })
+
+  it('names the 24-hour latch in its own abort reason', async () => {
+    const context = await setup()
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    expect(await context.store.tryIdleRehome()).not.toBeNull()
+    await context.store.releaseActivity(identity, sourceControl)
+    context.advance(24 * 60 * 60_000)
+    await heartbeat(context.store, source, sourceIncarnation, 3, 2)
+
+    expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
+
+    const [attempt] = await context.database.query(
+      'SELECT abort_reason FROM relay_region_rehome_attempts'
+    )
+    expect(attempt!.abort_reason).toBe('max_refresh_expired')
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({ enabled: false })
     await context.database.close()
   })
 
@@ -1714,7 +1872,7 @@ function hookAfterCandidateScan(
   const decorate = (delegate: RelayDatabase): RelayDatabase => ({
     query: async (sql, params) => {
       const rows = await delegate.query(sql, params)
-      if (!fired && sql.includes('SELECT a.user_id, a.relay_host_id')) {
+      if (!fired && sql.includes('SELECT d.user_id, d.relay_host_id')) {
         fired = true
         await hook(delegate)
       }

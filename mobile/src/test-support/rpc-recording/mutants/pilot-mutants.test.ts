@@ -17,6 +17,13 @@ const input = readScenarios(
 )
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 // One mutant per adapter family, so every family's state projection is shown to be load-bearing.
+// `aiVault.history-screen` carries none: every change to what `worktree.ps` publishes also moves
+// the `scopePaths` the next scripted completion asserts, so a mutant aborts the sequence instead of
+// diverging from it. Do not read that family's reply matrix as an accepted-vs-refused oracle
+// either: the screen paints the same spinner, labels and zero rows either way, so `normal`'s
+// projected state is identical to all seven non-crashing partitions. What holds the family is the
+// next request's `scopePaths` (`["/repo/feature"]` when the rows are read, `[]` when they are not)
+// and the crash channel the three `inner-*` partitions land in.
 const mutants: Record<string, Mutation> = {
   b1: 'race',
   b2: 'acceptance',
@@ -28,7 +35,18 @@ const mutants: Record<string, Mutation> = {
   'settings-task-hydration-fulfilled': 'task-hydration-envelope',
   'settings-task-write': 'task-preferences-optimistic',
   'settings-workspace-submit-fulfilled': 'workspace-submit-envelope',
-  'settings-task-workspace-fulfilled': 'task-workspace-envelope'
+  'settings-task-workspace-fulfilled': 'task-workspace-envelope',
+  'native-chat-write-delivery-unknown': 'native-chat-send-delivery-unknown',
+  'home-host-accounts': 'home-accounts-envelope',
+  'notifications-display-test-accepted': 'push-test-envelope',
+  'tasks-route-repo-list': 'task-screen-repo-envelope',
+  'linear-select-workspace': 'linear-workspace-context-reload',
+  'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
+  'terminal-worktree-connection-resolved': 'worktree-connection-first-repo',
+  'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state',
+  'tk-item-detail-metadata': 'assignable-user-avatar-null-collapse',
+  'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
+  'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2
@@ -74,6 +92,7 @@ describe('RPC main recording mutants', () => {
   for (const { id, scenario, mutation } of mutantPilots) {
     it(`${id}: kills ${mutation}`, async () => {
       const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
+        device: scenario,
         mutation: operationMutation(mutation)
       })
       const result = await runRecordingMutant(
@@ -90,6 +109,7 @@ describe('RPC main recording mutants', () => {
   for (const { id, scenario, reference } of referencePilots) {
     it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(`${id}: rejects bcba08b3e4`, async () => {
       const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
+        device: scenario,
         reference: true
       })
       const result = await runRecording(

@@ -3,9 +3,9 @@
   "family": "tasks.task-create-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "f6c7eea985190d9edeead5b36f90c8aa98679f69d19dab7579fec88841645259",
   "platform": "darwin",
@@ -13,8 +13,19 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "11915dfdb24a": {
+    "0fef9dc7845d": {
+      "name": "createTitle",
+      "ordinal": 7,
+      "value": ""
+    },
+    "13b1e9c092d4": {
+      "name": "createBody",
+      "ordinal": 8,
+      "value": ""
+    },
+    "3c76066eb236": {
       "name": "linear.createIssue#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -53,21 +64,10 @@
         }
       }
     },
-    "3e610f908f29": {
-      "name": "showCreateTask",
-      "value": false
-    },
-    "4a66cf72bc8f": {
+    "5294116e0f90": {
       "name": "creatingTask",
-      "value": false
-    },
-    "5b8e3a96030e": {
-      "name": "createBody",
-      "value": ""
-    },
-    "6105e77e3945": {
-      "name": "linear.createIssue#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+      "ordinal": 1,
+      "value": true
     },
     "61b2cb7e4313": {
       "composer": false,
@@ -104,20 +104,14 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
-    "791f05938c43": {
+    "b1504689c2b3": {
       "name": "creatingTask",
-      "value": true
+      "ordinal": 9,
+      "value": false
     },
-    "82cd71d524c8": {
-      "name": "error",
-      "value": ""
-    },
-    "871b62dd230b": {
-      "name": "createTitle",
-      "value": ""
-    },
-    "9f7828134fd2": {
+    "b44dfc09514f": {
       "name": "actionItem",
+      "ordinal": 5,
       "value": {
         "key": "linear:linear-workspace:issue-3",
         "provider": "linear",
@@ -149,6 +143,11 @@
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     },
+    "ce67fb8d9d58": {
+      "name": "linear.createIssue#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A new task\",\"description\":\"a body\",\"workspaceId\":\"linear-workspace\"}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -156,6 +155,16 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    },
+    "fa467ac4ab12": {
+      "name": "showCreateTask",
+      "ordinal": 6,
+      "value": false
     }
   },
   "recording": {
@@ -164,21 +173,21 @@
       {
         "id": "create-settled",
         "observation": {
-          "sender": ["11915dfdb24a"],
-          "payloads": ["6105e77e3945"],
+          "sender": ["3c76066eb236"],
+          "payloads": ["ce67fb8d9d58"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create-0": "eb79a9b3682a"
           },
           "state": "61b2cb7e4313",
           "effects": [
-            "791f05938c43",
-            "82cd71d524c8",
-            "9f7828134fd2",
-            "3e610f908f29",
-            "871b62dd230b",
-            "5b8e3a96030e",
-            "4a66cf72bc8f"
+            "5294116e0f90",
+            "ed3a7d6bc894",
+            "b44dfc09514f",
+            "fa467ac4ab12",
+            "0fef9dc7845d",
+            "13b1e9c092d4",
+            "b1504689c2b3"
           ]
         }
       }

@@ -14,7 +14,10 @@ import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-ac
 type SendActions = ReturnType<typeof useMobileDiffReviewSendActions>
 
 vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn() }))
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn().mockResolvedValue(undefined) }))
+// Resolving `true`, which is what the pasteboard answers when it took the text: the seam reads
+// that boolean, and a mock resolving `undefined` put every copy down the refusal arm unseen.
+const clipboardMock = vi.hoisted(() => ({ setStringAsync: vi.fn() }))
+vi.mock('expo-clipboard', () => clipboardMock)
 
 function sendResponse(accepted: boolean) {
   return {
@@ -52,6 +55,7 @@ describe('useMobileDiffReviewSendActions', () => {
   let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
     setSendSheet = vi.fn()
@@ -84,6 +88,34 @@ describe('useMobileDiffReviewSendActions', () => {
       renderer = create(createElement(Harness))
     })
   }
+
+  /** Copying reaches no client, so the cases below mount without one rather than stubbing it. */
+  async function mountWithoutClient(): Promise<void> {
+    mountedClient = null
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+  }
+
+  it('copies the notes through the platform seam and says so', async () => {
+    await mountWithoutClient()
+    await act(async () => {
+      await actions?.copyNotes()
+    })
+    expect(clipboardMock.setStringAsync).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes copied')
+  })
+
+  it('reports a refused copy instead of claiming it copied', async () => {
+    // The pasteboard answering `false` is the case the seam exists to surface: on the web the verb
+    // is refused when the route was not granted it, and the only caller is a floating promise.
+    clipboardMock.setStringAsync.mockResolvedValue(false)
+    await mountWithoutClient()
+    await act(async () => {
+      await actions?.copyNotes()
+    })
+    expect(setActionError).toHaveBeenLastCalledWith('the clipboard did not accept this text')
+  })
 
   it('heals a marked terminal BEFORE submitting the notes', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))

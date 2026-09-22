@@ -61,7 +61,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           allowFileUriLinks={context.allowFileUriLinks}
           deliveryFailed={context.failedDeliveryMessageIds?.has(message.id) === true}
           structuredActivityUi={context.showTurnStatus}
-          activityExpandOverride={expanded}
+          folded={slot.folded}
           runtimeContext={context.runtimeContext}
         />
       )}
@@ -72,9 +72,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           workedSeconds={status.workedSeconds}
           expanded={expanded === true}
           onToggleExpanded={
-            status.workedSeconds != null && turnKey
-              ? () => context.onToggleExpandedTurn(turnKey)
-              : undefined
+            slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
           }
         />
       ) : null}

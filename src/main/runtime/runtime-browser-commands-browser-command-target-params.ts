@@ -50,8 +50,8 @@ export type BrowserScreencastParams = {
 export type BrowserScreencastStartResult = {
   subscriptionId: string
   ready: Extract<BrowserScreencastResult, { type: 'ready' }>
-  // The frame budget belongs to the shared page, not to one subscriber's handle.
-  session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
+  // The frame budget and the page's dialog belong to the shared page, not to one subscriber's handle.
+  session: Omit<BrowserScreencastSession, 'updateFrameBudget' | 'settleDialog'>
   // Why: callers gate frames until they have emitted `ready`, and the snapshot captured
   // for a joining subscriber lands inside that window. This replays it once the gate opens.
   flushPendingFrame: () => void

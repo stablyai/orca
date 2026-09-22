@@ -1,6 +1,10 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
+  AdvancedNetworkSettingsSection,
   createHttpProxyBypassRulesDraftState,
   createHttpProxyUrlDraftState,
   hasConfiguredNetworkProxy,
@@ -11,6 +15,23 @@ import {
 } from './AdvancedNetworkSettingsSection'
 
 describe('AdvancedNetworkSettingsSection proxy drafts', () => {
+  it('renders bypass rules as a multiline textarea', () => {
+    const markup = renderToStaticMarkup(
+      createElement(AdvancedNetworkSettingsSection, {
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          httpProxyBypassRules: 'localhost\n127.0.0.1\n*.internal.corp'
+        },
+        updateSettings: () => undefined
+      })
+    )
+
+    expect(markup).toMatch(/<textarea[^>]*id="settings-http-proxy-bypass-rules"[^>]*>/)
+    expect(markup).toContain('localhost')
+    expect(markup).toContain('127.0.0.1')
+    expect(markup).toContain('*.internal.corp')
+  })
+
   it('keeps a committed proxy URL draft tied to the current persisted source', () => {
     const current = createHttpProxyUrlDraftState(undefined)
 

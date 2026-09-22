@@ -3,9 +3,9 @@
   "family": "components.setup-script",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "d4052f119c7ed68dc922c8beeb0074701f1532b10e48e284fb71aa165a17e437",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "28e75475e9e0": {
+    "2bf6d40fe6a5": {
       "name": "repo.hooks#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -38,8 +39,38 @@
         "startedAt": 0
       }
     },
-    "3515a8adcd6d": {
+    "5d1cf72f4e12": {
+      "advanced": true,
+      "command": "pnpm install",
+      "run": true,
+      "runPolicy": "ask",
+      "source": "repo",
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "79deedc9f2ed": {
       "name": "repo.hooks#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "80cf8444e458": {
+      "advanced": false,
+      "command": {
+        "$rpc": "null"
+      },
+      "run": true,
+      "runPolicy": "run-by-default",
+      "source": {
+        "$rpc": "null"
+      },
+      "trust": {
+        "$rpc": "null"
+      }
+    },
+    "a4e4636264db": {
+      "name": "repo.hooks#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -80,30 +111,6 @@
         }
       }
     },
-    "5d1cf72f4e12": {
-      "advanced": true,
-      "command": "pnpm install",
-      "run": true,
-      "runPolicy": "ask",
-      "source": "repo",
-      "trust": {
-        "$rpc": "null"
-      }
-    },
-    "80cf8444e458": {
-      "advanced": false,
-      "command": {
-        "$rpc": "null"
-      },
-      "run": true,
-      "runPolicy": "run-by-default",
-      "source": {
-        "$rpc": "null"
-      },
-      "trust": {
-        "$rpc": "null"
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -111,10 +118,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f5dc0ce1e7b8": {
-      "name": "repo.hooks#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
     }
   },
   "recording": {
@@ -123,8 +126,8 @@
       {
         "id": "hooks-pending",
         "observation": {
-          "sender": ["28e75475e9e0"],
-          "payloads": ["f5dc0ce1e7b8"],
+          "sender": ["2bf6d40fe6a5"],
+          "payloads": ["79deedc9f2ed"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -135,8 +138,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["3515a8adcd6d"],
-          "payloads": ["f5dc0ce1e7b8"],
+          "sender": ["a4e4636264db"],
+          "payloads": ["79deedc9f2ed"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

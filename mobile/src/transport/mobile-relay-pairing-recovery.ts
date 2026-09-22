@@ -1,9 +1,8 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  MobileRelayEndpoint,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { loadHosts, saveHost } from './host-store'
@@ -135,9 +134,7 @@ async function runRecovery(
           reqId: journal.metadata.installReqId,
           newResumeTokenHash: journal.metadata.pendingResumeTokenHash
         })
-        const installed = DeviceCredentialInstalledSchema.parse(
-          relayCredentialProvision.interpret(installReply)
-        )
+        const installed = relayCredentialProvision.interpret(installReply)
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
         observedCommitted = true
@@ -226,7 +223,7 @@ async function getRecoveryStatus(
     installReqId: journal.metadata.installReqId,
     ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
   })
-  return PairingGetEndpointsResultSchema.parse(relayPairingEndpointsRead.interpret(reply))
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 async function transitionToInviteAuthorization(
@@ -248,7 +245,7 @@ async function transitionToInviteAuthorization(
 
 async function publishCommitted(
   journal: MobileRelayPairingJournal,
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   dependencies: RecoveryDependencies
 ): Promise<void> {
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
@@ -295,7 +292,7 @@ function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
 }
 
 function assertCommitted(
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   installed: DeviceCredentialInstalled
 ): void {
   if (

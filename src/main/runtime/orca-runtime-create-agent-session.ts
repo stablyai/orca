@@ -16,11 +16,7 @@ import {
   AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
@@ -66,7 +62,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
         ])
       )
       .digest('base64url')
@@ -142,7 +139,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
           ])
         )
         .digest('base64url')
@@ -150,28 +148,16 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-      // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-      // shape must match the PTY route this scope already resolved.
-      const isRemote = Boolean(workspace.connectionId)
-      const shell = resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote,
-        terminalWindowsShell: settings.terminalWindowsShell
-      })
-      const startupArgs = {
+      const startupArgs = resolveAgentStartupPlanInputs({
         agent: request.agent,
-        cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
-          request.agentArgs !== undefined
-            ? request.agentArgs
-            : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-        sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
-        platform,
-        shell,
-        isRemote
-      }
+        settings,
+        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+        // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+        // shape must match the PTY route this scope already resolved.
+        isRemote: Boolean(workspace.connectionId),
+        ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+        sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
+      })
       const startup =
         request.promptDelivery === 'draft'
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
@@ -213,6 +199,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           env: startup.env,
           launchConfig: startup.launchConfig,
           launchAgent: request.agent,
+          terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',

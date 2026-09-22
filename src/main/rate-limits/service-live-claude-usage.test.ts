@@ -108,6 +108,124 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('keeps polling on cadence for an account with a Fable window the live feed cannot carry', async () => {
+    vi.useFakeTimers()
+    try {
+      const withFable = (usedPercent: number): ProviderRateLimits => ({
+        ...okProvider('claude', 40),
+        fableWeekly: { usedPercent, windowMinutes: 10080, resetsAt: null, resetDescription: null }
+      })
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => withFable(18))
+        .mockImplementation(async () => withFable(39))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(service.getState().claude?.fableWeekly?.usedPercent).toBe(18)
+
+      // Statusline posts land every minute, so the live snapshot never ages past the freshness window.
+      for (let minute = 0; minute < 15; minute += 1) {
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour: { used_percentage: 50 + minute },
+          sevenDay: { used_percentage: 30 }
+        })
+        await vi.advanceTimersByTimeAsync(60 * 1000)
+      }
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.fableWeekly?.usedPercent).toBe(39)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('honours a Retry-After that lands while the live feed is fresh', async () => {
+    vi.useFakeTimers()
+    try {
+      const withFable: ProviderRateLimits = {
+        ...okProvider('claude', 40),
+        fableWeekly: {
+          usedPercent: 18,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      }
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => withFable)
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 60 * 60 * 1000 }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // The Fable account keeps polling under live posts; the second poll is a 429 with a one-hour Retry-After.
+      for (let minute = 0; minute < 60; minute += 1) {
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour: { used_percentage: 40 + minute * 0.5 },
+          sevenDay: { used_percentage: 30 }
+        })
+        await vi.advanceTimersByTimeAsync(60 * 1000)
+      }
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+      expect(service.getState().claude?.session?.usedPercent).toBe(69.5)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a Retry-After window closed after a live post clears the error', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => ({
+        ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+        usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 50 * 60 * 1000 }
+      }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: { used_percentage: 41.2 }
+      })
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // Two poll cycles inside the Retry-After window, long after the live post went stale: no OAuth call.
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // Once Retry-After expires, polling resumes.
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('drops statusline posts before attribution is known or from a mismatched config dir', async () => {
     vi.useFakeTimers()
     try {

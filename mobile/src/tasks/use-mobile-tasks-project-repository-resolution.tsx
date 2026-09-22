@@ -1,10 +1,5 @@
 import type { ProjectProjectionModel } from './use-mobile-tasks-project-projection'
-import {
-  type GitHubOwnerRepo,
-  githubProjectKey,
-  useEffect,
-  useMemo
-} from './mobile-tasks-dependencies'
+import { githubProjectKey, useEffect, useMemo } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   getGitHubReviewerSeedUsers,
@@ -64,8 +59,7 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
           { repo: `id:${repo.id}` },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectRepoSlugRead.interpret(reply) as GitHubOwnerRepo | null
+        const result = githubProjectRepoSlugRead.interpret(reply)
         return { repoId: repo.id, entry: { path: repo.path, repository: result } }
       } catch {
         // Cached so readiness settles; `failed` marks it for retry on refresh.

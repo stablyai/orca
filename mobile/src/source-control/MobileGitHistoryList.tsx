@@ -6,13 +6,13 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
 import { gitCommitCompareRead } from './mobile-git-read-operations'
+import type { MobileGitChangedFile } from './git-compare-reply-schema'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { GitBranchChangeEntry } from '../../../src/shared/git-diff-compare-types'
 
 type Props = {
   client: RpcClient | null
@@ -42,7 +42,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
+  const [filesById, setFilesById] = useState<Record<string, MobileGitChangedFile[] | 'loading'>>({})
 
   // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
@@ -110,8 +110,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       .request(client, { worktree: `id:${worktreeId}`, commitId })
       .then((reply) => {
         const compared = gitCommitCompareRead.interpret(reply)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const entries = compared.accepted ? (compared.value as GitBranchChangeEntry[]) : []
+        const entries = compared.accepted ? compared.value.entries : []
         if (!stale) {
           setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }

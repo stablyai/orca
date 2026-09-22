@@ -3,9 +3,9 @@
   "family": "transport.capability-probe",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
   "scenarioSha256": "2ba1e1d70c98e2fd0d2d2dce6f68c11a186756f05207747e156375fc613940d7",
   "platform": "darwin",
@@ -13,12 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e5b32902af7": {
-      "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "2a265b3002f3": {
+    "20578a5e9a12": {
       "name": "status.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -53,8 +50,9 @@
     "2c76473bef66": {
       "published": []
     },
-    "3b0e75cbba89": {
+    "905661513589": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -90,9 +88,10 @@
     "9d1bfe4d6810": {
       "published": [["push.v1"]]
     },
-    "c0c86e67c300": {
-      "name": "status.get#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -101,6 +100,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -109,8 +113,8 @@
       {
         "id": "backing-off",
         "observation": {
-          "sender": ["3b0e75cbba89"],
-          "payloads": ["1e5b32902af7"],
+          "sender": ["905661513589"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "start": "eb79a9b3682a"
           },
@@ -121,8 +125,8 @@
       {
         "id": "published-after-backoff",
         "observation": {
-          "sender": ["3b0e75cbba89", "2a265b3002f3"],
-          "payloads": ["1e5b32902af7", "c0c86e67c300"],
+          "sender": ["905661513589", "20578a5e9a12"],
+          "payloads": ["d08f74d65ee6", "f1834177e593"],
           "settlements": {
             "start": "eb79a9b3682a"
           },

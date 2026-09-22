@@ -1,21 +1,14 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  readMobileReviewCreatedTerminal,
-  readMobileReviewTerminalSendAccepted,
-  type MobileReviewTerminalTab
-} from './mobile-diff-review-rpc'
+  reviewCreatedTerminalSchema,
+  reviewTerminalSendAcceptedSchema,
+  reviewTerminalTabsSchema
+} from './review-terminal-reply-schema'
 
 // Dropping a prompt into a fresh agent terminal: create the tab, then send the text. There is no
 // higher-level agent-composer RPC on mobile, so this pair is the launch mechanism — the PR triage
 // actions and the review-notes send sheet both drive it.
-
-const createdTerminalReader: RpcCompatibleReader<
-  unknown,
-  'created-terminal-tab',
-  MobileReviewTerminalTab | null
-> = (raw) => rpcReadUnchecked('created-terminal-tab', readMobileReviewCreatedTerminal(raw))
 
 /**
  * A refused create is an error the caller surfaces: there is nowhere to put the prompt. The reply
@@ -28,7 +21,7 @@ export const reviewTerminalCreateRun = bindDeferredRpcOperation(
     method: 'session.tabs.createTerminal',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: createdTerminalReader
+    read: rpcResultVariant('created-terminal-tab', reviewCreatedTerminalSchema)
   })
 )
 
@@ -36,18 +29,28 @@ export const reviewTerminalCreateRun = bindDeferredRpcOperation(
  * An accepted send can still report in-band that the terminal is locked, which is a different
  * failure from a refused send and the caller says so. The reader answers that one question.
  */
-const terminalSendAcceptedReader: RpcCompatibleReader<
-  unknown,
-  'terminal-send-accepted',
-  boolean
-> = (raw) => rpcReadUnchecked('terminal-send-accepted', readMobileReviewTerminalSendAccepted(raw))
-
 export const reviewTerminalSendRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'terminal.send-review-prompt',
     method: 'terminal.send',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: terminalSendAcceptedReader
+    read: rpcResultVariant('terminal-send-accepted', reviewTerminalSendAcceptedSchema)
+  })
+)
+
+/**
+ * The agent terminals the send sheet lists. Third reader on `session.tabs.list`: the reveal poller
+ * projects file tabs and answers null for anything else, and the reconciliation controller hands
+ * its owner the snapshot whole so its own type parameter can name it. This one keeps only the
+ * terminal tabs the sheet can drop a prompt into, which both of those drop.
+ */
+export const reviewTerminalListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.review-terminal-list',
+    method: 'session.tabs.list',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('review-terminal-tabs', reviewTerminalTabsSchema)
   })
 )

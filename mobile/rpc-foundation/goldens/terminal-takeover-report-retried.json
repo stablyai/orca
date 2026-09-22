@@ -3,9 +3,9 @@
   "family": "terminal.takeover-report",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
   "scenarioSha256": "8ad436ca6c3de8b0b3148326337acce18a8a4cf3c514acad1a4530a001f28c75",
   "platform": "darwin",
@@ -13,17 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "002261d201ea": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
     "44136fa355b3": {},
-    "797d27f8307a": {
+    "7a48f3d49553": {
       "name": "orchestration.workerTerminalUserInput#2",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
-    "db9815351ccf": {
+    "85f8fb785bb3": {
       "name": "orchestration.workerTerminalUserInput#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -57,16 +55,14 @@
         }
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f3349fb58cad": {
+    "a98cf260f79c": {
       "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "cbacb6a8db01": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -100,6 +96,14 @@
           "ok": false
         }
       }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -108,8 +112,8 @@
       {
         "id": "reported-on-retry",
         "observation": {
-          "sender": ["f3349fb58cad", "db9815351ccf"],
-          "payloads": ["002261d201ea", "797d27f8307a"],
+          "sender": ["cbacb6a8db01", "85f8fb785bb3"],
+          "payloads": ["a98cf260f79c", "7a48f3d49553"],
           "settlements": {
             "report": "eb79a9b3682a"
           },

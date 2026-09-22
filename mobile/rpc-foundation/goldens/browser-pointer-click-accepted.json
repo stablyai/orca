@@ -3,9 +3,9 @@
   "family": "browser.pointer-click",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
   "scenarioSha256": "73faa87b359a11959543542016295bb6b36a10934dd99ad5c1a77a4290a608cd",
   "platform": "darwin",
@@ -13,12 +13,33 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1e463da3d358": {
+    "002a5bcbde42": {
       "name": "browser.mouseClick#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
     },
-    "5b621e308200": {
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f14b569391f9": {
       "name": "browser.mouseClick#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -55,25 +76,6 @@
           }
         }
       }
-    },
-    "9855d4ec3415": {
-      "busy": false,
-      "dialog": {
-        "$rpc": "null"
-      },
-      "error": {
-        "$rpc": "null"
-      },
-      "keyboardValue": "hello",
-      "pointerModifiers": []
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     }
   },
   "recording": {
@@ -82,8 +84,8 @@
       {
         "id": "clicked",
         "observation": {
-          "sender": ["5b621e308200"],
-          "payloads": ["1e463da3d358"],
+          "sender": ["f14b569391f9"],
+          "payloads": ["002a5bcbde42"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "click": "eb79a9b3682a"

@@ -103,13 +103,14 @@ function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boole
   )
 }
 
-function liveSleepingAgentClaimKeys(
+function liveSleepingAgentClaims(
   store: ActivationStore,
   worktreeId: string,
   livePtyIds: ReadonlySet<string>,
   structuredInventory: StructuredActivationInventory | null
-): Set<string> {
+): { keys: Set<string>; claimedPtyIds: Set<string> } {
   const keys = new Set<string>()
+  const claimedPtyIds = new Set<string>()
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId !== worktreeId) {
       continue
@@ -134,10 +135,11 @@ function liveSleepingAgentClaimKeys(
     const persistedPtyId =
       layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined) ?? structuredOwnerPtyId
     if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
+      claimedPtyIds.add(persistedPtyId)
       keys.add(getProviderSessionClaimKey(record))
     }
   }
-  return keys
+  return { keys, claimedPtyIds }
 }
 
 export async function runWorktreeAgentActivationGate(
@@ -243,14 +245,27 @@ export async function runWorktreeAgentActivationGate(
   if (structured && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
     return 'structured'
   }
-  const launched = deps.resume(worktreeId, {
-    skipClaimKeys: liveSleepingAgentClaimKeys(
-      deps.getState(),
-      worktreeId,
-      liveWorkspacePtyIds,
-      structuredInventory
+  const store = deps.getState()
+  const claims = liveSleepingAgentClaims(
+    store,
+    worktreeId,
+    liveWorkspacePtyIds,
+    structuredInventory
+  )
+  const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
+    (record) =>
+      record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
+  )
+  // A surfaced PTY without a conversation claim may still own the sleeping session.
+  if (
+    hasUnclaimedRecovery &&
+    liveWorkspaceSessions.some(
+      (session) => session.agentOwnership !== 'absent' && !claims.claimedPtyIds.has(session.id)
     )
-  })
+  ) {
+    return 'blocked'
+  }
+  const launched = deps.resume(worktreeId, { skipClaimKeys: claims.keys })
   // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
   // claim the host had nothing; the callers re-check their own seeding guards first.
   return launched > 0

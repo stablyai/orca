@@ -25,6 +25,41 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('attachMobileImageToTerminal', () => {
+  it('keeps the captured OMP format while the picker is pending', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/my image.png'),
+      ok('send', { send: { accepted: true } })
+    ])
+    let resolvePick!: (value: { base64: string }) => void
+    const deps = {
+      client,
+      terminal: 'omp-term',
+      agent: 'omp',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: () =>
+        new Promise<{ base64: string }>((resolve) => {
+          resolvePick = resolve
+        })
+    }
+    const pending = attachMobileImageToTerminal('library', deps)
+    deps.agent = 'claude'
+    deps.terminal = 'other-term'
+    resolvePick({ base64: 'AAAA' })
+    expect(await pending).toBe(true)
+    expect(client.calls.find((call) => call.method === 'terminal.send')?.params).toMatchObject({
+      terminal: 'omp-term',
+      text: '\x1b[200~@"/tmp/my image.png"\x1b[201~ ',
+      enter: false
+    })
+  })
+
   it('uploads the picked image and pastes its bracketed path into the terminal', async () => {
     // startImageUpload (method_not_found) falls back to single-frame saveImageAsTempFile.
     const client = clientWithResponses([
@@ -40,6 +75,7 @@ describe('attachMobileImageToTerminal', () => {
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: 'device-9',
       getConnectionId: async () => 'conn-7',
@@ -72,6 +108,7 @@ describe('attachMobileImageToTerminal', () => {
 
     await attachMobileImageToTerminal('files', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       getConnectionId: async () => 'conn-ssh',
@@ -87,6 +124,7 @@ describe('attachMobileImageToTerminal', () => {
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-1',
       deviceToken: null,
       getConnectionId: async () => null,
@@ -111,6 +149,7 @@ describe('attachMobileImageToTerminal', () => {
 
     await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-2',
       deviceToken: null,
       getConnectionId: async () => null,
@@ -137,6 +176,7 @@ describe('attachMobileImageToTerminal', () => {
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-pending',
       deviceToken: null,
       getConnectionId: async () => null,
@@ -163,6 +203,7 @@ describe('attachMobileImageToTerminal', () => {
 
     const sent = await attachMobileImageToTerminal('library', {
       client,
+      agent: 'claude',
       terminal: 'term-rejected',
       deviceToken: null,
       getConnectionId: async () => null,

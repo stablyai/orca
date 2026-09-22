@@ -9,6 +9,7 @@ import {
   type KeyboardTypeOptions
 } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { BottomDrawer } from './BottomDrawer'
 
 type Props = {
@@ -23,6 +24,8 @@ type Props = {
   keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
+  /** Called once the drawer has gone, which is when the field stops holding the focus. */
+  onAfterClose?: () => void
 }
 
 export function TextInputModal({
@@ -36,7 +39,8 @@ export function TextInputModal({
   allowEmpty = false,
   keyboardType,
   onSubmit,
-  onCancel
+  onCancel,
+  onAfterClose
 }: Props) {
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
@@ -63,7 +67,7 @@ export function TextInputModal({
   const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -133,7 +137,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },

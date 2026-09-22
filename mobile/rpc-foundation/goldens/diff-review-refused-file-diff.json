@@ -3,9 +3,9 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "fc1f0b1f8c685b481838dfacd28c8608c6fa7a8a21faa1b81e05950c8d8e65f4",
+  "baseline": "0b1567a7b1adde0260598426730a38fe99f78852",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "d1b04fe2945a2799ac8465d8fd9e45ab790ae29b401a0cf4fef68ebc5fa3cc76",
   "platform": "darwin",
@@ -22,6 +22,11 @@
         "kind": "too-large"
       }
     },
+    "18072d796980": {
+      "name": "git.diff#3",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
+    },
     "2ecd0366533c": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -31,9 +36,15 @@
         "kind": "deleted"
       }
     },
-    "505493c5c2e4": {
-      "name": "git.diff#3",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
+    "33908d1938b7": {
+      "name": "git.diff#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
+    },
+    "481bd3924019": {
+      "name": "git.diff#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
     },
     "5768cc374e1d": {
       "branchCompare": "unloaded",
@@ -42,10 +53,6 @@
         "kind": "too-large"
       },
       "snapshot": "unloaded"
-    },
-    "5d5bb4ccf70d": {
-      "name": "git.diff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
     },
     "67daf7391fee": {
       "status": "rejected",
@@ -57,84 +64,9 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "7994a1073c64": {
-      "name": "git.diff#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"staged\":false}}"
-    },
-    "a58da3417608": {
-      "name": "git.diff#3",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "src/app.ts",
-            "staged": false,
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "internal",
-            "message": ""
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "c40409188ab0": {
-      "name": "git.diff#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "src/app.ts",
-            "staged": false,
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "internal",
-            "message": "boom"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "dde75a860803": {
+    "a71fa2bf76b8": {
       "name": "git.diff#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -169,6 +101,80 @@
         }
       }
     },
+    "abf08f796be3": {
+      "name": "git.diff#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": "boom"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b9d9c7cacbea": {
+      "name": "git.diff#3",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
     "f10ae0495f82": {
       "branchCompare": "unloaded",
       "diff": {
@@ -184,8 +190,8 @@
       {
         "id": "diff-too-large",
         "observation": {
-          "sender": ["dde75a860803"],
-          "payloads": ["5d5bb4ccf70d"],
+          "sender": ["a71fa2bf76b8"],
+          "payloads": ["481bd3924019"],
           "settlements": {
             "diff-too-large": "0698901154de"
           },
@@ -196,8 +202,8 @@
       {
         "id": "deleted",
         "observation": {
-          "sender": ["dde75a860803", "c40409188ab0"],
-          "payloads": ["5d5bb4ccf70d", "7994a1073c64"],
+          "sender": ["a71fa2bf76b8", "abf08f796be3"],
+          "payloads": ["481bd3924019", "33908d1938b7"],
           "settlements": {
             "diff-too-large": "0698901154de",
             "deleted": "2ecd0366533c"
@@ -209,8 +215,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["dde75a860803", "c40409188ab0", "a58da3417608"],
-          "payloads": ["5d5bb4ccf70d", "7994a1073c64", "505493c5c2e4"],
+          "sender": ["a71fa2bf76b8", "abf08f796be3", "b9d9c7cacbea"],
+          "payloads": ["481bd3924019", "33908d1938b7", "18072d796980"],
           "settlements": {
             "diff-too-large": "0698901154de",
             "deleted": "2ecd0366533c",

@@ -1,14 +1,17 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
-import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
+  gitBranchCompareResultSchema,
+  gitCommitCompareResultSchema,
+  gitDiffResultSchema
+} from './git-compare-reply-schema'
+import { gitHistoryResultSchema } from './git-history-reply-schema'
+import { gitStatusHostPayloadSchema, gitStatusProjectionSchema } from './git-status-reply-schema'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
-// Source-control reads. Every one of these replies used to be re-typed with a cast at the call
-// site; the reader below is now the only place that says what the payload is.
+// Source-control reads. Every reply below is validated against the members its consumer actually
+// reads; the schema module beside each one records which consumer line justifies each requirement.
 
 /**
  * git.status, first of two readers. The Changes screen publishes the host payload verbatim.
@@ -25,21 +28,21 @@ export const gitStatusHostPayloadRead = bindDeferredRpcOperation(
     method: 'git.status',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('host-status-payload')
+    read: rpcResultVariant('host-status-payload', gitStatusHostPayloadSchema)
   })
 )
 
-/** Shared with the session's branch-context read, which wants the same projection under a skip. */
+/**
+ * Shared with the session's branch-context read, which wants the same projection under a skip.
+ *
+ * Still always compatible: the projection's own contract is that an unreadable payload is a null
+ * status, which three screens route on.
+ */
 export const gitStatusProjectionReader: RpcCompatibleReader<
   unknown,
   'normalized-status',
   MobileGitStatusResult | null
-> = (raw) => ({
-  compatible: true,
-  variant: 'normalized-status',
-  value: readMobileGitStatusResult(raw),
-  salvage: { droppedPaths: [], droppedCount: 0 }
-})
+> = rpcResultVariant('normalized-status', gitStatusProjectionSchema)
 
 /** git.status, second reader: the normalized projection hosted-review preparation reads. */
 export const gitStatusProjectionRead = bindDeferredRpcOperation(
@@ -58,14 +61,14 @@ export const gitHistoryRead = bindDeferredRpcOperation(
     method: 'git.history',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('history-page')
+    read: rpcResultVariant('history-page', gitHistoryResultSchema)
   })
 )
 
 /**
- * A refused compare leaves the row's file list untouched, so refusal is a skip, not a throw. The
- * member read keeps the property-read exception a null result throws, which is what leaves an
- * already-loaded file list alone.
+ * A refused compare leaves the row's file list untouched, so refusal is a skip, not a throw. A
+ * reply that carries no readable `entries` is now an incompatible reply rather than an undefined
+ * list: the row's `.catch` resolves it to "No file changes" instead of spinning forever.
  */
 export const gitCommitCompareRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -73,7 +76,7 @@ export const gitCommitCompareRead = bindDeferredRpcOperation(
     method: 'git.commitCompare',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('commit-compare-entries', 'entries')
+    read: rpcResultVariant('commit-compare', gitCommitCompareResultSchema)
   })
 )
 
@@ -83,7 +86,7 @@ export const gitBranchCompareRead = bindDeferredRpcOperation(
     method: 'git.branchCompare',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('branch-compare')
+    read: rpcResultVariant('branch-compare', gitBranchCompareResultSchema)
   })
 )
 
@@ -93,6 +96,6 @@ export const gitBranchDiffRead = bindDeferredRpcOperation(
     method: 'git.branchDiff',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('branch-diff')
+    read: rpcResultVariant('branch-diff', gitDiffResultSchema)
   })
 )
