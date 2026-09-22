@@ -25,6 +25,7 @@ type FakeFileSystem = GenerationFileSystem & {
   seed(path: string, node: FakeNode): void
   failWritesAt(path: string | null): void
   failReadsAt(path: string | null): void
+  failDeletesAt(path: string | null): void
   failFileMovesTo(path: string | null): void
   loseContentsOnMove(): void
   text(path: string): string | null
@@ -36,6 +37,7 @@ function createFakeFileSystem(): FakeFileSystem {
   const writes: string[] = []
   let failAt: string | null = null
   let failReadAt: string | null = null
+  let failDeleteAt: string | null = null
   let failMoveTo: string | null = null
   let moveKeepsContents = true
   const uri = (path: string): string => `${ROOT}/${path}`
@@ -72,6 +74,9 @@ function createFakeFileSystem(): FakeFileSystem {
     },
     failReadsAt: (path) => {
       failReadAt = path
+    },
+    failDeletesAt: (path) => {
+      failDeleteAt = path
     },
     failFileMovesTo: (path) => {
       failMoveTo = path
@@ -120,6 +125,9 @@ function createFakeFileSystem(): FakeFileSystem {
       return nodes.get(target)?.kind === 'file'
     },
     async delete(target) {
+      if (failDeleteAt !== null && target === uri(failDeleteAt)) {
+        throw new Error('simulated undeletable file')
+      }
       for (const key of Array.from(nodes.keys())) {
         if (key === target || key.startsWith(`${target}/`)) {
           nodes.delete(key)
@@ -127,14 +135,16 @@ function createFakeFileSystem(): FakeFileSystem {
       }
     },
     async moveFile(fromUri, toUri) {
-      // The adapter's own shape: the destination goes as part of the move, because expo refuses one
-      // that exists. A failure therefore either leaves the old file or leaves none.
-      if (failMoveTo !== null && toUri === uri(failMoveTo)) {
-        throw new Error('simulated interrupted rename')
-      }
+      // The adapter's own ordering, and the worst case of it: expo refuses a destination that
+      // exists, so the destination goes first and the failure is injected after it. A fake that
+      // threw before that delete would never exercise the window the adapter really leaves.
       const node = nodes.get(fromUri)
       if (node?.kind !== 'file') {
         throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      nodes.delete(toUri)
+      if (failMoveTo !== null && toUri === uri(failMoveTo)) {
+        throw new Error('simulated interrupted rename')
       }
       nodes.delete(fromUri)
       nodes.set(toUri, node)
@@ -457,7 +467,9 @@ describe('generation store', () => {
       '/etc/passwd',
       'assets//app.js',
       'manifest.json',
-      'Manifest.JSON'
+      'Manifest.JSON',
+      'manifest-next.json',
+      'MANIFEST-NEXT.JSON'
     ]
 
     for (const path of escapes) {
@@ -730,20 +742,127 @@ describe('persisting a fresh manifest onto the active generation', () => {
     expect(fs.paths()).toEqual([])
   })
 
-  it('leaves the manifest that is on disk when the rename is interrupted', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const stored = fs.text(MANIFEST_PATH)
-    fs.failFileMovesTo(MANIFEST_PATH)
+  /**
+   * No atomic replace exists on either platform, so the write is three steps: the fresh manifest
+   * beside the old one, the old one away, the fresh one over it. What makes that safe is not the
+   * ordering alone but that every window it leaves is one a later read settles — a failure must
+   * never cost the generation, because losing it costs a phone with no host its offline workspace.
+   */
+  describe('interrupted at each of the three steps', () => {
+    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
 
-    await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
-      'interrupted rename'
-    )
+    async function activated(fs: FakeFileSystem) {
+      const store = createGenerationStore({ fileSystem: fs })
+      await activate(store, HOST)
+      return store
+    }
 
-    // Readable, and still the manifest the assets were downloaded with: the fresh one is written
-    // beside it, so nothing the old one said is gone until the whole of the new one is there.
-    expect(fs.text(MANIFEST_PATH)).toBe(stored)
-    expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
+    it('keeps the old manifest when the fresh one cannot be written', async () => {
+      const fs = createFakeFileSystem()
+      const store = await activated(fs)
+      const stored = fs.text(MANIFEST_PATH)
+      fs.failWritesAt(NEXT_PATH)
+
+      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('disk-full')
+
+      fs.failWritesAt(null)
+      expect(fs.text(MANIFEST_PATH)).toBe(stored)
+      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
+    })
+
+    it('finishes the swap on the next read when the old manifest cannot be deleted', async () => {
+      const fs = createFakeFileSystem()
+      const store = await activated(fs)
+      fs.failDeletesAt(MANIFEST_PATH)
+
+      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
+        'undeletable'
+      )
+
+      // Both files on disk: the fresh one is whole, so it is the activation and the read completes
+      // the swap rather than reading the manifest the edit replaced.
+      fs.failDeletesAt(null)
+      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
+      expect(fs.text(NEXT_PATH)).toBeNull()
+    })
+
+    it('adopts the fresh manifest on the next read when the rename is interrupted', async () => {
+      const fs = createFakeFileSystem()
+      const store = await activated(fs)
+      fs.failFileMovesTo(MANIFEST_PATH)
+
+      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
+        'interrupted rename'
+      )
+
+      // The window the adapter really leaves: the destination is gone and the rename did not land,
+      // so the only manifest on disk is the pending one, and it is complete.
+      expect(fs.text(MANIFEST_PATH)).toBeNull()
+      fs.failFileMovesTo(null)
+      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
+      expect(fs.text(NEXT_PATH)).toBeNull()
+    })
+
+    it('keeps the host tree when the pending swap cannot be settled either', async () => {
+      const fs = createFakeFileSystem()
+      const store = await activated(fs)
+      fs.failFileMovesTo(MANIFEST_PATH)
+      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('rename')
+
+      // Still unsettleable, so there is no activation to hand out — and nothing is deleted, because
+      // the pending manifest is the generation and the next read can still adopt it.
+      expect(await store.readActiveGeneration(HOST)).toBeNull()
+      expect(fs.text(NEXT_PATH)).not.toBeNull()
+      expect(fs.bytes(`${HOST}/generations/${BUILD}/index.html`)).not.toBeNull()
+    })
+  })
+
+  /** The three shapes a read can find, once a persist may have been interrupted anywhere. */
+  describe('settling a pending swap on the next read', () => {
+    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
+
+    function seedPending(fs: FakeFileSystem, body: string): void {
+      fs.seed(NEXT_PATH, { kind: 'file', bytes: new TextEncoder().encode(body) })
+    }
+
+    it('finishes a swap whose rename never ran, with the old manifest still beside it', async () => {
+      const fs = createFakeFileSystem()
+      const store = createGenerationStore({ fileSystem: fs })
+      await activate(store, HOST)
+      seedPending(fs, JSON.stringify(freshManifest()))
+
+      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
+
+      expect(fs.text(NEXT_PATH)).toBeNull()
+      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
+    })
+
+    it('adopts a pending manifest that is the only one left', async () => {
+      const fs = createFakeFileSystem()
+      const store = createGenerationStore({ fileSystem: fs })
+      await activate(store, HOST)
+      seedPending(fs, JSON.stringify(freshManifest()))
+      await fs.delete(`${ROOT}/${MANIFEST_PATH}`)
+
+      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
+
+      expect(fs.text(NEXT_PATH)).toBeNull()
+      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
+    })
+
+    it('discards a pending manifest that is torn or names another build, keeping the old one', async () => {
+      for (const body of ['not json', JSON.stringify(freshManifest({ buildId: 'b'.repeat(64) }))]) {
+        const fs = createFakeFileSystem()
+        const store = createGenerationStore({ fileSystem: fs })
+        await activate(store, HOST)
+        const stored = fs.text(MANIFEST_PATH)
+        seedPending(fs, body)
+
+        expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
+
+        expect(fs.text(NEXT_PATH)).toBeNull()
+        expect(fs.text(MANIFEST_PATH)).toBe(stored)
+      }
+    })
   })
 })

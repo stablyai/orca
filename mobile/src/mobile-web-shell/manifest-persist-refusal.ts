@@ -18,6 +18,12 @@ export type ManifestPersistOutcome = 'persisted' | ManifestPersistRefusal
  * would leave a cached generation described by a manifest its own files do not answer. Compared
  * through the contract's own serializer, which is the string the id is computed from, so the two
  * cannot disagree about what counts as the same assets.
+ *
+ * This is the phone's own check, not a restatement of one it has already made. The refine that
+ * pins `buildId` to `computeMobileWebBundleId(assets)` is on the host's `.strict()` schema in
+ * `src/shared/mobile-web-bundle/manifest-contract.ts`; the phone reads the same document loosely
+ * (`mobile-web-bundle-reply-schemas.ts`) and never recomputes the digest, so nothing before this
+ * line has compared a manifest's id to the bytes it names.
  */
 export function refuseManifestPersist(
   stored: MobileWebBundleManifestRead,

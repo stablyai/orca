@@ -1,20 +1,21 @@
 import { z } from 'zod'
-import {
-  MobileWebBundleManifestReadSchema,
-  type MobileWebBundleManifestRead
-} from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import { joinUri } from './generation-cache-uri'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
+import {
+  MANIFEST_FILE_NAME,
+  NEXT_MANIFEST_FILE_NAME,
+  parseGenerationManifest,
+  settleManifestSwap,
+  swapInFreshManifest
+} from './generation-manifest-swap'
 import { refuseManifestPersist, type ManifestPersistOutcome } from './manifest-persist-refusal'
 import { isHostCacheKey } from './host-cache-key'
 
 const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
-const MANIFEST_FILE_NAME = 'manifest.json'
 const HOST_INDEX_FILE_NAME = 'hosts.json'
-/** Where a fresh manifest is written before it is renamed over the active one. Under the host's
- *  staging tree rather than beside the assets, so it can never be an asset path an edit takes. */
-const STAGED_MANIFEST_FILE_NAME = 'manifest-next.json'
 
 /** The architecture reference's cache ceiling: four hosts, least recently activated evicted. */
 export const MAX_CACHED_HOSTS = 4
@@ -151,6 +152,12 @@ export function createGenerationStore(options: {
     const only = directories.length === 1 ? directories[0] : null
     if (only !== null) {
       const directory = joinUri(generations, only.name)
+      // A persist interrupted anywhere leaves a pending manifest; finishing or discarding it here
+      // is what makes the swap crash-safe. Unsettleable is not a bad generation — the pending file
+      // may be the only manifest left — so nothing is deleted and the next read tries again.
+      if ((await settleManifestSwap(fs, directory, only.name)) === 'unsettled') {
+        return null
+      }
       let text: string | null
       try {
         text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME))
@@ -159,7 +166,7 @@ export function createGenerationStore(options: {
         // redownloads, and a transient I/O blip must not cost a cache that verified.
         return null
       }
-      const manifest = parseManifest(text)
+      const manifest = parseGenerationManifest(text)
       if (manifest !== null && manifest.buildId === only.name) {
         return { buildId: manifest.buildId, directory, manifest }
       }
@@ -271,11 +278,7 @@ export function createGenerationStore(options: {
     if (refusal !== null) {
       return refusal
     }
-    // Beside first, then over: a write that fails or tears leaves the manifest the assets were
-    // downloaded with, which still names exactly the bytes on disk.
-    const staged = joinUri(stagingRoot(hostKey), STAGED_MANIFEST_FILE_NAME)
-    await fs.writeText(staged, JSON.stringify(manifest))
-    await fs.moveFile(staged, joinUri(active.directory, MANIFEST_FILE_NAME))
+    await swapInFreshManifest(fs, active.directory, manifest)
     return 'persisted'
   }
 
@@ -319,24 +322,12 @@ export function createGenerationStore(options: {
   }
 }
 
-function joinUri(...segments: readonly string[]): string {
-  return segments.map((segment) => segment.replace(/\/+$/, '')).join('/')
-}
-
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text)
   } catch {
     return null
   }
-}
-
-function parseManifest(text: string | null): MobileWebBundleManifestRead | null {
-  if (text === null) {
-    return null
-  }
-  const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
-  return parsed.success ? parsed.data : null
 }
 
 function requireHostKey(hostKey: string): string {
@@ -347,13 +338,16 @@ function requireHostKey(hostKey: string): string {
 }
 
 /** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and `manifest.json` is the store's own name rather than an asset's to take — folded,
- *  because APFS and NTFS are case-insensitive and `Manifest.JSON` would land on the same file. */
+ *  write, and both manifest names are the store's own rather than an asset's to take: the pending
+ *  one would be read back as an activation. Folded, because APFS and NTFS are case-insensitive and
+ *  `Manifest.JSON` would land on the same file. */
 function requireStorablePath(path: string): string {
   const segments = path.split('/')
+  const folded = path.toLowerCase()
   const storable =
     path.length > 0 &&
-    path.toLowerCase() !== MANIFEST_FILE_NAME &&
+    folded !== MANIFEST_FILE_NAME &&
+    folded !== NEXT_MANIFEST_FILE_NAME &&
     !path.includes('\\') &&
     segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
   if (!storable) {
