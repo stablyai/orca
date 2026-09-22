@@ -1181,6 +1181,11 @@ export const RPC_PARAMS_BY_METHOD = {
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
+  'mission.plan',
+  'orchestration.collaborationAck',
+  'orchestration.collaborationCheckpoint',
+  'orchestration.collaborationConfigure',
+  'orchestration.collaborationPublish',
   'orchestration.send',
   'orchestration.taskUpdate'
 ]

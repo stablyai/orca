@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
 import { OrchestrationDb } from '../../../src/main/runtime/orchestration/db'
+import { SCHEMA_VERSION } from '../../../src/main/runtime/orchestration/db/contract-constants'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Pin the last pre-v41 implementation: this contract specifically exercises status-only readers.
 const PRE_V41 = 'aac38d698ff75ac4c8658addab48ef5a83617619'
 
-test('pre-v41 code opens, acknowledges and writes a v41 database, then current code reopens it', async () => {
+test('pre-v41 code opens, acknowledges and writes the current database, then current code reopens it', async () => {
   const checkout = await materializeReleaseCheckout(PRE_V41)
   const baseline = await importReleaseCheckoutModule(
     checkout,
@@ -47,7 +48,7 @@ test('pre-v41 code opens, acknowledges and writes a v41 database, then current c
     db.close()
 
     db = new OldDb(path)
-    expect(db.db.pragma('user_version', { simple: true })).toBe(41)
+    expect(db.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     // Old readers retain their original replay semantics, but can acknowledge either stored batch.
     db.acknowledgeRunDelivery({ ...params, deliveryId: oldBatch.delivery.id })
     expect(db.getOrCreateRunDelivery(params)?.delivery.id).toBe(currentBatch.delivery.id)
