@@ -3,6 +3,10 @@
 // side of the bridge already did, and this provider only carries what it holds across the boundary.
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
+import {
+  BRIDGE_PAGE_CLIENT_ID,
+  BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
+} from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
@@ -56,21 +60,16 @@ export function RpcClientProvider({
       // Nothing mounts before `init`, so the page's state is never the unknown this answers null for.
       getKnownState: () => client.getState(),
       /**
-       * The page's identity to the host, which is its shell session and not the pairing credential.
+       * A placeholder the shell swaps for this device's real identity, never the credential itself.
        *
-       * The native provider answers with `host.deviceToken`, and the page holds no keychain: `init`
-       * carries the host "minus the credential the bridge already carries for it", and the token is
-       * keychain-only by the same rule that keeps it out of AsyncStorage. But the host only ever
-       * uses `client.id` as an opaque key — the mobile input floor and the viewport claim, both
-       * in-memory and both scoped to a live subscription — so the session id is a whole identity
-       * for it, and one no document has to be trusted with a credential to have.
-       *
-       * Null was not a smaller answer, it was no terminal at all: the session route refuses
-       * `terminal.subscribe` without a client identity, so no scrollback arrived, `init` never
-       * reached the document and the terminal surface stayed 0x0. `canSend` reads the same value,
-       * so live input was dead for the same reason.
+       * Only when the shell said it performs the swap; a shell that did not leaves this null, which
+       * is no terminal and no live input, because the session route refuses to subscribe or send
+       * without one — but a placeholder the host read itself would be refused as a spoof.
        */
-      getClientId: () => client.getShellSession()?.sessionId ?? null,
+      getClientId: () =>
+        client.getShellSession()?.accepts.includes(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT) === true
+          ? BRIDGE_PAGE_CLIENT_ID
+          : null,
       getReconnectAttempt: () => client.getReconnectAttempt(),
       getLastConnectedAt: () => client.getLastConnectedAt(),
       // The page reaches its host through the shell bridge, which rides whatever path the RN

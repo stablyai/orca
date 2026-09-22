@@ -55,6 +55,8 @@ export type Harness = {
   last: () => BridgeHostMessage
 }
 
+/** This device's identity to the host, as the shell reads it off the native client. */
+export const HARNESS_CLIENT_IDENTITY = 'device-token-a'
 export const ROUTE = { pathname: '/h/host-a' }
 export const PAGE_ROUTES = ['/h/[hostId]']
 /** What those patterns declared, as the manifest would carry it, `haptics` included: it is on every
@@ -86,6 +88,8 @@ export function harness(
     pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
     /** Stands for a host rebuilt under a page whose session already handshook. */
     sessionEstablished?: boolean
+    /** This device's identity to the host; `null` stands for one the shell cannot read yet. */
+    clientIdentity?: string | null
     ready?: boolean
     /** What the pasteboard answers a read with. */
     clipboardText?: string
@@ -123,6 +127,8 @@ export function harness(
     pageRouteGrants: options.pageRouteGrants ?? PAGE_ROUTE_GRANTS,
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,
+    readClientIdentity: () =>
+      options.clientIdentity === undefined ? HARNESS_CLIENT_IDENTITY : options.clientIdentity,
     host: HOST,
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),

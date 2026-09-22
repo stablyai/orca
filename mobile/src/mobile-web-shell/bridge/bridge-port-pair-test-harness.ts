@@ -94,6 +94,8 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   routeGrants?: readonly string[]
   /** Stands for a host rebuilt under a page whose session already handshook. */
   sessionEstablished?: boolean
+  /** This device's identity to the host; `null` stands for one the shell cannot read yet. */
+  clientIdentity?: string | null
   /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
 }
@@ -104,6 +106,9 @@ type Lane = {
   drainNow: () => number
   readonly depth: number
 }
+
+/** This device's identity to the host, as the shell reads it off the native client. */
+export const PORT_PAIR_CLIENT_IDENTITY = 'device-token-a'
 
 function createLane(deliver: (json: string) => void): Lane {
   const sent: string[] = []
@@ -212,6 +217,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     buildId: options.buildId ?? 'build-a',
     sessionId: options.sessionId ?? 'session-a',
     route: options.route ?? { pathname: '/h/host-a' },
+    readClientIdentity: () =>
+      options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
     sessionEstablished: options.sessionEstablished ?? false,

@@ -118,6 +118,13 @@ export type BridgeHostOptions = {
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /**
+   * This device's identity to that host, as the native screens already send it, swapped in for the
+   * page's placeholder on the way out. Read at forward time rather than captured: the host outlives
+   * every render after the one that built it. Required, because `init` tells the page the swap
+   * happens and a page that believed it and was not served would have its sends refused as spoofs.
+   */
+  readClientIdentity: () => string | null
+  /**
    * The allowlisted keys as the app holds them, asked for on every `init` rather than captured at
    * mount: a document that reloads inside one mount has to be primed from after its own writes.
    * Synchronous, because `init` is — see `sendInit`.

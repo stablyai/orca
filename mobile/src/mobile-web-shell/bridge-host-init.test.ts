@@ -7,6 +7,7 @@ import {
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import { routeViewOf } from './page-route-policy'
 
@@ -27,7 +28,7 @@ describe('init and state', () => {
       sessionId: 'session-a',
       buildId: 'build-a',
       // What this shell takes from the page, which is the page's own check before it posts one.
-      accepts: [BRIDGE_ROUTE_PARAM_CLEAR],
+      accepts: [BRIDGE_ROUTE_PARAM_CLEAR, BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT],
       connection: {
         state: 'reconnecting',
         reconnectAttempt: 3,

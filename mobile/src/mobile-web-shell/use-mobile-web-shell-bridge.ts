@@ -115,7 +115,7 @@ export type MobileWebShellBridgeArgs = {
  * the native origin check rather than reach a live client.
  */
 export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileWebShellBridgeView {
-  const { client } = useHostClient(args.hostId)
+  const { client, clientId } = useHostClient(args.hostId)
   const ready = args.session.kind === 'ready' ? args.session : null
   const sessionId = ready?.sessionId ?? null
   const buildId = ready?.buildId ?? null
@@ -133,6 +133,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
    * `publishRoute` below, which re-sends `init` to a page that said it takes one.
    */
   const argsRef = useRef(args)
+  // Held rather than depended on, for the reason every prop above is: the identity settles with the
+  // client, and taking it as a dependency would tear a live page session down to re-read a string.
+  const clientIdRef = useRef(clientId)
   // Commit-phase and declared above the host's effect, so the host is built against what this
   // render passed: a native frame can land between a commit and a passive effect.
   //
@@ -141,6 +144,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   // is what the ref is for.
   useLayoutEffect(() => {
     argsRef.current = args
+    clientIdRef.current = clientId
   })
   const snapshot = args.snapshot
 
@@ -164,6 +168,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       routeGrants: latest.routeGrants,
       sessionEstablished: latest.sessionEstablished,
       host: snapshot.host,
+      readClientIdentity: () => clientIdRef.current,
       post: (json) => {
         const mounted = viewRef.current
         return mounted === null || mounted.sessionId !== sessionId

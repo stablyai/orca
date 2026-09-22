@@ -15,6 +15,7 @@ import {
   type BridgeConnectionSnapshot,
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
@@ -158,7 +159,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
             ? { pageRouteGrants: parsedRouteGrants.data }
             : {}),
           granted,
-          accepts: [BRIDGE_ROUTE_PARAM_CLEAR],
+          // Both are additive names on an optional list, so no version moves: a page that knows
+          // neither posts neither, and one told nothing claims no identity and sends none.
+          accepts: [BRIDGE_ROUTE_PARAM_CLEAR, BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT],
           host,
           ...options.readStorage()
         })
@@ -183,6 +186,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     sendReply,
     sendError,
     capExceeded: (message) => new BridgeCapExceededError(message),
+    readClientIdentity: () => options.readClientIdentity(),
     serveNative: createNativeVerbServer({
       granted,
       serveVerb: (verb, params) => options.serveNativeVerb(verb, params)
@@ -194,6 +198,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     subscriptions,
     sendError,
     granted,
+    readClientIdentity: () => options.readClientIdentity(),
     report: (diagnostic) => options.onDiagnostic?.(diagnostic)
   })
 

@@ -6,6 +6,7 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
   BRIDGE_HAPTICS_GRANT,
@@ -464,6 +465,9 @@ describe('the page erasing a one-shot route param', () => {
     const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     const init = bridge.last()
-    expect(init.type === 'init' && init.accepts).toEqual([BRIDGE_ROUTE_PARAM_CLEAR])
+    expect(init.type === 'init' && init.accepts).toEqual([
+      BRIDGE_ROUTE_PARAM_CLEAR,
+      BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT
+    ])
   })
 })

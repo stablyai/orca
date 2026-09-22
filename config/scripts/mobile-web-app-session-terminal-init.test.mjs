@@ -10,6 +10,7 @@ import {
   createBundleServer,
   installShellDouble,
   readBridgeFaultGrant,
+  readBridgePageClientIdentity,
   readBridgeProtocolVersion,
   readShellCsp
 } from './mobile-web-app-render-harness.mjs'
@@ -101,6 +102,7 @@ let origin
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
+let pageClientIdentity = null
 
 beforeAll(async () => {
   if (!bundles) {
@@ -109,6 +111,7 @@ beforeAll(async () => {
   cspHeader = await readShellCsp()
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
+  pageClientIdentity = await readBridgePageClientIdentity()
   scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-app-terminal-init-'))
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
@@ -145,6 +148,8 @@ async function openSessionWithTerminalTab() {
     faultGrant,
     grants: [faultGrant, ...sessionGrants()],
     pageRoutes: PAGE_ROUTE_PATTERNS,
+    // The page claims an identity only against a shell that says it swaps one in.
+    accepts: [pageClientIdentity.accept],
     streams: ['session.tabs.subscribe', 'terminal.subscribe'],
     replies: {
       'worktree.show': { worktree: { id: WORKTREE, name: WORKTREE, path: `/tmp/${WORKTREE}` } },
@@ -231,14 +236,13 @@ describeRender(
       const { page } = await openSessionWithTerminalTab()
       const subscribe = await waitForSubscribe(page, 'terminal.subscribe')
       expect(subscribe.params.terminal).toBe(HANDLE)
-      // The gate that was closed. `client.id` is what the host keys the mobile input floor and the
-      // viewport claim on, and the page refuses to subscribe at all without one — silently, because
-      // the diagnostic that would have named it is compiled out of a release build.
+      // The gate that was closed, and the exact string the page may claim. It is the placeholder
+      // and never the credential: the native shell swaps in this device's real identity as the
+      // frame leaves it, which is what the host compares against the socket it authenticated.
       expect(subscribe.params.client).toEqual({
-        id: expect.any(String),
+        id: pageClientIdentity.placeholder,
         type: 'mobile'
       })
-      expect(subscribe.params.client.id.length).toBeGreaterThan(0)
       await page.close()
     }, 300_000)
 
