@@ -618,14 +618,31 @@ for (const engine of ['chromium', 'webkit']) {
        * names three readings and all three are taken: no underline, no pointer cursor, no anchor a
        * tap does nothing on. The granted arm is each one's presence precondition -- without it,
        * "no underline" is also what a frame that never rendered reports.
+       *
+       * Every verdict here is a reading the frame itself publishes: the anchors its document holds,
+       * the style the engine computed for one, whether focus lands on it, and whether the tap this
+       * arm made landed at all. None of them waits for a record that may never arrive.
+       *
+       * That is the round-1 fix, and it is why this case has two arms rather than three. It had a
+       * third that tapped the granted link and waited for the top-frame navigation through
+       * `expectNavigation: 'main-frame'`, and `waitForRecordedNavigation` has no bound but the
+       * case's own timeout: on CI's Chrome the click missed its 2 s actionability window under load,
+       * no navigation was ever recorded, and the arm sat in that wait for the whole 240 s
+       * (`Test timed out in 240000ms`, recorded `[]`, with the frame attached only at 38.9 s). Three
+       * arms sharing one budget is what made this case the one to find it.
+       *
+       * Nothing is lost by dropping it. The tap's outcome on a granted shell is the next case,
+       * `hands a user's tap on a link to the top frame, exactly once`, on these same counters from
+       * this same rig and with a budget of its own -- so the zero below still has a presence
+       * precondition, and it is the one this file uses elsewhere for exactly this reason.
        */
       it('renders an artifact link as text against a shell that cannot open one', async (ctx) => {
         const hidden = await open(browser(), {
           signal: ctx.signal,
           grants: ['navigate', 'storage'],
           act: async ({ frame }) => {
-            // The same tap the granted arm makes. It is expected to produce nothing, so the arm
-            // does not wait for a navigation -- `settleAfterMount` still drives the turn.
+            // The tap the next case makes on a granted shell. It is expected to produce nothing, so
+            // the arm takes the bounded settle rather than waiting for a record that is not coming.
             await frame?.click('#toplink', { timeout: 2000 })
           }
         })
@@ -644,7 +661,10 @@ for (const engine of ['chromium', 'webkit']) {
         // No underline, as the browser resolves it, and not in the tab order either.
         expect(hidden.links?.decoration).toBe('none')
         expect(hidden.links?.focusable).toBe(false)
-        // And the tap does nothing, which is the behaviour the affordance was advertising.
+        // And the tap does nothing, which is the behaviour the affordance was advertising. The
+        // click landing is asserted first, because a click that never reached its target and a tap
+        // that did nothing are the same three zeros and only one of them is the product's doing.
+        expect(hidden.actError).toBeNull()
         expect(hidden.topNavigations).toBe(0)
         expect(hidden.ownOriginTopNavigations).toBe(0)
         expect(hidden.popups).toBe(0)
@@ -652,11 +672,11 @@ for (const engine of ['chromium', 'webkit']) {
         // this pass somehow missed is refused by the sandbox as well.
         expect(hidden.mountedSandbox).toBe('')
 
-        // Every reading above against the granted arm, which is the shipped screen. Two arms,
-        // because a tap costs the readings: the top frame goes mid-navigation and the computed
-        // style of an element in a blanking frame reads as the initial value, which is what this
-        // arm measured before it was split. So the affordance is read without a tap and the tap's
-        // outcome is read on its own -- the split the `pixelBefore` sampling above exists for.
+        // Every reading above against the granted arm, which is the shipped screen. It does not tap,
+        // and that is not only about the wait: a tap costs the readings, because the top frame goes
+        // mid-navigation and the computed style of an element in a blanking frame reads as the
+        // initial value -- which is what this arm measured before it was split. The same split the
+        // `pixelBefore` sampling above exists for.
         const shown = await open(browser(), { signal: ctx.signal })
         expect(shown.grants).toContain('externalNavigation')
         expect(shown.pixel).toBe(ARTIFACT_RGB)
@@ -673,7 +693,8 @@ for (const engine of ['chromium', 'webkit']) {
          * style -- so on that engine the reading cannot tell the two apart. Asserting "not pointer"
          * on the hidden arm there would be a zero with no presence precondition behind it, so this
          * pins the discrimination where it exists and pins the blindness where it does not. The
-         * underline, the missing anchor and the tap carry the case on WebKit.
+         * underline, the missing anchor, the lost focusability and the tap that did nothing carry
+         * the case on WebKit.
          */
         if (engine === 'chromium') {
           expect(shown.links?.cursor).toBe('pointer')
@@ -682,18 +703,6 @@ for (const engine of ['chromium', 'webkit']) {
           expect(shown.links?.cursor).toBe(hidden.links?.cursor)
         }
         expect(shown.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
-
-        // And the tap that affordance advertises does reach the top frame, which is what makes the
-        // hidden arm's zero above a hidden capability rather than a rig that cannot see a tap.
-        const tapped = await open(browser(), {
-          signal: ctx.signal,
-          expectNavigation: 'main-frame',
-          act: async ({ frame }) => {
-            await frame?.click('#toplink', { timeout: 2000 })
-          }
-        })
-        expect(tapped.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(tapped.topNavigations).toBe(1)
       }, 240_000)
 
       it("hands a user's tap on a link to the top frame, exactly once", async (ctx) => {
