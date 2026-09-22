@@ -40,7 +40,7 @@ export type ResumeRepoGroup = {
  * The same id space automation dispatch resolves: a folder workspace by its full `folder:<uuid>`
  * key, a git worktree by its bare `repoId::path` id.
  */
-export function isFolderWorkspaceId(workspaceId: string): boolean {
+function isFolderWorkspaceId(workspaceId: string): boolean {
   return parseWorkspaceKey(workspaceId)?.type === 'folder'
 }
 
@@ -127,22 +127,7 @@ export function resolveResumeGroupHeader(
   }
 }
 
-/** Every offered session id, which is the default selection and the ceiling on any selection. */
+/** Every offered session id, which is what an unselective action names. */
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
-}
-
-/**
- * Narrows a selection to sessions the host actually offered.
- *
- * Selection changes only WHICH eligible chats are acted on, never what is eligible, so anything not
- * in the offered set is dropped here before it can reach an action.
- */
-export function selectedResumeSessionIds(
-  candidates: readonly ResumeCandidate[],
-  selected: ReadonlySet<string>
-): string[] {
-  return candidates
-    .filter((candidate) => selected.has(candidate.sessionId))
-    .map((candidate) => candidate.sessionId)
 }

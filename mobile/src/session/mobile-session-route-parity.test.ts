@@ -96,8 +96,9 @@ const HEAD_CALLBACK_BODY_SHA256 = '5845c3b85217a3af9d3d2bfafe564a2b29a1b2c6776b5
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
 // refusal the timer site passed when it had no reply at all. Refreshed once more for the
 // last-visited-worktree effect, whose bare store write became the one writer of that key, so the
-// hybrid shell's page mirror sees it as it is written rather than one `init` later.
-const HEAD_EFFECT_SHA256 = 'e510f68c935dd4dc4cae8815d4e74f8db70cc3d8e2947d98615e6f2385422f94'
+// hybrid shell's page mirror sees it as it is written rather than one `init` later. Refreshed for
+// the diff-comments effect, which now catches the loader's rejection. Count unchanged.
+const HEAD_EFFECT_SHA256 = 'cc25f3707d52d278ad65d0bb452fc5ddf5c94bba5ed850e17ac0568d65ebe522'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for

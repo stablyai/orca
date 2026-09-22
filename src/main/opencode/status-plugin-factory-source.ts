@@ -6,8 +6,9 @@ import {
 export function getStatusPluginFactorySource(options: {
   emitSessionStart: boolean
   emitNextEvents?: boolean
+  expectedAgent?: 'opencode' | 'opencode2'
 }): string[] {
-  const expectedAgent = options.emitNextEvents ? 'opencode2' : 'opencode'
+  const expectedAgent = options.expectedAgent ?? (options.emitNextEvents ? 'opencode2' : 'opencode')
   return [
     ...(options.emitNextEvents ? getOpenCode2EventNormalizationSource() : []),
     '// Why: accept the factory argument as an optional opaque parameter instead',

@@ -43,7 +43,8 @@ const PID_RECORD: ParsedDaemonPid = {
   launchNonce: 'n',
   linuxStartTicks: null,
   bootId: null,
-  spawnerExecPath: null
+  spawnerExecPath: null,
+  cgroupUnit: 'orca-daemon-n.scope'
 }
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -70,6 +71,9 @@ describe('collectTerminalDaemonHealth', () => {
     expect(health.buildVersion).toBe('1.2.2')
     expect(health.entryPath).toBe('/opt/orcad/daemon-entry.js')
     expect(health.protocolVersion).toBe(36)
+    // The daemon's self-detected cgroup scope round-trips through the pid record as-is —
+    // collectTerminalDaemonHealth must not reinterpret or drop it.
+    expect(health.cgroupUnit).toBe('orca-daemon-n.scope')
     // Why assert the coordinates: a self-test that probed some other endpoint would prove
     // nothing about the daemon this process installed.
     expect(checkDaemonHealthMock).toHaveBeenCalledWith(LIVE_FACTS.socketPath, LIVE_FACTS.tokenPath)

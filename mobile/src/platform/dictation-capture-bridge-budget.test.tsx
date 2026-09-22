@@ -77,7 +77,8 @@ function createAudioShell() {
         }
       }
     },
-    onInterruption: () => ({ remove: () => {} })
+    onInterruption: () => ({ remove: () => {} }),
+    screenLock: { hold: () => {}, release: () => {} }
   }
   const capture = createNativeAudioCapture(engine)
   return {

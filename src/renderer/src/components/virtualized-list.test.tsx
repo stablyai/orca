@@ -4,12 +4,12 @@ import { act, useState, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  measureSourceControlScrollMargin,
-  observeSourceControlScrollMargin,
-  SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
-  SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS,
-  SourceControlVirtualFileList
-} from './source-control/listing/virtual-file-list'
+  measureVirtualizedListScrollMargin,
+  observeVirtualizedListScrollMargin,
+  VIRTUALIZED_LIST_MIN_ROWS,
+  VIRTUALIZED_LIST_ROW_HEIGHT_PX,
+  VirtualizedList
+} from './virtualized-list'
 
 const VIEWPORT_HEIGHT_PX = 600
 
@@ -18,12 +18,7 @@ type ResizeObserverBoxSize = {
   inlineSize: number
 }
 
-type TrackedResizeObserver = {
-  callback: ResizeObserverCallback
-  elements: Set<Element>
-}
-
-const activeResizeObservers = new Set<TrackedResizeObserver>()
+const activeResizeObservers = new Set<MockResizeObserver>()
 
 class MockResizeObserver implements ResizeObserver {
   readonly elements = new Set<Element>()
@@ -72,7 +67,7 @@ function fireResizeObservers(target?: Element): void {
         devicePixelContentBoxSize: [size]
       } satisfies ResizeObserverEntry
     })
-    observer.callback(entries, observer as unknown as ResizeObserver)
+    observer.callback(entries, observer)
   }
 }
 
@@ -98,25 +93,15 @@ beforeEach(() => {
     function (this: HTMLElement) {
       return this.classList.contains('overflow-auto')
         ? VIEWPORT_HEIGHT_PX
-        : SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+        : VIRTUALIZED_LIST_ROW_HEIGHT_PX
     }
   )
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const top = topsByElement.get(this) ?? 0
     const height = this.classList.contains('overflow-auto')
       ? VIEWPORT_HEIGHT_PX
-      : SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
-    return {
-      top,
-      bottom: top + height,
-      height,
-      left: 0,
-      right: 240,
-      width: 240,
-      x: 0,
-      y: top,
-      toJSON: () => ({})
-    } as DOMRect
+      : VIRTUALIZED_LIST_ROW_HEIGHT_PX
+    return new DOMRect(0, top, 240, height)
   })
 })
 
@@ -135,11 +120,15 @@ function setTop(element: Element, top: number): void {
 function SharedScrollerHarness({
   aboveHeight,
   rows,
-  rowTestId = 'virtual-row'
+  rowTestId = 'virtual-row',
+  announceListPosition,
+  hasUnloadedRows
 }: {
   aboveHeight: number
   rows: readonly string[]
   rowTestId?: string
+  announceListPosition?: boolean
+  hasUnloadedRows?: boolean
 }): ReactElement {
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
 
@@ -177,9 +166,11 @@ function SharedScrollerHarness({
           }
         }}
       >
-        <SourceControlVirtualFileList
+        <VirtualizedList
           rows={rows}
           scrollElement={scroller}
+          announceListPosition={announceListPosition}
+          hasUnloadedRows={hasUnloadedRows}
           getRowKey={(row) => row}
           renderRow={(row) => (
             <div key={row} data-testid={rowTestId}>
@@ -217,7 +208,7 @@ function MultiSectionHarness({
       }}
     >
       <div data-testid="first-section">
-        <SourceControlVirtualFileList
+        <VirtualizedList
           rows={firstRows}
           scrollElement={scroller}
           getRowKey={(row) => row}
@@ -225,7 +216,7 @@ function MultiSectionHarness({
         />
       </div>
       <div data-testid="second-section">
-        <SourceControlVirtualFileList
+        <VirtualizedList
           rows={secondRows}
           scrollElement={scroller}
           getRowKey={(row) => row}
@@ -237,7 +228,7 @@ function MultiSectionHarness({
 }
 
 function syncListTop(aboveHeight: number): HTMLDivElement | null {
-  const list = host.querySelector<HTMLDivElement>('[data-testid="source-control-virtual-list"]')
+  const list = host.querySelector<HTMLDivElement>('[data-testid="virtualized-list"]')
   if (list) {
     setTop(list, aboveHeight)
   }
@@ -249,16 +240,16 @@ function syncListTop(aboveHeight: number): HTMLDivElement | null {
 }
 
 function syncMultiSectionListTops(firstRowCount: number): void {
-  const lists = host.querySelectorAll<HTMLElement>('[data-testid="source-control-virtual-list"]')
+  const lists = host.querySelectorAll<HTMLElement>('[data-testid="virtualized-list"]')
   if (lists[0]) {
     setTop(lists[0], 0)
   }
   if (lists[1]) {
-    setTop(lists[1], firstRowCount * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
+    setTop(lists[1], firstRowCount * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
   }
 }
 
-describe('measureSourceControlScrollMargin', () => {
+describe('measureVirtualizedListScrollMargin', () => {
   it('returns the list offset inside the scroller independent of scrollTop', () => {
     const scroller = document.createElement('div')
     const list = document.createElement('div')
@@ -266,16 +257,16 @@ describe('measureSourceControlScrollMargin', () => {
     setTop(list, 250)
     Object.defineProperty(scroller, 'scrollTop', { configurable: true, value: 40 })
 
-    expect(measureSourceControlScrollMargin(list, scroller)).toBe(190)
+    expect(measureVirtualizedListScrollMargin(list, scroller)).toBe(190)
 
     Object.defineProperty(scroller, 'scrollTop', { configurable: true, value: 120 })
     setTop(list, 170)
     // list.top dropped by the same amount scrollTop rose → margin unchanged.
-    expect(measureSourceControlScrollMargin(list, scroller)).toBe(190)
+    expect(measureVirtualizedListScrollMargin(list, scroller)).toBe(190)
   })
 })
 
-describe('observeSourceControlScrollMargin', () => {
+describe('observeVirtualizedListScrollMargin', () => {
   it('notifies on resize and disconnects cleanly', () => {
     const scroller = document.createElement('div')
     const child = document.createElement('div')
@@ -283,7 +274,7 @@ describe('observeSourceControlScrollMargin', () => {
     scroller.append(child, list)
     const onLayout = vi.fn()
 
-    const cleanup = observeSourceControlScrollMargin(list, scroller, onLayout)
+    const cleanup = observeVirtualizedListScrollMargin(list, scroller, onLayout)
     expect(activeResizeObservers.size).toBe(1)
 
     fireResizeObservers()
@@ -304,7 +295,7 @@ describe('observeSourceControlScrollMargin', () => {
     scroller.append(removedSibling, list)
     const onLayout = vi.fn()
 
-    const cleanup = observeSourceControlScrollMargin(list, scroller, onLayout)
+    const cleanup = observeVirtualizedListScrollMargin(list, scroller, onLayout)
     const observer = Array.from(activeResizeObservers)[0]
     expect(observer?.elements.has(removedSibling)).toBe(true)
     onLayout.mockClear()
@@ -323,10 +314,10 @@ describe('observeSourceControlScrollMargin', () => {
   })
 })
 
-describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
+describe('VirtualizedList scroll-margin lifecycle', () => {
   it('does not read layout during ordinary re-renders after the initial measure', () => {
     const aboveHeight = 160
-    const baseRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    const baseRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS)
 
     act(() => {
       root.render(
@@ -353,7 +344,7 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
   })
 
   it('keeps multi-section windowing correct when content above resizes', () => {
-    const rows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 20)
+    const rows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 20)
     let aboveHeight = 200
 
     act(() => {
@@ -407,10 +398,8 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
   })
 
   it('updates a later virtual section when an earlier virtual section resizes', () => {
-    let firstRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 10).map((row) => `first-${row}`)
-    const secondRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 20).map(
-      (row) => `second-${row}`
-    )
+    let firstRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 10).map((row) => `first-${row}`)
+    const secondRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 20).map((row) => `second-${row}`)
 
     act(() => {
       root.render(<MultiSectionHarness firstRows={firstRows} secondRows={secondRows} />)
@@ -418,7 +407,7 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
     syncMultiSectionListTops(firstRows.length)
     act(() => fireResizeObservers())
 
-    firstRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 80).map((row) => `first-${row}`)
+    firstRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 80).map((row) => `first-${row}`)
     act(() => {
       root.render(<MultiSectionHarness firstRows={firstRows} secondRows={secondRows} />)
     })
@@ -440,7 +429,7 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
     Object.defineProperty(scroller, 'scrollTop', {
       configurable: true,
       writable: true,
-      value: firstRows.length * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+      value: firstRows.length * VIRTUALIZED_LIST_ROW_HEIGHT_PX
     })
     act(() => scroller.dispatchEvent(new Event('scroll')))
 
@@ -452,14 +441,97 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
 
   it('renders small lists without the virtualization shell or observers', () => {
     const rows = ['a', 'b', 'c']
-    expect(rows.length).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(rows.length).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
 
     act(() => {
       root.render(<SharedScrollerHarness aboveHeight={80} rows={rows} rowTestId="plain" />)
     })
 
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
     expect(host.querySelectorAll('[data-testid="plain"]').length).toBe(3)
     expect(activeResizeObservers.size).toBe(0)
+  })
+})
+
+// Why not 500 and not a window's worth: a hard-coded set size, or one that happens to equal the
+// mounted count, would pass at those lengths.
+const ANNOUNCED_ROW_COUNT = VIRTUALIZED_LIST_MIN_ROWS + 23
+
+describe('VirtualizedList list-position announcement', () => {
+  function renderAnnouncing(options: { hasUnloadedRows?: boolean } = {}): HTMLElement[] {
+    act(() => {
+      root.render(
+        <SharedScrollerHarness
+          aboveHeight={0}
+          rows={manyRows(ANNOUNCED_ROW_COUNT)}
+          announceListPosition
+          hasUnloadedRows={options.hasUnloadedRows}
+        />
+      )
+    })
+    syncListTop(0)
+    act(() => {
+      fireResizeObservers()
+    })
+    return Array.from(host.querySelectorAll<HTMLElement>('[data-index]'))
+  }
+
+  it('announces the full row count once every row is loaded', () => {
+    const wrappers = renderAnnouncing()
+
+    expect(wrappers.length).toBeGreaterThan(0)
+    // The window is a strict subset, so a set size read off the DOM could not reach the real total.
+    expect(wrappers.length).toBeLessThan(ANNOUNCED_ROW_COUNT)
+    expect(host.querySelector('[data-testid="virtualized-list"]')?.getAttribute('role')).toBe(
+      'list'
+    )
+    expect(
+      wrappers.map((wrapper) => [
+        wrapper.getAttribute('role'),
+        wrapper.getAttribute('aria-setsize'),
+        wrapper.getAttribute('aria-posinset')
+      ])
+    ).toEqual(
+      wrappers.map((wrapper) => [
+        'listitem',
+        String(ANNOUNCED_ROW_COUNT),
+        String(Number(wrapper.dataset.index) + 1)
+      ])
+    )
+  })
+
+  it('announces an unknown set size while more rows are still unloaded', () => {
+    const wrappers = renderAnnouncing({ hasUnloadedRows: true })
+
+    expect(wrappers.length).toBeGreaterThan(0)
+    // -1, never the loaded count: a "Load more" control exists precisely because more rows do.
+    expect(wrappers.map((wrapper) => wrapper.getAttribute('aria-setsize'))).toEqual(
+      wrappers.map(() => '-1')
+    )
+    // Position is still real — only the total is unknown.
+    expect(wrappers.map((wrapper) => wrapper.getAttribute('aria-posinset'))).toEqual(
+      wrappers.map((wrapper) => String(Number(wrapper.dataset.index) + 1))
+    )
+  })
+
+  it('leaves the a11y tree untouched for callers that do not opt in', () => {
+    act(() => {
+      root.render(<SharedScrollerHarness aboveHeight={0} rows={manyRows(ANNOUNCED_ROW_COUNT)} />)
+    })
+    syncListTop(0)
+    act(() => {
+      fireResizeObservers()
+    })
+
+    const wrappers = Array.from(host.querySelectorAll<HTMLElement>('[data-index]'))
+    expect(wrappers.length).toBeGreaterThan(0)
+    expect(host.querySelector('[data-testid="virtualized-list"]')?.hasAttribute('role')).toBe(false)
+    for (const wrapper of wrappers) {
+      expect([
+        wrapper.hasAttribute('role'),
+        wrapper.hasAttribute('aria-setsize'),
+        wrapper.hasAttribute('aria-posinset')
+      ]).toEqual([false, false, false])
+    }
   })
 })

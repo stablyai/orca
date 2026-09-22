@@ -87,7 +87,7 @@ async function interruptedRestart(
   const capsule = JSON.parse(
     await readFile(join(previous.root, AGENT_SESSION_RECOVERY_CAPSULE_FILE), 'utf8')
   )
-  const marker = parseAgentSessionResumeMarker(capsule.markers[0])
+  const marker = parseAgentSessionResumeMarker(capsule.entries[0]?.marker)
   return { ...hostTestState(), host, store, closeSession, marker }
 }
 
@@ -324,7 +324,8 @@ it.each([
     expect(host.isHeld(SESSION)).toBe(false)
     expect(await host.restartResume.continueAfterRestart([SESSION], 'retry')).toEqual({
       resumed: [],
-      continued: []
+      continued: [],
+      sessions: []
     })
     expect(dispatch).not.toHaveBeenCalled()
     if (settlementFails) {
@@ -455,7 +456,7 @@ it.each([false, true])(
   }
 )
 
-it('releases a failed acquisition without retrying the spent offer', async () => {
+it('releases a failed acquisition and leaves the offer retryable', async () => {
   const { host, acquire, dispatch, closeSession } = await interruptedRestart()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   expect(await host.restartResume.resume([SESSION], 'modal')).toMatchObject([
@@ -463,8 +464,8 @@ it('releases a failed acquisition without retrying the spent offer', async () =>
   ])
   expect(host.isHeld(SESSION)).toBe(false)
   await host.restartResume.continueAfterRestart([SESSION], 'retry')
-  expect(acquire).toHaveBeenCalledTimes(1)
-  expect(dispatch).not.toHaveBeenCalled()
+  expect(acquire).toHaveBeenCalledTimes(2)
+  expect(dispatch).toHaveBeenCalledTimes(1)
   expect(closeSession).not.toHaveBeenCalled()
 })
 
@@ -489,7 +490,7 @@ it.each([false, true])(
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(dispatch).toHaveBeenCalledTimes(1)
     expect(host.journalSnapshot(SESSION).submissions).toHaveLength(1)
-    expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toEqual([])
+    expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
     await host.restartResume.continueAfterRestart([SESSION], 'later-click')
     expect(dispatch).toHaveBeenCalledTimes(1)
     host.release(SESSION, 'pane')
@@ -540,14 +541,85 @@ it('retains acquisition through slow continuation settlement, then releases it',
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-it('shares one real-file take across concurrent first recovery requests', async () => {
+// Opening the chat is inspection only. The explicit restart action is what removes the durable
+// offer, so ordinary pane lifecycle must not make this status disappear.
+it('keeps offering a chat after the user opens it', async () => {
+  const { host, root, store } = await interruptedRestart()
+  expect(await host.restartResume.list()).toHaveLength(1)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await host.hold(SESSION, 'pane')
+  host.release(SESSION, 'pane')
+  await vi.advanceTimersByTimeAsync(GRACE)
+  // The whole eviction, not just the provider stop: the lease returns to `released` on the step
+  // before the last, and until it does the offer is refused for a reason that is not recovery.
+  await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+  expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  vi.useRealTimers()
+
+  expect(await host.restartResume.list()).toHaveLength(1)
+  await host.restartResume.recordMarkers()
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
+})
+
+// The snooze, through the real quit path rather than a session map that cannot move: eviction
+// forgets sessions BEFORE the write-back runs, so a marker whose journal is only reachable while
+// the host still indexes it is exactly what a mock harness cannot catch.
+it('carries a snoozed offer through a real teardown', async () => {
   const { host, root } = await interruptedRestart()
-  const take = vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'take')
+  expect(await host.restartResume.list()).toHaveLength(1)
+  await host.flushAllStreamedEvents({ trigger: 'quit' })
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
+})
+
+// Nothing acted on the capsule this launch, so it is still exactly as the last teardown left it.
+it('keeps a durable offer intact through a teardown with no explicit action', async () => {
+  const { host, root } = await interruptedRestart()
+  await host.flushAllStreamedEvents({ trigger: 'quit' })
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
+})
+
+it('serializes teardown publication behind an explicit dismissal', async () => {
+  await attach()
+  const { host, root, acquire } = hostTestState()
+  const events = acquire.mock.calls[0]?.[0].events
+  if (!events) {
+    throw new Error('missing provider event sink')
+  }
+  events.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
+    { kind: 'turn', turnId: 'working', state: 'running' }
+  )
+  await host.flushStreamedEvents(SESSION)
+  host.restartResume.captureMarkers('quit')
+  host.restartResume.confirmStoppedMarker(SESSION)
+
+  const releaseRecord = Promise.withResolvers<void>()
+  const originalRecord = AgentSessionRecoveryCapsule.prototype.record
+  const record = vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'record')
+  record.mockImplementation(function (this: AgentSessionRecoveryCapsule, ...args) {
+    return releaseRecord.promise.then(() => originalRecord.apply(this, args))
+  })
+
+  try {
+    const recording = host.restartResume.recordMarkers()
+    await Promise.resolve()
+    const dismissed = host.restartResume.dismiss()
+    releaseRecord.resolve()
+    await Promise.all([recording, dismissed])
+    expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
+  } finally {
+    record.mockRestore()
+  }
+})
+
+it('keeps concurrent recovery reads independent and non-destructive', async () => {
+  const { host, root } = await interruptedRestart()
+  const list = vi.spyOn(AgentSessionRecoveryCapsule.prototype, 'list')
   const results = await Promise.all([host.restartResume.list(), host.restartResume.list()])
   expect(results.map((items) => items.length)).toEqual([1, 1])
-  expect(take).toHaveBeenCalledTimes(1)
-  expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toEqual([])
-  take.mockRestore()
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
+  list.mockRestore()
 })
 
 it('fails closed on corrupt recovery storage while ordinary hold and send still work', async () => {
@@ -557,7 +629,8 @@ it('fails closed on corrupt recovery storage while ordinary hold and send still 
   expect(await host.restartResume.list()).toEqual([])
   expect(await host.restartResume.continueAfterRestart([SESSION], 'modal')).toEqual({
     resumed: [],
-    continued: []
+    continued: [],
+    sessions: []
   })
   await host.hold(SESSION, 'pane')
   const body = hostTestMessage('A fresh ordinary request')
@@ -565,7 +638,7 @@ it('fails closed on corrupt recovery storage while ordinary hold and send still 
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).toMatchObject({ ok: true })
   expect(dispatch).toHaveBeenCalledTimes(1)
-  expect(warning).toHaveBeenCalledTimes(1)
+  expect(warning).toHaveBeenCalledTimes(3)
   warning.mockRestore()
   host.release(SESSION, 'pane')
 })

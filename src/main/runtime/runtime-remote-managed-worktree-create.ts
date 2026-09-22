@@ -110,6 +110,7 @@ export async function createRuntimeRemoteManagedWorktree(
       }
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
+        ...(args.startupCwd ? { cwd: args.startupCwd } : {}),
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
           : {}),

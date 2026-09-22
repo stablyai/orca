@@ -18,6 +18,7 @@ export function SessionActionMenuItems({
   menuKind = 'dropdown',
   resumeDisabled,
   resumeLabel,
+  resumeHidden = false,
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
@@ -36,6 +37,7 @@ export function SessionActionMenuItems({
   menuKind?: 'dropdown' | 'context'
   resumeDisabled: boolean
   resumeLabel: string
+  resumeHidden?: boolean
   onResume: () => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
@@ -92,10 +94,12 @@ export function SessionActionMenuItems({
           )}
         </Item>
       ) : null}
-      <Item disabled={resumeDisabled} onSelect={onResume}>
-        <Play className="size-3.5" />
-        {resumeLabel}
-      </Item>
+      {!resumeHidden ? (
+        <Item disabled={resumeDisabled} onSelect={onResume}>
+          <Play className="size-3.5" />
+          {resumeLabel}
+        </Item>
+      ) : null}
       {onResumeInNewChat ? (
         <Item onSelect={onResumeInNewChat}>
           <MessagesSquare className="size-3.5" />

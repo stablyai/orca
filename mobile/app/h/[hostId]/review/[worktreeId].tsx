@@ -6,7 +6,8 @@ import {
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * Diff review, from the desktop's bundle or from this app.
@@ -33,7 +34,6 @@ export default function MobileDiffReviewScreen() {
   }>()
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
-  const enabled = useMobileWebShellEnabled()
   const native = <MobileDiffReviewRouteScreen />
 
   // The four query params are read by the screen itself, so they are carried across whole rather
@@ -52,7 +52,12 @@ export default function MobileDiffReviewScreen() {
         })
       : null
 
-  if (enabled !== true || !hostId || route === null) {
+  const decision = useShellSwitchDecision(route)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  if (decision.kind === 'native') {
     return native
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen reused
@@ -60,9 +65,9 @@ export default function MobileDiffReviewScreen() {
   // left. A `file` change is the common case here and is a param change, not a path change.
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey(route)}
+      key={shellScreenRouteKey(decision.route)}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
     />
   )

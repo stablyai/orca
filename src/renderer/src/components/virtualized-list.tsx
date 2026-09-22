@@ -1,23 +1,16 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-// Why: below this count plain rows keep the DOM identical to the
-// pre-virtualization markup (natural flow, no absolute positioning), so small
-// changesets keep exact scrollbar and flicker-free behavior. `STA-351` /
-// `STA-1280` jank only appears with hundreds of rows.
-export const SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS = 50
-// Why: rows are one py-1 text-xs line, except conflict/submodule rows which
-// add a second label line — so estimate the common height and let
-// measureElement correct the tall variants. Identical entries measure
-// identically, so a git-status refresh cannot move the scroll position.
-export const SOURCE_CONTROL_FILE_ROW_HEIGHT_PX = 24
-export const SOURCE_CONTROL_FILE_ROW_OVERSCAN = 10
+// Small lists stay in natural flow; windowing pays off only at larger sizes.
+export const VIRTUALIZED_LIST_MIN_ROWS = 50
+export const VIRTUALIZED_LIST_ROW_HEIGHT_PX = 24
+export const VIRTUALIZED_LIST_OVERSCAN = 10
 
 /**
  * Offset of `container` from the start of `scrollElement`'s scrollable content.
  * Independent of current scrollTop (relative tops + scrollTop cancel out).
  */
-export function measureSourceControlScrollMargin(
+export function measureVirtualizedListScrollMargin(
   container: HTMLElement,
   scrollElement: HTMLElement
 ): number {
@@ -34,7 +27,7 @@ export function measureSourceControlScrollMargin(
  * Does not observe subtree mutations — virtualized row mount/unmount would
  * thrash and never change scroll margin.
  */
-export function observeSourceControlScrollMargin(
+export function observeVirtualizedListScrollMargin(
   container: HTMLElement,
   scrollElement: HTMLElement,
   onLayout: () => void
@@ -46,7 +39,7 @@ export function observeSourceControlScrollMargin(
 
   const observeScrollerChildren = (): void => {
     const currentChildren = new Set(scrollElement.children)
-    // Why: child-list churn can detach previously observed sections; pruning
+    // Why: child-list churn can detach previously observed siblings; pruning
     // targets prevents the long-lived virtual list from retaining stale DOM.
     for (const child of observedChildren) {
       if (!currentChildren.has(child) && child !== container) {
@@ -60,7 +53,7 @@ export function observeSourceControlScrollMargin(
   }
   observeScrollerChildren()
 
-  // Why: sections mount/unmount as direct scroller children; re-observe so a
+  // Why: list siblings mount/unmount as direct scroller children; re-observe so a
   // newly inserted sibling can still shift this list's margin when it resizes.
   const mutationObserver = new MutationObserver(() => {
     observeScrollerChildren()
@@ -75,16 +68,17 @@ export function observeSourceControlScrollMargin(
 }
 
 /**
- * Windows one source-control section's rows inside the panel's shared
- * scroller. Sections below SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS render plainly;
- * larger ones mount only viewport + overscan rows.
+ * Renders rows in natural flow until the list is large enough to benefit from
+ * windowing, then mounts only the viewport plus overscan rows.
  */
-export function SourceControlVirtualFileList<TRow>({
+export function VirtualizedList<TRow>({
   rows,
   getRowKey,
   renderRow,
   scrollElement,
-  estimateRowHeightPx = SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+  estimateRowHeightPx = VIRTUALIZED_LIST_ROW_HEIGHT_PX,
+  announceListPosition = false,
+  hasUnloadedRows
 }: {
   rows: readonly TRow[]
   getRowKey: (row: TRow) => string
@@ -96,16 +90,23 @@ export function SourceControlVirtualFileList<TRow>({
   // Why: callers outside source control have their own row paddings; measureElement
   // still corrects, but a wrong estimate makes the initial scrollbar jump.
   estimateRowHeightPx?: number
+  // Why: windowing hides the real row count and each row's place in it from assistive tech, so
+  // opt in to say both. Virtualized path only — below the threshold this returns a bare fragment,
+  // with no container to carry the roles, so small lists announce no list at all. Off by default:
+  // turning it on rewrites every other caller's a11y tree, and list/tree/grid is each surface's call.
+  announceListPosition?: boolean
+  // Why: a caller that pages in rows holds fewer than exist, and announcing the loaded count as the
+  // total is the mis-statement aria-setsize exists to prevent — ARIA spells that unknown total -1.
+  hasUnloadedRows?: boolean
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const virtualize = rows.length >= SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS
+  const virtualize = rows.length >= VIRTUALIZED_LIST_MIN_ROWS
 
-  // Why: the section shares the panel scroller with the commit area and
-  // sibling sections, so the virtualizer needs this list's offset inside that
-  // scroller. Measure on mount / scrollElement attach and when observers
-  // report layout shifts — never during ordinary React renders (git-status
-  // polls re-render often and must not force synchronous layout).
+  // Why: the list shares its scroller with headers and sibling lists, so the
+  // virtualizer needs this list's offset inside that scroller. Measure on mount
+  // / scrollElement attach and when observers report layout shifts — never during
+  // ordinary React renders.
   useLayoutEffect(() => {
     if (!virtualize) {
       return
@@ -116,21 +117,26 @@ export function SourceControlVirtualFileList<TRow>({
     }
 
     const updateMargin = (): void => {
-      const nextMargin = measureSourceControlScrollMargin(container, scrollElement)
+      const nextMargin = measureVirtualizedListScrollMargin(container, scrollElement)
       setScrollMargin((current) => (current === nextMargin ? current : nextMargin))
     }
 
     updateMargin()
-    return observeSourceControlScrollMargin(container, scrollElement, updateMargin)
+    return observeVirtualizedListScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, virtualize])
 
   const virtualizer = useVirtualizer({
     count: rows.length,
+    // Why the null half: disabled nulls scrollOffset, so initialOffset() cannot latch 0 pre-attach.
     enabled: virtualize && scrollElement !== null,
     getScrollElement: () => scrollElement,
     estimateSize: () => estimateRowHeightPx,
-    overscan: SOURCE_CONTROL_FILE_ROW_OVERSCAN,
+    overscan: VIRTUALIZED_LIST_OVERSCAN,
     scrollMargin,
+    // Why: crossing the threshold attaches the scroller for the first time and the virtualizer
+    // writes its start offset back — from 0, scrolling the shared scroller to the top under the
+    // user, unless told where they already are.
+    initialOffset: () => scrollElement?.scrollTop ?? 0,
     // Why: stable row keys let the virtualizer carry item identity across
     // status refreshes instead of remounting the window each poll.
     getItemKey: (index) => {
@@ -139,6 +145,9 @@ export function SourceControlVirtualFileList<TRow>({
     }
   })
 
+  // Why not the window's count: the window is what AT must not be able to hear.
+  const announcedSetSize = hasUnloadedRows ? -1 : rows.length
+
   if (!virtualize) {
     return <>{rows.map((row) => renderRow(row))}</>
   }
@@ -146,7 +155,8 @@ export function SourceControlVirtualFileList<TRow>({
   return (
     <div
       ref={containerRef}
-      data-testid="source-control-virtual-list"
+      data-testid="virtualized-list"
+      role={announceListPosition ? 'list' : undefined}
       className="relative w-full"
       style={{ height: virtualizer.getTotalSize() }}
     >
@@ -160,6 +170,9 @@ export function SourceControlVirtualFileList<TRow>({
             key={item.key}
             ref={virtualizer.measureElement}
             data-index={item.index}
+            role={announceListPosition ? 'listitem' : undefined}
+            aria-setsize={announceListPosition ? announcedSetSize : undefined}
+            aria-posinset={announceListPosition ? item.index + 1 : undefined}
             className="absolute top-0 left-0 w-full"
             // Why: item.start includes scrollMargin (offsets are scroller-wide),
             // but rows position inside this container, so subtract it back out.

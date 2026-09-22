@@ -80,6 +80,25 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   it('keeps the rename for a runtime host with no nested SSH target', () => {
     expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
   })
+
+  it('uses per-launch arguments and preserves launch telemetry', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      agentArgs: '--model opus',
+      launchSource: 'source_control_recovery',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.command).toContain("'--model'")
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'source_control_recovery',
+      request_kind: 'new'
+    })
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {

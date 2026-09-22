@@ -1,9 +1,11 @@
-// Spending the markers: the one path that turns a resumable candidate back into a live agent.
+// Delivering the explicit restart action: the one path that turns a resumable candidate back into
+// a live agent.
 //
 // The manual "Resume" button and the automatic setting both land here, so the two can never drift
 // into different eligibility or different double-fire protection.
 //
-// Resume itself is a HOLD, not a send. The first resume-capable hold on a childless session
+// Resume itself acquires a provider child, not a new send. The first resume-capable hold on a
+// childless session
 // re-acquires the provider at the cursor the record already proved — Claude's `resume` +
 // `resumeSessionAt`, Codex's thread id — which is native continuation. Nothing re-sends the user's
 // prompt: that is what makes an agent redo work it already finished.
@@ -74,9 +76,9 @@ export class StructuredAgentSessionResumeAdmission {
 
 export type StructuredAgentSessionResumeRunnerDeps = {
   admission: StructuredAgentSessionResumeAdmission
-  /** Spends the runtime claim. False means another request already took it. */
+  /** Validates this action's durable reservation. False means the candidate is no longer eligible. */
   consumeMarker: (sessionId: string) => Promise<boolean>
-  /** Takes the resume-capable hold that re-acquires the provider child. */
+  /** Acquires the provider child for the reserved session. */
   resume: (sessionId: string) => Promise<void>
   concurrency?: number
 }
@@ -104,10 +106,14 @@ async function resumeOne(
 ): Promise<StructuredAgentSessionResumeOutcome> {
   try {
     return await deps.admission.run(sessionId, owner, async () => {
-      // Consumed BEFORE the hold, not after it succeeds. A crash between the two costs one resume
-      // the user can start by hand; the other order costs them the same agent running twice.
+      // Validate BEFORE provider acquisition. The durable reservation is removed only after the
+      // action succeeds, and a failed acquisition reopens it for the next explicit attempt.
       if (!(await deps.consumeMarker(sessionId))) {
-        return { sessionId, outcome: 'refused' as const, reason: 'agent_session_resume_consumed' }
+        return {
+          sessionId,
+          outcome: 'refused' as const,
+          reason: 'agent_session_resume_not_eligible'
+        }
       }
       await deps.resume(sessionId)
       return { sessionId, outcome: 'resumed' as const }

@@ -14,6 +14,10 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { launchSourceSchema } from '../../../../shared/telemetry-property-schemas'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat-session-option-defaults'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
@@ -86,14 +90,24 @@ export function agentLaunchSurfaceFactory(
         fence,
         text: prompt.text
       }),
-    createTerminalAgent: async ({ worktreeId, agent, startupPrompt }) => {
+    createTerminalAgent: async ({
+      worktreeId,
+      agent,
+      startupPrompt,
+      agentArgs,
+      cwd,
+      launchSource
+    }) => {
       const terminal = await context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
         // Folded into that launcher by the same startup plan a new agent tab is built from, so an
         // argv agent's prompt is in its argv at exec time rather than typed in afterwards.
-        ...(startupPrompt ? { startupPrompt } : {})
+        ...(startupPrompt ? { startupPrompt } : {}),
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(cwd ? { cwd } : {}),
+        ...agentLaunchTelemetry(agent, launchSource)
       })
       return {
         handle: terminal.handle,
@@ -107,6 +121,34 @@ export function agentLaunchSurfaceFactory(
         text: prompt.text
       })
   }
+}
+
+/**
+ * The `agent_started` triple, of which only `launch_source` came from the caller.
+ *
+ * `agent_kind` and `request_kind` are derived rather than accepted — the host already knows both,
+ * and a value it derives is a value a caller cannot misreport. `request_kind` is always `new`
+ * because a launch reusing a terminal returns before any surface is created.
+ *
+ * An unrecognized `launch_source` drops the telemetry and starts the agent anyway. The wire keeps
+ * the arm set open so an older host cannot refuse a newer client's launch over a label, which is
+ * only honoured if the refusal does not reappear here: attribution is bookkeeping, and bookkeeping
+ * must not gate the user's launch.
+ */
+function agentLaunchTelemetry(
+  agent: TuiAgent,
+  launchSource: string | undefined
+): Pick<TerminalCreateOptions, 'telemetry'> {
+  const parsed = launchSourceSchema.safeParse(launchSource)
+  return parsed.success
+    ? {
+        telemetry: {
+          agent_kind: tuiAgentToAgentKind(agent),
+          launch_source: parsed.data,
+          request_kind: 'new'
+        }
+      }
+    : {}
 }
 
 function requireInstalledHost(): StructuredAgentSessionHost {

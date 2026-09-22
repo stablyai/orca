@@ -279,7 +279,6 @@ describe('what the surface offers a screen', () => {
       'readClipboardText',
       'readMedia',
       'releaseMedia',
-      'setWakelock',
       'startAudio',
       'stopAudio',
       'writeClipboardText'

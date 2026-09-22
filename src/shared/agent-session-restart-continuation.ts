@@ -5,9 +5,11 @@
 // would make the two lanes behave differently — and the wording is the part that tells an agent to
 // VERIFY its last action before repeating it. Both reasons point the same way.
 //
-// Sending this is ALWAYS a deliberate user action. Reconnecting never sends it, and the automatic
-// path never reaches this module: see `structured-agent-session-restart-resume-host`, where the
-// resume surface contains no send at all.
+// Sending this needs the user's OPT-IN, not their presence: the restart prompt's resume sends it,
+// and so does a launch the user ticked "resume automatically" for. That is acceptable because the
+// work being continued is the user's own, the wording above tells the agent to VERIFY its last
+// action before repeating it, and the launch reports what it did. Reattaching without a send
+// remains a separate operation that never comes here.
 
 export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
   "Orca restarted, so your previous reply was cut off partway through. Before continuing, check whether your most recent action completed — don't repeat it if it did. Then carry on."

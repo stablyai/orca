@@ -55,6 +55,34 @@ export type AgentLaunchIntent = {
   /** Seeded launch options, narrowed by the host to what a structured create accepts. */
   sessionOptions?: Readonly<Record<string, unknown>>
   reuseTerminal?: AgentLaunchReusedTerminal
+  /**
+   * Per-call replacement for the user's configured launch arguments, as a saved launch recipe
+   * carries. Tri-state and must stay so: absent means "use the settings default", `null` means the
+   * caller explicitly wants none, and collapsing the two would make a recipe that clears its args
+   * silently inherit whatever the settings happen to hold.
+   *
+   * Deliberately NOT a route input. `hasExplicitTuiLaunchCommand` reads the launch *command* and
+   * pointedly not the arguments, because structured chat drives Claude through the Agent SDK and
+   * Codex through app-server, whose option sets are versioned independently of the interactive
+   * CLI's. So args reaching a structured launch are ignored rather than forcing a terminal — the
+   * host says so in `warning` instead of quietly honouring neither the args nor the preference.
+   */
+  agentArgs?: string | null
+  /**
+   * Where the agent starts, when that is not the workspace root — a resumed session's recorded
+   * subdirectory is the case that needs it.
+   *
+   * Unlike `agentArgs` this one DOES decide the route: only a terminal can be started somewhere
+   * other than its workspace, so a launch carrying one downgrades with `tui_launch_command` rather
+   * than running a structured session in the wrong directory.
+   */
+  cwd?: string
+  /**
+   * Which surface the user acted on, for the `agent_started` telemetry triple. Never read as
+   * behaviour — the host derives the other two members of that triple and this one is the only part
+   * it cannot know.
+   */
+  launchSource?: string
 }
 
 /** The surface the host actually created. */
