@@ -156,11 +156,15 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
-  clearJournalPayloadRetention()
   agentSessionPtyWriteGate.detachRecordLookup()
   const outstanding = [...pendingTeardown]
   pendingTeardown.clear()
   const installed = pending ? await pending.catch(() => null) : null
+  // Cleared only after any install racing this stop has settled: clearing
+  // first let a late `ensureJournalPayloadRetention` (reached after this
+  // function's synchronous prefix but before `pending` resolves) re-register
+  // the store, leaving it installed even after stop returns.
+  clearJournalPayloadRetention()
   if (installed) {
     outstanding.push(installed)
   }
@@ -360,6 +364,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     }
   } catch (error) {
     agentSessionPtyWriteGate.detachRecordLookup()
+    clearJournalPayloadRetention()
     throw error
   }
 }

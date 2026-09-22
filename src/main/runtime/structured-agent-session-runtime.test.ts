@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { getDefaultJournalPayloadRetention } from '../native-chat/agent-session-journal/journal-payload-store'
 import type {
   AgentSessionClaimStatus,
   AgentSessionExecutionLocation,
@@ -299,6 +300,27 @@ describe('structured agent-session runtime install', () => {
       __setWindowsProcessTreeLoaderForTests()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
+  })
+
+  it('clears payload retention when stop races an in-flight install', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
+    // Deliberately not awaited: `stopStructuredAgentSessionRuntime` below must
+    // observe this install still in flight, before it reaches
+    // `ensureJournalPayloadRetention`.
+    const installPromise = ensureStructuredAgentSessionHost({
+      stateDirectory,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveEnvironment: async () => ({}),
+      reapOrphanChildren: async () => []
+    })
+
+    await stopStructuredAgentSessionRuntime()
+    await installPromise.catch(() => undefined)
+
+    expect(getDefaultJournalPayloadRetention()).toBeNull()
   })
 })
 

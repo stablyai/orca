@@ -48,7 +48,8 @@ export function readLocalDispatchPayload(input: {
     // A transcript has no journal, so the scope index recorded at clip time is
     // the only ownership proof this read has.
     isReferenced: () =>
-      retention !== null && retention.isReferencedBy(input.digest, dispatchPayloadScope(input.dispatchId)),
+      retention !== null &&
+      retention.isReferencedBy(input.digest, dispatchPayloadScope(input.dispatchId)),
     digest: input.digest,
     offset: input.offset,
     limit: input.limit,
@@ -77,7 +78,11 @@ export function parseRemotePayloadReply(
   }
   const record: Record<string, unknown> = Object.fromEntries(Object.entries(value))
   const payloadValue = record['payload']
-  if (typeof record['runtimeEpoch'] !== 'string' || typeof payloadValue !== 'object' || payloadValue === null) {
+  if (
+    typeof record['runtimeEpoch'] !== 'string' ||
+    typeof payloadValue !== 'object' ||
+    payloadValue === null
+  ) {
     throw malformedRemoteReply()
   }
   const payload: Record<string, unknown> = Object.fromEntries(Object.entries(payloadValue))
@@ -88,27 +93,34 @@ export function parseRemotePayloadReply(
   const chunkByteLength = payload['chunkByteLength']
   const complete = payload['complete']
   if (
-    typeof digest !== 'string' || typeof chunk !== 'string' || typeof complete !== 'boolean'
-    || !isByteCount(byteLength) || !isByteCount(chunkOffset) || !isByteCount(chunkByteLength)
+    typeof digest !== 'string' ||
+    typeof chunk !== 'string' ||
+    typeof complete !== 'boolean' ||
+    !isByteCount(byteLength) ||
+    !isByteCount(chunkOffset) ||
+    !isByteCount(chunkByteLength)
   ) {
     throw malformedRemoteReply()
   }
   const requestedOffset = request.offset ?? 0
   if (
     // The reply must answer the digest that was asked for, and nothing else.
-    digest !== request.digest
-    || Buffer.byteLength(chunk, 'utf8') !== chunkByteLength
+    digest !== request.digest ||
+    Buffer.byteLength(chunk, 'utf8') !== chunkByteLength ||
     // The host aligns a mid-code-point offset forward to the next UTF-8 lead
     // byte, so the answer may begin a little past the request but never before
     // it, and never further than one character's worth of continuation bytes.
-    || chunkOffset < requestedOffset
-    || chunkOffset - requestedOffset > MAX_UTF8_START_ALIGNMENT
-    || chunkOffset + chunkByteLength > byteLength
+    // Byte 0 is always a lead byte, so an honest reply at offset 0 never
+    // shifts at all; tolerating drift there would let a stale or buggy reply
+    // silently drop the payload's first bytes.
+    chunkOffset < requestedOffset ||
+    chunkOffset - requestedOffset > (requestedOffset === 0 ? 0 : MAX_UTF8_START_ALIGNMENT) ||
+    chunkOffset + chunkByteLength > byteLength ||
     // A peer that returns nothing and calls it unfinished hands the pager an
     // offset that never advances; that is a broken answer, not a short one.
-    || (chunkByteLength === 0 && !complete)
+    (chunkByteLength === 0 && !complete) ||
     // `complete` is what stops the pager; it must mean the payload's real end.
-    || complete !== (chunkOffset + chunkByteLength === byteLength)
+    complete !== (chunkOffset + chunkByteLength === byteLength)
   ) {
     throw malformedRemoteReply()
   }
@@ -126,8 +138,10 @@ function isByteCount(value: unknown): value is number {
 /** One code for every way a reply fails its binding: a caller cannot tell which
  *  check tripped, and none of them means the content is trustworthy. */
 function malformedRemoteReply(): OrchestrationError {
-  return new OrchestrationError('payload_integrity_failed',
-    'The execution host returned a malformed payload reply; refusing to present it as content.')
+  return new OrchestrationError(
+    'payload_integrity_failed',
+    'The execution host returned a malformed payload reply; refusing to present it as content.'
+  )
 }
 
 /** Keeps the reader's specific refusal code on the wire instead of flattening it. */

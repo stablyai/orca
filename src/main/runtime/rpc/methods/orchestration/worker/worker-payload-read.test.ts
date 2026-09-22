@@ -28,8 +28,13 @@ afterEach(async () => {
 })
 
 function transcriptMessage(text: string): NativeChatMessage {
-  return { id: 'm1', role: 'assistant', timestamp: null, source: 'transcript',
-    blocks: [{ type: 'text', text }] }
+  return {
+    id: 'm1',
+    role: 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [{ type: 'text', text }]
+  }
 }
 
 function longText(): string {
@@ -38,8 +43,9 @@ function longText(): string {
 
 describe('worker readback retention and owner-checked payload read', () => {
   it('clips the block, retains the redacted original, and serves it to the same Dispatch', () => {
-    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined,
-      { payloadScope: dispatchPayloadScope('ctx_owner') })
+    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined, {
+      payloadScope: dispatchPayloadScope('ctx_owner')
+    })
     const block = bounded.messages[0]!.blocks[0]!
     expect(block.type).toBe('text')
     if (block.type !== 'text') {
@@ -51,7 +57,10 @@ describe('worker readback retention and owner-checked payload read', () => {
     expect(bounded.warnings).toContain('Oversized transcript text was clipped.')
     expect(JSON.stringify(bounded)).not.toContain(CAPABILITY)
 
-    const range = readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: block.clipped!.digest })
+    const range = readLocalDispatchPayload({
+      dispatchId: 'ctx_owner',
+      digest: block.clipped!.digest
+    })
     expect(range.complete).toBe(true)
     expect(range.chunk).toContain('CONSTRAINT-C')
     expect(range.chunk).not.toContain(CAPABILITY)
@@ -60,43 +69,56 @@ describe('worker readback retention and owner-checked payload read', () => {
   })
 
   it('refuses another Dispatch, an unknown digest, and a tampered file', async () => {
-    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined,
-      { payloadScope: dispatchPayloadScope('ctx_owner') })
+    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined, {
+      payloadScope: dispatchPayloadScope('ctx_owner')
+    })
     const block = bounded.messages[0]!.blocks[0]!
     if (block.type !== 'text') {
       throw new Error('unexpected block')
     }
     const digest = block.clipped!.digest
-    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_other', digest }))
-      .toThrow(expect.objectContaining({ code: 'payload_not_referenced' }))
-    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: 'f'.repeat(64) }))
-      .toThrow(expect.objectContaining({ code: 'payload_not_referenced' }))
+    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_other', digest })).toThrow(
+      expect.objectContaining({ code: 'payload_not_referenced' })
+    )
+    expect(() =>
+      readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: 'f'.repeat(64) })
+    ).toThrow(expect.objectContaining({ code: 'payload_not_referenced' }))
     await writeFile(join(directory, `${digest}.payload`), 'tampered')
-    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest }))
-      .toThrow(expect.objectContaining({ code: 'payload_integrity_failed' }))
+    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest })).toThrow(
+      expect.objectContaining({ code: 'payload_integrity_failed' })
+    )
   })
 
   it('keeps the legacy lossy clip when no retention is installed', () => {
     setDefaultJournalPayloadRetention(null)
-    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined,
-      { payloadScope: dispatchPayloadScope('ctx_owner') })
+    const bounded = boundWorkerTranscriptMessages([transcriptMessage(longText())], undefined, {
+      payloadScope: dispatchPayloadScope('ctx_owner')
+    })
     const block = bounded.messages[0]!.blocks[0]!
     if (block.type !== 'text') {
       throw new Error('unexpected block')
     }
     expect(block.text.endsWith('… (truncated)')).toBe(true)
     expect(block.clipped).toMatchObject({ retrievable: false })
-    expect(() => readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: block.clipped!.digest }))
-      .toThrow(expect.objectContaining({ code: 'payload_not_retained' }))
+    expect(() =>
+      readLocalDispatchPayload({ dispatchId: 'ctx_owner', digest: block.clipped!.digest })
+    ).toThrow(expect.objectContaining({ code: 'payload_not_retained' }))
   })
 })
 
 describe('a federated payload reply is bound to the request that asked for it', () => {
   const DIGEST = 'a'.repeat(64)
   const OTHER = 'b'.repeat(64)
-  const reply = (payload: Record<string, unknown>): unknown => ({ runtimeEpoch: 'epoch-1', payload })
+  const reply = (payload: Record<string, unknown>): unknown => ({
+    runtimeEpoch: 'epoch-1',
+    payload
+  })
   const good = {
-    digest: DIGEST, chunk: 'hello', byteLength: 11, chunkOffset: 0, chunkByteLength: 5,
+    digest: DIGEST,
+    chunk: 'hello',
+    byteLength: 11,
+    chunkOffset: 0,
+    chunkByteLength: 5,
     complete: false
   }
 
@@ -138,6 +160,19 @@ describe('a federated payload reply is bound to the request that asked for it', 
       { digest: DIGEST, offset: 1 }
     )
     expect(parsed.payload.chunkOffset).toBe(4)
+  })
+
+  it('refuses a forward shift at a requested offset of 0, where byte 0 is always a lead byte', () => {
+    // Unlike a mid-code-point offset, byte 0 can never split a character, so an
+    // honest reply to `offset: 0` always has `chunkOffset === 0`. Tolerating
+    // drift here would let a stale or buggy reply silently drop the payload's
+    // first two bytes ('he') while every other binding check still passes.
+    expect(() =>
+      parseRemotePayloadReply(
+        reply({ ...good, chunk: 'llo', chunkOffset: 2, chunkByteLength: 3 }),
+        { digest: DIGEST, offset: 0 }
+      )
+    ).toThrow(expect.objectContaining({ code: 'payload_integrity_failed' }))
   })
 
   it('accepts a real store range taken at a mid-code-point offset', () => {
