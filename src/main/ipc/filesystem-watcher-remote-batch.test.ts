@@ -58,6 +58,28 @@ describe('remote filesystem watcher batching', () => {
     })
   })
 
+  it('identifies the emitting SSH connection when two hosts watch the same path', async () => {
+    vi.useFakeTimers()
+    const sender = makeSender()
+    for (const connectionId of ['host-a', 'host-b']) {
+      await handlers['fs:watchWorktree']({ sender }, { worktreePath: WORKTREE_PATH, connectionId })
+    }
+    const events: FsChangeEvent[] = [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/notes.md` }]
+    watchCallbacks[0](events)
+    watchCallbacks[1](events)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(sender.send).toHaveBeenCalledTimes(2)
+    for (const connectionId of ['host-a', 'host-b']) {
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: WORKTREE_PATH,
+        connectionId,
+        events
+      })
+    }
+    await closeAllWatchers()
+    vi.useRealTimers()
+  })
+
   it('coalesces a burst of remote events into a single fs:changed send', async () => {
     vi.useFakeTimers()
     const sender = makeSender()
@@ -72,6 +94,7 @@ describe('remote filesystem watcher batching', () => {
 
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: WORKTREE_PATH,
       events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }]
     })
@@ -94,6 +117,7 @@ describe('remote filesystem watcher batching', () => {
 
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: WORKTREE_PATH,
       events: [{ kind: 'delete', absolutePath: `${WORKTREE_PATH}/dist/app.js` }]
     })
@@ -116,6 +140,7 @@ describe('remote filesystem watcher batching', () => {
 
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: WORKTREE_PATH,
       events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
     })

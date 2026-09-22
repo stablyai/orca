@@ -45,7 +45,8 @@ type PendingDeleteTimer = {
 export function buildEditorExternalWatchEventHandler(
   findTarget: (
     worktreePath: string,
-    runtimeEnvironmentId: string | null
+    runtimeEnvironmentId: string | null,
+    connectionId?: string
   ) => EditorExternalWatchTarget | EditorExternalWatchTarget[] | undefined
 ): {
   handleFsChanged: (payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void
@@ -221,7 +222,7 @@ export function buildEditorExternalWatchEventHandler(
     payload: FsChangedPayload,
     runtimeEnvironmentId: string | null = null
   ): void => {
-    const found = findTarget(payload.worktreePath, runtimeEnvironmentId)
+    const found = findTarget(payload.worktreePath, runtimeEnvironmentId, payload.connectionId)
     const targets = Array.isArray(found) ? found : found ? [found] : []
     if (targets.length === 0) {
       return

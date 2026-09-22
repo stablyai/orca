@@ -99,12 +99,13 @@ export function useEditorExternalWatch(): void {
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId) =>
+      (worktreePath, runtimeEnvironmentId, connectionId) =>
         targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
-            target.runtimeEnvironmentId === runtimeEnvironmentId
+            target.runtimeEnvironmentId === runtimeEnvironmentId &&
+            target.connectionId === connectionId
         )
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
@@ -153,7 +154,12 @@ function subscribeRuntimeTarget(
       worktreePath: target.worktreePath,
       connectionId: target.connectionId
     },
-    (payload) => fsChangedHandlerRef.current?.(payload, target.runtimeEnvironmentId),
+    // Why: the subscription owns the connection even when an older runtime omits it from events.
+    (payload) =>
+      fsChangedHandlerRef.current?.(
+        { ...payload, connectionId: target.connectionId },
+        target.runtimeEnvironmentId
+      ),
     (err) => warnExternalWatchFailure(target, err)
   )
     .then((unsubscribe) => {

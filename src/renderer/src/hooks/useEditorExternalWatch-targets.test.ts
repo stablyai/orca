@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { joinPath } from '@/lib/path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getEditorExternalWatchTargets,
@@ -128,6 +129,22 @@ describe('getEditorExternalWatchTargets', () => {
     )
     expect(getEditorExternalWatchTargets({ ...state, openFiles: [] }).targets).toEqual([])
   })
+
+  it.each(['C:\\notes.md', 'C:/notes.md', '\\\\server\\share\\notes.md', '/notes.md'])(
+    'preserves the original path when joining the floating root for %s',
+    (filePath) => {
+      const repo = makeRepo('repo-1')
+      const { targets } = getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree: makeWorktree(repo.id),
+          openFiles: [{ ...makeOpenFile(FLOATING_TERMINAL_WORKTREE_ID), filePath }]
+        })
+      )
+      expect(targets).toHaveLength(1)
+      expect(joinPath(targets[0].worktreePath, 'notes.md')).toBe(filePath)
+    }
+  )
 
   it('enables WSL aliases for a proven-local Windows drive watcher', () => {
     const repo = makeRepo('repo-local-drive', null, 'local')

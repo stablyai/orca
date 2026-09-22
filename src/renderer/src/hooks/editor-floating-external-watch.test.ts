@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import type * as Autosave from '@/components/editor/editor-autosave'
@@ -103,6 +105,39 @@ describe('floating note external changes', () => {
       expect(notifyEditorExternalFileChange).toHaveBeenCalledWith(
         expect.objectContaining({ worktreeId })
       )
+    }
+    handler.dispose()
+  })
+
+  it('reloads a clean project mirror while preserving the dirty floating draft', () => {
+    const dirty = note('/notes/notes.md', true)
+    state.openFiles = [dirty, note('/notes/notes.md', false, 'project')]
+    const handler = buildEditorExternalWatchEventHandler(() => [
+      floatingTarget,
+      { ...floatingTarget, worktreeId: 'project' }
+    ])
+    handler.handleFsChanged({
+      worktreePath: '/notes',
+      events: [{ kind: 'update', absolutePath: '/notes/notes.md', isDirectory: false }]
+    })
+    vi.advanceTimersByTime(100)
+    expect(state.setExternalMutation).toHaveBeenCalledWith(dirty.id, 'changed')
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ worktreeId: 'project' })
+    )
+    handler.dispose()
+  })
+
+  it('forwards connection identity for updates, deletes and overflow recovery', () => {
+    const findTargets = vi.fn(() => undefined)
+    const handler = buildEditorExternalWatchEventHandler(findTargets)
+    for (const kind of ['update', 'delete', 'overflow'] as const) {
+      handler.handleFsChanged({
+        connectionId: 'ssh-a',
+        worktreePath: '/notes',
+        events: [{ kind, absolutePath: '/notes/notes.md' }]
+      })
+      expect(findTargets).toHaveBeenLastCalledWith('/notes', null, 'ssh-a')
     }
     handler.dispose()
   })

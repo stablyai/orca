@@ -74,6 +74,7 @@ export function scheduleRemoteWatcherRetryCore(
         `[filesystem-watcher] giving up SSH watch retry for ${worktreePath} on connection ${connectionId} after ${REMOTE_WATCH_RETRY_TIMEOUT_MS}ms`
       )
       listener.send('fs:changed', {
+        connectionId,
         worktreePath,
         events: [{ kind: 'overflow', absolutePath: worktreePath }]
       } satisfies FsChangedPayload)
