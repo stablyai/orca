@@ -31,7 +31,11 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.orchestrationDeepLinks.capture(argv, (link) => {
-    if (!state.mainWindow || state.mainWindow.isDestroyed()) {
+    if (
+      !state.orchestrationDeepLinkListenerReady ||
+      !state.mainWindow ||
+      state.mainWindow.isDestroyed()
+    ) {
       return false
     }
     state.mainWindow.webContents.send('ui:openOrchestrationDeepLink', link)

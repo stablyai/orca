@@ -37,6 +37,22 @@ describe('OrchestrationDeepLinkState', () => {
     })
   })
 
+  it('clears pending link when publish confirms live delivery', () => {
+    const state = new OrchestrationDeepLinkState()
+    const publish = vi.fn().mockReturnValue(true)
+
+    expect(
+      state.capture(['orca', 'orca://orchestration/new?title=Live&repo=wom7web'], publish)
+    ).toBe(true)
+
+    expect(publish).toHaveBeenCalledWith({
+      type: 'orchestration-new',
+      title: 'Live',
+      repo: 'wom7web'
+    })
+    expect(state.consume()).toBeNull()
+  })
+
   it('ignores untrusted URLs without replacing a pending intent', () => {
     const state = new OrchestrationDeepLinkState()
     state.capture(['orca', 'orca://orchestration/new?title=Safe'])
