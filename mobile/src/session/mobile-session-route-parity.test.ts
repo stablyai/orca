@@ -69,10 +69,13 @@ const HOST_COMPONENT_NAMES = new Set([
 // the attachment probe. The screen's other four clipboard sites (the terminal's paste, the sheets,
 // the quick-command row, the diff-review send) sit outside the walk from `MobileSessionRouteScreen`
 // and so do not move this pin. The copy-path sheet also gained the failure toast the other two had.
-const HEAD_MAIN_HOOK_SHA256 = '6d309ebdf13ecf21e4b42fb29de9db586a3c9835ead43015a5261b67bf18b8f6'
-const HEAD_HOOK_BINDING_SHA256 = '9041e8a74efdacc6099933bac11fb624aff46c99648746cf5504bf320ec431c5'
+// Refreshed for `reportDictationFailure`, the whole of the +1: the composer's two dictation
+// failure handlers were one policy written twice, and only `onError`'s copy knew about the setup
+// sheet, so a refused start showed the desktop's own `voice_dictation_disabled` as a toast.
+const HEAD_MAIN_HOOK_SHA256 = 'c7f4f35f447f1fd409dc9f1e617346d857ab6a6c6f5cf8420d1e6ee30984425d'
+const HEAD_HOOK_BINDING_SHA256 = '01ed7fd19e95b90443edaece28d5be583cafa4f9bb6bee734f6409c4df095fc8'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'ed45268b61372abcfeb29e9ce91822f1fb5214542b78356c7cef869824a09d37'
+  'dc189c0b5e5a6e060393382fa2d92d8754d6d14068cb4728d6a79a50599e401c'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -90,7 +93,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // frame cap inside the shell's page, and the Markdown copy action gained the failure branch that
 // answers a refused write. Re-recorded against the merged tree, since neither side's hash covers
 // the other's body. The hook and string counts are C7.2's and stand.
-const HEAD_CALLBACK_BODY_SHA256 = '5845c3b85217a3af9d3d2bfafe564a2b29a1b2c6776b5c2c9ec5afbf365a5157'
+// Refreshed once more for the two dictation failure handlers, which now both call
+// `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
+const HEAD_CALLBACK_BODY_SHA256 = '7449a84d321ce698bc5a2ab6bf204b2047dcfaaebf15f05ec924ba95cec9121a'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -525,10 +530,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(275)
+    expect(main.hooks).toHaveLength(276)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(77)
+    expect(main.callbacks).toHaveLength(78)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)
