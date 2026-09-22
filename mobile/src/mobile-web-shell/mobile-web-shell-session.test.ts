@@ -78,7 +78,7 @@ describe('the offline rule', () => {
   it('opens a cached generation with no compat check when the host is unreachable', () => {
     const start = started({ reachability: 'unreachable', hostCapabilities: [] })
     const step = run(start.session, { type: 'cache-read', generation: CACHED })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
@@ -139,7 +139,7 @@ describe('the connected flow', () => {
 
   it('opens the cached generation without paging when the build ids match', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     // And it writes the manifest it just matched: the routes are the only thing a same-build read
     // can have changed, and nothing else on this path touches the disk.
     expect(step.effects).toEqual([
@@ -240,7 +240,7 @@ describe('the connected flow', () => {
     })
     expect(progressed.session.state).toMatchObject({ kind: 'fetching', completedAssets: 2 })
     const staged = run(progressed.session, { type: 'download-staged' })
-    expect(staged.session.state).toEqual({ kind: 'activating' })
+    expect(staged.session.state).toEqual({ kind: 'activating', source: 'download' })
     const ready = run(staged.session, {
       type: 'activated',
       generationDirectory: '/cache/gen',
@@ -292,7 +292,7 @@ describe('a read the link cut short falls back to what is on disk', () => {
 
   it('opens the cached generation when the socket drops before the reachability change does', () => {
     const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(withoutRecord(step.effects)).toEqual([
       {
         kind: 'open-generation',

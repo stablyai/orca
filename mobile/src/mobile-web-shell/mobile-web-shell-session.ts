@@ -317,11 +317,11 @@ export function reduceMobileWebShellSession(
         : step(session, {})
     case 'download-staged':
       return session.state.kind === 'fetching'
-        ? step(session, { state: { kind: 'activating' } })
+        ? step(session, { state: { kind: 'activating', source: 'download' } })
         : step(session, {})
     case 'activated':
-      // Only the build this flow downloaded is a commit: a cache or offline open activates a build
-      // it never requested, and a same-build hit requested none.
+      // Only a download's activation is an update that landed. Not build-id equality: the fetch
+      // re-reads the manifest, so what it commits can be newer than what this flow was offered.
       return step(
         session,
         {
@@ -335,7 +335,9 @@ export function reduceMobileWebShellSession(
             elapsedMs: event.elapsedMs
           }
         },
-        event.buildId === session.requestedBuildId ? [{ kind: 'forget-update-failures' }] : []
+        session.state.kind === 'activating' && session.state.source === 'download'
+          ? [{ kind: 'forget-update-failures' }]
+          : []
       )
     case 'remounted':
       // Only the session id changes, so the view remounts against the same verified bytes. A new

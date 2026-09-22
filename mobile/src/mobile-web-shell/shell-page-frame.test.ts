@@ -30,7 +30,7 @@ describe('how long the shell keeps its own frame up', () => {
   it('has nothing to cover before a generation is on screen', () => {
     for (const state of [
       { kind: 'checking' },
-      { kind: 'activating' },
+      { kind: 'activating', source: 'download' },
       { kind: 'offline' },
       { kind: 'native-route' }
     ] as const satisfies readonly MobileWebShellSessionState[]) {

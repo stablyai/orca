@@ -100,7 +100,9 @@ export type MobileWebShellSessionState =
       readonly totalBytes: number
     }
   /** Bytes are in; the store is staging and committing, or a cache hit is being opened. */
-  | { readonly kind: 'activating' }
+  /** `download` is a generation this flow fetched and is committing; `cache` is one already on
+   *  disk. Only a download's activation is an update that landed. */
+  | { readonly kind: 'activating'; readonly source: 'download' | 'cache' }
   | {
       readonly kind: 'ready'
       readonly generationDirectory: string

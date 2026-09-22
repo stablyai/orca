@@ -59,7 +59,7 @@ describe('every exit from a failed update read leaves one record', () => {
       type: 'download-failed',
       cause: { reason: 'host-refused', hostCode: 'mobile_web_bundle_read_limited' }
     })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(recorded(step)).toEqual([
       {
         reason: 'host-refused',
@@ -114,7 +114,7 @@ describe('every exit from a failed update read leaves one record', () => {
 
   it('gates gone offline under the fetch open the cache unjudged', () => {
     const step = refusedUnder({ reachability: 'unreachable' }, CACHED_BELOW_HOST_FLOOR)
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(recorded(step)).toMatchObject([{ outcome: 'opened-cached', wall: null }])
   })
 
@@ -183,6 +183,16 @@ describe('a newer generation committed clears the record, and nothing else does'
     expect(forgets(step)).toBe(true)
   })
 
+  it('forgets when the host moved between the manifest read and the fetch', () => {
+    // The fetch reads the manifest again and commits what that read named, so the build that lands
+    // can be newer than the one this flow was offered. It is still this download's commit.
+    const MOVED = 'd'.repeat(64)
+    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const step = run(fetching.session, { type: 'download-staged' }, activated(MOVED))
+    expect(step.session.state).toMatchObject({ kind: 'ready', buildId: MOVED })
+    expect(forgets(step)).toBe(true)
+  })
+
   it('keeps the record when the fallback opens the cached generation', () => {
     const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
     const failed = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
@@ -204,7 +214,7 @@ describe('a newer generation committed clears the record, and nothing else does'
       { type: 'retry-pressed' },
       { type: 'cache-read', generation: CACHED }
     )
-    expect(offline.session.state).toEqual({ kind: 'activating' })
+    expect(offline.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(forgets(run(offline.session, activated(CACHED.buildId)))).toBe(false)
   })
 })

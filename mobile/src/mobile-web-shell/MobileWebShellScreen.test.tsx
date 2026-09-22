@@ -858,7 +858,7 @@ describe('the frame under a page that has not painted', () => {
   })
 
   it('carries the same label the screen was already painting while it opened the generation', async () => {
-    const opening = await renderScreen({ kind: 'activating' })
+    const opening = await renderScreen({ kind: 'activating', source: 'cache' })
     expect(textOf(opening)).toContain('Opening workspace')
     dependencies.pageFrame = 'unpainted'
     await updateScreen(opening, readyState('session-a'))
