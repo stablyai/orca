@@ -2,8 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const loadSnapshot = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
 vi.mock('./mobile-diff-review-loaders', () => ({
-  loadMobileDiffReviewSnapshot: vi.fn(),
+  loadMobileDiffReviewSnapshot: loadSnapshot,
   loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
 }))
 vi.mock('react-native', () => ({
@@ -29,6 +30,9 @@ vi.mock('expo-haptics', () => ({
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 
 import { MobileDiffReviewBody } from '../components/MobileDiffReviewBody'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 
 let tree: ReactTestRenderer | null = null
@@ -40,13 +44,17 @@ afterEach(() => {
 
 /** The review body as the screen view wires it, for a host the shell has not reached. */
 function ReviewWhileUnreachable({
-  onReconnect
+  onReconnect,
+  client = null,
+  connState = 'reconnecting'
 }: {
   onReconnect: ((hostId: string) => void) | null
+  client?: RpcClient | null
+  connState?: ConnectionState
 }) {
   const controller = useMobileDiffReviewController({
-    client: null,
-    connState: 'reconnecting',
+    client,
+    connState,
     hostId: 'host-1',
     worktreeId: 'wt-1',
     name: 'review',
@@ -104,5 +112,18 @@ describe('the review Retry while the host is unreachable', () => {
       retry?.props.onPress()
     })
     expect(onReconnect.mock.calls).toEqual([['host-1']])
+  })
+
+  it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
+    const rendered = await render(null)
+    expect(retryControls(rendered)).toHaveLength(0)
+    loadSnapshot.mockClear()
+    const client = createFakeRpcClient()
+    await act(async () => {
+      rendered.update(
+        createElement(ReviewWhileUnreachable, { onReconnect: null, client, connState: 'connected' })
+      )
+    })
+    expect(loadSnapshot.mock.calls).toEqual([[client, 'wt-1']])
   })
 })

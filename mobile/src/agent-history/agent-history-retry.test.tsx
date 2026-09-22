@@ -1,5 +1,6 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
 import type {
   ForceReconnect,
   RpcClientContextValue
@@ -14,9 +15,14 @@ import type {
  */
 
 const doubles = vi.hoisted(
-  (): { read: () => RpcClientContextValue | null; nativeRedial: ForceReconnect | undefined } => ({
+  (): {
+    read: () => RpcClientContextValue | null
+    nativeRedial: ForceReconnect | undefined
+    connection: { client: RpcClient | null; state: string }
+  } => ({
     read: () => null,
-    nativeRedial: undefined
+    nativeRedial: undefined,
+    connection: { client: null, state: 'reconnecting' }
   })
 )
 
@@ -51,12 +57,13 @@ vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () =>
     doubles.nativeRedial === undefined ? doubles.read()?.forceReconnect : doubles.nativeRedial,
   useForgetHostClient: () => () => {},
-  useHostClient: () => ({ client: null, clientId: null, state: 'reconnecting' }),
+  useHostClient: () => ({ ...doubles.connection, clientId: null }),
   usePrimeHosts: () => () => {},
   useRefreshHostClient: () => () => {}
 }))
 
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { RpcClientProvider, useRpcClientContext } from '../transport/client-context.web'
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
 
@@ -68,17 +75,23 @@ afterEach(() => {
   act(() => tree?.unmount())
   tree = null
   doubles.nativeRedial = undefined
+  doubles.connection = { client: null, state: 'reconnecting' }
 })
 
-async function mountPanel(): Promise<ReactTestRenderer> {
-  const pair = createFakeBridgePortPair()
+function panel(pair: ReturnType<typeof createFakeBridgePortPair>) {
+  return (
+    <RpcClientProvider client={pair.client}>
+      <MobileAgentSessionHistoryPanel hostId="host-a" worktreeId="wt-1" name="my worktree" />
+    </RpcClientProvider>
+  )
+}
+
+async function mountPanel(
+  pair: ReturnType<typeof createFakeBridgePortPair> = createFakeBridgePortPair()
+): Promise<ReactTestRenderer> {
   await pair.flush()
   await act(async () => {
-    tree = create(
-      <RpcClientProvider client={pair.client}>
-        <MobileAgentSessionHistoryPanel hostId="host-a" worktreeId="wt-1" name="my worktree" />
-      </RpcClientProvider>
-    )
+    tree = create(panel(pair))
   })
   if (tree === null) {
     throw new Error('the panel did not mount')
@@ -113,5 +126,19 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
       retry?.props.onPress()
     })
     expect(redial.mock.calls).toEqual([['host-a']])
+  })
+
+  it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
+    // The premise of hiding it: nothing on the page re-dials, so the load has to re-run on the
+    // client and state the shell's own reconnect delivers.
+    const pair = createFakeBridgePortPair()
+    const rendered = await mountPanel(pair)
+    expect(retryControls(rendered)).toHaveLength(0)
+    const client = createFakeRpcClient()
+    doubles.connection = { client, state: 'connected' }
+    await act(async () => {
+      rendered.update(panel(pair))
+    })
+    expect(client.requests.map((request) => request.method)).toContain('status.get')
   })
 })

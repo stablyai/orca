@@ -1,6 +1,7 @@
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
@@ -220,6 +221,15 @@ describe('MobileGitHistoryList', () => {
         retryControls()[0]?.props.onPress()
       })
       expect(forceReconnect.mock.calls).toEqual([['host-1']])
+    })
+
+    it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
+      transport.forceReconnect = null
+      await renderUnreachable()
+      expect(retryControls()).toHaveLength(0)
+      const client = createFakeRpcClient()
+      await update(client, 'connected')
+      expect(client.requests.map((request) => request.method)).toEqual(['git.history'])
     })
   })
 })
