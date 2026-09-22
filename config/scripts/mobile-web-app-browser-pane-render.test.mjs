@@ -489,6 +489,36 @@ describePane('the browser pane in a page', () => {
     }
   }, 120_000)
 
+  it('charges a JSON event to the window too, so one ack does not drive the ledger negative', async () => {
+    // The two emitters share one ledger and the `ack` arm subtracts whatever it finds on `unacked`.
+    // A JSON event that took a slot without paying for its bytes left `unackedBytes` below zero on
+    // the first ack, and the binary arm reads that floor: every later window check admitted frames
+    // the real `BridgeHostSubscriptions` would have refused.
+    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
+    try {
+      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
+      const ledger = await view.page.evaluate((protocolVersion) => {
+        const id = globalThis.__orcaRenderCheckSubscribes[0].id
+        globalThis.__orcaRenderCheckEmitEvent(id, { type: 'probe', payload: 'x'.repeat(4096) })
+        const charged = globalThis.__orcaRenderCheckWindow(id)
+        globalThis.orcaBridge.postMessage(
+          JSON.stringify({ v: protocolVersion, type: 'ack', id, seq: charged.frames })
+        )
+        return { charged, settled: globalThis.__orcaRenderCheckWindow(id) }
+      }, bridgeVersion)
+
+      // Charged on the way out, which is the precondition: a zero here would make the line below
+      // read as balanced when nothing was ever counted.
+      expect(ledger.charged.frames).toBe(1)
+      expect(ledger.charged.unackedBytes).toBeGreaterThan(4096)
+      // And returned whole by the ack, rather than past it.
+      expect(ledger.settled).toEqual({ frames: 0, unackedBytes: 0 })
+      expect(view.consoleErrors).toEqual([])
+    } finally {
+      await view.context.close()
+    }
+  }, 120_000)
+
   it('issues one mouseClick with the geometry the native pane would send', async () => {
     const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
     try {

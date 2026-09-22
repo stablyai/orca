@@ -410,6 +410,10 @@ export function installShellDouble({
    * ever sees them — so a check that drives a screen off a live stream needs this and not the
    * binary arm. No window rule: these payloads are a check's own fixtures and are nowhere near the
    * cap, and a drop here would read as the page ignoring an event it was never sent.
+   *
+   * It still owes the ledger its bytes. The `ack` arm subtracts what it finds on `unacked`, so a
+   * frame that took a slot without paying for it drove `unackedBytes` negative on the first ack and
+   * left the binary emitter's window admitting frames past the cap for the life of the stream.
    */
   globalThis.__orcaRenderCheckEmitEvent = (id, payload) => {
     const stream = openStreams.get(id)
@@ -418,10 +422,19 @@ export function installShellDouble({
     }
     const seq = stream.seq + 1
     const json = JSON.stringify({ v: version, type: 'event', id, seq, payload })
+    const bytes = new TextEncoder().encode(json).length
     stream.seq = seq
-    stream.unacked.push({ seq, bytes: new TextEncoder().encode(json).length })
+    stream.unacked.push({ seq, bytes })
+    stream.unackedBytes += bytes
     channel.onmessage?.({ data: json })
     return 'posted'
+  }
+  /** The window as the double holds it, so a check can read the ledger both emitters share. */
+  globalThis.__orcaRenderCheckWindow = (id) => {
+    const stream = openStreams.get(id)
+    return stream === undefined
+      ? null
+      : { frames: stream.unacked.length, unackedBytes: stream.unackedBytes }
   }
   globalThis.orcaBridge = channel
 }
