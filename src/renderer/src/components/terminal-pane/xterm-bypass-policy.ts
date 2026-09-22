@@ -252,7 +252,9 @@ function isPlainCtrlC(event: XtermBypassEvent): boolean {
 // xterm — the assumption the Cmd branch below was written under.
 const MAC_APP_MENU_ACCELERATORS = ['Mod+H', 'Mod+Alt+H', 'Mod+M', 'Mod+Q'] as const
 
-function matchesMacAppMenuAccelerator(event: XtermBypassEvent): boolean {
+/** Exported so every xterm key handler answers these the same way — the pane's
+ *  and the dashboard preview's, which share one native menu. */
+export function matchesMacAppMenuAccelerator(event: XtermBypassEvent): boolean {
   return MAC_APP_MENU_ACCELERATORS.some((binding) =>
     keybindingMatchesInput(binding, event, 'darwin')
   )

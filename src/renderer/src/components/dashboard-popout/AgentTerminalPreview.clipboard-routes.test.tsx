@@ -331,6 +331,28 @@ describe('AgentTerminalPreview clipboard routes', () => {
     expect(dispatchAppMenuSelectionAction('select-all')).toBe(false)
   })
 
+  it('bubbles the macOS app-menu accelerators so the popout menu still fires', async () => {
+    // Why: the popout shares the global app menu, and with kitty reporting on
+    // the preview's own key handler is the last thing between Cmd+H and it.
+    platformState.value = 'darwin'
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+    focusInsidePreview(view.container)
+
+    for (const init of [
+      { key: 'h', code: 'KeyH', metaKey: true },
+      { key: 'h', code: 'KeyH', metaKey: true, altKey: true },
+      { key: 'm', code: 'KeyM', metaKey: true },
+      { key: 'q', code: 'KeyQ', metaKey: true }
+    ]) {
+      const accelerator = new KeyboardEvent('keydown', { ...init, cancelable: true })
+      expect(terminal.customKeyHandler!(accelerator)).toBe(false)
+      expect(accelerator.defaultPrevented).toBe(false)
+    }
+  })
+
   it('pastes on plain Ctrl+V on Windows, where no Edit-menu accelerator ever fires', async () => {
     platformState.value = 'win32'
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)

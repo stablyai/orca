@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { matchesMacAppMenuAccelerator } from '../terminal-pane/xterm-bypass-policy'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
@@ -151,6 +152,11 @@ export function installPreviewTerminalKeyHandler(args: {
       return consumeEvent(event)
     }
 
+    if (platform === 'darwin' && matchesMacAppMenuAccelerator(event)) {
+      // Why: the popout shares the global app menu, so its terminal must let the
+      // menu accelerators through for the same reason the pane does (#20837).
+      return false
+    }
     const action = resolvePreviewShortcutAction(event, {
       ...args.getShortcutContext(),
       optionKeyLocations: optionKeyLocations.get()
