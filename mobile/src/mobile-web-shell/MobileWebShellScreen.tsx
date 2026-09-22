@@ -1,5 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -25,6 +33,8 @@ import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import { softwareKeyboardWindowInset } from '../platform/software-keyboard-window-inset'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
@@ -166,6 +176,16 @@ export function MobileWebShellScreen({
   runtime
 }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
+  // The page cannot see the IME for itself: edge-to-edge makes the manifest's `adjustResize` inert,
+  // so the window never shrinks and `visualViewport` inside the WebView reads full height with the
+  // keyboard up — the session route lays its live input row out under the keys. The shell owns the
+  // window, so it takes the strip off the view and the page lays out in what is left.
+  const keyboardHeight = useKeyboardOcclusion()
+  const keyboardInset = softwareKeyboardWindowInset({
+    keyboardHeight,
+    bottomInset: insets.bottom,
+    platform: Platform.OS
+  })
   const router = useRouter()
   const popShellStack = useShellStackPop()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
@@ -323,7 +343,10 @@ export function MobileWebShellScreen({
   }
   return (
     <View
-      style={[styles.shellRoot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      style={[
+        styles.shellRoot,
+        { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, keyboardInset) }
+      ]}
       testID="mobile-web-shell-ready"
     >
       {/* Above the page and dismissible, never in front of it: the workspace below this line
