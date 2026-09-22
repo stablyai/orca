@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { createGenerationStore } from '../mobile-web-shell/generation-store'
-import { createExpoGenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
+import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
 import { loadHosts } from '../transport/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
@@ -36,8 +35,7 @@ export function MobileWebShellUpdateFailureRow() {
 
   useEffect(() => {
     let stale = false
-    const store = createGenerationStore({ fileSystem: createExpoGenerationFileSystem() })
-    void Promise.all([store.readUpdateFailures(), loadHosts()])
+    void Promise.all([processGenerationStore().readUpdateFailures(), loadHosts()])
       .then(([failures, hosts]) => {
         if (!stale) {
           setLines(updateFailureLines(failures, hosts, Date.now()))
