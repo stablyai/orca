@@ -79,7 +79,20 @@ export const CACHED: CachedGeneration = {
   buildId: MANIFEST.buildId,
   directory: '/cache/mobile-web/host/generations/b',
   totalBytes: 4096,
-  routes: PAGE_ROUTES
+  routes: PAGE_ROUTES,
+  compat: {
+    schemaVersion: MANIFEST.schemaVersion,
+    runtimeProtocolVersion: MANIFEST.runtimeProtocolVersion,
+    minCompatibleRuntimeProtocolVersion: MANIFEST.minCompatibleRuntimeProtocolVersion
+  }
+}
+
+/** The same generation on disk, declaring something the host it is about to be judged against no
+ *  longer accepts. `gates()` answers `minCompatibleMobileVersion: 1`, so a bundle runtime of 0 is
+ *  below the floor this host states — which is the usual reason an update exists at all. */
+export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
+  ...CACHED,
+  compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
 
 /** An event as a test writes it. An effect result is stamped with the flow the session is on, which

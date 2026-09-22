@@ -320,16 +320,11 @@ describe('a read the link cut short falls back to what is on disk', () => {
     expect(step.effects).toEqual([])
   })
 
-  it('fails on a verdict about the bundle even with a generation cached', () => {
-    // A host that refuses the read, or bytes that do not hash, is an answer about the bundle. A
-    // cached generation is no reason to hide it behind a workspace that is merely older.
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'bundle' })
-    expect(step.session.state).toEqual({
-      kind: 'failed',
-      reason: 'download-failed',
-      retriedOnce: false
-    })
-    expect(step.effects).toEqual([])
+  it('leaves no notice on it, because nothing says an update was there to fail', () => {
+    // The link went before the host said what it serves. "Update failed" would be a claim about a
+    // generation this phone never heard of.
+    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'transport' })
+    expect(step.session.updateNotice).toBeNull()
   })
 })
 

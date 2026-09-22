@@ -69,15 +69,20 @@ const HOST_COMPONENT_NAMES = new Set([
 // the attachment probe. The screen's other four clipboard sites (the terminal's paste, the sheets,
 // the quick-command row, the diff-review send) sit outside the walk from `MobileSessionRouteScreen`
 // and so do not move this pin. The copy-path sheet also gained the failure toast the other two had.
-// Refreshed for the page's keyboard: the screen's own `Keyboard.addListener` pair became the
+// Refreshed for `reportDictationFailure`, the whole of that +1: the composer's two dictation
+// failure handlers were one policy written twice, and only `onError`'s copy knew about the setup
+// sheet, so a refused start showed the desktop's own `voice_dictation_disabled` as a toast.
+//
+// Refreshed again for the page's keyboard: the screen's own `Keyboard.addListener` pair became the
 // `useSoftKeyboard` seam, because react-native-web never fires those events and the live input row
 // laid itself out under the IME. +2 hooks (the seam, and the one effect split into a visibility one
 // and a height one), +1 effect, -2 registrations and -2 removals for the listener pair, and -6
-// strings: the four event names and the two `'ios'` guards that chose between them.
-const HEAD_MAIN_HOOK_SHA256 = 'ab74804d8a4525837107670e125c8e9c0d4c3fb80edec9a4ebfd1270d14b201b'
-const HEAD_HOOK_BINDING_SHA256 = '047e474d0a1db42c87bbc973188b14fafb0db3b6333cf59eb0f4b12b3321f61a'
+// strings: the four event names and the two `'ios'` guards that chose between them. Re-recorded
+// against the merged tree, since neither side's hash covers the other's change.
+const HEAD_MAIN_HOOK_SHA256 = '6f170722259dda22657333fa57b2b3e47ac2667a0e1aa8c9b08e773fe92866da'
+const HEAD_HOOK_BINDING_SHA256 = 'd483de1f08a63e4d32016e599e0038320f48478b16246617537bc2275fa92706'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'ed45268b61372abcfeb29e9ce91822f1fb5214542b78356c7cef869824a09d37'
+  'dc189c0b5e5a6e060393382fa2d92d8754d6d14068cb4728d6a79a50599e401c'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -95,7 +100,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // frame cap inside the shell's page, and the Markdown copy action gained the failure branch that
 // answers a refused write. Re-recorded against the merged tree, since neither side's hash covers
 // the other's body. The hook and string counts are C7.2's and stand.
-const HEAD_CALLBACK_BODY_SHA256 = '5845c3b85217a3af9d3d2bfafe564a2b29a1b2c6776b5c2c9ec5afbf365a5157'
+// Refreshed once more for the two dictation failure handlers, which now both call
+// `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
+const HEAD_CALLBACK_BODY_SHA256 = '7449a84d321ce698bc5a2ab6bf204b2047dcfaaebf15f05ec924ba95cec9121a'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -534,10 +541,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(277)
+    expect(main.hooks).toHaveLength(278)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(77)
+    expect(main.callbacks).toHaveLength(78)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(25)

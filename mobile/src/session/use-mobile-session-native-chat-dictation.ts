@@ -91,6 +91,26 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
+  /**
+   * One policy for every dictation failure, whichever entry point sees it: `onError` for a
+   * dictation already underway, `start`'s rejection for the tap that never got one. Written twice,
+   * only the first knew about the setup sheet, so a desktop refusing the start with
+   * `voice_dictation_disabled` showed the user that code as a toast.
+   */
+  const reportDictationFailure = useCallback(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
+      if (isDictationSetupRequiredError(message)) {
+        setShowDictationSetup(true)
+        return
+      }
+      triggerError()
+      showToast(message)
+    },
+    [setShowDictationSetup, showToast]
+  )
+
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
@@ -132,13 +152,7 @@ export function useMobileSessionNativeChatDictation(
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
-      if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(err.message)
+      reportDictationFailure(err)
     }
   })
 
@@ -151,10 +165,9 @@ export function useMobileSessionNativeChatDictation(
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
-      triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      reportDictationFailure(err)
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [activeHandle, dictation, liveInputTerminalHandles, reportDictationFailure])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
