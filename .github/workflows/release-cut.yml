@@ -2003,9 +2003,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $7zaOutput = node config/scripts/resolve-7za-path.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Could not resolve 7za for the broker signature gate.' }
+          $7zaExitCode = $LASTEXITCODE
+          if ($7zaExitCode -ne 0) {
+            throw "The 7za resolver exited with code $7zaExitCode for the broker signature gate."
+          }
           $7za = ($7zaOutput | Out-String).Trim()
-          if (-not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+          if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
             throw "Invalid 7za path for the broker signature gate: $7za"
           }
           New-Item -ItemType Directory -Path broker-signature-extract -Force | Out-Null
