@@ -256,9 +256,9 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
   })
 
-  // Why: OpenCode 2 raises the same form primitive for its pickers and for MCP
-  // elicitations; only the question tool stamps metadata.kind "question" (v2.0.12
-  // capture in docs/bug-reproductions/opencode2-form-created-kinds).
+  // Why: OpenCode 2 raises one form primitive for several producers, and its owner
+  // id — not its metadata — decides whether Orca can ever retire the blocker
+  // (v2.0.12 capture in docs/bug-reproductions/opencode2-form-created-kinds).
   async function runSetupBridge(
     events: { type: string; data: Record<string, unknown> }[]
   ): Promise<{ names: string[]; cleanup?: () => Promise<void> }> {
@@ -299,25 +299,22 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     }
   }
 
-  it.each([
-    ['websearch.provider', 'ses_root'],
-    ['mcp-elicitation', 'global']
-  ])('ignores a %s form instead of blocking the pane', async (kind, sessionID) => {
+  it('ignores a form owned by the non-session elicitation sentinel', async () => {
     const { names, cleanup } = await runSetupBridge([
       { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
       {
         type: 'form.created',
         data: {
           form: {
-            id: 'form-picker',
-            sessionID,
-            title: 'Choose a web search provider',
-            metadata: { kind },
-            fields: [{ key: 'provider', title: 'Provider', type: 'string', options: [] }]
+            id: 'form-mcp',
+            sessionID: 'global',
+            title: 'server is requesting input',
+            metadata: { kind: 'mcp-elicitation', server: 'server' },
+            fields: [{ key: 'elicitation', title: 'Input', type: 'string', options: [] }]
           }
         }
       },
-      { type: 'form.cancelled', data: { id: 'form-picker', sessionID } },
+      { type: 'form.cancelled', data: { id: 'form-mcp', sessionID: 'global' } },
       { type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
     ])
     await vi.waitFor(() => {
@@ -326,6 +323,63 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     expect(names).not.toContain('AskUserQuestion')
     await cleanup?.()
   })
+
+  // Why: metadata is optional in OpenCode's schema and its kind is a convention,
+  // so any session-owned form must block rather than silently disappear.
+  it.each([
+    ['no metadata at all', undefined],
+    ['metadata without a kind', { server: 'server' }],
+    ['an unrecognised kind', { kind: 'some.future.kind' }],
+    ['the web search provider picker', { kind: 'websearch.provider' }]
+  ])('blocks the pane on a session-owned form with %s', async (_label, metadata) => {
+    const { names, cleanup } = await runSetupBridge([
+      { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+      {
+        type: 'form.created',
+        data: {
+          form: {
+            id: 'form-unknown',
+            sessionID: 'ses_root',
+            title: 'Choose a web search provider',
+            ...(metadata === undefined ? {} : { metadata }),
+            fields: [{ key: 'provider', title: 'Provider', type: 'string', options: [] }]
+          }
+        }
+      }
+    ])
+    await vi.waitFor(() => {
+      expect(names).toContain('AskUserQuestion')
+    })
+    expect(names.at(-1)).toBe('AskUserQuestion')
+    await cleanup?.()
+  })
+
+  it.each(['form.replied', 'form.cancelled'])(
+    'retires an admitted unknown-kind blocker on %s',
+    async (resolution) => {
+      const { names, cleanup } = await runSetupBridge([
+        { type: 'session.execution.started', data: { sessionID: 'ses_root' } },
+        {
+          type: 'form.created',
+          data: {
+            form: {
+              id: 'form-unknown',
+              sessionID: 'ses_root',
+              title: 'Web Search',
+              fields: [{ key: 'choice', title: 'Allow?', type: 'string', options: [] }]
+            }
+          }
+        },
+        { type: resolution, data: { id: 'form-unknown', sessionID: 'ses_root' } },
+        { type: 'session.execution.succeeded', data: { sessionID: 'ses_root' } }
+      ])
+      await vi.waitFor(() => {
+        expect(names).toContain('AskUserQuestion')
+        expect(names.at(-1)).toBe('SessionIdle')
+      })
+      await cleanup?.()
+    }
+  )
 
   it('still blocks on a real question form and retires it on reply', async () => {
     const { names, cleanup } = await runSetupBridge([
