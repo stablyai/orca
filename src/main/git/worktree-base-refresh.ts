@@ -71,6 +71,7 @@ export async function refreshLocalBaseRefForWorktreeCreate(
     )
     return { ...resultBase, status: 'updated' }
   } catch {
+    // A skipped refresh must not prevent worktree creation.
     return { ...resultBase, status: 'skipped_error' }
   }
 }
