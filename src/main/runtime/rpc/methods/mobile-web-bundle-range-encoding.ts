@@ -1,6 +1,6 @@
 import { promisify } from 'node:util'
 import { gzip } from 'node:zlib'
-import type { MobileWebBundleRangeEncoding } from '../../../../shared/mobile-web-bundle/bundle-range-rpc-contract'
+import type { MobileWebBundleRangeEncoding } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 
 // Async so a 384 KiB deflate runs on the libuv pool, not the main process's event loop.
 const gzipAsync = promisify(gzip)

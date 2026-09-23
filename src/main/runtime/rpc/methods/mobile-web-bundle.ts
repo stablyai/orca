@@ -1,7 +1,7 @@
 /**
  * Serves this install's mobile web bundle to the paired client over the already-authenticated RPC
  * connection: one call for the manifest, then one call per 48 KiB chunk of each asset, or one per
- * gzipped range of up to 384 KiB for a client that read `mobileWeb.bundle.range.v1`.
+ * gzipped 384 KiB range for a client that read `rangeBytes` off the manifest reply.
  *
  * No SSH or relay proxying, ever. The bundle is an artifact of the desktop the phone paired with,
  * not something a remote execution host owns, so a runtime answers only out of its own install and
@@ -14,16 +14,16 @@ import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+  MOBILE_WEB_BUNDLE_RANGE_BYTES,
+  MOBILE_WEB_BUNDLE_RANGE_METHOD,
   MobileWebBundleChunkParamsSchema,
+  MobileWebBundleRangeParamsSchema,
+  type MobileWebBundleChunkParams,
   type MobileWebBundleChunkResult,
   type MobileWebBundleErrorCode,
-  type MobileWebBundleManifestResult
-} from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
-import {
-  MOBILE_WEB_BUNDLE_RANGE_METHOD,
-  MobileWebBundleRangeParamsSchema,
+  type MobileWebBundleManifestResult,
   type MobileWebBundleRangeResult
-} from '../../../../shared/mobile-web-bundle/bundle-range-rpc-contract'
+} from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import type { MobileWebBundleAsset } from '../../../../shared/mobile-web-bundle/manifest-contract'
 import {
   loadBundledMobileWebBundle,
@@ -82,10 +82,10 @@ function findAsset(bundle: BundledMobileWebBundle, path: string): MobileWebBundl
   return asset
 }
 
-/** Alignment is against the window being read: the chunk size the manifest reply advertised, which
- *  the contract deliberately leaves off `offset` so the host can shrink it without a client release,
- *  or a range's own requested length. Offset 0 is always in range, so a zero-byte asset is still
- *  fetchable and still reports eof. */
+/** Alignment is against the grid the manifest reply advertised for the method: `chunkBytes` or
+ *  `rangeBytes`, which the contract leaves off `offset` so the host can shrink either without a
+ *  client release. Offset 0 is always in range, so a zero-byte asset is still fetchable and still
+ *  reports eof. */
 function assertOffsetAddressesAWindow(
   offset: number,
   windowBytes: number,
@@ -99,13 +99,17 @@ function assertOffsetAddressesAWindow(
   }
 }
 
-type VerifiedWindow = { buildId: string; asset: MobileWebBundleAsset; data: Buffer }
+/** The self-description every chunk or range reply carries, plus the raw bytes of its window. */
+type VerifiedWindow = {
+  header: Omit<MobileWebBundleChunkResult, 'dataBase64'>
+  data: Buffer
+}
 
 /** The checks and the read both methods share, in order: build, member, alignment, read slot,
  *  whole-asset verdict, then the window. `encode` runs inside the slot so a deflate is charged too. */
 async function readVerifiedWindow<T>(
   ctx: RpcContext,
-  params: { buildId: string; path: string; offset: number },
+  params: MobileWebBundleChunkParams,
   windowBytes: number,
   encode: (window: VerifiedWindow) => Promise<T>
 ): Promise<T> {
@@ -129,7 +133,19 @@ async function readVerifiedWindow<T>(
     }
     abortIfDisconnected(ctx)
     const data = await readMobileWebBundleAssetChunk(bundle.root, asset, params.offset, windowBytes)
-    return await encode({ buildId: bundle.manifest.buildId, asset, data })
+    abortIfDisconnected(ctx)
+    return await encode({
+      header: {
+        buildId: bundle.manifest.buildId,
+        path: asset.path,
+        offset: params.offset,
+        // The whole asset's length and hash, so one window describes the asset it belongs to.
+        assetByteLength: asset.byteLength,
+        sha256: asset.sha256,
+        eof: params.offset + data.byteLength >= asset.byteLength
+      },
+      data
+    })
   } catch (error) {
     throw asContractError(error, asset.path)
   } finally {
@@ -143,39 +159,29 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     params: null,
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
       manifest: requireBundle().manifest,
-      chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
+      chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+      rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
     })
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
     params: MobileWebBundleChunkParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleChunkResult> =>
-      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, async (read) => ({
-        buildId: read.buildId,
-        path: read.asset.path,
-        offset: params.offset,
-        // The whole asset's length and hash, so one chunk describes the asset it belongs to.
-        assetByteLength: read.asset.byteLength,
-        sha256: read.asset.sha256,
-        dataBase64: read.data.toString('base64'),
-        eof: params.offset + read.data.byteLength >= read.asset.byteLength
+      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, async (window) => ({
+        ...window.header,
+        dataBase64: window.data.toString('base64')
       }))
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_RANGE_METHOD,
     params: MobileWebBundleRangeParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleRangeResult> =>
-      readVerifiedWindow(ctx, params, params.length, async (read) => {
-        const encoded = await encodeMobileWebBundleRange(read.data)
+      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_RANGE_BYTES, async (window) => {
+        const encoded = await encodeMobileWebBundleRange(window.data)
         return {
-          buildId: read.buildId,
-          path: read.asset.path,
-          offset: params.offset,
-          assetByteLength: read.asset.byteLength,
-          sha256: read.asset.sha256,
+          ...window.header,
           encoding: encoded.encoding,
-          dataBase64: encoded.bytes.toString('base64'),
-          eof: params.offset + read.data.byteLength >= read.asset.byteLength
+          dataBase64: encoded.bytes.toString('base64')
         }
       })
   })

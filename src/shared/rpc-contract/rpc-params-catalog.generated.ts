@@ -22,8 +22,10 @@ import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
-import { MobileWebBundleRangeParamsSchema } from '../mobile-web-bundle/bundle-range-rpc-contract'
-import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import {
+  MobileWebBundleChunkParamsSchema,
+  MobileWebBundleRangeParamsSchema
+} from '../mobile-web-bundle/bundle-rpc-contract'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
