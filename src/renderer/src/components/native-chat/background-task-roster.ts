@@ -11,10 +11,8 @@ import {
   type AgentChildRowContext,
   type AgentChildRowModel
 } from '../../../../shared/agent-child-row-model'
-import type {
-  AgentChildDisplayState,
-  AgentChildWorkView
-} from '../../../../shared/agent-status-child-work-view'
+import type { AgentChildDisplayState } from '../../../../shared/agent-status-child-work-display'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
 import { translate } from '@/i18n/i18n'
 

@@ -7,7 +7,7 @@ import {
   flattenAgentChildRowModels,
   type AgentChildRowModel
 } from '../../../../shared/agent-child-row-model'
-import type { AgentChildDisplayState } from '../../../../shared/agent-status-child-work-view'
+import type { AgentChildDisplayState } from '../../../../shared/agent-status-child-work-display'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 /** Row-identity key for an in-process subagent child row. The NUL separator

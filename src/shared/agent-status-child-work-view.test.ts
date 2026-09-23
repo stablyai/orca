@@ -15,7 +15,9 @@ import {
 } from './agent-status-child-work-projection'
 import {
   agentChildWorkOwnedLiveness,
-  deriveAgentChildDisplayState,
+  deriveAgentChildDisplayState
+} from './agent-status-child-work-display'
+import {
   projectAgentChildWorkViews,
   type AgentChildWorkView,
   type AgentChildWorkViewAlias

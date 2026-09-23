@@ -3,9 +3,9 @@ import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshn
 import {
   agentChildWorkOwnedLiveness,
   deriveAgentChildDisplayState,
-  type AgentChildDisplayState,
-  type AgentChildWorkView
-} from './agent-status-child-work-view'
+  type AgentChildDisplayState
+} from './agent-status-child-work-display'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status-types'
 
 /** What a child row says beside its name. Surfaces format it; they never decide it. */
