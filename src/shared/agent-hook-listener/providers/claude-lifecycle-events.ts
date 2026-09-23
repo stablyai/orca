@@ -85,7 +85,7 @@ export function normalizeClaudeSubagentLifecycleEvent(
   const hasConfirmedDoneGate =
     cachedLead?.state === 'done' &&
     cachedLead.interrupted !== true &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+    (state.claudeRunningNonAgentTaskByPaneKey.has(paneKey) ||
       state.claudeActiveSessionCronPaneKeys.has(paneKey))
   const restoredOnlyDoneGate =
     cachedLead?.state === 'done' && !hasConfirmedDoneGate && hasUnconfirmedChild

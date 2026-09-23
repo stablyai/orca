@@ -126,6 +126,7 @@ describe('agent hook extraction boundaries', () => {
       state.antigravityCompletedTranscriptByPaneKey,
       state.claudeSubagentRosterByPaneKey,
       state.claudeLeadStateByPaneKey,
+      state.claudeRunningNonAgentTaskByPaneKey,
       state.codexSubagentRosterByPaneKey,
       state.codexSubagentTranscriptByPaneKey,
       state.codexLeadStateByPaneKey,
@@ -151,7 +152,6 @@ describe('agent hook extraction boundaries', () => {
     const paneSets = [
       state.ampCompletedCacheKeys,
       state.claudeUnconfirmedRestoredStatusPaneKeys,
-      state.claudeRunningNonAgentTaskPaneKeys,
       state.claudeActiveSessionCronPaneKeys
     ]
     for (const set of paneSets) {
@@ -263,7 +263,7 @@ describe('agent hook extraction boundaries', () => {
     state.warnedVersions.add('old-version')
     state.warnedEnvs.add('development->production')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
-    state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
+    state.claudeRunningNonAgentTaskByPaneKey.set(PANE, 'monitoring')
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
@@ -272,7 +272,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.warnedVersions.size).toBe(0)
     expect(state.warnedEnvs.size).toBe(0)
     expect(state.lastPromptByPaneKey.size).toBe(0)
-    expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
+    expect(state.claudeRunningNonAgentTaskByPaneKey.size).toBe(0)
     expect(state.codexLeadStateByPaneKey.size).toBe(0)
     expect(state.grokActiveTurnByPaneKey.size).toBe(0)
   })

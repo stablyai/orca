@@ -289,9 +289,10 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       applyClaudeBackgroundWork
         ? () => {
             if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+              // Why: the relay host already derived this row's working mode; the wire carries presence only, so fail active.
+              this.state.claudeRunningNonAgentTaskByPaneKey.set(paneKey, 'working')
             } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+              this.state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
             }
           }
         : undefined

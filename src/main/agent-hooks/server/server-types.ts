@@ -2,7 +2,8 @@ import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusli
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusClearIpcPayload,
-  AgentStatusState
+  AgentStatusState,
+  AgentWorkingMode
 } from '../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
@@ -57,6 +58,8 @@ export type PersistedAgentHookAuthorityCommitment = {
 export type AgentHookStatusChangeEntry = {
   paneKey: string
   state: AgentStatusState
+  /** Only valid while working; `monitoring` is background watch work, not a live turn. */
+  workingMode?: AgentWorkingMode
   receivedAt: number
   observedInCurrentRuntime: boolean
 }

@@ -496,7 +496,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
   })
 
   it('recognizes task types that are registered only as background work', () => {
-    for (const taskType of ['local_workflow', 'monitor']) {
+    for (const taskType of ['local_workflow', 'monitor', 'monitor_mcp', 'monitor_ws']) {
       const tracker = trackerAt([100])
       tracker.observe(system('task_started', { task_id: taskType, task_type: taskType }))
       expect(tracker.state).toEqual({

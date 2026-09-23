@@ -1,6 +1,11 @@
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-kind'
-import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
+import {
+  agentChildWorkLivenessFromEvidence,
+  isAgentChildWorkKind,
+  isWatchOnlyChildWorkKind,
+  type AgentChildWorkLiveness
+} from './agent-status-child-work-liveness'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',
@@ -44,19 +49,20 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
-  hasRunningNonAgentTask: boolean
+  /** Running tasks the roster does not own: `monitoring` when only shells/monitors, else `working`. */
+  runningNonAgentTaskLiveness: AgentChildWorkLiveness
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false, hasRunningNonAgentTask: false }
+    return { present: false, tasks: [], truncated: false, runningNonAgentTaskLiveness: null }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
-  let hasRunningNonAgentTask = false
+  const nonAgentEvidence = { hasLiveAgentWork: false, hasLiveNonAgentWork: false }
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
-      hasRunningNonAgentTask = true
+      nonAgentEvidence.hasLiveAgentWork = true
       continue
     }
     const obj = item as Record<string, unknown>
@@ -66,13 +72,16 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
     if (taskType.length === 0) {
       truncated = true
-      hasRunningNonAgentTask ||= !isTerminal
+      nonAgentEvidence.hasLiveAgentWork ||= !isTerminal
       continue
     }
-    const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
-    // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
+    const kind = classifyClaudeBackgroundTaskKind(taskType)
+    const isAgentTask = isAgentChildWorkKind(kind)
+    // Why: unknown types and nonterminal labels fail active, and anything not watch-only (a workflow) is working.
     if (!isAgentTask && !isTerminal) {
-      hasRunningNonAgentTask = true
+      const watchOnly = isWatchOnlyChildWorkKind(kind)
+      nonAgentEvidence.hasLiveAgentWork ||= !watchOnly
+      nonAgentEvidence.hasLiveNonAgentWork ||= watchOnly
     }
     if (!isAgentTask) {
       continue
@@ -95,5 +104,10 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningNonAgentTask }
+  return {
+    present: true,
+    tasks,
+    truncated,
+    runningNonAgentTaskLiveness: agentChildWorkLivenessFromEvidence(nonAgentEvidence)
+  }
 }

@@ -18,7 +18,8 @@ vi.mock('electron', () => ({
     isOnBatteryPower: isOnBatteryPowerMock,
     on: (event: string, listener: () => void) => powerListeners.set(event, listener),
     off: (event: string) => powerListeners.delete(event)
-  }
+  },
+  powerSaveBlocker: { start: vi.fn(), stop: vi.fn(), isStarted: vi.fn() }
 }))
 
 vi.mock('./worktree-create-preparation', () => ({
@@ -36,6 +37,31 @@ vi.mock('./git/local-repo-ref-maintenance', () => ({
 }))
 
 import { installRepoMaintenanceIdleGate } from './repo-maintenance-idle-gate'
+import { AgentAwakeService, type AgentAwakeStatus } from './agent-awake-service'
+
+/** The real service, so the gate is tested against the lease it actually reads. */
+function createAwakeService(): AgentAwakeService {
+  const noopAssertion = { start: () => {}, stop: () => {}, dispose: () => {} }
+  return new AgentAwakeService({
+    blocker: { start: () => 1, stop: () => {}, isStarted: () => true },
+    linuxAssertion: noopAssertion,
+    macosAssertion: noopAssertion,
+    now: () => 1_000,
+    platform: 'linux',
+    powerMonitor: null,
+    logger: { debug: vi.fn(), warn: vi.fn() }
+  })
+}
+
+function workingStatus(overrides: Partial<AgentAwakeStatus> = {}): AgentAwakeStatus {
+  return {
+    paneKey: 'pane-1',
+    state: 'working',
+    receivedAt: 1_000,
+    observedInCurrentRuntime: true,
+    ...overrides
+  }
+}
 
 function installProbe(
   overrides: Partial<{ isQuitting: () => boolean; getWorkingAgentCount: () => number }> = {}
@@ -70,6 +96,28 @@ describe('repo maintenance idle gate', () => {
 
   it('vetoes while an agent is working', () => {
     expect(installProbe({ getWorkingAgentCount: () => 1 }).probe()).toBe(true)
+  })
+
+  // The gate has no copy of the eligibility test; it reads the awake lease's count, so
+  // both surfaces answer the same question about what counts as a running agent.
+  it('vetoes while the awake lease sees a real agent turn', () => {
+    const service = createAwakeService()
+    service.setStatuses([workingStatus()])
+
+    expect(
+      installProbe({ getWorkingAgentCount: () => service.getWorkingAgentCount() }).probe()
+    ).toBe(true)
+    service.dispose()
+  })
+
+  it('stays idle when the only working agent is a background watch loop', () => {
+    const service = createAwakeService()
+    service.setStatuses([workingStatus({ workingMode: 'monitoring' })])
+
+    expect(
+      installProbe({ getWorkingAgentCount: () => service.getWorkingAgentCount() }).probe()
+    ).toBe(false)
+    service.dispose()
   })
 
   it('vetoes while a worktree create is prepared or in flight', () => {

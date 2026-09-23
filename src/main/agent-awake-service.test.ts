@@ -202,6 +202,58 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).not.toHaveBeenCalled()
   })
 
+  it('does not start for a working status whose only work is a background watch loop', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus({ workingMode: 'monitoring' })])
+
+    expect(blocker.start).not.toHaveBeenCalled()
+    expect(macosAssertion.start).not.toHaveBeenCalled()
+    expect(linuxAssertion.start).not.toHaveBeenCalled()
+    expect(service.getWorkingAgentCount()).toBe(0)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: false })
+  })
+
+  // A subagent still running after its lead turn ended reports plain `working`; only a
+  // watch loop carries `monitoring`, so the subagent keeps its hold.
+  it('starts for a running subagent whose lead turn already ended', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(service.getWorkingAgentCount()).toBe(1)
+  })
+
+  it('does not start from a freshness renewal that only reports a watch loop', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setEnabled(true)
+    service.observeStatusFreshness(workingStatus({ workingMode: 'monitoring' }))
+
+    expect(blocker.start).not.toHaveBeenCalled()
+    expect(service.getWorkingAgentCount()).toBe(0)
+  })
+
+  it('drops the hold when a live turn winds down to a lingering watch loop', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    service.setStatuses([workingStatus({ workingMode: 'monitoring' })])
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: false })
+  })
+
   it('does not start a second blocker when one working status replaces another', () => {
     const blocker = createBlocker()
     const service = createService(() => 1_000, blocker)

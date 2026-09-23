@@ -32,14 +32,10 @@ describe('agentChildWorkLiveness', () => {
     }
   })
 
-  // A workflow is a lane that runs agents, not an agent: the agents it runs announce themselves,
-  // and the children projection skips it, so counting it as agent work claims a child that the
-  // expanded row cannot show.
-  it('reads a live workflow as a watch loop, not as agent work', () => {
-    expect(agentChildWorkLiveness([child({ kind: 'workflow' })])).toBe('monitoring')
-    expect(agentChildWorkLiveness([child({ kind: 'workflow', state: undefined })])).toBe(
-      'monitoring'
-    )
+  // A workflow runs agents, so it is agent work even though it is not a roster child.
+  it('reads a live workflow as agent work, not a watch loop', () => {
+    expect(agentChildWorkLiveness([child({ kind: 'workflow' })])).toBe('working')
+    expect(agentChildWorkLiveness([child({ kind: 'workflow', state: undefined })])).toBe('working')
   })
 
   it('keeps a waiting, blocked or unverifiable agent live, the way a shell in those states is', () => {
@@ -55,11 +51,31 @@ describe('agentChildWorkLiveness', () => {
     }
   })
 
-  it('reads any shell, monitor or unknown task that is not explicitly settled as a watch loop', () => {
-    for (const kind of ['command', 'monitor', 'unknown'] as const) {
+  it('reads any shell or monitor that is not explicitly settled as a watch loop', () => {
+    for (const kind of ['command', 'monitor'] as const) {
       for (const state of ['working', 'monitoring', 'unverifiable', undefined] as const) {
         expect(agentChildWorkLiveness([child({ kind, state })])).toBe('monitoring')
       }
+      for (const state of ['done', 'idle'] as const) {
+        expect(agentChildWorkLiveness([child({ kind, state })])).toBeNull()
+      }
+    }
+  })
+
+  it('fails an unknown kind toward working, so unrecognised work never reads as a watch loop', () => {
+    for (const state of ['working', 'monitoring', 'unverifiable', undefined] as const) {
+      expect(agentChildWorkLiveness([child({ kind: 'unknown', state })])).toBe('working')
+      expect(
+        agentChildWorkLiveness([child({ kind: 'command' }), child({ kind: 'unknown', state })])
+      ).toBe('working')
+    }
+    for (const state of ['done', 'idle'] as const) {
+      expect(agentChildWorkLiveness([child({ kind: 'unknown', state })])).toBeNull()
+    }
+  })
+
+  it('never lets a settled child count, whatever its kind', () => {
+    for (const kind of ['workflow', 'unknown'] as const) {
       for (const state of ['done', 'idle'] as const) {
         expect(agentChildWorkLiveness([child({ kind, state })])).toBeNull()
       }

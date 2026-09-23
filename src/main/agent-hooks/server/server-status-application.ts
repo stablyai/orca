@@ -69,6 +69,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     this.emitStatusFreshnessObservation({
       paneKey: refreshed.paneKey,
       state: refreshed.payload.state,
+      ...(refreshed.payload.workingMode ? { workingMode: refreshed.payload.workingMode } : {}),
       receivedAt: refreshed.receivedAt,
       observedInCurrentRuntime: true,
       ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),

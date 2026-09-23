@@ -214,7 +214,58 @@ describe('Grok completion observations', () => {
         hookEventName: 'Stop',
         backgroundTasks: [{ id: 'task-1', type: 'subagent', status: 'starting' }]
       })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+  })
+
+  // `workingMode: 'monitoring'` promises no foreground execution is owed, so a live subagent
+  // cannot carry it: a consumer that reads it decides real agent work needs nothing from the host.
+  it('leaves a live subagent as plain working, and marks only shells monitoring', () => {
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        backgroundTasks: [{ id: 'task-1', type: 'subagent', status: 'running' }]
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        backgroundTasks: [{ id: 'task-2', type: 'shell', status: 'running' }]
+      })
     ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+  })
+
+  it('does not call a pane monitoring while a subagent runs beside a shell', () => {
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        backgroundTasks: [
+          { id: 'task-1', type: 'subagent', status: 'running' },
+          { id: 'task-2', type: 'shell', status: 'running' }
+        ]
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+  })
+
+  // A blocked Stop hook with an empty inventory means the model's own loop is still running and
+  // there is no background work at all, which is the opposite of monitoring.
+  it('does not call a blocked Stop hook monitoring', () => {
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        sessionId: 'session-1',
+        promptId: 'prompt-1',
+        reason: 'end_turn',
+        backgroundTasks: [],
+        stopHookActive: true
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }],
+        stopHookActive: true
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
   })
 
   it('uses only idle_prompt, not task_complete text, as the session-idle backstop', () => {

@@ -7,7 +7,8 @@ describe('classifyClaudeBackgroundTaskKind', () => {
     expect(classifyClaudeBackgroundTaskKind('local_subagent')).toBe('agent')
     expect(classifyClaudeBackgroundTaskKind('local_workflow')).toBe('workflow')
     expect(classifyClaudeBackgroundTaskKind('local_bash')).toBe('command')
-    expect(classifyClaudeBackgroundTaskKind('monitor')).toBe('monitor')
+    expect(classifyClaudeBackgroundTaskKind('monitor_mcp')).toBe('monitor')
+    expect(classifyClaudeBackgroundTaskKind('monitor_ws')).toBe('monitor')
   })
 
   it('classifies the hook inventory vocabulary onto the same kinds', () => {
@@ -15,6 +16,8 @@ describe('classifyClaudeBackgroundTaskKind', () => {
     expect(classifyClaudeBackgroundTaskKind('teammate')).toBe('agent')
     expect(classifyClaudeBackgroundTaskKind('shell')).toBe('command')
     expect(classifyClaudeBackgroundTaskKind('background_shell')).toBe('command')
+    expect(classifyClaudeBackgroundTaskKind('workflow')).toBe('workflow')
+    expect(classifyClaudeBackgroundTaskKind('monitor')).toBe('monitor')
   })
 
   it('fails unknown and malformed types to unknown, never to agent', () => {

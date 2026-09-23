@@ -40,7 +40,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           this.state.claudeSubagentRosterByPaneKey.get(paneKey)
         ) ||
           enriched.payload.state !== 'done' ||
-          this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+          this.state.claudeRunningNonAgentTaskByPaneKey.has(paneKey) ||
           this.state.claudeActiveSessionCronPaneKeys.has(paneKey)) &&
         !this.runtimeObservedStatusPaneKeys.has(paneKey)
       ) {

@@ -125,14 +125,14 @@ describe('Claude session replacement voids the replaced session claims', () => {
     stop(state, paneKey, SESSION_A, {
       background_tasks: [{ type: 'bash', status: 'running', id: 'bash_1' }]
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeRunningNonAgentTaskByPaneKey.has(paneKey)).toBe(true)
 
     const replaced = claudeEvent(state, paneKey, {
       hook_event_name: 'PostToolUse',
       session_id: SESSION_B
     })
 
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeRunningNonAgentTaskByPaneKey.has(paneKey)).toBe(true)
     expect(replaced?.payload.state).toBe('working')
   })
 

@@ -202,7 +202,7 @@ export function normalizeHookPayload(
     ...(source === 'claude'
       ? {
           claudeRunningNonAgentTask:
-            state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+            state.claudeRunningNonAgentTaskByPaneKey.has(paneKey) ||
             state.claudeActiveSessionCronPaneKeys.has(paneKey)
         }
       : {}),

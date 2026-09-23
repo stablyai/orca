@@ -1,10 +1,12 @@
-import type { AgentStatusState } from '../shared/agent-status-types'
+import type { AgentStatusState, AgentWorkingMode } from '../shared/agent-status-types'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 
 export type AgentAwakeStatus = {
   paneKey: string
   state: AgentStatusState
+  /** Only valid while working; `monitoring` is watch work with no foreground execution owed. */
+  workingMode?: AgentWorkingMode
   receivedAt: number
   observedInCurrentRuntime: boolean
 }
@@ -54,6 +56,9 @@ export class AgentAwakeStatusLease {
     return (
       status.observedInCurrentRuntime &&
       status.state === 'working' &&
+      // `monitoring` promises no foreground execution is owed, so nothing here will end on its
+      // own: the watch outlives the turn that started it.
+      status.workingMode !== 'monitoring' &&
       Number.isFinite(status.receivedAt) &&
       now - status.receivedAt <= AGENT_AWAKE_STATUS_STALE_AFTER_MS
     )

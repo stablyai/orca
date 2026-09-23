@@ -60,7 +60,7 @@ export function normalizeClaudeEvent(
     // Why: a new process owns the pane; stale children/tasks/crons must not gate the
     // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
@@ -119,7 +119,7 @@ export function normalizeClaudeEvent(
     updateClaudeRunningNonAgentTask(
       state,
       paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
+      backgroundTasks.runningNonAgentTaskLiveness,
       interrupted === true
     )
   }
@@ -233,7 +233,7 @@ export function normalizeClaudeEvent(
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
   if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
@@ -286,7 +286,7 @@ export function normalizeClaudeEvent(
     resolvedStatus.stateName === 'working' &&
     claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
     !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
-    !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
+    !state.claudeRunningNonAgentTaskByPaneKey.has(paneKey) &&
     !state.claudeActiveSessionCronPaneKeys.has(paneKey)
   ) {
     // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.

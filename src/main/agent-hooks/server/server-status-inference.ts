@@ -83,7 +83,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
     if (
       agentType === 'claude' &&
-      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+      (this.state.claudeRunningNonAgentTaskByPaneKey.has(existing.paneKey) ||
         this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
     ) {
       return false

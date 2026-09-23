@@ -69,6 +69,45 @@ describe('AgentHookServer listener replay', () => {
     ])
   })
 
+  // The awake lease reads these two channels; dropping the mode on either holds a watch loop awake.
+  it('carries a relayed monitoring mode to status-change and freshness subscribers', () => {
+    const server = new AgentHookServer()
+    const statusChanges = vi.fn()
+    const freshness = vi.fn()
+    server.subscribeStatusChanges(statusChanges)
+    server.subscribeStatusFreshness(freshness)
+    const row = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1' }
+
+    server.ingestRemote(
+      {
+        ...row,
+        payload: { state: 'working', workingMode: 'monitoring', prompt: 'p', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(statusChanges).toHaveBeenLastCalledWith([
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring' })
+    ])
+
+    // An OSC title never states a mode, so it renews the cached monitoring row rather than replacing it.
+    server.ingestTerminalStatus({
+      ...row,
+      connectionId: 'conn-1',
+      payload: { state: 'working', prompt: 'p', agentType: 'claude' }
+    })
+    expect(freshness).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring' })
+    )
+
+    server.ingestRemote(
+      { ...row, payload: { state: 'working', prompt: 'p', agentType: 'claude' } },
+      'conn-1'
+    )
+    expect(statusChanges.mock.lastCall?.[0]).toEqual([
+      expect.not.objectContaining({ workingMode: expect.anything() })
+    ])
+  })
+
   it('notifies provider-session subscribers without changing status listener arguments', () => {
     const server = new AgentHookServer()
     const statuses = vi.fn()

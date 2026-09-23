@@ -1,5 +1,6 @@
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import type { AgentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
@@ -7,13 +8,13 @@ import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerOpenCodeBinder {
   protected setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    runningTaskLiveness: AgentChildWorkLiveness | undefined,
     hasActiveCron: boolean
   ): void {
-    if (hasRunningTask) {
-      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    if (runningTaskLiveness) {
+      this.state.claudeRunningNonAgentTaskByPaneKey.set(paneKey, runningTaskLiveness)
     } else {
-      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+      this.state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -40,10 +41,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousRunningTask = this.state.claudeRunningNonAgentTaskByPaneKey.get(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextRunningTask = this.state.claudeRunningNonAgentTaskByPaneKey.get(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {

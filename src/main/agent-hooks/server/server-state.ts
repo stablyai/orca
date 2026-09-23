@@ -20,6 +20,7 @@ import {
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
 import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
@@ -248,7 +249,7 @@ export abstract class AgentHookServerState {
   ): NormalizedLocalHook
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    runningTaskLiveness: AgentChildWorkLiveness | undefined,
     hasActiveCron: boolean
   ): void
   protected abstract toRetainedProviderSessionRow(

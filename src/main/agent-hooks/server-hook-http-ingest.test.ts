@@ -251,7 +251,7 @@ describe('AgentHookServer listener replay', () => {
       })
 
       expect(server.getStatusSnapshot()[0]).toEqual(waiting)
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+      expect(server._getStateForTests().claudeRunningNonAgentTaskByPaneKey.has(PANE)).toBe(true)
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
       server.stop()

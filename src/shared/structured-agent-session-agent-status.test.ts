@@ -47,13 +47,12 @@ describe('structuredAgentSessionAgentStatus', () => {
     }
   })
 
-  // The spinner and the expandable child list are built from the same summary, so a workflow must
-  // not claim a running agent that `projectAgentChildWorkLegacySubagents` then refuses to render.
-  it('reads a lead whose only live task is a workflow as monitoring, with no children to show', () => {
+  // Workflow agents never become roster children here, so the workflow row itself must hold the
+  // lead working; it still projects no child the expanded row would have to show.
+  it('reads a lead whose only live task is a workflow as working, with no children to show', () => {
     const backgroundTasks = [task({ id: 'flow-1', kind: 'workflow' })]
     expect(structuredAgentSessionAgentStatus({ status: 'idle', backgroundTasks })).toEqual({
       state: 'working',
-      workingMode: 'monitoring',
       fromChildWork: true
     })
     expect(
@@ -61,6 +60,21 @@ describe('structuredAgentSessionAgentStatus', () => {
         backgroundTasks.map(agentChildWorkProjectionCandidateFromBackgroundTask)
       )
     ).toBeUndefined()
+  })
+
+  it('reads an unknown live task as working, and only shells and monitors as monitoring', () => {
+    expect(
+      structuredAgentSessionAgentStatus({
+        status: 'idle',
+        backgroundTasks: [task({ id: 'shell', kind: 'command' }), task({ kind: 'unknown' })]
+      })
+    ).toEqual({ state: 'working', fromChildWork: true })
+    expect(
+      structuredAgentSessionAgentStatus({
+        status: 'idle',
+        backgroundTasks: [task({ id: 'shell', kind: 'command' }), task({ kind: 'monitor' })]
+      })
+    ).toEqual({ state: 'working', workingMode: 'monitoring', fromChildWork: true })
   })
 
   it('settles an idle lead once every task has settled', () => {

@@ -1,6 +1,9 @@
 import type { AgentSubagentSnapshot, AgentWorkingMode } from '../../agent-status-types'
 import { foldAgentLeadStatus, type AgentLeadStatusResolution } from '../../agent-lead-status-fold'
-import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-work-liveness'
+import {
+  agentChildWorkLivenessFromEvidence,
+  type AgentChildWorkLiveness
+} from '../../agent-status-child-work-liveness'
 import {
   claudeRosterHasWorkingSubagent,
   reapUnconfirmedRestoredClaudeSubagents,
@@ -28,7 +31,7 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
  *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
  *
  *  Voids only what the replaced session provably owned. Deliberately NOT voided:
- *  - `claudeRunningNonAgentTaskPaneKeys`: a background shell is an OS process that survives /clear,
+ *  - `claudeRunningNonAgentTaskByPaneKey`: a background shell is an OS process that survives /clear,
  *    and the previous inventory is positive evidence it was running. Only a fresh inventory or a
  *    certified process death may retire it.
  *  - `confirmedTeammate` roster rows: persistent in-process teammates a lead replacement can't end.
@@ -103,16 +106,16 @@ export function getOrCreateClaudeSubagentRoster(
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean,
+  runningNonAgentTaskLiveness: AgentChildWorkLiveness,
   /** Lead-turn property. Pass `false` from any non-lead fold: an interrupt clears the gate even when
    *  the inventory positively reports a running shell, which is a live-shell judgement no new call
    *  site may inherit by copying this signature. */
   interrupted: boolean
 ): void {
-  if (hasRunningNonAgentTask && !interrupted) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+  if (runningNonAgentTaskLiveness && !interrupted) {
+    state.claudeRunningNonAgentTaskByPaneKey.set(paneKey, runningNonAgentTaskLiveness)
   } else {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
   }
 }
 
@@ -127,11 +130,11 @@ export function resolveClaudePaneStatus(
     leadState: lead.state,
     interrupted: lead.interrupted === true,
     childWorkLiveness: agentChildWorkLivenessFromEvidence({
-      hasLiveAgentWork: claudeRosterHasWorkingSubagent(
-        state.claudeSubagentRosterByPaneKey.get(paneKey)
-      ),
+      hasLiveAgentWork:
+        claudeRosterHasWorkingSubagent(state.claudeSubagentRosterByPaneKey.get(paneKey)) ||
+        state.claudeRunningNonAgentTaskByPaneKey.get(paneKey) === 'working',
       hasLiveNonAgentWork:
-        state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+        state.claudeRunningNonAgentTaskByPaneKey.get(paneKey) === 'monitoring' ||
         state.claudeActiveSessionCronPaneKeys.has(paneKey)
     })
   })
@@ -139,7 +142,7 @@ export function resolveClaudePaneStatus(
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeRunningNonAgentTaskByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }
 
