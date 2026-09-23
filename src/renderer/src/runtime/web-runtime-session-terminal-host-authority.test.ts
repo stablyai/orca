@@ -5,6 +5,7 @@ import {
   createWebRuntimeSessionTerminal
 } from './web-runtime-session'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
+import { webRuntimeAgentSessionLaunchOptions } from './web-runtime-agent-session-launch-options'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -112,6 +113,19 @@ describe('createWebRuntimeSessionTerminal', () => {
     ).resolves.toEqual({ status: 'created' })
 
     expect(selectedHosts).toEqual([RUNTIME_EXECUTION_HOST_ID])
+  })
+
+  it('includes startup colors before settings have hydrated', () => {
+    mocks.getState().settings = null
+
+    expect(webRuntimeAgentSessionLaunchOptions({ worktreeId: WORKTREE_ID }, 'codex')).toMatchObject(
+      {
+        terminalColorQueryReplies: {
+          foreground: expect.any(String),
+          background: expect.any(String)
+        }
+      }
+    )
   })
 
   it.each(
