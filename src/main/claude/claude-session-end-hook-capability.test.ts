@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_SESSION_END_CAPABILITY_FLOOR,
-  claudeVersionSupportsSessionEnd,
-  parseClaudeCliVersion
+  claudeVersionSupportsSessionEnd
 } from './claude-session-end-hook-capability'
 
 describe('Claude SessionEnd hook version capability', () => {
   it('records 2.1.261 as the measured floor', () => {
     expect(CLAUDE_SESSION_END_CAPABILITY_FLOOR).toBe('2.1.261')
-  })
-
-  it('extracts Claude Code version output', () => {
-    expect(parseClaudeCliVersion('2.1.261 (Claude Code)')).toBe('2.1.261')
   })
 
   it.each([

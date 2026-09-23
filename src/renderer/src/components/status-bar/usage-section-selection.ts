@@ -5,7 +5,6 @@ export type UsageSection = {
   label: string
   window: RateLimitWindow
   groupName?: string
-  groupDescription?: string | null
 }
 
 /** Choose the most consumed window, preserving input order for ties. */

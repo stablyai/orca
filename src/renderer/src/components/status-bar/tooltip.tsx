@@ -145,7 +145,6 @@ export function getWindowSections(p: ProviderRateLimits): {
   label: string
   window: RateLimitWindow | null
   groupName?: string
-  groupDescription?: string | null
 }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({
@@ -158,8 +157,7 @@ export function getWindowSections(p: ProviderRateLimits): {
               : b.windowLabel || formatWindowLabel(b.windowMinutes)
           : b.name,
       window: b,
-      ...(b.groupName ? { groupName: b.groupName } : {}),
-      ...(b.groupDescription !== undefined ? { groupDescription: b.groupDescription } : {})
+      ...(b.groupName ? { groupName: b.groupName } : {})
     }))
     return [
       ...bucketSections,

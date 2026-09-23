@@ -17,9 +17,8 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
   /** Stable provider/source identifier when available. */
   id?: string
-  /** Optional provider-defined quota group metadata. */
+  /** Provider-defined quota pool; buckets sharing it render together, labelled by window. */
   groupName?: string
-  groupDescription?: string | null
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'

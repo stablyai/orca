@@ -1,28 +1,27 @@
 import path from 'node:path'
-import type { ProviderRateLimits, RateLimitBucket } from '../../shared/rate-limit-types'
-import { hasReachedAppVersion } from '../../shared/app-version'
+import type {
+  ProviderRateLimits,
+  RateLimitBucket,
+  UsageRateLimitFailureKind
+} from '../../shared/rate-limit-types'
+import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
+import { runProcess, type ProcessResult } from '../../shared/child-process/run-process'
 
-const AGY_USAGE_ARGS = ['--print', '/usage', '--output-format', 'json']
-const AGY_USAGE_TIMEOUT_MS = 10_000
-const AGY_USAGE_MAX_BUFFER = 1024 * 1024
-const AGY_VERSION_ARGS = ['--version']
-const AGY_VERSION_TIMEOUT_MS = 5_000
-const AGY_VERSION_MAX_BUFFER = 64 * 1024
-// Why 1.1.11: older agy answers `-p /usage` with a billable agent turn instead of
-// a quota report; 1.1.11 handles read-only slash commands in print mode directly.
+// Why 1.1.11: older agy answers `--print /usage` with a billable agent turn instead of
+// a quota report, so the version is re-checked before every usage invocation.
 const AGY_MIN_USAGE_VERSION = '1.1.11'
+const WINDOW_MINUTES: Readonly<Record<string, number>> = { '5h': 300, weekly: 10080 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
 
-function emptyAntigravityResult(
+function antigravityFailure(
   status: 'error' | 'unavailable',
   error: string,
-  now: number,
-  failureKind: 'cli-unavailable' | 'usage-unavailable' | 'parse' | 'unknown'
+  failureKind: UsageRateLimitFailureKind,
+  now: number
 ): ProviderRateLimits {
   return {
     provider: 'antigravity',
@@ -36,97 +35,73 @@ function emptyAntigravityResult(
   }
 }
 
-function parseWindowMinutes(window: unknown): number {
-  if (window === '5h') {
-    return 300
-  }
-  if (window === 'weekly') {
-    return 10080
-  }
-  return 0
-}
-
-function createAgyTimeoutError(): Error {
-  return Object.assign(new Error('The agy CLI timed out.'), { code: 'ETIMEDOUT' })
-}
-
-function parseResetAt(value: unknown): number | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function agyQuotaFormatError(now: number): ProviderRateLimits {
-  return emptyAntigravityResult(
+function quotaFormatError(now: number): ProviderRateLimits {
+  return antigravityFailure(
     'error',
     'Antigravity usage returned an unexpected quota format from the agy CLI.',
-    now,
-    'parse'
+    'parse',
+    now
   )
 }
 
+function parseBucket(value: unknown, groupName: string): RateLimitBucket | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  const name = typeof value.name === 'string' ? value.name.trim() : ''
+  const window = typeof value.window === 'string' ? value.window.trim() : ''
+  const remaining = value.remaining_fraction
+  if (!name || !window || typeof remaining !== 'number' || !(remaining >= 0 && remaining <= 1)) {
+    return null
+  }
+  const id = typeof value.id === 'string' ? value.id.trim() : ''
+  const resetsAt = typeof value.reset_time === 'string' ? Date.parse(value.reset_time) : Number.NaN
+  const windowMinutes = WINDOW_MINUTES[window] ?? 0
+  return {
+    ...(id ? { id } : {}),
+    name,
+    groupName,
+    windowMinutes,
+    ...(windowMinutes === 0 ? { windowLabel: window } : {}),
+    usedPercent: (1 - remaining) * 100,
+    resetsAt: Number.isFinite(resetsAt) ? resetsAt : null,
+    resetDescription: null
+  }
+}
+
 /**
- * Maps the `agy -p /usage` quota groups onto rate-limit buckets. Well-formed but
- * unknown groups/windows are preserved; any malformed entry rejects the whole
- * response so a partial read can never hide the tightest quota pool as `ok`.
+ * Maps `agy /usage` quota groups onto buckets, shortest known window first per group.
+ * Any malformed entry rejects the whole response so a partial read never hides a pool.
  */
-function parseAgyUsageResponse(value: unknown, now = Date.now()): ProviderRateLimits {
-  const root = isRecord(value) ? value : {}
-  const command = isRecord(root.command) ? root.command : {}
-  const data = isRecord(command.data) ? command.data : {}
-  const groups = data.groups
-  if (!Array.isArray(groups) || groups.length === 0) {
-    return emptyAntigravityResult(
+function parseAgyUsageResponse(value: unknown, now: number): ProviderRateLimits {
+  const data = isRecord(value) && isRecord(value.command) ? value.command.data : null
+  const groups = isRecord(data) ? data.groups : null
+  if (!Array.isArray(groups)) {
+    return quotaFormatError(now)
+  }
+  if (groups.length === 0) {
+    return antigravityFailure(
       'unavailable',
       'Antigravity usage is not available. The agy CLI returned no quota buckets.',
-      now,
-      'usage-unavailable'
+      'usage-unavailable',
+      now
     )
   }
   const buckets: RateLimitBucket[] = []
-  for (const groupValue of groups) {
-    if (!isRecord(groupValue)) {
-      return agyQuotaFormatError(now)
+  for (const group of groups) {
+    const groupName = isRecord(group) && typeof group.name === 'string' ? group.name.trim() : ''
+    const rawBuckets = isRecord(group) && Array.isArray(group.buckets) ? group.buckets : []
+    const parsed = rawBuckets.map((bucket) => parseBucket(bucket, groupName))
+    if (!groupName || parsed.length === 0 || parsed.some((bucket) => bucket === null)) {
+      return quotaFormatError(now)
     }
-    const groupName = typeof groupValue.name === 'string' ? groupValue.name.trim() : ''
-    if (!groupName || !Array.isArray(groupValue.buckets) || groupValue.buckets.length === 0) {
-      return agyQuotaFormatError(now)
-    }
-    const groupDescription =
-      typeof groupValue.description === 'string' ? groupValue.description.trim() || null : null
-    for (const bucketValue of groupValue.buckets) {
-      if (!isRecord(bucketValue)) {
-        return agyQuotaFormatError(now)
-      }
-      const name = typeof bucketValue.name === 'string' ? bucketValue.name.trim() : ''
-      const remaining = bucketValue.remaining_fraction
-      const sourceWindow = typeof bucketValue.window === 'string' ? bucketValue.window.trim() : ''
-      if (
-        !name ||
-        !sourceWindow ||
-        typeof remaining !== 'number' ||
-        !Number.isFinite(remaining) ||
-        remaining < 0 ||
-        remaining > 1
-      ) {
-        return agyQuotaFormatError(now)
-      }
-      buckets.push({
-        ...(typeof bucketValue.id === 'string' && bucketValue.id.trim()
-          ? { id: bucketValue.id.trim() }
-          : {}),
-        name,
-        groupName,
-        groupDescription,
-        windowMinutes: parseWindowMinutes(sourceWindow),
-        windowLabel: sourceWindow,
-        usedPercent: (1 - remaining) * 100,
-        resetsAt: parseResetAt(bucketValue.reset_time),
-        resetDescription: null
-      })
-    }
+    // Why: unknown windows (0 minutes) sort last; `Infinity - Infinity` is NaN, so ties fall to the name.
+    const byWindow = (bucket: RateLimitBucket): number => bucket.windowMinutes || Infinity
+    buckets.push(
+      ...parsed
+        .filter((bucket): bucket is RateLimitBucket => bucket !== null)
+        .sort((a, b) => byWindow(a) - byWindow(b) || a.name.localeCompare(b.name))
+    )
   }
   return {
     provider: 'antigravity',
@@ -140,131 +115,62 @@ function parseAgyUsageResponse(value: unknown, now = Date.now()): ProviderRateLi
   }
 }
 
-function classifyAgyFailure(error: unknown): {
-  message: string
-  status: 'error' | 'unavailable'
-  failureKind: 'cli-unavailable' | 'usage-unavailable' | 'parse' | 'unknown'
-} {
-  const record = isRecord(error) ? error : {}
-  const stderr = typeof record.stderr === 'string' ? record.stderr.trim() : ''
-  if (record.code === 'ENOENT') {
-    return {
-      message: 'Antigravity usage is unavailable because the agy CLI was not found.',
-      status: 'unavailable',
-      failureKind: 'cli-unavailable'
-    }
-  }
-  if (
-    record.code === 'ETIMEDOUT' ||
-    record.code === 'ERR_CHILD_PROCESS_TIMEOUT' ||
-    record.killed === true ||
-    record.signal === 'SIGTERM'
-  ) {
-    return {
-      message: 'Antigravity usage could not be refreshed before the agy CLI timed out.',
-      status: 'error',
-      failureKind: 'unknown'
-    }
-  }
-  if (/auth|login|sign.?in|credential/i.test(stderr)) {
-    return {
-      message: 'Antigravity usage is unavailable because the agy CLI is not authenticated.',
-      status: 'unavailable',
-      failureKind: 'usage-unavailable'
-    }
-  }
-  return {
-    message: 'Antigravity usage could not be read from the agy CLI.',
-    status: 'error',
-    failureKind: 'unknown'
-  }
+function runAgy(
+  program: string,
+  args: string[],
+  timeoutMs: number,
+  signal: AbortSignal | undefined
+): Promise<ProcessResult | null> {
+  return runProcess({ program, args, timeoutMs, maxOutputBytes: 1024 * 1024, signal }).catch(
+    () => null
+  )
 }
 
-/** Resolves the `agy` executable off PATH (bare name when absent). */
-export function getAntigravityUsageCommand(): string {
-  return resolveCliCommand('agy')
-}
-
-// Why a pre-check: invoking /usage on agy <1.1.11 starts an agent turn that spends
-// quota on every refresh, so the version gate must run before any usage invocation.
-// Unreadable versions fail closed for the same reason.
-/** Extracts the first semver triple (preserving prerelease/build) from `agy --version` output. */
-export function extractAgyVersion(output: string): string | null {
-  const match = output.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?)/)
-  return match ? match[1] : null
-}
-
-/** Probes `agy --version`; aborts propagate, every other failure reads as unsupported. */
-async function checkAgyUsageSupport(
-  command: string,
-  signal?: AbortSignal
-): Promise<{ supported: boolean; version: string | null }> {
-  try {
-    const { stdout } = await execFileCaptureToTermination(command, AGY_VERSION_ARGS, {
-      encoding: 'utf8',
-      timeout: AGY_VERSION_TIMEOUT_MS,
-      maxBuffer: AGY_VERSION_MAX_BUFFER,
-      signal,
-      createTimeoutError: createAgyTimeoutError
-    })
-    const version = extractAgyVersion(String(stdout))
-    return {
-      supported: version !== null && hasReachedAppVersion(version, AGY_MIN_USAGE_VERSION),
-      version
-    }
-  } catch (error) {
-    if (signal?.aborted || (isRecord(error) && error.name === 'AbortError')) {
-      throw error
-    }
-    return { supported: false, version: null }
-  }
-}
-
-/** Reads native Antigravity quota: version-gated `agy -p /usage`, else an actionable `unavailable`. */
+/** Reads native Antigravity quota via version-gated `agy --print /usage`. */
 export async function fetchAntigravityRateLimits(
   signal?: AbortSignal
 ): Promise<ProviderRateLimits> {
   const now = Date.now()
-  const command = getAntigravityUsageCommand()
-  if (!path.isAbsolute(command)) {
-    return emptyAntigravityResult(
+  const agy = resolveCliCommand('agy')
+  if (!path.isAbsolute(agy)) {
+    return antigravityFailure(
       'unavailable',
       'Antigravity usage is unavailable because the agy CLI was not found.',
-      now,
-      'cli-unavailable'
+      'cli-unavailable',
+      now
     )
   }
-  const versionCheck = await checkAgyUsageSupport(command, signal)
-  if (!versionCheck.supported) {
-    return emptyAntigravityResult(
+  const versionRun = await runAgy(agy, ['--version'], 5_000, signal)
+  const version = versionRun?.code === 0 ? parseCliVersion(versionRun.stdout) : null
+  if (!version || !hasReachedAppVersion(version, AGY_MIN_USAGE_VERSION)) {
+    return antigravityFailure(
       'unavailable',
-      versionCheck.version
-        ? `Antigravity usage needs agy ${AGY_MIN_USAGE_VERSION} or newer (found ${versionCheck.version}). Update the agy CLI to show quota in the status bar.`
-        : 'Antigravity usage is unavailable because the agy CLI version could not be read. Update agy to 1.1.11 or newer.',
-      now,
-      'usage-unavailable'
+      version
+        ? `Antigravity usage needs agy ${AGY_MIN_USAGE_VERSION} or newer (found ${version}). Update the agy CLI to show quota in the status bar.`
+        : `Antigravity usage is unavailable because the agy CLI version could not be read. Update agy to ${AGY_MIN_USAGE_VERSION} or newer.`,
+      'usage-unavailable',
+      now
+    )
+  }
+  const usageRun = await runAgy(
+    agy,
+    ['--print', '/usage', '--output-format', 'json'],
+    10_000,
+    signal
+  )
+  if (usageRun?.code !== 0) {
+    return antigravityFailure(
+      'error',
+      usageRun?.timedOut
+        ? 'Antigravity usage could not be refreshed before the agy CLI timed out.'
+        : 'Antigravity usage could not be read from the agy CLI.',
+      'unknown',
+      now
     )
   }
   try {
-    const { stdout } = await execFileCaptureToTermination(command, AGY_USAGE_ARGS, {
-      encoding: 'utf8',
-      timeout: AGY_USAGE_TIMEOUT_MS,
-      maxBuffer: AGY_USAGE_MAX_BUFFER,
-      signal,
-      createTimeoutError: createAgyTimeoutError
-    })
-    try {
-      return parseAgyUsageResponse(JSON.parse(String(stdout)), now)
-    } catch {
-      return agyQuotaFormatError(now)
-    }
-  } catch (error) {
-    if (signal?.aborted || (isRecord(error) && error.name === 'AbortError')) {
-      throw error
-    }
-    const failure = classifyAgyFailure(error)
-    return emptyAntigravityResult(failure.status, failure.message, now, failure.failureKind)
+    return parseAgyUsageResponse(JSON.parse(usageRun.stdout), now)
+  } catch {
+    return quotaFormatError(now)
   }
 }
-
-export { AGY_MIN_USAGE_VERSION, AGY_USAGE_ARGS, AGY_VERSION_ARGS, parseAgyUsageResponse }

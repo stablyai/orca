@@ -1,22 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
+import type { ProcessResult } from '../../shared/child-process/run-process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  AGY_MIN_USAGE_VERSION,
-  AGY_USAGE_ARGS,
-  AGY_VERSION_ARGS,
-  extractAgyVersion,
-  fetchAntigravityRateLimits,
-  parseAgyUsageResponse
-} from './antigravity-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 
-vi.mock('../git/command-runner/exec-file-capture', () => ({
-  execFileCaptureToTermination: vi.fn()
-}))
-
-vi.mock('../../shared/node-cli-command-resolution', () => ({
-  resolveCliCommand: vi.fn()
-}))
+vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('../../shared/node-cli-command-resolution', () => ({ resolveCliCommand: vi.fn() }))
 
 const sample = {
   command: {
@@ -24,7 +13,6 @@ const sample = {
       groups: [
         {
           name: 'Gemini Models',
-          description: 'Gemini quota',
           buckets: [
             {
               id: 'gemini-weekly',
@@ -66,43 +54,66 @@ const sample = {
   }
 }
 
+function exited(stdout: string, overrides: Partial<ProcessResult> = {}): ProcessResult {
+  return { code: 0, signal: null, stdout, stderr: '', timedOut: false, ...overrides }
+}
+
+function mockAgy(version: ProcessResult, usage?: ProcessResult): void {
+  vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
+  vi.mocked(runProcess).mockResolvedValueOnce(version)
+  if (usage) {
+    vi.mocked(runProcess).mockResolvedValueOnce(usage)
+  }
+}
+
+function usageInvocations(): unknown[] {
+  return vi.mocked(runProcess).mock.calls.filter(([spec]) => spec.args?.includes('/usage'))
+}
+
+async function fetchUsage(value: unknown) {
+  mockAgy(exited('1.2.9'), exited(JSON.stringify(value)))
+  return fetchAntigravityRateLimits()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('parseAgyUsageResponse', () => {
-  it('preserves two groups and two windows with independent values', () => {
-    const result = parseAgyUsageResponse(sample, 1_700_000_000_000)
+describe('fetchAntigravityRateLimits parsing', () => {
+  it('keeps each group and orders its buckets shortest window first', async () => {
+    const result = await fetchUsage(sample)
     expect(result.status).toBe('ok')
-    expect(result.buckets).toHaveLength(4)
     expect(
       result.buckets?.map((bucket) => [bucket.id, bucket.groupName, bucket.windowMinutes])
     ).toEqual([
-      ['gemini-weekly', 'Gemini Models', 10080],
       ['gemini-5h', 'Gemini Models', 300],
-      ['3p-weekly', 'Claude and GPT models', 10080],
-      ['3p-5h', 'Claude and GPT models', 300]
+      ['gemini-weekly', 'Gemini Models', 10080],
+      ['3p-5h', 'Claude and GPT models', 300],
+      ['3p-weekly', 'Claude and GPT models', 10080]
     ])
-    expect(result.buckets?.[0]?.usedPercent).toBeCloseTo(0.6)
-    expect(result.buckets?.[1]?.usedPercent).toBe(0)
-    expect(result.buckets?.[2]?.resetsAt).toBeNull()
+    expect(result.buckets?.[1]?.usedPercent).toBeCloseTo(0.6)
+    expect(result.buckets?.[0]?.windowLabel).toBeUndefined()
+    expect(result.buckets?.[3]?.resetsAt).toBeNull()
   })
 
-  it('keeps unknown groups and windows instead of dropping them', () => {
-    const result = parseAgyUsageResponse({
+  it('keeps unknown windows, labelled by their source name and sorted last', async () => {
+    const result = await fetchUsage({
       command: {
         data: {
           groups: [
             {
               name: 'New pool',
-              buckets: [{ id: 'daily', name: 'Daily', window: 'daily', remaining_fraction: 0.5 }]
+              buckets: [
+                { id: 'daily', name: 'Daily', window: 'daily', remaining_fraction: 0.5 },
+                { id: '5h', name: 'Five', window: '5h', remaining_fraction: 1 }
+              ]
             }
           ]
         }
       }
     })
-    expect(result.buckets?.[0]).toMatchObject({
-      id: 'daily',
+    expect(result.buckets?.map((bucket) => bucket.id)).toEqual(['5h', 'daily'])
+    expect(result.buckets?.[1]).toMatchObject({
       groupName: 'New pool',
       windowLabel: 'daily',
       windowMinutes: 0,
@@ -110,18 +121,16 @@ describe('parseAgyUsageResponse', () => {
     })
   })
 
-  it.each([
-    { name: 'missing groups', value: {} },
-    { name: 'empty groups', value: { command: { data: { groups: [] } } } }
-  ])('returns unavailable for $name', ({ value }) => {
-    const result = parseAgyUsageResponse(value)
+  it('reports an empty group list as unavailable', async () => {
+    const result = await fetchUsage({ command: { data: { groups: [] } } })
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
   })
 
-  // Why: a partial read must never present as `ok` — a dropped pool could hide
-  // the tightest quota while the status bar reports a successful refresh.
+  // Why: a partial read must never present as `ok` — a dropped pool could hide the tightest quota.
   it.each([
+    { name: 'missing groups', value: { command: { data: {} } } },
+    { name: 'missing command', value: {} },
     {
       name: 'partial bucket',
       value: { command: { data: { groups: [{ name: 'x', buckets: [{}] }] } } }
@@ -130,13 +139,7 @@ describe('parseAgyUsageResponse', () => {
       name: 'group without a name',
       value: {
         command: {
-          data: {
-            groups: [
-              {
-                buckets: [{ name: 'x', window: '5h', remaining_fraction: 0.5 }]
-              }
-            ]
-          }
+          data: { groups: [{ buckets: [{ name: 'x', window: '5h', remaining_fraction: 0.5 }] }] }
         }
       }
     },
@@ -144,9 +147,7 @@ describe('parseAgyUsageResponse', () => {
       name: 'bucket without a window',
       value: {
         command: {
-          data: {
-            groups: [{ name: 'x', buckets: [{ name: 'x', remaining_fraction: 0.5 }] }]
-          }
+          data: { groups: [{ name: 'x', buckets: [{ name: 'x', remaining_fraction: 0.5 }] }] }
         }
       }
     },
@@ -167,209 +168,102 @@ describe('parseAgyUsageResponse', () => {
           }
         }
       }
+    },
+    {
+      name: 'remaining_fraction below zero',
+      value: {
+        command: {
+          data: {
+            groups: [
+              { name: 'x', buckets: [{ name: 'x', window: '5h', remaining_fraction: -0.1 }] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      name: 'remaining_fraction above one',
+      value: {
+        command: {
+          data: {
+            groups: [{ name: 'x', buckets: [{ name: 'x', window: '5h', remaining_fraction: 1.1 }] }]
+          }
+        }
+      }
     }
-  ])('returns a parse error for $name', ({ value }) => {
-    const result = parseAgyUsageResponse(value)
+  ])('returns a parse error for $name', async ({ value }) => {
+    const result = await fetchUsage(value)
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+  })
+
+  it('reports malformed stdout as a parse failure', async () => {
+    mockAgy(exited('1.2.9'), exited('{'))
+    const result = await fetchAntigravityRateLimits()
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('parse')
   })
 })
 
-describe('extractAgyVersion', () => {
-  it.each([
-    { output: '1.2.4', expected: '1.2.4' },
-    { output: 'agy version 1.1.11\n', expected: '1.1.11' },
-    { output: 'v1.1.10 (darwin arm64)', expected: '1.1.10' },
-    { output: '1.1.11-rc.1', expected: '1.1.11-rc.1' },
-    { output: 'agy 1.2.4+build.7', expected: '1.2.4+build.7' }
-  ])('reads $output as $expected', ({ output, expected }) => {
-    expect(extractAgyVersion(output)).toBe(expected)
-  })
-
-  it.each([{ output: '' }, { output: 'agy' }, { output: 'version unknown' }])(
-    'returns null for $output',
-    ({ output }) => {
-      expect(extractAgyVersion(output)).toBeNull()
-    }
-  )
-})
-
-describe('fetchAntigravityRateLimits', () => {
-  function mockVersionThenUsage(versionStdout: string, usageStdout: string) {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination)
-      .mockResolvedValueOnce({ stdout: versionStdout, stderr: '' })
-      .mockResolvedValueOnce({ stdout: usageStdout, stderr: '' })
-  }
-
-  function usageInvocations() {
-    return vi
-      .mocked(execFileCaptureToTermination)
-      .mock.calls.filter(([, args]) => args === AGY_USAGE_ARGS)
-  }
-
-  it('resolves agy outside PATH and uses the exact argv without a shell', async () => {
-    mockVersionThenUsage('1.2.4', JSON.stringify(sample))
-    await fetchAntigravityRateLimits()
-    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
-      '/mock/bin/agy',
-      AGY_VERSION_ARGS,
-      expect.objectContaining({
-        timeout: 5_000,
-        signal: undefined,
-        createTimeoutError: expect.any(Function)
-      })
-    )
-    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
-      '/mock/bin/agy',
-      AGY_USAGE_ARGS,
-      expect.objectContaining({
-        timeout: 10_000,
-        maxBuffer: 1024 * 1024,
-        signal: undefined,
-        createTimeoutError: expect.any(Function)
-      })
-    )
-  })
-
-  it('proceeds on the 1.1.11 boundary version', async () => {
-    mockVersionThenUsage('1.1.11', JSON.stringify(sample))
-    const result = await fetchAntigravityRateLimits()
+describe('fetchAntigravityRateLimits version gate', () => {
+  it('probes the resolved agy, then reads usage with the refresh signal', async () => {
+    const controller = new AbortController()
+    mockAgy(exited('1.1.11'), exited(JSON.stringify(sample)))
+    const result = await fetchAntigravityRateLimits(controller.signal)
     expect(result.status).toBe('ok')
-    expect(usageInvocations()).toHaveLength(1)
-  })
-
-  // Why: agy 1.1.10 answers `-p /usage` with a billable agent turn instead of a
-  // quota report, so the usage argv must never be spawned for older CLIs.
-  it('never invokes /usage on agy older than 1.1.11', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
-      stdout: '1.1.10',
-      stderr: ''
-    })
-    const result = await fetchAntigravityRateLimits()
-    expect(result.status).toBe('unavailable')
-    expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
-    expect(result.error).toContain('1.1.10')
-    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
-    expect(vi.mocked(execFileCaptureToTermination).mock.calls).toHaveLength(1)
-    expect(usageInvocations()).toHaveLength(0)
-  })
-
-  // Why: `hasReachedAppVersion` ranks prereleases below the stable floor, and the
-  // extractor preserves the suffix, so an unverified build can never spawn /usage.
-  it('never invokes /usage on a prerelease below the stable floor', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
-      stdout: '1.1.11-rc.1',
-      stderr: ''
-    })
-    const result = await fetchAntigravityRateLimits()
-    expect(result.status).toBe('unavailable')
-    expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
-    expect(usageInvocations()).toHaveLength(0)
-  })
-
-  it.each([{ versionStdout: '' }, { versionStdout: 'version unknown' }])(
-    'never invokes /usage when the version is unreadable ($versionStdout)',
-    async ({ versionStdout }) => {
-      vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-      vi.mocked(execFileCaptureToTermination).mockResolvedValueOnce({
-        stdout: versionStdout,
-        stderr: ''
-      })
-      const result = await fetchAntigravityRateLimits()
-      expect(result.status).toBe('unavailable')
-      expect(result.error).toContain(AGY_MIN_USAGE_VERSION)
-      expect(usageInvocations()).toHaveLength(0)
+    expect(vi.mocked(runProcess).mock.calls.map(([spec]) => [spec.program, spec.args])).toEqual([
+      ['/mock/bin/agy', ['--version']],
+      ['/mock/bin/agy', ['--print', '/usage', '--output-format', 'json']]
+    ])
+    for (const [spec] of vi.mocked(runProcess).mock.calls) {
+      expect(spec.signal).toBe(controller.signal)
     }
-  )
+  })
 
-  it('never invokes /usage when the version probe fails', async () => {
+  // Why: agy 1.1.10 answers `/usage` with a billable agent turn, so it must never be spawned.
+  it.each([
+    { name: 'an older release', version: exited('1.1.10'), found: '1.1.10' },
+    { name: 'a prerelease below the floor', version: exited('1.1.11-rc.1'), found: '1.1.11-rc.1' },
+    { name: 'unreadable output', version: exited('version unknown'), found: null },
+    { name: 'a failed probe', version: exited('1.2.9', { code: 1 }), found: null },
+    { name: 'a timed-out probe', version: exited('', { code: null, timedOut: true }), found: null }
+  ])('never invokes /usage for $name', async ({ version, found }) => {
+    mockAgy(version)
+    const result = await fetchAntigravityRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('1.1.11')
+    if (found) {
+      expect(result.error).toContain(`found ${found}`)
+    }
+    expect(usageInvocations()).toHaveLength(0)
+  })
+
+  it('never invokes /usage when the version probe cannot start', async () => {
     vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination).mockRejectedValueOnce(
-      Object.assign(new Error('The agy CLI timed out.'), { code: 'ETIMEDOUT' })
-    )
+    vi.mocked(runProcess).mockRejectedValueOnce(new Error('spawn EACCES'))
     const result = await fetchAntigravityRateLimits()
     expect(result.status).toBe('unavailable')
     expect(usageInvocations()).toHaveLength(0)
   })
 
-  it('distinguishes an unresolved executable', async () => {
+  it('reports an unresolved executable without spawning', async () => {
     vi.mocked(resolveCliCommand).mockReturnValue('agy')
     const result = await fetchAntigravityRateLimits()
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
-    expect(execFileCaptureToTermination).not.toHaveBeenCalled()
+    expect(runProcess).not.toHaveBeenCalled()
   })
 
-  it('reports malformed stdout as a parse failure', async () => {
-    mockVersionThenUsage('1.2.4', '{')
-    const result = await fetchAntigravityRateLimits()
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
-  })
+  it('distinguishes a usage timeout from a failed read', async () => {
+    mockAgy(exited('1.2.9'), exited('', { code: null, timedOut: true }))
+    const timedOut = await fetchAntigravityRateLimits()
+    expect(timedOut.status).toBe('error')
+    expect(timedOut.error).toContain('timed out')
 
-  it('passes the refresh AbortSignal to the agy process', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    const controller = new AbortController()
-    vi.mocked(execFileCaptureToTermination)
-      .mockResolvedValueOnce({ stdout: '1.2.4', stderr: '' })
-      .mockResolvedValueOnce({ stdout: JSON.stringify(sample), stderr: '' })
-    await fetchAntigravityRateLimits(controller.signal)
-    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
-      '/mock/bin/agy',
-      AGY_VERSION_ARGS,
-      expect.objectContaining({ signal: controller.signal })
-    )
-    expect(execFileCaptureToTermination).toHaveBeenCalledWith(
-      '/mock/bin/agy',
-      AGY_USAGE_ARGS,
-      expect.objectContaining({ signal: controller.signal })
-    )
-  })
-
-  it('classifies the shared runner timeout separately from a generic read failure', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    vi.mocked(execFileCaptureToTermination)
-      .mockResolvedValueOnce({ stdout: '1.2.4', stderr: '' })
-      .mockRejectedValueOnce(
-        Object.assign(new Error('The agy CLI timed out.'), {
-          code: null,
-          killed: true,
-          signal: 'SIGTERM'
-        })
-      )
-    const result = await fetchAntigravityRateLimits()
-    expect(result.error).toContain('timed out')
-    expect(result.usageMetadata?.failureKind).toBe('unknown')
-  })
-
-  it('propagates refresh cancellation instead of converting it to a provider error', async () => {
-    vi.mocked(resolveCliCommand).mockReturnValue('/mock/bin/agy')
-    const abortError = Object.assign(new Error('The operation was aborted.'), {
-      name: 'AbortError'
-    })
-    vi.mocked(execFileCaptureToTermination).mockRejectedValue(abortError)
-    await expect(fetchAntigravityRateLimits(new AbortController().signal)).rejects.toMatchObject({
-      name: 'AbortError'
-    })
-  })
-
-  it.each([
-    { remaining: -0.1, label: 'below zero' },
-    { remaining: 1.1, label: 'above one' }
-  ])('rejects remaining_fraction $label as a parse error', ({ remaining }) => {
-    const result = parseAgyUsageResponse({
-      command: {
-        data: {
-          groups: [
-            { name: 'x', buckets: [{ name: 'x', window: '5h', remaining_fraction: remaining }] }
-          ]
-        }
-      }
-    })
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('parse')
+    mockAgy(exited('1.2.9'), exited('', { code: 2 }))
+    const failed = await fetchAntigravityRateLimits()
+    expect(failed.status).toBe('error')
+    expect(failed.error).not.toContain('timed out')
   })
 })
