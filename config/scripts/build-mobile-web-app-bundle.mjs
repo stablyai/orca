@@ -124,6 +124,17 @@ export const MOBILE_WEB_APP_ROOT_RESET =
   '<style id="expo-reset">html,body{height:100%}body{overflow:hidden}' +
   '#root{display:flex;height:100%;flex:1}</style>'
 
+/**
+ * Rules that make the page paint what the native app paints where the browser's defaults differ.
+ * Native is the reference. Zero specificity (`:where`), so a component's own style still wins.
+ *
+ * Text inputs: Chromium rings a focused input (`:focus-visible` matches every focused text field);
+ * no native TextInput paints one, and the caret plus the IME already mark focus on a phone.
+ * Inputs only: a button reached by a hardware keyboard keeps the browser's ring.
+ */
+export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
+  '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}</style>'
+
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
   'src',
@@ -564,7 +575,7 @@ export async function buildMobileWebAppBundle({
     // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
     // has no tab for an icon, and the bundle's images are route assets named by their own bytes.
     '<link rel="icon" href="data:," />\n' +
-    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
+    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {

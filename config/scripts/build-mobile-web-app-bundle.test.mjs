@@ -4,6 +4,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
@@ -405,6 +406,21 @@ describeBundling('the app bundle', () => {
       // In the document itself, not a linked asset: the CSP that allows it is the one already
       // relaxed for react-native-web's runtime sheet.
       expect(html).not.toContain('<link rel="stylesheet"')
+    })
+  }, 120_000)
+
+  it('drops the UA focus ring from text inputs, which no native TextInput paints', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'native-parity')
+      await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
+      // Zero specificity, so a component that styles its own outline still wins.
+      expect(MOBILE_WEB_APP_NATIVE_PARITY_STYLE).toContain(
+        ':where(input:focus,textarea:focus){outline:none}'
+      )
+      // Its own block: the expo-reset one is the template's copy and stays exactly that.
+      expect(MOBILE_WEB_APP_ROOT_RESET).not.toContain('outline')
     })
   }, 120_000)
 
