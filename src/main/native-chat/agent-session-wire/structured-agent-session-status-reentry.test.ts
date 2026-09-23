@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { AgentHookServer } from '../../agent-hooks/server'
@@ -51,7 +52,7 @@ async function createFeed() {
     string,
     {
       journal: AgentSessionJournal
-      params: { location: AgentSessionExecutionLocation; provider: 'codex' }
+      params: { location: AgentSessionExecutionLocation; provider: AgentSessionHandleProvider }
     }
   >([[SESSION, session]])
   const server = new AgentHookServer()

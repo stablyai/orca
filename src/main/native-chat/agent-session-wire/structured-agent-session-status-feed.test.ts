@@ -4,15 +4,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
-  AgentSessionBackgroundTask,
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
-import { indexedStatusFeedSession as indexed } from './structured-agent-session-status-feed-test-session'
+import {
+  indexedStatusFeedSession as indexed,
+  statusFeedChildView
+} from './structured-agent-session-status-feed-test-session'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedDeps,
@@ -63,14 +66,17 @@ function feedFor(
   sessions: Map<string, Parameters<typeof indexed>[0]>,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
-  readBackgroundTasks?: StructuredAgentSessionStatusFeedDeps['readBackgroundTasks'],
+  readChildWork?: () => AgentChildWorkView[],
   statusSink?: StructuredAgentSessionStatusSink
 ) {
   let now = 1_000
+  // The summary reads child records where the host keeps them: the sink its row landed in.
+  const sink =
+    statusSink ??
+    (readChildWork ? { publish: () => {}, forget: () => {}, readChildWork } : undefined)
   const feed = new StructuredAgentSessionStatusFeed({
     ...(onStatusChanged ? { onStatusChanged } : {}),
-    ...(statusSink ? { statusSink: () => statusSink } : {}),
-    ...(readBackgroundTasks ? { readBackgroundTasks } : {}),
+    ...(sink ? { statusSink: () => sink } : {}),
     sessions: {
       get: (sessionId: string) => {
         const session = sessions.get(sessionId)
@@ -646,10 +652,9 @@ describe('StructuredAgentSessionStatusFeed', () => {
     )
     const snapshot = vi.spyOn(journal, 'snapshot')
     let taskState: 'working' | 'waiting' = 'working'
-    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
-      state: 'monitoring',
-      tasks: [{ id: 'child', kind: 'agent', state: taskState }]
-    }))
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => [
+      statusFeedChildView({ state: taskState })
+    ])
     for (let tick = 1; tick <= 100; tick++) {
       taskState = tick % 2 === 1 ? 'waiting' : 'working'
       feed.publish(SESSION)
@@ -687,90 +692,6 @@ describe('StructuredAgentSessionStatusFeed', () => {
     readOnly.mockRestore()
     feed.publish(SESSION)
     expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
-  })
-
-  it('projects live background tasks and republishes a task-only state change', async () => {
-    const journal = await openJournal()
-    let tasks = [
-      { id: 'task-1', kind: 'agent' as const, name: 'deep_review', state: 'working' as const }
-    ]
-    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
-      state: 'monitoring',
-      tasks
-    }))
-    await journal.appendItem(
-      USER_IDENTITY,
-      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
-    )
-    feed.publish(SESSION, journal)
-    expect(events.at(-1)).toEqual({
-      type: 'status',
-      session: expect.objectContaining({
-        backgroundTasks: [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working' }]
-      })
-    })
-
-    // No journal change: only the task state moved.
-    tasks = [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting' as never }]
-    const before = events.length
-    feed.publish(SESSION, journal)
-    expect(events).toHaveLength(before + 1)
-    expect(events.at(-1)).toEqual({
-      type: 'status',
-      session: expect.objectContaining({
-        backgroundTasks: [expect.objectContaining({ state: 'waiting' })]
-      })
-    })
-
-    // An identical projection is suppressed.
-    feed.publish(SESSION, journal)
-    expect(events).toHaveLength(before + 1)
-  })
-
-  it('omits task usage so a progress tick never re-broadcasts the summary', async () => {
-    const journal = await openJournal()
-    let tasks: AgentSessionBackgroundTask[] = [
-      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', totalTokens: 10 }
-    ]
-    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
-      state: 'monitoring',
-      tasks
-    }))
-    await journal.appendItem(
-      USER_IDENTITY,
-      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
-    )
-    feed.publish(SESSION, journal)
-    const before = events.length
-
-    // A `task_progress` frame moves only usage, which no status-summary reader renders;
-    // re-broadcasting the whole summary per frame would cost every remote subscriber.
-    tasks = [
-      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', totalTokens: 4_200 }
-    ]
-    feed.publish(SESSION, journal)
-    expect(events).toHaveLength(before)
-    expect(events.at(-1)).toEqual({
-      type: 'status',
-      session: expect.objectContaining({
-        backgroundTasks: [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working' }]
-      })
-    })
-
-    // A state change on the same task still reaches subscribers.
-    tasks = [
-      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting', totalTokens: 4_200 }
-    ]
-    feed.publish(SESSION, journal)
-    expect(events).toHaveLength(before + 1)
-    expect(events.at(-1)).toEqual({
-      type: 'status',
-      session: expect.objectContaining({
-        backgroundTasks: [expect.objectContaining({ state: 'waiting' })]
-      })
-    })
   })
 })
 

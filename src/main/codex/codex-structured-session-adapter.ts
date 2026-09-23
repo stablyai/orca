@@ -75,9 +75,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
-      ...(deps.onBackgroundTasksChanged
-        ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
-        : {}),
       forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
     })
     this.turnCancellation = new CodexStructuredTurnCancellation({
@@ -154,11 +151,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       this.compactions.codex(event.sessionId, event.method, event.params)
-      // After the admission check, so a refused frame is observed by the strip
+      // After the admission check, so a refused frame is observed by the child records
       // only on the retry that also reaches the journal.
-      if (session.backgroundTasks.observe(event)) {
-        this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
-      }
+      session.backgroundTasks.observe(event)
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
     }
@@ -191,6 +186,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
     sessionId
   ) => this.sessions.get(sessionId)?.backgroundTasks.state
+
+  // Codex exposes no honest stop for a child thread or a persistent command.
+  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
+    sessionId
+  ) =>
+    this.sessions.has(sessionId) ? { supportsTaskStop: false, supportsStopAll: false } : undefined
 
   bindPromptItemId = (
     sessionId: string,

@@ -70,7 +70,7 @@ export function toolResult(
   })
 }
 
-type Delivery = { kind: 'journal' | 'legacy' | 'evidence'; detail: string }
+type Delivery = { kind: 'journal' | 'publish' | 'evidence'; detail: string }
 
 /** The host clock the adapter stamps evidence with; a replay moves it to each frame's time. */
 export const T0 = 1_700_000_000_500
@@ -125,8 +125,6 @@ export async function producer(host?: AgentHookServer) {
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => clock,
     persistHandle: async () => {},
-    onBackgroundTasksChanged: (_sessionId, state) =>
-      deliveries.push({ kind: 'legacy', detail: String(state?.tasks?.length ?? 0) }),
     onChildWorkEvidence: (sessionId, evidence) => {
       expect(sessionId).toBe('session-1')
       deliveries.push({ kind: 'evidence', detail: evidence.map((edge) => edge.type).join(',') })
@@ -146,7 +144,8 @@ export async function producer(host?: AgentHookServer) {
       }
     },
     appendTombstone: () => {},
-    publish: () => {}
+    // Production's journal publication is what republishes the parent's own row.
+    publish: () => deliveries.push({ kind: 'publish', detail: '' })
   }
   await adapter.acquire({
     identity: identityFor(),

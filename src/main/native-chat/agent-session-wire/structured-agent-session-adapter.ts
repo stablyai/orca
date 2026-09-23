@@ -174,6 +174,14 @@ export type StructuredAgentSessionSetOptionInput = {
   fence: number
 }
 
+/** Which stop controls a provider honours. Provider capability, not a fact about any one task. */
+export type AgentSessionBackgroundTaskStops = {
+  /** A stop can name one task. */
+  supportsTaskStop: boolean
+  /** An untargeted "stop everything" exists. */
+  supportsStopAll: boolean
+}
+
 export type StructuredAgentSessionAdapter = {
   /** Provider-aware capability check for hosts that route more than one adapter. */
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
@@ -259,7 +267,13 @@ export type StructuredAgentSessionAdapter = {
     fence: number
     taskId?: string
   }): Promise<{ cancelled: boolean }>
+  /** The provider's own roster of background work it can stop, for provider-side decisions
+   *  (targeted stops, conversation-command admission). No surface reads it: every surface reads
+   *  the host's child records. */
   backgroundTaskState?(sessionId: string): AgentSessionBackgroundTaskState | null | undefined
+  /** The stops this provider honours for a live session's background work; undefined when the
+   *  adapter holds no live session for it. */
+  backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined

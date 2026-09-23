@@ -70,6 +70,10 @@ export type AgentChildWorkEndedEvidence = {
   totalTokens?: number
 }
 
+/** The session's own next turn began. Settled children are kept, with their outcome, until then;
+ *  a settled child that still owns live work stays so that work keeps an owner. */
+export type AgentChildWorkTurnStartedEvidence = { type: 'turn-started'; observedAt: number }
+
 /** The provider session is gone: a child still live can no longer end on its own, so it settles
  *  with an outcome nobody reported. Settled children stay; the parent's removal drops them. */
 export type AgentChildWorkSessionEndedEvidence = { type: 'session-ended'; observedAt: number }
@@ -78,4 +82,5 @@ export type AgentChildWorkEvidence =
   | AgentChildWorkLiveEvidence
   | AgentChildWorkOperationEvidence
   | AgentChildWorkEndedEvidence
+  | AgentChildWorkTurnStartedEvidence
   | AgentChildWorkSessionEndedEvidence

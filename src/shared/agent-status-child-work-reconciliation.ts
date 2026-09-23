@@ -104,14 +104,11 @@ function removeChildren(ctx: ReconcileContext, childWorkIds: string[]): void {
   }
 }
 
-/** Oldest-settled first; a settled child that still owns live work stays so its work keeps an owner. */
-function trimSettled(ctx: ReconcileContext): void {
+/** Settled children, oldest-settled first, less any that still owns live work: that one stays so
+ *  its work keeps an owner. */
+function removableSettled(ctx: ReconcileContext): { removable: string[]; settledCount: number } {
   const owned = ownedStructuredChildWork(ctx)
   const settled = owned.filter((record) => record.membership === 'settled')
-  const excess = settled.length - STRUCTURED_CHILD_WORK_MAX_SETTLED
-  if (excess <= 0) {
-    return
-  }
   const owners = new Set(
     owned.flatMap((record) =>
       record.membership === 'live' && record.parentChildWorkId ? [record.parentChildWorkId] : []
@@ -120,10 +117,16 @@ function trimSettled(ctx: ReconcileContext): void {
   const removable = settled
     .filter((record) => !owners.has(record.childWorkId))
     .sort((a, b) => (a.settledAt ?? a.observedAt) - (b.settledAt ?? b.observedAt))
-  removeChildren(
-    ctx,
-    removable.slice(0, excess).map((record) => record.childWorkId)
-  )
+    .map((record) => record.childWorkId)
+  return { removable, settledCount: settled.length }
+}
+
+function trimSettled(ctx: ReconcileContext): void {
+  const { removable, settledCount } = removableSettled(ctx)
+  const excess = settledCount - STRUCTURED_CHILD_WORK_MAX_SETTLED
+  if (excess > 0) {
+    removeChildren(ctx, removable.slice(0, excess))
+  }
 }
 
 /** Apply one batch of evidence. The parent must already be held: the store refuses a child whose
@@ -145,6 +148,8 @@ export function reconcileAgentChildWorkEvidence(
       applyOperation(ctx, edge)
     } else if (edge.type === 'ended') {
       applyEnded(ctx, edge)
+    } else if (edge.type === 'turn-started') {
+      removeChildren(ctx, removableSettled(ctx).removable)
     } else {
       settleLive(ctx, edge.observedAt)
     }

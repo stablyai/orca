@@ -10,7 +10,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { closeClaudeSession } from './claude-structured-session-close'
@@ -88,7 +88,7 @@ describe('Claude published session close lifecycle', () => {
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
-    const backgroundStates: (AgentSessionBackgroundTaskState | null)[] = []
+    const childWork: AgentChildWorkEvidence['type'][] = []
     const adapter = adapterFor(
       claude,
       {},
@@ -96,7 +96,7 @@ describe('Claude published session close lifecycle', () => {
       [],
       undefined,
       persistHandle,
-      (_sessionId, state) => backgroundStates.push(state)
+      (_sessionId, evidence) => childWork.push(...evidence.map((edge) => edge.type))
     )
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
@@ -118,15 +118,7 @@ describe('Claude published session close lifecycle', () => {
       task_type: 'local_agent',
       is_backgrounded: true
     })
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      }
-    ])
+    expect(childWork).toEqual(['live'])
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
@@ -139,16 +131,8 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      },
-      null
-    ])
+    // The host's child records hear the session end, so no surface keeps the child listed.
+    expect(childWork).toEqual(['live', 'session-ended'])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persistHandle).toHaveBeenCalledTimes(2)
