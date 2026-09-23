@@ -83,7 +83,7 @@ export function spawnDaemonChildProcess(
   }
   const scoped = buildDurableDaemonScopeCommand(
     relocatedExecPath ?? process.execPath,
-    [forkEntryPath, ...scriptArgs],
+    [forkEntryPath, ...scriptArgs, '--fresh-daemon-scope'],
     launchNonce,
     daemonEnv
   )

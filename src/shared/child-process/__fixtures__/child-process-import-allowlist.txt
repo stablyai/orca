@@ -116,7 +116,6 @@ src/main/ipc/preflight-command-exec.ts
 src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
-src/main/linux-lid-sleep-assertion.ts
 src/main/local-builds/local-build-candidate.ts
 src/main/macos-system-sleep-assertion.ts
 src/main/macos-tcc-prompt-watch.ts

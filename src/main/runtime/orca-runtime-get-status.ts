@@ -35,6 +35,7 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -223,6 +224,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   }
 
   protected notifyWorktreesChanged(repoId: string): void {
+    // Why here: the listing re-runs a scan this generation overtook, and a headless host has no
+    // window notifier to bump it, so the runtime's own change event bumps before it is sent.
+    runWorktreeChangeInvalidators(repoId)
     this.notifier?.worktreesChanged(repoId)
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }

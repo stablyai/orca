@@ -2,12 +2,26 @@
 // tail of the item list. Every scan here stops at the turn's own record — the
 // typed `turn` item, or the legacy status row that carries one — because state
 // from an earlier turn is never this turn's state.
+//
+// These scans answer for the SESSION'S OWN agent. A subagent's rows share this
+// journal and are usually the newer ones while a child runs, so each scan skips
+// anything a subagent produced; the transcript still renders every agent.
+//
+// Each scan reads the turn record BEFORE it checks the producer, which is only
+// safe because a turn row can never carry linkage: a turn is the SESSION'S unit
+// of work, and no producer of a turn-bearing body stamps one. Both lanes were
+// checked — Claude's turn rows are built with no linkage at all, Codex has no
+// linkage concept, the compact row passes only a fence, and the stale-turn
+// sweep goes through the lifecycle-batch path, which cannot carry linkage by
+// type. So a child-linked row can never be what terminates one of these scans.
+// Re-check that before giving any of those sites a producer.
 
 import type {
   AgentJournalRenderItem,
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
+import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 
 export function activeStructuredAgentSessionTurnId(
@@ -84,12 +98,13 @@ export function isStructuredAgentSessionThinking(
 ): boolean {
   let newestContentIsReasoning: boolean | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
+    const item = items[index]
+    const body = item?.body
     const turn = readAgentJournalTurn(body)
     if (turn) {
       return turn.state === 'running' && newestContentIsReasoning === true
     }
-    if (newestContentIsReasoning !== null) {
+    if (newestContentIsReasoning !== null || !isRootAgentJournalItem(item)) {
       continue
     }
     if (body?.kind === 'message') {
@@ -107,18 +122,20 @@ export function isStructuredAgentSessionThinking(
   return false
 }
 
-/** The tool call the newest turn is still inside, or null when nothing is running.
- *  An abandoned `running` call from an earlier crashed turn can never be reported
- *  as live work. */
+/** The tool call the SESSION'S OWN agent is still inside, or null when nothing is
+ *  running. An abandoned `running` call from an earlier crashed turn can never be
+ *  reported as live work, and neither can a subagent's — while a child runs a
+ *  tool, the parent is still inside the call that spawned it. */
 export function activeStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
 ): AgentJournalToolCallItem | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
+    const item = items[index]
+    const body = item?.body
     if (readAgentJournalTurn(body)) {
       return null
     }
-    if (body?.kind === 'tool-call' && body.state === 'running') {
+    if (body?.kind === 'tool-call' && body.state === 'running' && isRootAgentJournalItem(item)) {
       return body
     }
   }

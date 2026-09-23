@@ -73,3 +73,43 @@ export function useKeyboardOcclusion(): number {
 export function useKeyboardAvoidingPadding(): number {
   return useKeyboardOcclusion()
 }
+
+/** The sibling's shape; the two facts it answers together are measured separately here. */
+export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
+
+/**
+ * Whether a keyboard is open, which here is not what it covers: the shell shortens the WebView to
+ * sit above the IME, so nothing covers the page and the occlusion above reads 0, correctly. The
+ * resize is what is left of the keyboard — inside the shell's WebView the shell's own bottom
+ * padding is the one thing that changes this window's height without changing its width too.
+ */
+function useShortenedWindow(): boolean {
+  const [shortened, setShortened] = useState(false)
+
+  useEffect(() => {
+    // The tallest height seen at this width is the resting one; a width change is a rotation or a
+    // fold, which starts the comparison again. A page that mounts with the keyboard already up
+    // reads false until it closes once, which costs one terminal refit and no correctness.
+    let width = window.innerWidth
+    let tallest = window.innerHeight
+    const read = (): void => {
+      if (window.innerWidth !== width) {
+        width = window.innerWidth
+        tallest = window.innerHeight
+      } else if (window.innerHeight > tallest) {
+        tallest = window.innerHeight
+      }
+      setShortened(window.innerHeight < tallest)
+    }
+    read()
+    window.addEventListener('resize', read)
+
+    return () => window.removeEventListener('resize', read)
+  }, [])
+
+  return shortened
+}
+
+export function useSoftKeyboard(): SoftKeyboardState {
+  return { height: useKeyboardOcclusion(), visible: useShortenedWindow() }
+}

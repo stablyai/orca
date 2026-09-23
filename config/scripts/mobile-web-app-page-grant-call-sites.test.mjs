@@ -1,11 +1,13 @@
 /**
- * The six grants that were pinned only by the list they were copied from (ruling 33.3).
+ * The eight grants this file pins, in six rows covering them (ruling 33.3).
  *
- * `haptics`, `screencastBinary`, `externalNavigation` and the four audio grants already have
- * censuses of their own; these six did not, so removing any of them from a manifest entry reddened
- * nothing. Each row below gets its own named case, and each case's control is the same rule driven
- * over the entry that route would have had with the grant struck out.
+ * `haptics`, `screencastBinary`, `externalNavigation` and the three audio grants already have
+ * censuses of their own; these eight did not, so removing any of them from a manifest entry
+ * reddened nothing. Each row below gets its own named case, and each case's control is the same
+ * rule driven over the entry that route would have had with the grant struck out.
  */
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
@@ -15,6 +17,7 @@ import {
   pageRouteModulesCoverTheManifest
 } from './mobile-web-app-page-route-modules.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   PAGE_GRANT_CALL_SITES,
   grantCallSites,
@@ -41,9 +44,81 @@ function closureOf(pathname) {
   return held
 }
 
+const scriptsDir = import.meta.dirname
+
+const sessionGrants = MOBILE_WEB_PAGE_ROUTES.filter((route) => route.pathname === SESSION).flatMap(
+  (route) => route.grants
+)
+const pinnedHere = PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
+const pinnedHereForSession = pinnedHere.filter((grant) => sessionGrants.includes(grant))
+const sessionOptionalGrants = MOBILE_WEB_PAGE_ROUTES.filter(
+  (route) => route.pathname === SESSION
+).flatMap((route) => route.optionalGrants ?? [])
+const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(grant))
+const censusedElsewhere = [...sessionGrants, ...sessionOptionalGrants].filter(
+  (grant) => !pinnedHere.includes(grant)
+)
+
+/**
+ * The split both this file and its census state in prose, counted off the two tables instead.
+ *
+ * The rows here pin some of the session route's grants and named censuses pin the rest; the
+ * sentences that say how many were written when a fourteenth grant existed and did not move when
+ * #22072 removed it.
+ *
+ * Two counts, and which one a row takes is what its sentence is about. Exactly one row takes the
+ * intersection: the `.mjs` sentence for how many of the session route's grants these rows cover,
+ * which a row pinning a grant no route declares -- the shell can serve a verb before a screen asks
+ * for it -- would otherwise make the census demand a comment overstate the session route's list.
+ *
+ * Of the rows that could take either, every other one counts the rows here, the title about
+ * reaching them through the session route included. That title names the session route but is not
+ * a claim about it: the assertion under it compares `grantsNeeded` with every row's grants, so it
+ * has to move when the rows move and not when the route does. A census holding it at the
+ * intersection would have kept the title below the assertion it heads. The remaining rows count
+ * neither: they read the route's own list, or the grants on it that no row pins.
+ *
+ * The rows read the whole file, titles included: a count in a JSDoc and the same count in an `it`
+ * title go stale together, and pinning only the first leaves a green suite describing itself
+ * wrongly to whoever reads the run.
+ */
+const SPELLED_COUNTS = {
+  'mobile-web-app-page-grant-call-sites.mjs': [
+    { precedes: 'grants', counted: sessionGrants.length },
+    { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
+    { precedes: 'rows pin', counted: PAGE_GRANT_CALL_SITES.length },
+    { precedes: 'of the session', counted: pinnedHereForSession.length },
+    { precedes: 'have censuses of their own', counted: pinnedElsewhere.length },
+    // One more than the row above: C8.1's optional grant is censused elsewhere as well, and the
+    // sentence here counts what has a census rather than what the route requires.
+    { precedes: 'are not repeated here', counted: censusedElsewhere.length }
+  ],
+  'mobile-web-app-page-grant-call-sites.test.mjs': [
+    // Both the header's "eight grants this file pins" and the title's "eight grants".
+    { precedes: 'grants', counted: pinnedHere.length },
+    { precedes: 'rows covering', counted: PAGE_GRANT_CALL_SITES.length },
+    { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
+    { precedes: 'did not', counted: pinnedHere.length },
+    { precedes: 'through the session route', counted: pinnedHere.length }
+  ]
+}
+
+function isAudio(grant) {
+  return grant.startsWith('native.audio.')
+}
+
 describe('the call-site reader', () => {
   const navigate = PAGE_GRANT_CALL_SITES[0]
   const storage = PAGE_GRANT_CALL_SITES[1]
+
+  it('spells the split off the two tables, in this file and in the one it reads', async () => {
+    for (const [name, rows] of Object.entries(SPELLED_COUNTS)) {
+      const source = await readFile(join(scriptsDir, name), 'utf8')
+      for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
+        expect(spelled, `${name}: ${precedes}`).toEqual(counts)
+      }
+    }
+  })
 
   it('counts a call and not an import that never calls it', () => {
     expect(

@@ -761,7 +761,7 @@ for (const engine of ['chromium', 'webkit']) {
           () => false,
           stop.signal,
           { arm: 'arm sampling-probe', browserVersion: browser().version() },
-          25
+          { sampleEveryMs: 25 }
         )
         clearTimeout(timer)
         spy.mockRestore()
@@ -770,6 +770,36 @@ for (const engine of ['chromium', 'webkit']) {
         expect(printed[0]).toContain('arm sampling-probe')
         // Not the placeholder: this string is only there if the sampling branch produced a reading.
         expect(printed[0]).toContain('frames [')
+      }, 60_000)
+
+      // The bound, driven once. An arm whose click misses its actionability window waits here for a
+      // record nobody will write, and before the bound existed it spent the case's whole budget and
+      // failed as a bare timeout. What this pins is the reason it fails with instead.
+      it('gives up on a navigation that is not coming, and names why', async (ctx) => {
+        void ctx
+        const page = await browser().newPage()
+        try {
+          const failed = await waitForRecordedNavigation(
+            page,
+            [],
+            () => false,
+            null,
+            {
+              arm: 'arm bound-probe',
+              browserVersion: browser().version(),
+              actError: 'locator.click: Timeout 2000ms exceeded'
+            },
+            { boundMs: 50 }
+          ).catch((error) => String(error))
+          // Which arm, how long it waited, what its click did, and what the frame last read -- the
+          // four a CI log has nothing else to go on for.
+          expect(failed).toContain('arm bound-probe')
+          expect(failed).toMatch(/waited \d+ms for the navigation it expects/)
+          expect(failed).toContain('Timeout 2000ms exceeded')
+          expect(failed).toContain('frames [')
+        } finally {
+          await page.close()
+        }
       }, 60_000)
 
       it('keeps the Preview/Source toggle, and Source shows the source', async (ctx) => {

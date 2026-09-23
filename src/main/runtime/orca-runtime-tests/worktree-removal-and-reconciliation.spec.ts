@@ -34,6 +34,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 describe('OrcaRuntimeService', () => {
   it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
@@ -679,5 +680,18 @@ describe('OrcaRuntimeService', () => {
     expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
     expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  // A headless host has no window notifier, so the removal itself must move the generation the
+  // runtime listing witnesses; otherwise a listing the delete overtook publishes the removed row.
+  it('moves the scan generation the runtime listing witnesses once the worktree is removed', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    const before = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktree).toHaveBeenCalled()
+    expect(getLocalWorktreeScanGeneration(TEST_REPO_ID)).not.toBe(before)
   })
 })

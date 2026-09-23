@@ -1,5 +1,6 @@
-// App-side emitters for `daemon_adopted` and `daemon_pty_cwd_denied` (#17696). Both sit on the
-// daemon launch / PTY spawn path, so every failure dies here — telemetry can never cost a terminal.
+// App-side emitters for `daemon_adopted`, `daemon_pty_cwd_denied`, and `daemon_pty_cwd_readable`
+// (#17696). All sit on the daemon launch / PTY spawn path, so every failure dies here — telemetry
+// can never cost a terminal.
 
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -7,6 +8,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
+  isMacTccFolderClass,
   type DaemonAdoptedAppVersionMatch,
   type DaemonSpawnerPathClass
 } from '../../shared/daemon-adoption-telemetry'
@@ -14,6 +16,7 @@ import { bucketDaemonLiveSessionCount } from '../../shared/daemon-lifecycle-tele
 import type { EventProps } from '../../shared/telemetry-events'
 import { track } from '../telemetry/client'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
+import { getDaemonMacCodeIdentity } from './daemon-mac-code-identity'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import type { MacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -25,13 +28,13 @@ import {
 
 export type DaemonAdoptionOrigin = Pick<
   EventProps<'daemon_pty_cwd_denied'>,
-  'app_version_match' | 'spawner_path_class'
+  'app_version_match' | 'code_identity' | 'spawner_path_class'
 >
 
 /** Classifies the adopted daemon's pid record against the running app; enum-only by construction. */
-export function classifyDaemonAdoptionOrigin(
+export async function classifyDaemonAdoptionOrigin(
   pidRecord: ParsedDaemonPid | null
-): DaemonAdoptionOrigin {
+): Promise<DaemonAdoptionOrigin> {
   const appVersionMatch: DaemonAdoptedAppVersionMatch = !pidRecord?.appVersion
     ? 'unknown'
     : pidRecord.appVersion === getAppEnvironment().getVersion()
@@ -41,18 +44,22 @@ export function classifyDaemonAdoptionOrigin(
     pidRecord?.spawnerExecPath ?? null,
     existsSync
   )
-  return { app_version_match: appVersionMatch, spawner_path_class: spawnerPathClass }
+  return {
+    app_version_match: appVersionMatch,
+    code_identity: await getDaemonMacCodeIdentity(pidRecord?.pid),
+    spawner_path_class: spawnerPathClass
+  }
 }
 
 // Adopted a daemon that a previous app launch forked (macOS only; that is where attribution matters).
-export function trackDaemonAdopted(
+export async function trackDaemonAdopted(
   pidRecord: ParsedDaemonPid | null,
   tccAttribution: MacDaemonTccAttributionHealth,
   liveSessionCount: number | null
-): void {
+): Promise<void> {
   try {
     track('daemon_adopted', {
-      ...classifyDaemonAdoptionOrigin(pidRecord),
+      ...(await classifyDaemonAdoptionOrigin(pidRecord)),
       tcc_attribution: tccAttribution,
       live_session_count_bucket: bucketDaemonLiveSessionCount(liveSessionCount)
     })
@@ -80,14 +87,18 @@ export async function hasDaemonPtyCwdDenialDiverged(
   }
 }
 
-/** Emits `daemon_pty_cwd_denied` for a cwd `hasDaemonPtyCwdDenialDiverged` already proved diverged. */
-export function trackDaemonPtyCwdDenied(cwd: string, pidPath: string | null): void {
+/** Emits a spawn's cwd verdict; `readable` is the control that gives `code_identity` a false-positive rate. */
+export async function trackDaemonPtyCwdVerdict(
+  event: 'daemon_pty_cwd_denied' | 'daemon_pty_cwd_readable',
+  cwd: string,
+  pidPath: string | null
+): Promise<void> {
   try {
     // Why read now, not the adapter's startup snapshot: a respawn swaps the daemon under a
-    // long-lived adapter, and the denial must be attributed to the daemon that just spawned.
-    track('daemon_pty_cwd_denied', {
+    // long-lived adapter, and the verdict must be attributed to the daemon that just spawned.
+    track(event, {
       cwd_class: classifyDaemonPtyCwd(cwd, homedir()),
-      ...classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath))
+      ...(await classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath)))
     })
   } catch {
     // Telemetry is best-effort; a dropped event must not reach the caller.
@@ -115,13 +126,21 @@ export async function reportDaemonPtyCwdVerdict(args: {
     }
     if (args.cwdReadableByDaemon === true) {
       clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
+      // TCC-gated folders only: elsewhere a readable cwd says nothing about the theory.
+      if (
+        process.platform === 'darwin' &&
+        isMacTccFolderClass(classifyDaemonPtyCwd(cwd, homedir()))
+      ) {
+        await trackDaemonPtyCwdVerdict('daemon_pty_cwd_readable', cwd, args.pidPath)
+      }
       return
     }
     if (!(await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon))) {
       return
     }
-    trackDaemonPtyCwdDenied(cwd, args.pidPath)
+    // Notice first: the event now waits on a codesign probe, and the user-facing notice must not.
     recordDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
+    await trackDaemonPtyCwdVerdict('daemon_pty_cwd_denied', cwd, args.pidPath)
   } catch {
     // Best-effort evidence; a spawn must not fail because the notice could not be recorded.
   }

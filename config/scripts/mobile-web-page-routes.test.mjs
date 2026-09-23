@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,12 +8,13 @@ import {
   buildMobileWebAppBundle,
   resolveMobileWebPageRoutes
 } from './build-mobile-web-app-bundle.mjs'
-import { computeMobileWebBundleBuildId } from './build-mobile-web-bundle.mjs'
+import { computeMobileWebBundleBuildId } from './mobile-web-bundle-manifest.mjs'
 import {
   collectMobileWebAppRouteKeys,
   routePathnameFromKey
 } from './mobile-web-app-route-manifest.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 
 /**
  * Which screens this desktop declares as page routes, and whether the bundle can render each.
@@ -95,6 +96,27 @@ const EXPECTED_PAGE_ROUTES = [
   }
 ]
 
+const sessionGrants = EXPECTED_PAGE_ROUTES.filter(
+  (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+).flatMap((route) => route.grants)
+
+const sessionOptionalGrants = EXPECTED_PAGE_ROUTES.filter(
+  (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+).flatMap((route) => route.optionalGrants ?? [])
+
+const withPrefix = (prefix) => sessionGrants.filter((grant) => grant.startsWith(prefix))
+
+/** Every count this table's own comments spell out, beside the list each is a count of. */
+const SPELLED_COUNTS = [
+  { precedes: 'grants', counted: sessionGrants.length },
+  { precedes: 'audio verbs', counted: withPrefix('native.audio.').length },
+  { precedes: 'media verbs', counted: withPrefix('native.media.').length },
+  // "All three or none": the audio verbs again, as the rule that they are declared together.
+  { precedes: 'or none', counted: withPrefix('native.audio.').length },
+  // C8.1's, and the count the optional lane will grow first.
+  { precedes: 'optional grant', counted: sessionOptionalGrants.length }
+]
+
 describe('the page routes the manifest declares', () => {
   it('turns a route key into the URL pattern expo-router gives it', () => {
     expect(routePathnameFromKey('./h/[hostId]/index.tsx')).toBe('/h/[hostId]')
@@ -107,6 +129,19 @@ describe('the page routes the manifest declares', () => {
   it('answers null for a layout, which is not a screen anyone navigates to', () => {
     expect(routePathnameFromKey('./h/_layout.tsx')).toBeNull()
     expect(routePathnameFromKey('./h/[hostId]/_layout.tsx')).toBeNull()
+  })
+
+  it("spells the session route's own counts off the table it comments", async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'mobile-web-page-routes.mjs'),
+      'utf8'
+    )
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(
+      source,
+      SPELLED_COUNTS
+    )) {
+      expect(spelled, precedes).toEqual(counts)
+    }
   })
 
   it('declares only routes the bundle has a module for', async () => {

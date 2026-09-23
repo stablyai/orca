@@ -102,7 +102,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
-  // The session screen: terminal and chat. Fourteen grants, every one of them read off a call site
+  // The session screen: terminal and chat. Thirteen grants, every one of them read off a call site
   // in this route's own closure rather than carried from the design, and it is the only route that
   // asks for the media verbs, the audio verbs or the screencast lane.
   //
@@ -127,12 +127,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // asks the shell through the grants `init` carried. Without it the pane subscribes without
   // `wantsBinary` against a shell that would have encoded the frames.
   //
-  // The four audio verbs are dictation's, and they are this route's alone: C7.10 PR D put the
+  // The three audio verbs are dictation's, and they are this route's alone: C7.10 PR D put the
   // capture seam on the page and `mobile-web-app-session-dictation-capture.test.mjs` derives the
-  // list from the closure, which reaches `dictation-capture.web.ts` from the composer. All four or
-  // none — a route granted three records with the screen free to lock, and a lock mid-processing
-  // suspends the app and loses the transcript. Ruling 4's degradation is retired with them: the
-  // page no longer falls back to the vendored module's denied microphone.
+  // list from the closure, which reaches `dictation-capture.web.ts` from the composer. All three or
+  // none — a route granted two opens a microphone it has no verb to close, and the device side
+  // holds the screen awake for as long as one is open (#22072 moved that lock off the page, which
+  // is why the fourth verb this list carried is gone). Ruling 4's degradation is retired with them:
+  // the page no longer falls back to the vendored module's denied microphone.
   //
   // `externalNavigation` is the one optional grant in this list, and it is C8.1's. The HTML preview
   // renders an agent's artifact in a sealed frame, and a tap on a link inside it becomes a top-frame

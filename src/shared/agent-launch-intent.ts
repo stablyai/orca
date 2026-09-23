@@ -88,7 +88,26 @@ export type AgentLaunchIntent = {
 /** The surface the host actually created. */
 export type AgentLaunchOutcome =
   | { kind: 'structured'; sessionId: string; handle: string }
-  | { kind: 'terminal'; handle: string }
+  | {
+      kind: 'terminal'
+      handle: string
+      /**
+       * The pane the host minted for this agent, as `tabId:leafId` — read it with `parsePaneKey`.
+       *
+       * Identity, not placement. The host already mints this pair, bakes it into the PTY's
+       * environment and hands it to its own reveal; a client that draws its own tabs previously had
+       * no way to learn it, because a `term_*` handle is a main-side mapping the renderer cannot
+       * resolve. Where that pane goes — which group, what order, whether it takes focus — stays
+       * with the client and never rides this wire.
+       *
+       * One field rather than a `tabId`/`leafId` pair, because the key already carries both and two
+       * copies of one fact can disagree.
+       *
+       * Absent when this launch minted no pane, such as a reused terminal that was already running,
+       * or when the runtime could not report the pane it created.
+       */
+      paneKey?: string
+    }
 /**
  * What became of the launch text.
  *
@@ -210,12 +229,20 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
     return false
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the assertion claims only that the keys may be present and unknown, which is true of any object.
-  const outcome = value as { kind?: unknown; handle?: unknown; sessionId?: unknown }
+  const outcome = value as {
+    kind?: unknown
+    handle?: unknown
+    sessionId?: unknown
+    paneKey?: unknown
+  }
   if (typeof outcome.handle !== 'string' || outcome.handle.length === 0) {
     return false
   }
   return outcome.kind === 'terminal'
-    ? true
+    ? // Checked when present, ignored when absent: a row written before this field existed, or by a
+      // runtime that minted no pane, still reads. Deliberately not parsed — a read-side shape rule
+      // stricter than the write side turns one odd row into a refused replay.
+      outcome.paneKey === undefined || typeof outcome.paneKey === 'string'
     : outcome.kind === 'structured' &&
         typeof outcome.sessionId === 'string' &&
         outcome.sessionId.length > 0

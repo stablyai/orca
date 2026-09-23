@@ -1,18 +1,19 @@
 import { readFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
 import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
   hashedAsset,
-  isDirectInvocation,
   readDesktopVersion,
   readProtocolWindow,
   sha256Hex,
   writeMobileWebBundleTree,
   contentTypeForExtension
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
+import { isDirectInvocation } from './script-entry-detection.mjs'
 import {
   ROUTE_SOURCE_LOADERS,
   assertRoutesCarryNoSynchronousExports,
@@ -26,7 +27,12 @@ const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
 const defaultAppDir = join(mobileDir, 'app')
 const entryPoint = join(mobileDir, 'web-entry', 'index.tsx')
-const defaultOutDir = join(projectDir, 'out', 'mobile-web-app')
+// The one definition of where the packaged bundle lives, taken from the guard that enforces it:
+// a second constant here could drift and leave electron-builder's beforePack looking at an empty
+// directory while the builder reported a tree it had written somewhere else.
+const { MOBILE_WEB_BUNDLE_DIR: defaultOutDir } = createRequire(import.meta.url)(
+  './verify-packaged-mobile-web-bundle.cjs'
+)
 
 /**
  * Every shim the app bundle needs, each one a documented Metro/RN-Web gap. `appliesTo` reads the
@@ -60,6 +66,14 @@ export const MOBILE_WEB_APP_SHIMS = [
     // schema constructed at module scope reaches the probe before our own code can run.
     name: 'zod-jitless-banner',
     appliesTo: (options) => options.banner?.js?.includes('__zod_globalConfig') === true
+  },
+  {
+    // Four modules under src/shared resolve `zod` upward to the root's copy, so the page bundled
+    // two Zods and built salvage combinators with one instance to nest inside schemas built by the
+    // other. mobile/tsconfig.json already maps `zod` to mobile's for the whole mobile program,
+    // those shared modules included; this is the bundler catching up to that contract.
+    name: 'one-zod',
+    appliesTo: (options) => options.alias?.zod === MOBILE_ZOD_PACKAGE
   },
   {
     // lucide-react-native@1.14.0's barrel re-exports LucideProvider from a context.mjs that does
@@ -117,6 +131,24 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'bridge',
   'page-async-storage.ts'
 )
+
+/**
+ * The one Zod the page runs.
+ *
+ * `nodePaths` is a fallback, consulted only where normal resolution fails, so it never reached
+ * `src/shared/zod-salvage.ts`: that file sits above `mobile/`, its bare `zod` resolves upward to
+ * the root's 4.5.4, and the 58 mobile modules beside it resolved to mobile's 4.4.3. Both shipped.
+ *
+ * Mobile's copy and not the root's, because the mobile app already says so: `mobile/tsconfig.json`
+ * maps `zod` to `./node_modules/zod`, and a shared module joins that program as an imported file,
+ * so tsc holds `zod-salvage.ts` to 4.4.3 today. The composition says the same thing from the other
+ * side — `salvagingArray` and friends are leaves nested inside `z.object(...)` built by mobile's
+ * Zod, so the leaves belong to the container's instance.
+ *
+ * The package directory rather than a file: nothing imports a `zod/...` subpath, and esbuild reads
+ * the `module` field here, which is the same ESM entry the package's `import` condition names.
+ */
+const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
 
 /**
  * Zod's compiled path, off before any module runs.
@@ -207,10 +239,13 @@ export function mobileWebAppBuildOptions(routes) {
     logLevel: 'silent',
     jsx: 'automatic',
     // One React: resolve everything from mobile/node_modules, which is where the entry lives.
+    // A fallback only, so it settles nothing for a module that resolves on its own — see
+    // MOBILE_ZOD_PACKAGE, which is a repo-root import this never reached.
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: {
       'react-native': 'react-native-web',
-      '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE
+      '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE,
+      zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [routeManifestPlugin(renderMobileWebAppRouteManifest(routes)), lucideBarrelPlugin],
     resolveExtensions: [
@@ -525,6 +560,10 @@ export async function buildMobileWebAppBundle({
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
+    // Undeclared, a browser asks the origin for /favicon.ico itself and the shell's asset server
+    // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
+    // has no tab for an icon, and the bundle's images are route assets named by their own bytes.
+    '<link rel="icon" href="data:," />\n' +
     `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')

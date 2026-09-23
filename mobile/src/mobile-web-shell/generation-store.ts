@@ -12,6 +12,12 @@ import {
 } from './generation-manifest-swap'
 import { refuseManifestPersist, type ManifestPersistOutcome } from './manifest-persist-refusal'
 import { isHostCacheKey } from './host-cache-key'
+import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
+import {
+  forgetHostUpdateFailuresIn,
+  readUpdateFailureLog,
+  recordUpdateFailureIn
+} from './mobile-web-shell-update-failure-log'
 
 const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
@@ -53,6 +59,12 @@ export type GenerationStore = {
     hostKey: string,
     manifest: MobileWebBundleManifestRead
   ): Promise<ManifestPersistOutcome>
+  /** Why an update read failed, kept for Troubleshoot. Never rejects: it is only evidence. */
+  recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
+  /** Oldest first; empty when nothing was recorded or the log cannot be read. */
+  readUpdateFailures(): Promise<readonly MobileWebShellUpdateFailure[]>
+  /** Keyed by host id, not cache key: the log outlives the host's generations. Never rejects. */
+  forgetHostUpdateFailures(hostId: string): Promise<void>
 }
 
 /** Recency only, so anything unreadable degrades to "evict this host first". */
@@ -318,7 +330,12 @@ export function createGenerationStore(options: {
     sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
     persistActiveManifest: (hostKey, manifest) =>
-      serialize(() => persistManifest(hostKey, manifest))
+      serialize(() => persistManifest(hostKey, manifest)),
+    recordUpdateFailure: (failure) =>
+      serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
+    readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
+    forgetHostUpdateFailures: (hostId) =>
+      serialize(() => forgetHostUpdateFailuresIn(fs, hostId)).catch(() => undefined)
   }
 }
 

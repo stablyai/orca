@@ -17,6 +17,8 @@ export type BridgeInboundFramePort = {
   report: (diagnostic: BridgeRpcClientDiagnostic) => void
   acceptInit: (message: Extract<BridgeHostMessage, { type: 'init' }>) => void
   acceptState: (connection: BridgeConnectionSnapshot) => void
+  /** One Back press from the shell, for whoever in this document claimed the key. */
+  acceptBack: () => void
 }
 
 /** The shell's own words where it had any, the way the native client passes an RPC error message
@@ -72,6 +74,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'state':
         port.acceptState(message.connection)
+        return
+      case 'back':
+        port.acceptBack()
         return
       case 'reply':
         if (!requests.has(message.id)) {

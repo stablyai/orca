@@ -54,7 +54,7 @@ export function SessionActionMenuItems({
   onOpenCwd?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
@@ -168,25 +168,29 @@ export function SessionActionMenuItems({
           )}
         </Item>
       ) : null}
-      <Separator />
-      {deleteBlockedReason ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* A disabled item is pointer-events:none, so the trigger needs this
+      {onDelete ? (
+        <>
+          <Separator />
+          {deleteBlockedReason ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A disabled item is pointer-events:none, so the trigger needs this
                wrapper to receive hover (as WorktreeContextMenu does). */}
-            <div>{deleteItem}</div>
-          </TooltipTrigger>
-          <TooltipContent
-            side={menuKind === 'context' ? 'right' : 'left'}
-            sideOffset={8}
-            className="max-w-72"
-          >
-            {deleteBlockedReason}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        deleteItem
-      )}
+                <div>{deleteItem}</div>
+              </TooltipTrigger>
+              <TooltipContent
+                side={menuKind === 'context' ? 'right' : 'left'}
+                sideOffset={8}
+                className="max-w-72"
+              >
+                {deleteBlockedReason}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            deleteItem
+          )}
+        </>
+      ) : null}
     </>
   )
 }

@@ -9,8 +9,13 @@ import {
   gates,
   readySession,
   run,
-  started
+  started,
+  BUNDLE_REFUSED,
+  LINK_LOST,
+  withoutRecord
 } from './mobile-web-shell-session-test-fixtures'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
+import { shellPageFrame } from './shell-page-frame'
 
 describe('the gates decide whether a step is taken at all', () => {
   it('waits while a connection is still being made', () => {
@@ -73,7 +78,7 @@ describe('the offline rule', () => {
   it('opens a cached generation with no compat check when the host is unreachable', () => {
     const start = started({ reachability: 'unreachable', hostCapabilities: [] })
     const step = run(start.session, { type: 'cache-read', generation: CACHED })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
@@ -134,7 +139,7 @@ describe('the connected flow', () => {
 
   it('opens the cached generation without paging when the build ids match', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     // And it writes the manifest it just matched: the routes are the only thing a same-build read
     // can have changed, and nothing else on this path touches the disk.
     expect(step.effects).toEqual([
@@ -235,7 +240,7 @@ describe('the connected flow', () => {
     })
     expect(progressed.session.state).toMatchObject({ kind: 'fetching', completedAssets: 2 })
     const staged = run(progressed.session, { type: 'download-staged' })
-    expect(staged.session.state).toEqual({ kind: 'activating' })
+    expect(staged.session.state).toEqual({ kind: 'activating', source: 'download' })
     const ready = run(staged.session, {
       type: 'activated',
       generationDirectory: '/cache/gen',
@@ -269,7 +274,7 @@ describe('the connected flow', () => {
   it('fails when the download or the cache write never produced a generation', () => {
     const step = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'bundle'
+      cause: BUNDLE_REFUSED
     })
     expect(step.session.state).toEqual({
       kind: 'failed',
@@ -286,9 +291,9 @@ describe('a read the link cut short falls back to what is on disk', () => {
   }
 
   it('opens the cached generation when the socket drops before the reachability change does', () => {
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'transport' })
-    expect(step.session.state).toEqual({ kind: 'activating' })
-    expect(step.effects).toEqual([
+    const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(withoutRecord(step.effects)).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
@@ -310,26 +315,21 @@ describe('a read the link cut short falls back to what is on disk', () => {
   it('still says the workspace could not be downloaded when nothing is on disk', () => {
     const step = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'transport'
+      cause: LINK_LOST
     })
     expect(step.session.state).toEqual({
       kind: 'failed',
       reason: 'download-failed',
       retriedOnce: false
     })
-    expect(step.effects).toEqual([])
+    expect(withoutRecord(step.effects)).toEqual([])
   })
 
-  it('fails on a verdict about the bundle even with a generation cached', () => {
-    // A host that refuses the read, or bytes that do not hash, is an answer about the bundle. A
-    // cached generation is no reason to hide it behind a workspace that is merely older.
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'bundle' })
-    expect(step.session.state).toEqual({
-      kind: 'failed',
-      reason: 'download-failed',
-      retriedOnce: false
-    })
-    expect(step.effects).toEqual([])
+  it('leaves no notice on it, because nothing says an update was there to fail', () => {
+    // The link went before the host said what it serves. "Update failed" would be a claim about a
+    // generation this phone never heard of.
+    const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
+    expect(step.session.updateNotice).toBeNull()
   })
 })
 
@@ -349,7 +349,7 @@ describe('a displayed generation is not restarted by the gates', () => {
     expect(run(wall.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
     const failed = run(afterCacheRead(null).session, {
       type: 'download-failed',
-      failure: 'bundle'
+      cause: BUNDLE_REFUSED
     })
     expect(run(failed.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([])
   })
@@ -574,7 +574,7 @@ describe('a result from a superseded flow reports into nothing', () => {
     expect(ready.session.state).toMatchObject({ kind: 'ready' })
     const late = run(ready.session, {
       type: 'download-failed',
-      failure: 'bundle',
+      cause: BUNDLE_REFUSED,
       flow: inFlight.session.flow
     })
     expect(late.session.state).toEqual(ready.session.state)
@@ -690,7 +690,11 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('arms nothing when the page spoke first, because there is nothing left to wait for', () => {
-    const step = run(readySession().session, { type: 'page-ready' }, { type: 'document-loaded' })
+    const step = run(
+      readySession().session,
+      { type: 'page-ready', reports: [] },
+      { type: 'document-loaded' }
+    )
     expect(step.effects).toEqual([])
     expect(step.session.pageReady).toBe(true)
   })
@@ -714,7 +718,7 @@ describe('the page has to speak for the document that loaded', () => {
     const step = run(
       readySession().session,
       { type: 'document-loaded' },
-      { type: 'page-ready' },
+      { type: 'page-ready', reports: [] },
       { type: 'page-ready-deadline' }
     )
     expect(step.effects).toEqual([])
@@ -733,7 +737,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('makes the second document prove itself, rather than riding the first one word', () => {
-    const spoken = run(readySession().session, { type: 'page-ready' })
+    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
     const remounted = run(spoken.session, { type: 'remounted', sessionId: 'session-two' })
     expect(remounted.session.pageReady).toBe(false)
     expect(run(remounted.session, { type: 'document-loaded' }).effects).toEqual([
@@ -742,7 +746,11 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('leaves a remounted document its own wait when the first one expires late', () => {
-    const first = run(readySession().session, { type: 'document-loaded' }, { type: 'page-ready' })
+    const first = run(
+      readySession().session,
+      { type: 'document-loaded' },
+      { type: 'page-ready', reports: [] }
+    )
     const armed = first.session.flow
     const second = run(
       first.session,
@@ -758,7 +766,7 @@ describe('the page has to speak for the document that loaded', () => {
   })
 
   it('makes a freshly activated generation prove itself too', () => {
-    const spoken = run(readySession().session, { type: 'page-ready' })
+    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
     const reactivated = run(spoken.session, {
       type: 'activated',
       generationDirectory: CACHED.directory,
@@ -768,5 +776,125 @@ describe('the page has to speak for the document that loaded', () => {
       elapsedMs: 9
     })
     expect(reactivated.session.pageReady).toBe(false)
+  })
+})
+
+/**
+ * A commit is not a paint, and `ready` is posted before the page has built anything: the only
+ * thing that says the view is worth showing is the page saying so.
+ */
+describe('the page reporting a frame on screen', () => {
+  it('records what the ready declared and keeps the frame covered until the report', () => {
+    const spoken = run(readySession().session, {
+      type: 'page-ready',
+      reports: [BRIDGE_PAGE_PAINTED]
+    })
+    expect(spoken.session.pageReportsPaint).toBe(true)
+    expect(spoken.session.pagePainted).toBe(false)
+    expect(shellPageFrame(spoken.session)).toBe('unpainted')
+    const painted = run(spoken.session, { type: 'page-painted' })
+    expect(painted.session.pagePainted).toBe(true)
+    expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+
+  it('new shell, old page: ignores an undeclared report and uncovers on ready', () => {
+    const spoken = run(readySession().session, { type: 'page-ready', reports: [] })
+    const step = run(spoken.session, { type: 'page-painted' })
+    expect(step.session.pagePainted).toBe(false)
+    // Uncovered anyway: `ready` is the newest word a page built before the report can say.
+    expect(shellPageFrame(step.session)).toBe('painted')
+  })
+
+  it('re-reads the declaration on every ask, because a reload asks again', () => {
+    const declared = run(readySession().session, {
+      type: 'page-ready',
+      reports: [BRIDGE_PAGE_PAINTED]
+    })
+    const reloaded = run(declared.session, { type: 'page-ready', reports: [] })
+    expect(reloaded.session.pageReportsPaint).toBe(false)
+  })
+
+  it('makes a remounted document report its own frame', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' }
+    )
+    const remounted = run(painted.session, { type: 'remounted', sessionId: 'session-two' })
+    expect(remounted.session.pagePainted).toBe(false)
+    expect(remounted.session.pageReportsPaint).toBe(false)
+    expect(shellPageFrame(remounted.session)).toBe('unpainted')
+  })
+
+  it('makes a freshly activated generation report its own frame', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' }
+    )
+    const reactivated = run(painted.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-three',
+      buildId: MANIFEST.buildId,
+      totalBytes: MANIFEST.totalBytes,
+      elapsedMs: 9
+    })
+    expect(reactivated.session.pagePainted).toBe(false)
+    expect(reactivated.session.pageReportsPaint).toBe(false)
+  })
+
+  it('makes the document that replaced a painted one inside this mount report its own frame', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' }
+    )
+    expect(shellPageFrame(painted.session)).toBe('painted')
+    // No new session and no new generation: the view reloaded under the one already on screen.
+    const restarted = run(painted.session, { type: 'document-started' })
+    expect(restarted.session.pagePainted).toBe(false)
+    const reasked = run(restarted.session, {
+      type: 'page-ready',
+      reports: [BRIDGE_PAGE_PAINTED]
+    })
+    expect(shellPageFrame(reasked.session)).toBe('unpainted')
+    expect(shellPageFrame(run(reasked.session, { type: 'page-painted' }).session)).toBe('painted')
+  })
+
+  it('retires the wait the document it replaced armed', () => {
+    const loaded = run(readySession().session, { type: 'document-loaded' })
+    expect(loaded.effects).toEqual([{ kind: 'await-page-ready' }])
+    const armed = loaded.session.flow
+    const spoken = run(loaded.session, { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] })
+    const restarted = run(spoken.session, { type: 'document-started' })
+    // The replacement is still loading and has said nothing, which is exactly what the retired
+    // document's deadline reads as a document that never loaded.
+    const expired = run(restarted.session, { type: 'page-ready-deadline', flow: armed })
+    expect(expired.session.state.kind).toBe('ready')
+    // And the replacement arms a wait of its own, so a document that really never speaks still
+    // takes the session down.
+    const reloaded = run(restarted.session, { type: 'document-loaded' })
+    expect(reloaded.effects).toEqual([{ kind: 'await-page-ready' }])
+  })
+
+  it('keeps the frame of a document that repeats its own handshake', () => {
+    const painted = run(
+      readySession().session,
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] },
+      { type: 'page-painted' },
+      { type: 'page-ready', reports: [BRIDGE_PAGE_PAINTED] }
+    )
+    // The document never restarted, so its frame is still the one on screen.
+    expect(painted.session.pagePainted).toBe(true)
+    expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+
+  it('records nothing from a page whose generation is no longer on screen', () => {
+    const failed = run(readySession().session, {
+      type: 'shell-failed',
+      reason: 'render-process-gone'
+    })
+    expect(run(failed.session, { type: 'page-painted' }).session.pagePainted).toBe(false)
   })
 })

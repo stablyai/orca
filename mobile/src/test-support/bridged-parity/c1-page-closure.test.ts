@@ -24,11 +24,11 @@ function asPinned(): Map<string, PageClosureObservation> {
 }
 
 describe('the C1 page closure', () => {
-  it('is the census the design named: 22 families, 104 goldens', () => {
+  it('is the census the design named: 20 families, 95 goldens', () => {
     const goldens = Object.values(C1_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C1_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 22,
-      goldens: 104
+      families: 20,
+      goldens: 95
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })

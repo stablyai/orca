@@ -4,22 +4,30 @@ import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
-  MobileWebShellReadFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
-  MobileWebShellSessionState,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import { awaitsGates, gateKey, gateVerdict } from './mobile-web-shell-gates'
-import { matchesRoutePattern, routeViewOf } from './page-route-policy'
-
-const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
-const NATIVE_ROUTE: MobileWebShellSessionState = { kind: 'native-route' }
-
-function rendersRoute(pageRoutes: readonly string[], pathname: string): boolean {
-  return pageRoutes.some((pattern) => matchesRoutePattern(pathname, pattern))
-}
+import {
+  readFailureSide,
+  type MobileWebShellUpdateFailureCause,
+  type MobileWebShellUpdateFailureFacts
+} from './mobile-web-shell-update-failure'
+import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
+import {
+  awaitsGates,
+  cachedGenerationWall,
+  CHECKING,
+  gateKey,
+  gateState,
+  gateVerdict,
+  NATIVE_ROUTE
+} from './mobile-web-shell-gates'
+import { routeViewOf } from './page-route-policy'
+import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
+import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
+import { step } from './mobile-web-shell-session-step'
 
 export function createMobileWebShellSession(routePathname: string): MobileWebShellSession {
   return {
@@ -31,18 +39,15 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     retriedOnce: false,
     remountedOnce: false,
     pageReady: false,
+    pageReportsPaint: false,
+    pagePainted: false,
+    pageBackClaimed: false,
     gates: null,
     cached: null,
+    updateNotice: null,
+    requestedBuildId: null,
     flow: 0
   }
-}
-
-function step(
-  session: MobileWebShellSession,
-  patch: Partial<MobileWebShellSession>,
-  effects: readonly MobileWebShellSessionEffect[] = []
-): MobileWebShellStep {
-  return { session: { ...session, ...patch }, effects }
 }
 
 /**
@@ -59,30 +64,16 @@ function startFlow(
 ): MobileWebShellStep {
   // A new flow, so nothing the replaced one has in flight can land on this one. That is also what
   // keeps a status refetch arriving mid-check from running the cache read and the download twice.
-  const base = { ...patch, gates, flow: session.flow + 1 }
-  const verdict = gateVerdict(gates)
-  if (verdict.kind === 'native-route') {
-    return step(session, { ...base, state: NATIVE_ROUTE }, before)
+  const base = {
+    updateNotice: null,
+    requestedBuildId: null,
+    ...patch,
+    gates,
+    flow: session.flow + 1
   }
-  if (verdict.kind === 'wall') {
-    return step(session, { ...base, state: { kind: 'wall', verdict: verdict.verdict } }, before)
-  }
-  if (verdict.kind === 'status-unreadable') {
-    return step(
-      session,
-      {
-        ...base,
-        state: {
-          kind: 'failed',
-          reason: 'status-unreadable',
-          retriedOnce: patch.retriedOnce ?? session.retriedOnce
-        }
-      },
-      before
-    )
-  }
-  if (verdict.kind === 'dialling' || verdict.kind === 'pending') {
-    return step(session, { ...base, state: CHECKING }, before)
+  const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
+  if (gated !== null) {
+    return step(session, { ...base, state: gated }, before)
   }
   // Offline sweeps and reads the cache exactly as a connected host does. What it skips is the
   // compat check, and `onCacheRead` is where that shows.
@@ -91,34 +82,15 @@ function startFlow(
 
 /** Puts a generation that is already on disk on screen. The only producer of `open-generation`.
  *  `andThen` is the disk work that opening one may owe, which runs after the view has its bytes. */
-function openCached(
-  session: MobileWebShellSession,
-  generation: CachedGeneration,
-  patch: Partial<MobileWebShellSession> = {},
-  andThen: readonly MobileWebShellSessionEffect[] = []
-): MobileWebShellStep {
-  return step(session, { ...patch, state: { kind: 'activating' } }, [
-    {
-      kind: 'open-generation',
-      directory: generation.directory,
-      buildId: generation.buildId,
-      totalBytes: generation.totalBytes
-    },
-    ...andThen
-  ])
-}
-
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
 ): MobileWebShellStep {
   const gates = session.gates
-  if (gates === null) {
-    return step(session, { cached: generation })
-  }
-  if (gates.reachability === 'connecting') {
-    // A dial in progress is not a host that cannot be reached: opening the cache here would skip a
-    // compat check the connection about to land is what makes answerable.
+  // Neither says the host cannot be reached: a dial in progress is a connection about to land, and
+  // gates that have not arrived have said nothing yet. Opening the cache on either would skip a
+  // compat check that the settled answer is what makes answerable.
+  if (gates === null || gates.reachability === 'connecting') {
     return step(session, { cached: generation })
   }
   if (gates.reachability === 'unreachable') {
@@ -128,10 +100,7 @@ function onCacheRead(
       return step(session, { cached: null, state: { kind: 'offline' } })
     }
     // The cached bundle's own list, which is the only one an unreachable host can be judged by.
-    const view = routeViewOf(generation.routes, session.routePathname)
-    return rendersRoute(view.pageRoutes, session.routePathname)
-      ? openCached(session, generation, { cached: generation, ...view })
-      : step(session, { cached: generation, ...view, state: NATIVE_ROUTE })
+    return openByOwnRoutes(session, generation, { patch: { cached: generation } })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -155,12 +124,13 @@ function onManifestRead(
   // because that verdict is about this route while the manifest is the truth about the whole
   // generation — a list that takes this screen native, or names a bundle this shell cannot open,
   // still grants or revokes the other routes those assets serve, and what is stored beside them is
-  // the whole of the next offline verdict.
+  // the whole of the next offline verdict. The compat facts come across with the routes, so what
+  // the held generation records and what the persist writes to disk stay the one manifest.
   const cached = session.cached
   const same: CachedGeneration | null =
     cached === null || cached.buildId !== manifest.buildId
       ? null
-      : { ...cached, routes: manifest.routes }
+      : { ...cached, routes: manifest.routes, compat: manifest }
   const persist: readonly MobileWebShellSessionEffect[] =
     same === null ? [] : [{ kind: 'persist-manifest', manifest: manifest.wire }]
   if (!rendersRoute(pageRoutes, session.routePathname)) {
@@ -196,6 +166,7 @@ function onManifestRead(
       pageRoutes,
       pageRouteGrants,
       routeGrants,
+      requestedBuildId: manifest.buildId,
       state: {
         kind: 'fetching',
         completedAssets: 0,
@@ -251,31 +222,60 @@ function onShellFailed(
   ])
 }
 
+/** The decision below, plus one record of it: a release build logs nothing, so what the shell
+ *  refused and what it showed instead is written down for Troubleshoot. */
 function onDownloadFailed(
   session: MobileWebShellSession,
-  failure: MobileWebShellReadFailure
+  cause: MobileWebShellUpdateFailureCause
+): MobileWebShellStep {
+  const decided = decideDownloadFailed(session, cause)
+  const failure: MobileWebShellUpdateFailureFacts = {
+    ...cause,
+    offeredBuildId: session.requestedBuildId,
+    cachedBuildId: session.cached?.buildId ?? null,
+    ...updateFailureOutcomeOf(decided.session.state)
+  }
+  return { ...decided, effects: [...decided.effects, { kind: 'record-update-failure', failure }] }
+}
+
+/**
+ * The read did not produce a generation, and what follows is decided by what is already on disk.
+ *
+ * With nothing cached there is nothing to show, so the refusal is the screen. With a generation
+ * cached there is: it is the same one the offline gate opens without being asked. Refusing the new
+ * bytes was right — a truncated asset does not hash, and a host that will not answer has not been
+ * read — but a wall over an intact workspace refuses a screen twice. The same branch either way,
+ * because the link going and the bundle being refused leave the phone holding exactly the same
+ * thing.
+ *
+ * Judged against the host first, unlike the offline branch: it was compatible when it was written,
+ * and this host can be reached and may have moved since — which is usually why an update was there
+ * to fail. A generation outside its window earns the wall, not the download-failed screen.
+ *
+ * Only the bundle-side refusal is named: a link that went says nothing about an update having been
+ * there to fail, and the notice would be claiming a generation this phone never heard of.
+ */
+function decideDownloadFailed(
+  session: MobileWebShellSession,
+  cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
   const cached = session.cached
-  if (failure === 'transport' && cached !== null) {
-    // The link went, not the bundle. A generation already on disk was compatible when it was
-    // written, and it is the same one the offline gate would have opened had the reachability
-    // change arrived before this rejection did; which of the two lands first is a race.
-    //
-    // Judged by its own routes, not the manifest's. The newer manifest was read before the
-    // download was attempted, so its `pageRoutes` and `routeGrants` are already on the session:
-    // opening the cached page under them would grant it what a bundle it is not running declared,
-    // and would mount it for a route only the newer bundle claims.
-    const { pageRoutes, pageRouteGrants, routeGrants } = routeViewOf(
-      cached.routes,
-      session.routePathname
-    )
-    if (!rendersRoute(pageRoutes, session.routePathname)) {
-      return step(session, { pageRoutes, pageRouteGrants, routeGrants, state: NATIVE_ROUTE })
-    }
-    return openCached(session, cached, { pageRoutes, pageRouteGrants, routeGrants })
+  const gates = session.gates
+  if (cached === null || gates === null) {
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
   }
-  return step(session, {
-    state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+  // The gates may have moved under the download: a `fetching` session does not await them, so the
+  // verdict here is read fresh and answered with the shell's one answer for it.
+  const verdict = gateVerdict(gates)
+  const gated = gateState(verdict, session.retriedOnce)
+  if (gated !== null) {
+    return step(session, { state: gated })
+  }
+  return openByOwnRoutes(session, cached, {
+    served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
+    wall: cachedGenerationWall(verdict, gates, cached.compat)
   })
 }
 
@@ -317,20 +317,28 @@ export function reduceMobileWebShellSession(
         : step(session, {})
     case 'download-staged':
       return session.state.kind === 'fetching'
-        ? step(session, { state: { kind: 'activating' } })
+        ? step(session, { state: { kind: 'activating', source: 'download' } })
         : step(session, {})
     case 'activated':
-      return step(session, {
-        pageReady: false,
-        state: {
-          kind: 'ready',
-          generationDirectory: event.generationDirectory,
-          sessionId: event.sessionId,
-          buildId: event.buildId,
-          totalBytes: event.totalBytes,
-          elapsedMs: event.elapsedMs
-        }
-      })
+      // Only a download's activation is an update that landed. Not build-id equality: the fetch
+      // re-reads the manifest, so what it commits can be newer than what this flow was offered.
+      return step(
+        session,
+        {
+          ...CLEAR_PAGE_DOCUMENT_STATE,
+          state: {
+            kind: 'ready',
+            generationDirectory: event.generationDirectory,
+            sessionId: event.sessionId,
+            buildId: event.buildId,
+            totalBytes: event.totalBytes,
+            elapsedMs: event.elapsedMs
+          }
+        },
+        session.state.kind === 'activating' && session.state.source === 'download'
+          ? [{ kind: 'forget-update-failures' }]
+          : []
+      )
     case 'remounted':
       // Only the session id changes, so the view remounts against the same verified bytes. A new
       // key is a new document, so whatever the last one said is no longer evidence about this one.
@@ -338,15 +346,23 @@ export function reduceMobileWebShellSession(
       // healthy page that is still inside its own, and take a working workspace off screen.
       return session.state.kind === 'ready'
         ? step(session, {
-            pageReady: false,
+            ...CLEAR_PAGE_DOCUMENT_STATE,
             flow: session.flow + 1,
             state: { ...session.state, sessionId: event.sessionId }
           })
         : step(session, {})
     case 'download-failed':
-      return onDownloadFailed(session, event.failure)
+      return onDownloadFailed(session, event.cause)
     case 'shell-failed':
       return onShellFailed(session, event.reason)
+    case 'document-started':
+      // A replacement document inherits nothing: what the last one declared and painted says
+      // nothing about this one, and leaving its paint latched uncovers the view over a blank tree.
+      // The flow goes with it for the same reason `remounted` moves it — the retired document's
+      // readiness wait would otherwise expire onto a replacement that is still loading.
+      return session.state.kind === 'ready'
+        ? step(session, { ...CLEAR_PAGE_DOCUMENT_STATE, flow: session.flow + 1 })
+        : step(session, {})
     case 'document-loaded':
       // Nothing to wait on outside `ready`, and nothing to wait for once the page has spoken: the
       // two orders this can arrive in are a race, and the latch is what makes either one fine.
@@ -354,7 +370,9 @@ export function reduceMobileWebShellSession(
         ? step(session, {}, [{ kind: 'await-page-ready' }])
         : step(session, {})
     case 'page-ready':
-      return session.state.kind === 'ready' ? step(session, { pageReady: true }) : step(session, {})
+    case 'page-painted':
+    case 'page-back-claim':
+      return step(session, pageDocumentStatePatch(session, event))
     case 'page-ready-deadline':
       // A document that finished and never said a word is a document that did not load, whatever
       // the WebView reported: `document-load-failed` is what drops the generation and fetches once.
@@ -366,6 +384,8 @@ export function reduceMobileWebShellSession(
         ? step(session, {
             retriedOnce: false,
             remountedOnce: false,
+            updateNotice: null,
+            requestedBuildId: null,
             state: CHECKING,
             flow: session.flow + 1
           })

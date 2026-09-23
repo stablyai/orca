@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Keyboard, Platform } from 'react-native'
 
+/** How much of the bottom of the layout viewport it covers, and whether it is open at all. */
+export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
+
+const CLOSED: SoftKeyboardState = { height: 0, visible: false }
+
 /**
- * How much of the bottom of the layout viewport the software keyboard covers.
- *
- * Native: the keyboard's own reported height, from the events the platform sends. iOS is told
- * `will`, Android `did`, which is the difference between animating with the keyboard and after it.
+ * What the software keyboard is doing, from the events the platform sends. iOS is told `will`,
+ * Android `did`, which is the difference between animating with the keyboard and after it. Both
+ * facts from one subscription, because the session screen wants each and two hooks would cost it
+ * two listener pairs and two renders per keyboard event.
  *
  * The web sibling is where this earns its place under `platform/`: react-native-web's `Keyboard` is
  * a stub — `addListener` returns a subscription that never fires and `isVisible()` is always false
  * — so a screen inside the shell's page that waits for a keyboard event waits forever, and the
- * software keyboard covers whatever sits at the bottom of the document. The browser reports the
- * same geometry a different way, through `visualViewport`.
+ * software keyboard covers whatever sits at the bottom of the document. There the two facts come
+ * apart, and neither is an event.
  */
-export function useKeyboardOcclusion(): number {
-  const [keyboardLift, setKeyboardLift] = useState(0)
+export function useSoftKeyboard(): SoftKeyboardState {
+  const [keyboard, setKeyboard] = useState<SoftKeyboardState>(CLOSED)
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -22,10 +27,11 @@ export function useKeyboardOcclusion(): number {
 
     const onShow = Keyboard.addListener(showEvent, (event) => {
       // The keyboard's own height already describes the obscured area; the consumer adds whatever
-      // clearance it wants above it.
-      setKeyboardLift(Math.max(0, event.endCoordinates.height))
+      // clearance it wants above it. Open is the event, not the height: a keyboard that reports 0
+      // is still one nobody wants the terminal re-fitted under.
+      setKeyboard({ height: Math.max(0, event.endCoordinates.height), visible: true })
     })
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboard(CLOSED))
 
     return () => {
       onShow.remove()
@@ -33,7 +39,12 @@ export function useKeyboardOcclusion(): number {
     }
   }, [])
 
-  return keyboardLift
+  return keyboard
+}
+
+/** The occluded strip alone, for the callers that lift by it and never ask whether it is open. */
+export function useKeyboardOcclusion(): number {
+  return useSoftKeyboard().height
 }
 
 /**

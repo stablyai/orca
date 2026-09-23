@@ -73,6 +73,7 @@ jobs:
           case "${TARGET_ENVIRONMENT}:${TARGET_CELL_IDS}" in
             staging:staging-gce-c4) ;;
             production:production-gce-c27,production-gce-c28,production-gce-c29) ;;
+            production:production-gce-c30) ;;
             *) echo "cell-ids do not match the reviewed environment topology" >&2; exit 1 ;;
           esac
           [[ "${TARGET_IMAGE}" =~ ^us-central1-docker\.pkg\.dev/${GCP_PROJECT_ID}/orca-cloud/relay@sha256:[0-9a-f]{64}$ ]]
@@ -166,6 +167,38 @@ jobs:
           done
           echo "file=${file}" >> "${GITHUB_OUTPUT}"
 
+      - id: live-images
+        name: Plan every non-target cell at the image it serves
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The URL map target pulls every cell's template into the plan, and same-cap rolls
+          # leave committed images behind the served ones; read only templates out of state.
+          cells="${RUNNER_TEMP}/relay-committed-cells.json"
+          live="${RUNNER_TEMP}/relay-live-cell-templates.json"
+          overlay="${RUNNER_TEMP}/relay-asia-live-images.tfvars.json"
+          committed_plan="${RUNNER_TEMP}/relay-committed-cells.tfplan"
+          mapfile -t targets < "${{ steps.targets.outputs.file }}"
+          # Not console: it evaluates every output against state, where a new cell has no MIG yet.
+          terraform -chdir=infra/terraform plan -input=false -refresh=false -lock=false \
+            -var-file="${TF_VARS}" "${targets[@]}" -out="${committed_plan}" > /dev/null
+          terraform -chdir=infra/terraform show -json "${committed_plan}" \
+            | jq -ce '.variables.relay_gce_cells.value | objects' > "${cells}"
+          terraform -chdir=infra/terraform show -json | jq -ce '[
+            .values.root_module.resources[]?
+            | select(.mode == "managed" and
+                .type == "google_compute_instance_template" and .name == "relay_gce_cell")
+            | { index, metadata_startup_script: .values.metadata_startup_script }
+          ]' > "${live}"
+          summary="$(node dev/scripts/relay-live-cell-image-overlay.mjs \
+            --cells-json "${cells}" --live-templates-json "${live}" \
+            --cell-ids "${TARGET_CELL_IDS}" --output "${overlay}")"
+          echo "file=${overlay}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Live images held for non-target cells"
+            echo "- Cells whose committed image differs from the served one: $(jq -r '.drifted | join(", ")' <<< "${summary}")"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Create and validate the saved topology plan
         id: plan
         shell: bash
@@ -175,7 +208,7 @@ jobs:
           plan_json="${RUNNER_TEMP}/relay-asia-topology.json"
           mapfile -t targets < "${{ steps.targets.outputs.file }}"
           terraform -chdir=infra/terraform plan -input=false -lock-timeout=30s \
-            -var-file="${TF_VARS}" \
+            -var-file="${TF_VARS}" -var-file="${{ steps.live-images.outputs.file }}" \
             "${targets[@]}" -out="${plan}"
           terraform -chdir=infra/terraform show -json "${plan}" > "${plan_json}"
           committed="${RUNNER_TEMP}/relay-committed-asia-topology.json"
@@ -221,7 +254,7 @@ jobs:
           plan="${RUNNER_TEMP}/relay-asia-topology-readback.tfplan"
           plan_json="${RUNNER_TEMP}/relay-asia-topology-readback.json"
           terraform -chdir=infra/terraform plan -input=false -lock-timeout=30s \
-            -var-file="${TF_VARS}" \
+            -var-file="${TF_VARS}" -var-file="${{ steps.live-images.outputs.file }}" \
             "${targets[@]}" -out="${plan}"
           terraform -chdir=infra/terraform show -json "${plan}" > "${plan_json}"
           result="$(node dev/scripts/validate-relay-asia-topology-plan.mjs \

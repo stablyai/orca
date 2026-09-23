@@ -71,8 +71,8 @@ jobs:
         with:
           path: dist/orca-windows-setup.exe
           # The mobile page trees are in the key because beforePack builds the mobile web bundle
-          # into the installer; src/** and config/** already cover src/mobile-web and the two
-          # bundle builders. A mobile-only change must miss this cache, not reuse a stale exe.
+          # into the installer; config/** already covers the builder, the verifier and the manifest
+          # writer. A mobile-only change must miss this cache, not reuse a stale exe.
           key: >-
             crash-survival-installer-${{ hashFiles(
               'src/**',

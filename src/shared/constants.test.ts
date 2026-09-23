@@ -137,6 +137,7 @@ describe('getDefaultSettings', () => {
       codex: '--dangerously-bypass-approvals-and-sandbox',
       gemini: '--yolo',
       cursor: '--yolo',
+      muse: '--yolo',
       copilot: '--yolo',
       grok: '--permission-mode bypassPermissions'
     })

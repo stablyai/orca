@@ -17,7 +17,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
-  'kimi'
+  'kimi',
+  'muse'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -200,6 +201,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'muse': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null
@@ -298,5 +303,7 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    case 'muse':
+      return providerSession.key === 'session_id' ? ['muse', 'resume', id] : null
   }
 }

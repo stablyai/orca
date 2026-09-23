@@ -14,13 +14,11 @@ import {
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
-import { isQuickOpenReaddirBudgetError } from '../../shared/quick-open-readdir-walk'
-import { buildInstallRgMessage } from '../../shared/quick-open-install-rg'
 import {
   limitQuickOpenFilesBySerializedBytes,
   serializedQuickOpenPathBytes
 } from '../../shared/quick-open-transport-budget'
-import { listFilesWithGit } from './filesystem-list-files-git-fallback'
+import { listFilesWithoutRipgrep } from './filesystem-list-files-without-ripgrep'
 import {
   absorbPendingRipgrepSpawnError,
   isRipgrepUnavailableExit,
@@ -35,7 +33,9 @@ export async function listQuickOpenFiles(
   excludePaths?: string[],
   signal?: AbortSignal,
   maxResults?: number,
-  maxSerializedBytes?: number
+  maxSerializedBytes?: number,
+  /** Applied before `maxResults`, so the cap counts matches rather than scanned files. */
+  pathFilter?: (relativePath: string) => boolean
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -51,25 +51,16 @@ export async function listQuickOpenFiles(
   const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, excludePaths)
   const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
-  const listWithoutRipgrep = async (): Promise<string[]> => {
-    try {
-      const files = await listFilesWithGit(
-        authorizedRootPath,
-        excludePathPrefixes,
-        localGitOptions,
-        signal,
-        maxResults
-      )
-      return maxSerializedBytes === undefined
-        ? files
-        : limitQuickOpenFilesBySerializedBytes(files, maxSerializedBytes)
-    } catch (err) {
-      if (!isQuickOpenReaddirBudgetError(err)) {
-        throw err
-      }
-      throw new Error(await buildInstallRgMessage(err))
-    }
-  }
+  const listWithoutRipgrep = (): Promise<string[]> =>
+    listFilesWithoutRipgrep({
+      rootPath: authorizedRootPath,
+      excludePathPrefixes,
+      localGitOptions,
+      signal,
+      maxResults,
+      maxSerializedBytes,
+      pathFilter
+    })
   if (
     wslDistroForOutput &&
     !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
@@ -124,6 +115,9 @@ export async function listQuickOpenFiles(
           return false
         }
         if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
+          return false
+        }
+        if (pathFilter && !pathFilter(relPath)) {
           return false
         }
         if (files.has(relPath)) {
@@ -303,7 +297,12 @@ export async function listQuickOpenFiles(
         (maxResults === undefined || files.size < maxResults) &&
         (maxSerializedBytes === undefined || serializedBytes < maxSerializedBytes)
       ) {
-        await runRg(ignoredPass)
+        // Why: a filtered scan walks the whole tree; an ignored-pass timeout keeps primary matches.
+        await runRg(ignoredPass).catch((err: unknown) => {
+          if (!pathFilter || signal?.aborted || err instanceof RipgrepUnavailableError) {
+            throw err
+          }
+        })
       }
     }
   } catch (err) {

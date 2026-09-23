@@ -194,7 +194,10 @@ export async function openPreviewArm(
       frame: artifactFrame,
       browserVersion,
       arm,
-      describeRequests
+      describeRequests,
+      // Carried, not just recorded: an arm whose click threw is waiting for a record nobody will
+      // write, and the bounded wait says so rather than leaving a bare timeout.
+      actError
     })
     const result = await readPreviewArm({
       page,

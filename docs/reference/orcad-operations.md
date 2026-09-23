@@ -35,6 +35,20 @@ user slice instead of the caller's service cgroup. A stop or restart of the serv
 leaves that scope — and the live terminals in it — running, and the successor adopts the
 endpoint as it always has.
 
+A newly launched private daemon scope also follows the daemon's own lifetime. A small
+detached shell holds an input pipe from the daemon; after that pipe closes and `/proc`
+confirms the daemon PID is gone, it asks the user manager to stop that exact scope.
+Systemd sends remaining processes SIGTERM and escalates after five seconds. This includes
+children that double-forked or called `setsid` and can no longer be found by parent PID.
+Disconnecting or restarting the runtime does not close the pipe: the daemon owns it.
+
+The cleanup only arms on a fresh scoped launch with a matching launch nonce. Adopted
+legacy scopes can contain GUI processes and are never armed retroactively. Unscoped
+launches and children deliberately moved into another systemd unit remain outside this
+cleanup. `nohup`, `disown`, and `tmux` alone do not move a process out of its cgroup, so
+those children now end when their terminal daemon dies. Work intended to outlive that
+daemon needs its own service or scope.
+
 The scope is requested only where it can work. All of these must hold:
 
 - **Linux with systemd as PID 1** (`/run/systemd/system` exists).

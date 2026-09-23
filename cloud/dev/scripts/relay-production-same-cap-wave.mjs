@@ -4,7 +4,10 @@ import { requireSameEvidenceCode } from './relay-evidence-code-provenance.mjs'
 
 // Migration-only by policy: zero hosts and no reservation, so a wave rolls one without
 // displacing anybody. It enters and must leave migration-only, never general.
-export const SAME_CAP_MIGRATION_ONLY_CELLS = ['production-gce-c17', 'production-gce-c18']
+// C30 stays here until its Asia canary promotes it; that follow-up moves it to the general list.
+export const SAME_CAP_MIGRATION_ONLY_CELLS = [
+  'production-gce-c17', 'production-gce-c18', 'production-gce-c30'
+]
 
 export const SAME_CAP_CELLS = [
   'production-gce-c7', 'production-gce-c8', 'production-gce-c9', 'production-gce-c10',

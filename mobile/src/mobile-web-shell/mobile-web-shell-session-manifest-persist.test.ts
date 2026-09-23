@@ -29,7 +29,7 @@ describe('a same-build manifest read over a cached generation', () => {
   it('opens the cached generation and persists the manifest beside it', () => {
     const step = run(afterCacheRead(STALE).session, { type: 'manifest-read', manifest: FRESH })
 
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
@@ -95,7 +95,7 @@ describe('the offline entry after a same-build manifest was persisted', () => {
   it('opens the route only the fresh grants allow', () => {
     const step = offlineEntry(persistedGeneration())
 
-    expect(step.session.state).toEqual({ kind: 'activating' })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',

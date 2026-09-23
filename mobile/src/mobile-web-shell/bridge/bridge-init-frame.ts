@@ -8,6 +8,10 @@ import {
   type BridgeInitHost,
   type BridgeInitRoute
 } from './bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 
 /**
  * Every grant this app implements, which is the ceiling a session's own list is drawn from. A page
@@ -23,6 +27,18 @@ import {
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
   BRIDGE_FAULT_GRANT,
   ...MOBILE_WEB_SHELL_GRANTS
+]
+
+/**
+ * What this shell accepts from a page beyond the frames every shell has always taken. Additive
+ * names on an optional list, so no version moves: a page that knows none posts none, one told
+ * nothing claims no identity, and one told nothing reports no paint.
+ */
+export const BRIDGE_SHELL_ACCEPTS: readonly string[] = [
+  BRIDGE_ROUTE_PARAM_CLEAR,
+  BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+  BRIDGE_PAGE_PAINTED,
+  BRIDGE_BACK_CLAIM_NOTIFY
 ]
 
 /** The one frame that starts a session, built in one place so its caps and its grants agree. */

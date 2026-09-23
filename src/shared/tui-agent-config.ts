@@ -308,6 +308,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
   },
+  muse: {
+    detectCmd: 'muse',
+    launchCmd: 'muse --trust-workspace',
+    // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
+    promptInjectionMode: 'stdin-after-start'
+  },
   devin: {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.

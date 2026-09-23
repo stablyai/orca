@@ -292,7 +292,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
     assert.equal(resolveCellShape('production-gce-c12').status, 1)
-    assert.equal(resolveCellShape('production-gce-c30').status, 1)
+    assert.equal(resolveCellShape('production-gce-c31').status, 1)
   })
 
   it('passes the same-cap allowlist on every canary invocation the job runs', () => {
@@ -336,9 +336,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.equal(workflow.split('POOL_ARGUMENTS=()').length, 3)
   })
 
-  // One cell's whole serving path and nothing else: the template, the MIG bound to it, and the
-  // backend service, whose reviewed drain timeout would otherwise need a fleet-wide root apply.
-  it('targets exactly this cell template, MIG, and backend on every plan the job runs', () => {
+  // One cell's compute path and nothing else: the template and the MIG bound to it. The cell
+  // backend service stays out because the capacity role has no compute.backendServices.update,
+  // so naming it fails the apply after the MIG has already rolled.
+  it('targets exactly this cell template and MIG on every plan the job runs', () => {
     const plans = workflow.split('terraform -chdir=infra/terraform plan').slice(1)
     assert.equal(plans.length, 2)
     for (const plan of plans) {
@@ -350,22 +351,26 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
           .map(([, resource]) => resource),
         [
           'google_compute_instance_template.relay_gce_cell',
-          'google_compute_instance_group_manager.relay_gce_cell',
-          'google_compute_backend_service.relay_gce_cell'
+          'google_compute_instance_group_manager.relay_gce_cell'
         ]
       )
-      // Any target that is not one of those three, or not scoped to this cell, fails here.
-      assert.equal(call.split('-target=').length, 4)
+      // Any target that is not one of those two, or not scoped to this cell, fails here.
+      assert.equal(call.split('-target=').length, 3)
     }
+  })
+
+  it('never names a backend service on any plan or apply in the job', () => {
+    assert.equal(workflow.includes('google_compute_backend_service'), false)
   })
 
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
     // the rest before it plans, and the next test covers them at protocol 0.
+    // C30 is already a rehome source but stays migration-only until its Asia canary promotes it.
     assert.deepEqual(
       SAME_CAP_CELLS.filter((cell) => !REHOME_SOURCE_CELLS.has(cell)),
-      SAME_CAP_MIGRATION_ONLY_CELLS
+      SAME_CAP_MIGRATION_ONLY_CELLS.filter((cell) => cell !== 'production-gce-c30')
     )
     for (const [cellId, protocol] of trusted.flatMap((cell) => [[cell, 1], [cell, 3]])) {
       const { cap, pool } = cellShape(cellId)
@@ -718,49 +723,37 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.equal(apply.split('wait-until "${MIG_NAME}" --stable').length, 3)
   })
 
-  // One validator verdict decides three different outcomes. Run the predicates the job ships
-  // rather than restating them, because restating them is how the two drift apart.
-  it('decides refuse, apply, or skip on resume from the shipped predicate', () => {
+  // Run the predicate the job ships rather than restating it, because restating it is how the
+  // two drift apart. An unconverged resume accepts the template-and-MIG pair and nothing else,
+  // and it applies nothing: a backend change cannot reach this plan, which no longer targets one.
+  it('accepts only the template-and-MIG pair on an unconverged resume', () => {
     const step = workflow.slice(
       workflow.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
       workflow.indexOf('- name: Apply only the selected same-cap template and MIG')
     )
-    const accept = /jq -e '(\.changes == 2\n[\s\S]*?)' \\\n\s+<<< "\$\{RESUME_REVIEW\}"/.exec(step)
+    const accept = /jq -e '(\.changes == 2)' <<< "\$\{RESUME_REVIEW\}"/.exec(step)
     assert.notEqual(accept, null, 'the resume step no longer gates on a validator verdict')
-    assert.match(step, /if test "\$\(jq -er '\.changes' <<< "\$\{RESUME_REVIEW\}"\)" = 0; then/)
+    assert.equal(step.includes('terraform -chdir=infra/terraform apply'), false)
     const outcome = (review) => {
       const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', [
         `RESUME_REVIEW=${JSON.stringify(JSON.stringify(review))}`,
         `jq -e '${accept[1]}' <<< "\${RESUME_REVIEW}" >/dev/null || { echo refuse; exit 0; }`,
-        'if test "$(jq -er \'.changes\' <<< "${RESUME_REVIEW}")" = 0',
-        'then echo apply; else echo skip; fi'
+        'echo accept'
       ].join('\n')], { encoding: 'utf8' })
       assert.equal(resolved.status, 0, resolved.stderr)
       return resolved.stdout.trim()
     }
-    // Template and MIG converged, this cell's reviewed backend not: apply it here, or the cell
-    // keeps the 300-second drain and no request logging behind a green resume.
-    assert.equal(
-      outcome({ changes: 0, backendUpdate: ['connection_draining_timeout_sec', 'log_config.0'] }),
-      'apply'
-    )
-    assert.equal(outcome({ changes: 0, backendUpdate: ['log_config.0'] }), 'apply')
-    // Template-and-MIG drift still applies nothing, which is what a resume means.
-    assert.equal(outcome({ changes: 2 }), 'skip')
-    assert.equal(
-      outcome({ changes: 2, backendUpdate: ['connection_draining_timeout_sec'] }),
-      'skip'
-    )
-    // Anything the validator did not bound to this cell's reviewed change set fails the step.
+    assert.equal(outcome({ changes: 2 }), 'accept')
+    // Anything the validator did not bound to the reviewed rollback-image drift fails the step.
     assert.equal(outcome({ changes: 0 }), 'refuse')
-    assert.equal(outcome({ changes: 0, backendUpdate: [] }), 'refuse')
-    assert.equal(outcome({ changes: 1, backendUpdate: ['log_config.0'] }), 'refuse')
+    assert.equal(outcome({ changes: 0, backendUpdate: ['log_config.0'] }), 'refuse')
+    assert.equal(outcome({ changes: 1 }), 'refuse')
     assert.equal(outcome({ changes: 3 }), 'refuse')
   })
 
-  // The stranded path is the other reader of `changes`, and a pending backend update must not
-  // suppress the explicit MIG roll that is the only thing clearing a stranded cell's drain flag.
-  it('rolls a stranded MIG on the shipped predicate, backend update or not', () => {
+  // The stranded cell's explicit MIG roll is the only thing that clears its drain flag, and
+  // `changes` is what decides it, so run the shipped predicate rather than restating it.
+  it('rolls a stranded MIG on the shipped predicate', () => {
     const apply = workflow
       .split('name: Apply only the selected same-cap template and MIG')[1]
       .split('\n      - id:')[0]
@@ -779,10 +772,6 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       return resolved.stdout.trim()
     }
     assert.equal(rolls('stranded', { changes: 0 }), 'replace')
-    assert.equal(
-      rolls('stranded', { changes: 0, backendUpdate: ['connection_draining_timeout_sec'] }),
-      'replace'
-    )
     // A real template replacement already restarts the instance; rolling again would be a second.
     assert.equal(rolls('stranded', { changes: 2 }), 'no-replace')
     assert.equal(rolls('resume', { changes: 0 }), 'no-replace')

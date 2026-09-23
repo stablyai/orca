@@ -8,6 +8,11 @@ import type {
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
+import {
+  createFakeGenerationFileSystem as createFakeFileSystem,
+  FAKE_GENERATION_ROOT,
+  type FakeGenerationFileSystem as FakeFileSystem
+} from './generation-file-system-fake'
 
 // The adapter is deliberately untested at runtime — it would need a device filesystem — so this is
 // the check that it still answers the port the store is written against.
@@ -15,156 +20,8 @@ type AdapterIsPort =
   ReturnType<typeof createExpoGenerationFileSystem> extends GenerationFileSystem ? true : false
 const adapterSatisfiesPort: AdapterIsPort = true
 
-const ROOT = 'file:///cache/mobile-web'
+const ROOT = FAKE_GENERATION_ROOT
 const HOST = deriveHostCacheKey('host-a')
-
-type FakeNode = { kind: 'directory' } | { kind: 'file'; bytes: Uint8Array }
-
-type FakeFileSystem = GenerationFileSystem & {
-  readonly writes: string[]
-  paths(): readonly string[]
-  seed(path: string, node: FakeNode): void
-  failWritesAt(path: string | null): void
-  failReadsAt(path: string | null): void
-  failDeletesAt(path: string | null): void
-  failFileMovesTo(path: string | null): void
-  loseContentsOnMove(): void
-  text(path: string): string | null
-  bytes(path: string): Uint8Array | null
-}
-
-function createFakeFileSystem(): FakeFileSystem {
-  const nodes = new Map<string, FakeNode>()
-  const writes: string[] = []
-  let failAt: string | null = null
-  let failReadAt: string | null = null
-  let failDeleteAt: string | null = null
-  let failMoveTo: string | null = null
-  let moveKeepsContents = true
-  const uri = (path: string): string => `${ROOT}/${path}`
-  const parentOf = (target: string): string => target.slice(0, target.lastIndexOf('/'))
-
-  const makeDirectory = (target: string): void => {
-    for (let at = target; at.startsWith(ROOT); at = parentOf(at)) {
-      nodes.set(at, { kind: 'directory' })
-    }
-  }
-  const write = (target: string, bytes: Uint8Array): void => {
-    if (failAt !== null && target === uri(failAt)) {
-      throw new Error('simulated disk-full write')
-    }
-    makeDirectory(parentOf(target))
-    nodes.set(target, { kind: 'file', bytes })
-    writes.push(target.slice(ROOT.length + 1))
-  }
-
-  return {
-    rootUri: ROOT,
-    writes,
-    paths: () =>
-      [...nodes.keys()]
-        .filter((key) => key !== ROOT)
-        .map((key) => key.slice(ROOT.length + 1))
-        .sort(),
-    seed: (path, node) => {
-      makeDirectory(parentOf(uri(path)))
-      nodes.set(uri(path), node)
-    },
-    failWritesAt: (path) => {
-      failAt = path
-    },
-    failReadsAt: (path) => {
-      failReadAt = path
-    },
-    failDeletesAt: (path) => {
-      failDeleteAt = path
-    },
-    failFileMovesTo: (path) => {
-      failMoveTo = path
-    },
-    loseContentsOnMove: () => {
-      moveKeepsContents = false
-    },
-    text: (path) => {
-      const node = nodes.get(uri(path))
-      return node?.kind === 'file' ? new TextDecoder().decode(node.bytes) : null
-    },
-    bytes: (path) => {
-      const node = nodes.get(uri(path))
-      return node?.kind === 'file' ? node.bytes : null
-    },
-    async list(target) {
-      if (nodes.get(target)?.kind !== 'directory') {
-        return []
-      }
-      return [...nodes.entries()]
-        .filter(
-          ([key]) => key.startsWith(`${target}/`) && !key.slice(target.length + 1).includes('/')
-        )
-        .map(([key, node]) => ({
-          name: key.slice(target.length + 1),
-          isDirectory: node.kind === 'directory'
-        }))
-    },
-    async createDirectory(target) {
-      makeDirectory(target)
-    },
-    async writeBytes(target, bytes) {
-      write(target, bytes)
-    },
-    async writeText(target, value) {
-      write(target, new TextEncoder().encode(value))
-    },
-    async readText(target) {
-      if (failReadAt !== null && target === uri(failReadAt)) {
-        throw new Error('simulated unreadable file')
-      }
-      const node = nodes.get(target)
-      return node?.kind === 'file' ? new TextDecoder().decode(node.bytes) : null
-    },
-    async fileExists(target) {
-      return nodes.get(target)?.kind === 'file'
-    },
-    async delete(target) {
-      if (failDeleteAt !== null && target === uri(failDeleteAt)) {
-        throw new Error('simulated undeletable file')
-      }
-      for (const key of Array.from(nodes.keys())) {
-        if (key === target || key.startsWith(`${target}/`)) {
-          nodes.delete(key)
-        }
-      }
-    },
-    async moveFile(fromUri, toUri) {
-      // The adapter's own ordering, and the worst case of it: expo refuses a destination that
-      // exists, so the destination goes first and the failure is injected after it. A fake that
-      // threw before that delete would never exercise the window the adapter really leaves.
-      const node = nodes.get(fromUri)
-      if (node?.kind !== 'file') {
-        throw new Error(`fake filesystem has no file at ${fromUri}`)
-      }
-      nodes.delete(toUri)
-      if (failMoveTo !== null && toUri === uri(failMoveTo)) {
-        throw new Error('simulated interrupted rename')
-      }
-      nodes.delete(fromUri)
-      nodes.set(toUri, node)
-    },
-    async moveDirectory(fromUri, toUri) {
-      if (nodes.has(toUri)) {
-        throw new Error(`fake filesystem refuses to move onto ${toUri}`)
-      }
-      for (const [key, node] of Array.from(nodes.entries())) {
-        if (key === fromUri || key.startsWith(`${fromUri}/`)) {
-          nodes.delete(key)
-          if (moveKeepsContents || key === fromUri) {
-            nodes.set(toUri + key.slice(fromUri.length), node)
-          }
-        }
-      }
-    }
-  }
-}
 
 function buildResult(options: {
   buildId?: string

@@ -111,11 +111,18 @@ routeContext.id = 'orca-mobile-web-app-routes'`
  * build rather than emitting a page that mounts with the export silently gone.
  */
 export function renderMobileWebAppRouteManifest(routes) {
-  const entryLines = routes.map(
-    ({ key, module }) =>
-      `  [${JSON.stringify(key)}]: { default: lazy(() => import(${JSON.stringify(module)})) }`
-  )
+  const entryLines = routes.map(({ key, module }) => {
+    // The layout commits with the screen below it still behind its own chunk, so it is not what
+    // says the page has something to show.
+    // Optional because the closure builds call this with the page-route list, whose entries carry
+    // no key: that manifest is never loaded, since a route module imports nothing from it.
+    const resolved = key?.endsWith('/_layout.tsx')
+      ? `import(${JSON.stringify(module)})`
+      : `import(${JSON.stringify(module)}).then(withRouteScreenPaintReport)`
+    return `  [${JSON.stringify(key)}]: { default: lazy(() => ${resolved}) }`
+  })
   return `import { lazy } from "react"
+import { withRouteScreenPaintReport } from "./src/mobile-web-shell/bridge/page-first-paint"
 const modules = {
 ${entryLines.join(',\n')}
 }

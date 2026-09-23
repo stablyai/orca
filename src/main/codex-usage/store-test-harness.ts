@@ -24,7 +24,10 @@ export function createWorktreeUsageSession(worktreeId: string) {
     outputTokens: 250,
     reasoningOutputTokens: 100,
     totalTokens: 1250,
-    hasInferredPricing: false
+    hasInferredPricing: false,
+    longContextInputTokens: 0,
+    longContextCachedInputTokens: 0,
+    longContextOutputTokens: 0
   }
   return {
     sessionId: 'session-1',

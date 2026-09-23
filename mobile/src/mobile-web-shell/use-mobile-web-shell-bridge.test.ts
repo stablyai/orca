@@ -15,6 +15,8 @@ import {
   type BridgeHapticsKind
 } from './bridge/bridge-haptics-notify'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -60,6 +62,10 @@ type Probe = {
   storageWrites: { key: string; value: string | null }[]
   /** The running total after each dropped screencast frame, as the screen receives it. */
   droppedBinaryFrames: number[]
+  /** One per paint the page reported, which is what lifts the screen's cover. */
+  paints: number
+  /** Every claim on the device Back key the host carried up, in order. */
+  backClaims: boolean[]
 }
 
 /** What the page cannot read for itself, as the screen hands it over. */
@@ -174,7 +180,11 @@ function Harness(props: {
     onPageReady: () => {
       setHandshook(sessionId)
       props.readies.push(sessionId ?? props.session.kind)
-    }
+    },
+    onPagePainted: () => {
+      props.probe.paints += 1
+    },
+    onPageBackClaim: (claimed) => props.probe.backClaims.push(claimed)
   })
   props.probe.view = view
   return props.session.kind === 'ready'
@@ -212,7 +222,12 @@ type Mounted = {
 
 let warned: MockInstance<typeof console.warn>
 
-async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
+async function mount(
+  session: MobileWebShellSessionState,
+  /** Overrides the reducer model below, for the cases that need a rebuilt host's pre-handshake
+   *  gate already open so the declaration is the only thing left that can refuse a press. */
+  sessionEstablished?: boolean
+): Promise<Mounted> {
   const posted: PostedFrame[] = []
   const probe: Probe = {
     view: null,
@@ -221,13 +236,22 @@ async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
     haptics: [],
     backPops: 0,
     droppedBinaryFrames: [],
+    paints: 0,
+    backClaims: [],
     storageWrites: []
   }
   const faults: BridgeErrorCapture[] = []
   const readies: string[] = []
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   const render = (next: MobileWebShellSessionState): ReactElement =>
-    createElement(Harness, { session: next, posted, probe, faults, readies })
+    createElement(Harness, {
+      session: next,
+      ...(sessionEstablished === undefined ? {} : { sessionEstablished }),
+      posted,
+      probe,
+      faults,
+      readies
+    })
   await act(async () => {
     rendered.tree = create(render(session))
   })
@@ -309,6 +333,14 @@ describe('the bridge channel', () => {
       clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-1' })
     )
     expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
+  })
+
+  it("hands the page's first paint to the caller that owns the cover over the view", async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    expect(mounted.probe.paints).toBe(0)
+    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(mounted.probe.paints).toBe(1)
   })
 
   it('hands a URL the page asked for to the caller that can leave the app', async () => {
@@ -565,6 +597,8 @@ describe('the callbacks a render passes', () => {
       haptics: [],
       backPops: 0,
       droppedBinaryFrames: [],
+      paints: 0,
+      backClaims: [],
       storageWrites: []
     }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
@@ -617,6 +651,79 @@ describe('client changes', () => {
     expect(first.requests).toHaveLength(0)
   })
 
+  /**
+   * The Back key across a host rebuild, which is the one the page cannot see.
+   *
+   * A client swapped under a live page is not a new document: the WebView stays mounted, the
+   * session id does not move, and the page neither handshakes again nor hears that anything
+   * happened. What it declared and what it is holding therefore belong to the session, the way
+   * `sessionEstablished` already does — a rebuilt host that started over would answer every press
+   * with "I cannot deliver this" and pop the screen out from under an open sheet.
+   */
+  it('keeps delivering Back to an open sheet after the host is rebuilt under it', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    expect(mounted.probe.backClaims).toEqual([true])
+    // A new client under the same session. Nothing here makes the page re-ask: two clients on the
+    // same generation leave the page's connection cache with nothing to refuse.
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    // The claim did not go with the host that learned it, so the screen keeps the key.
+    expect(mounted.probe.backClaims).toEqual([true])
+    const before = mounted.frames('session-one').length
+    await act(async () => {
+      expect(mounted.probe.view?.sendBack()).toBe(true)
+    })
+    expect(mounted.frames('session-one').slice(before)).toEqual([{ v: 1, type: BRIDGE_BACK_FRAME }])
+  })
+
+  /** The other half of the same seed: a page that never said it takes a press is still one the
+   *  rebuilt host will not send to. An empty declaration is a declaration. */
+  it('sends nothing after a rebuild to a page that never declared the frame', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    const before = mounted.frames('session-one').length
+    expect(mounted.probe.view?.sendBack()).toBe(false)
+    expect(mounted.frames('session-one')).toHaveLength(before)
+  })
+
+  /** The seed is the session's, not the hook's. A different session id is a different document,
+   *  which has declared nothing and is holding nothing until it says so itself. */
+  it('carries nothing into a host built for a different session', async () => {
+    // Both mounts stand for an established session, so the rebuilt host's own pre-handshake gate
+    // is already open and the declaration is the only thing left that can refuse the press.
+    const mounted = await mount(readyState('session-one'), true)
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    // The control: the same rebuild inside the session does keep delivering.
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    expect(mounted.probe.view?.sendBack()).toBe(true)
+    await mounted.update(readyState('session-two'))
+    expect(mounted.probe.view?.sendBack()).toBe(false)
+  })
+
+  /** A new document inside the same session still starts over: its own `ready` is what the host
+   *  reads, and the seed is not a latch. */
+  it('drops the carried claim when the next document says ready', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
+    )
+    doubles.client = createFakeRpcClient()
+    await mounted.update(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    expect(mounted.probe.backClaims).toEqual([true, false])
+  })
+
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {
     const first = fakeClient()
     const posted: PostedFrame[] = []
@@ -627,6 +734,8 @@ describe('client changes', () => {
       haptics: [],
       backPops: 0,
       droppedBinaryFrames: [],
+      paints: 0,
+      backClaims: [],
       storageWrites: []
     }
     const render = (deliver: readonly string[]): ReactElement =>
@@ -661,6 +770,8 @@ function newProbe(): Probe {
     haptics: [],
     backPops: 0,
     droppedBinaryFrames: [],
+    paints: 0,
+    backClaims: [],
     storageWrites: []
   }
 }

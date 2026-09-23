@@ -7,6 +7,9 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
+  projectStructuredItemsToNativeChat,
+  latestStructuredAgentSessionAssistantMessage,
+  activeStructuredAgentSessionToolCall,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
@@ -511,5 +514,167 @@ it('preserves confirmed MCP identity and the raw name through projection', () =>
     name: body.name,
     mcpIdentity: body.mcpIdentity,
     type: 'tool-call'
+  })
+})
+
+describe("producer linkage — a subagent's output never speaks for the parent", () => {
+  /** A row a subagent produced. Same journal, same session; only linkage differs. */
+  function childItem(
+    itemId: string,
+    sequence: number,
+    body: AgentJournalRenderItem['body'],
+    agentId = 'task-1'
+  ): AgentJournalRenderItem {
+    return { ...item(itemId, sequence, body), agentId, producerKind: 'agent' }
+  }
+
+  const userAsk = item('user-1', 1, {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'summarise the repo' }]
+  })
+  const turnRunning = item('turn-1', 2, { kind: 'turn', turnId: 'turn-1', state: 'running' })
+  const parentProse = item('root-prose', 3, {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'delegating' }]
+  })
+  const spawnCall = item('root-task', 4, {
+    kind: 'tool-call',
+    name: 'Task',
+    input: { description: 'explore the lane' },
+    state: 'running'
+  })
+  const childProse = childItem('child-prose', 5, {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'looking' }]
+  })
+  const childCall = childItem('child-grep', 6, {
+    kind: 'tool-call',
+    name: 'Grep',
+    input: { pattern: 'x' },
+    state: 'running'
+  })
+  const items = [userAsk, turnRunning, parentProse, spawnCall, childProse, childCall]
+
+  it("shows the parent's own prose and its own running call, not the child's newer ones", () => {
+    expect(latestStructuredAgentSessionAssistantMessage(items)).toBe('delegating')
+    expect(activeStructuredAgentSessionToolCall(items)?.name).toBe('Task')
+  })
+
+  it("publishes the parent's own line and call on the summary the sidebar reads", () => {
+    const summary = projectStructuredAgentSessionStatusSummary(items)
+    expect(summary.status).toBe('working')
+    expect(summary.lastAssistantMessage).toBe('delegating')
+    expect(summary.toolName).toBe('Task')
+    // The row does not go blank while a child runs: the spawn call is still the
+    // parent's own live work.
+    expect(summary.toolInput).toBeTruthy()
+  })
+
+  it("still renders the child's output in the transcript", () => {
+    // The other direction: scoping the STATUS readers must not delete subagent
+    // output from the chat.
+    const prose = projectStructuredItemsToNativeChat(items).flatMap((message) =>
+      message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    )
+    expect(prose).toContain('looking')
+    expect(prose).toContain('delegating')
+  })
+
+  it("falls back to nothing rather than a child's line when the parent said nothing", () => {
+    const summary = projectStructuredAgentSessionStatusSummary([
+      userAsk,
+      turnRunning,
+      spawnCall,
+      childProse,
+      childCall
+    ])
+    expect(summary.lastAssistantMessage).toBeUndefined()
+    expect(summary.toolName).toBe('Task')
+  })
+
+  it('attributes rows without reading their neighbours', () => {
+    // A window holding only the child's own rows: no spawn call, no turn record.
+    // Nothing here is re-derived from a start row, so attribution does not
+    // depend on how much of the timeline a reader happens to hold. (This store
+    // has no compaction and paginates complete-or-reset, so such a window is not
+    // reachable today — the point is that the rule does not rely on that.)
+    const windowed = [childProse, childCall]
+    expect(latestStructuredAgentSessionAssistantMessage(windowed)).toBe('')
+    expect(activeStructuredAgentSessionToolCall(windowed)).toBeNull()
+  })
+
+  it("does not quote a subagent's own user-role prompt as the session's", () => {
+    const childPrompt = childItem('child-prompt', 5, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'explore the lane' }]
+    })
+    expect(
+      projectStructuredAgentSessionStatusSummary([userAsk, turnRunning, spawnCall, childPrompt])
+        .latestPrompt
+    ).toBe('summarise the repo')
+  })
+
+  it('keeps a nested child off the parent, read through the projection', () => {
+    // A grandchild: its own agent id, and a parent that is not the session root.
+    const grandchild: AgentJournalRenderItem = {
+      ...item('grandchild-prose', 7, {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'deeper' }]
+      }),
+      agentId: 'task-2',
+      parentAgentId: 'task-1',
+      producerKind: 'agent'
+    }
+    const nested = [...items, grandchild]
+    expect(latestStructuredAgentSessionAssistantMessage(nested)).toBe('delegating')
+    // Naming a parent does not make the row that parent's: the summary the
+    // sidebar reads still shows the session's own line.
+    expect(projectStructuredAgentSessionStatusSummary(nested).lastAssistantMessage).toBe(
+      'delegating'
+    )
+    // And the transcript still renders it, so naming a parent is not a filter.
+    expect(
+      projectStructuredItemsToNativeChat(nested).some((block) =>
+        JSON.stringify(block).includes('deeper')
+      )
+    ).toBe(true)
+  })
+
+  it('treats an agent id that failed to resolve as a child rather than as the parent', () => {
+    const unresolved = childItem(
+      'child-unresolved',
+      5,
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'looking' }] },
+      ''
+    )
+    expect(
+      latestStructuredAgentSessionAssistantMessage([userAsk, turnRunning, parentProse, unresolved])
+    ).toBe('delegating')
+  })
+
+  it("reads a row written before linkage existed as the parent's own", () => {
+    // A journal open across the upgrade has unmarked child rows below marked
+    // ones. Absence means root, which reproduces exactly what those journals
+    // always showed — it is never "unknown".
+    const legacyChildProse = item('legacy-child', 5, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'legacy child line' }]
+    })
+    expect(
+      latestStructuredAgentSessionAssistantMessage([
+        userAsk,
+        turnRunning,
+        parentProse,
+        spawnCall,
+        legacyChildProse,
+        childProse
+      ])
+    ).toBe('legacy child line')
   })
 })

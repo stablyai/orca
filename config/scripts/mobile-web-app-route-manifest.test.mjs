@@ -78,13 +78,30 @@ describe('route manifest', () => {
       { key: './h/index.tsx', module: '/app/h/index.tsx' },
       { key: './h/_layout.tsx', module: '/app/h/_layout.tsx' }
     ])
-    expect(source).toContain('["./h/index.tsx"]: { default: lazy(() => import("/app/h/index.tsx"))')
+    expect(source).toContain('["./h/index.tsx"]: { default: lazy(() => import("/app/h/index.tsx")')
     expect(source).toContain(
-      '["./h/_layout.tsx"]: { default: lazy(() => import("/app/h/_layout.tsx"))'
+      '["./h/_layout.tsx"]: { default: lazy(() => import("/app/h/_layout.tsx")'
     )
     // A static import is what collapses the split back into one chunk.
     expect(source).not.toContain('import * as route')
     expect(source.match(/import\(/g)).toHaveLength(2)
+  })
+
+  it('reports the paint off the screen behind the chunk, not off the router above it', () => {
+    const source = renderMobileWebAppRouteManifest([
+      { key: './h/index.tsx', module: '/app/h/index.tsx' },
+      { key: './h/_layout.tsx', module: '/app/h/_layout.tsx' }
+    ])
+    // The screen, wrapped where the chunk resolves: the wrapper above expo-router commits with the
+    // suspense fallback, so a report hung there lands while the body is still empty.
+    expect(source).toContain(
+      '["./h/index.tsx"]: { default: lazy(() => import("/app/h/index.tsx").then(withRouteScreenPaintReport))'
+    )
+    // And never the layout, which commits with the screen below it still arriving.
+    expect(source).toContain(
+      '["./h/_layout.tsx"]: { default: lazy(() => import("/app/h/_layout.tsx")) }'
+    )
+    expect(source).toContain('import { withRouteScreenPaintReport } from')
   })
 
   it('leaves the RequireContext itself synchronous', () => {

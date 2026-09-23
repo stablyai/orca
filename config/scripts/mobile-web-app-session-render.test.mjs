@@ -11,7 +11,8 @@ import {
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
-  readShellCsp
+  readShellCsp,
+  waitForRecordedRequests
 } from './mobile-web-app-render-harness.mjs'
 
 /**
@@ -89,6 +90,7 @@ let server
 let browser
 let origin
 let routeChunks = {}
+let servedPaths = []
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
@@ -106,6 +108,7 @@ beforeAll(async () => {
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
   server = served.server
   origin = served.origin
+  servedPaths = served.requestedPaths
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
 }, 240_000)
@@ -119,8 +122,16 @@ afterAll(async () => {
 })
 
 /** A page carrying every signal these cases read: uncaught errors, console errors, request paths. */
-async function openPage(route) {
+async function openPage(route, replies = {}, { domStorageOff = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  if (domStorageOff) {
+    // What the Android shell serves: DOM storage is off on its WebView, and a WebView with it off
+    // answers `window.localStorage` with `null` rather than leaving it undefined. Read off the
+    // device rather than assumed — the emulator run's own error names `null` (reading 'getItem').
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', { configurable: true, get: () => null })
+    })
+  }
   // At document start, where the native shell installs the real channel: the entry reads it while
   // its own script runs, so a channel added after `load` would already be too late.
   await page.addInitScript(installShellDouble, {
@@ -133,15 +144,21 @@ async function openPage(route) {
     faultGrant,
     grants: [faultGrant, ...sessionGrants()],
     pageRoutes: PAGE_ROUTE_PATTERNS,
-    replies: {}
+    replies
   })
   const errors = []
+  const warnings = []
   const scripts = []
   const requestedHosts = []
   page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
   page.on('console', (message) => {
     if (message.type() === 'error') {
       errors.push(`console.error: ${message.text()}`)
+    }
+    // Kept apart from `errors`: the bridge reports a refused storage write at warning level, so a
+    // page writing a key it was never handed is invisible to every assertion above.
+    if (message.type() === 'warning') {
+      warnings.push(message.text())
     }
   })
   // Every request, not only the ones that answered: a CSP refusal fails the request, and a check
@@ -153,7 +170,7 @@ async function openPage(route) {
       scripts.push(path)
     }
   })
-  return { page, errors, scripts, requestedHosts }
+  return { page, errors, warnings, scripts, requestedHosts }
 }
 
 /**
@@ -186,8 +203,8 @@ async function waitForRoute({ page, errors }, route, awaitText) {
   }
 }
 
-async function openRoute(route, awaitText) {
-  const opened = await openPage(route)
+async function openRoute(route, awaitText, replies = {}, options = {}) {
+  const opened = await openPage(route, replies, options)
   await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
   await waitForRoute(opened, route, awaitText)
   return opened
@@ -195,6 +212,9 @@ async function openRoute(route, awaitText) {
 
 /** The session header renders it, so the chrome is on screen before this reads the tree. */
 const BACK_LABEL = 'Back to worktrees'
+
+/** The header's live title, the tab snapshot and the terminal inventory. */
+const SESSION_MOUNT_READS = ['worktree.show', 'session.tabs.list', 'terminal.list']
 
 describeRender(
   'the session route in a real browser',
@@ -265,18 +285,72 @@ describeRender(
       await opened.page.close()
     }, 120_000)
 
+    it('asks the origin for no icon, which the shell has none to answer with', async () => {
+      // The document declares `<link rel="icon" href="data:,">`. Without it a browser asks the
+      // origin for /favicon.ico on its own, and the shell's asset server answers 403 because the
+      // path is in no manifest — which the emulator run saw, repeatedly.
+      //
+      // Only a full Chrome asks; the bundled headless shell never does, so against the default
+      // browser this case is a precondition rather than a measurement.
+      // `ORCA_MOBILE_WEB_RENDER_BROWSER` is what CI resolves, and that is where this bites.
+      // Read off the server's own log, not the page's: a favicon fetch is made by the browser
+      // process rather than the page, and Playwright's `page.on('request')` never reports one.
+      // The whole file's log, because no case here may produce this request.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal')
+      // Settled rather than read at the paint: a browser asks for the icon after `load`, later
+      // than the text the route waited on, and reading there passes on a request still to come.
+      await opened.page.waitForLoadState('networkidle')
+      expect(servedPaths.filter((path) => path === '/favicon.ico')).toEqual([])
+      // The precondition, so a run that recorded no request at all cannot pass this.
+      expect(servedPaths).toContain('/')
+      await opened.page.close()
+    }, 120_000)
+
+    it('paints with DOM storage off, which is how the Android shell serves it', async () => {
+      // Every other case here runs against a real `localStorage`, which the page never has. The
+      // one module that needed it was `expo-notifications`: `push-registration.ts` reached it and
+      // its `DevicePushTokenAutoRegistration.fx` reads the persisted registration at import behind
+      // a `typeof localStorage === 'undefined'` guard, which `null` walks straight through. That
+      // put "Cannot read properties of null (reading 'getItem')" at error level on every page load
+      // on the device. The page has no push registration; the shell owns it.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal', {}, { domStorageOff: true })
+      // Exact and not a filter, like the case above it: a module reaching browser storage the page
+      // does not have is a defect wherever it comes from.
+      expect(opened.errors).toEqual([])
+      await opened.page.close()
+    }, 120_000)
+
+    it('writes no storage key it was never handed, on a mount that read the host status', async () => {
+      // `status.get` is what arms it: `host-status-gates.ts` runs on every mount above the route,
+      // and on a readable status the native `host-app-version-store.ts` writes
+      // `orca:host-app-version:v1:<hostId>` — a key no page route reads and `page-storage-keys.ts`
+      // does not admit, so the bridge refused it and logged one `storage-write-dropped` per mount
+      // on the device. Answered here because the other cases' double answers no RPC at all, which
+      // is exactly why this went unseen: the write needs a reply, not a control.
+      const opened = await openRoute(SESSION_ROUTE, 'Terminal', {
+        'status.get': {
+          protocolVersion: 9,
+          minCompatibleMobileVersion: 1,
+          appVersion: '1.4.191',
+          capabilities: []
+        }
+      })
+      // The whole refusal and not this one key: any page-closure writer of an unlisted key lands
+      // on the same line, and naming the key here would let the next one through.
+      expect(opened.warnings.filter((text) => text.includes('storage-write-dropped'))).toEqual([])
+      await opened.page.close()
+    }, 120_000)
+
     it('asks the desktop for the session it was opened on, so the page above is live', async () => {
       // The precondition every assertion above needs: a screen that mounted and asked for nothing
       // would paint the same chrome. The three reads are the header's live title, the tab snapshot
       // and the terminal inventory, each carrying the workspace the route named.
+      //
+      // Waited for and not read at the paint: all three are issued from effects that run after the
+      // commit putting 'Terminal' on screen, which is why this case reds on CI's loaded job and
+      // never here. Under a 20x CPU throttle the snapshot at the paint holds none of them.
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
-      const requests = await opened.page.evaluate(() => globalThis.__orcaRenderCheckRequests ?? [])
-      for (const method of ['worktree.show', 'session.tabs.list', 'terminal.list']) {
-        expect(
-          requests.some((request) => request.method === method),
-          method
-        ).toBe(true)
-      }
+      const requests = await waitForRecordedRequests(opened.page, SESSION_MOUNT_READS)
       expect(JSON.stringify(requests)).toContain(WORKTREE)
       await opened.page.close()
     }, 120_000)
@@ -303,7 +377,8 @@ describeRender(
  * what this route owes it is the `screencastBinary` grant, which
  * `mobile-web-app-screencast-lane-grant.test.mjs` derives from this closure.
  *
- * **The storage refusals.** A page write needs a control to make it. The refusal's own chain is
+ * **The storage refusals a control makes.** The case above covers the writes a mount makes on its
+ * own; a refusal a user's own write earns still needs the control. That chain is
  * `mobile/src/session/mobile-structured-send-page-storage-refusal.test.ts` end to end over the
  * real `page-async-storage`.
  */

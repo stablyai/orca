@@ -216,6 +216,23 @@ describe('nested corruption is rejected', () => {
     ).toBe(true)
   })
 
+  it('refuses an empty producer id, which a presence test would read as a subagent', () => {
+    const base = {
+      itemId: 'codex:t:turn:0',
+      revision: 1,
+      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      sequence: 1,
+      observedAt: 1_000
+    }
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
+    // `''` is PRESENT. Admitting it would hide the row from its own author on
+    // every parent-scoped surface — the defect linkage exists to remove.
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, producerKind: '' })).toBe(false)
+  })
+
   it('rejects shallow render items and submissions', () => {
     expect(
       isAdmissibleAgentJournalRenderItem({

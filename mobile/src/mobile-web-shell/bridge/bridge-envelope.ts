@@ -5,6 +5,7 @@ import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
+import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
@@ -163,6 +164,23 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     accepts: z
       .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
       .max(BRIDGE_MAX_PAGE_ACCEPTS)
+      .optional(),
+    /**
+     * What this page will post that the shell may have to wait for, which today is
+     * `BRIDGE_PAGE_PAINTED` and nothing else.
+     *
+     * `accepts` runs the other way and cannot stand in for this: it says what may be sent *to* the
+     * page. A shell waiting on a frame has to know the page will send one, because the generation
+     * is served by a desktop that updates independently of the installed shell — an undeclared
+     * wait would hide a working page built before the frame existed.
+     *
+     * Optional and additive in both directions, on the same bounds as `accepts`: a page that
+     * declares none is waited for by nothing, and an unknown name is a report this shell does not
+     * act on.
+     */
+    reports: z
+      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
+      .max(BRIDGE_MAX_PAGE_ACCEPTS)
       .optional()
   }),
   z.object({
@@ -244,6 +262,10 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('state'),
     connection: BridgeConnectionSnapshotSchema
   }),
+  // One Back press, and nothing else: the shell pops what it pushed, so a frame naming where to go
+  // back to would be naming a screen the page cannot see. Sent only to a page whose `ready` listed
+  // `BRIDGE_BACK_FRAME`, because an older page's reader refuses the whole frame.
+  z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   z.object({
     v: versionSchema,
     type: z.literal('end'),

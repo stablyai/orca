@@ -35,6 +35,20 @@ test('uses only its exact workflow-bound topology identity', () => {
   assert.match(iam, /assertion\.environment == '\$\{var\.environment\}'/)
 })
 
+test('accepts only the reviewed Asia topology waves', () => {
+  const cases = /case "\$\{TARGET_ENVIRONMENT\}:\$\{TARGET_CELL_IDS\}" in\n([\s\S]*?)\n\s*esac/
+    .exec(workflow)?.[1]
+  assert.ok(cases)
+  assert.deepEqual(
+    [...cases.matchAll(/^\s*([a-z]+:[a-z0-9,-]+)\) ;;$/gm)].map((match) => match[1]),
+    [
+      'staging:staging-gce-c4',
+      'production:production-gce-c27,production-gce-c28,production-gce-c29',
+      'production:production-gce-c30'
+    ]
+  )
+})
+
 test('plans only additive Asia topology and applies the saved plan', () => {
   assert.doesNotMatch(workflow, /manage_artifact_dns/)
   for (const target of [
@@ -52,8 +66,13 @@ test('plans only additive Asia topology and applies the saved plan', () => {
     workflow,
     /\.variables\.relay_gce_additional_region_subnetwork_cidrs\.value/
   )
-  assert.doesNotMatch(workflow, /terraform -chdir=infra\/terraform console/)
-  assert.equal((workflow.match(/-var-file="\$\{TF_VARS\}"/g) ?? []).length, 2)
+  // Console evaluates every output against state and fails while a declared cell has no MIG.
+  assert.doesNotMatch(workflow, /terraform[^\n]*console/)
+  assert.equal(
+    (workflow.match(/-var-file="\$\{TF_VARS\}" -var-file="\$\{\{ steps\.live-images\.outputs\.file \}\}"/g) ?? []).length,
+    2
+  )
+  assert.equal((workflow.match(/-var-file=/g) ?? []).length, 5)
   assert.doesNotMatch(workflow, /terraform[^\n]*apply[^\n]*-target/)
   assert.doesNotMatch(workflow, /google_(?:sql|cloudflare|dns|certificate_manager)/)
 })
@@ -121,4 +140,35 @@ test('the custom role cannot delete topology or mutate SQL and DNS', () => {
     iam,
     /resource "google_storage_bucket_iam_member" "github_relay_asia_topology_state_list"[\s\S]*?role\s+= google_project_iam_custom_role\.github_relay_asia_topology_state_list\[0\]\.id/
   )
+})
+
+test('plans every non-target cell at its served image, read from state templates only', () => {
+  const step = /- id: live-images\n[\s\S]*?\n\n/.exec(workflow)?.[0]
+  assert.ok(step)
+  assert.match(step, /terraform -chdir=infra\/terraform show -json \| jq -ce '\[/)
+  assert.match(step, /\.type == "google_compute_instance_template" and \.name == "relay_gce_cell"/)
+  assert.match(step, /\{ index, metadata_startup_script: \.values\.metadata_startup_script \}/)
+  assert.match(step, /relay-live-cell-image-overlay\.mjs/)
+  assert.match(step, /--cell-ids "\$\{TARGET_CELL_IDS\}"/)
+  // The committed map comes from a read-only plan over the same targets, never from console.
+  assert.match(step, /mapfile -t targets < "\$\{\{ steps\.targets\.outputs\.file \}\}"/)
+  assert.match(
+    step,
+    /terraform -chdir=infra\/terraform plan -input=false -refresh=false -lock=false \\\n\s+-var-file="\$\{TF_VARS\}" "\$\{targets\[@\]\}" -out="\$\{committed_plan\}" > \/dev\/null/
+  )
+  assert.match(step, /show -json "\$\{committed_plan\}" \\\n\s+\| jq -ce '\.variables\.relay_gce_cells\.value \| objects' > "\$\{cells\}"/)
+  assert.equal((step.match(/terraform -chdir=infra\/terraform (?:plan|apply)/g) ?? []).length, 1)
+  assert.ok(workflow.indexOf('- id: targets') < workflow.indexOf('- id: live-images'))
+  assert.ok(workflow.indexOf('- id: live-images') < workflow.indexOf('- name: Create and validate the saved topology plan'))
+})
+
+test('the deployments output tolerates a cell declared before its topology apply', () => {
+  const outputs = readFileSync(new URL('../../infra/terraform/outputs.tf', import.meta.url), 'utf8')
+  const start = outputs.indexOf('output "relay_gce_cell_deployments" {')
+  const block = outputs.slice(start, outputs.indexOf('\n}\n', start))
+  const lookups = [...block.matchAll(/^\s+\w+\s+=\s+(.*\.relay_gce_cell\[cell_id\].*)$/gm)].map((match) => match[1])
+  assert.equal(lookups.length, 6)
+  for (const lookup of lookups) {
+    assert.match(lookup, /^try\(google_compute_\w+\.relay_gce_cell\[cell_id\]\.\w+, null\)$/)
+  }
 })

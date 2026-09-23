@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { scopeDocumentStyleToHost } from '../../terminal/terminal-webview-html/document-style-scoping'
+import { scopeDocumentStyleToHost } from '../../style-scoping/document-style-scoping'
 import { richMarkdownEditorStyle } from './document-style'
 
 /**

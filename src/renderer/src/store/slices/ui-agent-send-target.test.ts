@@ -540,24 +540,28 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-live',
-        paneKey: livePaneKey,
-        stateStartedAt: 1_000
-      }),
-      buildAgentNotificationId({
-        worktreeId: 'wt-retained',
-        paneKey: retainedPaneKey,
-        stateStartedAt: 2_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-live',
+          paneKey: livePaneKey,
+          stateStartedAt: 1_000
+        }),
+        buildAgentNotificationId({
+          worktreeId: 'wt-retained',
+          paneKey: retainedPaneKey,
+          stateStartedAt: 2_000
+        })
+      ],
+      [livePaneKey, retainedPaneKey, skippedPaneKey]
+    )
 
     dismiss.mockClear()
     vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
     store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
 
-    expect(dismiss).not.toHaveBeenCalled()
+    // Nothing rebuilt twice; main still gets the subjects so it can retire what it announced.
+    expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, retainedPaneKey])
   })
 
   it('falls back to live entry worktree attribution and skips unresolved live entries', () => {
@@ -579,13 +583,16 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([fallbackPaneKey, livePaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-from-entry',
-        paneKey: fallbackPaneKey,
-        stateStartedAt: 1_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-from-entry',
+          paneKey: fallbackPaneKey,
+          stateStartedAt: 1_000
+        })
+      ],
+      [fallbackPaneKey, livePaneKey]
+    )
   })
 
   it('dedupes identical live and retained notification ids for the same pane', () => {
@@ -612,13 +619,16 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([livePaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-live',
-        paneKey: livePaneKey,
-        stateStartedAt: 1_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-live',
+          paneKey: livePaneKey,
+          stateStartedAt: 1_000
+        })
+      ],
+      [livePaneKey]
+    )
   })
 })
 

@@ -6,6 +6,7 @@ import {
   pageRendersRoute,
   MOBILE_WEB_SHELL_GRANTS,
   grantsForRoute,
+  routePatternRefusal,
   routeViewOf
 } from './page-route-policy'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
@@ -50,6 +51,101 @@ describe('matching a concrete route against a pattern', () => {
   it('matches a pattern with several dynamic segments', () => {
     expect(matchesRoutePattern('/h/a/session/b', '/h/[hostId]/session/[worktreeId]')).toBe(true)
     expect(matchesRoutePattern('/h/a/session', '/h/[hostId]/session/[worktreeId]')).toBe(false)
+  })
+})
+
+/**
+ * A trailing rest segment, which nothing on the desktop declares today.
+ *
+ * Forward compatibility, which is what OTA is for: a desktop that later ships a screen under a
+ * catch-all writes its pattern into the manifest, and a phone already in the store has to be able
+ * to read it. Segment-count-exact matching read `[...page]` as an ordinary dynamic segment, so such
+ * a pattern matched exactly one segment and nothing else.
+ */
+describe('a pattern with a rest segment', () => {
+  const PATTERN = '/h/[hostId]/[...page]'
+
+  it('matches one segment and as many as follow it', () => {
+    expect(matchesRoutePattern('/h/a/x', PATTERN)).toBe(true)
+    expect(matchesRoutePattern('/h/a/x/y', PATTERN)).toBe(true)
+    expect(matchesRoutePattern('/h/a/x/y/z', PATTERN)).toBe(true)
+  })
+
+  /**
+   * Zero is not a match, which is expo-router 55.0.18's own answer for the same pattern.
+   *
+   * `getReactNavigationConfig.js` turns `[...page]` into the path part `*page`, and
+   * `fork/getStateFromPath-forks.js`'s `formatRegexPattern` turns that into `((.*\/))` — while
+   * `cleanPath` in the same file gives the path a trailing slash. So the tail has to contain at
+   * least one slash of its own, and `/h/a` does not reach a route whose pattern ends in `[...page]`.
+   * Measured against those two functions directly at that version.
+   */
+  it('does not match the prefix it sits on, which is a different screen', () => {
+    expect(matchesRoutePattern('/h/a', PATTERN)).toBe(false)
+    expect(matchesRoutePattern('/h/a/', PATTERN)).toBe(false)
+  })
+
+  it('still holds the segments in front of it to the rule they had', () => {
+    expect(matchesRoutePattern('/g/a/x', PATTERN)).toBe(false)
+    expect(matchesRoutePattern('/h//x', PATTERN)).toBe(false)
+    expect(matchesRoutePattern('/h/a/x', '/h/[hostId]/files/[...page]')).toBe(false)
+    expect(matchesRoutePattern('/h/a/files/x/y', '/h/[hostId]/files/[...page]')).toBe(true)
+  })
+
+  it('refuses an empty segment in the tail, as the dynamic segments already do', () => {
+    expect(matchesRoutePattern('/h/a/x//y', PATTERN)).toBe(false)
+    expect(matchesRoutePattern('/h/a/x/y/', PATTERN)).toBe(false)
+  })
+
+  /**
+   * One, and trailing. A rest segment elsewhere is a pattern this matcher cannot read, so it is
+   * refused by name rather than guessed at: the route then stays native, which is where every
+   * route starts and what a phone that never heard of the shape would also do.
+   */
+  it('refuses a rest segment that is not the last one', () => {
+    expect(routePatternRefusal('/h/[...page]/tail')).toBe('rest-segment-not-last')
+    expect(matchesRoutePattern('/h/a/tail', '/h/[...page]/tail')).toBe(false)
+  })
+
+  it('refuses a pattern carrying two of them', () => {
+    expect(routePatternRefusal('/h/[...a]/[...b]')).toBe('rest-segments-repeated')
+    expect(matchesRoutePattern('/h/x/y', '/h/[...a]/[...b]')).toBe(false)
+  })
+
+  it('reads an ordinary pattern with nothing to refuse', () => {
+    for (const pattern of ['/h/[hostId]', '/h/[hostId]/session/[worktreeId]', PATTERN]) {
+      expect(routePatternRefusal(pattern), pattern).toBe(null)
+    }
+  })
+
+  it('is a pathname the manifest contract already accepts, so no field has to change', () => {
+    expect(
+      MobileWebBundleRouteSchema.safeParse({ pathname: PATTERN, grants: ['navigate'] }).success
+    ).toBe(true)
+  })
+
+  it('serves such a route and grants it what it declared', () => {
+    const routes = [{ pathname: PATTERN, grants: ['navigate', 'storage'] }]
+    expect(pageRendersRoute(routes, '/h/a/insights/deep/er')).toBe(true)
+    expect(grantsForRoute(routes, '/h/a/insights/deep/er')).toEqual(['navigate', 'storage'])
+  })
+
+  /**
+   * A rest pattern covers every pathname under its prefix, so a desktop declaring both lands two
+   * entries on one pathname. The exact one named that screen; taking the rest route's grants
+   * instead would hand a screen with its own row whatever the catch-all asked for.
+   */
+  it("gives an exactly declared route its own grants and not the rest route's", () => {
+    const routes = [
+      { pathname: PATTERN, grants: ['navigate', 'storage', 'externalLink'] },
+      { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
+    ]
+    expect(grantsForRoute(routes, '/h/a/tasks')).toEqual(['navigate'])
+    expect(grantsForRoute(routes, '/h/a/anything/else')).toEqual([
+      'navigate',
+      'storage',
+      'externalLink'
+    ])
   })
 })
 

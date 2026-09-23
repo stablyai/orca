@@ -26,11 +26,11 @@ function asPinned(): Map<string, PageClosureObservation> {
 }
 
 describe('the C5 page closure', () => {
-  it('is the census the design named: 27 families, 135 goldens', () => {
+  it('is the census the design named: 25 families, 126 goldens', () => {
     const goldens = Object.values(C5_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C5_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 27,
-      goldens: 135
+      families: 25,
+      goldens: 126
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -46,8 +46,8 @@ describe('the C5 page closure', () => {
    */
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
-      identical: 72,
-      'result-absent-settlement': 51,
+      identical: 66,
+      'result-absent-settlement': 48,
       'params-undefined': 7,
       'result-absent-stream-release': 3,
       'write-ordinal': 2
@@ -56,7 +56,7 @@ describe('the C5 page closure', () => {
 
   it("inherits C1's families whole, with the verdicts C1 committed", () => {
     // Not "the same families": the same goldens in them, at the same verdicts. C2's rule does not
-    // reproduce these — it disagrees on 13 of the 104, being `tasks.smart-source-search` 7,
+    // reproduce these — it disagrees on 13 of the 103, being `tasks.smart-source-search` 7,
     // `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 — so inheritance is the
     // derivation, and this is what says the inheritance happened rather than a re-derivation that
     // looked close. The count is the one C2's and C3's files state; this file said 10 until the
@@ -69,7 +69,7 @@ describe('the C5 page closure', () => {
     for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
       expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
-    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(22)
+    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(20)
   })
 
   it('adds five families and nothing else, all of them AI Vault', () => {
@@ -119,7 +119,7 @@ describe('the C5 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C5_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(63)
+    expect(exclusions.length).toBe(60)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )

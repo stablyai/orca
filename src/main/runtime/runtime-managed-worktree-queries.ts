@@ -22,12 +22,10 @@ import {
 import { mergeWorktree } from '../ipc/worktree-logic'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
-import type { NativeLocalWorktreeMetadataScanExpectation } from '../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
-import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { Store } from '../persistence'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
@@ -41,31 +39,6 @@ type Dependencies = {
   scanRepo(repo: Repo): Promise<RuntimeWorktreeScanResult>
   /** Hosts this runtime has repos or workspaces on, so a host with no rows is still named. */
   listKnownHostIds(): Iterable<ExecutionHostId>
-}
-
-/**
- * The destructive scan expectation for one repo, or undefined when this repo must not carry one.
- *
- * WSL-routed repos are excluded for the same reason the desktop listing excludes them: the listing
- * runs in the distro and reports Linux paths while metadata can hold UNC ones, and v1 cannot prove
- * those aliases equivalent. A runtime that needs repair throws rather than resolving routing, which
- * is likewise no basis for deleting rows.
- */
-function captureLocalMetadataPruneExpectation(
-  store: RuntimeStore,
-  repo: Repo
-): NativeLocalWorktreeMetadataScanExpectation | undefined {
-  if (typeof store.captureNativeLocalWorktreeMetadataScanExpectation !== 'function') {
-    return undefined
-  }
-  try {
-    if (getLocalProjectWorktreeGitOptions(store as unknown as Store, repo).wslDistro) {
-      return undefined
-    }
-  } catch {
-    return undefined
-  }
-  return store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
 }
 
 export class RuntimeManagedWorktreeQueries {
@@ -159,26 +132,24 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
       }
     }
-    // Why capture before the scan: listing can mutate metadata synchronously before its first
-    // await, and the prune revalidates against the rows as they stood when the scan was issued.
-    const metadataScanGeneration = getLocalWorktreeScanGeneration(repo.id)
-    const metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
-    let scan: RuntimeWorktreeScanResult
-    try {
-      scan = await this.deps.scanRepo(repo)
-    } catch {
-      scan = { ok: false, worktrees: [] }
-    }
-    if (scan.ok) {
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
+      this.deps.scanRepo(target)
+    )
+    // Why a still-overtaken scan is published non-authoritative rather than rejected: this method
+    // has no stale reply, and a thrown error makes the client drop the repo's rows. Non-authoritative
+    // rows purge nothing and light no indicator; the overtaking mutation's own change event, sent
+    // after its generation bump, brings the listing that reflects it. Nothing is pruned from rows
+    // that omit a worktree created under the scan.
+    if (scan.ok && !scan.superseded) {
       // Why the runtime sweeps too: the desktop listing that used to own this runs off `ipcMain`,
       // so a headless host -- which has no renderer -- never pruned its own repos' rows (#17776).
-      if (metadataPruneExpectation) {
+      if (scan.metadataPruneExpectation) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
           store: store as unknown as Store,
           repo,
           gitWorktrees: scan.worktrees,
-          scan: metadataPruneExpectation,
-          scanGeneration: metadataScanGeneration
+          scan: scan.metadataPruneExpectation,
+          scanGeneration: scan.scanGeneration
         })
       }
       pruneLineageForMissingRepoWorktrees(store as unknown as Store, repo, scan.worktrees)
@@ -212,7 +183,7 @@ export class RuntimeManagedWorktreeQueries {
     })
     return {
       repoId: repo.id,
-      authoritative: scan.ok,
+      authoritative: scan.ok && !scan.superseded,
       source: scan.ok ? 'git' : 'metadata-fallback',
       worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
     }

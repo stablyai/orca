@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import { isStructuredAgentSessionThinking } from './structured-agent-session-live-turn'
+import {
+  activeStructuredAgentSessionToolCall,
+  isStructuredAgentSessionThinking
+} from './structured-agent-session-live-turn'
 
 function item(
   itemId: string,
@@ -109,5 +112,92 @@ describe('isStructuredAgentSessionThinking', () => {
     expect(
       isStructuredAgentSessionThinking([turnStart, reasoning(2), item('prompt', 3, prompt)])
     ).toBe(false)
+  })
+})
+
+describe("the live-turn readers answer for the session's own agent", () => {
+  const turnStart = item('turn-start', 1, {
+    kind: 'status',
+    text: 'Working',
+    turnLifecycle: { turnId: 'turn-1', state: 'running' }
+  })
+  const spawnCall = item('root-task', 2, {
+    kind: 'tool-call',
+    name: 'Task',
+    input: { description: 'explore' },
+    state: 'running'
+  })
+  const child = (
+    itemId: string,
+    sequence: number,
+    body: AgentJournalRenderItem['body'],
+    agentId = 'task-1'
+  ): AgentJournalRenderItem => ({ ...item(itemId, sequence, body), agentId })
+
+  it('does not report the parent as thinking because a subagent is reasoning', () => {
+    const childReasoning = child('child-reasoning', 3, {
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }]
+    })
+    expect(isStructuredAgentSessionThinking([turnStart, spawnCall, childReasoning])).toBe(false)
+  })
+
+  it('still reports the parent as thinking when the parent itself is reasoning', () => {
+    const ownReasoning = item('own-reasoning', 3, {
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }]
+    })
+    expect(isStructuredAgentSessionThinking([turnStart, spawnCall, ownReasoning])).toBe(true)
+  })
+
+  it("reports the parent's own running call while a subagent runs its own", () => {
+    const childCall = child('child-grep', 3, {
+      kind: 'tool-call',
+      name: 'Grep',
+      input: { pattern: 'x' },
+      state: 'running'
+    })
+    expect(activeStructuredAgentSessionToolCall([turnStart, spawnCall, childCall])?.name).toBe(
+      'Task'
+    )
+  })
+
+  it('reports nothing running when only a subagent has a live call', () => {
+    const childCall = child('child-grep', 2, {
+      kind: 'tool-call',
+      name: 'Grep',
+      input: { pattern: 'x' },
+      state: 'running'
+    })
+    expect(activeStructuredAgentSessionToolCall([turnStart, childCall])).toBeNull()
+  })
+
+  it('treats an agent id that failed to resolve as a child, not as the parent', () => {
+    // Presence, not truthiness. A truthy test would read the empty id as root
+    // and put the child's tool call straight back on the parent's row — the
+    // exact defect this attribution exists to remove.
+    const unresolved = child(
+      'child-grep',
+      3,
+      { kind: 'tool-call', name: 'Grep', input: { pattern: 'x' }, state: 'running' },
+      ''
+    )
+    expect(activeStructuredAgentSessionToolCall([turnStart, spawnCall, unresolved])?.name).toBe(
+      'Task'
+    )
+  })
+
+  it("reads a row written before linkage existed as the parent's own", () => {
+    const legacyChildCall = item('legacy-call', 3, {
+      kind: 'tool-call',
+      name: 'Grep',
+      input: { pattern: 'x' },
+      state: 'running'
+    })
+    expect(
+      activeStructuredAgentSessionToolCall([turnStart, spawnCall, legacyChildCall])?.name
+    ).toBe('Grep')
   })
 })

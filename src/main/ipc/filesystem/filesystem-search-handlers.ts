@@ -24,6 +24,11 @@ import {
 import { checkRgAvailable } from '../rg-availability'
 import { resolveAuthorizedPath } from '../filesystem-auth'
 import { listQuickOpenFiles } from '../filesystem-list-files'
+import {
+  isFileNameFilterQueryTooLarge,
+  pathMatchesFileNameFilterTokens,
+  splitFileNameFilterTokens
+} from '../../../shared/file-name-filter-tokens'
 import { searchWithGitGrep } from '../filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
@@ -184,6 +189,8 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         requestToken?: string
         maxResults?: number
         searchQuery?: string
+        /** Local only: keep paths containing every whitespace-separated word, like the Explorer filter. */
+        nameFilter?: string
       }
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
@@ -221,12 +228,20 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             signal: controller?.signal
           })
         }
+        if (args.nameFilter !== undefined && isFileNameFilterQueryTooLarge(args.nameFilter)) {
+          return []
+        }
+        const nameFilterTokens = args.nameFilter ? splitFileNameFilterTokens(args.nameFilter) : []
         return await listQuickOpenFiles(
           args.rootPath,
           store,
           args.excludePaths,
           controller?.signal,
-          args.maxResults
+          args.maxResults,
+          undefined,
+          nameFilterTokens.length > 0
+            ? (relativePath) => pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)
+            : undefined
         )
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)

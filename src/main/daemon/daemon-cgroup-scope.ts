@@ -215,6 +215,12 @@ export function buildLegacyScopeMigrationCommand(
   canonicalRuntimeDir: string | null = CANONICAL_USER_RUNTIME_DIR
 ): DurableDaemonScopeCommand {
   const runtimeDir = resolveUserRuntimeDir(env, canonicalRuntimeDir)
+  const migrationEnv: NodeJS.ProcessEnv = runtimeDir
+    ? { ...env, XDG_RUNTIME_DIR: runtimeDir }
+    : { ...env }
+  // busctl --user prefers this variable over XDG_RUNTIME_DIR. Service hardening commonly sets
+  // it to disabled:, which would make a reachable user bus look unavailable during migration.
+  delete migrationEnv.DBUS_SESSION_BUS_ADDRESS
   return {
     command: 'busctl',
     args: [
@@ -234,7 +240,7 @@ export function buildLegacyScopeMigrationCommand(
       ...pids.map(String),
       '0'
     ],
-    env: runtimeDir ? { ...env, XDG_RUNTIME_DIR: runtimeDir } : { ...env }
+    env: migrationEnv
   }
 }
 
@@ -302,6 +308,7 @@ export function buildDurableDaemonScopeCommand(
       '--user',
       '--scope',
       `--unit=${daemonScopeUnitName(launchNonce)}`,
+      '--property=TimeoutStopSec=5s',
       '--collect',
       '--quiet',
       '--',

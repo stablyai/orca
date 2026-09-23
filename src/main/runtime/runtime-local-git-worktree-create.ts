@@ -1,4 +1,5 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
@@ -190,6 +191,8 @@ export async function createRuntimeLocalGitWorktree(args: {
     }
     throw error
   }
+  // Why: the worktree is listable from here on; scans that began before it appeared are stale.
+  runWorktreeChangeInvalidators(args.repo.id)
   if (shouldRetireGeneratedName) {
     await retireGeneratedWorktreeName(
       args.store as Parameters<typeof retireGeneratedWorktreeName>[0],

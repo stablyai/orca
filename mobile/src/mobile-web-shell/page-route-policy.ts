@@ -41,26 +41,84 @@ function implementsGrant(name: string): boolean {
   return MOBILE_WEB_SHELL_GRANTS.some((grant) => grant === name)
 }
 
+/** A pattern segment expo-router would read as dynamic: `[hostId]`, and `[...page]` with it. */
+function isDynamicSegment(segment: string): boolean {
+  return segment.startsWith('[') && segment.endsWith(']')
+}
+
+/**
+ * expo-router's rest segment, which stands for a path rather than a segment.
+ *
+ * Read the way `matchers.js` reads it at expo-router 55.0.18: the brackets come off and the name
+ * left behind starts with `...`.
+ */
+function isRestSegment(segment: string): boolean {
+  return isDynamicSegment(segment) && segment.slice(1, -1).startsWith('...')
+}
+
+/** Why this matcher will not read a pattern. A refused pattern matches nothing. */
+export const ROUTE_PATTERN_REFUSALS = ['rest-segment-not-last', 'rest-segments-repeated'] as const
+
+export type RoutePatternRefusal = (typeof ROUTE_PATTERN_REFUSALS)[number]
+
+/**
+ * Whether a manifest pattern is one this matcher can read, and what is wrong with it if not.
+ *
+ * One rest segment, trailing, is the shape expo-router's own file system can produce and the only
+ * one this reads. Anything else is refused by name and matches nothing, so its route stays native
+ * — the same answer a phone too old to have heard of rest segments gives, and the answer a shell
+ * should give for a pattern whose tail it cannot say it understood.
+ *
+ * Narrower than expo-router on purpose, and the one place the two differ: its own matcher does
+ * take a non-trailing rest, `h/*page/tail` matching `/h/a/b/tail` at 55.0.18. This refuses it
+ * rather than copying a shape nothing produces and this shell cannot reason about.
+ */
+export function routePatternRefusal(pattern: string): RoutePatternRefusal | null {
+  const segments = pattern.split('/')
+  const rest = segments.flatMap((segment, index) => (isRestSegment(segment) ? [index] : []))
+  if (rest.length > 1) {
+    return 'rest-segments-repeated'
+  }
+  return rest[0] !== undefined && rest[0] !== segments.length - 1 ? 'rest-segment-not-last' : null
+}
+
 /**
  * Whether a concrete route is the one a pattern names.
  *
  * Segment by segment, because a dynamic segment matches one segment and never a path: `/h/[hostId]`
  * is the worktree list and `/h/a/session/b` is a different screen that starts with the same two
  * segments. A pattern segment in brackets matches any non-empty segment; everything else is exact.
+ *
+ * A trailing `[...page]` is the exception and matches one segment or many, never none. Nothing on
+ * the desktop declares one today; a desktop that ships a catch-all screen later writes such a
+ * pattern into its manifest, and a phone already in the store has to read it. One or more and not
+ * zero is expo-router's own answer at 55.0.18: `getReactNavigationConfig.js` turns `[...page]` into
+ * the path part `*page`, `fork/getStateFromPath-forks.js` turns that into `((.*\/))`, and
+ * `cleanPath` beside it gives every path a trailing slash — so the tail must hold a slash of its
+ * own, and the prefix the pattern sits on is a different screen.
  */
 export function matchesRoutePattern(pathname: string, pattern: string): boolean {
-  const actual = pathname.split('/')
-  const expected = pattern.split('/')
-  if (actual.length !== expected.length) {
+  if (routePatternRefusal(pattern) !== null) {
     return false
   }
-  return expected.every((segment, index) => {
-    const value = actual[index]
-    if (value === undefined) {
-      return false
-    }
-    return segment.startsWith('[') && segment.endsWith(']') ? value.length > 0 : segment === value
-  })
+  const actual = pathname.split('/')
+  const expected = pattern.split('/')
+  const fixed = isRestSegment(expected[expected.length - 1] ?? '')
+    ? expected.length - 1
+    : expected.length
+  // Exact where the pattern is all segments, and at least one tail segment where it ends in a rest.
+  if (fixed === expected.length ? actual.length !== fixed : actual.length <= fixed) {
+    return false
+  }
+  return (
+    expected.slice(0, fixed).every((segment, index) => {
+      const value = actual[index]
+      if (value === undefined) {
+        return false
+      }
+      return isDynamicSegment(segment) ? value.length > 0 : segment === value
+    }) && actual.slice(fixed).every((value) => value.length > 0)
+  )
 }
 
 /**
@@ -128,7 +186,12 @@ export function grantsForRoute(
   routes: readonly MobileWebPageRoute[] | undefined,
   pathname: string
 ): string[] {
-  const declared = (routes ?? []).find((route) => matchesRoutePattern(pathname, route.pathname))
+  const matching = (routes ?? []).filter((route) => matchesRoutePattern(pathname, route.pathname))
+  // A rest pattern covers every pathname under its prefix, so a desktop that declares both lands
+  // two entries on one pathname. The exact one is what named this screen; taking the rest route's
+  // list instead would hand a screen with its own row whatever the catch-all asked for.
+  const declared =
+    matching.find((route) => !route.pathname.split('/').some(isRestSegment)) ?? matching[0]
   return declared === undefined ? [] : effectiveRouteGrants(declared)
 }
 

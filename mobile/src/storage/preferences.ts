@@ -120,22 +120,41 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
 
 const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
 
-// Why: the hybrid shell route is dark. Default-off means a store build never fetches, writes or
-// sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
-// `'true'`, including an unreadable store, is off.
+export type MobileShellBuildKind = 'native' | 'ota'
+
+/**
+ * Which shell this binary was built for, and the only place the build-time constant is spelled.
+ *
+ * `babel-preset-expo`'s inline-env-vars plugin replaces a literal `process.env.EXPO_PUBLIC_*`
+ * member expression with the build machine's value, so in a release bundle this function has no
+ * variable left in it. That rewrite only fires on a literal member expression: a destructure, a
+ * computed key or a copy through another binding is not inlined and would read `undefined` on a
+ * device, which is why every caller goes through this one and never through `process.env`.
+ *
+ * Anything but the exact string `ota` — unset, empty, a typo, a value from a stale shell — is
+ * native. A release built without the variable is the native app, which is every default build.
+ */
+export function mobileShellBuildKind(): MobileShellBuildKind {
+  return process.env.EXPO_PUBLIC_MOBILE_SHELL === 'ota' ? 'ota' : 'native'
+}
+
+// Why: the hybrid shell route is dark in every build but an OTA one. Default-off means a native
+// store build never fetches, writes or sweeps a bundle cache — anything but `'true'`, including an
+// unreadable store, is off there.
 /**
  * Whether this build can have the flag on at all.
  *
- * A release build never reads the key: it shares its bundle id with the development build and the
- * iOS data container survives an install-over, so a flag a developer left on would otherwise
- * follow the store build in and mount the shell on a deep link.
+ * A native release build never reads the key: it shares its bundle id with the development build
+ * and with an OTA build, and the iOS data container survives an install-over, so a flag either of
+ * those left on would otherwise follow the native store build in and mount the shell on a deep
+ * link. The ability comes from the build, never from storage, which is what makes that impossible.
  *
  * Named rather than spelled twice. The hook beside the reader starts its state on this answer so
- * a store build is decided on its first render rather than after an effect, and two spellings of
- * one `__DEV__` test would be two things to keep true.
+ * a native store build is decided on its first render rather than after an effect, and two
+ * spellings of one build-kind test would be two things to keep true.
  */
 export function mobileWebShellFlagCanBeOn(): boolean {
-  return typeof __DEV__ !== 'undefined' && __DEV__
+  return (typeof __DEV__ !== 'undefined' && __DEV__) || mobileShellBuildKind() === 'ota'
 }
 
 export async function loadMobileWebShellEnabled(): Promise<boolean> {
@@ -144,6 +163,12 @@ export async function loadMobileWebShellEnabled(): Promise<boolean> {
   }
   try {
     const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
+    // An untouched OTA install mounts the page on first launch; a development build keeps its
+    // opt-in. Either way a stored value decides, so the Troubleshoot toggle can switch an OTA
+    // build off and that choice survives the next launch.
+    if (raw === null) {
+      return mobileShellBuildKind() === 'ota'
+    }
     return raw === 'true'
   } catch {
     return false

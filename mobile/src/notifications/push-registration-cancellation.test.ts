@@ -18,6 +18,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { removeHost } from '../transport/host-store'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 vi.mock('../transport/host-store', () => ({ removeHost: vi.fn() }))
+vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
+  forgetHostUpdateFailures: async () => undefined,
+  deleteHostPageCache: async () => undefined
+}))
 vi.mock('./mobile-push-lease-renewal', () => ({ startMobilePushLeaseRenewal: () => () => {} }))
 
 const storage = new Map<string, string>()

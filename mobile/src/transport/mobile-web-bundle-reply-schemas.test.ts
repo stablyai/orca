@@ -6,6 +6,7 @@ import {
 import {
   computeMobileWebBundleId,
   MobileWebBundleAssetSchema,
+  MobileWebBundleRouteSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
@@ -131,6 +132,23 @@ describe('mobile web bundle manifest reply reader', () => {
     expect(
       MobileWebBundleManifestReadSchema.safeParse({ ...manifest, contentEncoding: 'br' }).success
     ).toBe(true)
+  })
+
+  it('reads a route pattern with a trailing rest segment, which no field has to change for', () => {
+    // Forward compatibility for a desktop that later ships a catch-all screen: `page-route-policy`
+    // matches such a pattern, and it only ever sees one the reader let through. Pinned on the
+    // phone's loose reader and on the host's strict one, since the pathname rule lives there.
+    const pathname = '/h/[hostId]/[...page]'
+    const manifest = manifestReply({
+      routes: [{ pathname, grants: ['navigate'] }]
+    }).manifest
+    const parsed = MobileWebBundleManifestReadSchema.safeParse(manifest)
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.routes?.[0]?.pathname).toBe(pathname)
+    expect(MobileWebBundleRouteSchema.safeParse({ pathname, grants: ['navigate'] }).success).toBe(
+      true
+    )
   })
 
   it('accepts a host that shrank chunkBytes and refuses one that grew it', () => {

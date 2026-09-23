@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildMobileWebBundle } from './build-mobile-web-bundle.mjs'
+import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
@@ -452,7 +452,7 @@ describe('arch-aware packaging guard', () => {
   beforeAll(async () => {
     scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
     bundleDir = join(scratch, 'mobile-web')
-    await buildMobileWebBundle({ outDir: bundleDir })
+    await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
   })
   afterAll(async () => {
     await rm(scratch, { recursive: true, force: true })

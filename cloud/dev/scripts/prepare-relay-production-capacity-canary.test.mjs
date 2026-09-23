@@ -117,7 +117,7 @@ describe('production Relay capacity cell admission', () => {
     for (const cellId of [
       'production-gce-c27', 'production-gce-c28', 'production-gce-c29',
       // Migration-only canaries: the US-only capacity rollout never touches them either.
-      'production-gce-c17', 'production-gce-c18'
+      'production-gce-c17', 'production-gce-c18', 'production-gce-c30'
     ]) {
       const hostname = cellId.slice('production-gce-'.length)
       assert.deepEqual(parseProductionCapacityCellArguments([
@@ -134,7 +134,7 @@ describe('production Relay capacity cell admission', () => {
         paceWindowMs: 0
       })
     }
-    for (const cellId of ['production-gce-c12', 'production-gce-c30']) {
+    for (const cellId of ['production-gce-c12', 'production-gce-c31']) {
       const hostname = cellId.slice('production-gce-'.length)
       assert.throws(() => parseProductionCapacityCellArguments([
         '--director-origin', 'https://relay.onorca.dev',

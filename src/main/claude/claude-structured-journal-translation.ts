@@ -18,11 +18,13 @@ import {
 } from './claude-structured-provider-fallback'
 import { taskFrameSentence } from './claude-background-task-frames'
 import { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
-import { ClaudeForwardedToolRegistry } from './claude-forwarded-tool-registry'
+import { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
+import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import {
+  claudeFrameParentRef,
   claudeStreamTurnStartSource,
   claudeStreamTurnSource,
   isRootClaudeFrame
@@ -86,14 +88,34 @@ export function createClaudeJournalTranslator(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
+  const toolOrigins = new ClaudeToolOriginRegistry()
   const subagents = new ClaudeSubagentRoster({
     sink: deps.sink,
-    currentGroupKey: () => turn.groupKey
+    currentGroupKey: () => turn.groupKey,
+    isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
+    childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
+    // A settled group can receive no further announcement, so a correction
+    // still owed is never coming; the rows keep the stamp they already have.
+    onIdentitiesFinal: () => corrections.abandon()
   })
-  const forwardedTools = new ClaudeForwardedToolRegistry()
+  const corrections = new ClaudeProvisionalRowCorrections({
+    ...subagents.linkage,
+    rewrite: (identity, body, options) => {
+      // The admission-returning path, so a correction the sink refuses under
+      // backpressure stays owed instead of vanishing. Sinks without it accept
+      // unconditionally, which is what the plain append already assumed.
+      const admission = deps.sink.tryAppendItem?.(identity, body, options)
+      if (admission === undefined) {
+        deps.sink.appendItem(identity, body, options)
+        return true
+      }
+      return admission.accepted
+    },
+    publish: () => deps.sink.publish()
+  })
   const backgroundTasks = new ClaudeBackgroundTaskRows({
     sink: deps.sink,
-    isForwardedParentTool: (toolUseId) => forwardedTools.has(toolUseId),
+    isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     // A typed task row is provider output: journaling one must open a resumed
     // turn, or the session shows the row while reading idle.
     openOutputTurn: (frame, observedAt) =>
@@ -105,8 +127,9 @@ export function createClaudeJournalTranslator(
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    persist: (identity, text) => {
-      deps.sink.appendItem(identity, claudeStreamingMessageBody(text))
+    producer: subagents.linkage,
+    persist: (identity, text, options) => {
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), options)
       deps.sink.publish()
     }
   })
@@ -131,7 +154,7 @@ export function createClaudeJournalTranslator(
     if (!delta) {
       return false
     }
-    streamedText.append(delta.identity, delta.text)
+    streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
     return true
   }
 
@@ -141,9 +164,10 @@ export function createClaudeJournalTranslator(
     streamedBlocks,
     streamedText,
     subagents,
-    forwardedTools,
+    toolOrigins,
     backgroundTasks,
     providerFallback,
+    corrections,
     turn
   }
 
@@ -171,7 +195,15 @@ export function createClaudeJournalTranslator(
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
       }
+      // Ahead of the flush: a forced checkpoint resolves attribution as it
+      // writes, so an announcement landing in this same pass has to be visible
+      // to it or the row is stamped provisionally one line too early.
+      const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
       streamedText.flush()
+      if (announced) {
+        corrections.retry()
+        streamedText.reattribute()
+      }
       if (event.type === 'prompt') {
         prompts.handle(event)
       } else if (event.type === 'prompt-cancelled') {
@@ -199,10 +231,18 @@ export function createClaudeJournalTranslator(
         const kind = claudeProviderFrameKind(event.message)
         const failure = claudeResultFailure(event.message)
         if (failure || !isSettledClaudeResultKind(kind)) {
-          providerFallback.append(kind, event.message, failure?.text)
+          providerFallback.append(
+            kind,
+            event.message,
+            failure?.text,
+            undefined,
+            undefined,
+            // A result that settles no turn is a CHILD's result: this
+            // translator only ever opens root turns.
+            settlesTurn ? undefined : corrections.stampFor(claudeFrameParentRef(event.message))
+          )
         }
       } else if (event.type === 'message') {
-        subagents.observeSystemFrame(event.message)
         const backgroundTaskCovered = backgroundTasks.observe(
           event.message,
           event.observedAt ?? Date.now()
@@ -221,7 +261,8 @@ export function createClaudeJournalTranslator(
             event.message,
             taskFrameSentence(event.message),
             undefined,
-            { coveredByTypedTranslator: backgroundTaskCovered }
+            { coveredByTypedTranslator: backgroundTaskCovered },
+            corrections.stampFor(claudeFrameParentRef(event.message))
           )
         }
         publishActivity(kind, event.message)
@@ -249,13 +290,14 @@ export function createClaudeJournalTranslator(
       return streamedText.pending
     },
     dispose: () => {
+      streamedText.flush()
       streamedText.dispose()
       tools.clear()
       prompts.clear()
       streamedBlocks.clear()
       subagents.dispose()
       backgroundTasks.dispose()
-      forwardedTools.clear()
+      toolOrigins.clear()
     }
   }
 }

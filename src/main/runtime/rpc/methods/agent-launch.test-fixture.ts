@@ -27,6 +27,11 @@ export type AgentLaunchRuntimeStubOptions = {
   createWarning?: string
   /** What `createTerminal` reports when the surface itself came up degraded. */
   terminalWarning?: string
+  /** The pane `createTerminal` minted. Off by default so the existing outcome assertions keep
+   *  modelling a runtime that reports none — the arm `RuntimeTerminalCreate.paneKey?` allows. */
+  terminalPaneKey?: string
+  /** The pane minted with an agent-first worktree's startup terminal. */
+  startupTerminalPaneKey?: string
 }
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
@@ -60,13 +65,19 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => ({
       worktree: { id: 'wt-new' },
-      startupTerminal: args.startupAgent ? { handle: 'term_agent_first' } : undefined,
+      startupTerminal: args.startupAgent
+        ? {
+            handle: 'term_agent_first',
+            ...(options.startupTerminalPaneKey ? { paneKey: options.startupTerminalPaneKey } : {})
+          }
+        : undefined,
       ...(options.setupReceipt ? { setupReceipt: options.setupReceipt } : {}),
       ...(options.createWarning ? { warning: options.createWarning } : {})
     })),
     // Args are declared so a test can assert what the launch asked for, not merely that it asked.
     createTerminal: vi.fn(async (_selector: string, _options?: Record<string, unknown>) => ({
       handle: 'term_1',
+      ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),
       ...(options.terminalWarning ? { warning: options.terminalWarning } : {})
     })),
     showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),

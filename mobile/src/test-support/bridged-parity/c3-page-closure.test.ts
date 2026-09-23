@@ -42,11 +42,11 @@ describe('the C3 page closure', () => {
    * *family* entering the closure is invisible until someone re-derives it by hand — which
    * `config/scripts/mobile-web-app-page-closure-families.test.mjs` now does for both files routes.
    */
-  it('is the census the design named: 28 families, 126 goldens', () => {
+  it('is the census the design named: 26 families, 117 goldens', () => {
     const goldens = Object.values(C3_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C3_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 28,
-      goldens: 126
+      families: 26,
+      goldens: 117
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -61,8 +61,8 @@ describe('the C3 page closure', () => {
    */
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C3_PAGE_CLOSURE)).toEqual({
-      identical: 66,
-      'result-absent-settlement': 48,
+      identical: 60,
+      'result-absent-settlement': 45,
       'params-undefined': 7,
       'result-absent-stream-release': 3,
       'write-ordinal': 2
@@ -84,11 +84,11 @@ describe('the C3 page closure', () => {
     // Redeclaring `settings.repo-metadata` in the preview half always reds this case; how many
     // others go with it depends on the shape of the redeclaration, so the number is not the claim.
     // Measured: one golden under the family's name reds seven, because it also shrinks the census
-    // to 114 and leaves that family with no byte-identical golden. The family copied verbatim with
-    // a single verdict flipped reds five, the census unmoved at 126. Both keep the load-bearing
-    // half — the spread takes the last table's entry, and this case is what sees it.
+    // and leaves that family with no byte-identical golden. The family copied verbatim with a
+    // single verdict flipped reds five, the census unmoved. Both keep the load-bearing half — the
+    // spread takes the last table's entry, and this case is what sees it.
     //
-    // C2's rule does not reproduce these pins — measured here, it disagrees on 13 of the 104,
+    // C2's rule does not reproduce these pins — measured here, it disagrees on 13 of the 94,
     // being `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and
     // `worktree-catalog-snapshot` 1 — so inheritance is the derivation rather than a
     // re-derivation that looked close.
@@ -96,7 +96,7 @@ describe('the C3 page closure', () => {
     expect({
       families: Object.keys(committed).length,
       pins: Object.values(committed).flatMap(Object.keys).length
-    }).toEqual({ families: 22, pins: 104 })
+    }).toEqual({ families: 20, pins: 95 })
     for (const [family, pinned] of Object.entries(committed)) {
       expect(C3_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
@@ -110,7 +110,7 @@ describe('the C3 page closure', () => {
       ['C5', C5_PAGE_CLOSURE]
     ] as const) {
       const shared = Object.keys(other).filter((family) => family in C3_PAGE_CLOSURE)
-      expect(shared.length, name).toBe(22)
+      expect(shared.length, name).toBe(20)
       for (const family of shared) {
         expect(C3_PAGE_CLOSURE[family], `${name}/${family}`).toEqual(other[family])
       }
@@ -134,7 +134,7 @@ describe('the C3 page closure', () => {
   })
 
   it('names the families where a pin proves only that the divergence kept its name', () => {
-    // "126 certified" would read as 126 proofs of byte-identity. One family has no byte-identical
+    // "125 certified" would read as 125 proofs of byte-identity. One family has no byte-identical
     // golden at all, so its 5 say only that the class did not change, and the PR body says so.
     const wholly = Object.entries(C3_PAGE_CLOSURE)
       .filter(([, pins]) => !Object.values(pins).includes('identical'))
@@ -165,7 +165,7 @@ describe('the C3 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C3_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(60)
+    expect(exclusions.length).toBe(57)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )

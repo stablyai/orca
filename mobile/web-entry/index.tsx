@@ -1,5 +1,6 @@
 // Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
-// Dark: built by `build:mobile-web:app` into out/mobile-web-app, shipped by nothing until C1.
+// Built by `build:mobile-web` into the packaged bundle dir; mounted only by a build with
+// `EXPO_PUBLIC_MOBILE_SHELL=ota`.
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
@@ -11,6 +12,10 @@ import {
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
+import {
+  RouteScreenPaintProvider,
+  createRouteScreenPaintReporter
+} from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
@@ -29,13 +34,33 @@ import routeContext from './route-manifest'
 // and that is the boundary below's, not suspense's.
 // A factory because the client is not in scope until `init` lands, and ExpoRoot takes a component.
 function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
+  // A commit is not a paint, and an unpainted WebView shows the surface behind it and nothing else,
+  // so the shell keeps its own frame over this document until the second frame lands.
+  const reportRouteScreenPaint = createRouteScreenPaintReporter(
+    {
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        cancelAnimationFrame(handle)
+      }
+    },
+    () => {
+      client.notifyPagePainted()
+    }
+  )
   return function RootProviders({ children }: PropsWithChildren) {
     // Effects run child-first, so 'mounted' lands only after the router tree below this wrapper
-    // has committed. The tree is rendered once, with a ready client, so there is one such commit.
+    // has committed. That commit can be the suspense fallback of a route chunk still arriving,
+    // which is why the paint is reported from the screen and not from here.
     useEffect(() => {
       stampPageMountState(target, 'mounted')
     }, [])
-    return <RpcClientProvider client={client}>{children}</RpcClientProvider>
+    return (
+      <RpcClientProvider client={client}>
+        <RouteScreenPaintProvider report={reportRouteScreenPaint}>
+          {children}
+        </RouteScreenPaintProvider>
+      </RpcClientProvider>
+    )
   }
 }
 

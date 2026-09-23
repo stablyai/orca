@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useRouter } from 'expo-router'
+import { usePathname, useRouter } from 'expo-router'
 import {
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_ROUTE_HREF_PATTERN
@@ -7,6 +7,7 @@ import {
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
+import { useBackClaim } from './use-back-claim.web'
 import type { RouteHandoff } from './route-handoff'
 
 /** The path half of a target, which is what the shell's route patterns are written against. */
@@ -133,6 +134,23 @@ function createRefusalReporter(): (reason: RouteHandoffRefusal, target: string) 
 export function useRouteHandoff(): RouteHandoff {
   const client = usePageBridgeClient()
   const router = useRouter()
+  // Subscribed to, not read for its value: `canGoBack()` answers off committed navigation state,
+  // and nothing else in this hook re-renders when a push inside the page commits one.
+  usePathname()
+  // A stack the page grew itself pops itself, so Back belongs to this document while one exists.
+  // Re-checked at the press rather than trusted from the claim: the two cross on separate frames,
+  // and `false` hands the press back to the shell to pop the screen this page was pushed onto.
+  useBackClaim(
+    router.canGoBack()
+      ? () => {
+          if (!router.canGoBack()) {
+            return false
+          }
+          router.back()
+          return true
+        }
+      : null
+  )
 
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()

@@ -393,6 +393,20 @@ relay_gce_cells = {
     connection_hard_cap         = 3000
     connection_unobserved_bound = 60
   }
+  "production-gce-c30" = {
+    hostname                    = "c30"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-a"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:4158d8a2e18e9caec439d257f0c1e45d92ffea8c0262f057b2f08c76a134bcf0"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
 }
 
 relay_region_rehome_source_cell_ids = [
@@ -415,7 +429,8 @@ relay_region_rehome_source_cell_ids = [
   # Asia cells carry the same trust so mis-homed hosts can be drained back off them.
   "production-gce-c27",
   "production-gce-c28",
-  "production-gce-c29"
+  "production-gce-c29",
+  "production-gce-c30"
 ]
 
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply

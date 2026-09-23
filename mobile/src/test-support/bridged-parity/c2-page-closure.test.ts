@@ -41,11 +41,11 @@ describe('the C2 page closure', () => {
    * *family* entering the closure — a scenario recorded at a site the route newly imports — is
    * invisible until someone re-derives the closure by hand, as C1's and C5's pins are too.
    */
-  it('is the census the design named: 70 families, 268 goldens', () => {
+  it('is the census the design named: 68 families, 259 goldens', () => {
     const goldens = Object.values(C2_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C2_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 70,
-      goldens: 268
+      families: 68,
+      goldens: 259
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -60,8 +60,8 @@ describe('the C2 page closure', () => {
    */
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C2_PAGE_CLOSURE)).toEqual({
-      identical: 114,
-      'result-absent-settlement': 120,
+      identical: 108,
+      'result-absent-settlement': 117,
       'params-undefined': 29,
       'result-absent-stream-release': 3,
       'write-ordinal': 2
@@ -81,7 +81,7 @@ describe('the C2 page closure', () => {
     // `c1-page-closure.test.ts`, whose exclusion check is `toBeGreaterThan(0)` and which pins no
     // class totals at all.
     //
-    // C2's own rule does not reproduce these pins — measured, it disagrees on 13 of the 104, being
+    // C2's own rule does not reproduce these pins — measured, it disagrees on 13 of the 103, being
     // `tasks.smart-source-search` 7, `host-worktree-refresh` 5 and `worktree-catalog-snapshot` 1 —
     // so inheritance is the derivation rather than a re-derivation that looked close.
     const committed = pinsFromSource(C1_SOURCE)
@@ -89,7 +89,7 @@ describe('the C2 page closure', () => {
     expect({
       families: Object.keys(committed).length,
       pins: Object.values(committed).flatMap(Object.keys).length
-    }).toEqual({ families: 22, pins: 104 })
+    }).toEqual({ families: 20, pins: 95 })
     for (const [family, pinned] of Object.entries(committed)) {
       expect(C2_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
@@ -100,7 +100,7 @@ describe('the C2 page closure', () => {
     // Two page closures that share a family share the goldens in it. Were one to be re-derived and
     // the other inherited, this is the assertion that would not hold.
     const shared = Object.keys(C5_PAGE_CLOSURE).filter((family) => family in C2_PAGE_CLOSURE)
-    expect(shared.length).toBe(22)
+    expect(shared.length).toBe(20)
     for (const family of shared) {
       expect(C2_PAGE_CLOSURE[family], family).toEqual(C5_PAGE_CLOSURE[family])
     }
@@ -120,7 +120,7 @@ describe('the C2 page closure', () => {
   })
 
   it('names the families where a pin proves only that the divergence kept its name', () => {
-    // "268 certified" would read as 268 proofs of byte-identity. Six families have no byte-identical
+    // "266 certified" would read as 266 proofs of byte-identity. Six families have no byte-identical
     // golden at all, so their 27 say only that the class did not change, and the PR body says so.
     const wholly = Object.entries(C2_PAGE_CLOSURE)
       .filter(([, pins]) => !Object.values(pins).includes('identical'))
@@ -160,7 +160,7 @@ describe('the C2 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C2_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(154)
+    expect(exclusions.length).toBe(151)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )
@@ -221,7 +221,7 @@ describe('reading a run against the C2 pin', () => {
     expect(pageClosureRunTotals(C2_PAGE_CLOSURE, run)).not.toEqual(
       pageClosureTotals(C2_PAGE_CLOSURE)
     )
-    expect([...run].filter(([, seen]) => seen.family in C2_PAGE_CLOSURE).length).toBe(267)
+    expect([...run].filter(([, seen]) => seen.family in C2_PAGE_CLOSURE).length).toBe(258)
   })
 
   it('ignores every golden outside the closure, which is most of the corpus', () => {

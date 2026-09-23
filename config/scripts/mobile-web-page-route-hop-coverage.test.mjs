@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { mobileAppNavigationTargets } from './mobile-app-navigation-targets.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 
 /**
  * Every in-page hop between page routes, and whether the opener's grants cover the target.
@@ -73,7 +75,7 @@ function sameRoute(pushed, declared) {
  * a changed-file row and its diff.
  *
  * The seven C7 rows are the same rule with the arrows all one way: every one `X -> session`, one
- * from each other page route. The session screen's fourteen grants are a strict
+ * from each other page route. The session screen's thirteen grants are a strict
  * superset of every other route's, so nothing can reach it under the grants it was opened with —
  * and nothing it pushes to leaves, because its own seven targets each declare a subset. A row in
  * the other direction would mean a route had grown a grant the session lacks.
@@ -100,7 +102,32 @@ const HANDED_OFF = [
   '/h/[hostId]/tasks -> /h/[hostId]/session/[worktreeId]'
 ]
 
+/**
+ * The one count the note above spells out, counted off the list it is about.
+ *
+ * The superset claim is what the seven session rows rest on, so the number in it is load-bearing:
+ * it read fourteen through #22072, which removed a grant and moved nothing here.
+ */
+const SPELLED_COUNTS = [
+  {
+    precedes: 'grants are a strict',
+    counted: MOBILE_WEB_PAGE_ROUTES.filter(
+      (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+    ).flatMap((route) => route.grants).length
+  }
+]
+
 describe('in-page hops between page routes', () => {
+  it("spells the session route's grant count off the table it is claiming about", async () => {
+    const source = await readFile(import.meta.filename, 'utf8')
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(
+      source,
+      SPELLED_COUNTS
+    )) {
+      expect(spelled, precedes).toEqual(counts)
+    }
+  })
+
   it('finds the hops the app actually builds, so the census is not empty', () => {
     const { targets } = mobileAppNavigationTargets()
     // The sidebar's tasks push is the hop this lane exists for; if the census stops seeing it the

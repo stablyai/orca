@@ -1,13 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Platform,
-  useWindowDimensions,
-  Keyboard,
-  BackHandler
-} from 'react-native'
+import { View, Pressable, StyleSheet, Platform, useWindowDimensions, Keyboard } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -20,6 +12,7 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { colors, spacing } from '../theme/mobile-theme'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
@@ -107,20 +100,17 @@ function MountedRightDrawer({
     }
   }, [onHidden, visible])
 
-  useEffect(() => {
-    // Native only, ahead of need: the review screen is this drawer's one caller and C4 is what
-    // serves that route from the page. React Native Web answers `BackHandler.addEventListener`
-    // with a console warning and an inert subscription, and a WebView has no hardware back to
-    // intercept; the shell owns the one the phone has.
-    if (!visible || Platform.OS === 'web') {
-      return
-    }
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
-      return true
-    })
-    return () => sub.remove()
-  }, [visible, onClose])
+  // The same seam every session sheet takes: the hardware key natively, and a claim on the shell's
+  // key inside the page. The review screen is this drawer's one caller and C4 serves that route
+  // from the page, so both halves are reachable.
+  useBackClaim(
+    visible
+      ? () => {
+          onClose()
+          return true
+        }
+      : null
+  )
 
   const dismiss = useCallback(() => {
     onClose()

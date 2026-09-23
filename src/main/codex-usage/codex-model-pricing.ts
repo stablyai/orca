@@ -1,14 +1,12 @@
-export type TieredPrice = { threshold: number; price: number }
-export type CodexModelPricing = {
-  input: number
-  cachedInput: number
-  output: number
-  inputTiers?: TieredPrice[]
-  cachedInputTiers?: TieredPrice[]
-  outputTiers?: TieredPrice[]
+type CodexTokenRates = { input: number; cachedInput: number; output: number }
+export type CodexModelPricing = CodexTokenRates & {
+  /** Rates for a request whose prompt exceeds LONG_CONTEXT_THRESHOLD_TOKENS; they apply to that
+   *  whole request's input, cached input and output. */
+  longContext?: CodexTokenRates
 }
 
-const LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
+/** OpenAI: "Prompts with more than 272K input tokens" — strictly greater, decimal thousands. */
+export const LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 
 export const MODEL_PRICING: Record<string, CodexModelPricing> = {
   'gpt-5': { input: 1.25, cachedInput: 0.125, output: 10 },
@@ -16,6 +14,7 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
   'gpt-5.1-codex': { input: 1.25, cachedInput: 0.125, output: 10 },
   'gpt-5.1-codex-max': { input: 1.25, cachedInput: 0.125, output: 10 },
   'gpt-5.2': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.2-pro': { input: 21, cachedInput: 21, output: 168 },
   'gpt-5.2-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
   'gpt-5.3': { input: 1.75, cachedInput: 0.175, output: 14 },
   'gpt-5.3-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
@@ -26,69 +25,68 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     input: 30,
     cachedInput: 30,
     output: 180,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 270 }]
+    longContext: { input: 60, cachedInput: 60, output: 270 }
   },
   'gpt-5.4': {
     input: 2.5,
     cachedInput: 0.25,
     output: 15,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+    longContext: { input: 5, cachedInput: 0.5, output: 22.5 }
   },
   'gpt-5.5-pro': {
     input: 30,
     cachedInput: 30,
     output: 180,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 270 }]
+    longContext: { input: 60, cachedInput: 60, output: 270 }
   },
   'gpt-5.5': {
     input: 5,
     cachedInput: 0.5,
     output: 30,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+    longContext: { input: 10, cachedInput: 1, output: 45 }
   },
+  // Why: Sol's $4/$20 is OpenAI's promotional rate, listed through at least 2026-11-21.
   'gpt-5.6-sol': {
-    input: 5,
-    cachedInput: 0.5,
-    output: 30,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+    input: 4,
+    cachedInput: 0.4,
+    output: 20,
+    longContext: { input: 8, cachedInput: 0.8, output: 30 }
   },
   'gpt-5.6-terra': {
-    input: 2.5,
-    cachedInput: 0.25,
-    output: 15,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+    input: 2,
+    cachedInput: 0.2,
+    output: 12,
+    longContext: { input: 4, cachedInput: 0.4, output: 18 }
   },
   'gpt-5.6-luna': {
-    input: 1,
-    cachedInput: 0.1,
-    output: 6,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
+    input: 0.2,
+    cachedInput: 0.02,
+    output: 1.2,
+    longContext: { input: 0.4, cachedInput: 0.04, output: 1.8 }
   },
   'gpt-6-astra': {
     input: 10,
     cachedInput: 1,
     output: 50,
-    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 20 }],
-    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
-    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 75 }]
+    longContext: { input: 20, cachedInput: 2, output: 75 }
+  },
+  'gpt-6-sol': {
+    input: 2,
+    cachedInput: 0.2,
+    output: 10,
+    longContext: { input: 4, cachedInput: 0.4, output: 15 }
+  },
+  'gpt-6-luna': {
+    input: 0.1,
+    cachedInput: 0.01,
+    output: 0.5,
+    longContext: { input: 0.2, cachedInput: 0.02, output: 0.75 }
   }
 }
 
 const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'none']
+// Why: `max`/`ultra` only in parentheses — as a dash suffix `max` would strip `gpt-5.1-codex-max`.
+const PARENTHESIZED_REASONING_TIERS = [...REASONING_TIER_SUFFIXES, 'max', 'ultra']
 
 function stripParenthesizedReasoningTier(model: string): string | null {
   const match = model.match(/^(.*)\(([^()]*)\)$/)
@@ -96,7 +94,7 @@ function stripParenthesizedReasoningTier(model: string): string | null {
     return model
   }
   const tier = match[2].trim().toLowerCase()
-  if (!REASONING_TIER_SUFFIXES.includes(tier)) {
+  if (!PARENTHESIZED_REASONING_TIERS.includes(tier)) {
     return null
   }
   return match[1]
@@ -136,6 +134,9 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-5.1' || normalized.startsWith('gpt-5.1-')) {
     return 'gpt-5.1'
+  }
+  if (normalized === 'gpt-5.2-pro' || normalized.startsWith('gpt-5.2-pro-')) {
+    return 'gpt-5.2-pro'
   }
   if (normalized === 'gpt-5.2-codex' || normalized.startsWith('gpt-5.2-codex-')) {
     return 'gpt-5.2-codex'
@@ -181,6 +182,12 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-6-astra' || normalized.startsWith('gpt-6-astra-')) {
     return 'gpt-6-astra'
+  }
+  if (normalized === 'gpt-6-sol' || normalized.startsWith('gpt-6-sol-')) {
+    return 'gpt-6-sol'
+  }
+  if (normalized === 'gpt-6-luna' || normalized.startsWith('gpt-6-luna-')) {
+    return 'gpt-6-luna'
   }
   // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
   // `gpt-5.6-` prefix match would swallow the tier IDs above and any future

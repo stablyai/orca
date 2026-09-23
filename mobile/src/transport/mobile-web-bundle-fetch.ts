@@ -8,6 +8,7 @@ import type {
   MobileWebBundleManifestRead
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
+import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { runRpcOperation } from './rpc-operation'
 
 /** The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
@@ -106,12 +107,16 @@ async function readBundleAsset(args: {
     assertChunkDescribesAsset(chunk, args.asset, args.buildId, offset)
     const bytes = decodeBase64(chunk.dataBase64)
     if (bytes.byteLength > args.chunkBytes) {
-      throw new Error(
+      throw new MobileWebBundleFetchError(
+        'chunk-oversize',
         `bundle chunk for ${args.asset.path} at ${offset} is ${bytes.byteLength} bytes, over the host's ${args.chunkBytes}`
       )
     }
     if (offset + bytes.byteLength > whole.byteLength) {
-      throw new Error(`bundle asset ${args.asset.path} is longer than the manifest declares`)
+      throw new MobileWebBundleFetchError(
+        'asset-overlong',
+        `bundle asset ${args.asset.path} is longer than the manifest declares`
+      )
     }
     whole.set(bytes, offset)
     offset += bytes.byteLength
@@ -120,17 +125,24 @@ async function readBundleAsset(args: {
     }
     // Without this a host that keeps answering an unchanged offset with no bytes pages forever.
     if (bytes.byteLength === 0) {
-      throw new Error(`bundle asset ${args.asset.path} made no progress at ${offset}`)
+      throw new MobileWebBundleFetchError(
+        'asset-no-progress',
+        `bundle asset ${args.asset.path} made no progress at ${offset}`
+      )
     }
   }
   if (offset !== whole.byteLength) {
-    throw new Error(
+    throw new MobileWebBundleFetchError(
+      'asset-short',
       `bundle asset ${args.asset.path} ended at ${offset} of ${whole.byteLength} declared bytes`
     )
   }
   const digest = toHex(sha256(whole))
   if (digest !== args.asset.sha256) {
-    throw new Error(`bundle asset ${args.asset.path} hashed ${digest}, not ${args.asset.sha256}`)
+    throw new MobileWebBundleFetchError(
+      'asset-checksum-mismatch',
+      `bundle asset ${args.asset.path} hashed ${digest}, not ${args.asset.sha256}`
+    )
   }
   return whole
 }
@@ -154,15 +166,22 @@ function assertChunkDescribesAsset(
   offset: number
 ): void {
   if (chunk.buildId !== buildId) {
-    throw new Error(`bundle build changed mid-fetch: asked ${buildId}, served ${chunk.buildId}`)
+    throw new MobileWebBundleFetchError(
+      'build-changed-mid-fetch',
+      `bundle build changed mid-fetch: asked ${buildId}, served ${chunk.buildId}`
+    )
   }
   if (chunk.path !== asset.path || chunk.offset !== offset) {
-    throw new Error(
+    throw new MobileWebBundleFetchError(
+      'chunk-misrouted',
       `bundle chunk answered ${chunk.path} at ${chunk.offset}, not ${asset.path} at ${offset}`
     )
   }
   if (chunk.sha256 !== asset.sha256 || chunk.assetByteLength !== asset.byteLength) {
-    throw new Error(`bundle asset ${asset.path} no longer matches the manifest entry`)
+    throw new MobileWebBundleFetchError(
+      'asset-entry-changed',
+      `bundle asset ${asset.path} no longer matches the manifest entry`
+    )
   }
 }
 
@@ -170,10 +189,13 @@ function assertChunkDescribesAsset(
  *  asset that failed rejects first and is what `Promise.all` reports. */
 function throwIfStopped(caller: AbortSignal | undefined, stopped: AbortSignal): void {
   if (caller?.aborted === true) {
-    throw new Error('mobile web bundle fetch aborted')
+    throw new MobileWebBundleFetchError('fetch-stopped', 'mobile web bundle fetch aborted')
   }
   if (stopped.aborted) {
-    throw new Error('mobile web bundle fetch stopped after an earlier asset failed')
+    throw new MobileWebBundleFetchError(
+      'fetch-stopped',
+      'mobile web bundle fetch stopped after an earlier asset failed'
+    )
   }
 }
 

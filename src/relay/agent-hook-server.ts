@@ -225,7 +225,7 @@ export class RelayAgentHookServer {
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string): void {
     this.retryScheduler.clearAssistantMessageRetry(paneKey)
-    this.retryScheduler.clearCodexSubagentPoll(paneKey)
+    this.retryScheduler.clearTranscriptPoll(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -284,7 +284,7 @@ export class RelayAgentHookServer {
         const version = hookBodyVersion(hookBody)
         this.applyEvent(event, source, env, version)
         this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
+        this.retryScheduler.scheduleTranscriptPoll(source, hookBody, event, env, version)
       }
       res.writeHead(204)
       res.end()

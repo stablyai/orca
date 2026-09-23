@@ -208,6 +208,29 @@ describe('per-job path classification', () => {
     }
   })
 
+  it('runs Linux packaging for the daemon shutdown descendant oracle and its production paths', () => {
+    for (const file of [
+      'config/docker/daemon-shutdown-descendants/Dockerfile',
+      'config/docker/daemon-shutdown-descendants/bundle-entry.ts',
+      'config/docker/daemon-shutdown-descendants/fixture.cjs',
+      'config/docker/daemon-shutdown-descendants/run-case.sh',
+      'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
+    ]) {
+      expectClassification([file], { package: true })
+    }
+    for (const file of [
+      'src/main/daemon/terminal-host.ts',
+      'src/main/daemon/terminal-session-teardown.ts',
+      'src/main/daemon/terminal-host-session-shutdown.ts',
+      'src/main/daemon/terminal-descendant-shutdown.ts',
+      'src/main/pty-descendant-termination.ts',
+      'src/main/pty-descendant-exit-verification.ts',
+      'src/main/pty-process-table-parser.ts'
+    ]) {
+      expectClassification([file], { package: true, package_windows: true })
+    }
+  })
+
   it('runs both package jobs when the shared skills runtime verifier changes', () => {
     expectClassification(['config/scripts/verify-skills-cli-runtime.cjs'], {
       package: true,
@@ -277,7 +300,7 @@ describe('per-job path classification', () => {
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
-    // build:mobile-web:app is defined there, so the job has to run on an edit to it. A prefix
+    // build:mobile-web is defined there, so the job has to run on an edit to it. A prefix
     // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
     expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
   })
@@ -468,6 +491,20 @@ describe('per-job path classification', () => {
 })
 
 describe('PR Checks skip wiring', () => {
+  it('runs the candidate daemon shutdown Docker oracle in the existing Linux package job', () => {
+    const steps = prWorkflow.jobs.package.steps
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const oracle = steps.findIndex(
+      (step) => step.name === 'Verify Linux daemon shutdown descendant cleanup'
+    )
+    expect(install).toBeGreaterThan(-1)
+    expect(oracle).toBeGreaterThan(install)
+    expect(steps[oracle].run).toBe('node config/scripts/run-daemon-shutdown-descendants-docker.mjs')
+    expect(steps[oracle].env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+  })
+
   it('classifies the PR range with a tested script and expands renames', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
