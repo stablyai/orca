@@ -119,7 +119,10 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
   const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0))
 
   /** Releases wave after wave until `done` settles; returns how many waves it took. */
-  const runWaves = async (done: Promise<unknown>): Promise<number> => {
+  const runWaves = async (
+    done: Promise<unknown>,
+    beforeWave?: (wave: number) => void
+  ): Promise<number> => {
     let settled = false
     done.then(
       () => (settled = true),
@@ -131,6 +134,7 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
       const wave = waiting
       waiting = []
       waves += 1
+      beforeWave?.(waves)
       wave.forEach((release) => release())
       await settleMicrotasks()
     }
@@ -180,31 +184,54 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
     }
   })
 
-  it('narrows the window on a read-limited refusal and still reassembles every byte', async () => {
-    const files = syntheticBundle()
-    const host = waveHost(files, { readSlots: 3 })
-
-    const fetched = fetchMobileWebBundle({ client: host.client })
-    await host.runWaves(fetched)
-    const result = await fetched
-
-    // One refusal narrows the window for the rest of the fetch, so no later wave is refused.
-    expect(host.refusalCount()).toBe(1)
-    expect(host.requests).toHaveLength(77)
-    expect(Math.max(...host.peaks.slice(4))).toBe(3)
-    for (const [path, text] of Object.entries(files)) {
-      expect(new TextDecoder().decode(result.assets.get(path))).toBe(text)
-    }
-  })
-
-  it('fails with the host code when even one read is refused', async () => {
-    const host = waveHost({ 'index.html': 'abcdefgh' }, { readSlots: 0 })
+  it('fails the fetch on a read-limited refusal and stops the other reads', async () => {
+    const host = waveHost(syntheticBundle(), { readSlots: 3 })
 
     const fetched = fetchMobileWebBundle({ client: host.client })
     await host.runWaves(fetched)
     const error = await fetched.catch((thrown: unknown) => thrown)
 
     expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_read_limited')
+    expect(host.refusalCount()).toBe(1)
+    // The first wave's four, plus one follow-up from each sibling reply that settled before the refusal.
+    expect(host.requests.length).toBeLessThanOrEqual(7)
+  })
+
+  it('rejects a caller abort that lands during the final window', async () => {
+    const controller = new AbortController()
+    const host = waveHost(syntheticBundle())
+
+    const fetched = fetchMobileWebBundle({ client: host.client, signal: controller.signal })
+    const waves = await host.runWaves(fetched, (wave) => {
+      if (wave === 19) {
+        controller.abort()
+      }
+    })
+
+    // Every read is already sent by the last wave, so no later dispatch can notice the abort.
+    expect(waves).toBe(19)
+    expect(host.requests).toHaveLength(76)
+    const error = await fetched.catch((thrown: unknown) => thrown)
+    expect(error instanceof MobileWebBundleFetchError ? error.refusal : null).toBe('fetch-stopped')
+  })
+
+  it('reports received bytes before the first asset completes', async () => {
+    const host = waveHost(syntheticBundle())
+    const progress: { completedAssets: number; receivedBytes: number }[] = []
+
+    const fetched = fetchMobileWebBundle({
+      client: host.client,
+      onProgress: ({ completedAssets, receivedBytes }) =>
+        progress.push({ completedAssets, receivedBytes })
+    })
+    await host.runWaves(fetched)
+    await fetched
+
+    expect(progress[0]).toEqual({ completedAssets: 0, receivedBytes: CHUNK_BYTES })
+    expect(progress.at(-1)).toEqual({
+      completedAssets: 6,
+      receivedBytes: 71 * CHUNK_BYTES - 1 + 13
+    })
   })
 
   it('stops every other read once one chunk fails', async () => {

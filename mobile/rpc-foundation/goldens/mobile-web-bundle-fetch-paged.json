@@ -3,8 +3,8 @@
   "family": "mobileWeb.bundle-fetch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "84d6fca6e71bf46dc3b3526465f9613e6c3e80d7",
-  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "baseline": "34fda6f62e2b203e6e4df2518df9595061732233",
+  "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
   "scenarioSha256": "e3044fe513a5fc1fb10c5c00422d965dd760eeea37cfcebc79b4597141f4baa1",
@@ -164,15 +164,6 @@
         }
       }
     },
-    "2ff2addcb1f6": {
-      "name": "bundle-progress",
-      "ordinal": 10,
-      "value": {
-        "completedAssets": 2,
-        "receivedBytes": 37,
-        "totalAssets": 2
-      }
-    },
     "32f2527d4016": {
       "name": "mobileWeb.bundle.chunk#1",
       "ordinal": 3,
@@ -231,12 +222,21 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
     },
-    "7d128753d006": {
+    "823559d1d4b0": {
+      "name": "bundle-progress",
+      "ordinal": 11,
+      "value": {
+        "completedAssets": 2,
+        "receivedBytes": 37,
+        "totalAssets": 2
+      }
+    },
+    "a8fc2e3f9314": {
       "name": "bundle-progress",
       "ordinal": 9,
       "value": {
-        "completedAssets": 1,
-        "receivedBytes": 26,
+        "completedAssets": 0,
+        "receivedBytes": 16,
         "totalAssets": 2
       }
     },
@@ -248,6 +248,15 @@
         "assetCount": 2,
         "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
         "totalBytes": 37
+      }
+    },
+    "c37e890da8f5": {
+      "name": "bundle-progress",
+      "ordinal": 10,
+      "value": {
+        "completedAssets": 1,
+        "receivedBytes": 26,
+        "totalAssets": 2
       }
     },
     "f09d3e39d35e": {
@@ -268,7 +277,7 @@
             "fetch": "c319ae866f13"
           },
           "state": "573943fdb37d",
-          "effects": ["7d128753d006", "2ff2addcb1f6"]
+          "effects": ["a8fc2e3f9314", "c37e890da8f5", "823559d1d4b0"]
         }
       }
     ]

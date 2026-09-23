@@ -1,7 +1,7 @@
 import { sha256 } from '@noble/hashes/sha256'
 import {
-  mobileWebBundleManifestRead,
-  readMobileWebBundleErrorCode
+  mobileWebBundleChunkRead,
+  mobileWebBundleManifestRead
 } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
@@ -9,19 +9,12 @@ import type {
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import type { MobileWebBundleReadMethod } from './mobile-web-bundle-read-method'
 import { runRpcOperation } from './rpc-operation'
-import {
-  decodeMobileWebBundleWindow,
-  mobileWebBundleWindowBytes,
-  requestMobileWebBundleWindow
-} from './mobile-web-bundle-window-read'
 
 /** The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
- *  so the client never offers a fifth. The four are chunk or range reads across the whole manifest,
- *  not one asset each: paging a large asset alone would put every one of its reads on the critical
- *  path. */
-const MAX_CONCURRENT_WINDOW_READS = 4
+ *  so the client never offers a fifth. The four are chunk reads across the whole manifest, not one
+ *  asset each: paging a large asset alone would put every one of its chunks on the critical path. */
+const MAX_CONCURRENT_CHUNK_READS = 4
 
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
@@ -39,8 +32,7 @@ export type MobileWebBundleFetchResult = {
 
 type AssetReassembly = {
   readonly entry: MobileWebBundleAssetRead
-  whole: Uint8Array | null
-  receivedBytes: number
+  readonly whole: Uint8Array
   outstandingChunks: number
 }
 
@@ -55,46 +47,38 @@ type ChunkRead = { readonly asset: AssetReassembly; readonly offset: number }
  */
 export async function fetchMobileWebBundle(args: {
   client: RpcClient
-  /** Absent reads as `chunk`, the method every bundle host serves. */
-  readMethod?: MobileWebBundleReadMethod
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
-  throwIfStopped(args.signal, stopped.signal)
+  throwIfCallerAborted(args.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
+  const queue = planChunkReads(manifest.assets, opened.chunkBytes)
   const assets = new Map<string, Uint8Array>()
   let receivedBytes = 0
-  const method = args.readMethod ?? 'chunk'
-  const windowBytes = mobileWebBundleWindowBytes(method, opened.chunkBytes)
 
-  const readChunk = async (read: ChunkRead): Promise<void> => {
-    const chunk = await requestMobileWebBundleWindow(args.client, method, {
+  const readChunk = async ({ asset, offset }: ChunkRead): Promise<void> => {
+    const reply = await runRpcOperation(args.client, mobileWebBundleChunkRead, {
       buildId: manifest.buildId,
-      path: read.asset.entry.path,
-      offset: read.offset,
-      length: windowBytes
+      path: asset.entry.path,
+      offset
     })
-    // A sibling already failed the fetch; this reply is not worth checking, decoding or hashing.
-    if (stopped.signal.aborted || read.asset.whole === null) {
+    // A sibling already failed the fetch; this reply is not worth checking, hashing or reporting.
+    if (stopped.signal.aborted) {
       return
     }
-    assertChunkDescribesAsset(chunk, read.asset.entry, manifest.buildId, read.offset)
-    const expected = Math.min(windowBytes, read.asset.entry.byteLength - read.offset)
-    const bytes = decodeMobileWebBundleWindow(method, chunk, expected)
-    assertChunkFillsItsSlot(read, bytes.byteLength, chunk.eof, windowBytes)
-    const { whole } = read.asset
-    const { offset } = read
-    whole.set(bytes, offset)
-    read.asset.receivedBytes += bytes.byteLength
-    read.asset.outstandingChunks -= 1
-    if (read.asset.outstandingChunks > 0) {
-      return
+    assertChunkDescribesAsset(reply, asset.entry, manifest.buildId, offset)
+    const bytes = decodeBase64(reply.dataBase64)
+    assertChunkFillsItsSlot(asset.entry, offset, bytes.byteLength, reply.eof, opened.chunkBytes)
+    asset.whole.set(bytes, offset)
+    asset.outstandingChunks -= 1
+    if (asset.outstandingChunks === 0) {
+      assets.set(asset.entry.path, verifyReassembledAsset(asset))
     }
-    assets.set(read.asset.entry.path, verifyReassembledAsset(read.asset, read.asset.whole))
-    receivedBytes += read.asset.whole.byteLength
+    // Per chunk, not per asset: the largest asset goes first, so asset completions bunch at the end.
+    receivedBytes += bytes.byteLength
     args.onProgress?.({
       completedAssets: assets.size,
       totalAssets: manifest.assets.length,
@@ -103,17 +87,33 @@ export async function fetchMobileWebBundle(args: {
     })
   }
 
-  await runChunkWindow({
-    reads: planChunkReads(manifest.assets, windowBytes),
-    readChunk,
-    signal: args.signal,
-    stopped
-  })
+  const worker = async (): Promise<void> => {
+    try {
+      while (!stopped.signal.aborted) {
+        const read = queue.shift()
+        if (read === undefined) {
+          return
+        }
+        throwIfCallerAborted(args.signal)
+        await readChunk(read)
+      }
+    } catch (error) {
+      // One failed chunk stops every other read: each read a worker would still send holds one of
+      // the host's four slots against the caller's retry.
+      stopped.abort()
+      throw error
+    }
+  }
+
+  const workers = Math.min(MAX_CONCURRENT_CHUNK_READS, queue.length)
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  // The final window sends nothing after its last reply, so no worker would see this abort.
+  throwIfCallerAborted(args.signal)
   return { manifest, assets, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
 }
 
 /** Largest asset first, so the biggest script's tail is never the last read left in flight. Offsets
- *  are the chunk or range grid, so every read is known up front; `eof` still comes from the reply. */
+ *  are the host's chunk grid, so every read is known up front; `eof` still comes from the reply. */
 function planChunkReads(
   entries: readonly MobileWebBundleAssetRead[],
   chunkBytes: number
@@ -123,138 +123,63 @@ function planChunkReads(
     const count = Math.max(1, Math.ceil(entry.byteLength / chunkBytes))
     const asset: AssetReassembly = {
       entry,
-      whole: null,
-      receivedBytes: 0,
+      whole: new Uint8Array(entry.byteLength),
       outstandingChunks: count
     }
     return Array.from({ length: count }, (_, index) => ({ asset, offset: index * chunkBytes }))
   })
 }
 
-/**
- * Keeps up to four chunk or range reads in flight over one queue. A `read_limited` refusal means something
- * else holds one of the host's slots: the window narrows once per refusal at the current width and
- * the read is retried; a refusal of a read sent alone is the host's verdict and fails the fetch.
- */
-function runChunkWindow(args: {
-  reads: ChunkRead[]
-  readChunk: (read: ChunkRead) => Promise<void>
-  signal?: AbortSignal
-  stopped: AbortController
-}): Promise<void> {
-  const queue = args.reads
-  let width = MAX_CONCURRENT_WINDOW_READS
-  let inFlight = 0
-  return new Promise((resolve, reject) => {
-    // One failed chunk stops every other read, not just the next: each read it would still send
-    // holds one of the host's four slots against the caller's retry.
-    const fail = (error: unknown): void => {
-      if (!args.stopped.signal.aborted) {
-        args.stopped.abort()
-        reject(error)
-      }
-    }
-    const pump = (): void => {
-      if (args.stopped.signal.aborted) {
-        return
-      }
-      if (queue.length === 0 && inFlight === 0) {
-        resolve()
-        return
-      }
-      while (inFlight < width && queue.length > 0) {
-        try {
-          throwIfStopped(args.signal, args.stopped.signal)
-        } catch (error) {
-          fail(error)
-          return
-        }
-        const read = queue.shift()!
-        // Allocated at the asset's first read, so a fetch that stops early never holds the rest.
-        read.asset.whole ??= new Uint8Array(read.asset.entry.byteLength)
-        const sentAtWidth = width
-        inFlight += 1
-        args.readChunk(read).then(
-          () => {
-            inFlight -= 1
-            pump()
-          },
-          (error: unknown) => {
-            inFlight -= 1
-            if (
-              sentAtWidth > 1 &&
-              readMobileWebBundleErrorCode(error) === 'mobile_web_bundle_read_limited'
-            ) {
-              width = sentAtWidth === width ? width - 1 : width
-              queue.unshift(read)
-              pump()
-              return
-            }
-            fail(error)
-          }
-        )
-      }
-    }
-    pump()
-  })
-}
-
-/** Offsets are planned, so a chunk that falls short without ending the asset would leave a hole. */
+/** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
 function assertChunkFillsItsSlot(
-  read: ChunkRead,
+  entry: MobileWebBundleAssetRead,
+  offset: number,
   byteLength: number,
   eof: boolean,
   chunkBytes: number
 ): void {
-  const { path, byteLength: declared } = read.asset.entry
-  const end = read.offset + byteLength
+  const { path, byteLength: declared } = entry
+  const expected = Math.min(chunkBytes, declared - offset)
+  if (byteLength === expected && eof === offset + chunkBytes >= declared) {
+    return
+  }
+  const end = offset + byteLength
   if (byteLength > chunkBytes) {
     throw new MobileWebBundleFetchError(
       'chunk-oversize',
-      `bundle chunk for ${path} at ${read.offset} is ${byteLength} bytes, over the host's ${chunkBytes}`
+      `bundle chunk for ${path} at ${offset} is ${byteLength} bytes, over the host's ${chunkBytes}`
     )
   }
-  if (end > declared || (!eof && byteLength > 0 && end >= declared)) {
+  if (byteLength > expected || (byteLength > 0 && !eof && end >= declared)) {
     throw new MobileWebBundleFetchError(
       'asset-overlong',
       `bundle asset ${path} is longer than the manifest declares`
     )
   }
-  if (eof && end < declared) {
-    throw new MobileWebBundleFetchError(
-      'asset-short',
-      `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
-    )
-  }
   if (!eof && byteLength === 0) {
     throw new MobileWebBundleFetchError(
       'asset-no-progress',
-      `bundle asset ${path} made no progress at ${read.offset}`
+      `bundle asset ${path} made no progress at ${offset}`
     )
   }
-  if (!eof && byteLength < chunkBytes) {
-    throw new MobileWebBundleFetchError(
-      'asset-short',
-      `bundle chunk for ${path} at ${read.offset} carried ${byteLength} of ${chunkBytes} bytes without ending the asset`
-    )
-  }
+  throw new MobileWebBundleFetchError(
+    'asset-short',
+    eof
+      ? `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
+      : `bundle chunk for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
+  )
 }
 
-function verifyReassembledAsset(asset: AssetReassembly, whole: Uint8Array): Uint8Array {
-  if (asset.receivedBytes !== whole.byteLength) {
-    throw new MobileWebBundleFetchError(
-      'asset-short',
-      `bundle asset ${asset.entry.path} ended at ${asset.receivedBytes} of ${whole.byteLength} declared bytes`
-    )
-  }
-  const digest = toHex(sha256(whole))
+/** Every slot was accepted exactly once, so only the hash is left to say the bytes are right. */
+function verifyReassembledAsset(asset: AssetReassembly): Uint8Array {
+  const digest = toHex(sha256(asset.whole))
   if (digest !== asset.entry.sha256) {
     throw new MobileWebBundleFetchError(
       'asset-checksum-mismatch',
       `bundle asset ${asset.entry.path} hashed ${digest}, not ${asset.entry.sha256}`
     )
   }
-  return whole
+  return asset.whole
 }
 
 /**
@@ -295,18 +220,22 @@ function assertChunkDescribesAsset(
   }
 }
 
-/** The caller's abort is what it asked for; the internal one never leaves this module, because the
- *  read that failed rejects the window before any sibling can. */
-function throwIfStopped(caller: AbortSignal | undefined, stopped: AbortSignal): void {
+/** Only the caller's abort surfaces as `fetch-stopped`; an internal stop rejects with the failure
+ *  that caused it. */
+function throwIfCallerAborted(caller: AbortSignal | undefined): void {
   if (caller?.aborted === true) {
     throw new MobileWebBundleFetchError('fetch-stopped', 'mobile web bundle fetch aborted')
   }
-  if (stopped.aborted) {
-    throw new MobileWebBundleFetchError(
-      'fetch-stopped',
-      'mobile web bundle fetch stopped after an earlier chunk failed'
-    )
+}
+
+/** Metro ships no Buffer; `atob` is the decoder the pairing and E2EE paths already run on Hermes. */
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
   }
+  return bytes
 }
 
 function toHex(bytes: Uint8Array): string {
