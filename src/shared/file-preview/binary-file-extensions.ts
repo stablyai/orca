@@ -70,17 +70,36 @@ export const BINARY_FILE_EXTENSIONS: readonly string[] = Object.freeze([
 
 const BINARY_FILE_EXTENSION_SET = new Set(BINARY_FILE_EXTENSIONS)
 
-/** Guess by extension only without bytes; use isBinaryBuffer for content-based detection. */
-export function hasBinaryFileExtension(filePath: string | undefined): boolean {
+// Why: the editor renders these binaries in its image and PDF viewers; any other binary
+// can only show "Binary file — cannot display".
+const EDITOR_VIEWABLE_BINARY_EXTENSION_SET = new Set([...IMAGE_FILE_EXTENSIONS, '.pdf'])
+
+function lowerFileExtension(filePath: string | undefined): string | null {
   if (filePath === undefined) {
-    return false
+    return null
   }
   const lowerPath = filePath.toLowerCase()
   const dotIndex = lowerPath.lastIndexOf('.')
   const separatorIndex = Math.max(lowerPath.lastIndexOf('/'), lowerPath.lastIndexOf('\\'))
   // A leading dot is a dotfile (.gitignore), not an extension.
   if (dotIndex <= separatorIndex + 1) {
-    return false
+    return null
   }
-  return BINARY_FILE_EXTENSION_SET.has(lowerPath.slice(dotIndex))
+  return lowerPath.slice(dotIndex)
+}
+
+/** Guess by extension only without bytes; use isBinaryBuffer for content-based detection. */
+export function hasBinaryFileExtension(filePath: string | undefined): boolean {
+  const extension = lowerFileExtension(filePath)
+  return extension !== null && BINARY_FILE_EXTENSION_SET.has(extension)
+}
+
+/** A known binary the editor has no viewer for (audio, video, archives, Office documents, …). */
+export function hasBinaryFileExtensionWithoutEditorViewer(filePath: string | undefined): boolean {
+  const extension = lowerFileExtension(filePath)
+  return (
+    extension !== null &&
+    BINARY_FILE_EXTENSION_SET.has(extension) &&
+    !EDITOR_VIEWABLE_BINARY_EXTENSION_SET.has(extension)
+  )
 }

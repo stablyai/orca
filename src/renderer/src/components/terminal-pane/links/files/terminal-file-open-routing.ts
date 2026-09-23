@@ -16,6 +16,7 @@ import {
   shouldOpenTerminalFileWithSystemDefault,
   terminalLinkWslDistro
 } from '../../host-files/terminal-file-path-mapping'
+import { hasBinaryFileExtensionWithoutEditorViewer } from '../../../../../../shared/file-preview/binary-file-extensions'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
@@ -252,6 +253,22 @@ export function openDetectedFilePath(
     if (deps.openInSourceGroupSurface === 'browser') {
       refuseExplicitNonEditorRoute()
       return
+    }
+
+    // Why: the editor can only say "Binary file — cannot display" for these, so an ordinary
+    // click takes the Shift+Cmd/Ctrl route to the app the OS registers for the file type.
+    if (!openWithSystemDefault && hasBinaryFileExtensionWithoutEditorViewer(mappedFilePath)) {
+      if (!canOpenWithSystemDefault) {
+        await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+        return
+      }
+      const openedWithSystemDefault = await window.api.shell.openFilePath(
+        mappedFilePath,
+        LOCAL_EXECUTION_HOST_ID
+      )
+      if (openedWithSystemDefault || !isCurrentRequest()) {
+        return
+      }
     }
 
     const {
