@@ -1,3 +1,4 @@
+import { buildWorktreeBaseRefreshArgs } from './git-worktree-base-refresh'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -589,5 +590,62 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     const included = await listFiles({ includePattern: 'vendored' })
     expect(included).toEqual(['vendored/inner.txt'])
+  })
+
+  it('refuses checked-out equals-containing base branches without changing the index', async () => {
+    const branch = 'base=custom'
+    const originalBranch = (await runGit(['symbolic-ref', '--short', 'HEAD'])).stdout.trim()
+    const originalOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['checkout', '-b', branch])
+    try {
+      await runGit(['config', `branch.${branch}.mergeOptions`, '--squash'])
+      await writeFile(join(repoPath, 'equals-incoming.txt'), 'remote contents\n')
+      await runGit(['add', 'equals-incoming.txt'])
+      await runGit(['commit', '-qm', 'refresh target'])
+      const remoteOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+      await runGit(['reset', '--hard', originalOid])
+      const indexBefore = await readFile(join(repoPath, '.git', 'index'))
+      await expect(
+        Promise.resolve().then(() => runGit(buildWorktreeBaseRefreshArgs(branch, remoteOid)))
+      ).rejects.toThrow('Cannot safely refresh')
+      expect((await runGit(['rev-parse', 'HEAD'])).stdout.trim()).toBe(originalOid)
+      expect(await readFile(join(repoPath, '.git', 'index'))).toEqual(indexBefore)
+      await expect(readFile(join(repoPath, 'equals-incoming.txt'))).rejects.toThrow()
+    } finally {
+      await runGit(['reset', '--hard', originalOid])
+      await runGit(['checkout', originalBranch])
+      await runGit(['branch', '-D', branch])
+    }
+  })
+
+  it.each(['untracked', 'ignored'])('base refresh preserves %s collisions', async (kind) => {
+    const branch = `refresh-${kind}`
+    const originalBranch = (await runGit(['symbolic-ref', '--short', 'HEAD'])).stdout.trim()
+    const originalOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const file = `refresh-${kind}.txt`
+    await runGit(['checkout', '-b', branch])
+    try {
+      if (kind === 'ignored') {
+        await writeFile(join(repoPath, '.git', 'info', 'exclude'), `${file}\n`)
+      }
+      await writeFile(join(repoPath, file), 'remote contents\n')
+      await runGit(['add', '-f', file])
+      await runGit(['commit', '-qm', 'refresh target'])
+      const remoteOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+      await runGit(['reset', '--hard', originalOid])
+      await writeFile(join(repoPath, file), 'local contents\n')
+      await expect(runGit(buildWorktreeBaseRefreshArgs(branch, remoteOid))).rejects.toThrow()
+      expect(await readFile(join(repoPath, file), 'utf8')).toBe('local contents\n')
+      expect((await runGit(['rev-parse', 'HEAD'])).stdout.trim()).toBe(originalOid)
+      await rm(join(repoPath, file))
+      await runGit(buildWorktreeBaseRefreshArgs(branch, remoteOid))
+      expect((await runGit(['rev-parse', 'HEAD'])).stdout.trim()).toBe(remoteOid)
+      expect(await readFile(join(repoPath, file), 'utf8')).toBe('remote contents\n')
+    } finally {
+      await rm(join(repoPath, file), { force: true })
+      await runGit(['reset', '--hard', originalOid])
+      await runGit(['checkout', originalBranch])
+      await runGit(['branch', '-D', branch])
+    }
   })
 })

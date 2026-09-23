@@ -7,6 +7,7 @@ import {
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from './worktree-operation-options'
 import { gitExecOptions } from './worktree-operation-options'
+import { buildWorktreeBaseRefreshArgs } from '../../shared/git-worktree-base-refresh'
 
 export { getLocalBaseRefUpdateSuggestionForWorktreeCreate }
 
@@ -57,7 +58,7 @@ export async function refreshLocalBaseRefForWorktreeCreate(
         }
       }
       await gitExecFileAsync(
-        ['reset', '--hard', evaluation.remoteOid],
+        buildWorktreeBaseRefreshArgs(evaluation.localBranch, evaluation.remoteOid),
         gitExecOptions(currentOwner.path, options)
       )
       return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
@@ -70,7 +71,6 @@ export async function refreshLocalBaseRefForWorktreeCreate(
     )
     return { ...resultBase, status: 'updated' }
   } catch {
-    // update-ref/reset can fail on locked refs or odd worktree states; worktree creation should still proceed.
     return { ...resultBase, status: 'skipped_error' }
   }
 }

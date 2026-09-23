@@ -1,6 +1,7 @@
 import type { GitExec } from './git-handler-ops'
 import { areRelayWorktreePathsEqual, readRelayWorktreeList } from './git-handler-worktree-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
+import { buildWorktreeBaseRefreshArgs } from '../shared/git-worktree-base-refresh'
 
 export async function refreshLocalBaseRefForWorktreeCreateOp(
   git: GitExec,
@@ -60,7 +61,10 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
     if (checkOnly) {
       return
     }
-    await git(['reset', '--hard', remoteOid], ownerWorktree.path)
+    await git(
+      buildWorktreeBaseRefreshArgs(fullRef.slice('refs/heads/'.length), remoteOid),
+      ownerWorktree.path
+    )
     return
   }
 

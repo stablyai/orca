@@ -50,6 +50,8 @@ Monitor and steer your agents from your phone — get notified when an agent fin
 
 Fan one prompt across five agents, each in its own isolated git worktree — compare the results and merge the winner.
 
+Optional local base refresh fast-forwards the base branch when safe. If incoming files would overwrite untracked or ignored files in its checkout, Orca skips the refresh and continues creating the new worktree. Orca also skips checked-out base branches whose names contain `=`, because it cannot safely override their merge preferences on all supported Git versions. These safeguards apply to local and SSH worktrees.
+
 [Docs →](https://www.onorca.dev/docs/model/worktrees)
 
 </td>
