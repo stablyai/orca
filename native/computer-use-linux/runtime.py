@@ -928,11 +928,15 @@ def press_key(raw):
         return
     if Gdk is None:
         raise RuntimeError("GDK is required for non-character key synthesis")
-    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.PRESSRELEASE)
+    # PRESSRELEASE expects a hardware keycode; SYM takes the keysym and resolves the keycode itself.
+    Atspi.generate_keyboard_event(Gdk.keyval_from_name(name), None, Atspi.KeySynthType.SYM)
 
 
 def hotkey(raw):
     key_spec = re.sub(r"(?i)commandorcontrol|cmdorctrl", "ctrl", str(raw))
+    if "+" in key_spec:
+        # xdotool treats an upper-case letter as its shifted keysym, so ctrl+A would press ctrl+shift+a.
+        key_spec = "+".join(part.lower() if len(part) == 1 else part for part in key_spec.split("+"))
     xdotool = shutil.which("xdotool")
     if xdotool:
         subprocess.run([xdotool, "key", key_spec], check=True)
