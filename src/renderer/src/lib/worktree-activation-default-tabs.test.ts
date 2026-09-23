@@ -30,6 +30,31 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 
+  it('suppresses only the automatic empty-workspace fallback', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, undefined, {
+      automaticCreationEnabled: false
+    })
+
+    expect(store.createTab).not.toHaveBeenCalled()
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'codex' },
+      undefined,
+      undefined,
+      undefined,
+      {
+        automaticCreationEnabled: false
+      }
+    )
+
+    expect(store.createTab).toHaveBeenCalledOnce()
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'codex' })
+  })
+
   it('creates a terminal when explicit launch work targets an empty workspace', () => {
     const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
 

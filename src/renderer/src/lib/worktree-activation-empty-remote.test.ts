@@ -122,6 +122,50 @@ describe('empty remote worktree activation', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
+  it('leaves an empty remote workspace blank when automatic creation is disabled', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn()
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: callRuntimeEnvironment,
+          subscribe: vi.fn()
+        }
+      }
+    })
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: REPO_PATH,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      settings: {
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 0,
+        activeRenderableTabId: null
+      }))
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      automaticCreationEnabled: false
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(callRuntimeEnvironment).not.toHaveBeenCalled()
+  })
+
   it('surfaces a failed host terminal request without retrying ambiguously', async () => {
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({

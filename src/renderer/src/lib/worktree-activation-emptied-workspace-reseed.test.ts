@@ -356,6 +356,23 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(expectedTabCount)
   })
 
+  it('leaves an empty folder workspace blank when automatic creation is disabled', () => {
+    seedEmptiedFolderWorkspaceOnTwoHosts()
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        autoCreateTerminalOnWorkspaceActivation: false
+      }
+    })
+
+    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
+      executionHostId: 'local'
+    })
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(0)
+  })
+
   it.each([true, false])(
     'forwards providesInitialSurface=%s through the async activation gate',
     async (providesInitialSurface) => {

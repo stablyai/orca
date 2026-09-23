@@ -57,11 +57,18 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     startup: { command: string; env?: Record<string, string> }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+  settings?: Pick<
+    GlobalSettings,
+    | 'autoCreateTerminalOnWorkspaceActivation'
+    | 'experimentalNativeChat'
+    | 'openAgentTabsInChatByDefault'
+  > | null
 }
 
 export type InitialTerminalOptions = {
   activateCreatedTabs?: boolean
+  /** Gates only the empty-workspace fallback. Explicit startup, setup, issue, and default-tab work still creates its required terminal. */
+  automaticCreationEnabled?: boolean
   backendStartupTerminalSpawned?: boolean
   /** Create a preserved fallback startup beside setup/default terminals. */
   createNewTerminalForStartup?: boolean

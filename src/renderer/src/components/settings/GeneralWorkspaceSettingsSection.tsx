@@ -101,6 +101,36 @@ export function GeneralWorkspaceSettingsSection({
         />
       </SearchableSetting>
 
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.f0ab824a1c',
+          'Open a Terminal When Selecting a Workspace'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.d73aa3e205',
+          'Automatically open the first terminal when selecting a workspace with no open tabs.'
+        )}
+        keywords={['terminal', 'automatic', 'select', 'workspace', 'worktree']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.f0ab824a1c',
+            'Open a Terminal When Selecting a Workspace'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.d73aa3e205',
+            'Automatically open the first terminal when selecting a workspace with no open tabs.'
+          )}
+          checked={settings.autoCreateTerminalOnWorkspaceActivation !== false}
+          onChange={() =>
+            updateSettings({
+              autoCreateTerminalOnWorkspaceActivation:
+                settings.autoCreateTerminalOnWorkspaceActivation === false
+            })
+          }
+        />
+      </SearchableSetting>
+
       {/* Why: the "Don't ask again" toast in the delete-worktree dialog
           deep-links here, so the wrapper id must stay stable. Renaming it
           breaks that toast action even though this pane still renders fine. */}

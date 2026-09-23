@@ -94,6 +94,44 @@ describe('activateAndRevealWorktree', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('leaves a selected empty workspace blank when automatic creation is disabled', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        autoCreateTerminalOnWorkspaceActivation: false
+      }
+    })
+
+    const result = activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toBeUndefined()
+  })
+
+  it('still creates a terminal when activation requests an initial directory', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        autoCreateTerminalOnWorkspaceActivation: false
+      }
+    })
+
+    const result = activateAndRevealWorktree(worktree.id, {
+      initialCwd: '/workspace/feature/packages/app',
+      notifyHostRuntime: false
+    })
+    const tabId = result === false ? null : result.primaryTabId
+
+    expect(tabId).not.toBeNull()
+    expect(useAppStore.getState().pendingInitialCwdByTabId[tabId!]).toBe(
+      '/workspace/feature/packages/app'
+    )
+  })
+
   it('does not relaunch on repeated activate/close cycles', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)

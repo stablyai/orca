@@ -58,6 +58,7 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     undefined,
     {
+      automaticCreationEnabled: state.settings?.autoCreateTerminalOnWorkspaceActivation !== false,
       reseedEmptiedWorkspace: true
     }
   )
@@ -180,7 +181,11 @@ export function ensureWorktreeHasInitialTerminal(
   // a terminal now, so it stays ungated.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
-    shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
+    shouldAutoCreateInitialTerminal(
+      renderableTabCount,
+      shouldHonourClosedTerminalTombstone,
+      opts?.automaticCreationEnabled !== false
+    )
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined

@@ -30,6 +30,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     activate?: boolean
+    automaticCreationEnabled?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -79,7 +80,8 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       if (
         !shouldAutoCreateInitialTerminal(
           renderableTabCount,
-          Object.hasOwn(state.tabsByWorktree, worktreeId)
+          Object.hasOwn(state.tabsByWorktree, worktreeId),
+          opts?.automaticCreationEnabled !== false
         )
       ) {
         return
