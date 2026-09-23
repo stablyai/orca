@@ -79,27 +79,67 @@ export class LoadedStateParsingOperations {
     private readonly cohorts: LoadedCohortMigrationOperations
   ) {}
 
+  /**
+   * Load the legacy storage representation supplied by a migration/importer.
+   *
+   * This deliberately uses the same decrypt, normalization, migration, and
+   * sidecar handling as a file load. An invalid imported document must fail
+   * closed instead of falling back to an unrelated on-disk backup.
+   */
+  loadSerialized(raw: string): PersistedState {
+    return this.loadInternal(true, raw)
+  }
+
+  /** Load only from an injected authority; never consult the legacy JSON path. */
+  loadFromAuthority(raw: string | undefined): PersistedState {
+    return this.loadInternal(false, raw, true)
+  }
+
+  loadParsedFromAuthority(parsed: Record<string, unknown> | undefined): PersistedState {
+    return this.loadInternal(false, undefined, true, parsed)
+  }
+
   load(allowBackupRecovery = true): PersistedState {
+    return this.loadInternal(allowBackupRecovery)
+  }
+
+  private loadInternal(
+    fileRecovery: boolean,
+    serialized?: string,
+    authoritySource = false,
+    parsedInput?: Record<string, unknown>
+  ): PersistedState {
     // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.runtime.dataFile
-    const fileExistedOnLoad = existsSync(dataFile)
+    const fileExistedOnLoad = authoritySource
+      ? serialized !== undefined || parsedInput !== undefined
+      : serialized !== undefined || existsSync(dataFile)
     logPersistenceStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
     })
 
     let result: PersistedState | null = null
+    let parsed: PersistedState | undefined
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
-        const raw = readFileSync(dataFile, 'utf-8')
-        logPersistenceStartupMilestone('persistence-read-done', {
-          bytes: Buffer.byteLength(raw),
-          durationMs: Math.round(performance.now() - readStartedAt)
-        })
-        logPersistenceStartupMilestone('persistence-json-parse-start')
-        const parsed = JSON.parse(raw) as PersistedState
-        logPersistenceStartupMilestone('persistence-json-parse-done')
-
+        const raw =
+          parsedInput === undefined ? (serialized ?? readFileSync(dataFile, 'utf-8')) : undefined
+        if (raw !== undefined) {
+          logPersistenceStartupMilestone('persistence-read-done', {
+            bytes: Buffer.byteLength(raw),
+            durationMs: Math.round(performance.now() - readStartedAt)
+          })
+          logPersistenceStartupMilestone('persistence-json-parse-start')
+          parsed = JSON.parse(raw)
+          logPersistenceStartupMilestone('persistence-json-parse-done')
+        } else {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Legacy partial records enter the existing domain normalizers through this loader type.
+          parsed = parsedInput as PersistedState
+        }
+        if (parsed === undefined) {
+          throw new Error('Profile state startup snapshot is missing')
+        }
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
@@ -188,11 +228,15 @@ export class LoadedStateParsingOperations {
         })
       }
     } catch (err) {
+      if (serialized !== undefined || authoritySource) {
+        console.error('[persistence] Failed to load imported profile state:', err)
+        throw new Error('Failed to load imported profile state', { cause: err })
+      }
       console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
     // Corrupt-file and no-file paths converge here; a corrupted install counts as existing, so it sees the opt-in banner.
-    if (result === null && allowBackupRecovery) {
+    if (result === null && fileRecovery && !authoritySource) {
       const hasBackup = hasStateBackup(dataFile)
       if (fileExistedOnLoad || hasBackup) {
         if (this.backups.restoreFromBackup(dataFile)) {
@@ -216,7 +260,6 @@ export class LoadedStateParsingOperations {
     if (migratedScrollback.changed) {
       this.runtime.loadNeedsSave = true
     }
-
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {

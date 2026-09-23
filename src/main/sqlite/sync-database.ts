@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { DatabaseSync, StatementSync, SQLInputValue } from 'node:sqlite'
+import type { backup, BackupOptions, DatabaseSync, StatementSync, SQLInputValue } from 'node:sqlite'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -34,6 +34,15 @@ function loadDatabaseSync(): typeof DatabaseSync {
   }
   return (process.getBuiltinModule('node:sqlite') as { DatabaseSync: typeof DatabaseSync })
     .DatabaseSync
+}
+
+function hasBackup(value: unknown): value is { backup: typeof backup } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'backup' in value &&
+    typeof value.backup === 'function'
+  )
 }
 
 class SyncDatabase {
@@ -98,6 +107,21 @@ class SyncDatabase {
 
   get isTransaction(): boolean {
     return this.db.isTransaction
+  }
+
+  /** The source connection must remain open until the native backup settles. */
+  async backup(path: string, options?: BackupOptions): Promise<number> {
+    const sqlite: unknown =
+      typeof process.getBuiltinModule === 'function'
+        ? process.getBuiltinModule('node:sqlite')
+        : undefined
+    if (!hasBackup(sqlite)) {
+      throw new Error('Asynchronous SQLite backup is unavailable in this Node.js runtime')
+    }
+    if (this.db.isTransaction) {
+      throw new Error('Asynchronous SQLite backup requires an idle database connection')
+    }
+    return sqlite.backup(this.db, path, options ?? {})
   }
 
   close(): void {

@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
@@ -16,6 +17,11 @@ import {
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
+import {
+  durableWriteTempPath,
+  renameDurableSync,
+  writeFileDurableSync
+} from '../../durable-file-write'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import type { ProjectCollectionOperations } from './project-collection-operations'
@@ -32,8 +38,21 @@ import type { SshProfileOperations } from './ssh-profile-operations'
 import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
 import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+import { profileStateJsonExportPath } from '../profile-state/profile-state-export-path'
+import type { ProfileStateAuthorityInitialState } from './profile-state-authority'
 
-export type StoreOptions = StoreRuntimeOptions
+export type StoreOptions = StoreRuntimeOptions & {
+  /** Storage-form JSON supplied by a read-only profile migration/import boundary. */
+  serializedState?: string
+  /** Reuse the authority's validated startup read without retaining a cached copy. */
+  initialAuthorityState?: ProfileStateAuthorityInitialState
+}
+
+export type PreparedProfileStateExport = {
+  readonly json: string
+  commit(): void
+}
 export type PtyBindingSourceExpectation = {
   worktreeId?: string
   tabId: string
@@ -50,11 +69,39 @@ export class Store {
   private readonly state: PersistedState
 
   constructor(options: StoreOptions = {}) {
+    if (options.profileStateAuthority !== undefined && options.serializedState !== undefined) {
+      throw new Error('Store cannot use both a profile-state authority and serialized state')
+    }
+    if (
+      options.initialAuthorityState !== undefined &&
+      (options.profileStateAuthority === undefined ||
+        options.initialAuthorityState.authority !== options.profileStateAuthority)
+    ) {
+      throw new Error('Store initial authority state must belong to its profile-state authority')
+    }
+    const initial = options.initialAuthorityState
+    const parsedState = initial?.takeParsedState?.()
     this.runtime = new StoreRuntimeState(options)
     this.domains = createStoreDomains(this.runtime)
     installStoreDomainContexts(this, this.domains)
     this.runtime.flushOrThrow = () => this.flushOrThrow()
-    const loaded = this.domains.loader.load()
+    let loaded: PersistedState
+    if (options.profileStateAuthority !== undefined) {
+      if (initial !== undefined) {
+        loaded =
+          initial.takeParsedState !== undefined
+            ? this.domains.loader.loadParsedFromAuthority(parsedState)
+            : this.domains.loader.loadFromAuthority(initial.serializedState)
+      } else {
+        loaded = this.domains.loader.loadFromAuthority(
+          options.profileStateAuthority.readSerializedState()
+        )
+      }
+    } else if (options.serializedState !== undefined) {
+      loaded = this.domains.loader.loadSerialized(options.serializedState)
+    } else {
+      loaded = this.domains.loader.load()
+    }
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
     this.runtime.state = this.state
@@ -89,10 +136,118 @@ export class Store {
     ) {
       scheduleSave(this.domains.scheduling)
     }
+    // An imported source is not a legacy JSON authority. The caller must
+    // commit through its database/export boundary instead of writing a file.
+    if (options.serializedState !== undefined) {
+      this.freezeWrites()
+    }
   }
 
   getProfileStorageDirectory(): string {
     return dirname(this.runtime.dataFile)
+  }
+
+  /**
+   * Prepare a storage-form export for a database importer.
+   *
+   * Secret retention is committed only after the caller durably accepts the
+   * export. This keeps a failed migration from discarding the prior sealed
+   * value from the in-memory fallback store.
+   */
+  prepareProfileStateExport(): PreparedProfileStateExport {
+    const built = this.domains.serialization.buildStateToSave()
+    let committed = false
+    return {
+      json: built.payload.toString('utf8'),
+      commit: () => {
+        if (committed) {
+          return
+        }
+        this.runtime.protectedSecrets.commitRetentionUpdates(built.protectedSecretUpdates)
+        committed = true
+      }
+    }
+  }
+
+  /** Publish an explicit rollback/compatibility export after flushing current state. */
+  writeProfileStateJsonExport(targetPath: string): number | undefined {
+    this.runtime.dirtyProfileStateDomains = null
+    this.flushOrThrow()
+    const authority = this.runtime.profileStateAuthority
+    if (authority?.writeJsonExport) {
+      return authority.writeJsonExport(targetPath)
+    }
+
+    const prepared = this.prepareProfileStateExport()
+    mkdirSync(dirname(targetPath), { recursive: true })
+    writeFileDurableSync(durableWriteTempPath(targetPath), targetPath, prepared.json)
+    prepared.commit()
+    return undefined
+  }
+
+  /** Publish the latest SQLite revision as a durable, versioned rollback export. */
+  writeLatestProfileStateJsonExport(): number | undefined {
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.writeJsonExport) {
+      return undefined
+    }
+    this.runtime.dirtyProfileStateDomains = null
+    this.flushOrThrow()
+
+    const stagingPath = `${this.runtime.dataFile}.sqlite-export.pending.${process.pid}.${Date.now()}.tmp`
+    let published = false
+    try {
+      const revision = authority.writeJsonExport(stagingPath)
+      if (revision === 0) {
+        rmSync(stagingPath, { force: true })
+        published = true
+        return undefined
+      }
+      const targetPath = profileStateJsonExportPath(this.runtime.dataFile, revision)
+      mkdirSync(dirname(targetPath), { recursive: true })
+      if (existsSync(targetPath)) {
+        const staged = readFileSync(stagingPath)
+        const existing = readFileSync(targetPath)
+        if (!staged.equals(existing)) {
+          throw new Error(
+            `Profile state export revision ${revision} already exists with different content`
+          )
+        }
+        rmSync(stagingPath, { force: true })
+      } else {
+        renameDurableSync(stagingPath, targetPath)
+      }
+      published = true
+      return revision
+    } finally {
+      if (!published) {
+        rmSync(stagingPath, { force: true })
+      }
+    }
+  }
+
+  /** Publish canonical JSON for a pre-update older-build compatibility window. */
+  writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.writeJsonCompatibilityExport) {
+      return undefined
+    }
+    this.runtime.dirtyProfileStateDomains = null
+    this.flushOrThrow()
+    return authority.writeJsonCompatibilityExport(this.runtime.dataFile)
+  }
+
+  /** Freeze writes, then preserve the SQLite family for an explicit recovery decision. */
+  quarantineProfileStateDatabase(
+    quarantineRoot?: string,
+    reason?: string
+  ): ProfileStateDatabaseQuarantine {
+    this.freezeWrites()
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.quarantineDatabase) {
+      throw new Error('SQLite profile-state quarantine is unavailable')
+    }
+    return authority.quarantineDatabase(quarantineRoot, reason)
   }
 
   freezeWrites(): void {
@@ -101,6 +256,7 @@ export class Store {
       clearTimeout(this.runtime.writeTimer)
       this.runtime.writeTimer = null
     }
+    this.runtime.profileStateAuthority?.close?.()
   }
 }
 

@@ -46,7 +46,10 @@ import type { WriteSchedulingOperations } from './write-scheduling'
 import { flushDurableStateOrThrowAsync } from './write-flush-barriers'
 import { scheduleSave } from './write-scheduling'
 
-type SshLeaseRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
+type SshLeaseRecoveryOperationsRuntime = Pick<
+  StoreRuntimeState,
+  'dirtyProfileStateDomains' | 'protectedSecrets' | 'state'
+>
 
 const sshLeaseRecoveryOperationsContext = Symbol('SshLeaseRecoveryOperations')
 type SshLeaseRecoveryOperationsContext = {
@@ -127,6 +130,9 @@ export class SshLeaseRecoveryOperations {
 
   markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
     markSshRemotePtyLeasesForShutdownOperation(getSshPtyLeaseOperations(this), targetId, state)
+    this[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+      'sshRemotePtyLeases'
+    )
   }
 
   async markSshRemotePtyLeasesAsync(
@@ -195,8 +201,12 @@ export function getSshPtyConsumerRecoveryOperations(
   return {
     state: owner[sshLeaseRecoveryOperationsContext].runtime.state,
     protectedSecrets: owner[sshLeaseRecoveryOperationsContext].runtime.protectedSecrets,
-    flushDurableStateOrThrowAsync: () =>
-      flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    flushDurableStateOrThrowAsync: () => {
+      owner[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+        'sshPtyConsumerRecoveries'
+      )
+      return flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    }
   }
 }
 
@@ -238,9 +248,18 @@ export function getSshPtyLeaseOperations(owner: SshLeaseRecoveryOperations): Ssh
         targetId,
         leases
       ),
-    flush: () => owner[sshLeaseRecoveryOperationsContext].flushBarriers.flush(),
-    flushDurableStateOrThrowAsync: () =>
-      flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    flush: () => {
+      owner[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+        'sshRemotePtyLeases'
+      )
+      owner[sshLeaseRecoveryOperationsContext].flushBarriers.flush()
+    },
+    flushDurableStateOrThrowAsync: () => {
+      owner[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+        'sshRemotePtyLeases'
+      )
+      return flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    }
   }
 }
 

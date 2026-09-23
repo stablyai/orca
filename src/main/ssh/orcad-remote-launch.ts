@@ -62,7 +62,8 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     'umask 077 &&',
     `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
-    `nohup ${shellEscape(spec.nodePath)} ${entry}`,
+    // Keep $! equal to the runtime PID rather than a waiting shell's PID.
+    `exec nohup ${shellEscape(spec.nodePath)} ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
     `echo $! > ${pidFile} && cat ${pidFile}`

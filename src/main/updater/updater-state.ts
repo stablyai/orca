@@ -24,6 +24,7 @@ export type UpdateInstallMode =
   | 'interactive'
   | 'supervised-headless-serve'
   | 'unsupported-headless-serve'
+export type PreQuitCleanupFailureMode = 'continue' | 'abort'
 
 // Why: expected preflight outcomes need typed context so UI routing never depends on matching error text.
 export class ReleaseFeedPreflightError extends Error {
@@ -42,6 +43,7 @@ export abstract class UpdaterState {
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
+  protected onBeforeQuitFailure: PreQuitCleanupFailureMode = 'continue'
   protected autoUpdaterInitialized = false
   // Why: modifier-clicking "Check for Updates" targets prerelease manifests; the feed still pins a concrete tag so cancelled prereleases without manifests are skipped.
   protected includePrereleaseActive = false

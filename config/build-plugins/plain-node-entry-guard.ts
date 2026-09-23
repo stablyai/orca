@@ -41,7 +41,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'session-scanner-worker-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
-  'usage-scan-worker-entry'
+  'usage-scan-worker-entry',
+  'profile-state-backup-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [

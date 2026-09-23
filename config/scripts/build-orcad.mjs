@@ -295,7 +295,10 @@ async function smokeLoadWatcherChild() {
         resolve(failure)
       }
       child.on('message', (message) => {
-        if (message?.op === 'subscribe-started') {
+        // Wait until the subscribe lifecycle has sent its final acknowledgement.
+        // Disconnecting on subscribe-started races the subsequent subscribed or
+        // subscribe-failed message and makes the child report an expected EPIPE.
+        if (message?.op === 'subscribed' || message?.op === 'subscribe-failed') {
           child.disconnect()
         }
       })

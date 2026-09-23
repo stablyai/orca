@@ -146,29 +146,44 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           { errorType: error instanceof Error ? error.name : typeof error },
           {
             level: 'warn',
-            message: 'Pre-quit cleanup failed; continuing update install'
+            message:
+              this.onBeforeQuitFailure === 'abort'
+                ? 'Pre-quit cleanup failed; aborting update install'
+                : 'Pre-quit cleanup failed; continuing update install'
           }
         )
+        if (this.onBeforeQuitFailure === 'abort') {
+          throw error
+        }
       })
     const timeoutResult = new Promise<'timeout'>((resolve) => {
       timeout = setTimeout(() => resolve('timeout'), PRE_QUIT_CLEANUP_TIMEOUT_MS)
     })
 
-    const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
-    if (result === 'timeout') {
-      recordUpdaterLifecycle(
-        'pre_quit_cleanup_timeout',
-        { timeoutMs: PRE_QUIT_CLEANUP_TIMEOUT_MS },
-        {
-          level: 'warn',
-          message: `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    try {
+      const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
+      if (result === 'timeout') {
+        recordUpdaterLifecycle(
+          'pre_quit_cleanup_timeout',
+          { timeoutMs: PRE_QUIT_CLEANUP_TIMEOUT_MS },
+          {
+            level: 'warn',
+            message:
+              this.onBeforeQuitFailure === 'abort'
+                ? `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; aborting update install`
+                : `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+          }
+        )
+        if (this.onBeforeQuitFailure === 'abort') {
+          throw new Error(
+            `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms before update install`
+          )
         }
-      )
-      return
-    }
-
-    if (timeout) {
-      clearTimeout(timeout)
+      }
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import os from 'node:os'
 import * as pty from 'node-pty'
+import { assignHostProcessToKillOnCloseJob } from '../windows/windows-pty-job'
 
 const WARMUP_KILL_TIMEOUT_MS = 10_000
 
@@ -17,6 +18,8 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): v
   // real spawn arriving first simply does the warming itself.
   setImmediate(() => {
     try {
+      // Warm-up children must die with the daemon, even before its first real terminal.
+      assignHostProcessToKillOnCloseJob()
       const proc = spawnPty(process.env.COMSPEC || 'cmd.exe', ['/c', 'exit'], {
         name: 'xterm-256color',
         cols: 2,

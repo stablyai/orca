@@ -12,6 +12,7 @@ import {
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 
 describe('parseArgs', () => {
   it('accepts --bind and leaves it unset when absent', () => {
@@ -38,6 +39,9 @@ describe('resolveOrcadExitCode', () => {
       resolveOrcadExitCode(new OrcadInstanceLockError('orcad_instance_lock_held', 'held'))
     ).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
+    expect(resolveOrcadExitCode(new ProfileStateAccessError('recovery interrupted'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
   })

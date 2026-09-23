@@ -168,7 +168,7 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   }
 }
 
-function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
   try {
     linkSync(sourcePath, targetPath)
     return true

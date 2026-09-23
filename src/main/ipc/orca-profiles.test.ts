@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ProfileStoragePaths from '../orca-profiles/profile-storage-paths'
 
 const {
   handlers,
@@ -11,7 +12,8 @@ const {
   getOrcaProfileListStateMock,
   seedNewOrcaProfileTelemetryConsentMock,
   setActiveOrcaProfileMock,
-  transferOrcaProfileProjectMock
+  transferOrcaProfileProjectMock,
+  hasOrcaProfileStateDatabaseMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -23,7 +25,8 @@ const {
   getOrcaProfileListStateMock: vi.fn(),
   seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
-  transferOrcaProfileProjectMock: vi.fn()
+  transferOrcaProfileProjectMock: vi.fn(),
+  hasOrcaProfileStateDatabaseMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -66,6 +69,11 @@ vi.mock('../orca-profiles/profile-project-transfer', () => ({
   transferOrcaProfileProject: transferOrcaProfileProjectMock
 }))
 
+vi.mock('../orca-profiles/profile-storage-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProfileStoragePaths>()),
+  hasOrcaProfileStateDatabase: hasOrcaProfileStateDatabaseMock
+}))
+
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
@@ -87,6 +95,7 @@ describe('registerOrcaProfileHandlers', () => {
     seedNewOrcaProfileTelemetryConsentMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
     transferOrcaProfileProjectMock.mockReset()
+    hasOrcaProfileStateDatabaseMock.mockReset().mockReturnValue(false)
   })
 
   afterEach(() => {
@@ -351,6 +360,85 @@ describe('registerOrcaProfileHandlers', () => {
       )
     ).rejects.toThrow('active_target_orca_profile_transfer_requires_relaunch')
 
+    expect(transferOrcaProfileProjectMock).not.toHaveBeenCalled()
+  })
+
+  it('freezes a newly migrated source after transfer failure and reopens its current profile', async () => {
+    const store = makeStoreMock()
+    const onBeforeRelaunch = vi.fn()
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'personal', profiles: [] })
+    transferOrcaProfileProjectMock.mockImplementation(() => {
+      hasOrcaProfileStateDatabaseMock.mockReturnValue(true)
+      throw new Error('source commit interrupted')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every Store operation exercised by these IPC handlers.
+    registerOrcaProfileHandlers(store as never, { onBeforeRelaunch })
+
+    await expect(
+      Promise.resolve(
+        handlers.get('orcaProfiles:transferProject')?.(null, {
+          sourceProfileId: 'personal',
+          targetProfileId: 'work',
+          repoId: 'repo-1',
+          mode: 'move'
+        })
+      )
+    ).rejects.toThrow('source commit interrupted')
+
+    expect(store.flushPendingOrThrowAsync).toHaveBeenCalledBefore(transferOrcaProfileProjectMock)
+    expect(store.freezeWrites).toHaveBeenCalledOnce()
+    expect(store.freezeWrites).toHaveBeenCalledBefore(onBeforeRelaunch)
+    expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(appQuitMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps an active JSON source writable after validation fails without a migration', async () => {
+    const store = makeStoreMock()
+    const onBeforeRelaunch = vi.fn()
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'personal', profiles: [] })
+    transferOrcaProfileProjectMock.mockImplementation(() => {
+      throw new Error('unknown_source_repo')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every Store operation exercised by these IPC handlers.
+    registerOrcaProfileHandlers(store as never, { onBeforeRelaunch })
+
+    await expect(
+      Promise.resolve(
+        handlers.get('orcaProfiles:transferProject')?.(null, {
+          sourceProfileId: 'personal',
+          targetProfileId: 'work',
+          repoId: 'repo-1',
+          mode: 'move'
+        })
+      )
+    ).rejects.toThrow('unknown_source_repo')
+
+    expect(store.freezeWrites).not.toHaveBeenCalled()
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    null,
+    {},
+    { sourceProfileId: 4 },
+    {
+      sourceProfileId: 'personal',
+      targetProfileId: 'work',
+      repoId: 'repo-1',
+      mode: 'invalid'
+    }
+  ])('rejects malformed transfer arguments before disk work: %j', async (args) => {
+    const store = makeStoreMock()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every Store operation exercised by these IPC handlers.
+    registerOrcaProfileHandlers(store as never)
+    await expect(
+      Promise.resolve(handlers.get('orcaProfiles:transferProject')?.(null, args))
+    ).rejects.toThrow('invalid_orca_profile_project_transfer')
+    expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
     expect(transferOrcaProfileProjectMock).not.toHaveBeenCalled()
   })
 })

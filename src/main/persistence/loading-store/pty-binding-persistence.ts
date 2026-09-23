@@ -27,6 +27,7 @@ type PtyBindingPersistenceOperationsRuntime = Pick<
   | 'lastDurableWriteGeneration'
   | 'pendingWrite'
   | 'quitFlushStarted'
+  | 'dirtyProfileStateDomains'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'
@@ -130,6 +131,15 @@ function writePtyBinding(
       }
     }
     applyPtyBinding(args, session, bindingWorktreeId, paneKey)
+    // The binding path flushes synchronously; mark the domain without scheduling a second timer.
+    const dirtyDomains = runtime.dirtyProfileStateDomains
+    if (dirtyDomains !== null) {
+      dirtyDomains.add(
+        resolvedHostId === LOCAL_EXECUTION_HOST_ID
+          ? 'workspaceSession'
+          : 'workspaceSessionsByHostId'
+      )
+    }
     runtime.flushOrThrow()
   } catch (err) {
     if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {

@@ -142,7 +142,10 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
     const stopped = parseOrcadStopOutcome(
       await exec(
         options,
-        stopOrcadCommand(options.host, outgoingDir, { waitSeconds: STOP_WAIT_SECONDS })
+        stopOrcadCommand(options.host, outgoingDir, {
+          waitSeconds: STOP_WAIT_SECONDS,
+          nodePath: options.nodePath
+        })
       )
     )
     if (!orcadStopFreedTheHost(stopped)) {
@@ -150,9 +153,9 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
         outcome: 'failed',
         code: 'orcad_rollback_stop_incomplete',
         reason:
-          `orcad ${options.record.active} did not exit within ${STOP_WAIT_SECONDS}s of SIGTERM ` +
-          `(${stopped}). Nothing was restored — the store is untouched and the host is still ` +
-          'serving the version you tried to leave.'
+          `Could not verify that orcad ${options.record.active} exited (${stopped}). ` +
+          'Nothing was restored. Orca requires matching runtime readiness before signaling ' +
+          'an incumbent and confirmed exit before replacing its state.'
       }
     }
   }

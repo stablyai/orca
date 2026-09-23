@@ -84,7 +84,10 @@ export class SessionSnapshotOperations {
         [resolved]: next
       }
     }
-    scheduleSave(this[sessionSnapshotOperationsContext].scheduling)
+    scheduleSave(
+      this[sessionSnapshotOperationsContext].scheduling,
+      resolved === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId']
+    )
   }
 }
 

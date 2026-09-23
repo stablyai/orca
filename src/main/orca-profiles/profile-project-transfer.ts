@@ -3,7 +3,7 @@ import type {
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
 import { getOrcaProfileListState } from './profile-index-store'
-import { readProfileState, writeProfileState } from './profile-project-state-file'
+import { readProfileStateWithRevision, writeProfileState } from './profile-project-state-file'
 import { removeSourceRepo } from './profile-project-source-removal'
 import {
   applyPayloadToTarget,
@@ -11,6 +11,14 @@ import {
   createTransferPayload
 } from './profile-project-transfer-payload'
 import { repoPhysicalKey } from './profile-project-worktree-identity'
+import { migrateProfileProjectTransferParticipant } from './profile-project-transfer-migration'
+import {
+  createProfileProjectMoveIntent,
+  persistProfileProjectMoveIntent,
+  recoverPendingProfileProjectMoves,
+  removeProfileProjectMoveIntent,
+  type ProfileProjectMoveIntent
+} from './profile-project-move-intent'
 
 function assertKnownProfiles(args: TransferOrcaProfileProjectArgs, userDataPath: string): void {
   const profiles = getOrcaProfileListState(userDataPath).profiles
@@ -30,9 +38,12 @@ export function transferOrcaProfileProject(
   args: TransferOrcaProfileProjectArgs,
   userDataPath: string
 ): TransferOrcaProfileProjectResult {
+  recoverPendingProfileProjectMoves(userDataPath)
   assertKnownProfiles(args, userDataPath)
-  const sourceState = readProfileState(args.sourceProfileId, userDataPath)
-  const targetState = readProfileState(args.targetProfileId, userDataPath)
+  let sourceSnapshot = readProfileStateWithRevision(args.sourceProfileId, userDataPath)
+  let targetSnapshot = readProfileStateWithRevision(args.targetProfileId, userDataPath)
+  const sourceState = sourceSnapshot.state
+  const targetState = targetSnapshot.state
   const sourceRepo = sourceState.repos.find((repo) => repo.id === args.repoId)
   if (!sourceRepo) {
     throw new Error('unknown_source_repo')
@@ -50,6 +61,25 @@ export function transferOrcaProfileProject(
     }
   }
 
+  let moveIntent: ProfileProjectMoveIntent | undefined
+  if (sourceSnapshot.revision !== undefined && targetSnapshot.revision === undefined) {
+    targetSnapshot = migrateProfileProjectTransferParticipant(
+      args.targetProfileId,
+      userDataPath,
+      targetSnapshot
+    )
+  } else if (
+    args.mode === 'move' &&
+    sourceSnapshot.revision === undefined &&
+    targetSnapshot.revision !== undefined
+  ) {
+    sourceSnapshot = migrateProfileProjectTransferParticipant(
+      args.sourceProfileId,
+      userDataPath,
+      sourceSnapshot
+    )
+  }
+
   const targetRepo = createTargetRepo(sourceRepo, targetState, args.mode === 'copy')
   const payload = createTransferPayload({
     sourceState,
@@ -57,13 +87,36 @@ export function transferOrcaProfileProject(
     targetRepo,
     includeSessions: args.mode === 'move'
   })
-  writeProfileState(args.targetProfileId, userDataPath, applyPayloadToTarget(targetState, payload))
-  if (args.mode === 'move') {
+  const targetAfterState = applyPayloadToTarget(targetState, payload)
+  const sourceAfterState =
+    args.mode === 'move' ? removeSourceRepo(sourceState, sourceRepo.id) : undefined
+  if (sourceAfterState !== undefined && sourceSnapshot.revision !== undefined) {
+    moveIntent = createProfileProjectMoveIntent({
+      sourceProfileId: args.sourceProfileId,
+      targetProfileId: args.targetProfileId,
+      source: sourceSnapshot,
+      target: targetSnapshot,
+      sourceAfterJson: JSON.stringify(sourceAfterState),
+      targetAfterJson: JSON.stringify(targetAfterState)
+    })
+    persistProfileProjectMoveIntent(userDataPath, moveIntent)
+  }
+  writeProfileState(
+    args.targetProfileId,
+    userDataPath,
+    targetAfterState,
+    targetSnapshot.revision === undefined ? {} : { expectedRevision: targetSnapshot.revision }
+  )
+  if (sourceAfterState !== undefined) {
     writeProfileState(
       args.sourceProfileId,
       userDataPath,
-      removeSourceRepo(sourceState, sourceRepo.id)
+      sourceAfterState,
+      sourceSnapshot.revision === undefined ? {} : { expectedRevision: sourceSnapshot.revision }
     )
+    if (moveIntent) {
+      removeProfileProjectMoveIntent(userDataPath, moveIntent.id)
+    }
   }
   return {
     status: 'transferred',

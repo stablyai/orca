@@ -200,7 +200,9 @@ function installWillQuitHandler(): void {
     const sshShutdown = beginSshShutdown()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
-    const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
+    const storeFlush =
+      state.store?.flushAsync({ exportJsonCompatibility: updateQuitInProgress }) ??
+      Promise.resolve()
     // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
     // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
     const usageCacheFlush = Promise.all([

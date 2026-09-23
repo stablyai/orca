@@ -183,6 +183,84 @@ describe('updater', () => {
     )
   })
 
+  it('aborts native install when required pre-quit cleanup fails', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('profile state export failed'))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
+    )
+  })
+
+  it('keeps optional pre-quit cleanup fail-and-continue behavior by default', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('optional cleanup failed'))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts native install when required pre-quit cleanup times out', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn(() => new Promise<void>(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(2_500)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
+    )
+  })
+
   it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
     vi.useFakeTimers()
 
