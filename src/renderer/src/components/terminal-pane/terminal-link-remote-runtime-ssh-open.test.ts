@@ -283,6 +283,41 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('downloads plain-click SSH binaries the editor cannot display, then opens them', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/renders/clip.mp4', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-1' }),
+      '/home/me/repo/renders/clip.mp4'
+    )
+  })
+
+  it('keeps plain-click SSH images in the editor viewer', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/renders/frame.png', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/home/me/repo/renders/frame.png' }),
+      { forceContentReload: true }
+    )
+  })
+
   it('does not ask the client OS to open SSH directories', async () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
