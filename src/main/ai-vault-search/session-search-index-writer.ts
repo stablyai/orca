@@ -5,6 +5,7 @@ import type {
   TranscriptReadOutcome,
   TranscriptSessionIdentity
 } from '../ai-vault/session-transcript-consumers'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import { EMPTY_CONTENT_HASH, foldContentHash } from './session-search-content-hash'
 import type {
   SessionSearchFileIdentity,
@@ -358,9 +359,8 @@ export class SessionSearchIndexWriter {
         // message had been buffered let a single one carry a transaction as far
         // past the ceiling as it was large.
         for (const row of searchMessageRows([message])) {
-          // FTS rows often come from slices of a multi-megabyte JSONL line.
-          // Copy the bounded text before retaining it in the write buffer.
-          row.text = Buffer.from(row.text, 'utf16le').toString('utf16le')
+          // FTS rows are slices of a multi-megabyte JSONL line.
+          row.text = ownRetainedString(row.text)
           buffer.push(row)
           bufferedChars += row.text.length
           if (bufferedChars < this.commitChars) {
