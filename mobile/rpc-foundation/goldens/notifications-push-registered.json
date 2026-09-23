@@ -3,7 +3,7 @@
   "family": "notifications.push-registration",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e94bde327dea5dc0ea23d72d01978b097c538104",
+  "baseline": "34fda6f62e2b203e6e4df2518df9595061732233",
   "lockfileSha256": "2bc53d3e8628a9bb8cbc51288065161216ea577912ab91961d8b026982774a0f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
