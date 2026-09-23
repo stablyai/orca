@@ -84,6 +84,14 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'codex':
       return 'X'
+    // Why: 'C' belongs to Claude, so Cursor takes its second letter — the same
+    // rule that gives Grok 'R'.
+    case 'cursor':
+      return 'U'
+    // Why: 'O' belongs to OpenCode Go, so OpenRouter takes 'R'… which Grok
+    // holds. 'N' is the next unambiguous letter in "openRouter"/"router".
+    case 'openrouter':
+      return 'N'
   }
 }
 

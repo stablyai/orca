@@ -3,7 +3,8 @@ import type {
   CodexAccountsApi,
   CodexConfigSyncApi,
   GrokAccountsApi,
-  MinimaxCredentialsApi
+  MinimaxCredentialsApi,
+  OpenRouterCredentialsApi
 } from './api/agent-account-api'
 import type { HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
@@ -142,6 +143,7 @@ export type PreloadApi = {
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
+  openrouterCredentials: OpenRouterCredentialsApi
   grokAccounts: GrokAccountsApi
   ssh: SshApi
   automations: AutomationsApi

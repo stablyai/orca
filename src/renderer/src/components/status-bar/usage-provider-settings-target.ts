@@ -16,10 +16,14 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-opencode-go'
     case 'minimax':
       return 'accounts-minimax'
+    case 'openrouter':
+      return 'accounts-openrouter'
     case 'grok':
       return 'accounts-grok'
+    case 'cursor':
     case 'kimi':
-      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+      // Why: Orca must not mutate these providers' CLI-owned credential
+      // lifecycles; it only reads the session their CLI already wrote.
       return null
   }
 }

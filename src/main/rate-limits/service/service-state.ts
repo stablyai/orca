@@ -20,12 +20,15 @@ import {
   type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
+import { readCursorAuthSession } from '../cursor-auth'
 import { readGrokAuthSession } from '../grok-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
     claude: null,
     codex: null,
+    cursor: null,
+    openrouter: null,
     gemini: null,
     opencodeGo: null,
     kimi: null,
@@ -34,6 +37,7 @@ export abstract class RateLimitServiceState {
     grok: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected cursorAuthConfigured = readCursorAuthSession().status === 'ok'
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -41,6 +45,8 @@ export abstract class RateLimitServiceState {
   protected lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
+    cursor: 0,
+    openrouter: 0,
     gemini: 0,
     'opencode-go': 0,
     kimi: 0,
@@ -52,6 +58,8 @@ export abstract class RateLimitServiceState {
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
+    cursor: 0,
+    openrouter: 0,
     gemini: 0,
     'opencode-go': 0,
     kimi: 0,

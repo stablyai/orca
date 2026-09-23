@@ -6626,7 +6626,17 @@
           "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "openrouterTitle": "OpenRouter",
+          "openrouterDescription": "Track spend against the limit set on your OpenRouter API key.",
+          "openrouterKeys": "Manage keys",
+          "openrouterApiKey": "OpenRouter API key",
+          "openrouterKeySaved": "A key is saved — enter a new one to replace it",
+          "openrouterSave": "Save",
+          "openrouterClear": "Clear",
+          "openrouterConfigured": "Key saved",
+          "openrouterNotConfigured": "Not configured",
+          "openrouterStorageNote": "Stored encrypted on this computer and never included in settings sync."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -9018,7 +9028,12 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "openrouterTitle": "OpenRouter Usage",
+            "openrouterDescription": "API key spend against the limit set on the key.",
+            "openrouterKeyword": "openrouter",
+            "openrouterApiKeyword": "api key",
+            "openrouterCreditsKeyword": "credits"
           }
         },
         "advanced": {

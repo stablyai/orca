@@ -217,6 +217,34 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsOpenRouterSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.openrouterTitle',
+      'OpenRouter Usage'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.openrouterDescription',
+      'API key spend against the limit set on the key.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.openrouterKeyword',
+        'openrouter'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.openrouterApiKeyword',
+        'api key'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.openrouterCreditsKeyword',
+        'credits'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -224,5 +252,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsOpenRouterSearchEntries()
 ])

@@ -9,6 +9,9 @@ import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
+import { fetchOpenRouterRateLimits } from './openrouter-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
 export type Deferred<T> = {
@@ -89,6 +92,10 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchCursorRateLimits).mockImplementation(async () => unavailableProvider('cursor'))
+  vi.mocked(fetchOpenRouterRateLimits).mockImplementation(async () =>
+    unavailableProvider('openrouter')
+  )
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
@@ -106,8 +113,14 @@ export function resetRateLimitProviderMocks(): void {
     error: null,
     status: 'unavailable'
   })
+  // Why stubbed here rather than left real: both read files under the real home
+  // directory, so without a stub the suite's result depends on whether the
+  // developer running it happens to have Cursor or an OpenRouter key installed.
+  vi.mocked(fetchCursorRateLimits).mockResolvedValue(unavailableProvider('cursor'))
+  vi.mocked(fetchOpenRouterRateLimits).mockResolvedValue(unavailableProvider('openrouter'))
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
+  vi.mocked(readCursorAuthSession).mockReturnValue({ status: 'missing' })
 }
 
 type RateLimitWindow = Parameters<RateLimitService['attach']>[0]

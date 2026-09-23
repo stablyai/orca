@@ -86,6 +86,8 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     provider:
       | 'claude'
       | 'codex'
+      | 'cursor'
+      | 'openrouter'
       | 'gemini'
       | 'opencode-go'
       | 'kimi'

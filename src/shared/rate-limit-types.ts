@@ -49,6 +49,8 @@ export type ProviderRateLimits = {
   provider:
     | 'claude'
     | 'codex'
+    | 'cursor'
+    | 'openrouter'
     | 'gemini'
     | 'opencode-go'
     | 'kimi'
@@ -61,7 +63,7 @@ export type ProviderRateLimits = {
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
+  /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor billing cycle), null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
@@ -118,6 +120,8 @@ export type GrokAccountStatus = {
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
+  openrouter: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
@@ -140,6 +144,19 @@ export type RateLimitState = {
   minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /**
+   * True when main finds a Cursor CLI session file (~/.config/cursor/auth.json
+   * or CURSOR_CONFIG_DIR). Cursor has no Orca-managed account row, so this is
+   * the durable signal that keeps its bar visible across reloads and between
+   * snapshot refreshes — the same role grokAuthConfigured plays.
+   */
+  cursorAuthConfigured: boolean
+  /**
+   * True when an OpenRouter API key is stored on disk. The key value never
+   * leaves main, so the renderer only sees this boolean — the same contract as
+   * minimaxApiKeyConfigured.
+   */
+  openrouterApiKeyConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

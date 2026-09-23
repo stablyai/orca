@@ -77,6 +77,7 @@ import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
+import { openrouterCredentialsApi } from './api/openrouter-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { automationsApi } from './api/automations-bridge'
@@ -176,6 +177,7 @@ const api = {
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
   minimaxCredentials: minimaxCredentialsApi,
+  openrouterCredentials: openrouterCredentialsApi,
   grokAccounts: grokAccountsApi,
   ssh: sshApi,
   automations: automationsApi,

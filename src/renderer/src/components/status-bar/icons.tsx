@@ -1,5 +1,6 @@
 import React from 'react'
 import minimaxIconUrl from '../../../../../resources/minimax-icon.svg?url'
+import openrouterIconUrl from '../../../../../resources/openrouter-icon.png?url'
 
 export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
@@ -24,6 +25,25 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   return (
     <img
       src={minimaxIconUrl}
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      className="block shrink-0"
+      style={{ width: size, height: size }}
+    />
+  )
+}
+
+export function OpenRouterIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: an <img> asset rather than an inline currentColor path, so the mark
+  // keeps its own palette on the muted status-bar background the way the
+  // MiniMax mark does. OpenRouter publishes no SVG, so this is its official
+  // glyph (openrouter.ai/favicon/glyph.png) downscaled to 64px — the dark tile
+  // reads the same way Cursor's does against the status bar.
+  return (
+    <img
+      src={openrouterIconUrl}
       alt=""
       aria-hidden="true"
       width={size}

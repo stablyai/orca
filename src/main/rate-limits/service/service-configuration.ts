@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
+import { hasOpenRouterApiKey } from '../../openrouter/openrouter-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
   type CodexAccountSelectionTarget,
@@ -126,6 +127,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       grokAuthConfigured: this.grokAuthConfigured,
+      cursorAuthConfigured: this.cursorAuthConfigured,
+      openrouterApiKeyConfigured: hasOpenRouterApiKey(),
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(

@@ -101,6 +101,8 @@ export const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 export type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
+  openrouter: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null

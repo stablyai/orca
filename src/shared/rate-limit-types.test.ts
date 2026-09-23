@@ -10,6 +10,8 @@ describe('RateLimitState', () => {
     const state: RateLimitState = {
       claude: null,
       codex: null,
+      cursor: null,
+      openrouter: null,
       gemini: null,
       opencodeGo: null,
       kimi: null,
@@ -19,6 +21,8 @@ describe('RateLimitState', () => {
       minimaxCookieConfigured: false,
       minimaxApiKeyConfigured: false,
       grokAuthConfigured: false,
+      cursorAuthConfigured: false,
+      openrouterApiKeyConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: [],
