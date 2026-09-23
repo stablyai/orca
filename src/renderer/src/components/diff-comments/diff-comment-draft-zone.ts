@@ -306,6 +306,11 @@ export function useDiffCommentDraftZone({
     }
     return () => {
       cancelReanchorFrame()
+      // Runs before the identity effect on a same-render swap, so stash here or the draft is lost.
+      const current = draftZoneRef.current
+      if (!unmountedRef.current && current && !current.submitting) {
+        pendingDraftRef.current = { draft: current.draft, body: current.body }
+      }
       disposeDraftZone(false)
     }
   }, [cancelReanchorFrame, disposeDraftZone, editor])

@@ -126,6 +126,33 @@ describe('useDiffCommentDraftZone re-anchoring', () => {
     expect(hook.result.current.isDraftOpen()).toBe(true)
   })
 
+  it('re-anchors the typed body onto a replacement editor', () => {
+    const first = createFakeDiffCommentEditor()
+    const replacement = createFakeDiffCommentEditor()
+    const onCreateComment = vi.fn().mockResolvedValue(true)
+    const hook = renderHook(
+      ({
+        fake,
+        monacoModelIdentity
+      }: {
+        fake: FakeDiffCommentEditor
+        monacoModelIdentity: string
+      }) => useDiffCommentDraftZone({ editor: fake.editor, monacoModelIdentity, onCreateComment }),
+      { initialProps: { fake: first, monacoModelIdentity: 'model-v1' } }
+    )
+    act(() => {
+      hook.result.current.onAddCommentClickRef.current({ lineNumber: DRAFT_LINE, top: 0 })
+    })
+    typeDraft(first, BODY)
+
+    hook.rerender({ fake: replacement, monacoModelIdentity: 'model-v2' })
+    expect(first.zones.size).toBe(0)
+    pumpFrames()
+
+    expect(draftCard(replacement).textarea.value).toBe(BODY)
+    expect([...replacement.zones.values()][0].afterLineNumber).toBe(DRAFT_LINE)
+  })
+
   it('lets a click on another line win over a scheduled re-anchor', () => {
     const fake = createFakeDiffCommentEditor()
     const hook = renderDraftZone(fake, vi.fn().mockResolvedValue(true))
