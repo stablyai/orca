@@ -118,7 +118,8 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
 
   const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-  /** Releases wave after wave until `done` settles; returns how many waves it took. */
+  /** Releases wave after wave until `done` settles and returns how many waves that took, then keeps
+   *  draining, so a read that should have been stopped is counted instead of left unreleased. */
   const runWaves = async (
     done: Promise<unknown>,
     beforeWave?: (wave: number) => void
@@ -135,6 +136,12 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
       waiting = []
       waves += 1
       beforeWave?.(waves)
+      wave.forEach((release) => release())
+      await settleMicrotasks()
+    }
+    while (waiting.length > 0) {
+      const wave = waiting
+      waiting = []
       wave.forEach((release) => release())
       await settleMicrotasks()
     }

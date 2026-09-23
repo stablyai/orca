@@ -200,24 +200,24 @@ function verifyReassembledAsset(asset: AssetReassembly): Uint8Array {
  * different build, and nothing else in the reply would say so.
  */
 function assertWindowDescribesAsset(
-  window: MobileWebBundleWindowHeader,
+  reply: MobileWebBundleWindowHeader,
   asset: MobileWebBundleAssetRead,
   buildId: string,
   offset: number
 ): void {
-  if (window.buildId !== buildId) {
+  if (reply.buildId !== buildId) {
     throw new MobileWebBundleFetchError(
       'build-changed-mid-fetch',
-      `bundle build changed mid-fetch: asked ${buildId}, served ${window.buildId}`
+      `bundle build changed mid-fetch: asked ${buildId}, served ${reply.buildId}`
     )
   }
-  if (window.path !== asset.path || window.offset !== offset) {
+  if (reply.path !== asset.path || reply.offset !== offset) {
     throw new MobileWebBundleFetchError(
       'chunk-misrouted',
-      `bundle window answered ${window.path} at ${window.offset}, not ${asset.path} at ${offset}`
+      `bundle window answered ${reply.path} at ${reply.offset}, not ${asset.path} at ${offset}`
     )
   }
-  if (window.sha256 !== asset.sha256 || window.assetByteLength !== asset.byteLength) {
+  if (reply.sha256 !== asset.sha256 || reply.assetByteLength !== asset.byteLength) {
     throw new MobileWebBundleFetchError(
       'asset-entry-changed',
       `bundle asset ${asset.path} no longer matches the manifest entry`
