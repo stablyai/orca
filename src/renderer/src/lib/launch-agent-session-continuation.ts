@@ -85,22 +85,18 @@ export async function launchAgentSessionContinuation({
   await preflightAgentTrust({ agent, workspacePath, connectionId })
 
   const label = getAgentLabel(agent)
+  // Why: Claude loads the context as an unsubmitted `--prefill` draft (#21912), so the
+  // delivery toast must not claim it was sent.
+  const promptDelivery = agent === 'claude' ? 'draft' : 'submit-after-ready'
   const result = launchAgentInNewTab({
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
+    promptDelivery,
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
-    onPromptDelivered: () =>
-      toast.success(
-        translate(
-          'components.agentSessionContinuation.sent',
-          'Session context sent to {{agent}} in a new session.',
-          { agent: label }
-        )
-      )
+    onPromptDelivered: () => notifyPromptDelivered(label, promptDelivery)
   })
   if (!result) {
     notifyLaunchFailed(label)
@@ -120,6 +116,25 @@ export async function launchAgentSessionContinuation({
       })
   }
   return true
+}
+
+function notifyPromptDelivered(
+  agentLabel: string,
+  promptDelivery: 'draft' | 'submit-after-ready'
+): void {
+  toast.success(
+    promptDelivery === 'draft'
+      ? translate(
+          'components.agentSessionContinuation.draftLoaded',
+          'Session context loaded as a draft in the new {{agent}} session. Review it and press Enter to continue.',
+          { agent: agentLabel }
+        )
+      : translate(
+          'components.agentSessionContinuation.sent',
+          'Session context sent to {{agent}} in a new session.',
+          { agent: agentLabel }
+        )
+  )
 }
 
 function notifyLaunchFailed(agentLabel: string): void {

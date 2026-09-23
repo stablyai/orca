@@ -17836,6 +17836,7 @@
       "agentDisabled": "{{agent}} is disabled in Agent settings.",
       "agentUnavailable": "{{agent}} was not detected on this workspace host.",
       "sent": "Session context sent to {{agent}} in a new session.",
+      "draftLoaded": "Session context loaded as a draft in the new {{agent}} session. Review it and press Enter to continue.",
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
     },
