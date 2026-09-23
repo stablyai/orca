@@ -270,9 +270,11 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     })
 
     expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('asset-overlong')
-    const bombAt = inflations.outLengths.indexOf(601)
-    expect(bombAt).toBeGreaterThanOrEqual(0)
-    expect(inflations.resultLengths[bombAt]).toBe(601)
+    // Order-free: a stray read from an earlier test may inflate into this test's record too.
+    expect(inflations.resultLengths).toContain(601)
+    for (const [call, resultLength] of inflations.resultLengths.entries()) {
+      expect(resultLength).toBeLessThanOrEqual(inflations.outLengths[call]!)
+    }
   })
 
   it('refuses a range that inflates short of its window as short', async () => {
