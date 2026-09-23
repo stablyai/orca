@@ -5,6 +5,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
 import type {
+  InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitRuntimeTarget
 } from '../../../../shared/rate-limit-types'
@@ -83,6 +84,11 @@ export type AccountsPaneSectionModel = {
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runClaudeAccountAction: ClaudeAccountActionRunner
+  claudeUsageVisible: boolean
+  claudeUsageTargetMatches: boolean
+  claudeRateLimits: ProviderRateLimits | null
+  inactiveClaudeAccounts: readonly InactiveAccountUsage[]
+  claudeUsageFetchSettled: boolean
   codexAccounts: CodexRateLimitAccountsState
   codexAction: CodexAccountAction
   visibleCodexAccounts: CodexRateLimitAccountsState['accounts']

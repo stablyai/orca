@@ -17,6 +17,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import { useAppStore } from '../store'
 
 const LOCAL = { activeRuntimeEnvironmentId: null }
 const REMOTE = { activeRuntimeEnvironmentId: 'env-1' }
@@ -422,6 +423,32 @@ describe('provider account mutations', () => {
       wslDistro: null
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  // Why: the accounts pane and status-bar switcher both route account
+  // switches through here, and the active-account rate-limit snapshot is
+  // keyed by runtime target, not account (rate-limits.ts). Without this
+  // clear, a same-target switch would keep showing the previous account's
+  // usage as "ready" until the next background poll.
+  it('clears the active Claude rate-limit snapshot after a successful select', async () => {
+    claudeSelectLocal.mockResolvedValue(emptyClaudeState())
+    useAppStore.setState({
+      rateLimits: {
+        ...useAppStore.getState().rateLimits,
+        claude: {
+          provider: 'claude',
+          session: { usedPercent: 77, windowMinutes: 300, resetsAt: null, resetDescription: null },
+          weekly: null,
+          updatedAt: 1,
+          error: null,
+          status: 'ok'
+        }
+      }
+    })
+
+    await selectClaudeProviderAccount(LOCAL, { accountId: 'acc-2', runtime: 'host', wslDistro: null })
+
+    expect(useAppStore.getState().rateLimits.claude).toBeNull()
   })
 
   it('routes select and remove through the active runtime accounts RPC when remote', async () => {
