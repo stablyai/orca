@@ -139,6 +139,7 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   snapshotIsFresh: boolean
   localTerminalCount: number
   hasPersistedTerminalState: boolean
+  automaticCreationEnabled?: boolean
 }): boolean {
   return (
     args.snapshotIsFresh &&
@@ -152,7 +153,11 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
     // Why the shared predicate: the host owning the terminals does not change what an empty
     // workspace means. A missing row is "never initialized", an explicit empty row is "the user
     // closed the last terminal", and only the local seeder used to read the difference (STA-6173).
-    shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&
+    shouldAutoCreateInitialTerminal(
+      args.localTerminalCount,
+      args.hasPersistedTerminalState,
+      args.automaticCreationEnabled !== false
+    ) &&
     !args.requestedInitialTerminal &&
     args.activeWorktreeId === args.event.worktree
   )
