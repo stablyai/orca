@@ -11,7 +11,7 @@ type TabGroupEmptyStateProps = {
   showNewBrowser: boolean
 }
 
-/** Render creation actions for a tab group whose workspace has no open content. */
+/** Omits browser creation when the workspace host policy disables it. */
 export const TabGroupEmptyState = memo(function TabGroupEmptyState({
   onNewTerminal,
   onNewMarkdown,

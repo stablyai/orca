@@ -58,13 +58,12 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     undefined,
     {
-      automaticCreationEnabled: state.settings?.autoCreateTerminalOnWorkspaceActivation !== false,
       reseedEmptiedWorkspace: true
     }
   )
 }
 
-/** Seed the terminal surfaces required by explicit launch work or automatic activation policy. */
+/** Creates explicit launch work regardless of the passive empty-workspace terminal preference. */
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
@@ -190,7 +189,7 @@ export function ensureWorktreeHasInitialTerminal(
     shouldAutoCreateInitialTerminal(
       renderableTabCount,
       shouldHonourClosedTerminalTombstone,
-      opts?.automaticCreationEnabled !== false
+      ownerState.settings?.autoCreateTerminalOnWorkspaceActivation !== false
     )
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =

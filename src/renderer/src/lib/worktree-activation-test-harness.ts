@@ -3,6 +3,7 @@ import type { Mock } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/worktree/launch-types'
 import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
+import type { WorktreeActivationStore } from './worktree-activation-store-contract'
 
 export type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -46,6 +47,7 @@ export function registerWorktreeActivationReset(): void {
 export type MockActivationStore = {
   tabsByWorktree: Record<string, { id: string }[]>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  settings?: WorktreeActivationStore['settings']
   createTab: Mock<() => { id: string }>
   setActiveTab: Mock<() => void>
   setTabCustomTitle: Mock<() => void>

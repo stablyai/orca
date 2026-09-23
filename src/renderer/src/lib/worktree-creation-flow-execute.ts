@@ -33,7 +33,7 @@ function isPendingCreationSurfaceVisible(creationId: string): boolean {
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
 }
 
-/** Complete a prepared worktree creation request and hand its resulting surfaces to the UI. */
+/** Keeps post-create activation and terminal recovery best-effort so workspaces are not stranded. */
 export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
@@ -202,8 +202,6 @@ export async function executeWorktreeCreation(
         primaryTabId = verifiedLaunchTabId
       } else if (existingTabs.length === 0) {
         try {
-          const automaticCreationEnabled =
-            stateAfterActivationFailure.settings?.autoCreateTerminalOnWorkspaceActivation !== false
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
             worktree.id,
@@ -212,14 +210,7 @@ export async function executeWorktreeCreation(
             preparedRequest.issueCommand,
             result.defaultTabs,
             // Activation failed before providing its promised surface, so recovery must seed one.
-            automaticCreationEnabled
-              ? backendSpawned
-                ? { backendStartupTerminalSpawned: true }
-                : undefined
-              : {
-                  automaticCreationEnabled: false,
-                  ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-                }
+            backendSpawned ? { backendStartupTerminalSpawned: true } : undefined
           )
         } catch (recoveryError) {
           console.error(
@@ -231,12 +222,9 @@ export async function executeWorktreeCreation(
       }
       if (!backendSpawned) {
         try {
-          const automaticCreationEnabled =
-            useAppStore.getState().settings?.autoCreateTerminalOnWorkspaceActivation !== false
           ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
             startup: startupOpt,
-            agent: preparedRequest.agent,
-            automaticCreationEnabled
+            agent: preparedRequest.agent
           })
         } catch (recoveryError) {
           console.error(
@@ -252,8 +240,6 @@ export async function executeWorktreeCreation(
     const hasExplicitTerminalWork = Boolean(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
-    const automaticCreationEnabled =
-      useAppStore.getState().settings?.autoCreateTerminalOnWorkspaceActivation !== false
     if (preparedRequest.agent === null || hasExplicitTerminalWork) {
       try {
         primaryTabId = ensureWorktreeHasInitialTerminal(
@@ -265,7 +251,6 @@ export async function executeWorktreeCreation(
           result.defaultTabs,
           {
             activateCreatedTabs: false,
-            ...(automaticCreationEnabled ? {} : { automaticCreationEnabled: false }),
             ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
             ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
           }
@@ -279,8 +264,7 @@ export async function executeWorktreeCreation(
         ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
           startup: startupOpt,
           agent: preparedRequest.agent,
-          activate: false,
-          automaticCreationEnabled
+          activate: false
         })
       } catch (error) {
         console.error('worktree create: after-wake terminal seeding failed', worktree.id, error)

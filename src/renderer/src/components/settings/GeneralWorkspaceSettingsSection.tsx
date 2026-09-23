@@ -16,7 +16,7 @@ type GeneralWorkspaceSettingsSectionProps = {
   sourceDefaultsSupported?: boolean
 }
 
-/** Render workspace-related general settings and persist changes through the supplied updater. */
+/** Uses the throwing updater only where host-owned settings must surface persistence failures. */
 export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings,

@@ -67,8 +67,6 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
 
 export type InitialTerminalOptions = {
   activateCreatedTabs?: boolean
-  /** Gates only the empty-workspace fallback. Explicit startup, setup, issue, and default-tab work still creates its required terminal. */
-  automaticCreationEnabled?: boolean
   backendStartupTerminalSpawned?: boolean
   /** Create a preserved fallback startup beside setup/default terminals. */
   createNewTerminalForStartup?: boolean

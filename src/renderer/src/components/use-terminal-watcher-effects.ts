@@ -51,7 +51,7 @@ type TerminalWatcherController = Pick<
   | 'workspaceSurfaceIds'
 >
 
-/** Install terminal watcher effects that keep workspace activation and terminal state aligned. */
+/** Defers activation seeding until the execution host and restored agent inventory are authoritative. */
 export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
     activationDeferredMountTabIdsByWorktreeRef,

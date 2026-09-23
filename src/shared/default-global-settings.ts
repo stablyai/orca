@@ -17,7 +17,7 @@ import {
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
-/** Build the complete default settings record for a new Orca profile. */
+/** Supplies explicit defaults so settings stay stable when a profile is first persisted. */
 export function buildDefaultSettings(args: {
   workspaceDir: string
   appFontFamily: string

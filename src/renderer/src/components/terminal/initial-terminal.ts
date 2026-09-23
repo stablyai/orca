@@ -1,4 +1,4 @@
-/** Decide whether activation should seed a terminal for an otherwise empty workspace. */
+/** Treats persisted empty state as a user tombstone and gates only never-initialized fallback creation. */
 export function shouldAutoCreateInitialTerminal(
   renderableTabCount: number,
   hasPersistedTerminalState = false,

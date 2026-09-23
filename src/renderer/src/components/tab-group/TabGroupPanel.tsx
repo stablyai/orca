@@ -30,7 +30,7 @@ const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
-/** Render one workspace tab group, including its strip, content, and empty-state actions. */
+/** Leaves live terminal and browser surfaces mounted at worktree scope while group content changes. */
 export default function TabGroupPanel({
   groupId,
   worktreeId,

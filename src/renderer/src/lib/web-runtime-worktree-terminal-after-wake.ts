@@ -23,7 +23,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
-/** Restore a required web-runtime terminal after wake while avoiding passive duplicate creation. */
+/** Preserves live-host guards while letting explicit startup bypass passive creation policy. */
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
   opts?: {
@@ -31,7 +31,6 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     activate?: boolean
-    automaticCreationEnabled?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -83,7 +82,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         !shouldAutoCreateInitialTerminal(
           renderableTabCount,
           Object.hasOwn(state.tabsByWorktree, worktreeId),
-          opts?.automaticCreationEnabled !== false
+          state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
         )
       ) {
         return

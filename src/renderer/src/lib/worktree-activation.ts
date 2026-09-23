@@ -32,7 +32,6 @@ import {
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import { canInspectAgentActivationInventory } from './can-inspect-agent-activation-inventory'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -48,8 +47,7 @@ export type ActivateAndRevealResult = {
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean,
-  automaticCreationEnabled = true
+  providesInitialSurface?: boolean
 ): string | null {
   if (providesInitialSurface === true && startup === undefined) {
     return null
@@ -64,14 +62,21 @@ function ensureFolderWorkspaceInitialTerminal(
     undefined,
     undefined,
     {
-      automaticCreationEnabled,
       reseedEmptiedWorkspace: providesInitialSurface !== true
     }
   )
   return primaryTabId
 }
 
-/** Activate a folder workspace and reveal or seed its primary surface when appropriate. */
+function canInspectAgentActivationInventory(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.api?.runtime?.call === 'function' &&
+    typeof window.api?.pty?.listSessions === 'function'
+  )
+}
+
+/** Gates restored agent inventory before seeding so activation cannot create a sibling shell. */
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
@@ -126,8 +131,6 @@ export function activateAndRevealFolderWorkspace(
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
-  const automaticCreationEnabled =
-    Boolean(opts?.startup) || state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
   state.markWorktreeVisited(workspaceKey)
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
@@ -137,7 +140,7 @@ export function activateAndRevealFolderWorkspace(
     !opts?.startup &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
-        automaticCreationEnabled &&
+        state.settings?.autoCreateTerminalOnWorkspaceActivation !== false &&
         shouldAutoCreateInitialTerminal(
           state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
         )))
@@ -153,12 +156,7 @@ export function activateAndRevealFolderWorkspace(
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
-    : ensureFolderWorkspaceInitialTerminal(
-        folderWorkspace,
-        opts?.startup,
-        providesInitialSurface,
-        automaticCreationEnabled
-      )
+    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface)
 
   if (opts?.revealInSidebar !== false) {
     state.revealWorktreeInSidebar(
@@ -171,15 +169,14 @@ export function activateAndRevealFolderWorkspace(
     ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
       runtimeEnvironmentId,
       startup: opts?.startup,
-      agent: opts?.agent,
-      automaticCreationEnabled
+      agent: opts?.agent
     })
   }
 
   return { primaryTabId }
 }
 
-/** Activate a managed worktree and return the primary terminal selected or created for it. */
+/** Preserves explicit launch work while applying passive terminal creation policy. */
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: WorktreeActivationOptions
@@ -192,8 +189,6 @@ export function activateAndRevealWorktree(
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs?.tabs.length || opts?.issueCommand
   )
-  const automaticCreationEnabled =
-    hasActivationWork || state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
   const isPlainAlreadyActiveTerminal =
@@ -243,7 +238,7 @@ export function activateAndRevealWorktree(
     !hasActivationWork &&
     (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
       (canInspectAgentActivationInventory() &&
-        automaticCreationEnabled &&
+        postActivationState.settings?.autoCreateTerminalOnWorkspaceActivation !== false &&
         shouldAutoCreateInitialTerminal(
           postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
         )))
@@ -277,7 +272,6 @@ export function activateAndRevealWorktree(
             ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
-            automaticCreationEnabled,
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -321,8 +315,7 @@ export function activateAndRevealWorktree(
   ) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       startup: opts?.startup,
-      agent: opts?.agent,
-      automaticCreationEnabled
+      agent: opts?.agent
     })
   }
 
