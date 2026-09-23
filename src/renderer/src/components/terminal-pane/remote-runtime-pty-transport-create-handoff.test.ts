@@ -50,6 +50,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         leafId: 'pane:1',
         launchAgent: 'codex',
         terminalKittyKeyboardProtocol: true,
+        terminalColorQueryReplies: { foreground: '#eeeeee', background: '#282c34' },
         ...(resume
           ? { resumeProviderSession: { key: 'session_id' as const, id: 'session-1' } }
           : {})
@@ -58,6 +59,10 @@ describe('createRemoteRuntimePtyTransport', () => {
       const method = resume ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
       const call = runtimeCall.mock.calls.find(([args]) => args.method === method)?.[0]
       expect(call).toBeDefined()
+      expect(call?.params).toHaveProperty('terminalColorQueryReplies', {
+        foreground: '#eeeeee',
+        background: '#282c34'
+      })
       if (supported) {
         expect(call?.params).toHaveProperty('terminalKittyKeyboardProtocol', true)
       } else {

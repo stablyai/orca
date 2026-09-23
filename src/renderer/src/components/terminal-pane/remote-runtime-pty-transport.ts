@@ -2273,6 +2273,7 @@ export function createRemoteRuntimePtyTransport(
                     {
                       kind: 'explicit',
                       ...keyboardOptions,
+                      ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       providerSession: resumeProviderSessionToSend,
@@ -2294,6 +2295,7 @@ export function createRemoteRuntimePtyTransport(
                     withAgentSessionCreateOperationId(
                       {
                         ...keyboardOptions,
+                        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
                         ...(agentPrompt ? { prompt: agentPrompt } : {}),

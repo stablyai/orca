@@ -11,6 +11,7 @@ import type {
   RuntimeEnsureAgentSessionRequest
 } from '../agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
+import { TerminalColorQueryReplyColorsParams } from './terminal-unary-params'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -127,6 +128,7 @@ export const ExplicitEnsure = z
     providerSession: ProviderSession,
     ompResumeFilePath: OmpResumeFilePath.optional(),
     terminalKittyKeyboardProtocol: z.boolean().optional(),
+    terminalColorQueryReplies: TerminalColorQueryReplyColorsParams.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
@@ -156,6 +158,7 @@ export const EnsureAgentSessionParams: z.ZodType<RuntimeEnsureAgentSessionReques
 export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionRequest> = z
   .object({
     terminalKittyKeyboardProtocol: z.boolean().optional(),
+    terminalColorQueryReplies: TerminalColorQueryReplyColorsParams.optional(),
     clientOperationId: z
       .string()
       .refine(

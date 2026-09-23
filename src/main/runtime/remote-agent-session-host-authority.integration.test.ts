@@ -106,8 +106,10 @@ describe('remote agent-session host authority integration', () => {
       }
       const runtime = new OrcaRuntimeService(store as never)
       let nextRequestedSession = 0
+      const observedColorReplies: unknown[] = []
       runtime.setPtyController({
         spawn: async (options) => {
+          observedColorReplies.push(options.terminalColorQueryReplies)
           const requestedSessionId = `remote-repro-${++nextRequestedSession}`
           let resolvedSessionId = requestedSessionId
           const result = await host.createOrAttach({
@@ -159,6 +161,7 @@ describe('remote agent-session host authority integration', () => {
         worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}`,
         agent: 'claude',
         providerSession: { key: 'session_id', id: 'provider-session-repro' },
+        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
         presentation: 'background'
       }
       const [first, second] = await Promise.all([
@@ -190,6 +193,10 @@ describe('remote agent-session host authority integration', () => {
         ptyId: first.result.terminal.ptyId
       })
       expect(spawnSubprocess).toHaveBeenCalledOnce()
+      expect(observedColorReplies).toHaveLength(2)
+      expect(observedColorReplies).toEqual(
+        Array.from({ length: 2 }, () => ({ foreground: '#ffffff', background: '#282c34' }))
+      )
       expect(host.listSessions()).toHaveLength(1)
 
       // Why: a retry cannot prove whether its previous response arrived, so

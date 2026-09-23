@@ -177,6 +177,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+      terminalColorQueryReplies: request.terminalColorQueryReplies,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,

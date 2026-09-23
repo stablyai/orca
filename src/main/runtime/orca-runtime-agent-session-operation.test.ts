@@ -116,12 +116,15 @@ async function fenceRemoteAgentSessionSpawn(runtime: OrcaRuntimeService) {
 
 describe('agent-session create operation ledger', () => {
   it.each([true, false, undefined])(
-    'forwards renderer keyboard support on create and resume: %s',
+    'forwards renderer terminal capabilities on create and resume: %s',
     async (terminalKittyKeyboardProtocol) => {
       const runtime = createRuntime()
       const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      const terminalColorQueryReplies = { foreground: '#eeeeee', background: '#282c34' }
       await runtime.createAgentSession(
-        CreateAgentSessionParams.parse(request(operationId(), { terminalKittyKeyboardProtocol }))
+        CreateAgentSessionParams.parse(
+          request(operationId(), { terminalKittyKeyboardProtocol, terminalColorQueryReplies })
+        )
       )
       await runtime.ensureAgentSession(
         EnsureAgentSessionParams.parse({
@@ -129,12 +132,14 @@ describe('agent-session create operation ledger', () => {
           worktree: 'id:worktree-1',
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'provider-session-1' },
-          terminalKittyKeyboardProtocol
+          terminalKittyKeyboardProtocol,
+          terminalColorQueryReplies
         })
       )
       expect(createTerminal).toHaveBeenCalledTimes(2)
       for (const call of createTerminal.mock.calls) {
         expect(call[1]?.terminalKittyKeyboardProtocol).toBe(terminalKittyKeyboardProtocol)
+        expect(call[1]?.terminalColorQueryReplies).toEqual(terminalColorQueryReplies)
       }
     }
   )
@@ -146,6 +151,21 @@ describe('agent-session create operation ledger', () => {
     await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
       'agent_session_operation_conflict'
     )
+    expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('refuses changed startup colors under the same create operation', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    await runtime.createAgentSession(
+      request(id, { terminalColorQueryReplies: { background: '#282c34' } })
+    )
+    await expect(
+      runtime.createAgentSession(
+        request(id, { terminalColorQueryReplies: { background: '#ffffff' } })
+      )
+    ).rejects.toThrow('agent_session_operation_conflict')
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
