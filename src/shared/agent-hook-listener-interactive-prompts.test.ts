@@ -397,4 +397,26 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.state).toBe('waiting')
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
+
+  it('preserves serialized Codex async question input for the live card', () => {
+    const properties = {
+      questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+    }
+    const event = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'request_user_input_async',
+          arguments: JSON.stringify(properties)
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
+  })
 })

@@ -95,7 +95,7 @@ export function useNativeChatInteractiveSend(
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
       // Claude and Codex ignore pasted labels but have different selector state
       // machines; Grok commits pasted text. OpenClaude follows Claude's path.
-      const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
+      const stepsAnswer = shouldStepNativeChatAskAnswer(agent) && prompt.delivery !== 'async'
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
