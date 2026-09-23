@@ -363,6 +363,63 @@ describe('ClaudeRuntimeAuthService', () => {
     }
   })
 
+  it('re-materializes the active account when the post-failure read-back adopts another account', async () => {
+    const expired = createClaudeCredentialsJson(
+      'one@example.com',
+      'one-expired',
+      null,
+      Date.now() - 60 * 60 * 1000
+    )
+    const twoRotated = createClaudeCredentialsJson(
+      'two@example.com',
+      'two-rotated',
+      null,
+      Date.now() + 8 * 60 * 60 * 1000
+    )
+    const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+    const managedAuthPath2 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-2',
+      createClaudeCredentialsJson('two@example.com', 'two-old', null, Date.now() - 60_000)
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' }),
+        createClaudeAccount('account-2', managedAuthPath2, { email: 'two@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
+    vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(true)
+
+    const { markClaudePtySpawned, markClaudePtyExited } = await import('./live-pty-gate')
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+
+    markClaudePtySpawned('pty-live-1')
+    try {
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+
+      // A Claude signed in as account-2 rotates its token into the shared runtime while
+      // account-1's refresh is in flight; read-back rightly saves it to account-2.
+      vi.mocked(refreshClaudeOauthCredentials).mockImplementationOnce(async () => {
+        testState.legacyKeychainCredentials = twoRotated
+        return null
+      })
+      await service.syncForCurrentSelection()
+
+      expect(readManagedCredentialsForTest('account-2', managedAuthPath2)).toBe(twoRotated)
+      expect(testState.legacyKeychainCredentials).toBe(expired)
+    } finally {
+      markClaudePtyExited('pty-live-1')
+      vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
+      vi.mocked(isOauthTokenExpiredPastGrace).mockReturnValue(false)
+      vi.mocked(refreshClaudeOauthCredentials).mockResolvedValue(null)
+    }
+  })
+
   it('keeps a live Claude rotation that lands during the first sync after launch', async () => {
     const expired = createClaudeCredentialsJson(
       'one@example.com',

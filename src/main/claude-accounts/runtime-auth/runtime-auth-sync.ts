@@ -256,12 +256,13 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       if (refreshed) {
         credentialsJson = refreshed
       } else if (liveClaudePtys && this.lastSyncedAccountId === activeAccount.id) {
-        // Why: a live Claude may have rotated the runtime token while our refresh was in flight (even on the first sync, before lastWrittenCredentialsJson exists); adopt it or leave it rather than rewrite the stale blob over it. Only a wiped runtime, or a first sync that has nothing to compare against, falls through to materialize.
+        // Why: a live Claude may have rotated the runtime token while our refresh was in flight (even on the first sync, before lastWrittenCredentialsJson exists); adopt it or leave it rather than rewrite the stale blob over it. Only a wiped runtime, a rotation read-back filed under another account, or a first sync with nothing to compare against falls through to materialize.
         const readBackResult = await this.readBackRefreshedTokens(credentialsJson, {
           updateLastWrittenCredentialsJson: true
         })
         if (
-          readBackResult.status === 'persisted' ||
+          (readBackResult.status === 'persisted' &&
+            (await this.readManagedCredentials(activeAccount)) !== credentialsJson) ||
           (readBackResult.status === 'rejected' &&
             readBackResult.hasValidChangedRuntimeCredentials) ||
           (readBackResult.status === 'unchanged' &&
