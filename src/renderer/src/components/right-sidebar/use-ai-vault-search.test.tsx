@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/ai-vault-search-types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
+import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
@@ -22,6 +23,7 @@ const searchSessions =
   vi.fn<
     (request: AiVaultSearchRequest, scope?: ExecutionHostScope) => Promise<AiVaultSearchResponse>
   >()
+const searchStatus = vi.fn()
 const empty: AiVaultSearchResponse = {
   kind: 'results',
   hits: [],
@@ -34,9 +36,10 @@ beforeEach(() => {
   vi.useFakeTimers()
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { aiVault: { searchSessions } }
+    value: { aiVault: { searchSessions, searchStatus } }
   })
   searchSessions.mockReset().mockResolvedValue(empty)
+  searchStatus.mockReset().mockResolvedValue({ ...unavailableSessionSearchStatus(), enabled: true })
   delete mockSettings.aiVaultSearch
 })
 afterEach(() => vi.useRealTimers())
@@ -331,5 +334,87 @@ it('is neither searching nor holding a query for a blank box', async () => {
   expect(searchSessions).not.toHaveBeenCalled()
   expect(result.current.searching).toBe(false)
   expect(result.current.hasQuery).toBe(false)
+  unmount()
+})
+
+it('falls back to the title filter for a remote host that reports indexing off', async () => {
+  searchStatus.mockResolvedValue(unavailableSessionSearchStatus())
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'ssh:build-box', 'relevance')
+  )
+  // The status answer lands inside the search debounce and cancels the pending request.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100)
+  })
+  await debounce()
+  expect(searchStatus).toHaveBeenCalledWith('ssh:build-box')
+  expect(searchSessions).not.toHaveBeenCalled()
+  expect(result.current.searching).toBe(false)
+  expect(result.current.hasQuery).toBe(true)
+  expect(result.current.hostSearchOff).toBe(true)
+  expect(result.current.needsLocalConsent).toBe(false)
+  unmount()
+})
+
+it('searches a remote host whose status is on, and asks nothing of it for a blank box', async () => {
+  const initialProps = { query: '' }
+  const { result, rerender, unmount } = renderHook(
+    ({ query }) =>
+      useAiVaultPanelSearch(query, ALL_AGENTS, undefined, 'ssh:build-box', 'relevance'),
+    { initialProps }
+  )
+  await debounce()
+  expect(searchStatus).not.toHaveBeenCalled()
+  rerender({ query: 'needle' })
+  await debounce()
+  expect(result.current.hostSearchOff).toBe(false)
+  expect(result.current.searching).toBe(true)
+  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
+    { ...ALL_REQUEST, cursor: undefined },
+    'ssh:build-box'
+  )
+  unmount()
+})
+
+it('never asks for host status on the local desktop or across every computer', async () => {
+  const local = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
+  )
+  const all = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
+  )
+  await debounce()
+  expect(searchStatus).not.toHaveBeenCalled()
+  expect(all.result.current.hostSearchOff).toBe(false)
+  local.unmount()
+  all.unmount()
+})
+
+it('does not carry one host\'s "off" into the all scope or onto another host', async () => {
+  searchStatus.mockResolvedValue(unavailableSessionSearchStatus())
+  const initialProps: { scope: ExecutionHostScope } = { scope: 'ssh:build-box' }
+  const { result, rerender, unmount } = renderHook(
+    ({ scope }) => useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, scope, 'relevance'),
+    { initialProps }
+  )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100)
+  })
+  expect(result.current.hostSearchOff).toBe(true)
+  rerender({ scope: 'all' })
+  expect(result.current.hostSearchOff).toBe(false)
+  await debounce()
+  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
+    { ...ALL_REQUEST, cursor: undefined },
+    'all'
+  )
+  rerender({ scope: 'ssh:build-box' })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100)
+  })
+  expect(result.current.hostSearchOff).toBe(true)
+  searchStatus.mockResolvedValue({ ...unavailableSessionSearchStatus(), enabled: true })
+  rerender({ scope: 'ssh:other-box' })
+  expect(result.current.hostSearchOff).toBe(false)
   unmount()
 })
