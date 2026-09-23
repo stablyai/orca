@@ -1,4 +1,8 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../shared/rate-limit-types'
 import {
   formatResetCountdown,
   formatResetDuration
@@ -19,7 +23,7 @@ import {
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
-import { sortAntigravityBuckets } from './antigravity-usage-format'
+import { groupUsageSections } from './usage-section-selection'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -141,23 +145,25 @@ function ErrorMessage({
 // Window section derivation
 // ---------------------------------------------------------------------------
 
-export function getWindowSections(p: ProviderRateLimits): {
-  label: string
-  window: RateLimitWindow | null
-  groupName?: string
-}[] {
+// Why: a grouped bucket sits under its pool heading, so it is named by its window instead.
+function getGroupedBucketLabel(bucket: RateLimitBucket): string {
+  if (bucket.windowMinutes === 300) {
+    return translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
+  }
+  if (bucket.windowMinutes === 10080) {
+    return translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
+  }
+  return bucket.windowLabel ?? formatWindowLabel(bucket.windowMinutes)
+}
+
+export function getWindowSections(
+  p: ProviderRateLimits
+): { label: string; window: RateLimitWindow | null; groupName?: string }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({
-      label:
-        p.provider === 'antigravity'
-          ? b.windowMinutes === 300
-            ? translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session')
-            : b.windowMinutes === 10080
-              ? translate('auto.components.status.bar.tooltip.252c096536', 'Weekly')
-              : b.windowLabel || formatWindowLabel(b.windowMinutes)
-          : b.name,
+      label: b.groupName ? getGroupedBucketLabel(b) : b.name,
       window: b,
-      ...(b.groupName ? { groupName: b.groupName } : {})
+      groupName: b.groupName
     }))
     return [
       ...bucketSections,
@@ -334,34 +340,6 @@ export function ProviderPanel({
     resetCreditCount != null
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
-  const groupedAntigravitySections =
-    p.provider === 'antigravity'
-      ? [...new Set(windowSections.map((section) => section.groupName ?? ''))].map((groupName) => ({
-          groupName,
-          sections: sortAntigravityBuckets(
-            windowSections
-              .filter((section) => (section.groupName ?? '') === groupName)
-              .map((section) => ({
-                name: section.label,
-                windowMinutes: section.window?.windowMinutes ?? 0,
-                section
-              }))
-          ).map(({ section }) => section)
-        }))
-      : []
-
-  const renderWindowSection = (s: (typeof windowSections)[number]) => (
-    <ProviderRateLimitWindowSection
-      key={`${s.groupName ?? 'default'}:${s.label}`}
-      window={s.window}
-      label={s.label}
-      textClass={textClass}
-      mutedClass={mutedClass}
-      emptyBarClass={emptyBarClass}
-      usagePercentageDisplay={usagePercentageDisplay}
-      now={now}
-    />
-  )
 
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
@@ -390,14 +368,23 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      {p.provider === 'antigravity'
-        ? groupedAntigravitySections.map(({ groupName, sections }) => (
-            <div key={groupName || 'default'} className="space-y-3">
-              {groupName ? <div className={`font-medium ${textClass}`}>{groupName}</div> : null}
-              {sections.map(renderWindowSection)}
-            </div>
-          ))
-        : windowSections.map(renderWindowSection)}
+      {groupUsageSections(windowSections.filter((s) => s.window)).map(({ groupName, entries }) => (
+        <div key={groupName ?? ''} className="space-y-3">
+          {groupName ? <div className={`font-medium ${textClass}`}>{groupName}</div> : null}
+          {entries.map((s) => (
+            <ProviderRateLimitWindowSection
+              key={s.label}
+              window={s.window}
+              label={s.label}
+              textClass={textClass}
+              mutedClass={mutedClass}
+              emptyBarClass={emptyBarClass}
+              usagePercentageDisplay={usagePercentageDisplay}
+              now={now}
+            />
+          ))}
+        </div>
+      ))}
 
       {p.error ? (
         <ErrorMessage

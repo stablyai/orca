@@ -79,6 +79,12 @@ describe('formatRateLimitWindowChipLabel', () => {
     expect(formatRateLimitWindowChipLabel({ windowMinutes: 10080, resetsAt: null })).toBe('wk')
   })
 
+  it('falls back to the source window name when the duration is unknown', () => {
+    expect(
+      formatRateLimitWindowChipLabel({ windowMinutes: 0, resetsAt: null, windowLabel: 'daily' })
+    ).toBe('daily')
+  })
+
   it('reports "now" when the reset timestamp has already passed', () => {
     const now = 1_700_000_000_000
     expect(formatRateLimitWindowChipLabel({ windowMinutes: 300, resetsAt: now - MIN }, now)).toBe(

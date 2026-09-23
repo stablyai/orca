@@ -14,11 +14,14 @@ import {
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
-import { AntigravityCompactMetrics } from './antigravity-compact-metrics'
-import { sortAntigravityBuckets } from './antigravity-usage-format'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { getTightestUsageSectionFromSections, type UsageSection } from './usage-section-selection'
+import {
+  getTightestUsageSectionFromSections,
+  getUsageGroupShortLabel,
+  groupUsageSections,
+  type UsageSection
+} from './usage-section-selection'
 
 type ProviderId = ProviderRateLimits['provider']
 
@@ -41,15 +44,9 @@ function providerMaxUsed(sections: UsageSection[]): number {
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
-  useRemainingDuration = false
+  useRemainingDuration = false,
+  now = Date.now()
 ): string {
-  if (p.provider === 'antigravity') {
-    return section.window.windowMinutes === 300
-      ? '5h'
-      : section.window.windowMinutes === 10080
-        ? 'wk'
-        : (section.window.windowLabel ?? formatWindowLabel(section.window.windowMinutes))
-  }
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
@@ -59,14 +56,20 @@ function shortLabel(
     return 'Fable'
   }
   return useRemainingDuration
-    ? formatRateLimitWindowChipLabel(section.window)
-    : formatWindowLabel(section.window.windowMinutes)
+    ? formatRateLimitWindowChipLabel(section.window, now)
+    : (section.window.windowLabel ?? formatWindowLabel(section.window.windowMinutes))
+}
+
+// Why: the compact summary promises one quiet figure per quota pool (one for ungrouped providers).
+export function getCompactUsageSections(p: ProviderRateLimits, now?: number): UsageSection[] {
+  return groupUsageSections(usedSections(p)).flatMap(({ entries }) => {
+    const tightest = getTightestUsageSectionFromSections(entries)
+    return tightest ? [{ ...tightest, label: shortLabel(p, tightest, true, now) }] : []
+  })
 }
 
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
-  const sections = usedSections(p)
-  const tightest = getTightestUsageSectionFromSections(sections)
-  return tightest ? { ...tightest, label: shortLabel(p, tightest, true) } : null
+  return getTightestUsageSectionFromSections(getCompactUsageSections(p))
 }
 
 // The soonest-resetting window summarizes the agent's next reset in one line.
@@ -130,7 +133,7 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const compactSections = mode === 'compact' ? getCompactUsageSections(p, now) : []
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -153,16 +156,21 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : p.provider === 'antigravity' && hasUsage && mode === 'compact' ? (
-          <AntigravityCompactMetrics sections={sections} display={display} now={now} />
-        ) : tightest ? (
-          <span className="ml-auto">
-            <UsageMetric
-              section={tightest}
-              label={tightest.label}
-              display={display}
-              showBar={false}
-            />
+        ) : compactSections.length > 0 ? (
+          <span className="ml-auto flex items-center gap-2.5">
+            {compactSections.map((section) => (
+              <UsageMetric
+                key={section.groupName ?? ''}
+                section={section}
+                label={
+                  section.groupName
+                    ? `${getUsageGroupShortLabel(section.groupName)} ${section.label}`
+                    : section.label
+                }
+                display={display}
+                showBar={false}
+              />
+            ))}
           </span>
         ) : reset ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
@@ -170,34 +178,15 @@ export function UsageRow({
       </div>
       {hasUsage && mode === 'verbose' ? (
         <div className="space-y-1 pl-[30px]">
-          {Array.from(
-            sections.reduce((groups, section) => {
-              const key = section.groupName ?? ''
-              const current = groups.get(key) ?? []
-              current.push(section)
-              groups.set(key, current)
-              return groups
-            }, new Map<string, UsageSection[]>())
-          ).map(([groupName, groupSections]) => (
-            <div key={groupName || 'default'} className="space-y-0.5">
+          {groupUsageSections(sections).map(({ groupName, entries }) => (
+            <div key={groupName ?? ''} className="space-y-0.5">
               {groupName ? (
                 <div className="text-[11px] font-medium text-muted-foreground">{groupName}</div>
               ) : null}
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                {(p.provider === 'antigravity'
-                  ? sortAntigravityBuckets(
-                      groupSections.map((section) => ({
-                        name: section.label,
-                        windowMinutes: section.window.windowMinutes,
-                        section
-                      }))
-                    ).map(({ section }) => section)
-                  : groupSections
-                      .slice()
-                      .sort((a, b) => a.window.windowMinutes - b.window.windowMinutes)
-                ).map((section) => (
+                {entries.map((section) => (
                   <UsageMetric
-                    key={`${groupName}:${section.label}`}
+                    key={section.label}
                     section={section}
                     label={shortLabel(p, section)}
                     display={display}

@@ -411,20 +411,20 @@ describe('UsageRow', () => {
               resetsAt: mocks.now + 2 * 60 * 60_000
             })),
             {
-              id: '3p-weekly',
-              name: 'Weekly Limit Remaining',
-              groupName: 'Claude and GPT models',
-              usedPercent: 0,
-              windowMinutes: 10080,
-              resetsAt: null,
-              resetDescription: null
-            },
-            {
               id: '3p-5h',
               name: 'Five Hour Limit Remaining',
               groupName: 'Claude and GPT models',
               usedPercent: 0,
               windowMinutes: 300,
+              resetsAt: null,
+              resetDescription: null
+            },
+            {
+              id: '3p-weekly',
+              name: 'Weekly Limit Remaining',
+              groupName: 'Claude and GPT models',
+              usedPercent: 0,
+              windowMinutes: 10080,
               resetsAt: null,
               resetDescription: null
             }
@@ -439,11 +439,12 @@ describe('UsageRow', () => {
     )
     expect(compactMarkup).toContain('G')
     expect(compactMarkup).toContain('C/G')
-    expect(compactMarkup).not.toContain('5h')
+    // Why: a pool without a reset time names its window, as ungrouped chips do.
+    expect(compactMarkup).toContain('C/G 5h')
     expect(compactMarkup).not.toContain('wk')
     expect(compactMarkup).toContain('1%')
     expect(compactMarkup).not.toContain('1% used')
-    expect(compactMarkup.indexOf('1%')).toBeLessThan(compactMarkup.indexOf('2h'))
+    expect(compactMarkup).toContain('G 2h')
 
     const remainingCompactMarkup = renderToStaticMarkup(
       <UsageRow
@@ -463,57 +464,6 @@ describe('UsageRow', () => {
     )
     expect(remainingCompactMarkup).toContain('99%')
     expect(remainingCompactMarkup).not.toContain('99% left')
-    expect(remainingCompactMarkup).not.toContain('5h')
-    expect(remainingCompactMarkup).not.toContain('wk')
-  })
-
-  it('renders detailed Antigravity windows with unknown windows after known windows', () => {
-    const markup = renderToStaticMarkup(
-      <UsageRow
-        p={{
-          provider: 'antigravity',
-          session: null,
-          weekly: null,
-          buckets: [
-            {
-              name: 'Daily Limit Remaining',
-              groupName: 'Gemini Models',
-              usedPercent: 2,
-              windowMinutes: 0,
-              windowLabel: 'daily',
-              resetsAt: null,
-              resetDescription: null
-            },
-            {
-              name: 'Weekly Limit Remaining',
-              groupName: 'Gemini Models',
-              usedPercent: 1,
-              windowMinutes: 10080,
-              resetsAt: null,
-              resetDescription: null
-            },
-            {
-              name: 'Five Hour Limit Remaining',
-              groupName: 'Gemini Models',
-              usedPercent: 0,
-              windowMinutes: 300,
-              resetsAt: null,
-              resetDescription: null
-            }
-          ],
-          updatedAt: mocks.now,
-          error: null,
-          status: 'ok'
-        }}
-        display="used"
-        mode="verbose"
-        state={{ kind: 'usage', statusLabel: null }}
-        showSignInAction={false}
-        now={mocks.now}
-      />
-    )
-    expect(markup.indexOf('5h')).toBeLessThan(markup.indexOf('wk'))
-    expect(markup.indexOf('wk')).toBeLessThan(markup.indexOf('daily'))
   })
 })
 

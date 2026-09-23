@@ -69,20 +69,24 @@ describe('Antigravity status summary', () => {
   it.each([
     ['used', ['0% used', '1% used']],
     ['remaining', ['100% left', '99% left']]
-  ] as const)('uses native concise labels in %s mode', (display, expected) => {
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={antigravity} compact={false} display={display} mode="verbose" />
-    )
+  ] as const)(
+    'labels each pool and falls back to window length in %s mode',
+    (display, expected) => {
+      const markup = renderToStaticMarkup(
+        <ProviderSegment p={antigravity} compact={false} display={display} mode="verbose" />
+      )
 
-    for (const value of expected) {
-      expect(markup).toContain(value)
+      for (const value of expected) {
+        expect(markup).toContain(value)
+      }
+      expect(markup).toContain('G')
+      expect(markup).toContain('C/G')
+      // Why: without a reset time the chip names the window, as it does for Claude and Codex.
+      expect(markup).toContain('5h')
+      expect(markup).toContain('wk')
+      expect(markup).not.toContain('Limit Remaining')
     }
-    expect(markup).toContain('G')
-    expect(markup).toContain('C/G')
-    expect(markup).not.toContain('5h')
-    expect(markup).not.toContain('wk')
-    expect(markup).not.toContain('Limit Remaining')
-  })
+  )
 
   it('shows reset durations after detailed menu-bar percentages', () => {
     const markup = renderToStaticMarkup(

@@ -6,15 +6,12 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
-import { getTightestUsageSection } from './UsageRosterPanel'
-import { getTightestUsageSectionFromSections, type UsageSection } from './usage-section-selection'
+import { getCompactUsageSections, getTightestUsageSection } from './UsageRosterPanel'
+import { getUsageGroupShortLabel, groupUsageSections } from './usage-section-selection'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
-import { getAntigravityGroupShortLabel, sortAntigravityBuckets } from './antigravity-usage-format'
 
 function MiniBar({
   usedPct,
@@ -53,58 +50,6 @@ function WindowLabel({
       {showLabel ? ` ${label}` : ''}
     </span>
   )
-}
-
-function AntigravityCompactSummary({
-  sections,
-  display,
-  now
-}: {
-  sections: UsageSection[]
-  display: UsagePercentageDisplay
-  now: number
-}): React.JSX.Element {
-  return (
-    <>
-      {sections.map((section, index) => {
-        const reset = section.window.resetsAt
-          ? formatResetDuration(section.window.resetsAt - now)
-          : null
-        return (
-          <React.Fragment key={`${section.groupName ?? 'other'}:${section.label}`}>
-            {index > 0 ? <span className="mx-1 text-muted-foreground">|</span> : null}
-            <span className="inline-flex items-center gap-1 tabular-nums">
-              <span className="text-muted-foreground">
-                {getAntigravityGroupShortLabel(section.groupName)}
-              </span>
-              <span>
-                {formatUsagePercentageLabel(section.window.usedPercent, display)}
-                {reset ? ` ${reset}` : ''}
-              </span>
-            </span>
-          </React.Fragment>
-        )
-      })}
-    </>
-  )
-}
-
-function getAntigravityCompactSections(p: ProviderRateLimits): UsageSection[] {
-  const groups = new Map<string, UsageSection[]>()
-  for (const bucket of p.buckets ?? []) {
-    const key = bucket.groupName ?? ''
-    const sections = groups.get(key) ?? []
-    sections.push({ label: bucket.name, window: bucket, groupName: bucket.groupName })
-    groups.set(key, sections)
-  }
-  return [...groups.values()]
-    .map((sections) =>
-      sortAntigravityBuckets(sections.map((section) => section.window)).map((window) =>
-        sections.find((section) => section.window === window)!
-      )
-    )
-    .map((sections) => getTightestUsageSectionFromSections(sections))
-    .filter((section): section is UsageSection => section !== null)
 }
 
 // Single-letter provider badge for the icon-only (narrow) status bar. Shared by
@@ -150,72 +95,46 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-function AntigravitySummary({
-  p,
-  display,
-  now
-}: {
-  p: ProviderRateLimits
-  display: UsagePercentageDisplay
-  now: number
-}): React.JSX.Element {
-  const groups = new Map<string, NonNullable<ProviderRateLimits['buckets']>>()
-  for (const bucket of p.buckets ?? []) {
-    const key = bucket.groupName ?? ''
-    const current = groups.get(key) ?? []
-    current.push(bucket)
-    groups.set(key, current)
-  }
-  return (
-    <>
-      {[...groups.entries()].map(([groupName, buckets], groupIndex) => (
-        <React.Fragment key={groupName || 'other'}>
-          {groupIndex > 0 ? <span className="mx-1 text-muted-foreground">|</span> : null}
-          <span className="inline-flex items-center gap-1 tabular-nums">
-            <span className="text-muted-foreground">
-              {getAntigravityGroupShortLabel(groupName)}
-            </span>
-            {sortAntigravityBuckets(buckets).map((bucket, index) => (
-              <React.Fragment key={bucket.id ?? `${bucket.groupName}:${bucket.windowMinutes}`}>
-                {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-                <span>
-                  {formatUsagePercentageLabel(bucket.usedPercent, display)}
-                  {bucket.resetsAt ? ` ${formatResetDuration(bucket.resetsAt - now)}` : ''}
-                </span>
-              </React.Fragment>
-            ))}
-          </span>
-        </React.Fragment>
-      ))}
-    </>
-  )
+function GroupLabel({ groupName }: { groupName: string | undefined }): React.JSX.Element | null {
+  return groupName ? (
+    <span className="text-muted-foreground">{getUsageGroupShortLabel(groupName)}</span>
+  ) : null
 }
 
 function VerboseProviderUsage({
   p,
-  display,
-  now
+  display
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
-  now: number
 }): React.JSX.Element {
-  if (p.provider === 'antigravity' && p.buckets?.length) {
-    return <AntigravitySummary p={p} display={display} now={now} />
-  }
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets =
-      p.provider === 'antigravity'
-        ? p.buckets
-        : p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    // Why: every grouped quota pool matters; only Gemini's ungrouped extras are filtered.
+    const visibleBuckets = p.buckets.filter(
+      (bucket) => bucket.groupName || STATUS_BAR_BUCKET_NAMES.has(bucket.name)
+    )
     return (
       <>
-        {visibleBuckets.map((bucket, index) => (
-          <React.Fragment key={bucket.name}>
-            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
-            </span>
+        {groupUsageSections(visibleBuckets).map(({ groupName, entries }, groupIndex) => (
+          <React.Fragment key={groupName ?? ''}>
+            {groupIndex > 0 ? <span className="text-muted-foreground">|</span> : null}
+            <GroupLabel groupName={groupName} />
+            {entries.map((bucket, index) => (
+              <React.Fragment key={bucket.name}>
+                {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+                {groupName ? (
+                  <WindowLabel
+                    w={bucket}
+                    label={formatRateLimitWindowChipLabel(bucket)}
+                    display={display}
+                  />
+                ) : (
+                  <span className="tabular-nums">
+                    {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+                  </span>
+                )}
+              </React.Fragment>
+            ))}
           </React.Fragment>
         ))}
         {visibleBuckets.length === 0 && p.session ? (
@@ -288,7 +207,6 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
-  const now = useResetCountdownClock((p?.buckets ?? []).map((bucket) => bucket.resetsAt))
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -343,22 +261,22 @@ export function ProviderSegment({
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} now={now} />
+          <VerboseProviderUsage p={p} display={display} />
         </>
-      ) : p.provider === 'antigravity' ? (
-        <AntigravityCompactSummary
-          sections={getAntigravityCompactSections(p)}
-          display={display}
-          now={now}
-        />
-      ) : tightest ? (
-        <WindowLabel
-          w={tightest.window}
-          label={tightest.label}
-          display={display}
-          showLabel={!compact}
-        />
-      ) : null}
+      ) : (
+        getCompactUsageSections(p).map((section, index) => (
+          <React.Fragment key={section.groupName ?? ''}>
+            {index > 0 ? <span className="text-muted-foreground">|</span> : null}
+            <GroupLabel groupName={section.groupName} />
+            <WindowLabel
+              w={section.window}
+              label={section.label}
+              display={display}
+              showLabel={!compact}
+            />
+          </React.Fragment>
+        ))
+      )}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
