@@ -43,6 +43,7 @@ const PARTY_NAMING_FIELDS = ['to', 'from', 'terminal', 'callerTerminalHandle'] a
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
+  'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
   'orchestration.workerStart terminal': 'adopts an existing PTY pane, which a session never has',
   'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
   'orchestration.workerTerminalUserInput terminal': 'names the worker terminal'
@@ -58,7 +59,6 @@ const MINIMAL_PARAMS: Readonly<Record<string, Record<string, unknown>>> = {
   'orchestration.reply': { id: 'msg_missing', body: 'b' },
   'orchestration.ask': { question: 'q', to: 'term_worker' },
   'orchestration.dispatch': { task: 'task_missing', to: 'term_worker' },
-  'orchestration.dispatchShow': { task: 'task_missing', preamble: true },
   'orchestration.gateCreate': { task: 'task_missing', question: 'q' },
   'orchestration.gateResolve': { id: 'gate_missing', resolution: 'r' },
   'orchestration.gateList': {},

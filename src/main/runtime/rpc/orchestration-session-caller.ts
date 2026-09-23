@@ -50,8 +50,6 @@ export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> =
   'orchestration.reply': 'from',
   'orchestration.ask': 'from',
   'orchestration.dispatch': 'from',
-  // The preview names its caller as the coordinator, exactly as the dispatch it previews does.
-  'orchestration.dispatchShow': 'from',
   'orchestration.gateCreate': 'from',
   'orchestration.gateResolve': 'from',
   'orchestration.gateList': 'from',

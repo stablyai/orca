@@ -1,9 +1,6 @@
 import { getOptionalStringFlag } from '../../flags'
 import type { RuntimeClient } from '../../runtime-client'
-import {
-  resolveInjectedSessionCaller,
-  resolveOrchestrationTerminalHandle
-} from './terminal-identity'
+import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 /** Which Run `worker-list` enumerated, and why. Additive: old readers ignore it. */
 export type WorkerListRunScope = { run?: string; source: 'flag' | 'bound' | 'all' }
@@ -23,9 +20,6 @@ export async function resolveWorkerListRunScope(
   if (explicit) {
     return { run: explicit, source: 'flag' }
   }
-  // Outside the catch: a --terminal naming someone other than this session is refused, never
-  // widened into an unscoped listing.
-  resolveInjectedSessionCaller(flags, 'terminal')
   try {
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     const current = await client.call<{ run: { id: string } | null }>('orchestration.runCurrent', {

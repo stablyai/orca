@@ -5,7 +5,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import { orchestrationMigrationData } from '../../../shared/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { injectedSessionAddress, resolveCoordinatorTerminalHandle } from './terminal-identity'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
@@ -42,9 +42,12 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
 export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
-    // Why: a preview must embed the same real coordinator handle as an actual dispatch.
+    // Why: a preview must embed the same real coordinator handle as an actual dispatch. Its --from
+    // only fills preview text and names no caller, so it passes through unfenced.
     const from = showPreamble
-      ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      ? (getOptionalStringFlag(flags, 'from') ??
+        injectedSessionAddress() ??
+        (await resolveCoordinatorTerminalHandle(flags, cwd, client)))
       : undefined
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
