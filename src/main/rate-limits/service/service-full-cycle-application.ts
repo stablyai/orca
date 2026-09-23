@@ -34,7 +34,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      kiroResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -191,25 +192,39 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const grokResult = await grokResultPromise
+    await Promise.all([
+      this.applyDeferredProviderResult('grok', grokResultPromise, previousState, signal),
+      this.applyDeferredProviderResult('kiro', kiroResultPromise, previousState, signal)
+    ])
+  }
+
+  private async applyDeferredProviderResult(
+    provider: 'grok' | 'kiro',
+    resultPromise: Promise<
+      { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
+    >,
+    previousState: Pick<RateLimitServiceFullCycleApplication['state'], 'grok' | 'kiro'>,
+    signal: AbortSignal
+  ): Promise<void> {
+    const result = await resultPromise
     if (signal.aborted) {
       return
     }
-    const grok =
-      grokResult.status === 'fulfilled'
-        ? grokResult.value
+    const limits =
+      result.status === 'fulfilled'
+        ? result.value
         : ({
-            provider: 'grok',
+            provider,
             session: null,
             weekly: null,
             updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
+            error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
-    this.trackActiveFailureStreak('grok', grok)
+    this.trackActiveFailureStreak(provider, limits)
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok)
+      [provider]: this.applyStalePolicy(limits, previousState[provider])
     })
   }
 }

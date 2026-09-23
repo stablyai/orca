@@ -1,5 +1,6 @@
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import { getKiroStatusBarToggleSearchEntry } from './appearance-status-bar-kiro-toggle-search'
 import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getGrokStatusBarToggleSearchEntry(): {
@@ -34,4 +35,10 @@ export function getGrokStatusBarToggleSearchEntry(): {
       'Show Grok subscription credit usage when signed in via Grok CLI.'
     )
   }
+}
+
+export function getGrokAndKiroStatusBarToggleSearchEntries(): ReturnType<
+  typeof getGrokStatusBarToggleSearchEntry
+>[] {
+  return [getGrokStatusBarToggleSearchEntry(), getKiroStatusBarToggleSearchEntry()]
 }
