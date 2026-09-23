@@ -245,12 +245,34 @@ describe.each(['native', 'relay'] as const)('%s base refresh preserves local dat
   )
 
   it('preserves tracked edits made after preflight without autostashing', async () => {
+    await git(['reset', '--hard', remoteOid])
+    await writeFile(join(repoPath, 'base.txt'), 'remote edit\n')
+    await git(['add', 'base.txt'])
+    await git(['commit', '-qm', 'remote tracked update'])
+    remoteOid = await head()
+    await git(['update-ref', 'refs/remotes/origin/main', remoteOid])
+    await git(['reset', '--hard', originalOid])
+    await writeFile(join(repoPath, 'base.txt'), 'existing stashed edit\n')
+    await git(['stash', 'push', '-m', 'existing stash'])
+    const stashBefore = (await git(['stash', 'list', '--format=%H'])).stdout
+    const indexBefore = await readFile(join(repoPath, '.git', 'index'))
     await git(['config', 'merge.autoStash', 'true'])
     beforeMutation = async () => {
       await writeFile(join(repoPath, 'base.txt'), 'late local edit\n')
     }
-    await refresh()
+    await expectRefusal()
+    expect(beforeMutation).toBeUndefined()
+    expect(await head()).toBe(originalOid)
+    expect(await readFile(join(repoPath, '.git', 'index'))).toEqual(indexBefore)
     expect(await readFile(join(repoPath, 'base.txt'), 'utf8')).toBe('late local edit\n')
-    expect((await git(['stash', 'list'])).stdout).toBe('')
+    expect((await git(['stash', 'list', '--format=%H'])).stdout).toBe(stashBefore)
+    expect((await git(['diff', '--cached', '--name-only'])).stdout).toBe('')
+    for (const file of ['MERGE_HEAD', 'MERGE_AUTOSTASH']) {
+      await expect(readFile(join(repoPath, '.git', file))).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+    await expect(readFile(join(repoPath, 'incoming.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(join(repoPath, 'incoming.local'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
   })
 })

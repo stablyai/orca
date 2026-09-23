@@ -363,7 +363,7 @@ describe('createWorktree base status merge', () => {
     },
     {
       status: 'skipped_error',
-      expectedReason: 'Git returned an error'
+      expectedReason: 'untracked or ignored files'
     }
   ] satisfies {
     status: LocalBaseRefRefreshResult['status']
@@ -401,6 +401,11 @@ describe('createWorktree base status merge', () => {
     expect(description).not.toContain('try again')
     expect(description).not.toContain('AI tools')
     expect(description).not.toContain('git diff')
+    if (status === 'skipped_error') {
+      expect(description).toContain('locked refs')
+      expect(description).toContain('Preserve your files')
+      expect(description).not.toContain('{{')
+    }
     // Owner path is only meaningful for the dirty-owner skip; do not leak it into other reasons.
     if (status === 'skipped_dirty_worktree') {
       expect(description).toContain('/repo')

@@ -1758,7 +1758,7 @@ async function evaluateRemoteLocalBaseRefRefreshability(
       }
     }
 
-    // Why: not checked out anywhere, so a bare-ref fast-forward is safe; omitting ownerWorktreePath tells the relay to update-ref, not reset --hard.
+    // Why: not checked out anywhere, so a bare-ref fast-forward is safe; omitting ownerWorktreePath tells the relay to update-ref instead of merging into a checkout.
     return {
       refreshable: true,
       ...resultBase,

@@ -28,9 +28,9 @@ export function localBaseRefRefreshFailureDetail(result: LocalBaseRefRefreshResu
       )
     case 'skipped_error':
       return translate(
-        'auto.store.slices.worktrees.localBaseRefRefreshFailedDetailError',
-        'Git returned an error while updating local {{value0}}. Check the repo for locked refs or unusual worktree state, then update local {{value0}} manually.',
-        { value0: result.localBranch }
+        'auto.store.slices.worktrees.localBaseRefRefreshFailedDetailSafeUpdate',
+        'Git could not update local {{branch}}. Check for conflicting local files (including untracked or ignored files) or locked refs. Preserve your files before updating local {{branch}} manually.',
+        { branch: result.localBranch }
       )
     case 'updated':
       return ''
