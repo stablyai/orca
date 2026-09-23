@@ -2,25 +2,40 @@
 
 OpenCode 2 has one form primitive and several producers. Orca's setup bridge mapped every
 `form.created` to `question.asked`, which is Orca's un-evictable "the pane owner must answer
-this" blocker. Only one producer is an agent-initiated question.
+this" blocker — including forms owned by a sentinel that is not a session.
 
 Captured against the shipped `opencode v2.0.12` binary on macOS, driving the real TUI in a PTY
 against a real `opencode serve` instance and reading the server's `/api/event` SSE stream.
 
-## The discriminator: `form.metadata.kind`
+## The discriminator: `form.sessionID`, not `form.metadata.kind`
 
-`Form.Info` is `{ id, sessionID, title, metadata?, fields }`; `metadata` is an open record that
-each producer stamps. Every `Form.ask` call site in the v2.0.12 bundle:
+`Form.Info` is `{ id, sessionID, title, metadata?, fields }`. Every `Form.ask` call site in the
+v2.0.12 bundle (still exactly five on `v2.0.15`, in `tool/plugin/question.ts`,
+`tool/plugin/websearch.ts` and `mcp/index.ts`):
 
-| `metadata.kind`      | Form title                                    | `sessionID` | Agent-initiated question  |
-| -------------------- | --------------------------------------------- | ----------- | ------------------------- |
+| `metadata.kind`      | Form title                                    | `sessionID` | Blocks the pane owner    |
+| -------------------- | --------------------------------------------- | ----------- | ------------------------ |
 | `question`           | `Questions`                                   | the session | yes — the `question` tool |
-| `websearch.provider` | `Web Search` / `Choose a web search provider` | the session | no — a provider picker    |
-| `mcp-elicitation`    | `<server> is requesting input`                | `"global"`  | no — an MCP server prompt |
+| `websearch.provider` | `Web Search` / `Choose a web search provider` | the session | yes — the turn is stalled |
+| `mcp-elicitation`    | `<server> is requesting input`                | `"global"`  | no — see below            |
 
-`mcp-elicitation` is the worst shape for Orca: `"global"` is not a session, so the blocker it
-mints can never be retired by that session going idle — only by an exact `form.replied` /
-`form.cancelled` for the same form id.
+`metadata.kind` looks like the discriminator but cannot be one. In `packages/schema/src/form.ts`
+on `v2.0.15`, `Metadata` is `Schema.Record(Schema.String, Schema.Unknown)` and line 130 declares
+`metadata: Metadata.pipe(optional)` — so `metadata` may be absent entirely and `kind` is a
+convention no producer is obliged to stamp. The public `POST /api/session/:sessionID/form`
+endpoint (`packages/protocol/src/groups/session.ts:809`, payload at ~147) lets any client raise a
+genuinely blocking form on a real session with no metadata at all. Keying on
+`metadata.kind === "question"` therefore drops real blockers silently.
+
+What actually differs is the owner. `mcp-elicitation` passes `GLOBAL_ELICITATION_SESSION_ID`
+(`"global"`, `packages/core/src/mcp/index.ts:82`), which is not a session, so a blocker minted for
+it can never be retired by that session going idle — only by an exact `form.replied` /
+`form.cancelled`. `websearch.provider` passes the real `context.sessionID`, so session idle retires
+it normally, and while it is pending the agent genuinely is waiting on the user.
+
+So Orca blocks on every session-owned form and drops only the non-session sentinel. Upstream notes
+in `form.ts:122-129` that `"global"` is temporary and elicitations will get real session ids; when
+that lands the exclusion stops matching and Orca starts blocking on them correctly.
 
 `form-created-question.json` and `form-replied-question.json` are the live capture of the
 `question` tool's form being raised and answered. Note `metadata.tool` is `{ messageID, id }`,

@@ -45,7 +45,8 @@ import {
   createStructuredAgentSessionOwnerProbes
 } from './structured-agent-session-owner-probe'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
+import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
@@ -91,6 +92,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
   getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
+  /** Which login-shell variables Codex and Claude children inherit; absent inherits all. */
+  resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
   resolveCodexOverrides?: () => NodeJS.ProcessEnv
   onError?: (input: { scope: string; error: unknown }) => void
   /** Every structured-session status projection, for host-side reactions such as the first-work
@@ -183,13 +186,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
   }
-  const bootEnvironment = (deps.resolveEnvironment ?? resolveLoginShellEnvironment)()
-  const resolveCodexEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
-    ...(await bootEnvironment),
-    ...(await deps.resolveLaunchEnv?.()),
-    ...(await deps.resolveLaunchEnvOverlay?.()),
-    ...deps.resolveCodexOverrides?.()
-  })
+  const { resolveCodexEnvironment, resolveClaudeInheritedEnv } =
+    createStructuredAgentEnvironmentResolvers(deps)
   const store = await AgentSessionRecordStore.open({
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
     hostId: deps.hostId
@@ -274,6 +272,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.resolveClaudeLaunchEnv
         ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv }
         : {}),
+      resolveClaudeInheritedEnv,
       resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
       ...(deps.resolveClaudePermissionMode
         ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }

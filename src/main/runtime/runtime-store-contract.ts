@@ -120,6 +120,8 @@ export type RuntimeStore = {
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
+    nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
+    nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
     aiVaultSearch?: GlobalSettings['aiVaultSearch']
   }
   // Why: narrow to `unknown` return so test mocks can return void without

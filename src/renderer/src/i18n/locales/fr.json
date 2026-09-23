@@ -6761,7 +6761,16 @@
             "defaultCopy": "Choisissez comment s'ouvrent les nouveaux onglets de terminal d'agents pris en charge.",
             "defaultViewLabel": "Vue Chat UI par défaut",
             "defaultViewTerminal": "Chat dans le terminal",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
+            "shellEnvNamePlaceholder": "Nom de la variable",
+            "shellEnvNameAdd": "Ajouter",
+            "shellEnvNameRemove": "Supprimer {{value0}}",
+            "shellEnvNamesEmpty": "Aucune variable ajoutée pour le moment.",
+            "shellEnvNamesAlwaysPassed": "PATH, les paramètres régionaux et SSH_AUTH_SOCK sont toujours transmis. S'applique au prochain démarrage ou à la prochaine reprise d'un chat.",
+            "shellEnvTitle": "Utiliser l'environnement de votre shell",
+            "shellEnvCopy": "Les chats Codex et Claude démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
+            "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell"
           },
           "agentDashboard": {
             "title": "Tableau de bord des agents",

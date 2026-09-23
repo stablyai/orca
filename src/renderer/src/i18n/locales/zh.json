@@ -6062,7 +6062,16 @@
             "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
             "defaultViewLabel": "默认 Chat UI 视图",
             "defaultViewTerminal": "终端聊天",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "从 shell 传递的变量",
+            "shellEnvNamePlaceholder": "变量名",
+            "shellEnvNameAdd": "添加",
+            "shellEnvNameRemove": "删除 {{value0}}",
+            "shellEnvNamesEmpty": "尚未添加任何变量。",
+            "shellEnvNamesAlwaysPassed": "PATH、区域设置和 SSH_AUTH_SOCK 始终会传递。在下次聊天开始或恢复时生效。",
+            "shellEnvTitle": "使用 shell 环境",
+            "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
+            "shellEnvToggleLabel": "切换使用 shell 环境"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",

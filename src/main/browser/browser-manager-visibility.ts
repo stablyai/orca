@@ -229,7 +229,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       return () => {}
     }
 
-    // Why: agent commands need a paintable webview for lazy-loading sites without stealing the user's visible tab.
+    // Why: pixel-capturing agent commands need a drawn webview without stealing the user's visible tab.
     const acquirePromise = renderer
       .executeJavaScript(
         `(async function() {

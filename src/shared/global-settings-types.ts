@@ -233,6 +233,11 @@ export type GlobalSettings = {
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean
+  /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
+   *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
+  nativeChatInheritShellEnvironment?: boolean
+  /** Login-shell variable names structured chat inherits while the whole environment is off. */
+  nativeChatShellEnvironmentVariables?: string[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */

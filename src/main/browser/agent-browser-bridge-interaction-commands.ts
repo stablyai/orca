@@ -240,16 +240,21 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
     // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
-      const wc = this.getWebContents(target.webContentsId)
-      if (!wc) {
-        throw new BrowserError('browser_no_tab', 'Tab is no longer available')
-      }
-      const buffer = await wc.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true
-      })
-      return { data: buffer.toString('base64') }
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.getWebContents(target.webContentsId)
+        if (!wc) {
+          throw new BrowserError('browser_no_tab', 'Tab is no longer available')
+        }
+        const buffer = await wc.printToPDF({
+          printBackground: true,
+          preferCSSPageSize: true
+        })
+        return { data: buffer.toString('base64') }
+      },
+      { needsPaint: true }
+    )
   }
 }

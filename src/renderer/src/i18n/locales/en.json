@@ -6374,12 +6374,23 @@
         "RepoScanUnavailableIndicator": {
           "title": "Worktree scan failed for {{value0}}",
           "retry": "Retry scan",
-          "retained": "Existing worktrees are kept until a scan succeeds. Click to retry.",
+          "retained": "Existing worktrees are kept until a scan succeeds. Click the warning icon to retry.",
           "xcodeLicense": "Apple developer tools require license acceptance before Git can run.",
           "developerTools": "Apple command-line developer tools are missing or unavailable.",
           "architectureMismatch": "A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.",
-          "copyCommand": "Copy command",
           "copyDiagnostics": "Copy diagnostics"
+        },
+        "LocalGitToolchainScanBanner": {
+          "xcodeLicenseTitle": "Accept the Xcode license to use Git",
+          "xcodeLicenseBody": "macOS blocks Git until you accept it. Run this in Terminal, then switch back to Orca. It will check again automatically.",
+          "developerToolsTitle": "Install Apple's command line tools",
+          "developerToolsBody": "Git needs Apple's developer tools. Run this in Terminal, then switch back to Orca. It will check again automatically.",
+          "affectedOne": "Worktree scan paused for {{value0}}",
+          "affectedMany": "Worktree scan paused for {{value0}} projects",
+          "copyCommand": "Copy command",
+          "copied": "Command copied",
+          "retry": "Retry now",
+          "restored": "Git is working again. Worktrees refreshed."
         }
       },
       "shared": {
@@ -7174,7 +7185,16 @@
             "structuredToggleLabel": "Toggle updated structured native chat",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were mid-turn are automatically resumed when Orca is reopened.",
-            "resumeToggleLabel": "Toggle automatic resume after a restart"
+            "resumeToggleLabel": "Toggle automatic resume after a restart",
+            "shellEnvNamesLabel": "Variables to pass from your shell",
+            "shellEnvNamePlaceholder": "Variable name",
+            "shellEnvNameAdd": "Add",
+            "shellEnvNameRemove": "Remove {{value0}}",
+            "shellEnvNamesEmpty": "No variables added yet.",
+            "shellEnvNamesAlwaysPassed": "PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.",
+            "shellEnvTitle": "Use your shell environment",
+            "shellEnvCopy": "Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.",
+            "shellEnvToggleLabel": "Toggle using your shell environment"
           },
           "agentDashboard": {
             "title": "Agent Dashboard",
@@ -17614,6 +17634,11 @@
         "blocked": "Goal blocked",
         "limited": "Goal limited",
         "attachmentsUnsupported": "Remove attachments before setting a goal."
+      },
+      "fileLinks": {
+        "notFound": "File not found: {{value0}}",
+        "unverifiable": "Couldn't check {{value0}}: {{value1}}",
+        "unresolved": "Couldn't resolve {{value0}} in this workspace"
       }
     },
     "tab": {

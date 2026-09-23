@@ -559,7 +559,10 @@ export async function buildMobileWebAppBundle({
   // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n' +
+    // No viewport-fit=cover: the page never asks to extend under the system bars. The shell owns
+    // the safe area: it pads the WebView and, on Android, zeroes the insets the WebView would
+    // report via env(); on iOS the padded WKWebView reports none.
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     // Undeclared, a browser asks the origin for /favicon.ico itself and the shell's asset server
     // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
     // has no tab for an icon, and the bundle's images are route assets named by their own bytes.

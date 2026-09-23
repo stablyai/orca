@@ -6001,7 +6001,16 @@
             "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
             "defaultViewLabel": "기본 Chat UI 보기",
             "defaultViewTerminal": "Terminal 채팅",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "셸에서 전달할 변수",
+            "shellEnvNamePlaceholder": "변수 이름",
+            "shellEnvNameAdd": "추가",
+            "shellEnvNameRemove": "{{value0}} 제거",
+            "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
+            "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
+            "shellEnvTitle": "셸 환경 사용",
+            "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
+            "shellEnvToggleLabel": "셸 환경 사용 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",

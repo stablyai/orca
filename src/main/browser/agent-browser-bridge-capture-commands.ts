@@ -13,14 +13,9 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
     // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName) => {
-        return this.captureScreenshotCommand(sessionName, ['screenshot'], 300, format)
-      },
-      { ensureVisible: false }
-    )
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+      return this.captureScreenshotCommand(sessionName, ['screenshot'], 300, format)
+    })
   }
 
   async fullPageScreenshot(
@@ -28,19 +23,14 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName, target) => {
-        return this.captureFullPageScreenshotCommand(
-          sessionName,
-          target.webContentsId,
-          500,
-          format === 'jpeg' ? 'jpeg' : 'png'
-        )
-      },
-      { ensureVisible: false }
-    )
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      return this.captureFullPageScreenshotCommand(
+        sessionName,
+        target.webContentsId,
+        500,
+        format === 'jpeg' ? 'jpeg' : 'png'
+      )
+    })
   }
 
   private readScreenshotFromResult(raw: unknown, format?: string): BrowserScreenshotResult {

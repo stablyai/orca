@@ -5996,7 +5996,16 @@
             "defaultCopy": "対応 Agent の新規ターミナルタブを開く方法を選択します。",
             "defaultViewLabel": "デフォルトの Chat UI ビュー",
             "defaultViewTerminal": "ターミナルチャット",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "シェルから渡す変数",
+            "shellEnvNamePlaceholder": "変数名",
+            "shellEnvNameAdd": "追加",
+            "shellEnvNameRemove": "{{value0}} を削除",
+            "shellEnvNamesEmpty": "まだ変数は追加されていません。",
+            "shellEnvNamesAlwaysPassed": "PATH、ロケール、SSH_AUTH_SOCK は常に渡されます。次にチャットを開始または再開したときに適用されます。",
+            "shellEnvTitle": "シェル環境を使用する",
+            "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
+            "shellEnvToggleLabel": "シェル環境の使用の切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",

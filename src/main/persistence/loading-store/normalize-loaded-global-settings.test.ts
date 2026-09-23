@@ -35,3 +35,34 @@ describe('retired Agents sidebar setting', () => {
     expect(normalized.agentsSidebarMigratedFromExperimental).toBe(true)
   })
 })
+
+describe('structured chat shell environment settings', () => {
+  it('keeps a valid saved list and an explicit opt-out', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatInheritShellEnvironment: false,
+      nativeChatShellEnvironmentVariables: ['HTTPS_PROXY', 'CODEX_LB_API_KEY']
+    })
+    expect(normalized.nativeChatInheritShellEnvironment).toBe(false)
+    expect(normalized.nativeChatShellEnvironmentVariables).toEqual([
+      'HTTPS_PROXY',
+      'CODEX_LB_API_KEY'
+    ])
+  })
+
+  it('degrades a malformed hand-edited value to the defaults instead of failing a chat', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatInheritShellEnvironment: 'no',
+      nativeChatShellEnvironmentVariables: 'HTTPS_PROXY, CODEX_LB_API_KEY'
+    })
+    expect(normalized.nativeChatInheritShellEnvironment).toBe(true)
+    expect(normalized.nativeChatShellEnvironmentVariables).toEqual([])
+  })
+
+  it('drops non-string and invalid entries from a saved list', () => {
+    expect(
+      normalizeLegacyProfile({
+        nativeChatShellEnvironmentVariables: ['HTTPS_PROXY', 7, null, 'not valid', 'HTTPS_PROXY']
+      }).nativeChatShellEnvironmentVariables
+    ).toEqual(['HTTPS_PROXY'])
+  })
+})

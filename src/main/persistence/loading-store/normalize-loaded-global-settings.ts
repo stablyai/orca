@@ -7,6 +7,7 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -114,6 +115,11 @@ export function normalizeLoadedGlobalSettings(
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
+    // Why: the structured runtime reads these per launch; a malformed hand-edited value must not fail a chat.
+    nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
+    nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
+      parsed.settings?.nativeChatShellEnvironmentVariables
+    ),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
     visibleTaskProvidersDefaultedForJira: true,
