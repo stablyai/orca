@@ -1,3 +1,4 @@
+import { webRuntimeAgentSessionLaunchOptions } from './web-runtime-agent-session-launch-options'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -83,9 +84,8 @@ export async function createWebRuntimeSessionTerminalResult(
   let createdLeafId: string | undefined
   try {
     const agent = args.launchAgent ?? args.agent
-    const agentArgsOverride =
-      args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
     if (agent) {
+      const agentLaunchOptions = webRuntimeAgentSessionLaunchOptions(args, agent)
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
@@ -105,18 +105,11 @@ export async function createWebRuntimeSessionTerminalResult(
                       method: 'terminal.ensureAgentSession',
                       params: {
                         ...(await keyboardOptions(environmentId)),
+                        ...agentLaunchOptions,
                         kind: 'explicit',
-                        worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                        agent,
                         providerSession: args.providerSession!,
                         ...(args.launchConfig?.ompResumeFilePath
                           ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
-                          : {}),
-                        ...(agentArgsOverride !== undefined
-                          ? { agentArgs: agentArgsOverride }
-                          : {}),
-                        ...(args.launchPreferences
-                          ? { launchPreferences: args.launchPreferences }
                           : {}),
                         presentation: 'background'
                       },
@@ -134,16 +127,9 @@ export async function createWebRuntimeSessionTerminalResult(
                       params: withAgentSessionCreateOperationId(
                         {
                           ...(await keyboardOptions(environmentId)),
-                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                          agent,
+                          ...agentLaunchOptions,
                           ...(args.prompt ? { prompt: args.prompt } : {}),
                           ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
-                          ...(agentArgsOverride !== undefined
-                            ? { agentArgs: agentArgsOverride }
-                            : {}),
-                          ...(args.launchPreferences
-                            ? { launchPreferences: args.launchPreferences }
-                            : {}),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),
                           ...(args.viewMode ? { viewMode: args.viewMode } : {}),
                           presentation: 'background'

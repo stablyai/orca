@@ -126,6 +126,10 @@ describe('createWebRuntimeSessionTerminal', () => {
   )(
     'keeps $sessionKind host creation background with activate=$activate and keyboard=$keyboardSupported',
     async ({ sessionKind, activate, keyboardSupported }) => {
+      mocks.getState().settings.terminalColorOverrides = {
+        foreground: '#eeeeee',
+        background: '#262a33'
+      }
       const hostTabId = `host-${sessionKind}-${activate ? 'active' : 'background'}`
       const runtimeCall = vi.fn(async (request: { method: string }) => {
         if (request.method === 'status.get') {
@@ -191,7 +195,10 @@ describe('createWebRuntimeSessionTerminal', () => {
       expect(authorityRequest).toMatchObject({
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
-        params: { presentation: 'background' }
+        params: {
+          presentation: 'background',
+          terminalColorQueryReplies: { foreground: '#eeeeee', background: '#262a33' }
+        }
       })
       if (keyboardSupported) {
         expect(authorityRequest).toHaveProperty('params.terminalKittyKeyboardProtocol', true)
@@ -373,6 +380,10 @@ describe('createWebRuntimeSessionTerminal', () => {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
         worktree: `id:${WORKTREE_ID}`,
         agent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: expect.any(String),
+          background: expect.any(String)
+        },
         prompt: 'linked issue context',
         promptDelivery: 'draft',
         agentArgs: '--model gpt-5 --profile captured',
