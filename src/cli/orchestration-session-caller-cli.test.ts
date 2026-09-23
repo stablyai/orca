@@ -290,6 +290,30 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
   )
 })
 
+describe.each([
+  { command: 'gate-list', method: 'gateList', callerParam: 'from' },
+  { command: 'task-list', method: 'taskList', callerParam: 'callerTerminalHandle' }
+])('orchestration $command --run run as an agent session', ({ command, method, callerParam }) => {
+  beforeEach(asSessionInTerminalView)
+
+  it('needs no caller, but refuses a --from naming another actor, before any request', async () => {
+    await invoke(command, flagMap({ run: 'run_1' }))
+    expect(callsTo(method)[0]).toMatchObject({ run: 'run_1' })
+    expect(callsTo(method)[0]?.[callerParam]).toBeUndefined()
+
+    callMock.mockClear()
+    await expect(
+      invoke(command, flagMap({ run: 'run_1', from: 'term_sibling' }))
+    ).rejects.toMatchObject({ code: 'consumer_fenced' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts a --from that restates the session', async () => {
+    await invoke(command, flagMap({ run: 'run_1', from: `session:${SESSION}` }))
+    expect(callsTo(method)[0]?.[callerParam]).toBeUndefined()
+  })
+})
+
 describe('the identity a session presents', () => {
   it("lets a structured worker restate its own minted handle, and nobody else's", async () => {
     setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })

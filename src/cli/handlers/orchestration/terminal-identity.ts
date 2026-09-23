@@ -193,6 +193,18 @@ function resolveInjectedSessionCaller(
   return sessionId
 }
 
+/**
+ * For a listing scoped by `--run`, which needs no caller: a session still refuses a caller flag
+ * naming someone else rather than dropping it.
+ */
+export function refuseConflictingSessionCaller(
+  flags: Map<string, string | boolean>,
+  flagName: 'from' | 'terminal'
+): undefined {
+  resolveInjectedSessionCaller(flags, flagName)
+  return undefined
+}
+
 /** The session's own spellings, plus the handle a structured worker session was minted. */
 function namesInjectedSession(value: string, sessionId: string): boolean {
   return normalizeOrchestrationActor(value)?.id === sessionId || value === injectedSessionAddress()
