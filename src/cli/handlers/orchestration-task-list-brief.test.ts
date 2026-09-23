@@ -12,8 +12,12 @@ async function runTaskListBrief(): Promise<{
   result: { tasks: { spec: string; spec_truncated: boolean }[] }
 }> {
   vi.mocked(printResult).mockClear()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this focused handler test exercises only flags, client.call, and JSON output; the structural client double cannot satisfy RuntimeClient's private class members.
   await ORCHESTRATION_HANDLERS['orchestration task-list']({
-    flags: new Map([['brief', true]]),
+    flags: new Map<string, string | boolean>([
+      ['brief', true],
+      ['run', 'run_test']
+    ]),
     client: { call: callMock },
     json: true
   } as never)

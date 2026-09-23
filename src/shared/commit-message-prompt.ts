@@ -264,6 +264,21 @@ export function tokenizeCustomCommandTemplate(
   return { ok: true, tokens, spans }
 }
 
+export function planAdditionalAgentArgs(
+  agentArgs: string | null | undefined,
+  backslash: CommandTemplateBackslash = 'escape'
+): { ok: true; args: string[] } | { ok: false; error: string } {
+  const trimmed = agentArgs?.trim()
+  if (!trimmed) {
+    return { ok: true, args: [] }
+  }
+  const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
+  if (!tokenized.ok) {
+    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
+  }
+  return { ok: true, args: tokenized.tokens }
+}
+
 export type CustomCommandPlan =
   | { ok: true; binary: string; args: string[]; stdinPayload: string | null }
   | { ok: false; error: string }

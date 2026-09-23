@@ -63,7 +63,8 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
         connectionId: null,
         isWsl: true,
         worktreeId: 'repo::C:\\repo',
-        runtimeCliCommand: 'orca-dev'
+        runtimeCliCommand: 'orca-dev',
+        devMode: false
       })
     ).toBe('orca-dev')
     expect(
@@ -71,7 +72,8 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
         connectionId: 'ssh-1',
         isWsl: true,
         worktreeId: 'repo::C:\\repo',
-        runtimeCliCommand: 'orca-dev'
+        runtimeCliCommand: 'orca-dev',
+        devMode: true
       })
     ).toBe('orca')
   })

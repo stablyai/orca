@@ -1,10 +1,14 @@
-import type { CommandTemplateBackslash } from './commit-message-prompt'
+import {
+  type CommandTemplateBackslash,
+  planAdditionalAgentArgs,
+  planCustomCommand,
+  tokenizeCustomCommandTemplate
+} from './commit-message-prompt'
 import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './tui-agent'
 
 // Why: planning is a pure transformation from "user request + prompt text"
@@ -21,6 +25,7 @@ export type CommitMessagePlanInput = {
   backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
+  useAgentDefaultModel?: boolean
   customAgentCommand?: string
   agentCommandOverride?: string
   agentArgs?: string
@@ -58,21 +63,6 @@ export function planAgentBinary(
     return { ok: false, error: 'Agent command override must start with a binary name.' }
   }
   return { ok: true, binary, prefixArgs }
-}
-
-function planAdditionalAgentArgs(
-  agentArgs: string | null | undefined,
-  backslash: CommandTemplateBackslash = 'escape'
-): { ok: true; args: string[] } | { ok: false; error: string } {
-  const trimmed = agentArgs?.trim()
-  if (!trimmed) {
-    return { ok: true, args: [] }
-  }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
-  if (!tokenized.ok) {
-    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
-  }
-  return { ok: true, args: tokenized.tokens }
 }
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
@@ -276,11 +266,13 @@ export function planCommitMessageGeneration(
   if (!spec) {
     return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
   }
-  const model = getCommitMessageModel(input.agentId, input.model)
-  if (!model) {
+  const model = input.useAgentDefaultModel
+    ? undefined
+    : getCommitMessageModel(input.agentId, input.model)
+  if (!input.useAgentDefaultModel && !model) {
     return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
   }
-  if (input.thinkingLevel) {
+  if (input.thinkingLevel && model) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,
@@ -296,11 +288,15 @@ export function planCommitMessageGeneration(
   }
 
   const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-  const baseArgs = spec.buildArgs({
+  const builtArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
-    thinkingLevel: input.thinkingLevel
+    thinkingLevel: input.useAgentDefaultModel ? undefined : input.thinkingLevel
   })
+  const modelOptionAliases = spec.singletonOptions?.[0] ?? DEFAULT_SINGLETON_OPTIONS[0]
+  const baseArgs = input.useAgentDefaultModel
+    ? removeAllOptionOccurrences(builtArgs, modelOptionAliases)
+    : builtArgs
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs

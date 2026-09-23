@@ -101,6 +101,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'recipient_ambiguous',
   'recipient_run_mismatch',
   'dispatch_inactive',
+  'sender_not_assignee',
   'worker_identity_changed',
   'cursor_invalid',
   'cursor_dispatch_mismatch',
@@ -130,6 +131,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'answer_conflict',
   'stale_delivery',
   'waiter_exists',
+  'collaboration_topology_exists',
+  'collaboration_topology_unavailable',
+  'collaboration_topic_not_allowed',
+  'collaboration_subscription_unavailable',
   'invalid_argument',
   // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
   // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.

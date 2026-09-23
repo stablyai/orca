@@ -4,6 +4,8 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { createCollaborationTopology } from '../../../../collaboration/collaboration-topology'
+import { registerCollaborationRuntimeTopology } from '../../../../collaboration/collaboration-runtime-registry'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -90,20 +92,26 @@ describe('orchestration RPC methods', () => {
       expect(current.run?.id).toBe(created.run.id)
     })
 
-    it('publishes a run receipt without internal routing columns', async () => {
+    it('keeps persisted collaboration topology out of the public Run shape', async () => {
       setup(false)
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
-        'tab_coord:11111111-1111-4111-8111-111111111111'
-      )
-
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(coordinatorPaneKey)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the orchestration RPC harness returns unknown; this assertion names the run id used immediately by the topology persistence check.
       const created = (await call('orchestration.runCreate', {
-        objective: 'Coordinate reviews',
+        objective: 'Internal topology storage',
         from: 'term_coord'
-      })) as { run: Record<string, unknown> }
-
-      expect(created.run).not.toHaveProperty('coordinator_pane_key')
-      expect(created.run).not.toHaveProperty('home_database')
-      expect(created.run.consumer_generation).toBe(1)
+      })) as { run: { id: string } }
+      registerCollaborationRuntimeTopology(
+        runtime,
+        created.run.id,
+        createCollaborationTopology([{ taskId: 'task_internal' }])
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runShow is exercised only to assert that internal persistence fields stay absent from the public run object.
+      const shown = (await call('orchestration.runShow', { id: created.run.id })) as {
+        run: Record<string, unknown>
+      }
+      expect(shown.run).not.toHaveProperty('collaboration_topology')
+      expect(shown.run).not.toHaveProperty('coordinator_pane_key')
+      expect(shown.run).not.toHaveProperty('home_database')
     })
 
     it('requires runtime-observed stable pane identity for binding', async () => {

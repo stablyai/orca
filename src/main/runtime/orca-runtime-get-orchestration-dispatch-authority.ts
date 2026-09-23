@@ -244,7 +244,6 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), worktreeId)
       : undefined
   }
-
   getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {
     return readOrchestrationFleetAgentStatusSnapshot(this)
   }
@@ -268,7 +267,8 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
-        : undefined
+        : undefined,
+      devMode: !getAppEnvironment().isPackaged()
     })
   }
   /**
