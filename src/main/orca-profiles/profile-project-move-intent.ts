@@ -17,16 +17,25 @@ import {
   type ReadProfileStateResult
 } from './profile-project-state-file'
 import { getOrcaProfileMoveIntentDirectory } from './profile-storage-paths'
+import {
+  readProfileProjectDomainMoveState,
+  validateProfileProjectDomainMoveIntent,
+  type ProfileProjectDomainMoveIntent
+} from './profile-project-domain-move-intent'
+import { writeProfileProjectDomainChanges } from './profile-project-domain-state'
 
 const PROFILE_MOVE_INTENT_VERSION = 1
 const INTENT_FILE_PATTERN = /^[0-9a-f-]{36}\.json$/
 const PROFILE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
 
-export type ProfileProjectMoveIntent = {
-  version: typeof PROFILE_MOVE_INTENT_VERSION
+export type ProfileProjectMoveIdentity = {
   id: string
   sourceProfileId: string
   targetProfileId: string
+}
+
+type ProfileProjectMoveIntentV1 = ProfileProjectMoveIdentity & {
+  version: typeof PROFILE_MOVE_INTENT_VERSION
   expectedSourceRevision: number
   expectedTargetRevision: number
   sourceBeforeHash: string
@@ -37,33 +46,7 @@ export type ProfileProjectMoveIntent = {
   targetAfterJson: string
 }
 
-export function createProfileProjectMoveIntent(args: {
-  sourceProfileId: string
-  targetProfileId: string
-  source: ReadProfileStateResult
-  target: ReadProfileStateResult
-  sourceAfterJson: string
-  targetAfterJson: string
-}): ProfileProjectMoveIntent {
-  const sourceBeforeJson = requireSerializedSnapshot(args.source, 'source')
-  const targetBeforeJson = requireSerializedSnapshot(args.target, 'target')
-  const expectedSourceRevision = requireRevision(args.source, 'source')
-  const expectedTargetRevision = requireRevision(args.target, 'target')
-  return {
-    version: PROFILE_MOVE_INTENT_VERSION,
-    id: randomUUID(),
-    sourceProfileId: args.sourceProfileId,
-    targetProfileId: args.targetProfileId,
-    expectedSourceRevision,
-    expectedTargetRevision,
-    sourceBeforeHash: hashProfileStateJson(sourceBeforeJson),
-    targetBeforeHash: hashProfileStateJson(targetBeforeJson),
-    sourceAfterHash: hashProfileStateJson(args.sourceAfterJson),
-    targetAfterHash: hashProfileStateJson(args.targetAfterJson),
-    sourceAfterJson: args.sourceAfterJson,
-    targetAfterJson: args.targetAfterJson
-  }
-}
+export type ProfileProjectMoveIntent = ProfileProjectMoveIntentV1 | ProfileProjectDomainMoveIntent
 
 export function persistProfileProjectMoveIntent(
   userDataPath: string,
@@ -117,16 +100,10 @@ function recoverProfileProjectMoveIntent(
   userDataPath: string,
   intent: ProfileProjectMoveIntent
 ): void {
-  const source = readProfileStateWithRevision(intent.sourceProfileId, userDataPath)
-  const target = readProfileStateWithRevision(intent.targetProfileId, userDataPath)
-  if (source.revision === undefined || target.revision === undefined) {
-    throw new Error(`Profile move ${intent.id} no longer has two SQLite participants`)
-  }
-
-  const sourceBefore = matches(source, intent.expectedSourceRevision, intent.sourceBeforeHash)
-  const targetBefore = matches(target, intent.expectedTargetRevision, intent.targetBeforeHash)
-  const sourceAfter = matches(source, intent.expectedSourceRevision + 1, intent.sourceAfterHash)
-  const targetAfter = matches(target, intent.expectedTargetRevision + 1, intent.targetAfterHash)
+  const { sourceBefore, targetBefore, sourceAfter, targetAfter } =
+    intent.version === 2
+      ? readProfileProjectDomainMoveState(userDataPath, intent)
+      : readLegacyMoveState(userDataPath, intent)
 
   if (sourceAfter && targetAfter) {
     removeProfileProjectMoveIntent(userDataPath, intent.id)
@@ -137,9 +114,13 @@ function recoverProfileProjectMoveIntent(
     return
   }
   if (sourceBefore && targetAfter) {
-    writeSerializedProfileState(intent.sourceProfileId, userDataPath, intent.sourceAfterJson, {
-      expectedRevision: intent.expectedSourceRevision
-    })
+    if (intent.version === 2) {
+      writeProfileProjectDomainChanges(intent.sourceProfileId, userDataPath, intent.source)
+    } else {
+      writeSerializedProfileState(intent.sourceProfileId, userDataPath, intent.sourceAfterJson, {
+        expectedRevision: intent.expectedSourceRevision
+      })
+    }
     removeProfileProjectMoveIntent(userDataPath, intent.id)
     return
   }
@@ -147,8 +128,7 @@ function recoverProfileProjectMoveIntent(
     throw new Error(`Profile move ${intent.id} has an unrecognized target state`)
   }
   if (targetAfter && !sourceAfter) {
-    // A source revision that moved independently means the intent can no longer
-    // be replayed safely. Leave the journal for an operator or a later repair.
+    // Preserve the journal when an independent write makes replay unsafe.
     throw new Error(`Profile move ${intent.id} conflicts with a source profile write`)
   }
   if (sourceAfter && targetBefore) {
@@ -157,26 +137,27 @@ function recoverProfileProjectMoveIntent(
   throw new Error(`Profile move ${intent.id} has an unrecognized participant state`)
 }
 
+function readLegacyMoveState(userDataPath: string, intent: ProfileProjectMoveIntentV1) {
+  const source = readProfileStateWithRevision(intent.sourceProfileId, userDataPath)
+  const target = readProfileStateWithRevision(intent.targetProfileId, userDataPath)
+  if (source.revision === undefined || target.revision === undefined) {
+    throw new Error(`Profile move ${intent.id} no longer has two SQLite participants`)
+  }
+
+  return {
+    sourceBefore: matches(source, intent.expectedSourceRevision, intent.sourceBeforeHash),
+    targetBefore: matches(target, intent.expectedTargetRevision, intent.targetBeforeHash),
+    sourceAfter: matches(source, intent.expectedSourceRevision + 1, intent.sourceAfterHash),
+    targetAfter: matches(target, intent.expectedTargetRevision + 1, intent.targetAfterHash)
+  }
+}
+
 function matches(snapshot: ReadProfileStateResult, revision: number, hash: string): boolean {
   return (
     snapshot.revision === revision &&
     snapshot.serialized !== undefined &&
     hashProfileStateJson(snapshot.serialized) === hash
   )
-}
-
-function requireSerializedSnapshot(snapshot: ReadProfileStateResult, participant: string): string {
-  if (snapshot.serialized === undefined) {
-    throw new Error(`SQLite profile move requires a serialized ${participant} snapshot`)
-  }
-  return snapshot.serialized
-}
-
-function requireRevision(snapshot: ReadProfileStateResult, participant: string): number {
-  if (snapshot.revision === undefined) {
-    throw new Error(`SQLite profile move requires a ${participant} revision`)
-  }
-  return snapshot.revision
 }
 
 function profileProjectMoveIntentPath(userDataPath: string, intentId: string): string {
@@ -206,21 +187,16 @@ function readProfileProjectMoveIntent(path: string): ProfileProjectMoveIntent {
 }
 
 function validateIntent(value: unknown): asserts value is ProfileProjectMoveIntent {
-  if (!isRecord(value)) {
-    throw new Error('Profile move intent is malformed')
+  validateMoveIdentity(value)
+  if (value.version === 2) {
+    validateProfileProjectDomainMoveIntent(value)
+    return
   }
   const intent = value
   const expectedSourceRevision = intent.expectedSourceRevision
   const expectedTargetRevision = intent.expectedTargetRevision
   if (
     intent.version !== PROFILE_MOVE_INTENT_VERSION ||
-    typeof intent.id !== 'string' ||
-    !/^[0-9a-f-]{36}$/.test(intent.id) ||
-    typeof intent.sourceProfileId !== 'string' ||
-    typeof intent.targetProfileId !== 'string' ||
-    !PROFILE_ID_PATTERN.test(intent.sourceProfileId) ||
-    !PROFILE_ID_PATTERN.test(intent.targetProfileId) ||
-    intent.sourceProfileId === intent.targetProfileId ||
     !Number.isSafeInteger(expectedSourceRevision) ||
     !Number.isSafeInteger(expectedTargetRevision) ||
     typeof expectedSourceRevision !== 'number' ||
@@ -235,6 +211,23 @@ function validateIntent(value: unknown): asserts value is ProfileProjectMoveInte
     typeof intent.targetAfterJson !== 'string' ||
     hashProfileStateJson(intent.sourceAfterJson) !== intent.sourceAfterHash ||
     hashProfileStateJson(intent.targetAfterJson) !== intent.targetAfterHash
+  ) {
+    throw new Error('Profile move intent is malformed')
+  }
+}
+
+function validateMoveIdentity(
+  value: unknown
+): asserts value is ProfileProjectMoveIdentity & Record<string, unknown> {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !/^[0-9a-f-]{36}$/.test(value.id) ||
+    typeof value.sourceProfileId !== 'string' ||
+    typeof value.targetProfileId !== 'string' ||
+    !PROFILE_ID_PATTERN.test(value.sourceProfileId) ||
+    !PROFILE_ID_PATTERN.test(value.targetProfileId) ||
+    value.sourceProfileId === value.targetProfileId
   ) {
     throw new Error('Profile move intent is malformed')
   }

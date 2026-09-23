@@ -221,3 +221,12 @@ export function readProfileStateSnapshot(db: Database.Database): ProfileStateSna
     }
   })
 }
+
+/** Validate the complete snapshot without retaining state that recovery callers discard. */
+export function validateProfileStateSnapshot(db: Database.Database): number {
+  return withProfileStateReadSnapshot(db, () => {
+    const revision = readProfileStateRevision(db)
+    readProfileStateDocuments(db, { profileRevision: revision, representation: 'validated' })
+    return revision
+  })
+}

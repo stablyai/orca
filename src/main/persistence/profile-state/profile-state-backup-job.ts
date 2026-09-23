@@ -1,6 +1,6 @@
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
-import { readProfileStateParsedSnapshot } from './profile-state-documents'
+import { validateProfileStateSnapshot } from './profile-state-documents'
 
 export type ProfileStateBackupJob = {
   databasePath: string
@@ -24,7 +24,7 @@ export async function writeProfileStateBackup(job: ProfileStateBackupJob): Promi
 function validateProfileStateBackup(path: string, profileId: string): void {
   const snapshot = openProfileStateDatabaseReadOnly(path, profileId)
   try {
-    readProfileStateParsedSnapshot(snapshot.db)
+    validateProfileStateSnapshot(snapshot.db)
   } finally {
     snapshot.db.close()
   }

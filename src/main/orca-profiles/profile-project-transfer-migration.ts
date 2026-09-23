@@ -1,16 +1,17 @@
 import { migrateProfileStateToSqlite } from '../persistence/profile-state/profile-state-migration'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from './profile-storage-paths'
+import type { ReadProfileStateResult } from './profile-project-state-file'
 import {
-  readProfileStateWithRevision,
-  type ReadProfileStateResult
-} from './profile-project-state-file'
+  readProfileProjectTransferState,
+  type ReadProfileProjectTransferResult
+} from './profile-project-domain-state'
 
 /** Adopt inactive storage without running Store's active-profile listeners or secret transforms. */
 export function migrateProfileProjectTransferParticipant(
   profileId: string,
   userDataPath: string,
   snapshot: ReadProfileStateResult
-): ReadProfileStateResult {
+): ReadProfileProjectTransferResult {
   const migrated = migrateProfileStateToSqlite({
     dataFile: getOrcaProfileDataFile(profileId, userDataPath),
     databaseFile: getOrcaProfileStateDatabaseFile(profileId, userDataPath),
@@ -19,7 +20,7 @@ export function migrateProfileProjectTransferParticipant(
     serializedState: snapshot.serialized ?? '{}'
   })
   try {
-    return readProfileStateWithRevision(profileId, userDataPath)
+    return readProfileProjectTransferState(profileId, userDataPath)
   } finally {
     migrated.authority.close()
   }

@@ -1,10 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { importProfileStateJson } from './profile-state-documents'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
-import { readProfileStateDomains } from './profile-state-domain-reader'
+import {
+  readProfileStateDomains,
+  readProfileStateDomainsWithRevisionFromDatabase
+} from './profile-state-domain-reader'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
 
 const temporaryDirectories: string[] = []
@@ -119,4 +122,31 @@ describe('profile state domain reader', () => {
     expect(result.kind).toBe('values')
     expect(result.kind === 'values' ? result.values.has('automationRuns') : true).toBe(false)
   })
+})
+
+it('reuses independently parsed values for selected domains and history rows', () => {
+  const { databasePath } = createDatabase()
+  const { db } = openProfileStateDatabase(databasePath, 'profile-a')
+  const settings = '{"theme":"dark"}'
+  const row = '{"id":"run-a","output":"retained"}'
+  importProfileStateJson(db, `{"settings":${settings},"automationRuns":[${row}]}`)
+  const parse = vi.spyOn(JSON, 'parse')
+  try {
+    expect(
+      readProfileStateDomainsWithRevisionFromDatabase(db, ['settings', 'automationRuns'])
+    ).toEqual({
+      kind: 'values',
+      revision: 1,
+      values: new Map<string, unknown>([
+        ['settings', { theme: 'dark' }],
+        ['automationRuns', [{ id: 'run-a', output: 'retained' }]]
+      ])
+    })
+    expect(parse.mock.calls.filter(([input]) => input === settings)).toHaveLength(1)
+    expect(parse.mock.calls.filter(([input]) => input === row)).toHaveLength(1)
+    expect(parse.mock.calls.some(([input]) => input === `[${row}]`)).toBe(false)
+  } finally {
+    parse.mockRestore()
+    db.close()
+  }
 })

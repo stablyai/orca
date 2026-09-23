@@ -10,7 +10,8 @@ import { verifyProfileStateSchema } from './profile-state-database-validation'
 import {
   importProfileStateJson,
   readProfileStateSnapshot,
-  readProfileStateParsedSnapshot
+  readProfileStateParsedSnapshot,
+  validateProfileStateSnapshot
 } from './profile-state-documents'
 import { readProfileStateDomainsWithRevisionFromDatabase } from './profile-state-domain-reader'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
@@ -35,7 +36,7 @@ function fixture() {
 }
 
 describe('profile state reads during concurrent commits', () => {
-  it.each([readProfileStateSnapshot, readProfileStateParsedSnapshot])(
+  it.each([readProfileStateSnapshot, readProfileStateParsedSnapshot, validateProfileStateSnapshot])(
     'keeps revision and documents together when a writer commits during %s',
     (read) => {
       const { path, db: writer } = fixture()
@@ -56,14 +57,19 @@ describe('profile state reads during concurrent commits', () => {
       try {
         const snapshot = read(reader)
         expect(committed).toBe(true)
-        expect(snapshot).toMatchObject({ revision: 1 })
-        expect(snapshot).toMatchObject(
-          read === readProfileStateSnapshot
-            ? { json: '{"automationRuns":[{"id":"run-1","status":"pending"}]}' }
-            : { state: { automationRuns: [{ id: 'run-1', status: 'pending' }] } }
-        )
+        if (typeof snapshot === 'number') {
+          expect(snapshot).toBe(1)
+        } else {
+          expect(snapshot).toMatchObject({ revision: 1 })
+          expect(snapshot).toMatchObject(
+            read === readProfileStateSnapshot
+              ? { json: '{"automationRuns":[{"id":"run-1","status":"pending"}]}' }
+              : { state: { automationRuns: [{ id: 'run-1', status: 'pending' }] } }
+          )
+        }
         expect(reader.isTransaction).toBe(false)
-        expect(read(reader).revision).toBe(2)
+        const next = read(reader)
+        expect(typeof next === 'number' ? next : next.revision).toBe(2)
       } finally {
         reader.close()
         writer.close()

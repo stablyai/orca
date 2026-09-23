@@ -39,11 +39,11 @@ export function serializeCompleteProfileStateDomains(
     if (fragment === '{}') {
       continue
     }
-    const serialized = applySecretSentinelSubstitutions(fragment, substitutions, '')
+    const serialized = applySecretSentinelSubstitutions(fragment, substitutions, '', 'text')
     hash.update(serialized.stateHash)
     domains.push({
       domain,
-      payload: serialized.payload.toString('utf8').slice(JSON.stringify(domain).length + 2, -1)
+      payload: serialized.payload.slice(JSON.stringify(domain).length + 2, -1)
     })
   }
   return {

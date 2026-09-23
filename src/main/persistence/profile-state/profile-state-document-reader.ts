@@ -8,7 +8,8 @@ import {
   ProfileStateDocumentCorruptionError,
   validateProfileStateDocumentRow,
   type ProfileStateDocument,
-  type ProfileStateParsedDocument
+  type ProfileStateParsedDocument,
+  type ProfileStateValidatedDocument
 } from './profile-state-document-validation'
 
 export type ReadProfileStateDocumentsOptions = {
@@ -27,20 +28,33 @@ export function readProfileStateDocuments(
 ): readonly ProfileStateDocument[]
 export function readProfileStateDocuments(
   db: Database.Database,
-  options: ReadProfileStateDocumentsOptions & { representation?: 'parsed' } = {}
-): readonly (ProfileStateDocument | ProfileStateParsedDocument)[] {
+  options: ReadProfileStateDocumentsOptions & { representation: 'validated' }
+): void
+export function readProfileStateDocuments(
+  db: Database.Database,
+  options: ReadProfileStateDocumentsOptions & { representation?: 'parsed' | 'validated' } = {}
+):
+  | readonly (ProfileStateDocument | ProfileStateParsedDocument | ProfileStateValidatedDocument)[]
+  | void {
   const profileRevision = options.profileRevision ?? readProfileStateRevision(db)
   const normalized =
-    options.representation === 'parsed'
-      ? readProfileStateAutomationRunsDocument(db, profileRevision, 'parsed')
-      : readProfileStateAutomationRunsDocument(db, profileRevision)
+    options.representation === 'validated'
+      ? readProfileStateAutomationRunsDocument(db, profileRevision, 'validated')
+      : options.representation === 'parsed'
+        ? readProfileStateAutomationRunsDocument(db, profileRevision, 'parsed')
+        : readProfileStateAutomationRunsDocument(db, profileRevision)
   const rows = db
     .prepare(
       `SELECT domain, payload, domain_version, revision, updated_at, content_hash
        FROM profile_state_documents ORDER BY rowid`
     )
-    .all()
-  const documents = rows.map((row): ProfileStateDocument | ProfileStateParsedDocument => {
+    .iterate()
+  const documents: (
+    | ProfileStateDocument
+    | ProfileStateParsedDocument
+    | ProfileStateValidatedDocument
+  )[] = []
+  for (const row of rows) {
     const document = validateProfileStateDocumentRow(row, {
       retainParsedValue: options.representation === 'parsed'
     })
@@ -55,12 +69,19 @@ export function readProfileStateDocuments(
         document.domain
       )
     }
+    if (options.representation === 'validated') {
+      continue
+    }
     if (options.representation === 'parsed') {
       const { payload: _payload, ...parsedDocument } = document
-      return { ...parsedDocument, value: document.value }
+      documents.push({ ...parsedDocument, value: document.value })
+    } else {
+      documents.push(document)
     }
-    return document
-  })
+  }
+  if (options.representation === 'validated') {
+    return
+  }
   if (normalized === undefined) {
     return documents
   }

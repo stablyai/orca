@@ -5,7 +5,8 @@ import {
   hashProfileStatePayload,
   ProfileStateDocumentCorruptionError,
   type ProfileStateDocument,
-  type ProfileStateParsedDocument
+  type ProfileStateParsedDocument,
+  type ProfileStateValidatedDocument
 } from './profile-state-document-validation'
 import {
   AUTOMATION_RUNS_ABSENT,
@@ -22,6 +23,12 @@ import {
 
 import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
 
+type Representation = 'serialized' | 'parsed' | 'validated'
+type ReadDocument =
+  | ProfileStateDocument
+  | ProfileStateParsedDocument
+  | ProfileStateValidatedDocument
+
 /** Undefined means explicit document storage; null means the domain is absent. */
 export function readProfileStateAutomationRunsDocument(
   db: Database.Database,
@@ -34,9 +41,14 @@ export function readProfileStateAutomationRunsDocument(
 ): ProfileStateParsedDocument | null | undefined
 export function readProfileStateAutomationRunsDocument(
   db: Database.Database,
+  profileRevision: number,
+  representation: 'validated'
+): ProfileStateValidatedDocument | null | undefined
+export function readProfileStateAutomationRunsDocument(
+  db: Database.Database,
   profileRevision = readProfileStateRevision(db),
-  representation: 'serialized' | 'parsed' = 'serialized'
-): ProfileStateDocument | ProfileStateParsedDocument | null | undefined {
+  representation: Representation = 'serialized'
+): ReadDocument | null | undefined {
   const meta = readCurrentAutomationRunsState(db, profileRevision)
   if (meta.presence === AUTOMATION_RUNS_DOCUMENT) {
     return undefined
@@ -54,26 +66,33 @@ export function readProfileStateAutomationRunsDocument(
     }
     assertNoNormalizedAutomationRuns(db)
     return makeAutomationRunsDocument(
-      'null',
       meta,
-      representation === 'parsed' ? { value: null } : undefined
+      representation === 'validated'
+        ? {}
+        : representation === 'parsed'
+          ? { value: null }
+          : { payload: 'null' }
     )
   }
 
-  // Sort references instead of copying large payloads into SQLite's temporary sort table.
-  const parsedRows = db
-    .prepare(
-      `SELECT run_id, ordinal, payload, content_hash, revision, updated_at FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE}`
-    )
-    .all()
-    .map((row) => parseNormalizedAutomationRunRow(row, representation === 'parsed'))
-    .sort((left, right) => left.ordinal - right.ordinal)
+  // Sort only stable keys; payloads stay outside the sorter and extra columns cannot shadow the key.
+  const references = db.prepare(
+    `SELECT run_id FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE} ORDER BY ordinal`
+  )
+  const row = db.prepare(
+    `SELECT run_id, ordinal, payload, content_hash, revision, updated_at FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE} WHERE run_id = ?`
+  )
   const payloads: string[] = []
   const values: unknown[] = []
-  const aggregate = representation === 'parsed' ? createHash('sha256').update('[') : undefined
+  const aggregate = createHash('sha256').update('[')
   const ids = new Set<string>()
-  parsedRows.forEach((parsed, index) => {
-    if (parsed.ordinal !== index || ids.has(parsed.id)) {
+  let index = 0
+  for (const reference of references.iterate()) {
+    const parsed = parseNormalizedAutomationRunRow(
+      row.get(reference.run_id),
+      representation === 'parsed'
+    )
+    if (parsed.id !== reference.run_id || parsed.ordinal !== index || ids.has(parsed.id)) {
       throw new ProfileStateDocumentCorruptionError(
         'Normalized automationRuns ordering is corrupt',
         AUTOMATION_RUNS_DOMAIN
@@ -89,37 +108,41 @@ export function readProfileStateAutomationRunsDocument(
       )
     }
     ids.add(parsed.id)
-    if (aggregate) {
-      if (index > 0) {
-        aggregate.update(',')
-      }
-      aggregate.update(parsed.payload, 'utf8')
+    if (index > 0) {
+      aggregate.update(',')
+    }
+    aggregate.update(parsed.payload, 'utf8')
+    if (representation === 'parsed') {
       values.push(parsed.value)
-    } else {
+    } else if (representation === 'serialized') {
       payloads.push(parsed.payload)
     }
-  })
-  const payload = aggregate ? '' : `[${payloads.join(',')}]`
-  const contentHash = aggregate
-    ? aggregate.update(']').digest('hex')
-    : hashProfileStatePayload(payload)
+    index++
+  }
+  const contentHash = aggregate.update(']').digest('hex')
   if (contentHash !== meta.contentHash) {
     throw new ProfileStateDocumentCorruptionError(
       'Normalized automationRuns aggregate hash mismatch',
       AUTOMATION_RUNS_DOMAIN
     )
   }
-  return makeAutomationRunsDocument(payload, meta, aggregate ? { value: values } : undefined)
+  return makeAutomationRunsDocument(
+    meta,
+    representation === 'validated'
+      ? {}
+      : representation === 'parsed'
+        ? { value: values }
+        : { payload: `[${payloads.join(',')}]` }
+  )
 }
 
 function makeAutomationRunsDocument(
-  payload: string,
   meta: AutomationRunsMeta,
-  parsed?: { value: unknown }
-): ProfileStateDocument | ProfileStateParsedDocument {
+  content: { payload: string } | { value: unknown } | Record<string, never>
+): ReadDocument {
   return {
     domain: AUTOMATION_RUNS_DOMAIN,
-    ...(parsed ?? { payload }),
+    ...content,
     domainVersion: meta.domainVersion,
     revision: meta.revision,
     updatedAt: meta.updatedAt,

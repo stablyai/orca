@@ -9,7 +9,8 @@ export type ProfileStateDocument = {
   contentHash: string
 }
 
-export type ProfileStateParsedDocument = Omit<ProfileStateDocument, 'payload'> & { value: unknown }
+export type ProfileStateValidatedDocument = Omit<ProfileStateDocument, 'payload'>
+export type ProfileStateParsedDocument = ProfileStateValidatedDocument & { value: unknown }
 
 export class ProfileStateDocumentCorruptionError extends Error {
   readonly code = 'corrupt-document' as const

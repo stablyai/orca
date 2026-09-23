@@ -8,7 +8,8 @@ import {
   hashProfileStateJson,
   importProfileStateJson,
   readProfileStateSnapshot,
-  readProfileStateParsedSnapshot
+  readProfileStateParsedSnapshot,
+  validateProfileStateSnapshot
 } from './profile-state-documents'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createProfileStateStore } from './profile-state-store-factory'
@@ -61,6 +62,7 @@ describe('independent profile state JSON fragments', () => {
         'UPDATE profile_state_documents SET payload = ?, content_hash = ? WHERE domain = ?'
       ).run(payload, hashProfileStateJson(payload), 'futureDomain')
       expect(() => readProfileStateParsedSnapshot(db)).toThrow(/invalid JSON: futureDomain/)
+      expect(() => validateProfileStateSnapshot(db)).toThrow(/invalid JSON: futureDomain/)
       db.close()
 
       expect(() => {
@@ -89,7 +91,7 @@ describe('independent profile state JSON fragments', () => {
     }
   })
 
-  it.each(['snapshot', 'parsed', 'authority', 'store'] as const)(
+  it.each(['snapshot', 'parsed', 'validated', 'authority', 'store'] as const)(
     'rejects history rows that form a valid array only when spliced together (%s)',
     (boundary) => {
       const { paths, db } = fixture()
@@ -112,6 +114,8 @@ describe('independent profile state JSON fragments', () => {
             readProfileStateSnapshot(db)
           } else if (boundary === 'parsed') {
             readProfileStateParsedSnapshot(db)
+          } else if (boundary === 'validated') {
+            validateProfileStateSnapshot(db)
           } else if (boundary === 'authority') {
             authority.readSerializedState()
           } else {

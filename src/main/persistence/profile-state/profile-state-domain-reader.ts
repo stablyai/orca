@@ -7,7 +7,7 @@ import { readProfileStateAutomationRunsDocument } from './profile-state-automati
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
 import {
   validateProfileStateDocumentRow,
-  type ProfileStateDocument
+  type ProfileStateParsedDocument
 } from './profile-state-document-validation'
 
 export type ProfileStateDomainReadResult =
@@ -71,17 +71,17 @@ export function readProfileStateDomainsWithRevisionFromDatabase(
       }
 
       const normalized = wanted.has('automationRuns')
-        ? readProfileStateAutomationRunsDocument(db, revision)
+        ? readProfileStateAutomationRunsDocument(db, revision, 'parsed')
         : undefined
       const legacyDomains = [...wanted].filter(
         (domain) => domain !== 'automationRuns' || normalized === undefined
       )
       for (const document of readSelectedDocuments(db, legacyDomains)) {
         assertProfileStateDocumentRevision(document.revision, revision, document.domain)
-        values.set(document.domain, JSON.parse(document.payload))
+        values.set(document.domain, document.value)
       }
       if (normalized !== undefined && normalized !== null) {
-        values.set(normalized.domain, JSON.parse(normalized.payload))
+        values.set(normalized.domain, normalized.value)
       }
       return { kind: 'values', revision, values }
     })
@@ -93,7 +93,7 @@ export function readProfileStateDomainsWithRevisionFromDatabase(
 function readSelectedDocuments(
   db: Parameters<typeof readProfileStateRevision>[0],
   domains: readonly string[]
-): readonly ProfileStateDocument[] {
+): readonly ProfileStateParsedDocument[] {
   if (domains.length === 0) {
     return []
   }
@@ -105,6 +105,11 @@ function readSelectedDocuments(
        WHERE domain IN (${placeholders})
        ORDER BY rowid`
     )
-    .all(...domains)
-  return rows.map((row) => validateProfileStateDocumentRow(row))
+    .iterate(...domains)
+  return Array.from(rows, (row) => {
+    const { payload: _payload, ...document } = validateProfileStateDocumentRow(row, {
+      retainParsedValue: true
+    })
+    return { ...document, value: document.value }
+  })
 }
