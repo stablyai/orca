@@ -15,7 +15,9 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
@@ -266,7 +268,8 @@ internal class OrcaMobileWebShellView(
       ): Boolean = false
     }
     view.setDownloadListener { _, _, _, _, _ -> }
-    // A listener replaces the WebView's own onApplyWindowInsets, so the zeroed set is fed back in.
+    // Replaces WebView's own inset handling (its listener on P–R, onApplyWindowInsets on S+);
+    // forwarding the zeroed set keeps S+ in step.
     ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
       ViewCompat.onApplyWindowInsets(target, insetsForShellPage(insets))
     }
@@ -449,3 +452,18 @@ internal class MobileWebShellBridgeMessageTooLargeException(byteCount: Int) : Co
   "A bridge message of $byteCount bytes exceeds the " +
     "$MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES byte cap"
 )
+
+/**
+ * The shell pads the bars and shortens the WebView for the keyboard, so WebView M144+ forwarding
+ * systemBars/displayCutout to env(safe-area-inset-*), and M139+ resizing for ime(), pad twice.
+ * Zeroed, never CONSUMED, so later changes still arrive (Android "Understand window insets in WebView").
+ */
+private fun insetsForShellPage(insets: WindowInsetsCompat): WindowInsetsCompat =
+  WindowInsetsCompat.Builder(insets)
+    .setInsets(SHELL_OWNED_INSET_TYPES, Insets.NONE)
+    .build()
+
+private val SHELL_OWNED_INSET_TYPES =
+  WindowInsetsCompat.Type.systemBars() or
+    WindowInsetsCompat.Type.displayCutout() or
+    WindowInsetsCompat.Type.ime()
