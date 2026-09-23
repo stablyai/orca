@@ -418,8 +418,15 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4214 -> 4215   (+1)
  *   local modules  1028 -> 1029   (+1)
+ *
+ * The structured tool line then added `src/shared/structured-agent-session-tool-call-block.ts`,
+ * which the projection and live turn this route already reaches import. One local module,
+ * measured; the change was src/shared-only, so its own CI never ran this suite.
+ *
+ *   modules        4215 -> 4216   (+1)
+ *   local modules  1029 -> 1030   (+1)
  */
-const SESSION_ROUTE_MODULES = 4215
+const SESSION_ROUTE_MODULES = 4216
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
