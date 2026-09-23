@@ -18,6 +18,29 @@ function database(query: () => Promise<Record<string, unknown>[]>): RelayDatabas
 }
 
 describe('relay readiness', () => {
+  it.each([200, 503])('releases every unused JWKS response body for status %i', async (status) => {
+    let activeBodies = 0
+    const readiness = createRelayReadiness(database(async () => [{ ready: 1 }]), 'https://jwks', {
+      fetch: async () => {
+        activeBodies++
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              activeBodies--
+            }
+          }),
+          { status }
+        )
+      },
+      cacheMs: 0
+    })
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      expect(await readiness.check()).toBe(status === 200)
+      expect(activeBodies).toBe(0)
+    }
+  })
+
   it('fails readiness while liveness remains independent of SQL and JWKS', async () => {
     const jwksFailure = createRelayReadiness(database(async () => [{ ready: 1 }]), 'https://jwks', {
       fetch: vi.fn(async () => new Response('', { status: 503 })) as typeof fetch,

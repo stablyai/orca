@@ -67,11 +67,11 @@ async function cellStatus(fetchImpl, config) {
     body: JSON.stringify({ v: 1, cellId: config.cellId }),
     signal: AbortSignal.timeout(30_000)
   })
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('director capacity identity was rejected')
-  }
   if (!response.ok) {
-    await response.arrayBuffer().catch(() => undefined)
+    await response.body?.cancel().catch(() => undefined)
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('director capacity identity was rejected')
+    }
     return undefined
   }
   const result = await response.json().catch(() => undefined)

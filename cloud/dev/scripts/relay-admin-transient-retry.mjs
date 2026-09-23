@@ -23,7 +23,7 @@ export async function fetchAdminOnceMore(fetchImpl, url, init, overrides = {}) {
     return await attempt()
   }
   if (!isTransientAdminStatus(response.status)) return response
-  await response.arrayBuffer?.().catch(() => undefined)
+  await response.body?.cancel().catch(() => undefined)
   await wait(retryDelayMs)
   return await attempt()
 }

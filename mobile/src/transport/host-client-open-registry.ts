@@ -7,6 +7,7 @@ export type HostClientOpenTicket = {
 export class HostClientOpenRegistry {
   private readonly pending = new Map<string, HostClientOpenTicket>()
   private readonly generations = new Map<string, number>()
+  private nextGeneration = 0
 
   getActivePromise(hostId: string): Promise<void> | null {
     const ticket = this.pending.get(hostId)
@@ -31,7 +32,7 @@ export class HostClientOpenRegistry {
       // reference immediately while the ticket still cancels its continuation.
       this.pending.delete(hostId)
     }
-    this.advanceGeneration(hostId)
+    this.generations.delete(hostId)
   }
 
   isCurrent(hostId: string, ticket: HostClientOpenTicket): boolean {
@@ -49,15 +50,16 @@ export class HostClientOpenRegistry {
   }
 
   cancelAll(): void {
-    for (const [hostId, ticket] of this.pending) {
+    for (const ticket of this.pending.values()) {
       ticket.cancelled = true
-      this.advanceGeneration(hostId)
     }
     this.pending.clear()
+    this.generations.clear()
   }
 
   private advanceGeneration(hostId: string): number {
-    const generation = (this.generations.get(hostId) ?? 0) + 1
+    // A registry-wide counter keeps retired generations unique without retaining removed hosts.
+    const generation = ++this.nextGeneration
     this.generations.set(hostId, generation)
     return generation
   }

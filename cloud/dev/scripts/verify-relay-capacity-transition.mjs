@@ -151,7 +151,7 @@ async function cellRuntime(fetchImpl, config, token) {
     throw error
   }
   if ([502, 503, 504].includes(response.status)) {
-    await response.arrayBuffer().catch(() => undefined)
+    await response.body?.cancel().catch(() => undefined)
     return null
   }
   return await responseJson(response, 'cell runtime status')

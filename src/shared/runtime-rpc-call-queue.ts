@@ -1,5 +1,10 @@
 import { abortSignalReason } from './abort-signal-reason'
-import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
+import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
+import {
+  REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES,
+  retainedRemoteRuntimeJsonStringBytes,
+  serializeRemoteRuntimePayload
+} from './remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
@@ -63,6 +68,40 @@ export class RuntimeRpcCallQueuePool {
     private readonly maxQueuedTotal = RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL,
     private readonly maxRetainedBytes = REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES
   ) {}
+
+  enqueueJson<T>(
+    selector: string,
+    method: string,
+    params: unknown,
+    run: (params: unknown, envelope?: RuntimeOrchestrationEnvelope) => Promise<T>,
+    signal?: AbortSignal,
+    envelope?: RuntimeOrchestrationEnvelope
+  ): Promise<T> {
+    if (signal?.aborted) {
+      return Promise.reject(abortSignalReason(signal))
+    }
+    let serialized: string
+    try {
+      // Snapshot before waiting so the queue cannot retain an unmeasured caller graph.
+      serialized = serializeRemoteRuntimePayload({ method, params, envelope })
+    } catch (error) {
+      return Promise.reject(error)
+    }
+    return this.enqueue(
+      selector,
+      method,
+      () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This wrapper was serialized above; its typed envelope contains only JSON fields, and params remains unknown.
+        const request = JSON.parse(serialized) as {
+          params?: unknown
+          envelope?: RuntimeOrchestrationEnvelope
+        }
+        return run(request.params, request.envelope)
+      },
+      retainedRemoteRuntimeJsonStringBytes(serialized),
+      signal
+    )
+  }
 
   enqueue<T>(
     selector: string,

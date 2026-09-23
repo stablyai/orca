@@ -1,5 +1,6 @@
 import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
 // values, verified against the installed `claude` binary (2.1.177) and the
@@ -150,6 +151,7 @@ export async function refreshClaudeOauthCredentials(
       signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS)
     })
     if (!res.ok) {
+      await cancelUnreadResponseBody(res)
       // Why: surface the status (never the token) so a throttle (429) or a
       // dead refresh token (400/401 invalid_grant) is diagnosable in the
       // field, instead of a silent null that looks identical to success.

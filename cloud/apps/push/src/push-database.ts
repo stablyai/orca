@@ -85,14 +85,16 @@ class SqliteDatabase extends SqliteTransaction {
     let release!: () => void
     this.tail = new Promise((resolve) => (release = resolve))
     await previous
-    this.database.exec('BEGIN IMMEDIATE')
-    const transaction = new SqliteTransaction(this.database)
+    let started = false
     try {
+      this.database.exec('BEGIN IMMEDIATE')
+      started = true
+      const transaction = new SqliteTransaction(this.database)
       const result = await operation(transaction)
       this.database.exec('COMMIT')
       return result
     } catch (error) {
-      this.database.exec('ROLLBACK')
+      if (started) this.database.exec('ROLLBACK')
       throw error
     } finally {
       release()

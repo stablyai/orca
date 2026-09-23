@@ -136,6 +136,7 @@ export class CloudSqlRolloutLease {
       `${this.#metadataUrl()}?ifGenerationMatch=${encodeURIComponent(existing.generation)}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${await this.#token()}` } }
     )
+    await response.body?.cancel().catch(() => {})
     if (response.status === 412) {
       return { released: false, reason: 'conflict' }
     }
@@ -150,10 +151,9 @@ export class CloudSqlRolloutLease {
     const metadataResponse = await this.#fetcher(this.#metadataUrl(), {
       headers: { Authorization: `Bearer ${token}` }
     })
-    if (metadataResponse.status === 404) {
-      return null
-    }
     if (!metadataResponse.ok) {
+      await metadataResponse.body?.cancel().catch(() => {})
+      if (metadataResponse.status === 404) return null
       throw new Error(`lease inspection failed: ${metadataResponse.status}`)
     }
     const metadata = await metadataResponse.json()
@@ -163,10 +163,9 @@ export class CloudSqlRolloutLease {
     const bodyResponse = await this.#fetcher(`${this.#metadataUrl()}?alt=media`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-    if (bodyResponse.status === 404) {
-      return null
-    }
     if (!bodyResponse.ok) {
+      await bodyResponse.body?.cancel().catch(() => {})
+      if (bodyResponse.status === 404) return null
       throw new Error(`lease body read failed: ${bodyResponse.status}`)
     }
     let raw = null
@@ -211,10 +210,11 @@ export class CloudSqlRolloutLease {
         body: JSON.stringify(record)
       }
     )
-    if (response.status === 412) {
-      throw new LeaseConflict(`${this.uri} changed concurrently while we were claiming it`)
-    }
     if (!response.ok) {
+      await response.body?.cancel().catch(() => {})
+      if (response.status === 412) {
+        throw new LeaseConflict(`${this.uri} changed concurrently while we were claiming it`)
+      }
       throw new Error(`lease write failed: ${response.status}`)
     }
     const metadata = await response.json()

@@ -28,6 +28,7 @@ type SelfWriteStamp = RecentSelfWrite & {
 }
 
 const stamps = new Map<string, SelfWriteStamp>()
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
 
 function selfWriteKey(absolutePath: string, runtimeEnvironmentId?: string | null): string {
   return `${runtimeEnvironmentId?.trim() || 'client'}::${normalizeAbsolutePathForComparison(absolutePath)}`
@@ -39,6 +40,30 @@ function pruneExpiredSelfWrites(now = Date.now()): void {
       stamps.delete(key)
     }
   }
+}
+
+function scheduleSelfWriteExpiry(): void {
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+    expiryTimer = null
+  }
+  let nextExpiry = Infinity
+  for (const stamp of stamps.values()) {
+    nextExpiry = Math.min(nextExpiry, stamp.expiresAt)
+  }
+  if (!Number.isFinite(nextExpiry)) {
+    return
+  }
+  // One timer releases idle contents without shortening the remote echo window.
+  expiryTimer = setTimeout(
+    () => {
+      expiryTimer = null
+      pruneExpiredSelfWrites()
+      scheduleSelfWriteExpiry()
+    },
+    Math.max(0, nextExpiry - Date.now() + 1)
+  )
+  expiryTimer.unref?.()
 }
 
 function enforceSelfWriteStampLimit(): void {
@@ -68,10 +93,12 @@ export function recordSelfWrite(
     expiresAt: now + ttlMs
   })
   enforceSelfWriteStampLimit()
+  scheduleSelfWriteExpiry()
 }
 
 export function clearSelfWrite(absolutePath: string, runtimeEnvironmentId?: string | null): void {
   stamps.delete(selfWriteKey(absolutePath, runtimeEnvironmentId))
+  scheduleSelfWriteExpiry()
 }
 
 export function getRecentSelfWrite(
@@ -85,6 +112,7 @@ export function getRecentSelfWrite(
   }
   if (Date.now() > stamp.expiresAt) {
     stamps.delete(key)
+    scheduleSelfWriteExpiry()
     return null
   }
   return { content: stamp.content }
@@ -99,6 +127,7 @@ export function hasRecentSelfWrite(
 
 export function __clearSelfWriteRegistryForTests(): void {
   stamps.clear()
+  scheduleSelfWriteExpiry()
 }
 
 export function __getSelfWriteRegistrySizeForTests(): number {

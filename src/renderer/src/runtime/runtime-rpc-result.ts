@@ -15,6 +15,11 @@ export class RuntimeRpcCallError extends Error {
   }
 }
 
+// Scope denials should surface once instead of becoming an empty/retry loop.
+export function isRuntimeScopeForbiddenError(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
+}
+
 export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TResult>): TResult {
   if (response.ok === false) {
     throw new RuntimeRpcCallError(response)

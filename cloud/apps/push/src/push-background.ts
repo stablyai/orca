@@ -6,16 +6,23 @@ const SESSION_PRUNE_INTERVAL_MS = 10 * 60_000
 const DELIVERY_PRUNE_INTERVAL_MS = 60_000
 
 function prune(label: string, run: () => Promise<number>, intervalMs: number): NodeJS.Timeout {
+  let running = false
   const timer = setInterval(() => {
-    void run().catch((error: unknown) => {
-      console.warn(
-        JSON.stringify({
-          event: 'orca_push_prune_failed',
-          target: label,
-          error: error instanceof Error ? error.name : 'unknown'
-        })
-      )
-    })
+    if (running) return
+    running = true
+    void run()
+      .catch((error: unknown) => {
+        console.warn(
+          JSON.stringify({
+            event: 'orca_push_prune_failed',
+            target: label,
+            error: error instanceof Error ? error.name : 'unknown'
+          })
+        )
+      })
+      .finally(() => {
+        running = false
+      })
   }, intervalMs)
   timer.unref()
   return timer

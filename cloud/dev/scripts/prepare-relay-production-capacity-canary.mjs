@@ -118,14 +118,13 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
         graceMs: 0,
         paceWindowMs
       })
+      await paced.body?.cancel().catch(() => undefined)
       if (paced.ok) {
-        await paced.json().catch(() => ({}))
         return { changed: false, drained: true, paceWindowMs }
       }
       // A cell still on an image without paced drain rejects the unknown field outright.
       // An unpaced drain is the behaviour that cell already has, so fall back to it.
       if (paced.status !== 400) throw new Error(`/v1/admin/drain returned ${paced.status}`)
-      await paced.json().catch(() => ({}))
     }
     await postAt(config.cellOrigin, '/v1/admin/drain', { v: 1, graceMs: 0 })
     return { changed: false, drained: true, paceWindowMs: 0 }

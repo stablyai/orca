@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +13,10 @@ const { connectMock, spawnMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('node:fs', async (original) => {
+  const actual = await original<typeof fs>()
+  return { ...actual, writeFileSync: vi.fn(actual.writeFileSync) }
+})
 vi.mock('./macos-native-provider-socket', () => ({
   connectMacOSProviderSocket: connectMock
 }))
@@ -84,4 +89,50 @@ describe('superseded macOS provider startup cleanup', () => {
       expect(existsSync(replacementToken)).toBe(true)
     }
   )
+
+  it('removes its temporary directory when the helper cannot be spawned', async () => {
+    spawnMock.mockImplementation(() => {
+      throw new Error('invalid spawn options')
+    })
+    const owner = new MacOSProviderProcessOwner()
+    const startup = startMacOSNativeProviderSocket({
+      helperExecutablePath: 'missing-provider',
+      isCurrent: () => true,
+      providerProcess: owner
+    })
+    const socketPath = spawnMock.mock.calls[0]?.[1]?.[1]
+    if (typeof socketPath !== 'string') {
+      throw new Error('missing provider socket path')
+    }
+    const socketDirectory = dirname(socketPath)
+    directories.push(socketDirectory)
+
+    await expect(startup).rejects.toThrow('invalid spawn options')
+    expect(existsSync(socketDirectory)).toBe(false)
+  })
+
+  it('releases each temporary directory when writing its token fails', async () => {
+    vi.mocked(writeFileSync).mockImplementation((path) => {
+      if (typeof path !== 'string') {
+        throw new Error('missing token path')
+      }
+      directories.push(dirname(path))
+      throw new Error('ENOSPC')
+    })
+    const owner = new MacOSProviderProcessOwner()
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await expect(
+        startMacOSNativeProviderSocket({
+          helperExecutablePath: 'fixture-provider',
+          isCurrent: () => true,
+          providerProcess: owner
+        })
+      ).rejects.toThrow('ENOSPC')
+      expect(directories).toHaveLength(attempt + 1)
+      for (const directory of directories) {
+        expect(existsSync(directory)).toBe(false)
+      }
+    }
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
 })

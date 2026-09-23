@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
+import { cancelUnreadResponseBody } from './lib/unread-response-body'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
@@ -59,6 +60,7 @@ async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
   try {
     const res = await net.fetch(ATOM_FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) {
+      await cancelUnreadResponseBody(res)
       return null
     }
     const body = await res.text()
@@ -183,9 +185,11 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
     const manifestUrl = getReleaseManifestUrl(tag)
     const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (res.status === 404) {
+      await cancelUnreadResponseBody(res)
       return 'not-ready'
     }
     if (!res.ok) {
+      await cancelUnreadResponseBody(res)
       return 'unavailable'
     }
     const manifestText = await res.text()
