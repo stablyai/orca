@@ -70,12 +70,13 @@ describe('structuredSessionChildIdentityEnv', () => {
     expect(env).toEqual({
       PATH: `${SHIM_DIR}:/usr/bin`,
       ORCA_AGENT_SESSION_ID: SESSION_ID,
+      // For a CLI that predates the id, which refuses on it instead of guessing a sibling.
+      ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: 'orca'
     })
-    // A chat names itself by its id alone: no handle, no pane key, no identity-less marker.
+    // A chat names itself by its id alone: no handle, no pane key.
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
     expect(env.ORCA_PANE_KEY).toBeUndefined()
-    expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
     expect(childEnv).toEqual({ PATH: '/usr/bin' })
   })
 

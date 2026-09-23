@@ -25,8 +25,10 @@
  * PTY leaf. It would also open `selectExactWorkerProviderSession`, which is fail-closed today
  * precisely because a structured session emits no hook agent status.
  *
- * The identity-less marker (`ORCA_STRUCTURED_SESSION`) is no longer written: a child with an id is
- * never identity-less, so a marker inherited from an Orca launched inside an older session is inert.
+ * `ORCA_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
+ * global install when a shell rc resets PATH — which would otherwise guess a sibling's terminal;
+ * such a CLI refuses on the marker. A current CLI checks the id first, so the marker never makes a
+ * session with an id identity-less.
  *
  * The handle is read from the registry at spawn time, so an in-host recovery respawn re-bakes the
  * SAME handle rather than a stale or fresh one.
@@ -34,6 +36,7 @@
 
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 
@@ -46,6 +49,7 @@ export function structuredSessionChildIdentityEnv(
     ...childEnv,
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
+    [ORCA_STRUCTURED_SESSION_ENV]: '1',
     ORCA_CLI_COMMAND: 'orca'
   }
   applyOrcaCliPath(env)

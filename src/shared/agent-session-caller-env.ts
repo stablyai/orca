@@ -5,7 +5,8 @@
  * terminal is resolved or guessed on its behalf.
  *
  * Identity by session id assumes one machine and one user. A host boundary (SSH, a paired peer,
- * WSL) re-opens that decision, which is why nothing forwards the id across one as a caller.
+ * WSL) re-opens that decision: the host refuses a claim that arrives across one, and the SSH
+ * passthrough never carries the id.
  */
 export const ORCA_AGENT_SESSION_ID_ENV = 'ORCA_AGENT_SESSION_ID'
 
