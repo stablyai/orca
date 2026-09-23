@@ -86,9 +86,9 @@ export async function createWebRuntimeSessionTerminalResult(
   try {
     const agent = args.launchAgent ?? args.agent
     if (agent) {
-      const { terminalColorQueryReplies, ...agentLaunchOptions } =
+      const { launchOptions: agentLaunchOptions, terminalColors } =
         webRuntimeAgentSessionLaunchOptions(args, agent)
-      const colorOptions = createAgentSessionColorOptions(terminalColorQueryReplies)
+      const colorOptions = createAgentSessionColorOptions(terminalColors)
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)

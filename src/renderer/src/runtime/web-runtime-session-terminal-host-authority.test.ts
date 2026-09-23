@@ -120,7 +120,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     expect(webRuntimeAgentSessionLaunchOptions({ worktreeId: WORKTREE_ID }, 'codex')).toMatchObject(
       {
-        terminalColorQueryReplies: {
+        terminalColors: {
           foreground: expect.any(String),
           background: expect.any(String)
         }

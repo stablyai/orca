@@ -25,10 +25,12 @@ export function webRuntimeAgentSessionLaunchOptions(
   const background = theme?.background
   const agentArgs = args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
   return {
-    worktree: toRuntimeWorktreeSelector(args.worktreeId),
-    agent,
-    ...(foreground && background ? { terminalColorQueryReplies: { foreground, background } } : {}),
-    ...(agentArgs !== undefined ? { agentArgs } : {}),
-    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {})
+    launchOptions: {
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      agent,
+      ...(agentArgs !== undefined ? { agentArgs } : {}),
+      ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {})
+    },
+    terminalColors: foreground && background ? { foreground, background } : undefined
   }
 }
