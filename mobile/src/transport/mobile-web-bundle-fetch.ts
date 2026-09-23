@@ -1,8 +1,5 @@
 import { sha256 } from '@noble/hashes/sha256'
-import {
-  mobileWebBundleChunkRead,
-  mobileWebBundleManifestRead
-} from './mobile-web-bundle-operations'
+import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
   MobileWebBundleManifestRead
@@ -10,11 +7,18 @@ import type {
 import type { RpcClient } from './rpc-client'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { runRpcOperation } from './rpc-operation'
+import {
+  mobileWebBundleWindowReader,
+  type MobileWebBundleWindowHeader
+} from './mobile-web-bundle-window-reader'
 
-/** The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
- *  so the client never offers a fifth. The four are chunk reads across the whole manifest, not one
- *  asset each: paging a large asset alone would put every one of its chunks on the critical path. */
-const MAX_CONCURRENT_CHUNK_READS = 4
+/** A window is one byte span of an asset on the grid the manifest reply named: a 48 KiB chunk, or a
+ *  384 KiB range from a host that serves them.
+ *
+ *  The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
+ *  so the client never offers a fifth. The four are window reads across the whole manifest, not one
+ *  asset each: paging a large asset alone would put every one of its windows on the critical path. */
+const MAX_CONCURRENT_WINDOW_READS = 4
 
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
@@ -33,10 +37,10 @@ export type MobileWebBundleFetchResult = {
 type AssetReassembly = {
   readonly entry: MobileWebBundleAssetRead
   readonly whole: Uint8Array
-  outstandingChunks: number
+  outstandingWindows: number
 }
 
-type ChunkRead = { readonly asset: AssetReassembly; readonly offset: number }
+type WindowRead = { readonly asset: AssetReassembly; readonly offset: number }
 
 /**
  * Reads the manifest, pages every asset, and returns the verified bytes.
@@ -55,29 +59,36 @@ export async function fetchMobileWebBundle(args: {
   throwIfCallerAborted(args.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
-  const queue = planChunkReads(manifest.assets, opened.chunkBytes)
+  const reader = mobileWebBundleWindowReader(opened)
+  const queue = planWindowReads(manifest.assets, reader.windowBytes)
   const assets = new Map<string, Uint8Array>()
   let receivedBytes = 0
 
-  const readChunk = async ({ asset, offset }: ChunkRead): Promise<void> => {
-    const reply = await runRpcOperation(args.client, mobileWebBundleChunkRead, {
+  const readWindow = async ({ asset, offset }: WindowRead): Promise<void> => {
+    const reply = await reader.read(args.client, {
       buildId: manifest.buildId,
       path: asset.entry.path,
       offset
     })
-    // A sibling already failed the fetch; this reply is not worth checking, hashing or reporting.
+    // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
       return
     }
-    assertChunkDescribesAsset(reply, asset.entry, manifest.buildId, offset)
-    const bytes = decodeBase64(reply.dataBase64)
-    assertChunkFillsItsSlot(asset.entry, offset, bytes.byteLength, reply.eof, opened.chunkBytes)
+    assertWindowDescribesAsset(reply.header, asset.entry, manifest.buildId, offset)
+    const bytes = reply.bytes()
+    assertWindowFillsItsSlot(
+      asset.entry,
+      offset,
+      bytes.byteLength,
+      reply.header.eof,
+      reader.windowBytes
+    )
     asset.whole.set(bytes, offset)
-    asset.outstandingChunks -= 1
-    if (asset.outstandingChunks === 0) {
+    asset.outstandingWindows -= 1
+    if (asset.outstandingWindows === 0) {
       assets.set(asset.entry.path, verifyReassembledAsset(asset))
     }
-    // Per chunk, not per asset: the largest asset goes first, so asset completions bunch at the end.
+    // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
     receivedBytes += bytes.byteLength
     args.onProgress?.({
       completedAssets: assets.size,
@@ -95,17 +106,17 @@ export async function fetchMobileWebBundle(args: {
           return
         }
         throwIfCallerAborted(args.signal)
-        await readChunk(read)
+        await readWindow(read)
       }
     } catch (error) {
-      // One failed chunk stops every other read: each read a worker would still send holds one of
+      // One failed window stops every other read: each read a worker would still send holds one of
       // the host's four slots against the caller's retry.
       stopped.abort()
       throw error
     }
   }
 
-  const workers = Math.min(MAX_CONCURRENT_CHUNK_READS, queue.length)
+  const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
   await Promise.all(Array.from({ length: workers }, () => worker()))
   // The final window sends nothing after its last reply, so no worker would see this abort.
   throwIfCallerAborted(args.signal)
@@ -113,41 +124,41 @@ export async function fetchMobileWebBundle(args: {
 }
 
 /** Largest asset first, so the biggest script's tail is never the last read left in flight. Offsets
- *  are the host's chunk grid, so every read is known up front; `eof` still comes from the reply. */
-function planChunkReads(
+ *  are on the window grid, so every read is known up front; `eof` still comes from the reply. */
+function planWindowReads(
   entries: readonly MobileWebBundleAssetRead[],
-  chunkBytes: number
-): ChunkRead[] {
+  windowBytes: number
+): WindowRead[] {
   const largestFirst = [...entries].sort((left, right) => right.byteLength - left.byteLength)
   return largestFirst.flatMap((entry) => {
-    const count = Math.max(1, Math.ceil(entry.byteLength / chunkBytes))
+    const count = Math.max(1, Math.ceil(entry.byteLength / windowBytes))
     const asset: AssetReassembly = {
       entry,
       whole: new Uint8Array(entry.byteLength),
-      outstandingChunks: count
+      outstandingWindows: count
     }
-    return Array.from({ length: count }, (_, index) => ({ asset, offset: index * chunkBytes }))
+    return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
   })
 }
 
 /** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
-function assertChunkFillsItsSlot(
+function assertWindowFillsItsSlot(
   entry: MobileWebBundleAssetRead,
   offset: number,
   byteLength: number,
   eof: boolean,
-  chunkBytes: number
+  windowBytes: number
 ): void {
   const { path, byteLength: declared } = entry
-  const expected = Math.min(chunkBytes, declared - offset)
-  if (byteLength === expected && eof === offset + chunkBytes >= declared) {
+  const expected = Math.min(windowBytes, declared - offset)
+  if (byteLength === expected && eof === offset + windowBytes >= declared) {
     return
   }
   const end = offset + byteLength
-  if (byteLength > chunkBytes) {
+  if (byteLength > windowBytes) {
     throw new MobileWebBundleFetchError(
       'chunk-oversize',
-      `bundle chunk for ${path} at ${offset} is ${byteLength} bytes, over the host's ${chunkBytes}`
+      `bundle window for ${path} at ${offset} is ${byteLength} bytes, over the ${windowBytes}-byte window`
     )
   }
   if (byteLength > expected || (byteLength > 0 && !eof && end >= declared)) {
@@ -166,7 +177,7 @@ function assertChunkFillsItsSlot(
     'asset-short',
     eof
       ? `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
-      : `bundle chunk for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
+      : `bundle window for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
   )
 }
 
@@ -183,36 +194,30 @@ function verifyReassembledAsset(asset: AssetReassembly): Uint8Array {
 }
 
 /**
- * Every chunk reply restates the build, path and offset it answers, and the whole asset's length and
+ * Every window reply restates the build, path and offset it answers, and the whole asset's length and
  * hash. Checking all five is what makes a misrouted or stale reply a failure here instead of a
- * corrupt reassembly: a desktop that auto-updates mid-download answers a later chunk from a
+ * corrupt reassembly: a desktop that auto-updates mid-download answers a later window from a
  * different build, and nothing else in the reply would say so.
  */
-function assertChunkDescribesAsset(
-  chunk: {
-    buildId: string
-    path: string
-    offset: number
-    assetByteLength: number
-    sha256: string
-  },
+function assertWindowDescribesAsset(
+  window: MobileWebBundleWindowHeader,
   asset: MobileWebBundleAssetRead,
   buildId: string,
   offset: number
 ): void {
-  if (chunk.buildId !== buildId) {
+  if (window.buildId !== buildId) {
     throw new MobileWebBundleFetchError(
       'build-changed-mid-fetch',
-      `bundle build changed mid-fetch: asked ${buildId}, served ${chunk.buildId}`
+      `bundle build changed mid-fetch: asked ${buildId}, served ${window.buildId}`
     )
   }
-  if (chunk.path !== asset.path || chunk.offset !== offset) {
+  if (window.path !== asset.path || window.offset !== offset) {
     throw new MobileWebBundleFetchError(
       'chunk-misrouted',
-      `bundle chunk answered ${chunk.path} at ${chunk.offset}, not ${asset.path} at ${offset}`
+      `bundle window answered ${window.path} at ${window.offset}, not ${asset.path} at ${offset}`
     )
   }
-  if (chunk.sha256 !== asset.sha256 || chunk.assetByteLength !== asset.byteLength) {
+  if (window.sha256 !== asset.sha256 || window.assetByteLength !== asset.byteLength) {
     throw new MobileWebBundleFetchError(
       'asset-entry-changed',
       `bundle asset ${asset.path} no longer matches the manifest entry`
@@ -226,16 +231,6 @@ function throwIfCallerAborted(caller: AbortSignal | undefined): void {
   if (caller?.aborted === true) {
     throw new MobileWebBundleFetchError('fetch-stopped', 'mobile web bundle fetch aborted')
   }
-}
-
-/** Metro ships no Buffer; `atob` is the decoder the pairing and E2EE paths already run on Hermes. */
-function decodeBase64(value: string): Uint8Array {
-  const binary = atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
 }
 
 function toHex(bytes: Uint8Array): string {

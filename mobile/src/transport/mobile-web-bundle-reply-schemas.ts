@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH
 } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
@@ -113,7 +114,17 @@ export const MobileWebBundleManifestReadSchema = z
  *  the constant because a larger value would overshoot `dataBase64` above. */
 export const MobileWebBundleManifestReplySchema = z.looseObject({
   manifest: MobileWebBundleManifestReadSchema,
-  chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+  chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES),
+  /** The range grid, named only by a host that serves `mobileWeb.bundle.range`. A value this build
+   *  cannot page within its `dataBase64` bound reads as absent, which keeps the fetch on chunks
+   *  rather than refusing the manifest. */
+  rangeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(MOBILE_WEB_BUNDLE_RANGE_BYTES)
+    .optional()
+    .catch(undefined)
 })
 
 /** Self-describing on purpose: `buildId`, `path` and `offset` are echoed so a reassembler cannot

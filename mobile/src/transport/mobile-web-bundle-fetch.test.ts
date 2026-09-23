@@ -250,7 +250,7 @@ describe('fetchMobileWebBundle', () => {
 
     const failed = fetchMobileWebBundle({ client: host.client })
     await expect(failed).rejects.toThrow(
-      'bundle chunk answered other.html at 0, not index.html at 0'
+      'bundle window answered other.html at 0, not index.html at 0'
     )
     expect(await refusalOf(failed)).toBe('chunk-misrouted')
   })
@@ -279,7 +279,7 @@ describe('fetchMobileWebBundle', () => {
 
     const failed = fetchMobileWebBundle({ client: host.client })
     await expect(failed).rejects.toThrow(
-      'bundle chunk answered index.html at 0, not index.html at 3'
+      'bundle window answered index.html at 0, not index.html at 3'
     )
     expect(await refusalOf(failed)).toBe('chunk-misrouted')
   })
@@ -351,7 +351,7 @@ describe('fetchMobileWebBundle', () => {
 
     const failed = fetchMobileWebBundle({ client: host.client })
     await expect(failed).rejects.toThrow(
-      "bundle chunk for index.html at 0 is 6 bytes, over the host's 3"
+      'bundle window for index.html at 0 is 6 bytes, over the 3-byte window'
     )
     expect(await refusalOf(failed)).toBe('chunk-oversize')
   })

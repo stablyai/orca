@@ -50,24 +50,16 @@ describe('decoding a bundle range', () => {
     ).toBe('range-undecodable')
   })
 
-  // The spare byte in the bounded buffer is what turns an overlong body into a refusal.
-  it('refuses a gzip body that inflates past the window, without growing the buffer', () => {
-    expect(refusalOf(() => decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength - 100))).toBe(
-      'range-length-mismatch'
+  // The spare byte in the bounded buffer is what lets the fetch's slot check see an overlong body.
+  it('stops a gzip body that inflates past the window one byte over it', () => {
+    expect(decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength - 100).byteLength).toBe(
+      RAW.byteLength - 99
     )
   })
 
-  it('refuses a gzip body that inflates short of the window', () => {
-    expect(refusalOf(() => decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength + 100))).toBe(
-      'range-length-mismatch'
+  it('hands back a gzip body that inflates short of the window as it is', () => {
+    expect(decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength + 100).byteLength).toBe(
+      RAW.byteLength
     )
-  })
-
-  it('refuses an identity body of the wrong length', () => {
-    expect(
-      refusalOf(() =>
-        decodeMobileWebBundleRange({ ...RANGE, encoding: 'identity' }, RAW, RAW.byteLength + 1)
-      )
-    ).toBe('range-length-mismatch')
   })
 })

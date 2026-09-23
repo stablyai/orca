@@ -23,7 +23,6 @@ const REASON_COPY: Record<MobileWebShellUpdateFailureReason, string> = {
   'chunk-misrouted': 'a chunk answered the wrong asset or offset',
   'asset-entry-changed': 'an asset no longer matched the manifest',
   'range-undecodable': 'a compressed read could not be decoded',
-  'range-length-mismatch': 'a compressed read decoded to the wrong size',
   'fetch-stopped': 'the download was stopped',
   'cache-write-failed': 'saving the download on this phone failed',
   'unrecognised-error': 'an unrecognised error'
