@@ -6,6 +6,15 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../../../../shared/agent-session-wire'
+import {
+  buildAgentChildRowModels,
+  type AgentChildRowContext,
+  type AgentChildRowModel
+} from '../../../../shared/agent-child-row-model'
+import type {
+  AgentChildDisplayState,
+  AgentChildWorkView
+} from '../../../../shared/agent-status-child-work-view'
 import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
 import { translate } from '@/i18n/i18n'
 
@@ -13,10 +22,10 @@ type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState
 
 export type BackgroundRosterTask = {
-  task: AgentSessionBackgroundTask
-  settled: boolean
+  /** What the row shows, decided by the same model the sidebar's child rows use. */
+  row: AgentChildRowModel
+  /** The row's display state in the header's vocabulary. */
   state: RunState
-  name: string
 }
 
 export type BackgroundTaskGroup = { kind: TaskKind; tasks: BackgroundRosterTask[] }
@@ -70,8 +79,43 @@ function effectiveState(task: AgentSessionBackgroundTask, settled: boolean): Run
   return task.kind === 'monitor' ? 'monitoring' : 'working'
 }
 
-/** Merge live and settled tasks into kind groups, stable-sorted first-seen
- *  (startedAt) then id, so a live update never reshuffles surviving rows. */
+/** A host that publishes only the task roster decided each row's state; the row keeps it. */
+function legacyTaskRow(task: AgentSessionBackgroundTask, settled: boolean): AgentChildRowModel {
+  const state = effectiveState(task, settled)
+  const startedAt = task.startedAt ?? 0
+  return {
+    id: task.id,
+    providerId: task.id,
+    kind: task.kind,
+    displayState: state,
+    name: resolveBackgroundTaskName(task),
+    detail:
+      state === 'waiting' || state === 'blocked' || state === 'unverifiable'
+        ? { kind: 'reason', state }
+        : null,
+    firstObservedAt: startedAt,
+    recencyAt: startedAt,
+    ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
+    // Absent means stoppable: a host predating the field published only rows its stop could act on.
+    canStop: task.stoppable !== false,
+    settled,
+    owned: []
+  }
+}
+
+/** Stable-sort first-seen then id, so a live update never reshuffles surviving rows. */
+function groupRosterEntries(entries: BackgroundRosterTask[]): BackgroundTaskGroup[] {
+  entries.sort((left, right) => {
+    const startDelta = left.row.firstObservedAt - right.row.firstObservedAt
+    return startDelta !== 0 ? startDelta : left.row.id < right.row.id ? -1 : 1
+  })
+  return KIND_ORDER.map((kind) => ({
+    kind,
+    tasks: entries.filter((entry) => entry.row.kind === kind)
+  })).filter((group) => group.tasks.length > 0)
+}
+
+/** Merge live and settled tasks into kind groups. */
 export function buildBackgroundTaskGroups(
   tasks: readonly AgentSessionBackgroundTask[],
   settledTasks: readonly AgentSessionBackgroundTask[]
@@ -83,23 +127,49 @@ export function buildBackgroundTaskGroups(
     [tasks, false]
   ] as const) {
     for (const task of roster) {
-      owners.set(task.id, {
-        task,
-        settled,
-        state: effectiveState(task, settled),
-        name: resolveBackgroundTaskName(task)
-      })
+      const row = legacyTaskRow(task, settled)
+      owners.set(task.id, { row, state: headerRunState(row.displayState) })
     }
   }
-  const entries = [...owners.values()]
-  entries.sort((left, right) => {
-    const startDelta = (left.task.startedAt ?? 0) - (right.task.startedAt ?? 0)
-    return startDelta !== 0 ? startDelta : left.task.id < right.task.id ? -1 : 1
-  })
-  return KIND_ORDER.map((kind) => ({
-    kind,
-    tasks: entries.filter((entry) => entry.task.kind === kind)
-  })).filter((group) => group.tasks.length > 0)
+  return groupRosterEntries([...owners.values()])
+}
+
+// The strip reads a live session channel; contact loss is not yet a verdict it receives.
+const STRIP_ROW_CONTEXT: AgentChildRowContext = {
+  parentEvidenceFresh: true,
+  transportObservation: 'live',
+  parentObservedAt: 0
+}
+
+/** The header's word for a row: a failure reads as the host's `blocked`, a cancel as `idle`. */
+function headerRunState(displayState: AgentChildDisplayState): RunState {
+  switch (displayState) {
+    case 'failed':
+      return 'blocked'
+    case 'interrupted':
+      return 'idle'
+    case 'working':
+    case 'monitoring':
+    case 'waiting':
+    case 'blocked':
+    case 'done':
+    case 'idle':
+    case 'unverifiable':
+      return displayState
+  }
+}
+
+/** Kind groups from the host's child views: the main agent's work at the top, each child's own
+ *  work nested beneath it rather than counted again in its kind's group. */
+export function buildBackgroundTaskGroupsFromViews(
+  views: readonly AgentChildWorkView[]
+): BackgroundTaskGroup[] {
+  return groupRosterEntries(
+    buildAgentChildRowModels(views, STRIP_ROW_CONTEXT).map((row) => ({
+      row,
+      state: headerRunState(row.displayState)
+    }))
+  )
 }
 
 export function backgroundTaskStateWord(state: RunState): string {
@@ -155,14 +225,11 @@ export function formatBackgroundTaskTokens(totalTokens: number): string {
     : `${tokenScaleText(Math.round(totalTokens / 100_000) / 10)}m`
 }
 
-export function backgroundTaskElapsedLabel(
-  task: AgentSessionBackgroundTask,
-  now: number
-): string | null {
-  if (task.startedAt === undefined || task.startedAt <= 0) {
+export function backgroundTaskElapsedLabel(startedAt: number, now: number): string | null {
+  if (startedAt <= 0) {
     return null
   }
-  return formatNativeChatDuration((now - task.startedAt) / 1000)
+  return formatNativeChatDuration((now - startedAt) / 1000)
 }
 
 export function backgroundTaskGroupLabel(kind: TaskKind): string {

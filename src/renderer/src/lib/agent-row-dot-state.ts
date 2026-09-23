@@ -1,5 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentWorkingMode } from '../../../shared/agent-status-types'
+import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
+import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
 import type { AgentRowState } from './agent-row-decay-state'
 
 /**
@@ -21,4 +22,19 @@ export function agentRowDotState(
       return state
   }
   return 'idle'
+}
+
+/** The dot an agent row renders: a child row's own, else an interrupted turn, else its state. */
+export function agentRowDisplayDotState(agent: {
+  state: AgentRowState
+  entry: Pick<AgentStatusEntry, 'interrupted' | 'workingMode'>
+  childRow?: Pick<AgentChildRowModel, 'displayState'>
+}): AgentDotState {
+  if (agent.childRow) {
+    return agent.childRow.displayState
+  }
+  if (agent.entry.interrupted === true) {
+    return 'interrupted'
+  }
+  return agentRowDotState(agent.state, agent.entry.workingMode)
 }

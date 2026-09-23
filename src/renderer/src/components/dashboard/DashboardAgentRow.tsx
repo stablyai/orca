@@ -10,7 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
-import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
@@ -153,9 +153,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted
-    ? 'interrupted'
-    : asDotState(agent.state, agent.entry.workingMode)
+  const dotState: AgentDotState = agentRowDisplayDotState(agent)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.

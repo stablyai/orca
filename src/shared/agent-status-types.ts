@@ -8,6 +8,7 @@ import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { TuiAgent } from './tui-agent'
 import {
   normalizeInteractivePromptField,
@@ -142,6 +143,9 @@ export type AgentStatusEntry = {
   /** The main agent's own state; absent from old hosts and from writers that carry no main agent fact
    *  (OSC, launch seeds), where readers fall back to `state`. */
   mainAgent?: AgentMainAgentStatus
+  /** The host's child-work views for this session, when it publishes them; child rows then read
+   *  these instead of `subagents`. Absent from older hosts. */
+  children?: AgentChildWorkView[]
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
