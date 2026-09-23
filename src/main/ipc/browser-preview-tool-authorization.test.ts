@@ -1,3 +1,8 @@
+const sshRouting = vi.hoisted(() => ({ getTarget: vi.fn(), prepare: vi.fn() }))
+vi.mock('./ssh', () => ({ getSshConnectionStore: () => ({ getTarget: sshRouting.getTarget }) }))
+vi.mock('../browser/local-ssh-browser-partitions', () => ({
+  prepareLocalSshBrowserPartition: sshRouting.prepare
+}))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DocPreviewGuestPolicyModule from '../browser/doc-preview-guest-policy'
 import type * as TabRegistrationWaitModule from './browser-tab-registration-wait'
@@ -516,4 +521,32 @@ describe('doc preview tool authorization', () => {
     await handler?.(trustedSender(HOST_RENDERER_ID), { browserPageId: preview.browserPageId })
     expect(extractHoverPayloadMock).toHaveBeenCalledWith(preview.browserPageId, preview.contents)
   })
+})
+
+it('allows a registered recipe target to prepare its local browser partition', async () => {
+  const targetId = 'runtime-ssh-orca-vm'
+  sshRouting.getTarget.mockReturnValue({ id: targetId })
+  sshRouting.prepare.mockResolvedValue({ partition: 'vm-partition' })
+  await expect(
+    registeredHandlers().get('browser:prepareSshWorkspacePartition')?.(
+      trustedSender(HOST_RENDERER_ID),
+      { targetId }
+    )
+  ).resolves.toEqual({ partition: 'vm-partition' })
+  expect(sshRouting.getTarget).toHaveBeenCalledWith(targetId)
+  expect(sshRouting.prepare).toHaveBeenCalledWith({
+    targetId,
+    browserProfileId: 'default',
+    skipProbe: false
+  })
+})
+it('rejects an unregistered recipe-looking id before creating a browser route', async () => {
+  sshRouting.getTarget.mockReturnValue(undefined)
+  await expect(
+    registeredHandlers().get('browser:prepareSshWorkspacePartition')?.(
+      trustedSender(HOST_RENDERER_ID),
+      { targetId: 'runtime-ssh-orca-missing' }
+    )
+  ).rejects.toThrow('browser_local_route_target_invalid')
+  expect(sshRouting.prepare).not.toHaveBeenCalled()
 })

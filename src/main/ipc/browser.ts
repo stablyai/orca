@@ -35,6 +35,10 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
+/**
+ * Register browser IPC operations and guest/session management.
+ * SSH route preparation requires a trusted renderer and a registered target, including recipe VMs.
+ */
 export function registerBrowserHandlers(): void {
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
@@ -114,9 +118,7 @@ export function registerBrowserHandlers(): void {
         throw new Error('browser_local_route_target_invalid')
       }
       const { getSshConnectionStore } = await import('./ssh')
-      const registered = getSshConnectionStore()
-        ?.listTargets()
-        .some((target) => target.id === args.targetId)
+      const registered = getSshConnectionStore()?.getTarget(args.targetId)
       if (!registered) {
         throw new Error('browser_local_route_target_invalid')
       }

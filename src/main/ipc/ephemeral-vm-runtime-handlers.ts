@@ -1,3 +1,4 @@
+import { restoreRuntimeOwnedSshTarget } from '../ephemeral-vm-runtime-ssh-restore'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -41,6 +42,10 @@ export type EphemeralVmCleanupCommandResult = {
   message?: string
 }
 
+/**
+ * Register recipe runtime lifecycle IPC handlers.
+ * Activating a running SSH VM restores its transport; suspended VMs use the resume recipe.
+ */
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
@@ -203,6 +208,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+        // A running VM can still have an unreachable transport. Report that failure to
+        // the activation UI so the user can retry; do not rerun the resume recipe.
+        await restoreRuntimeOwnedSshTarget(userDataPath, runtime.id)
         return runtime
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)

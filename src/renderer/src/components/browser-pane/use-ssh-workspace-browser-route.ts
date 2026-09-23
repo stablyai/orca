@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
@@ -45,6 +48,7 @@ export function useSshWorkspaceBrowserRoute(
   browseFromThisDevice: () => void
 } {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const runtimeEnvironmentId = useAppStore((s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
@@ -52,10 +56,14 @@ export function useSshWorkspaceBrowserRoute(
   const updateSettings = useAppStore((s) => s.updateSettings)
   const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(
     executionHostId,
-    browserRoutingSettings
+    browserRoutingSettings,
+    runtimeEnvironmentId
   )
   const sshTargetId = routeEligibility?.targetId ?? null
   const targetId = routeEligibility?.eligible === true ? routeEligibility.targetId : null
+  const recipeConnection = useAppStore((s) =>
+    targetId ? s.runtimeOwnedSshConnectionStates.get(targetId) : undefined
+  )
   const browserProfileId = sessionProfileId ?? 'default'
   const [attempt, setAttempt] = useState<{ count: number; skipProbe: boolean }>({
     count: 0,
@@ -100,7 +108,8 @@ export function useSshWorkspaceBrowserRoute(
     return () => {
       cancelled = true
     }
-  }, [targetId, browserProfileId, attempt, skipProbe])
+    // Reattach can finish after the Browser first opens during desktop startup.
+  }, [targetId, browserProfileId, attempt, skipProbe, recipeConnection])
 
   // Why (review P1-1): `state` lags one commit behind a targetId transition on
   // an already-mounted instance; returning stale 'unrouted' (or a stale
@@ -150,14 +159,18 @@ export function useSshWorkspaceBrowserRoute(
  */
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const runtimeEnvironmentId = useAppStore((s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const targetId =
-    resolveSshWorkspaceBrowserRouteEligibility(executionHostId, browserRoutingSettings)?.targetId ??
-    null
+    resolveSshWorkspaceBrowserRouteEligibility(
+      executionHostId,
+      browserRoutingSettings,
+      runtimeEnvironmentId
+    )?.targetId ?? null
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }

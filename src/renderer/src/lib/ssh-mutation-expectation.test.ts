@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { captureDirectSshMutationExpectation } from './ssh-mutation-expectation'
 
-function stateWithGenerations(): Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'> {
+function stateWithGenerations(): Pick<
+  AppState,
+  'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeOwnedSshConnectionStates'
+> {
   return {
+    runtimeOwnedSshConnectionStates: new Map(),
     sshConnectionStates: new Map([
       [
         'ssh-1',
@@ -65,4 +69,46 @@ describe('captureDirectSshMutationExpectation', () => {
       captureDirectSshMutationExpectation(stateWithGenerations(), 'ssh-1', 'hub-2')
     ).toThrow("Couldn't verify the SSH connection")
   })
+})
+
+it('uses recipe authority without registering the VM as a user-managed host', () => {
+  const targetId = 'runtime-ssh-orca-vm'
+  const state = {
+    ...stateWithGenerations(),
+    runtimeOwnedSshConnectionStates: new Map([
+      [
+        targetId,
+        {
+          targetId,
+          status: 'connected' as const,
+          error: null,
+          reconnectAttempt: 0,
+          connectionGeneration: 42
+        }
+      ]
+    ])
+  }
+  expect(captureDirectSshMutationExpectation(state, targetId).expectedSshConnectionGeneration).toBe(
+    42
+  )
+  expect(() => captureDirectSshMutationExpectation(state, targetId, 'hub-1')).toThrow()
+  state.runtimeOwnedSshConnectionStates.clear()
+  expect(() => captureDirectSshMutationExpectation(state, targetId)).toThrow()
+})
+
+it('does not authorize recipe mutations with disconnected or stale ordinary-host state', () => {
+  const targetId = 'runtime-ssh-orca-vm'
+  const stale = {
+    targetId,
+    status: 'disconnected' as const,
+    error: null,
+    reconnectAttempt: 0,
+    connectionGeneration: 42
+  }
+  const state = {
+    ...stateWithGenerations(),
+    runtimeOwnedSshConnectionStates: new Map([[targetId, stale]])
+  }
+  state.sshConnectionStates.set(targetId, { ...stale, status: 'connected' })
+  expect(() => captureDirectSshMutationExpectation(state, targetId)).toThrow()
 })

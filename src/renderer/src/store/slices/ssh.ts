@@ -32,6 +32,8 @@ export type SshCredentialRequest = {
 }
 
 export type SshSlice = {
+  runtimeOwnedSshConnectionStates: Map<string, SshConnectionState>
+  setRuntimeOwnedSshConnectionState: (targetId: string, state: SshConnectionState | null) => void
   sshConnectionStates: Map<string, SshConnectionState>
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
@@ -109,7 +111,12 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
   }
 }
 
+/**
+ * Create SSH UI state and update actions.
+ * Keep recipe connection authority separate from public-host metadata and invalidate operation guards on changes.
+ */
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+  runtimeOwnedSshConnectionStates: new Map(),
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshTargetGenerations: new Map(),
@@ -121,6 +128,29 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
   detectedPortsByConnection: {},
+
+  /** Update recipe authority and invalidate captured operations; null removes stale session state. */
+  setRuntimeOwnedSshConnectionState: (targetId, state) =>
+    set((s) => {
+      const previous = s.runtimeOwnedSshConnectionStates.get(targetId)
+      if (state ? sshConnectionStatesEqual(previous, state) : !previous) {
+        return s
+      }
+      const next = new Map(s.runtimeOwnedSshConnectionStates)
+      if (state) {
+        next.set(targetId, state)
+      } else {
+        next.delete(targetId)
+      }
+      advanceLocalSshTargetConnectionGeneration(targetId)
+      const didReconnect = previous?.status !== 'connected' && state?.status === 'connected'
+      return {
+        runtimeOwnedSshConnectionStates: next,
+        sshConnectedGeneration: didReconnect
+          ? s.sshConnectedGeneration + 1
+          : s.sshConnectedGeneration
+      }
+    }),
 
   setSshConnectionState: (targetId, state) =>
     set((s) => {
