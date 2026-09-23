@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
-import { chromium } from 'playwright-core'
+import { chromium, webkit } from 'playwright-core'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
@@ -18,9 +18,28 @@ import { createBundleServer, readShellCsp } from './mobile-web-app-render-harnes
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 
-// The emulator the audit measured on is 480 dpi, which a WebView reports as 3. A launch flag, not
-// Playwright's emulated scale: under emulation Chromium floors borders to CSS px, which no phone does.
-const DEVICE_SCALE_FLAG = '--force-device-scale-factor=3'
+// The emulator the audit measured on is 480 dpi, which a WebView reports as 3. Chromium by launch
+// flag, not Playwright's emulated scale, under which it floors borders to CSS px as no phone does.
+// WebKit (the iOS shell) takes the emulated scale, which is how it paints a sub-pixel border.
+const ENGINES = [
+  {
+    name: 'chromium',
+    launch: () => {
+      const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
+      return chromium.launch({
+        headless: true,
+        args: ['--force-device-scale-factor=3'],
+        ...(executablePath ? { executablePath } : {})
+      })
+    },
+    pageOptions: { viewport: null }
+  },
+  {
+    name: 'webkit',
+    launch: () => webkit.launch({ headless: true }),
+    pageOptions: { viewport: { width: 427, height: 952 }, deviceScaleFactor: 3 }
+  }
+]
 
 // Required, not imported: the page's own dependencies require react-native, and esbuild then
 // resolves every importer to the package's CommonJS build, so that is the copy the page ships.
@@ -43,7 +62,7 @@ const describeParity = bundles ? describe : describe.skip
 let scratch = null
 let server = null
 let origin = null
-let browser = null
+const browsers = new Map()
 
 beforeAll(async () => {
   if (!bundles) {
@@ -74,32 +93,31 @@ beforeAll(async () => {
   const served = await createBundleServer({ outDir, cspHeader: await readShellCsp() })
   server = served.server
   origin = served.origin
-  const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
-  browser = await chromium.launch({
-    headless: true,
-    args: [DEVICE_SCALE_FLAG],
-    ...(executablePath ? { executablePath } : {})
-  })
-}, 300_000)
+  for (const engine of ENGINES) {
+    browsers.set(engine.name, await engine.launch())
+  }
+}, 180_000)
 
 afterAll(async () => {
-  await browser?.close()
+  for (const browser of browsers.values()) {
+    await browser.close()
+  }
   server?.close()
   if (scratch) {
     await rm(scratch, { recursive: true, force: true })
   }
 })
 
-async function openPage() {
-  const page = await browser.newPage({ viewport: null })
+async function openPage(engine) {
+  const page = await browsers.get(engine.name).newPage(engine.pageOptions)
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-testid="input"]')
   return page
 }
 
-describeParity('the page against native, at a phone density', () => {
+describeParity.each(ENGINES)('the page against native, at a phone density, in $name', (engine) => {
   it('draws StyleSheet.hairlineWidth one device pixel thick, as native does', async () => {
-    const page = await openPage()
+    const page = await openPage(engine)
     try {
       const measured = await page.evaluate(() => {
         const line = document.querySelector('[data-testid="hairline"]')
@@ -113,7 +131,7 @@ describeParity('the page against native, at a phone density', () => {
   })
 
   it('paints no focus ring on a focused text input, as no native TextInput does', async () => {
-    const page = await openPage()
+    const page = await openPage(engine)
     try {
       await page.focus('[data-testid="input"]')
       const outline = await page.evaluate(() => {

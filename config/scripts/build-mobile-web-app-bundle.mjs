@@ -94,7 +94,7 @@ export const MOBILE_WEB_APP_SHIMS = [
   },
   {
     // react-native-web pins StyleSheet.hairlineWidth to 1 CSS px, three device px on a phone.
-    // Native's value is one device px, so the page takes native's formula at that assignment.
+    // Native's value is one device px, so the page paints native's count at that assignment.
     name: 'hairline-device-pixel',
     appliesTo: (options) =>
       options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
@@ -135,9 +135,9 @@ export const MOBILE_WEB_APP_ROOT_RESET =
  * Rules that make the page paint what the native app paints where the browser's defaults differ.
  * Native is the reference. Zero specificity (`:where`), so a component's own style still wins.
  *
- * Text inputs: Chromium rings a focused input (`:focus-visible` matches every focused text field);
- * no native TextInput paints one, and the caret plus the IME already mark focus on a phone.
- * Inputs only: a button reached by a hardware keyboard keeps the browser's ring.
+ * Inputs and textareas: Chromium rings a focused one (`:focus-visible` matches every focused
+ * text field); no native TextInput paints one, and the caret and the IME already mark focus.
+ * Those only: a button reached by a hardware keyboard keeps the browser's ring.
  */
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}</style>'
@@ -227,17 +227,19 @@ export const lucideBarrelPlugin = {
 
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
-// React Native's formula (Libraries/StyleSheet/StyleSheetExports.js): roundToNearestPixel(0.4),
-// else one device pixel. Chromium at a real device scale paints that as one device pixel.
+// React Native's device-pixel count (roundToNearestPixel(0.4), else one), plus half a pixel: both
+// engines floor a border to whole device pixels, and WebKit floors an exact 1/ratio to 0 and paints
+// nothing, which is why react-native-web gave up on density. Measured in both engines at 1 to 4.
 const DEVICE_PIXEL_HAIRLINE_ASSIGNMENT =
-  'StyleSheet.hairlineWidth = (function (ratio) { return Math.round(0.4 * ratio) / ratio || 1 / ratio; })' +
+  'StyleSheet.hairlineWidth = (function (ratio) {' +
+  ' return ((Math.round(0.4 * ratio) || 1) + 0.5) / ratio; })' +
   "(typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);"
 
 const hairlineDevicePixelPlugin = {
   name: HAIRLINE_PLUGIN_NAME,
   setup(build) {
     build.onLoad(
-      // Both builds: once any dependency requires the package, esbuild resolves every importer to cjs.
+      // Both builds: once a dependency requires it, esbuild resolves every importer to cjs.
       { filter: /react-native-web[\\/]dist[\\/](cjs[\\/])?exports[\\/]StyleSheet[\\/]index\.js$/ },
       async (args) => {
         const source = await readFile(args.path, 'utf8')
