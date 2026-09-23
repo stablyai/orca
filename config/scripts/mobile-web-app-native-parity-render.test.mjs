@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
+import pngjs from 'pngjs'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
@@ -48,11 +49,13 @@ import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
 const { StyleSheet, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
+  separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
   hairline: { height: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#222222' },
   input: { height: 40 }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }))
+  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }))
 )
 `
 
@@ -125,6 +128,27 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return { ratio, devicePixels: Math.round(line.getBoundingClientRect().height * ratio) }
       })
       expect(measured).toEqual({ ratio: 3, devicePixels: 1 })
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('paints a StyleSheet.hairlineWidth-tall separator one device pixel tall at a fractional offset', async () => {
+    const page = await openPage(engine)
+    try {
+      // 10.1 CSS px down: a 0.5 px separator straddles two device rows there in both engines.
+      const shot = pngjs.PNG.sync.read(
+        await page.locator('[data-testid="separator-box"]').screenshot({ scale: 'device' })
+      )
+      const column = Math.floor(shot.width / 2)
+      let darkRows = 0
+      for (let y = 0; y < shot.height; y++) {
+        // Pure black only: the clip's last row can catch the #222222 border drawn below it.
+        if (shot.data[(y * shot.width + column) * 4] < 16) {
+          darkRows++
+        }
+      }
+      expect(darkRows).toBe(1)
     } finally {
       await page.close()
     }

@@ -227,12 +227,13 @@ export const lucideBarrelPlugin = {
 
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
-// React Native's device-pixel count (roundToNearestPixel(0.4), else one), plus half a pixel: both
-// engines floor a border to whole device pixels, and WebKit floors an exact 1/ratio to 0 and paints
-// nothing, which is why react-native-web gave up on density. Measured in both engines at 1 to 4.
+// React Native's device-pixel count (roundToNearestPixel(0.4), else one) over the ratio, rounded up
+// to the 1/64 CSS px both engines lay out in. WebKit stores an exact 1/3 as 21/64, under one device
+// pixel at 3, and paints nothing; 22/64 is the smallest step that paints. Any width above 1/ratio
+// can still straddle two rows at some offsets; the smallest such step does so least.
 const DEVICE_PIXEL_HAIRLINE_ASSIGNMENT =
   'StyleSheet.hairlineWidth = (function (ratio) {' +
-  ' return ((Math.round(0.4 * ratio) || 1) + 0.5) / ratio; })' +
+  ' return Math.ceil((64 * (Math.round(0.4 * ratio) || 1)) / ratio) / 64; })' +
   "(typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);"
 
 const hairlineDevicePixelPlugin = {
