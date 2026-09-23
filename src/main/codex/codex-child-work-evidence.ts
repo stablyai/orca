@@ -195,19 +195,17 @@ export class CodexChildWorkEvidence {
       // The turn is over, and so is every call it had open.
       facts.openCalls.clear()
       facts.waiting = false
-      this.publish(facts, JSON.stringify(['ended', turnId, state]), () => {
-        const lastMessage = ofTurn(facts.lastMessage, turnId)?.text
-        const { totalTokens } = facts
-        const outcome = codexChildTurnOutcome(state)
-        return (observedAt) => ({
-          type: 'ended',
-          observedAt,
-          handle: { idKind: 'thread_id', id: threadId, runId: turnId },
-          outcome,
-          ...(lastMessage ? { lastMessage } : {}),
-          ...(totalTokens !== undefined ? { totalTokens } : {})
-        })
-      })
+      const lastMessage = ofTurn(facts.lastMessage, turnId)?.text
+      const { totalTokens } = facts
+      const outcome = codexChildTurnOutcome(state)
+      this.publish(facts, JSON.stringify(['ended', turnId, state]), (observedAt) => ({
+        type: 'ended',
+        observedAt,
+        handle: { idKind: 'thread_id', id: threadId, runId: turnId },
+        outcome,
+        ...(lastMessage ? { lastMessage } : {}),
+        ...(totalTokens !== undefined ? { totalTokens } : {})
+      }))
       return
     }
     for (const [itemId, call] of facts.openCalls) {
@@ -218,21 +216,19 @@ export class CodexChildWorkEvidence {
     const observation = this.liveAgent(threadId, child, facts, turnId)
     const openCall = [...facts.openCalls].at(-1)
     const announced = facts.published !== undefined
-    this.publish(facts, JSON.stringify(['live', observation, openCall?.[0]]), () => {
-      return (observedAt) => {
-        if (!openCall) {
-          return { type: 'live', observedAt, child: { ...observation, operation: null } }
-        }
-        const [, call] = openCall
-        call.openedAt ??= observedAt
-        const operation = {
-          toolName: call.toolName,
-          ...(call.input ? { input: call.input } : {}),
-          basis: 'open' as const,
-          observedAt: call.openedAt
-        }
-        return { type: 'live', observedAt, child: { ...observation, operation } }
+    this.publish(facts, JSON.stringify(['live', observation, openCall?.[0]]), (observedAt) => {
+      if (!openCall) {
+        return { type: 'live', observedAt, child: { ...observation, operation: null } }
       }
+      const [, call] = openCall
+      call.openedAt ??= observedAt
+      const operation = {
+        toolName: call.toolName,
+        ...(call.input ? { input: call.input } : {}),
+        basis: 'open' as const,
+        observedAt: call.openedAt
+      }
+      return { type: 'live', observedAt, child: { ...observation, operation } }
     })
     if (!announced) {
       this.requeueOwnedBy(threadId)
@@ -262,10 +258,10 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  private publish(facts: ChildFacts, fingerprint: string, edge: () => CodexPendingChildWork) {
+  private publish(facts: ChildFacts, fingerprint: string, edge: CodexPendingChildWork): void {
     if (facts.published !== fingerprint) {
       facts.published = fingerprint
-      this.pending.push(edge())
+      this.pending.push(edge)
     }
   }
 
