@@ -49,8 +49,9 @@ const ESC = '\x1b'
 /**
  * Rich native input for the chat view. Sends prompts into the running agent
  * through the same verified runtime path as typed input (KTD4), so the agent
- * cannot distinguish native input from keystrokes. Enter sends; Shift+Enter
- * inserts a newline; multi-line is bracketed-paste wrapped; Esc interrupts.
+ * cannot distinguish native input from keystrokes. The send shortcut can be
+ * configured in Chat UI settings (defaults to Enter sends; Shift+Enter inserts
+ * a newline); multi-line is bracketed-paste wrapped; Esc interrupts.
  * Slash-command and `@file` autocomplete are agent-aware; image paste persists a
  * temp file and injects the agent-appropriate path (or reports unsupported).
  */

@@ -4,6 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const shortcutSetting = vi.hoisted((): { value: 'enter' | 'cmd-or-ctrl-enter' } => ({
+  value: 'enter'
+}))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -27,15 +31,75 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
+vi.mock('@/components/ShortcutKeyCombo', () => ({
+  ShortcutKeyCombo: ({ keys }: { keys: string[] }) => <span>{keys.join(' + ')}</span>
+}))
+
 vi.mock('./NativeChatSessionOptionPickers', () => ({
   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
 }))
 
+vi.mock('./use-native-chat-send-shortcut', () => ({
+  useNativeChatSendShortcut: () => shortcutSetting.value
+}))
+
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  shortcutSetting.value = 'enter'
+  vi.unstubAllGlobals()
+})
 
 describe('NativeChatComposerActions', () => {
+  it('shows the configured Enter shortcut in the Send tooltip', () => {
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+    expect(screen.getByText('Enter')).toBeTruthy()
+  })
+
+  it('shows the platform modifier in the Send tooltip when configured', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    shortcutSetting.value = 'cmd-or-ctrl-enter'
+
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    expect(screen.getByText('⌘ + Enter')).toBeTruthy()
+  })
+
   it('places session option pickers immediately beside dictation', () => {
     render(
       <NativeChatComposerActions

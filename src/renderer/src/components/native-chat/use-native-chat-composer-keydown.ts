@@ -6,8 +6,12 @@ import {
   type HistoryState,
   type NativeChatPickerItem
 } from './native-chat-composer-state'
+import type { NativeChatSendShortcut } from '../../../../shared/native-chat-send-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useNativeChatSendShortcut } from './use-native-chat-send-shortcut'
 
 export type UseNativeChatComposerKeyDownArgs = {
+  nativeChatSendShortcut?: NativeChatSendShortcut
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   draft: string
@@ -24,7 +28,9 @@ export type UseNativeChatComposerKeyDownArgs = {
   setHistory: Dispatch<SetStateAction<HistoryState>>
 }
 
+/** Handles composer shortcuts, picker navigation, history, and interrupts. */
 export function useNativeChatComposerKeyDown({
+  nativeChatSendShortcut: nativeChatSendShortcutOverride,
   autocomplete,
   activeSuggestion,
   draft,
@@ -40,6 +46,7 @@ export function useNativeChatComposerKeyDown({
   setCaret,
   setHistory
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLElement> {
+  const nativeChatSendShortcut = useNativeChatSendShortcut(nativeChatSendShortcutOverride)
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
@@ -82,12 +89,18 @@ export function useNativeChatComposerKeyDown({
         }
       }
 
+      if (nativeChatSendShortcut === 'cmd-or-ctrl-enter' && isScreenSubmitShortcut(event)) {
+        event.preventDefault()
+        send()
+        return
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault()
         interrupt()
         return
       }
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (nativeChatSendShortcut === 'enter' && event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         send()
         return
@@ -121,6 +134,7 @@ export function useNativeChatComposerKeyDown({
       draft,
       history,
       interrupt,
+      nativeChatSendShortcut,
       isComposing,
       send,
       setActiveSuggestion,

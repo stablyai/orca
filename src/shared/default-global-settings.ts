@@ -16,7 +16,9 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_NATIVE_CHAT_SEND_SHORTCUT } from './native-chat-send-shortcut'
 
+/** Creates the default global settings for a new profile. */
 export function buildDefaultSettings(args: {
   workspaceDir: string
   appFontFamily: string
@@ -137,6 +139,7 @@ export function buildDefaultSettings(args: {
     experimentalStructuredNativeChat: false,
     nativeChatResumeWorkOnRestart: false,
     nativeChatSessionOptions: {},
+    nativeChatSendShortcut: DEFAULT_NATIVE_CHAT_SEND_SHORTCUT,
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
