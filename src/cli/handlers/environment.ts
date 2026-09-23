@@ -1,20 +1,26 @@
 import type { CommandHandler } from '../dispatch'
+import {
+  createRecipeEnvironment,
+  projectProviderState,
+  removeEnvironmentWithProviderCleanup
+} from '../environment-recipe-lifecycle'
 import { formatEnvironment, formatEnvironmentList, formatHostList, printResult } from '../format'
+import { getRequiredStringFlag } from '../flags'
 import { listSshTargets } from '../host-selector-alternatives'
-import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
+import { getDefaultUserDataPath } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
-  removeEnvironment,
   resolveEnvironment,
-  type EnvironmentAddResult,
-  type EnvironmentRemoveResult
+  type EnvironmentAddResult
 } from '../runtime/environments'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
+  'environment create': createRecipeEnvironment,
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
@@ -74,8 +80,34 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca environment list`. Paired servers are stored on this machine, so there is no other host to ask.',
       'Run `orca environment list` on that machine to see the servers paired with it.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
-    printResult(localSuccess({ environments }), json, formatEnvironmentList)
+    const userDataPath = getDefaultUserDataPath()
+    const environments = listEnvironments(userDataPath).map(redactRuntimeEnvironment)
+    if (flags.get('include-provider-state') !== true) {
+      printResult(localSuccess({ environments }), json, formatEnvironmentList)
+      return
+    }
+    const runtimes = listEphemeralVmRuntimes(userDataPath)
+    const rows = environments.map((environment) => ({
+      ...environment,
+      providerState: projectProviderState(
+        runtimes.find((runtime) => runtime.runtimeEnvironmentId === environment.id)
+      )
+    }))
+    printResult(localSuccess({ environments: rows }), json, ({ environments: values }) =>
+      values.length === 0
+        ? 'No saved environments.'
+        : values
+            .map((environment) => {
+              const state = environment.providerState
+              return [
+                `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}`,
+                state
+                  ? `  provider: ${state.status}; cleanup: ${state.cleanupStatus}; runtime: ${state.runtimeId}`
+                  : '  provider: not recipe-managed'
+              ].join('\n')
+            })
+            .join('\n')
+    )
   },
   'environment show': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
@@ -86,16 +118,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       formatEnvironment(value)
     )
   },
-  'environment rm': async ({ flags, json }) => {
-    const selector = getRequiredStringFlag(flags, 'environment')
-    const removed = redactRuntimeEnvironment(removeEnvironment(getDefaultUserDataPath(), selector))
-    printResult(
-      localSuccess({ removed }),
-      json,
-      (result: EnvironmentRemoveResult) =>
-        `Removed environment ${result.removed.name} (${result.removed.id}).`
-    )
-  }
+  'environment rm': removeEnvironmentWithProviderCleanup
 }
 
 /**
@@ -113,14 +136,6 @@ function rejectLocalPairingStoreRetargeting(
   rejectRemoteSelectionFlags(flags, suffix, {
     nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
   })
-}
-
-function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
-  const value = flags.get(name)
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
-  }
-  return value
 }
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {

@@ -263,7 +263,10 @@ export const electronViteConfig: UserConfig = {
             'src/main/codex/managed-home-shell-preflight.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
+          // Why: the CLI creates and destroys durable recipe-backed environments
+          // through the same lifecycle service as the desktop UI.
+          'ephemeral-vm-runtime-service': resolve('src/main/ephemeral-vm-runtime-service.ts')
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.

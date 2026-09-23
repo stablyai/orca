@@ -11,7 +11,8 @@ import {
 } from '../../shared/runtime-environment-store'
 import type {
   KnownRuntimeEnvironment,
-  PublicKnownRuntimeEnvironment
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentSource
 } from '../../shared/runtime-environments'
 import type { PairingOffer } from '../../shared/pairing'
 import { RuntimeClientError } from './types'
@@ -28,7 +29,12 @@ export { getEnvironmentStorePath, listEnvironments }
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: {
+    name: string
+    pairingCode: string
+    now?: number
+    source?: RuntimeEnvironmentSource
+  }
 ): KnownRuntimeEnvironment {
   return translateStoreError(() => addEnvironmentFromPairingCodeInStore(userDataPath, args))
 }

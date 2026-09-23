@@ -18,6 +18,21 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca host list', 'orca host list --json']
   },
   {
+    path: ['environment', 'create'],
+    summary: 'Create and pair a recipe-backed Orca runtime environment',
+    usage: 'orca environment create --recipe <id> [--name <name>] [--repo-path <path>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'recipe', 'name', 'repo-path'],
+    notes: [
+      'Runs the selected environmentRecipes entry from orca.yaml, saves its durable provider lifecycle record, and pairs the returned Orca server.',
+      'The repository must already be registered in the local Orca runtime. The current directory is used unless --repo-path is provided.',
+      'SSH recipes and provisioned-root recipes are not supported by this first CLI lifecycle surface; use the Orca desktop flow for those.'
+    ],
+    examples: [
+      'orca environment create --recipe haven-aws-remote',
+      'orca environment create --recipe haven-aws-remote --name haven-aws-live --json'
+    ]
+  },
+  {
     path: ['environment', 'add'],
     summary: 'Save a remote Orca runtime environment from a pairing code',
     usage: 'orca environment add --name <name> --pairing-code <code> [--json]',
@@ -27,10 +42,11 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['environment', 'list'],
     summary: 'List saved Orca runtime environments',
-    usage: 'orca environment list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    usage: 'orca environment list [--include-provider-state] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'include-provider-state'],
     notes: [
-      'Answers from this machine\u2019s pairing store. --environment and --pairing-code are rejected rather than ignored, because there is no other host that could answer.'
+      'Answers from this machine\u2019s pairing store. --environment and --pairing-code are rejected rather than ignored, because there is no other host that could answer.',
+      "--include-provider-state adds Orca's durable last-known recipe lifecycle state and redacted provider result. It does not query the cloud provider live."
     ]
   },
   {
@@ -41,9 +57,20 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['environment', 'rm'],
+    aliases: [['environment', 'destroy']],
     destructive: true,
-    summary: 'Remove one saved Orca runtime environment',
-    usage: 'orca environment rm --environment <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    summary: 'Destroy a recipe-backed environment or forget a manual pairing',
+    usage: 'orca environment rm --environment <selector> [--force] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'force'],
+    notes: [
+      '`environment destroy` is an alias for this command.',
+      'For a recipe-backed environment, runs the immutable destroy recipe stored at creation and removes the pairing only after cleanup succeeds.',
+      'For a manual pairing with no recipe lifecycle record, removes only the local pairing and explicitly reports that no provider cleanup ran.',
+      '--force forgets a recipe-backed pairing only after you independently confirmed its provider resource is gone. It does not run provider cleanup.'
+    ],
+    examples: [
+      'orca environment destroy --environment haven-aws-live --json',
+      'orca environment rm --environment work-laptop --json'
+    ]
   }
 ]

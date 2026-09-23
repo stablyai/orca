@@ -1,13 +1,14 @@
 ---
 name: orca-cli
 description: >-
-  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
-  skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
-  when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
-  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
-  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
-  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
+  Operate Orca-managed environments, worktrees, folder contexts, terminals, repos, automations,
+  artifacts, skill sharing, worktree comments, and Orca's embedded browser through the `orca`
+  CLI. Use when the user says "$orca-cli", "remote Orca environment", "Orca worktree", "child
+  worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal", "handoff" /
+  "handover" / "give this to another agent", "Orca browser", "orca artifacts", or "share
+  skills". Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is
+  involved. Use Computer Use only when a visible window needs GUI control that a CLI,
+  filesystem, or API cannot do.
 ---
 
 # Orca CLI
@@ -21,6 +22,36 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 **Dev builds (`pnpm dev`):** after `pnpm build:cli` the dev CLI is `orca-dev`, and `./config/scripts/orca-dev.mjs` invokes it worktree-locally without depending on the /usr/local/bin symlink. Plain `orca` targets any installed production Orca.
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
+
+## Recipe-Backed Environments
+
+An environment recipe provisions a remote machine that runs the full Orca server. Worktrees,
+terminals, agents, orchestration, and server-hosted browser tabs then use the same
+`--environment` selector; this is not an SSH-only connection.
+
+Run this from a repository that is already registered with the local Orca runtime and contains
+the recipe in `orca.yaml`:
+
+```text
+ORCA environment create --recipe <recipe-id> --name <environment-name> --json
+ORCA status --environment <environment-name> --json
+ORCA environment list --include-provider-state --json
+ORCA environment destroy --environment <environment-name> --json
+```
+
+- `create` runs the recipe, stores the returned Orca-server pairing, and returns the environment
+  plus redacted provider state. Use `--repo-path <path>` when the recipe is not in the current
+  directory.
+- Confirm `status` reports `reachable: true` before starting work. Then pass
+  `--environment <environment-name>` to normal Orca commands.
+- `list --include-provider-state` reports durable last-known recipe state; it does not query the
+  cloud provider live.
+- `destroy` is an alias for `environment rm`. For a recipe-managed environment it runs the exact
+  recorded destroy recipe first and removes the pairing only after cleanup succeeds. A cleanup
+  failure keeps the pairing and lifecycle record so the command can be retried.
+- A manually paired environment has no provider lifecycle to destroy, so removal only forgets
+  the local pairing. Use `environment rm --force` for a recipe-managed environment only after a
+  human has independently completed and verified provider cleanup.
 
 ## Full Handoffs
 

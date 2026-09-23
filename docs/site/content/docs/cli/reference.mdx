@@ -65,6 +65,38 @@ orca host list --json
 
 The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH rows include the detected remote platform (`linux`, `darwin`, or `win32`) after the target connects; older or disconnected targets report `platform unknown`. They also include `connected` and, when known, the SSH lifecycle `connectionStatus`. SSH labels and paired-server names also resolve when they are unique; use the IDs from `host list` when names collide. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
 
+### Create a recipe-backed environment
+
+An environment recipe provisions a remote machine running the full Orca server, not just an SSH
+target. The same `--environment` selector then supports remote worktrees, terminals, agents,
+orchestration, and server-hosted browser tabs.
+
+Register the repository with Orca once, then create and verify an environment from a recipe in
+its `orca.yaml`:
+
+```bash
+orca repo add --path /abs/path/to/repo --json
+orca environment create --recipe <recipe-id> --name <environment-name> --repo-path /abs/path/to/repo --json
+orca status --environment <environment-name> --json
+orca environment list --include-provider-state --json
+```
+
+`environment create` stores the Orca-server pairing returned by the recipe. Before starting
+work, confirm that `status` reports `reachable: true`. Provider state in `environment list` is
+the durable last-known recipe state; the list command does not query the provider live.
+
+When finished, use the same lifecycle record to clean up the exact provider resource:
+
+```bash
+orca environment destroy --environment <environment-name> --json
+```
+
+`destroy` is an alias for `environment rm`. A recipe-managed pairing is removed only after its
+destroy recipe succeeds. If cleanup fails, Orca retains the pairing and lifecycle record so the
+command can be retried. Manually paired environments have no provider lifecycle, so removing
+one only forgets the local pairing. Use `environment rm --force` for a recipe-managed
+environment only after independently completing and verifying provider cleanup.
+
 ## Runtime commands
 
 ```bash
