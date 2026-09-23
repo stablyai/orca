@@ -382,13 +382,13 @@ describeBundling('the app bundle', () => {
     })
   }, 120_000)
 
-  it('declares no viewport-fit, so env(safe-area-inset-*) reads 0 inside the shell', async () => {
+  it('declares no viewport-fit, because the shell owns the safe area', async () => {
     await withScratch(async (scratch) => {
       const outDir = join(scratch, 'viewport')
       await buildMobileWebAppBundle({ outDir })
       const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      // The shell already pads the WebView out of the system bars; viewport-fit=cover makes an
-      // edge-to-edge WebView report the window's bar insets too, and every SafeAreaView pads twice.
+      // The shell pads the WebView out of the system bars, so the page has nothing to extend
+      // under; asking to would invite a second pad from every page-side SafeAreaView.
       expect(html).toContain(
         '<meta name="viewport" content="width=device-width, initial-scale=1" />'
       )

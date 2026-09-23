@@ -559,8 +559,8 @@ export async function buildMobileWebAppBundle({
   // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
   const html =
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
-    // No viewport-fit=cover: the shell pads the WebView out of the system bars, and with cover an
-    // edge-to-edge WebView reports the window's insets via env(), so every SafeAreaView pads again.
+    // No viewport-fit=cover: the page never asks to extend under the system bars. The shell owns
+    // the safe area; it pads the WebView and zeroes the insets the WebView would report via env().
     '<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     // Undeclared, a browser asks the origin for /favicon.ico itself and the shell's asset server
     // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
