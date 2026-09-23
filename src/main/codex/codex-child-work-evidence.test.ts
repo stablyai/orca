@@ -370,6 +370,14 @@ describe('Codex child-work evidence', () => {
     expect(nested?.parentChildWorkId).toBe(owner?.childWorkId)
   })
 
+  it('holds no evidence for a session with nowhere to deliver it', () => {
+    const tracker = new CodexBackgroundTaskTracker(PRIMARY)
+    tracker.observe(spawned())
+    tracker.observe(turn('turn/started', CHILD, 'c1'))
+    tracker.publishChildWork()
+    expect(tracker.drainChildWorkEvidence(1)).toEqual([])
+  })
+
   it('drops every record when the provider session ends', () => {
     const { send, tracker, records, store } = runningChild()
     send(
