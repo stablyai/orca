@@ -2,7 +2,10 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import {
+  refuseConflictingSessionCaller,
+  resolveCoordinatorTerminalHandle
+} from './terminal-identity'
 
 export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
   'orchestration gate-create': async ({ flags, client, cwd, json }) => {
@@ -37,7 +40,9 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
     // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
-    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const from = run
+      ? refuseConflictingSessionCaller(flags, 'from')
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number
