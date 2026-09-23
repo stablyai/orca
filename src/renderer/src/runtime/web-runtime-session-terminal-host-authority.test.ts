@@ -135,11 +135,13 @@ describe('createWebRuntimeSessionTerminal', () => {
       { sessionKind: 'resume' as const, activate: true },
       { sessionKind: 'resume' as const, activate: false }
     ].flatMap((entry) =>
-      [true, false].map((keyboardSupported) => ({ ...entry, keyboardSupported }))
+      [true, false].flatMap((keyboardSupported) =>
+        [true, false].map((colorSupported) => ({ ...entry, keyboardSupported, colorSupported }))
+      )
     )
   )(
-    'keeps $sessionKind host creation background with activate=$activate and keyboard=$keyboardSupported',
-    async ({ sessionKind, activate, keyboardSupported }) => {
+    'keeps $sessionKind host creation background with activate=$activate, keyboard=$keyboardSupported, colors=$colorSupported',
+    async ({ sessionKind, activate, keyboardSupported, colorSupported }) => {
       mocks.getState().settings.terminalColorOverrides = {
         foreground: '#eeeeee',
         background: '#262a33'
@@ -157,7 +159,8 @@ describe('createWebRuntimeSessionTerminal', () => {
               minCompatibleRuntimeClientVersion: 2,
               capabilities: [
                 'agent-session.host-authority.v1',
-                ...(keyboardSupported ? ['agent-session.keyboard.v1'] : [])
+                ...(keyboardSupported ? ['agent-session.keyboard.v1'] : []),
+                ...(colorSupported ? ['agent-session.color-query-replies.v1'] : [])
               ]
             }
           }
@@ -210,10 +213,17 @@ describe('createWebRuntimeSessionTerminal', () => {
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
         params: {
-          presentation: 'background',
-          terminalColorQueryReplies: { foreground: '#eeeeee', background: '#262a33' }
+          presentation: 'background'
         }
       })
+      if (colorSupported) {
+        expect(authorityRequest).toHaveProperty('params.terminalColorQueryReplies', {
+          foreground: '#eeeeee',
+          background: '#262a33'
+        })
+      } else {
+        expect(authorityRequest).not.toHaveProperty('params.terminalColorQueryReplies')
+      }
       if (keyboardSupported) {
         expect(authorityRequest).toHaveProperty('params.terminalKittyKeyboardProtocol', true)
       } else {
@@ -325,7 +335,11 @@ describe('createWebRuntimeSessionTerminal', () => {
           graphStatus: 'ready',
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 2,
-          capabilities: ['agent-session.host-authority.v1']
+          capabilities: [
+            'agent-session.host-authority.v1',
+            'agent-session.keyboard.v1',
+            'agent-session.color-query-replies.v1'
+          ]
         }
       })
       .mockResolvedValueOnce({
@@ -394,6 +408,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
         worktree: `id:${WORKTREE_ID}`,
         agent: 'codex',
+        terminalKittyKeyboardProtocol: true,
         terminalColorQueryReplies: {
           foreground: expect.any(String),
           background: expect.any(String)

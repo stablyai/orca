@@ -1,6 +1,7 @@
 import { webRuntimeAgentSessionLaunchOptions } from './web-runtime-agent-session-launch-options'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
+import { createAgentSessionColorOptions } from './agent-session-color-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
@@ -85,7 +86,9 @@ export async function createWebRuntimeSessionTerminalResult(
   try {
     const agent = args.launchAgent ?? args.agent
     if (agent) {
-      const agentLaunchOptions = webRuntimeAgentSessionLaunchOptions(args, agent)
+      const { terminalColorQueryReplies, ...agentLaunchOptions } =
+        webRuntimeAgentSessionLaunchOptions(args, agent)
+      const colorOptions = createAgentSessionColorOptions(terminalColorQueryReplies)
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
@@ -106,6 +109,7 @@ export async function createWebRuntimeSessionTerminalResult(
                       params: {
                         ...(await keyboardOptions(environmentId)),
                         ...agentLaunchOptions,
+                        ...(await colorOptions(environmentId)),
                         kind: 'explicit',
                         providerSession: args.providerSession!,
                         ...(args.launchConfig?.ompResumeFilePath
@@ -128,6 +132,7 @@ export async function createWebRuntimeSessionTerminalResult(
                         {
                           ...(await keyboardOptions(environmentId)),
                           ...agentLaunchOptions,
+                          ...(await colorOptions(environmentId)),
                           ...(args.prompt ? { prompt: args.prompt } : {}),
                           ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),

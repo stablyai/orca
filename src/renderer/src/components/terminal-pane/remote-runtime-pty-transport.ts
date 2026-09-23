@@ -1,4 +1,5 @@
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionColorOptions } from '@/runtime/agent-session-color-capability'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -408,6 +409,7 @@ export function createRemoteRuntimePtyTransport(
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
   const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentColorOptions = createAgentSessionColorOptions(terminalColorQueryReplies)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -2263,6 +2265,7 @@ export function createRemoteRuntimePtyTransport(
           )
         const hostAuthorityCreate = async () => {
           const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+          const colorOptions = await agentColorOptions(createEnvironmentId)
           return createWithUnknownOutcomeRecovery(
             'agent-session',
             (timeoutMs) =>
@@ -2273,7 +2276,7 @@ export function createRemoteRuntimePtyTransport(
                     {
                       kind: 'explicit',
                       ...keyboardOptions,
-                      ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+                      ...colorOptions,
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       providerSession: resumeProviderSessionToSend,
@@ -2295,7 +2298,7 @@ export function createRemoteRuntimePtyTransport(
                     withAgentSessionCreateOperationId(
                       {
                         ...keyboardOptions,
-                        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+                        ...colorOptions,
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
                         ...(agentPrompt ? { prompt: agentPrompt } : {}),
