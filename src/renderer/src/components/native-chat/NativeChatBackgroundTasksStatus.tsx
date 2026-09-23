@@ -159,7 +159,7 @@ export function NativeChatBackgroundTasksStatus(props: {
   tasks: readonly AgentSessionBackgroundTask[]
   settledTasks: readonly AgentSessionBackgroundTask[]
   /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
-  children?: readonly AgentChildWorkView[]
+  childViews?: readonly AgentChildWorkView[]
   supportsTaskStop: boolean
   /** False when the provider exposes no honest stop at all; the fallback
    *  control is hidden rather than offering a button that cannot act. */
@@ -186,10 +186,10 @@ export function NativeChatBackgroundTasksStatus(props: {
   // The 1 Hz elapsed tick must not re-group, re-sort and re-translate the whole roster.
   const groups: BackgroundTaskGroup[] = useMemo(
     () =>
-      props.children !== undefined
-        ? buildBackgroundTaskGroupsFromViews(props.children)
+      props.childViews !== undefined
+        ? buildBackgroundTaskGroupsFromViews(props.childViews)
         : buildBackgroundTaskGroups(props.tasks, props.settledTasks),
-    [props.children, props.tasks, props.settledTasks]
+    [props.childViews, props.tasks, props.settledTasks]
   )
   const singleLiveCommand =
     groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1
