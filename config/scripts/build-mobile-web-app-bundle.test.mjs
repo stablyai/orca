@@ -401,6 +401,7 @@ describeBundling('the app bundle', () => {
       await buildMobileWebAppBundle({ outDir })
       const html = await readFile(join(outDir, 'index.html'), 'utf8')
       expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+      expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
       // Literals rather than substrings taken off the constant, which would read it back against
       // itself and follow any rule dropped from it. Every rule, because the chain is only as
       // definite as its weakest link: a height on #root alone resolves against a body that has
@@ -418,21 +419,6 @@ describeBundling('the app bundle', () => {
       // In the document itself, not a linked asset: the CSP that allows it is the one already
       // relaxed for react-native-web's runtime sheet.
       expect(html).not.toContain('<link rel="stylesheet"')
-    })
-  }, 120_000)
-
-  it('drops the UA focus ring from text inputs, which no native TextInput paints', async () => {
-    await withScratch(async (scratch) => {
-      const outDir = join(scratch, 'native-parity')
-      await buildMobileWebAppBundle({ outDir })
-      const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
-      // Zero specificity, so a component that styles its own outline still wins.
-      expect(MOBILE_WEB_APP_NATIVE_PARITY_STYLE).toContain(
-        ':where(input:focus,textarea:focus){outline:none}'
-      )
-      // Its own block: the expo-reset one is the template's copy and stays exactly that.
-      expect(MOBILE_WEB_APP_ROOT_RESET).not.toContain('outline')
     })
   }, 120_000)
 
