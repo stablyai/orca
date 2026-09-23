@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { recoverMissingSshPtyProvider } from '../provider/missing-ssh-pty-provider-recovery'
 import { getProvider } from '../provider/registry'
 import { makePaneSpawnReservationKey, paneSpawnReservationsByOwnerKey } from './spawn-reservation'
 import {
@@ -15,6 +16,14 @@ export async function adoptStablePane(
   store: Store | undefined,
   args: AdoptStablePaneArgs
 ): Promise<AdoptStablePaneResult | null> {
+  // Why first: adoption resolves the provider before the spawn preflights run, so a
+  // runtime-owned target's relay must be re-attached here too. Awaited ahead of the
+  // pending-adoption lookup so everything from that lookup to the map write stays
+  // synchronous and two spawns for one pane cannot both adopt.
+  const providerRecovery = recoverMissingSshPtyProvider(args.connectionId)
+  if (providerRecovery) {
+    await providerRecovery
+  }
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
   const pendingAdoption = ownerKey ? stablePaneAdoptionsByOwnerKey.get(ownerKey) : undefined
