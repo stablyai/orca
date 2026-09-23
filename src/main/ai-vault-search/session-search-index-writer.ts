@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,
@@ -358,6 +359,8 @@ export class SessionSearchIndexWriter {
         // message had been buffered let a single one carry a transaction as far
         // past the ceiling as it was large.
         for (const row of searchMessageRows([message])) {
+          // A capped slice must not pin the full transcript message behind the buffer's budget.
+          row.text = ownRetainedString(row.text)
           buffer.push(row)
           bufferedChars += row.text.length
           if (bufferedChars < this.commitChars) {
