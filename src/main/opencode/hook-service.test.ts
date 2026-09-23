@@ -91,7 +91,7 @@ describe('OpenCode hook plugin source', () => {
     const digest = (source: string): string => createHash('sha256').update(source).digest('hex')
 
     expect(digest(getOpenCodePluginSource())).toBe(
-      '51ae4f9fbf7a85e3e33db961d0d83b89395ed026335502569e4f3179927aa629'
+      '248f126bca2487b41e0ce5ffdbec2d7f03359d7aac3ecc61f93e707b6a54a145'
     )
     expect(
       digest(getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false }))

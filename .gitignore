@@ -108,6 +108,8 @@ docs/**
 !docs/audits/plugin-uninstall-log-retirement/**
 !docs/readme/
 !docs/readme/**
+!docs/bug-reproductions/
+!docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
 !docs/audits/
 !docs/audits/crashpad-read-limit/
