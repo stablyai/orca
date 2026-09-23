@@ -189,7 +189,7 @@ function verifyReassembledAsset(asset: AssetReassembly): Uint8Array {
  * different build, and nothing else in the reply would say so.
  */
 function assertChunkDescribesAsset(
-  chunk: {
+  reply: {
     buildId: string
     path: string
     offset: number
@@ -200,19 +200,19 @@ function assertChunkDescribesAsset(
   buildId: string,
   offset: number
 ): void {
-  if (chunk.buildId !== buildId) {
+  if (reply.buildId !== buildId) {
     throw new MobileWebBundleFetchError(
       'build-changed-mid-fetch',
-      `bundle build changed mid-fetch: asked ${buildId}, served ${chunk.buildId}`
+      `bundle build changed mid-fetch: asked ${buildId}, served ${reply.buildId}`
     )
   }
-  if (chunk.path !== asset.path || chunk.offset !== offset) {
+  if (reply.path !== asset.path || reply.offset !== offset) {
     throw new MobileWebBundleFetchError(
       'chunk-misrouted',
-      `bundle chunk answered ${chunk.path} at ${chunk.offset}, not ${asset.path} at ${offset}`
+      `bundle chunk answered ${reply.path} at ${reply.offset}, not ${asset.path} at ${offset}`
     )
   }
-  if (chunk.sha256 !== asset.sha256 || chunk.assetByteLength !== asset.byteLength) {
+  if (reply.sha256 !== asset.sha256 || reply.assetByteLength !== asset.byteLength) {
     throw new MobileWebBundleFetchError(
       'asset-entry-changed',
       `bundle asset ${asset.path} no longer matches the manifest entry`
