@@ -173,7 +173,7 @@ function getClientErrorMessage(err: unknown): string | undefined {
  * identity this process carries; a caller flag may restate that same session but never name
  * another, and a conflicting one is refused here, before any request is sent.
  */
-export function resolveInjectedSessionCaller(
+function resolveInjectedSessionCaller(
   flags: Map<string, string | boolean>,
   flagName: 'from' | 'terminal'
 ): string | undefined {
@@ -195,17 +195,25 @@ export function resolveInjectedSessionCaller(
 
 /** The session's own spellings, plus the handle a structured worker session was minted. */
 function namesInjectedSession(value: string, sessionId: string): boolean {
-  if (normalizeOrchestrationActor(value)?.id === sessionId) {
-    return true
+  return normalizeOrchestrationActor(value)?.id === sessionId || value === injectedSessionAddress()
+}
+
+/**
+ * The address the host gives this session: a structured worker keeps the handle it was minted, any
+ * other session is `session:<id>`. Only for text that must match what the host writes.
+ */
+export function injectedSessionAddress(): string | undefined {
+  const sessionId = readInjectedAgentSessionId()
+  if (!sessionId) {
+    return undefined
   }
   const ownHandle = process.env.ORCA_TERMINAL_HANDLE
-  return isStructuredWorkerHandle(ownHandle) && value === ownHandle
+  return isStructuredWorkerHandle(ownHandle) ? ownHandle : `session:${sessionId}`
 }
 
 /** How check output names its caller: the handle, or the session's address. */
 export function orchestrationCallerLabel(handle: string | undefined): string {
-  const sessionId = handle === undefined ? readInjectedAgentSessionId() : undefined
-  return handle ?? (sessionId ? `session:${sessionId}` : 'unknown')
+  return handle ?? injectedSessionAddress() ?? 'unknown'
 }
 
 export async function resolveCoordinatorTerminalHandle(
