@@ -18,6 +18,7 @@ import {
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
+import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
@@ -368,6 +369,8 @@ export function GeneralEditorSettingsSection({
           onChange={() => updateSettings({ editorMinimapEnabled: !settings.editorMinimapEnabled })}
         />
       </SearchableSetting>
+
+      <MarkdownDefaultViewSetting settings={settings} updateSettings={updateSettings} />
 
       <RichMarkdownSpellcheckSetting settings={settings} updateSettings={updateSettings} />
 

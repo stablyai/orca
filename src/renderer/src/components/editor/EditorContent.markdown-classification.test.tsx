@@ -116,6 +116,7 @@ function renderEditPath({
     gitStatusEntries: undefined,
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: viewMode },
+    markdownDefaultViewMode: undefined,
     markdownRichModeSizeOverridden: false,
     isChangesMode: false,
     canOpenWorkspaceFileBrowser: true
@@ -170,6 +171,7 @@ function getGuardedRenderModel({
     gitStatusEntries: undefined,
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: 'rich' },
+    markdownDefaultViewMode: undefined,
     markdownRichModeSizeOverridden: false,
     isChangesMode,
     canOpenWorkspaceFileBrowser: true

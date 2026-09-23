@@ -9828,7 +9828,14 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "markdownDefaultView": "Default Markdown View",
+            "markdownDefaultViewDesc": "Which view Markdown files open in. Switching views inside a tab still only affects that tab.",
+            "markdownDefaultViewMd": "md",
+            "markdownDefaultViewView": "view",
+            "markdownDefaultViewPreview": "preview",
+            "markdownDefaultViewRich": "rich editor",
+            "markdownDefaultViewSource": "source"
           }
         },
         "git": {
@@ -12064,6 +12071,10 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "MarkdownDefaultViewSetting": {
+          "2255066e40": "Default Markdown View",
+          "9cc24271f8": "Which view Markdown files open in. Switching views inside a tab still only affects that tab."
         }
       },
       "right": {
@@ -17204,7 +17215,11 @@
           "insertColumnLeft": "Insert column left",
           "insertColumnRight": "Insert column right",
           "deleteColumn": "Delete column",
-          "deleteTable": "Delete table"
+          "deleteTable": "Delete table",
+          "defaultMarkdownView": "Default Markdown View",
+          "defaultViewSource": "Source",
+          "defaultViewRich": "Rich Editor",
+          "defaultViewPreview": "Preview"
         }
       }
     }

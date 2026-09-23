@@ -22,6 +22,7 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
+import type { MarkdownDefaultViewMode } from './markdown-default-view-mode'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
@@ -94,6 +95,9 @@ export type GlobalSettings = {
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
+  /** Markdown edit tabs open in this view until toggled for that tab. Absent on
+   *  profiles saved before the preference existed; they keep the rich editor. */
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the

@@ -4,11 +4,13 @@ import type {
   RuntimeMobileMarkdownResponse
 } from '../../shared/mobile-markdown-document'
 import {
+  markdownDefaultViewModeChannel,
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
+import type { MarkdownDefaultViewMode } from '../../shared/markdown-default-view-mode'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
@@ -131,6 +133,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null): void => {
     ipcRenderer.send(richMarkdownContextMenuTargetChannel, target)
+  },
+  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode): void => {
+    ipcRenderer.send(markdownDefaultViewModeChannel, mode)
   },
   setTerminalInputFocused: (focused: boolean): void => {
     ipcRenderer.send('ui:setTerminalInputFocused', focused)

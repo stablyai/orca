@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { MarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 
@@ -31,6 +32,7 @@ function renderModel(args: {
   fileContents?: Record<string, FileContent>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
   markdownRichModeSizeOverridden?: boolean
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
@@ -43,6 +45,7 @@ function renderModel(args: {
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
+    markdownDefaultViewMode: args.markdownDefaultViewMode,
     markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
     isChangesMode: args.isChangesMode ?? false,
     canOpenWorkspaceFileBrowser: true
@@ -78,6 +81,7 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
       gitStatusEntries: undefined,
       gitBranchEntries: undefined,
       markdownViewMode: {},
+      markdownDefaultViewMode: undefined,
       markdownRichModeSizeOverridden: false,
       isChangesMode: false,
       canOpenWorkspaceFileBrowser: false

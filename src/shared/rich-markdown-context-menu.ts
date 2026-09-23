@@ -1,4 +1,20 @@
+import {
+  normalizeMarkdownDefaultViewMode,
+  type MarkdownDefaultViewMode
+} from './markdown-default-view-mode'
+
+/** Context-menu commands that set the persisted default Markdown view, keyed by the view they select. */
+export const richMarkdownDefaultViewCommands = {
+  source: 'default-view-source',
+  rich: 'default-view-rich',
+  preview: 'default-view-preview'
+} as const satisfies Record<MarkdownDefaultViewMode, string>
+
+export type RichMarkdownDefaultViewCommand =
+  (typeof richMarkdownDefaultViewCommands)[MarkdownDefaultViewMode]
+
 export type RichMarkdownContextMenuCommand =
+  | RichMarkdownDefaultViewCommand
   | 'add-link'
   | 'bold'
   | 'italic'
@@ -39,5 +55,16 @@ export type RichMarkdownContextMenuTableTarget = {
   y: number
 }
 
+export function markdownDefaultViewForCommand(
+  command: RichMarkdownContextMenuCommand
+): MarkdownDefaultViewMode | null {
+  const match = Object.entries(richMarkdownDefaultViewCommands).find(
+    ([, candidate]) => candidate === command
+  )
+  return match ? normalizeMarkdownDefaultViewMode(match[0]) : null
+}
+
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
 export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'
+/** Mirrors the persisted default Markdown view into main so the native menu can check the active radio item. */
+export const markdownDefaultViewModeChannel = 'rich-markdown:default-view-mode'

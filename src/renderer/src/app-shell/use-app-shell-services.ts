@@ -1,5 +1,6 @@
 import { useAppStore } from '../store'
 import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
+import { useMarkdownDefaultViewPreference } from '../components/editor/use-markdown-default-view-preference'
 import { useIpcEvents } from '../hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
 import { useAutoAckViewedAgent } from '../hooks/useAutoAckViewedAgent'
@@ -33,6 +34,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   )
 
   useClosedEditorTabCleanup()
+  useMarkdownDefaultViewPreference()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   useLocalStructuredSessionTabsSync()

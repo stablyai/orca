@@ -6,6 +6,17 @@ import {
 } from './editable-context-menu'
 import { richMarkdownContextMenuCommandChannel } from '../../shared/rich-markdown-context-menu'
 
+function clickMenuItem(item: Electron.MenuItemConstructorOptions | undefined): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the click handlers under test read none of Electron's three callback arguments.
+  item?.click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+}
+
+function submenuOf(
+  item: Electron.MenuItemConstructorOptions | undefined
+): Electron.MenuItemConstructorOptions[] {
+  return Array.isArray(item?.submenu) ? item.submenu : []
+}
+
 function contextParams(
   overrides: Partial<Electron.ContextMenuParams> = {}
 ): Electron.ContextMenuParams {
@@ -96,6 +107,8 @@ describe('buildEditableContextMenuTemplate', () => {
       'Insert',
       'Table',
       'separator',
+      'Default Markdown View',
+      'separator',
       'cut',
       'copy',
       'Paste',
@@ -166,8 +179,8 @@ describe('buildEditableContextMenuTemplate', () => {
       y: 34
     })
 
-    template[9].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
-    template[10].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    clickMenuItem(template[11])
+    clickMenuItem(template[12])
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })
@@ -271,6 +284,52 @@ describe('buildEditableContextMenuTemplate', () => {
     template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
+  })
+  it('checks the active default markdown view and sends the command for another one', () => {
+    const send = vi.fn()
+    const template = buildEditableContextMenuTemplate(
+      contextParams({ x: 12, y: 34, misspelledWord: '', dictionarySuggestions: [] }),
+      {
+        replaceMisspelling: vi.fn(),
+        send,
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      },
+      { markdownDefaultViewMode: 'preview' }
+    )
+
+    const defaultViewMenu = submenuOf(
+      template.find((item) => item.label === 'Default Markdown View')
+    )
+    expect(defaultViewMenu.map((item) => [item.label, item.type, item.checked])).toEqual([
+      ['Source', 'radio', false],
+      ['Rich Editor', 'radio', false],
+      ['Preview', 'radio', true]
+    ])
+
+    clickMenuItem(defaultViewMenu[0])
+    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, {
+      command: 'default-view-source',
+      x: 12,
+      y: 34
+    })
+  })
+
+  it('falls back to the rich editor when main has no mirrored preference yet', () => {
+    const template = buildEditableContextMenuTemplate(
+      contextParams({ x: 12, y: 34, misspelledWord: '', dictionarySuggestions: [] }),
+      {
+        replaceMisspelling: vi.fn(),
+        send: vi.fn(),
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      }
+    )
+
+    const defaultViewMenu = submenuOf(
+      template.find((item) => item.label === 'Default Markdown View')
+    )
+    expect(defaultViewMenu.filter((item) => item.checked).map((item) => item.label)).toEqual([
+      'Rich Editor'
+    ])
   })
 })
 

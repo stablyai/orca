@@ -8,13 +8,13 @@ import {
 } from './markdown-preview-controls'
 
 describe('getMarkdownViewModes', () => {
-  it('offers source and rich for markdown edit tabs', () => {
+  it('offers source, rich, and preview for markdown edit tabs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'edit'
       })
-    ).toEqual(['source', 'rich'])
+    ).toEqual(['source', 'rich', 'preview'])
   })
 
   it('offers source and rich for single-file markdown diffs', () => {
@@ -54,6 +54,26 @@ describe('markdown preview helpers', () => {
         mode: 'edit'
       })
     ).toBe('rich')
+  })
+
+  it('opens markdown edit tabs in the preferred view', () => {
+    expect(getDefaultMarkdownViewMode({ language: 'markdown', mode: 'edit' }, 'preview')).toBe(
+      'preview'
+    )
+    expect(getDefaultMarkdownViewMode({ language: 'markdown', mode: 'edit' }, 'source')).toBe(
+      'source'
+    )
+  })
+
+  it('ignores the preference on surfaces whose rich slot is not a markdown view', () => {
+    expect(getDefaultMarkdownViewMode({ language: 'csv', mode: 'edit' }, 'preview')).toBe('rich')
+    expect(getDefaultMarkdownViewMode({ language: 'mermaid', mode: 'edit' }, 'source')).toBe('rich')
+    expect(
+      getDefaultMarkdownViewMode(
+        { language: 'markdown', mode: 'diff', diffSource: 'unstaged' },
+        'preview'
+      )
+    ).toBe('source')
   })
 
   it('defaults markdown diffs to source mode', () => {

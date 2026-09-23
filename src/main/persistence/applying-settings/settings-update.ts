@@ -18,6 +18,7 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
+import { normalizeMarkdownDefaultViewMode } from '../../../shared/markdown-default-view-mode'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -180,6 +181,11 @@ export function updateSettings(
     // Why: every writer (desktop IPC, web RPC, migrations) hits this boundary, so the persisted list stays bounded and well-formed.
     sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
       updates.prBotAuthorOverrides
+    )
+  }
+  if ('markdownDefaultViewMode' in updates) {
+    sanitizedUpdates.markdownDefaultViewMode = normalizeMarkdownDefaultViewMode(
+      updates.markdownDefaultViewMode
     )
   }
   if ('mobilePairingCustomAddress' in updates) {

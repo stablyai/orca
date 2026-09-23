@@ -16,6 +16,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_MARKDOWN_DEFAULT_VIEW_MODE } from './markdown-default-view-mode'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -54,6 +55,7 @@ export function buildDefaultSettings(args: {
     editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
+    markdownDefaultViewMode: DEFAULT_MARKDOWN_DEFAULT_VIEW_MODE,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
     primarySelectionMiddleClickPasteDefaultedForLinux: args.primarySelectionDefaultedForLinux,

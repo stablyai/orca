@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
+import { normalizeMarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
 import {
@@ -117,6 +118,11 @@ function normalizeSettingsUpdates(
   if ('terminalScrollbackRows' in updates) {
     sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
       updates.terminalScrollbackRows
+    )
+  }
+  if ('markdownDefaultViewMode' in updates) {
+    sanitizedUpdates.markdownDefaultViewMode = normalizeMarkdownDefaultViewMode(
+      updates.markdownDefaultViewMode
     )
   }
   if ('mobilePairingCustomAddress' in updates) {

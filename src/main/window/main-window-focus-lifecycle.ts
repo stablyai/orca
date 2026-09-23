@@ -1,9 +1,15 @@
 import { ipcMain, Menu, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
+  markdownDefaultViewModeChannel,
   richMarkdownContextMenuTargetChannel,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
+import {
+  DEFAULT_MARKDOWN_DEFAULT_VIEW_MODE,
+  normalizeMarkdownDefaultViewMode,
+  type MarkdownDefaultViewMode
+} from '../../shared/markdown-default-view-mode'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -93,6 +99,18 @@ export function installMainWindowFocusLifecycle(args: {
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
+  // Why: the native context menu is built in main, so it needs a mirror of the
+  // persisted preference to check the right radio item. The renderer stays the
+  // only writer of the setting itself.
+  let markdownDefaultViewMode: MarkdownDefaultViewMode = DEFAULT_MARKDOWN_DEFAULT_VIEW_MODE
+  const onMarkdownDefaultViewMode = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    markdownDefaultViewMode = normalizeMarkdownDefaultViewMode(value)
+  }
+  ipcMain.on(markdownDefaultViewModeChannel, onMarkdownDefaultViewMode)
+
   let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
   const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
@@ -108,7 +126,8 @@ export function installMainWindowFocusLifecycle(args: {
     )
     pendingRichMarkdownContextMenuTableTarget = null
     const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
-      tableTarget
+      tableTarget,
+      markdownDefaultViewMode
     })
     if (template.length === 0 || mainWindow.isDestroyed()) {
       return
@@ -256,6 +275,7 @@ export function installMainWindowFocusLifecycle(args: {
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
     ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
+    ipcMain.removeListener(markdownDefaultViewModeChannel, onMarkdownDefaultViewMode)
   }
   return {
     dispose,

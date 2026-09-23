@@ -7,6 +7,7 @@ import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import type { MarkdownRenderState } from './markdown-render-mode'
+import { MarkdownDefaultViewContextMenu } from './MarkdownDefaultViewContextMenu'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 
@@ -137,29 +138,33 @@ export function EditorMarkdownFileSurface({
   if (renderMode === 'preview') {
     const shouldExplainRichFallback = mdViewMode === 'rich' && richModeUnsupportedMessage
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        {shouldExplainRichFallback ? (
-          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
-            {richModeUnsupportedMessage}
+      // Why: the rendered preview is the one markdown surface with no native or
+      // Monaco context menu, so Orca supplies its own.
+      <MarkdownDefaultViewContextMenu>
+        <div className="flex h-full min-h-0 flex-col">
+          {shouldExplainRichFallback ? (
+            <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+              {richModeUnsupportedMessage}
+            </div>
+          ) : null}
+          {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
+          <div className="min-h-0 flex-1">
+            <MarkdownPreview
+              key={viewStateScopeId}
+              content={currentContent}
+              filePath={activeFile.filePath}
+              sourceFileId={activeFile.id}
+              sourceWorktreeId={activeFile.worktreeId}
+              sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+              scrollCacheKey={`${editorViewStateKey}:preview`}
+              showTableOfContents={showMarkdownTableOfContents}
+              onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+              {...markdownDocuments.previewProps}
+            />
           </div>
-        ) : null}
-        {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
-        <div className="min-h-0 flex-1">
-          <MarkdownPreview
-            key={viewStateScopeId}
-            content={currentContent}
-            filePath={activeFile.filePath}
-            sourceFileId={activeFile.id}
-            sourceWorktreeId={activeFile.worktreeId}
-            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-            scrollCacheKey={`${editorViewStateKey}:preview`}
-            showTableOfContents={showMarkdownTableOfContents}
-            onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-            {...markdownDocuments.previewProps}
-          />
         </div>
-      </div>
+      </MarkdownDefaultViewContextMenu>
     )
   }
   return <div className="h-full min-h-0">{monacoEditor}</div>

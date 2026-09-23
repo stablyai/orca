@@ -24,6 +24,7 @@ import {
   isRichMarkdownTableContextCommand,
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
+import { markdownDefaultViewForCommand } from '../../../../shared/rich-markdown-context-menu'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import { useRichMarkdownPendingFocus } from './useRichMarkdownPendingFocus'
 import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
@@ -327,6 +328,9 @@ export default function RichMarkdownEditor({
       if (
         !ed ||
         isRichMarkdownTableContextCommand(payload.command) ||
+        // Why: the app-level preference hook owns these; routing them here would
+        // move the caret and apply the change once per mounted editor.
+        markdownDefaultViewForCommand(payload.command) !== null ||
         !isRichMarkdownContextCommandTarget(payload, rootRef.current)
       ) {
         return

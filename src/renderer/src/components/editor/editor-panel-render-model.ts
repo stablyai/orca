@@ -2,6 +2,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { canPreviewLanguage } from '@/lib/file-preview'
 import type { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
@@ -24,6 +25,7 @@ type EditorPanelRenderModelParams = {
   gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
+  markdownDefaultViewMode: MarkdownDefaultViewMode | undefined
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
@@ -36,6 +38,7 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
+  markdownDefaultViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
   canOpenWorkspaceFileBrowser
@@ -93,11 +96,14 @@ export function getEditorPanelRenderModel({
     diffSource: activeFile.diffSource
   })
   const hasViewModeToggle = markdownViewModes.length > 0
-  const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: viewerLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
+  const defaultMarkdownViewMode = getDefaultMarkdownViewMode(
+    {
+      language: viewerLanguage,
+      mode: activeFile.mode,
+      diffSource: activeFile.diffSource
+    },
+    markdownDefaultViewMode
+  )
   const storedMarkdownViewMode = markdownViewMode[activeFile.id]
   const mdViewMode: MarkdownViewMode =
     hasViewModeToggle &&

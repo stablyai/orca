@@ -151,6 +151,39 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.markdownDefaultView',
+      'Default Markdown View'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.markdownDefaultViewDesc',
+      'Which view Markdown files open in. Switching views inside a tab still only affects that tab.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownDefaultViewMd',
+        'md'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownDefaultViewView',
+        'view'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownDefaultViewPreview',
+        'preview'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownDefaultViewRich',
+        'rich editor'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownDefaultViewSource',
+        'source'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.128bc09325', 'Markdown Review Notes'),
     description: translate(
       'auto.components.settings.general.search.694613d47f',

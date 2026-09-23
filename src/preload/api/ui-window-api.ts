@@ -5,6 +5,7 @@ import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
+import type { MarkdownDefaultViewMode } from '../../shared/markdown-default-view-mode'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -34,6 +35,7 @@ export type UiWindowApi = {
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
+  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode) => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
   setShortcutRecorderFocused: (focused: boolean) => void

@@ -213,6 +213,7 @@ function EditorPanelInner({
     gitStatusEntries,
     gitBranchEntries,
     markdownViewMode,
+    markdownDefaultViewMode: settings?.markdownDefaultViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
     canOpenWorkspaceFileBrowser
