@@ -13,12 +13,12 @@ export function AddRepoHostSelectorSlot({
   return (
     <>
       <AddRepoHostSelector
-        hosts={hostSelection.hostOptions}
-        selectedHostId={hostSelection.selectedHostId}
+        hosts={hostSelection.addProjectHostOptions}
+        selectedOptionId={hostSelection.selectedOptionId}
         open={hostSelection.hostSelectorOpen}
         onOpenChange={hostSelection.setHostSelectorOpen}
-        onSelectHost={(hostId) => void hostSelection.handleSelectAddProjectHost(hostId)}
-        onConnectHost={(hostId) => void hostSelection.handleConnectAddProjectHost(hostId)}
+        onSelectHost={(optionId) => void hostSelection.handleSelectAddProjectHost(optionId)}
+        onConnectHost={(optionId) => void hostSelection.handleConnectAddProjectHost(optionId)}
         onAddSshHost={() => setAddRemoteHostMode('ssh')}
         onAddRemoteServer={() => setAddRemoteHostMode('server')}
       />

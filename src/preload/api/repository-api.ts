@@ -75,8 +75,12 @@ export type RepositoryApi = {
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>
-  pickFolders: () => Promise<string[]>
-  pickDirectory: () => Promise<string | null>
+  pickFolders: (args?: {
+    /** Initial dialog directory (e.g. a WSL distro UNC root). */ defaultPath?: string
+  }) => Promise<string[]>
+  pickDirectory: (args?: {
+    /** Initial dialog directory (e.g. a WSL distro UNC root). */ defaultPath?: string
+  }) => Promise<string | null>
   clone: (args: { url: string; destination: string }) => Promise<Repo>
   cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
   createRemote: (args: {

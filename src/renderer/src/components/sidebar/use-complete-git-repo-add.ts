@@ -2,12 +2,14 @@ import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { pinAddedRepoWslRuntimePreference } from './add-repo-store-upsert'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type CompleteGitRepoAddOptions = {
@@ -40,6 +42,15 @@ export function useCompleteGitRepoAdd({
       source: AddRepoExistingWorkspaceSource,
       executionHostId?: ExecutionHostId
     ): Promise<void> => {
+      // Why: a repo whose files live on \\wsl.localhost\<distro> runs in that
+      // distro — pin the project runtime preference at add time so terminals,
+      // agents and worktrees all resolve the same runtime (browse/clone/create
+      // all funnel through here).
+      const addedRepo = useAppStore.getState().repos.find((repo) => repo.id === repoId)
+      const wslDistro = addedRepo ? parseWslUncPath(addedRepo.path)?.distro : null
+      if (wslDistro) {
+        pinAddedRepoWslRuntimePreference(repoId, wslDistro)
+      }
       const worktrees = (useAppStore.getState().worktreesByRepo[repoId] ?? []).filter(
         (worktree) =>
           executionHostId === undefined ||

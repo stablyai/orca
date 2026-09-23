@@ -31,6 +31,7 @@ export function getCloneDestinationAutoFill({
   cloneDestination,
   activeRuntimeEnvironmentId,
   sshTargetId,
+  wslDistro,
   workspaceDir,
   cloneStepAutoFilled
 }: {
@@ -38,13 +39,20 @@ export function getCloneDestinationAutoFill({
   cloneDestination: string
   activeRuntimeEnvironmentId: string | null | undefined
   sshTargetId?: string | null | undefined
+  /** Selected Add Project WSL distro — its home seeds the destination instead. */
+  wslDistro?: string | null | undefined
   workspaceDir: string | null | undefined
   cloneStepAutoFilled: boolean
 }): { destination: string } | null {
   if (step !== 'clone' || cloneStepAutoFilled || cloneDestination) {
     return null
   }
-  if (activeRuntimeEnvironmentId?.trim() || sshTargetId?.trim() || !workspaceDir) {
+  // Why: with a WSL distro selected, the Windows workspaceDir default would
+  // win the race against the distro-home seed — leave the field to it.
+  if (activeRuntimeEnvironmentId?.trim() || sshTargetId?.trim() || wslDistro?.trim()) {
+    return null
+  }
+  if (!workspaceDir) {
     return null
   }
   return { destination: getDefaultCloneParent(workspaceDir) }

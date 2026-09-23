@@ -67,7 +67,7 @@ export function useAddRepoLocalFolderFlow({
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
-  handleBrowse: () => Promise<void>
+  handleBrowse: (browseRoot?: string) => Promise<void>
   resetLocalFolderFlow: () => void
 } {
   const localAddGenRef = useRef(0)
@@ -291,24 +291,28 @@ export function useAddRepoLocalFolderFlow({
     void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
   }, [droppedLocalPath, handleAddLocalPath, isOpen])
 
-  const handleBrowse = useCallback(async (): Promise<void> => {
+  // Why: with a WSL distro selected, AddRepoDialog passes its UNC tree as
+  // root so picks flow through the existing local/UNC lane unchanged.
+  const handleBrowse = useCallback(async (root?: string) => {
     const gen = ++localAddGenRef.current
-    setIsAdding(true)
-    setAddProjectBusyLabel('Choose a folder...')
-    try {
-      const paths = await window.api.repos.pickFolders()
-      if (paths.length === 0 || gen !== localAddGenRef.current) {
-        return
+      setIsAdding(true)
+      setAddProjectBusyLabel('Choose a folder...')
+      try {
+        const paths = await window.api.repos.pickFolders(root ? { defaultPath: root } : undefined)
+        if (paths.length === 0 || gen !== localAddGenRef.current) {
+          return
+        }
+        await handleAddLocalPaths(paths, 'local_folder_picker', gen)
+      } finally {
+        if (gen === localAddGenRef.current) {
+          clearNestedScanState()
+          setIsAdding(false)
+          setAddProjectBusyLabel(null)
+        }
       }
-      await handleAddLocalPaths(paths, 'local_folder_picker', gen)
-    } finally {
-      if (gen === localAddGenRef.current) {
-        clearNestedScanState()
-        setIsAdding(false)
-        setAddProjectBusyLabel(null)
-      }
-    }
-  }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
+    },
+    [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding]
+  )
 
   return { handleBrowse, resetLocalFolderFlow }
 }

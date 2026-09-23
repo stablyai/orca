@@ -120,7 +120,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('exposes the selected SSH target id', async () => {
-    mocks.stateValues = ['ssh:ssh-1', false]
+    mocks.stateValues = ['ssh:ssh-1', null, [], new Set(), false]
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
@@ -131,7 +131,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('selects a runtime host without changing the durable active server', async () => {
-    mocks.stateValues = ['local', false]
+    mocks.stateValues = ['local', null, [], new Set(), false]
     const setStep = vi.fn()
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
@@ -145,7 +145,7 @@ describe('useAddRepoHostSelection', () => {
 
   it('uses the paired runtime as the only local filesystem authority in web clients', async () => {
     mocks.isWebClient = true
-    mocks.stateValues = ['local', false]
+    mocks.stateValues = ['local', null, [], new Set(), false]
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
@@ -160,7 +160,7 @@ describe('useAddRepoHostSelection', () => {
 
   it('has no local fallback while a paired web runtime is loading', async () => {
     mocks.isWebClient = true
-    mocks.stateValues = ['local', false]
+    mocks.stateValues = ['local', null, [], new Set(), false]
     mocks.hostOptions = [mocks.hostOptions[0]]
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
@@ -176,7 +176,7 @@ describe('useAddRepoHostSelection', () => {
     'has no paired-web fallback when the only host is %s',
     async (health) => {
       mocks.isWebClient = true
-      mocks.stateValues = ['runtime:env-1', false]
+      mocks.stateValues = ['runtime:env-1', null, [], new Set(), false]
       mocks.hostOptions = [
         {
           ...mocks.hostOptions[2],
@@ -194,7 +194,7 @@ describe('useAddRepoHostSelection', () => {
   )
 
   it('selects a local or SSH host without changing the durable active server', async () => {
-    mocks.stateValues = ['runtime:env-1', false]
+    mocks.stateValues = ['runtime:env-1', null, [], new Set(), false]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
     const setStep = vi.fn()
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
@@ -208,7 +208,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('falls back from a disconnected selected SSH host to Local Mac', async () => {
-    mocks.stateValues = ['ssh:ssh-1', false]
+    mocks.stateValues = ['ssh:ssh-1', null, [], new Set(), false]
     mocks.hostOptions[1] = {
       ...mocks.hostOptions[1],
       health: 'disconnected'
@@ -222,7 +222,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('does not select a disconnected SSH host', async () => {
-    mocks.stateValues = ['local', false]
+    mocks.stateValues = ['local', null, [], new Set(), false]
     mocks.hostOptions[1] = {
       ...mocks.hostOptions[1],
       health: 'disconnected'
@@ -239,7 +239,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('connects and selects a disconnected SSH host from Add Project', async () => {
-    mocks.stateValues = ['local', true]
+    mocks.stateValues = ['local', null, [], new Set(), true]
     mocks.hostOptions[1] = {
       ...mocks.hostOptions[1],
       health: 'disconnected'
@@ -266,12 +266,12 @@ describe('useAddRepoHostSelection', () => {
       expect.objectContaining({ status: 'connected' })
     )
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
-    expect(mocks.stateSetters[1]).toHaveBeenCalledWith(false)
+    expect(mocks.stateSetters[4]).toHaveBeenCalledWith(false)
     expect(setStep).toHaveBeenCalledWith('add')
   })
 
   it('does not auto-select the active runtime host while it is unavailable', async () => {
-    mocks.stateValues = ['local', false]
+    mocks.stateValues = ['local', null, [], new Set(), false]
     mocks.hostOptions[2] = {
       ...mocks.hostOptions[2],
       health: 'blocked'
@@ -285,7 +285,7 @@ describe('useAddRepoHostSelection', () => {
   })
 
   it('hides ephemeral VM runtime hosts from Add Project selection', async () => {
-    mocks.stateValues = ['runtime:env-vm', false]
+    mocks.stateValues = ['runtime:env-vm', null, [], new Set(), false]
     mocks.hostOptions.push({
       id: 'runtime:env-vm',
       label: 'orca VM abc12345',

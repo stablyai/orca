@@ -145,6 +145,9 @@ export type RuntimeApi = {
   wsl: {
     isAvailable: () => Promise<boolean>
     listDistros: () => Promise<string[]>
+    listRunningDistros: () => Promise<string[]>
+    /** UNC path of the distro user's home (`\\wsl.localhost\<distro>\home\...`), null when unresolvable. */
+    getDistroHome: (distro: string) => Promise<string | null>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>

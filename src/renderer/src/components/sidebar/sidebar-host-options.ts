@@ -94,7 +94,7 @@ export function buildSidebarHostOptions(args: {
   })
 }
 
-export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[]): boolean {
+export function shouldShowHostScopeControls(hosts: readonly { id: string }[]): boolean {
   return hosts.some((host) => host.id !== LOCAL_EXECUTION_HOST_ID)
 }
 

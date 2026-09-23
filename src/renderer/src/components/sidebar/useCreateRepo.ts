@@ -13,6 +13,7 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { wslDistroUncRoot } from './use-wsl-distro-home'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useCreateRepo(
@@ -26,6 +27,9 @@ export function useCreateRepo(
     hostId?: string | null
     runtimeEnvironmentId?: string | null
     sshTargetId?: string | null
+    /** Selected Add Project WSL distro; the picker roots inside its UNC home. */
+    wslDistro?: string | null
+    wslDistroHomeUnc?: string | null
   } = {}
 ) {
   const [createName, setCreateName] = useState('')
@@ -36,6 +40,10 @@ export function useCreateRepo(
   const hostToken = options.hostId ?? options.sshTargetId ?? ''
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
+  const wslDistroRef = useRef(options.wslDistro ?? null)
+  wslDistroRef.current = options.wslDistro ?? null
+  const wslDistroHomeUncRef = useRef(options.wslDistroHomeUnc ?? null)
+  wslDistroHomeUncRef.current = options.wslDistroHomeUnc ?? null
 
   // Why: monotonic ID so stale create callbacks can detect they were superseded
   // when the user clicks Back or closes the dialog mid-create. Mirrors the
@@ -74,7 +82,13 @@ export function useCreateRepo(
       return null
     }
     const gen = createGenRef.current
-    const dir = await window.api.repos.pickDirectory()
+    // Why: a WSL distro parent lives on the distro's UNC tree, which the
+    // native picker can browse — root it there instead of the Windows home.
+    const distro = wslDistroRef.current
+    const defaultPath = distro
+      ? (wslDistroHomeUncRef.current ?? wslDistroUncRoot(distro))
+      : undefined
+    const dir = await window.api.repos.pickDirectory(defaultPath ? { defaultPath } : undefined)
     if (dir && gen === createGenRef.current && mountedRef.current) {
       setCreateParent(dir)
       setCreateError(null)

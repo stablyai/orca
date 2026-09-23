@@ -42,7 +42,7 @@ describe('AddRepoHostSelector', () => {
             presence: 'local'
           }
         ]}
-        selectedHostId="local"
+        selectedOptionId="local"
         open
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -79,7 +79,7 @@ describe('AddRepoHostSelector', () => {
             presence: 'configured'
           }
         ]}
-        selectedHostId="ssh:ssh-1"
+        selectedOptionId="ssh:ssh-1"
         open={false}
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -122,7 +122,7 @@ describe('AddRepoHostSelector', () => {
             }
           }
         ]}
-        selectedHostId="runtime:old-server"
+        selectedOptionId="runtime:old-server"
         open
         onOpenChange={vi.fn()}
         onSelectHost={vi.fn()}
@@ -133,5 +133,50 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('The selected Orca server is too old for this client.')
     expect(html).toContain('Update Orca on the server.')
     expect(html).toContain('aria-disabled="true"')
+  })
+
+  it('lists WSL distro rows with readiness and no connect action', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Windows',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          },
+          {
+            id: 'wsl-distro:Ubuntu',
+            kind: 'wsl-distro',
+            wslDistro: 'Ubuntu',
+            label: 'WSL · Ubuntu',
+            detail: 'Windows Linux subsystem · ready',
+            health: 'available'
+          },
+          {
+            id: 'wsl-distro:Debian',
+            kind: 'wsl-distro',
+            wslDistro: 'Debian',
+            label: 'WSL · Debian',
+            detail: 'Windows Linux subsystem · start on first use',
+            health: 'disconnected'
+          }
+        ]}
+        selectedOptionId="wsl-distro:Ubuntu"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('WSL · Ubuntu')
+    expect(html).toContain('WSL · Debian')
+    expect(html).toContain('Windows Linux subsystem · ready')
+    expect(html).toContain('Windows Linux subsystem · start on first use')
+    // Why: WSL rows are local-host sub-modes, never SSH-style connect targets.
+    // 'Connect<' rather than 'Connect' so the trigger's 'Connected' badge passes.
+    expect(html).not.toContain('Connect<')
   })
 })

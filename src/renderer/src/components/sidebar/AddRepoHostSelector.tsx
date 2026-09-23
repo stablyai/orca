@@ -4,25 +4,29 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { SidebarHostOption } from './sidebar-host-options'
+import type { AddProjectHostOption } from './add-project-wsl-host-options'
+import { isAddProjectWslDistroOption } from './add-project-wsl-host-options'
 import { getSidebarHostHealthLabel, shouldShowHostScopeControls } from './sidebar-host-options'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import { translate } from '@/i18n/i18n'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
 type AddRepoHostSelectorProps = {
-  hosts: SidebarHostOption[]
-  selectedHostId: ExecutionHostId | null
+  /** Execution hosts plus WSL distro sub-rows (see add-project-wsl-host-options). */
+  hosts: AddProjectHostOption[]
+  selectedOptionId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelectHost: (hostId: ExecutionHostId) => void
-  onConnectHost?: (hostId: ExecutionHostId) => void
+  onSelectHost: (optionId: string) => void
+  onConnectHost?: (hostId: string) => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
 }
 
-function getHostStatusDetail(host: SidebarHostOption): string {
+function getHostStatusDetail(host: AddProjectHostOption): string {
+  if (isAddProjectWslDistroOption(host)) {
+    return host.detail
+  }
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
@@ -31,7 +35,7 @@ function getHostStatusDetail(host: SidebarHostOption): string {
 
 export function AddRepoHostSelector({
   hosts,
-  selectedHostId,
+  selectedOptionId,
   open,
   onOpenChange,
   onSelectHost,
@@ -45,7 +49,7 @@ export function AddRepoHostSelector({
     return null
   }
 
-  const selectedHost = hosts.find((host) => host.id === selectedHostId) ?? hosts[0]
+  const selectedHost = hosts.find((host) => host.id === selectedOptionId) ?? hosts[0]
   if (!selectedHost) {
     return null
   }
@@ -64,7 +68,9 @@ export function AddRepoHostSelector({
             className="h-7 min-w-0 max-w-[18rem] gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <span className="min-w-0 truncate">{selectedHost.label}</span>
-            {selectedHost.health !== 'local' ? (
+            {selectedHost.health !== 'local' && !isAddProjectWslDistroOption(selectedHost) ? (
+              // Why: a WSL row's "Disconnected" would read as broken — its row
+              // detail already says "start on first use".
               <span
                 title={getHostStatusDetail(selectedHost)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
@@ -162,9 +168,10 @@ export function AddRepoHostSelector({
                 </Popover>
               ) : null}
               {hosts.map((host) => {
-                const selected = host.id === selectedHostId
-                const disabled = !canSelectAddRepoHost(host)
-                const canConnect = canConnectAddRepoHost(host)
+                const wslDistroRow = isAddProjectWslDistroOption(host)
+                const selected = host.id === selectedOptionId
+                const disabled = wslDistroRow ? false : !canSelectAddRepoHost(host)
+                const canConnect = !wslDistroRow && canConnectAddRepoHost(host)
                 const isConnecting = host.health === 'connecting'
                 return (
                   <CommandItem

@@ -8,7 +8,11 @@ import type { ALL_RPC_METHODS } from './methods'
 type RegisteredMethod = (typeof ALL_RPC_METHODS)[number]
 
 // These schemas reach into src/main and have no shared catalog entry.
-type UncataloguedMethod = 'emulator.install' | 'orchestration.send' | 'orchestration.taskUpdate'
+type UncataloguedMethod =
+  | 'emulator.install'
+  | 'host.wsl.getDistroHome'
+  | 'orchestration.send'
+  | 'orchestration.taskUpdate'
 
 type IsAny<T> = 0 extends 1 & T ? true : false
 

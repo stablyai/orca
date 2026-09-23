@@ -6379,6 +6379,11 @@
           "architectureMismatch": "A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.",
           "copyCommand": "Copy command",
           "copyDiagnostics": "Copy diagnostics"
+        },
+        "addProjectWslHost": {
+          "wslDistroLabel": "WSL · {{distro}}",
+          "wslDistroRunning": "Windows Linux subsystem · ready",
+          "wslDistroNotRunning": "Windows Linux subsystem · start on first use"
         }
       },
       "shared": {

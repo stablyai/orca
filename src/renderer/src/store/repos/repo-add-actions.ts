@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -130,6 +131,25 @@ export function createRepoAddActions(
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
           warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
+          // Why here: a project stored on \\wsl.localhost\<distro> must run in
+          // that distro. This chokepoint covers the folder adds that funnel
+          // through addRepoPath (non-git confirm, nested open-as-folder, and
+          // multi-folder picks); nested *import* pins in importNestedRepos, and
+          // git-repo clone/create pin via useCompleteGitRepoAdd.
+          const wslDistro = target.kind === 'local' ? parseWslUncPath(repo.path)?.distro : null
+          if (wslDistro) {
+            const pinnedProject = get().projects.find((p) => p.sourceRepoIds.includes(repo.id))
+            if (pinnedProject) {
+              const pinned = await get().updateProject(pinnedProject.id, {
+                localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+              })
+              if (!pinned) {
+                console.warn(
+                  `Failed to pin WSL runtime (${wslDistro}) for project ${pinnedProject.id}`
+                )
+              }
+            }
+          }
         }
         return repo
       } catch (err) {

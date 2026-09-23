@@ -36,9 +36,10 @@ export const reposApi = {
 
   pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
 
-  pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
+  pickFolders: (args?: { defaultPath?: string }) => ipcRenderer.invoke('repos:pickFolders', args),
 
-  pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
+  pickDirectory: (args?: { defaultPath?: string }) =>
+    ipcRenderer.invoke('repos:pickDirectory', args),
 
   clone: (args) => ipcRenderer.invoke('repos:clone', args),
 

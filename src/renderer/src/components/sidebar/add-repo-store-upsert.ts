@@ -30,6 +30,21 @@ function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
   return repo
 }
 
+// Why: a repo whose files live on \\wsl.localhost\<distro> must run inside that
+// distro — the host stays local, so the project's runtime preference is the
+// only place the distro decision can live (see resolveProjectExecutionRuntime).
+export function pinAddedRepoWslRuntimePreference(repoId: string, wslDistro: string): void {
+  const project = useAppStore
+    .getState()
+    .projects.find((candidate) => candidate.sourceRepoIds.includes(repoId))
+  if (!project) {
+    return
+  }
+  void useAppStore.getState().updateProject(project.id, {
+    localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+  })
+}
+
 export function upsertAddedRepoWithProjectHostSetup(
   repo: Repo,
   owner: AddedRepoOwner = {}

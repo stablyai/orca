@@ -5367,6 +5367,11 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "addProjectWslHost": {
+          "wslDistroLabel": "WSL · {{distro}}",
+          "wslDistroRunning": "适用于 Linux 的 Windows 子系统 · 就绪",
+          "wslDistroNotRunning": "适用于 Linux 的 Windows 子系统 · 首次使用时启动"
         }
       },
       "shared": {

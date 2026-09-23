@@ -10,12 +10,15 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { wslDistroUncRoot } from './use-wsl-distro-home'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoCloneFlow({
   step,
   activeRuntimeEnvironmentId,
   sshTargetId,
+  wslDistro,
+  wslDistroHomeUnc,
   workspaceDir,
   fetchWorktrees,
   onGitRepoReady
@@ -23,6 +26,9 @@ export function useAddRepoCloneFlow({
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
   sshTargetId?: string | null
+  /** Selected Add Project WSL distro; destination defaults into its home. */
+  wslDistro?: string | null
+  wslDistroHomeUnc?: string | null
   workspaceDir: string | null | undefined
   fetchWorktrees: (
     repoId: string,
@@ -53,7 +59,7 @@ export function useAddRepoCloneFlow({
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
-  const hostToken = `${activeRuntimeEnvironmentId?.trim() ?? ''}:${sshTargetId?.trim() ?? ''}`
+  const hostToken = `${activeRuntimeEnvironmentId?.trim() ?? ''}:${sshTargetId?.trim() ?? ''}:${wslDistro ?? ''}`
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
@@ -74,6 +80,7 @@ export function useAddRepoCloneFlow({
     cloneDestination,
     activeRuntimeEnvironmentId,
     sshTargetId,
+    wslDistro,
     workspaceDir,
     cloneStepAutoFilled: cloneStepAutoFilledRef.current
   })
@@ -84,6 +91,20 @@ export function useAddRepoCloneFlow({
     // but runtime/server clone flows must keep their destination user-entered.
     cloneStepAutoFilledRef.current = true
     setCloneDestination(cloneDestinationAutoFill.destination)
+  }
+
+  // Why: a WSL distro destination seeds from the distro home's workspaces
+  // tree (the same UNC lane local clones use); pick + auto-fill must reset
+  // when the distro changes, so track the distro the fill was for.
+  const wslAutoFillDistroRef = useRef<string | null>(null)
+  if (step !== 'clone') {
+    wslAutoFillDistroRef.current = null
+  } else if (wslDistro && wslDistroHomeUnc && !cloneDestination) {
+    const destination = `${wslDistroHomeUnc.replace(/[\\/]+$/, '')}\\orca\\workspaces`
+    if (wslAutoFillDistroRef.current !== wslDistro) {
+      wslAutoFillDistroRef.current = wslDistro
+      setCloneDestination(destination)
+    }
   }
 
   const resetCloneFlow = useCallback((): void => {
@@ -108,12 +129,15 @@ export function useAddRepoCloneFlow({
       return
     }
     const gen = cloneGenRef.current
-    const dir = await window.api.repos.pickDirectory()
+    // Why: with a WSL distro selected, root the picker inside the distro's
+    // UNC tree — clone destinations there are handled by the same UNC lane.
+    const defaultPath = wslDistro ? (wslDistroHomeUnc ?? wslDistroUncRoot(wslDistro)) : undefined
+    const dir = await window.api.repos.pickDirectory(defaultPath ? { defaultPath } : undefined)
     if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)
     }
-  }, [activeRuntimeEnvironmentId, sshTargetId])
+  }, [activeRuntimeEnvironmentId, sshTargetId, wslDistro, wslDistroHomeUnc])
 
   const handleClone = useCallback(async (): Promise<void> => {
     const trimmedUrl = cloneUrl.trim()

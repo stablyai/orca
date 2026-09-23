@@ -891,6 +891,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'host.pwsh.isAvailable': null,
   'host.wsl.isAvailable': null,
   'host.wsl.listDistros': null,
+  'host.wsl.listRunningDistros': null,
   'hostedReview.create': HostedReviewCreate,
   'hostedReview.createStacked': HostedReviewCreate,
   'hostedReview.forBranch': HostedReviewForBranch,
@@ -1182,6 +1183,7 @@ export const RPC_PARAMS_BY_METHOD = {
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
+  'host.wsl.getDistroHome',
   'orchestration.send',
   'orchestration.taskUpdate'
 ]

@@ -13,6 +13,7 @@ import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
+import { getWslBrowseRoot, useWslDistroHome } from './use-wsl-distro-home'
 import { useAddRepoNestedReviewController } from './useAddRepoNestedReviewController'
 import {
   useAddRepoHostedController,
@@ -50,6 +51,9 @@ export default React.memo(function AddRepoDialog({
     finishProjectAdd
   })
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+  const selectedWslDistro = hostSelection.selectedWslDistro
+  const wslDistroHomeUnc = useWslDistroHome(selectedWslDistro)
+  const wslBrowseRoot = getWslBrowseRoot(selectedWslDistro, wslDistroHomeUnc)
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
@@ -128,7 +132,9 @@ export default React.memo(function AddRepoDialog({
     {
       hostId: hostSelection.selectedHostId,
       runtimeEnvironmentId: selectedRuntimeEnvironmentId,
-      sshTargetId: hostSelection.selectedSshTargetId
+      sshTargetId: hostSelection.selectedSshTargetId,
+      wslDistro: selectedWslDistro,
+      wslDistroHomeUnc
     }
   )
 
@@ -143,6 +149,7 @@ export default React.memo(function AddRepoDialog({
     step,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     sshTargetId: hostSelection.selectedSshTargetId,
+    wslDistro: selectedWslDistro,
     createParent,
     setCreateParent
   })
@@ -163,6 +170,8 @@ export default React.memo(function AddRepoDialog({
     step,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     sshTargetId: hostSelection.selectedSshTargetId,
+    wslDistro: selectedWslDistro,
+    wslDistroHomeUnc,
     workspaceDir: settings?.workspaceDir,
     fetchWorktrees,
     onGitRepoReady: completeGitRepoAdd
@@ -253,7 +262,9 @@ export default React.memo(function AddRepoDialog({
 
   useAddRepoHostChangeReset({
     isOpen,
-    selectedHostId: hostSelection.selectedHostId,
+    // Why: the option id (not the bare hostId) — switching to/from a WSL
+    // distro row must also clear host-scoped typed paths and defaults.
+    selectedHostId: hostSelection.selectedOptionId,
     onResetClosed: resetState,
     onResetHostScopedState: resetHostScopedState
   })
@@ -308,8 +319,9 @@ export default React.memo(function AddRepoDialog({
         selectedTargetId={selectedTargetId}
         selectedSshTargetId={hostSelection.selectedSshTargetId}
         selectedHostLabel={
-          hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
-            ?.label ?? null
+          hostSelection.addProjectHostOptions.find(
+            (host) => host.id === hostSelection.selectedOptionId
+          )?.label ?? null
         }
         lockSshTargetSelection={hostSelection.selectedParsedHost?.kind === 'ssh'}
         remotePath={remotePath}
@@ -334,7 +346,7 @@ export default React.memo(function AddRepoDialog({
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
         onBrowse={() =>
           routeAddRepoBrowse(hostSelection.selectedParsedHost, {
-            browseLocal: () => void handleBrowse(),
+            browseLocal: () => void handleBrowse(wslBrowseRoot ?? undefined),
             browseRuntime: () => setStep('server-path'),
             browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
           })

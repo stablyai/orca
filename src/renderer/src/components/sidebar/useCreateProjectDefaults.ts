@@ -6,6 +6,7 @@ import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { getDefaultCreateProjectParent, type GitAvailability } from './create-project-defaults'
+import { fetchWslDistroHome } from './use-wsl-distro-home'
 
 const LOCAL_GIT_AVAILABILITY_TIMEOUT_MS = 1500
 const RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS = 3000
@@ -47,12 +48,15 @@ export function useCreateProjectDefaults({
   step,
   activeRuntimeEnvironmentId,
   sshTargetId,
+  wslDistro,
   createParent,
   setCreateParent
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
   sshTargetId?: string | null | undefined
+  /** Selected Add Project WSL distro; the parent default lives in its home. */
+  wslDistro?: string | null | undefined
   createParent: string
   setCreateParent: (value: string) => void
 }): {
@@ -75,11 +79,14 @@ export function useCreateProjectDefaults({
   const createGitProbeGenRef = useRef(0)
   const activeCreateParentRuntimeEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
   const activeCreateParentSshTargetId = sshTargetId?.trim() || null
+  const activeCreateParentWslDistro = wslDistro?.trim() || null
   const activeCreateParentTargetKey = activeCreateParentRuntimeEnvironmentId
     ? `runtime:${activeCreateParentRuntimeEnvironmentId}`
     : activeCreateParentSshTargetId
       ? `ssh:${activeCreateParentSshTargetId}`
-      : 'local'
+      : activeCreateParentWslDistro
+        ? `wsl:${activeCreateParentWslDistro}`
+        : 'local'
 
   const canReplaceCreateParentDefault = useCallback((parent: string): boolean => {
     if (createParentTouchedRef.current) {
@@ -139,9 +146,12 @@ export function useCreateProjectDefaults({
     if (!canReplaceCreateParentDefault(createParent)) {
       return
     }
+    // Why: both local shapes resolve a parent promise — IPC default for the
+    // Windows home, a distro-home UNC for WSL — then share one apply path.
+    const targetKey = activeCreateParentWslDistro ? `wsl:${activeCreateParentWslDistro}` : 'local'
     if (
       createParent.trim() &&
-      autoFilledCreateParentRef.current?.targetKey !== 'local' &&
+      autoFilledCreateParentRef.current?.targetKey !== targetKey &&
       autoFilledCreateParentRef.current?.parent === createParent.trim()
     ) {
       setCreateDefaultParent('')
@@ -149,14 +159,22 @@ export function useCreateProjectDefaults({
       return
     }
     if (
-      autoFilledCreateParentRef.current?.targetKey === 'local' &&
+      autoFilledCreateParentRef.current?.targetKey === targetKey &&
       autoFilledCreateParentRef.current.parent === createParent.trim()
     ) {
       return
     }
+    // Why: when the home lookup fails, keep the default empty — a distro-root
+    // fallback (/orca/projects) is unwritable for non-root users and mkdir
+    // would surface a permission error. The picker roots at the distro root
+    // instead, so users can pick any writable parent.
+    const parentPromise = activeCreateParentWslDistro
+      ? fetchWslDistroHome(activeCreateParentWslDistro).then((homeUnc) =>
+          homeUnc ? `${homeUnc.replace(/[\\/]+$/, '')}\\orca\\projects` : ''
+        )
+      : window.api.repos.getDefaultCreateProjectParent()
     setCreateDefaultParent('')
-    void window.api.repos
-      .getDefaultCreateProjectParent()
+    void parentPromise
       .then((parent) => {
         if (
           gen !== createParentDefaultGenRef.current ||
@@ -167,14 +185,15 @@ export function useCreateProjectDefaults({
         }
         setCreateDefaultParent(parent)
         createStepAutoFilledRef.current = true
-        autoFilledCreateParentRef.current = { parent, targetKey: 'local' }
-        createParentProvenanceRef.current = { parent, targetKey: 'local' }
+        autoFilledCreateParentRef.current = { parent, targetKey }
+        createParentProvenanceRef.current = { parent, targetKey }
         setCreateParent(parent)
       })
       .catch(() => {
-        // Keep the field empty if the local host cannot provide a submit-ready default.
+        // Keep the field empty if the host cannot provide a submit-ready default.
       })
   }, [
+    activeCreateParentWslDistro,
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
     activeCreateParentSshTargetId,
@@ -259,9 +278,11 @@ export function useCreateProjectDefaults({
     }
     const runtimeEnvironmentId = activeRuntimeEnvironmentId?.trim()
     const gen = ++createGitProbeGenRef.current
-    if (activeCreateParentSshTargetId) {
+    if (activeCreateParentSshTargetId || activeCreateParentWslDistro) {
       // Why: SSH creation happens through the relay; probing client Git would
       // make the selected host look healthier or less healthy than it is.
+      // A WSL distro create runs the distro's own git (cwd-UNC routing), so
+      // the client probe is equally misleading.
       setCreateGitAvailability('unknown')
       return
     }
@@ -291,7 +312,7 @@ export function useCreateProjectDefaults({
         }
         setCreateGitAvailability('unknown')
       })
-  }, [activeRuntimeEnvironmentId, activeCreateParentSshTargetId, step])
+  }, [activeCreateParentWslDistro, activeRuntimeEnvironmentId, activeCreateParentSshTargetId, step])
 
   return {
     createDefaultParent,
