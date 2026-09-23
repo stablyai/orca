@@ -113,7 +113,9 @@ function runningChild() {
 
 describe('Codex child-work evidence', () => {
   it('records a spawned child by its thread, with its turn as the run', () => {
-    const { records, store, log } = runningChild()
+    const { records, store, log, send } = runningChild()
+    // Codex delivers the announcement a second time, on `item/completed`.
+    send({ ...spawned(), method: 'item/completed' })
     expect(records()).toEqual([
       expect.objectContaining({
         kind: 'agent',
@@ -130,7 +132,7 @@ describe('Codex child-work evidence', () => {
       ['thread_id', CHILD],
       ['turn_id', 'c1']
     ])
-    // The announcement arrives twice; the host hears it once.
+    // The host hears the child once.
     expect(log.flat().filter((edge) => edge.type === 'live')).toHaveLength(1)
   })
 
