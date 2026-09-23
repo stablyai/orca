@@ -153,7 +153,8 @@ describe('fetchMobileWebBundle', () => {
     expect(fetched.totalBytes).toBe(16)
     expect(fetched.manifest.buildId).toBe(host.manifest.buildId)
     expect(fetched.elapsedMs).toBeGreaterThanOrEqual(0)
-    expect(progress).toHaveLength(2)
+    // One report per accepted chunk: four for index.html, one for app.js.
+    expect(progress).toHaveLength(5)
     expect(progress.at(-1)).toBe(16)
     // 13 bytes at 4 per chunk is four requests, 3 bytes is one, plus the manifest.
     expect(host.calls.filter((call) => call.method === 'mobileWeb.bundle.chunk')).toHaveLength(5)
@@ -284,8 +285,8 @@ describe('fetchMobileWebBundle', () => {
   })
 
   it('reads a zero-byte asset in one chunk and returns it empty', async () => {
-    // A real bundle carries these. The asset is whole the moment the host says eof, and nothing
-    // else in the loop can end it: a zero-length reply is otherwise how a host makes no progress.
+    // A real bundle carries these. Its one planned slot is zero bytes long, so the host's eof is
+    // what makes the empty reply whole rather than a refusal for no progress.
     const host = bundleHost({ 'assets/empty.css': '', 'index.html': 'abc' })
 
     const fetched = await fetchMobileWebBundle({ client: host.client })
@@ -406,7 +407,7 @@ describe('fetchMobileWebBundle', () => {
     expect(await refusalOf(failed)).toBe('asset-short')
   })
 
-  it('stops a host that pages forever without sending a byte', async () => {
+  it('refuses a zero-byte chunk that does not end the asset', async () => {
     const host = bundleHost(
       { 'index.html': 'abcdef' },
       {
