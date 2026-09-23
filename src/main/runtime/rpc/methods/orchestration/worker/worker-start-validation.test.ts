@@ -20,6 +20,7 @@ function fakeRuntime(
   disabledTuiAgents: TuiAgent[] = []
 ): { runtime: OrcaRuntimeService; resolveDefault: ReturnType<typeof vi.fn> } {
   const proto = OrcaRuntimeWithGetTerminalInteractiveWait.prototype
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validation reads only store settings and the two orchestration methods the fixture supplies.
   const runtime = {
     store: { getSettings: () => ({ defaultTuiAgent, disabledTuiAgents }) },
     validateOrchestrationAgentLauncher: proto.validateOrchestrationAgentLauncher
