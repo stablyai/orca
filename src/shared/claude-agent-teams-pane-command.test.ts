@@ -12,7 +12,7 @@ const TEAMMATE_COMMAND =
 describe('retargetClaudeAgentTeamsPaneCommand', () => {
   it('re-spells the teammate launch for PowerShell', () => {
     expect(retargetClaudeAgentTeamsPaneCommand(TEAMMATE_COMMAND, 'powershell')).toBe(
-      "Set-Location 'E:\\Repos\\demo'; " +
+      "Set-Location 'E:\\Repos\\demo' -ErrorAction Stop; " +
         "$env:CLAUDECODE = '1'; " +
         "$env:CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'; " +
         "& 'C:\\Users\\dev\\.local\\bin\\claude.exe' '--agent-name' 'Nova' " +
@@ -48,7 +48,7 @@ describe('retargetClaudeAgentTeamsPaneCommand', () => {
   it('doubles apostrophes in values it interpolates', () => {
     expect(
       retargetClaudeAgentTeamsPaneCommand("cd '/it'\"'\"'s here' && claude", 'powershell')
-    ).toBe("Set-Location '/it''s here'; & 'claude'")
+    ).toBe("Set-Location '/it''s here' -ErrorAction Stop; & 'claude'")
   })
 
   it('keeps operator characters that sh only ever saw inside quotes', () => {
@@ -58,7 +58,7 @@ describe('retargetClaudeAgentTeamsPaneCommand', () => {
         'powershell'
       )
     ).toBe(
-      "Set-Location '/repo'; $env:A = 'x|y'; " +
+      "Set-Location '/repo' -ErrorAction Stop; $env:A = 'x|y'; " +
         "& 'claude' '--prompt' 'a|b' '--filter' 'c;d' '--to' '>e'"
     )
   })

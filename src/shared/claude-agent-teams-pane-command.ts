@@ -58,19 +58,13 @@ export function retargetClaudeAgentTeamsPaneCommand(
   if (!parsed.ok) {
     return null
   }
-  // Why carry the spans: once tokenized, a quoted `|` inside an argument and a
-  // bare pipe operator are the same string. divergesFromShell is the only record
-  // of which one sh saw, so rejecting on the token VALUE would refuse a perfectly
-  // ordinary `--prompt 'a|b'`.
+  // Why spans: unquoted values can't tell a quoted `|` from a pipe; divergesFromShell can.
   const tokens = parsed.tokens.map((value, index) => ({
     value,
     diverges: parsed.spans[index]?.divergesFromShell ?? true
   }))
   const isCdChain = tokens.length > 3 && tokens[0]!.value === 'cd' && tokens[2]!.value === '&&'
-  // Why: `&&` after a `cd` is the one operator this rewrite models. Any other
-  // diverging token — a bare operator, a substitution, a line continuation —
-  // means sh would run something the rewrite does not express, and PowerShell
-  // would read it differently again.
+  // Why: `cd … &&` is the only sh syntax modelled; any other would be mistranslated.
   if (tokens.some((token, index) => token.diverges && !(isCdChain && index === 2))) {
     return null
   }
@@ -97,7 +91,10 @@ export function retargetClaudeAgentTeamsPaneCommand(
       ? POWERSHELL_HOLDING_COMMAND
       : buildShellCommandFromArgv(argv, shell)
   return [
-    ...(directory === null ? [] : [`Set-Location ${quoteStartupArg(directory, shell)}`]),
+    // Why Stop: a failed Set-Location is non-terminating, so sh's `cd … &&` short-circuit would be lost.
+    ...(directory === null
+      ? []
+      : [`Set-Location ${quoteStartupArg(directory, shell)} -ErrorAction Stop`]),
     ...assignments.map((each) => `$env:${each.name} = ${quoteStartupArg(each.value, shell)}`),
     body
   ].join(commandSeparator(shell))
