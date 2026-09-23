@@ -31,6 +31,14 @@ export function NativeChatNoticeRow({
       </div>
     )
   }
+  if (block.presentation === 'command-output') {
+    // Why: command output is laid out in columns; proportional type breaks its grid.
+    return (
+      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+        {block.text}
+      </pre>
+    )
+  }
   if (block.presentation === 'plan-document') {
     return (
       <Card className="gap-3 py-3 shadow-xs">

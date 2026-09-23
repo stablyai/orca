@@ -43,6 +43,33 @@ describe('omp model list probe', () => {
     ])
   })
 
+  it('keeps the context window each row states', () => {
+    // Row shape as `omp models --json` prints it (OMP 17.0.5).
+    const listing = JSON.stringify({
+      models: [
+        {
+          provider: 'openai-codex',
+          id: 'gpt-5.5',
+          selector: 'openai-codex/gpt-5.5',
+          name: 'GPT-5.5',
+          contextWindow: 272000,
+          maxTokens: 128000
+        },
+        { provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 1000000 },
+        { provider: 'zai', id: 'glm', name: 'GLM', contextWindow: 0 },
+        { provider: 'zai', id: 'glm-air', name: 'GLM Air', contextWindow: '128000' }
+      ]
+    })
+    expect(
+      parseOmpModelList(listing).map(({ id, contextWindowTokens }) => ({ id, contextWindowTokens }))
+    ).toEqual([
+      { id: 'openai-codex/gpt-5.5', contextWindowTokens: 272000 },
+      { id: 'openai-codex/gpt-5.4', contextWindowTokens: 1000000 },
+      { id: 'zai/glm', contextWindowTokens: undefined },
+      { id: 'zai/glm-air', contextWindowTokens: undefined }
+    ])
+  })
+
   it('tolerates an update notice printed ahead of the JSON', () => {
     const noisy = `Package updates are available. Run omp update\n${LISTING}\n`
     expect(parseOmpModelList(noisy).map(({ id }) => id)).toEqual([

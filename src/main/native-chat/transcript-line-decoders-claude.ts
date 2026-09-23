@@ -84,6 +84,9 @@ export function decodeClaudeTranscriptLine(
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
+  // Why: the row link pairs a local command's reply with its command row.
+  const parentUuid = extractString(record.parentUuid)
+  const parent = parentUuid ? { parentId: parentUuid } : {}
   if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.
@@ -92,7 +95,8 @@ export function decodeClaudeTranscriptLine(
       role: 'system',
       blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
       timestamp,
-      source: 'transcript'
+      source: 'transcript',
+      ...parent
     }
   }
   const message = asRecord(record.message)
@@ -126,7 +130,8 @@ export function decodeClaudeTranscriptLine(
     role: claudeMessageRole(role, blocks),
     blocks,
     timestamp,
-    source: 'transcript'
+    source: 'transcript',
+    ...parent
   }
 }
 

@@ -212,6 +212,7 @@ describe('worker transcript wire bounds', () => {
     const message = {
       id: `${transcriptPath}:0000000000000042`,
       turnId: `${transcriptPath}:0000000000000001`,
+      parentId: `${transcriptPath}:0000000000000041`,
       role: 'assistant' as const,
       timestamp: null,
       source: 'transcript' as const,
@@ -224,6 +225,12 @@ describe('worker transcript wire bounds', () => {
     expect(first.messages).toEqual(second.messages)
     expect(first.messages[0]?.id).toMatch(/^worker-message-/)
     expect(first.messages[0]?.turnId).toMatch(/^worker-message-/)
+    // The parent link stays joinable to the parent row's opaque id.
+    const parent = boundWorkerTranscriptMessages(
+      [{ ...message, id: message.parentId, parentId: undefined }],
+      transcriptPath
+    )
+    expect(first.messages[0]?.parentId).toBe(parent.messages[0]?.id)
     expect(first.messages[0]?.blocks[0]).toEqual({ type: 'image-ref' })
     expect(JSON.stringify(first)).not.toContain('Users')
     expect(first.warnings).toEqual(

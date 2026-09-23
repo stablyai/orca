@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getAgentAnsweredNativeChatCommands,
   getHostClaimedNativeChatCommands,
   getNativeChatAgentProfile,
+  getNativeChatCommandReply,
   getVerifiedNativeChatCommands
 } from './native-chat-agent-profiles'
 
@@ -54,5 +56,39 @@ describe('host-claimed native chat commands', () => {
   it('claims the whole catalog for agents with no pass-through policy', () => {
     expect(names('custom-agent')).toEqual(['clear', 'help'])
     expect(names('grok')).toEqual([])
+  })
+})
+
+describe('native chat command replies', () => {
+  it('declares /context as answered by the composer for OMP and by a transcript row for OpenClaude', () => {
+    expect(getNativeChatCommandReply('omp', 'context')).toBe('composer')
+    expect(getNativeChatCommandReply('openclaude', 'context')).toBe('transcript')
+    // Claude and Codex answer /context in their structured sessions.
+    expect(getNativeChatCommandReply('claude', 'context')).toBeNull()
+    expect(getNativeChatCommandReply('codex', 'context')).toBeNull()
+    expect(getNativeChatCommandReply('omp', 'compact')).toBeNull()
+  })
+
+  it('declares only /context, the one reply the desktop chat implements', () => {
+    for (const agent of ['claude', 'openclaude', 'codex', 'omp', 'grok', 'custom-agent']) {
+      const declared = getVerifiedNativeChatCommands(agent).filter(({ reply }) => reply)
+      expect(declared.map(({ name }) => name)).toEqual(
+        agent === 'omp' || agent === 'openclaude' ? ['context'] : []
+      )
+    }
+  })
+
+  it('leaves out of the agent-answered catalog only the commands that declare a reply', () => {
+    const names = (agent: string) =>
+      getAgentAnsweredNativeChatCommands(agent).map(({ name }) => name)
+    expect(names('openclaude')).toEqual(names('claude'))
+    expect(names('omp')).toEqual(
+      getVerifiedNativeChatCommands('omp')
+        .map(({ name }) => name)
+        .filter((name) => name !== 'context')
+    )
+    expect(getAgentAnsweredNativeChatCommands('codex')).toEqual(
+      getVerifiedNativeChatCommands('codex')
+    )
   })
 })

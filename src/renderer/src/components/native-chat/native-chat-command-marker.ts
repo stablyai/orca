@@ -14,6 +14,8 @@ export type NativeChatCommandMarker = {
   /** The command as typed, e.g. `/clear`. */
   command: string
   sentAt: number
+  /** What the host answered, for a command the agent never saw. */
+  output?: string
 }
 
 export type NativeChatCommandMarkerScope = {
@@ -39,7 +41,8 @@ export function readCommandMarkerCache(
 export function appendCommandMarkerCache(
   scope: NativeChatCommandMarkerScope,
   command: string,
-  sentAt = Date.now()
+  sentAt = Date.now(),
+  output?: string
 ): NativeChatCommandMarker[] {
   commandMarkerCounter += 1
   const key = commandMarkerScopeKey(scope)
@@ -47,7 +50,12 @@ export function appendCommandMarkerCache(
   // are not transcript turns, so their local feedback needs a pane-scoped cache.
   const next = [
     ...(commandMarkerCache.get(key) ?? []),
-    { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
+    {
+      id: `${sentAt}-${commandMarkerCounter}`,
+      command,
+      sentAt,
+      ...(output === undefined ? {} : { output })
+    }
   ].slice(-COMMAND_MARKER_LIMIT)
   // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
   // sessionId changes on every /clear) is ephemeral and was never evicted, so it
@@ -92,14 +100,16 @@ export function applyCommandMarkerBoundaries(
 
 /** Render command markers as compact `system` messages. The `system` role draws
  *  as a muted aside (not a user bubble); the text avoids the harness noise
- *  prefixes so stripNoiseMessages keeps it. */
+ *  prefixes so stripNoiseMessages keeps it. A host-answered command shows its
+ *  answer in place of the `Ran` line: the answer is the feedback. */
 export function commandMarkersAsMessages(
   markers: readonly NativeChatCommandMarker[]
 ): NativeChatMessage[] {
   return markers.map((marker) => ({
     id: `command:${marker.id}`,
     role: 'system' as const,
-    blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
+    // Why: a host answer is one sentence, so it reads as the aside it replaces, not a grid.
+    blocks: [{ type: 'text' as const, text: marker.output ?? `Ran ${marker.command}` }],
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))

@@ -1,5 +1,9 @@
 import type { AgentType } from './agent-status-types'
-import { getAgentSlashCommands, type SlashCommandSuggestion } from './native-chat-slash-commands'
+import {
+  getAgentSlashCommands,
+  type NativeChatCommandReply,
+  type SlashCommandSuggestion
+} from './native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
@@ -48,6 +52,27 @@ export function getNativeChatAgentProfile(
  *  surface stays skills-only — this is the single place that policy lives. */
 export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return agent === 'grok' ? [] : getAgentSlashCommands(agent)
+}
+
+/** How the chat finds the reply to a verified command over a terminal session;
+ *  null when the agent answers it in the terminal or the command is unknown. */
+export function getNativeChatCommandReply(
+  agent: AgentType,
+  commandName: string
+): NativeChatCommandReply | null {
+  return (
+    getVerifiedNativeChatCommands(agent).find((command) => command.name === commandName)?.reply ??
+    null
+  )
+}
+
+/** The verified catalog minus commands only the desktop chat answers: a surface
+ *  without the composer's answers or the transcript's reply rows (mobile) would
+ *  offer a command that appears to do nothing. */
+export function getAgentAnsweredNativeChatCommands(
+  agent: AgentType
+): readonly SlashCommandSuggestion[] {
+  return getVerifiedNativeChatCommands(agent).filter((command) => command.reply === undefined)
 }
 
 /** The mirror of the claimed set: catalog commands this agent acts on when they

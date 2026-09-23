@@ -116,6 +116,37 @@ describe('native chat session option enrichment', () => {
     )
   })
 
+  it('carries the context window OMP lists for each model, absent from an older host', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'openai-codex/gpt-5.5',
+          label: 'GPT-5.5',
+          description: 'openai-codex',
+          contextWindowTokens: 272_000
+        },
+        { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex' }
+      ]
+    })
+    const models = await discoverNativeChatCatalogModels('omp', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    expect(models).toEqual([
+      {
+        id: 'openai-codex/gpt-5.5',
+        label: 'GPT-5.5',
+        description: 'openai-codex',
+        contextWindowTokens: 272_000,
+        options: []
+      },
+      { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex', options: [] }
+    ])
+  })
+
   it('uses only discovered Claude rows and capabilities per host', async () => {
     mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,

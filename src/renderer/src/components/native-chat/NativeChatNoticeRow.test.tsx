@@ -71,6 +71,27 @@ describe('notice rows', () => {
     expect(disclosure?.querySelector('summary')).not.toHaveTextContent('Check the configuration')
     expect(disclosure?.querySelector('pre')).toHaveTextContent('Check the configuration')
   })
+  it('keeps the column layout of command output in monospace', () => {
+    const text =
+      'Context Usage\n⛁ ⛁ ⛶   gpt-4o · 16.6k/128k tokens (13%)\n      ⛁ Skills: 304 tokens'
+    render(
+      <MessageRow
+        message={{
+          id: 'command-output',
+          role: 'system',
+          blocks: [{ type: 'text', text, presentation: 'command-output' }],
+          timestamp: 1,
+          source: 'transcript'
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+    const output = screen.getByText(/Context Usage/)
+    expect(output.tagName).toBe('PRE')
+    expect(output).toHaveClass('font-mono')
+    expect(output.textContent).toBe(text)
+  })
   it('renders future presentation and tone values as untinted text', () => {
     renderStatus({
       kind: 'status',

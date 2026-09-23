@@ -50,6 +50,8 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** Tokens the model's context window holds, where the host's listing states it. */
+  contextWindowTokens?: number
   options: CatalogOption[]
 }
 

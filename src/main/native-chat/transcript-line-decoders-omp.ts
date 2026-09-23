@@ -10,7 +10,8 @@
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
-  type NativeChatMessage
+  type NativeChatMessage,
+  type NativeChatTokenUsage
 } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -24,20 +25,34 @@ import { toolResultOutput } from './transcript-record-blocks'
  * omp session rows: `type: 'message'` turns carrying user/assistant/toolResult/
  * developer records with text, thinking, toolCall and image content blocks, the
  * content-less bash/python execution cells, plus the `type: 'custom_message'`
- * rows extensions inject into the conversation.
- * Session bookkeeping rows (session_init, mode_change, compaction, custom) are
- * skipped, as are records of an unrecognized type.
+ * rows extensions inject into the conversation, and a `compaction` row as the
+ * boundary it draws in the context. Other session bookkeeping rows (session_init,
+ * mode_change, custom) are skipped, as are records of an unrecognized type.
  */
 export function decodeOmpTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
   const record = parseJsonObject(line)
-  if (!record || (record.type !== 'message' && record.type !== 'custom_message')) {
+  if (
+    !record ||
+    (record.type !== 'message' && record.type !== 'custom_message' && record.type !== 'compaction')
+  ) {
     return null
   }
   const id = extractString(record.id) ?? fallbackId
   const timestamp = parseTimestamp(record.timestamp)
+
+  if (record.type === 'compaction') {
+    // Why: responses before this row measured a context omp has since replaced.
+    return {
+      id,
+      role: 'system',
+      blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }],
+      timestamp,
+      source: 'transcript'
+    }
+  }
 
   if (record.type === 'custom_message') {
     // Why: these extension-authored turns reach the model, and omp's own
@@ -124,8 +139,52 @@ export function decodeOmpTranscriptLine(
         }
       : null
   }
-  const messageRole = role === 'assistant' ? 'assistant' : role === 'user' ? 'user' : 'system'
-  return { id, role: messageRole, blocks, timestamp, source: 'transcript' }
+  if (role === 'assistant') {
+    return {
+      id,
+      role: 'assistant',
+      blocks,
+      timestamp,
+      source: 'transcript',
+      ...ompServing(message)
+    }
+  }
+  return { id, role: role === 'user' ? 'user' : 'system', blocks, timestamp, source: 'transcript' }
+}
+
+/** Which provider/model served an assistant record, and what prompt it read. */
+function ompServing(
+  message: Record<string, unknown>
+): Pick<NativeChatMessage, 'model' | 'provider' | 'usage'> {
+  const model = extractString(message.model)
+  const provider = extractString(message.provider)
+  // Why: omp's own context gauge skips aborted and errored replies' accounting.
+  const usage =
+    message.stopReason === 'aborted' || message.stopReason === 'error'
+      ? null
+      : ompTokenUsage(message.usage)
+  return {
+    ...(model ? { model } : {}),
+    ...(provider ? { provider } : {}),
+    ...(usage ? { usage } : {})
+  }
+}
+
+function ompTokenUsage(value: unknown): NativeChatTokenUsage | null {
+  const usage = asRecord(value)
+  if (!usage) {
+    return null
+  }
+  return {
+    inputTokens: tokenCount(usage.input),
+    cacheCreationInputTokens: tokenCount(usage.cacheWrite),
+    cacheReadInputTokens: tokenCount(usage.cacheRead),
+    outputTokens: tokenCount(usage.output)
+  }
+}
+
+function tokenCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
 /** A bash/python execution cell: the invocation, then its captured output. */
