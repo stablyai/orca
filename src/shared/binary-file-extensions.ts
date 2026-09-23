@@ -5,16 +5,15 @@ export { IMAGE_FILE_MIME_TYPES, IMAGE_FILE_EXTENSIONS } from './media-file-exten
 // Keep SVG out of binary extensions because editors open it as source text.
 const TEXT_IMAGE_EXTENSIONS = new Set(['.svg'])
 
-const NON_IMAGE_BINARY_EXTENSIONS = [
+// Data files the OS hands to a viewer app; a plain link click may open them there.
+const OS_VIEWER_BINARY_EXTENSIONS = [
   // Archives
   '.7z',
   '.bz2',
   '.gz',
-  '.jar',
   '.rar',
   '.tar',
   '.tgz',
-  '.war',
   '.xz',
   '.zip',
   '.zst',
@@ -44,8 +43,12 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.ttc',
   '.ttf',
   '.woff',
-  '.woff2',
-  // Compiled artifacts and datastores
+  '.woff2'
+]
+
+// Why: never routed to the OS app by a plain click — for some the OS default runs code
+// (a .exe executes, a .jar launches Java).
+const COMPILED_AND_DATASTORE_EXTENSIONS = [
   '.a',
   '.bin',
   '.class',
@@ -53,6 +56,7 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.dylib',
   '.exe',
   '.idx',
+  '.jar',
   '.lockb',
   '.node',
   '.o',
@@ -62,19 +66,22 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.so',
   '.sqlite',
   '.sqlite3',
+  '.war',
   '.wasm'
 ]
 
 export const BINARY_FILE_EXTENSIONS: readonly string[] = Object.freeze([
   ...IMAGE_FILE_EXTENSIONS.filter((extension) => !TEXT_IMAGE_EXTENSIONS.has(extension)),
-  ...NON_IMAGE_BINARY_EXTENSIONS
+  ...OS_VIEWER_BINARY_EXTENSIONS,
+  ...COMPILED_AND_DATASTORE_EXTENSIONS
 ])
 
 const BINARY_FILE_EXTENSION_SET = new Set(BINARY_FILE_EXTENSIONS)
 
-// Why: the editor renders these binaries in its image and PDF viewers; any other binary
-// can only show "Binary file — cannot display".
-const EDITOR_VIEWABLE_BINARY_EXTENSION_SET = new Set([...IMAGE_FILE_EXTENSIONS, '.pdf'])
+// Why: PDFs open in the editor's own viewer.
+const OS_VIEWER_ONLY_EXTENSION_SET = new Set(
+  OS_VIEWER_BINARY_EXTENSIONS.filter((extension) => extension !== '.pdf')
+)
 
 function lowerFileExtension(filePath: string | undefined): string | null {
   if (filePath === undefined) {
@@ -96,12 +103,11 @@ export function hasBinaryFileExtension(filePath: string | undefined): boolean {
   return extension !== null && BINARY_FILE_EXTENSION_SET.has(extension)
 }
 
-/** A known binary the editor has no viewer for (audio, video, archives, Office documents, …). */
-export function hasBinaryFileExtensionWithoutEditorViewer(filePath: string | undefined): boolean {
+/**
+ * A binary the editor has no viewer for and the OS opens in a viewer app (audio, video,
+ * archives, Office documents, fonts). Executables and other loadable code are excluded.
+ */
+export function hasOsViewerOnlyFileExtension(filePath: string | undefined): boolean {
   const extension = lowerFileExtension(filePath)
-  return (
-    extension !== null &&
-    BINARY_FILE_EXTENSION_SET.has(extension) &&
-    !EDITOR_VIEWABLE_BINARY_EXTENSION_SET.has(extension)
-  )
+  return extension !== null && OS_VIEWER_ONLY_EXTENSION_SET.has(extension)
 }
