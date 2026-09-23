@@ -133,6 +133,18 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {isStatusBarItemAvailable('cursor', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('cursor')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('cursor')
+            }}
+          >
+            <AgentIcon agent="cursor" size={14} />
+            {translate('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}
           onCheckedChange={() => {

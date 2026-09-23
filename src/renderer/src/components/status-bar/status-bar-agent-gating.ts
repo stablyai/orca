@@ -13,9 +13,9 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'gemini',
   'kimi',
   'antigravity',
-  'grok'
+  'grok',
+  'cursor'
 ])
-
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
   detectedAgentIds: TuiAgent[] | null
