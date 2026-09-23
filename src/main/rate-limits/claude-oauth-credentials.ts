@@ -26,6 +26,8 @@ export type ClaudeOAuthCredentialReadResult = {
   hasRefreshableCredentials: boolean
   source: ClaudeOAuthCredentialSource
   keychainUnavailable?: boolean
+  /** Carried through for callers that must not refresh; the usage endpoint ignores it. */
+  expiresAt?: number
 }
 
 type ClaudeOAuthCredentialReadOptions = {
@@ -41,11 +43,12 @@ export function parseClaudeOAuthCredentialsJson(
     const oauth = (JSON.parse(raw) as ClaudeCredentials)?.claudeAiOauth
     const hasRefreshableCredentials =
       typeof oauth?.refreshToken === 'string' && oauth.refreshToken.trim() !== ''
+    const expiresAt = typeof oauth?.expiresAt === 'number' ? oauth.expiresAt : undefined
     if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
-      return { token: null, hasRefreshableCredentials, source }
+      return { token: null, hasRefreshableCredentials, source, expiresAt }
     }
     // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
-    return { token: oauth.accessToken, hasRefreshableCredentials, source }
+    return { token: oauth.accessToken, hasRefreshableCredentials, source, expiresAt }
   } catch {
     return emptyClaudeOAuthCredentialReadResult()
   }
@@ -115,7 +118,7 @@ export async function readClaudeCredentialsFromStrictKeychain(
   }
 }
 
-async function readFromCredentialsFile(
+export async function readClaudeOAuthCredentialsFile(
   configDir?: string
 ): Promise<ClaudeOAuthCredentialReadResult> {
   const credentialPath = path.join(
@@ -132,6 +135,54 @@ async function readFromCredentialsFile(
   }
 }
 
+/**
+ * Credentials that belong to exactly this config dir: its scoped Keychain item on darwin, then its
+ * own `.credentials.json` — parsed, never merely present.
+ *
+ * Deliberately no legacy-Keychain fallback, unlike `readClaudeOAuthCredentials`: that item answers
+ * for the shared login, so a signed-out bound directory would read as signed in and the launch
+ * would land on another organisation's account.
+ *
+ * A Keychain that could not be read is reported as such rather than as "no credentials": the two
+ * have different remedies, and a locked keychain is not a directory nobody signed into.
+ */
+export async function readClaudeConfigDirScopedOAuthCredentials(
+  configDir: string,
+  options?: {
+    platform?: NodeJS.Platform
+    readScopedKeychain?: (configDir: string) => Promise<string | null>
+  }
+): Promise<ClaudeOAuthCredentialReadResult> {
+  let keychainUnavailable = false
+  if ((options?.platform ?? process.platform) === 'darwin') {
+    const scoped = options?.readScopedKeychain
+      ? await readInjectedScopedKeychain(configDir, options.readScopedKeychain)
+      : await readClaudeCredentialsFromStrictKeychain(configDir, 'scoped-keychain')
+    if (scoped.token || scoped.hasRefreshableCredentials) {
+      return scoped
+    }
+    keychainUnavailable = scoped.keychainUnavailable === true
+  }
+  const file = await readClaudeOAuthCredentialsFile(configDir)
+  return !file.token && !file.hasRefreshableCredentials && keychainUnavailable
+    ? unavailableKeychainResult()
+    : file
+}
+
+async function readInjectedScopedKeychain(
+  configDir: string,
+  read: (configDir: string) => Promise<string | null>
+): Promise<ClaudeOAuthCredentialReadResult> {
+  try {
+    const credentials = await read(configDir)
+    return credentials
+      ? parseClaudeOAuthCredentialsJson(credentials, 'scoped-keychain')
+      : emptyClaudeOAuthCredentialReadResult()
+  } catch {
+    return unavailableKeychainResult()
+  }
+}
+
 export async function readClaudeOAuthCredentials(
   options?: ClaudeOAuthCredentialReadOptions
 ): Promise<ClaudeOAuthCredentialReadResult> {
@@ -140,7 +191,7 @@ export async function readClaudeOAuthCredentials(
     return keychain
   }
 
-  const file = await readFromCredentialsFile(options?.credentialsFileConfigDir)
+  const file = await readClaudeOAuthCredentialsFile(options?.credentialsFileConfigDir)
   if (file.token || file.hasRefreshableCredentials) {
     return file
   }

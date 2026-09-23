@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type {
+  BoundClaudeHomeUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitState
@@ -17,6 +18,8 @@ import {
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
   type InactiveClaudeAccountInfo,
+  type BoundClaudeHomeCacheRow,
+  type BoundClaudeHomesResolver,
   type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
@@ -103,6 +106,11 @@ export abstract class RateLimitServiceState {
   protected inactiveClaudeAccountsGeneration = 0
   protected lastInactiveCodexFetchAt = 0
   protected inactiveCodexAccountsGeneration = 0
+  protected boundClaudeHomesResolver: BoundClaudeHomesResolver | null = null
+  protected boundClaudeHomeCache = new Map<string, BoundClaudeHomeCacheRow>()
+  protected boundClaudeHomeFetching = new Set<string>()
+  protected lastBoundClaudeHomeFetchAt = 0
+  protected boundClaudeHomesGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
   constructor() {}
@@ -139,6 +147,27 @@ export abstract class RateLimitServiceState {
           isFetching: true
         })
       }
+    }
+    return result
+  }
+
+  protected buildBoundClaudeHomeArray(): BoundClaudeHomeUsage[] {
+    const result: BoundClaudeHomeUsage[] = []
+    for (const binding of this.boundClaudeHomesResolver?.() ?? []) {
+      const cached = this.boundClaudeHomeCache.get(binding.groupId)
+      const isFetching = this.boundClaudeHomeFetching.has(binding.groupId)
+      if (!cached && !isFetching) {
+        continue
+      }
+      result.push({
+        groupId: binding.groupId,
+        configDir: binding.configDir,
+        rateLimits: cached?.rateLimits ?? null,
+        // Why: a row that has never resolved shows bars-or-status only once its fetch lands.
+        status: cached?.status ?? 'ok',
+        updatedAt: cached?.updatedAt ?? 0,
+        isFetching
+      })
     }
     return result
   }

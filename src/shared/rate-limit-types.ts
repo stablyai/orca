@@ -107,6 +107,22 @@ export type InactiveAccountUsage = {
   isFetching: boolean
 }
 
+/** How a project group's bound CLAUDE_CONFIG_DIR looks to Orca, which only ever reads it (D9). */
+/**
+ * `unavailable` is Orca's own failure to fetch, not a verdict on the directory. Additive: a client
+ * older than this member falls through to the generic unreadable label rather than breaking.
+ */
+export type BoundClaudeHomeStatus = 'ok' | 'signed-out' | 'expired' | 'unreadable' | 'unavailable'
+
+export type BoundClaudeHomeUsage = {
+  groupId: string
+  configDir: string
+  rateLimits: ProviderRateLimits | null
+  status: BoundClaudeHomeStatus
+  updatedAt: number
+  isFetching: boolean
+}
+
 export type GrokAccountStatus = {
   signedIn: boolean
   email: string | null
@@ -144,4 +160,10 @@ export type RateLimitState = {
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
+  /**
+   * Optional on the wire: a host that predates bound-home usage omits it, and a client that
+   * does not know it drops it. Readers treat a missing array as "no bound groups" and render
+   * nothing rather than erroring.
+   */
+  boundClaudeHomes?: BoundClaudeHomeUsage[]
 }

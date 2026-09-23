@@ -58,6 +58,11 @@ export class RuntimeAccountController {
     return this.services?.claudeAccounts.getRuntimeConfigDir(target) ?? null
   }
 
+  /** Why not requireServices: a group edit can land before account services are wired. */
+  evictBoundClaudeHomeUsage(groupId: string): void {
+    this.services?.rateLimits.evictBoundClaudeHomeUsage(groupId)
+  }
+
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
@@ -72,6 +77,7 @@ export class RuntimeAccountController {
     await Promise.allSettled([
       rateLimits.refresh(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchBoundClaudeHomesOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
   }
@@ -81,6 +87,7 @@ export class RuntimeAccountController {
     await Promise.allSettled([
       rateLimits.refreshIfStale(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchBoundClaudeHomesOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
   }

@@ -43,6 +43,7 @@ import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-c
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
+import type { AssertClaudeBoundHomeUsable } from '../claude/claude-bound-home-refusal'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
@@ -112,6 +113,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>)
     | null
+
+  protected readonly assertClaudeBoundHomeUsableFn: AssertClaudeBoundHomeUsable
 
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
 
@@ -242,7 +245,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
-    }
+    },
+    onClaudeHomeBindingChanged: (groupId) => this.accounts.evictBoundClaudeHomeUsage(groupId)
   })
 
   protected readonly nestedRepoImport = new RuntimeNestedRepoImport({

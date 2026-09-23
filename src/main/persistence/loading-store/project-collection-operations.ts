@@ -63,6 +63,21 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).getRepos()
   }
 
+  /**
+   * Whether the profile's project catalog has been loaded. A store whose state has not been
+   * populated answers `[]` from every collection below, which reads as "nothing is configured" —
+   * the Claude home-binding decision needs to tell those two apart rather than launch the shared
+   * home for a group that bound another one.
+   */
+  hasHydratedProjectCatalog(): boolean {
+    const state = this[projectCollectionOperationsContext].runtime.state
+    return (
+      Array.isArray(state?.projectGroups) &&
+      Array.isArray(state.repos) &&
+      Array.isArray(state.folderWorkspaces)
+    )
+  }
+
   getProjects(): Project[] {
     return getProjectHostOperations(this).getProjects()
   }

@@ -84,7 +84,13 @@ export const ExecutionLocation = z
 export const AccountHome = z
   .object({
     variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
-    path: z.string().min(1).max(4096)
+    path: z.string().min(1).max(4096),
+    /** Host-set marker naming the project group whose binding chose this home. Optional, so an
+     *  older peer that never sends or reads it stays wire-compatible. */
+    binding: z
+      .object({ kind: z.literal('project-group'), groupId: Identifier('Invalid project group id') })
+      .strict()
+      .optional()
   })
   .strict()
 

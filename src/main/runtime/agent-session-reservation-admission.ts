@@ -176,9 +176,13 @@ export function applyAgentSessionReservation(
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
     existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    existing.accountHome.path !== request.accountHome.path ||
+    existing.accountHome.binding?.kind !== request.accountHome.binding?.kind ||
+    existing.accountHome.binding?.groupId !== request.accountHome.binding?.groupId
   ) {
-    // Why: location, provider, and account are the session identity; changing one is a fork.
+    // Why: location, provider, and account are the session identity; changing one is a fork. The
+    // binding marker is part of it — it decides which account gates the launch runs, so acquiring
+    // or losing it at the same path is still an account change.
     throw new Error('agent_session_conflict')
   }
   if (request.expectedFence === null) {

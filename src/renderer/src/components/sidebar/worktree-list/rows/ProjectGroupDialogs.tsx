@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { ProjectGroupNameDialog } from '../../ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from '../../ProjectGroupDeleteDialog'
+import { ProjectGroupSettingsDialog } from '../../ProjectGroupSettingsDialog'
 import SuppressExternalWorktreeInboxDialog from '../../SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
@@ -28,7 +29,7 @@ export function SidebarWorktreeListDialogs({
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
-  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog, settingsTarget } = dialogs
   return (
     <>
       <ProjectGroupNameDialog
@@ -113,6 +114,23 @@ export function SidebarWorktreeListDialogs({
         }}
         onConfirm={dialogs.handleConfirmDeleteProjectGroup}
       />
+      {/* Why mounted only with a resolved target: there is no safe host to fall back to, so the
+          dialog simply does not exist while the row does not resolve. */}
+      {settingsTarget ? (
+        <ProjectGroupSettingsDialog
+          open
+          groupName={settingsTarget.groupName}
+          configDir={settingsTarget.configDir}
+          inherited={settingsTarget.inherited}
+          executionHostId={settingsTarget.executionHostId}
+          onOpenChange={(open) => {
+            if (!open) {
+              dialogs.setSettingsDialog(null)
+            }
+          }}
+          onSubmit={dialogs.handleSubmitProjectGroupSettings}
+        />
+      ) : null}
     </>
   )
 }

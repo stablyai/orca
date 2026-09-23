@@ -89,12 +89,12 @@ export function ProjectGroupNameDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">{title}</DialogTitle>
-          <DialogDescription className="text-xs">{description}</DialogDescription>
+          <DialogTitle size="sm">{title}</DialogTitle>
+          <DialogDescription size="sm">{description}</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
-            <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
+            <Label htmlFor={inputId} size="sm">
               {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
@@ -102,25 +102,19 @@ export function ProjectGroupNameDialog({
               ref={inputRef}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="h-8 text-xs"
+              size="sm"
             />
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="text-xs"
+              size="sm-compact"
               onClick={() => onOpenChange(false)}
             >
               {translate('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
-            <Button
-              type="submit"
-              size="sm"
-              className="text-xs"
-              disabled={!trimmedName || submitting}
-            >
+            <Button type="submit" size="sm-compact" disabled={!trimmedName || submitting}>
               {submitting
                 ? translate(
                     'auto.components.sidebar.ProjectGroupNameDialog.4a64e78822',

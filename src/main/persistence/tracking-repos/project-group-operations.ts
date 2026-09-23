@@ -1,3 +1,4 @@
+import { parseClaudeConfigDirBinding } from '../../../shared/claude-home-binding'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import {
@@ -63,7 +64,9 @@ export class ProjectGroupPersistenceOperations {
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'claudeConfigDir'>
+    >
   ): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
@@ -80,6 +83,11 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (updates.claudeConfigDir !== undefined) {
+      // Same parse as load, so an in-memory group never holds a value reload would drop. The
+      // schema hop already refused an unparseable path, so null here only ever means "clear".
+      group.claudeConfigDir = parseClaudeConfigDirBinding(updates.claudeConfigDir)
     }
     group.updatedAt = Date.now()
     this.scheduleSave()

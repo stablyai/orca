@@ -13,6 +13,8 @@ export type ProjectGroup = {
   tabOrder: number
   isCollapsed: boolean
   color: string | null
+  /** Absolute CLAUDE_CONFIG_DIR every Orca-launched Claude session in this group runs under. */
+  claudeConfigDir?: string | null
   createdAt: number
   updatedAt: number
 }

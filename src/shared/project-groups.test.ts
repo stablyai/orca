@@ -84,6 +84,44 @@ describe('project-groups', () => {
     expect(groups.find((group) => group.id === 'invalid')?.executionHostId).toBeUndefined()
   })
 
+  it('normalizes the persisted Claude config dir binding', () => {
+    const groups = normalizeProjectGroups([
+      { id: 'trimmed', name: 'Trimmed', tabOrder: 1, claudeConfigDir: '  /homes/work  ' },
+      { id: 'windows', name: 'Windows', tabOrder: 2, claudeConfigDir: 'C:\\homes\\work' },
+      { id: 'unc', name: 'Unc', tabOrder: 3, claudeConfigDir: '\\\\server\\share\\home' },
+      { id: 'relative', name: 'Relative', tabOrder: 4, claudeConfigDir: 'homes/work' },
+      { id: 'blank', name: 'Blank', tabOrder: 5, claudeConfigDir: '   ' },
+      { id: 'non-string', name: 'NonString', tabOrder: 6, claudeConfigDir: 42 },
+      { id: 'unbound', name: 'Unbound', tabOrder: 7 },
+      // Drive-relative on Windows (resolves against the process's current drive), and a single
+      // backslash-laden relative filename on POSIX. Neither names one fixed directory.
+      {
+        id: 'drive-relative',
+        name: 'DriveRelative',
+        tabOrder: 8,
+        claudeConfigDir: '\\Users\\alice'
+      },
+      { id: 'drive-no-slash', name: 'DriveNoSlash', tabOrder: 9, claudeConfigDir: 'C:homes' }
+    ])
+    const configDirById = new Map(groups.map((group) => [group.id, group.claudeConfigDir]))
+
+    expect(configDirById.get('trimmed')).toBe('/homes/work')
+    expect(configDirById.get('windows')).toBe('C:\\homes\\work')
+    expect(configDirById.get('unc')).toBe('\\\\server\\share\\home')
+    expect(configDirById.get('relative')).toBeNull()
+    expect(configDirById.get('blank')).toBeNull()
+    expect(configDirById.get('non-string')).toBeNull()
+    expect(configDirById.get('unbound')).toBeNull()
+    expect(configDirById.get('drive-relative')).toBeNull()
+    expect(configDirById.get('drive-no-slash')).toBeNull()
+  })
+
+  it('leaves a newly created group unbound', () => {
+    expect(
+      createProjectGroup({ name: 'Fresh', createdFrom: 'manual', tabOrder: 0 }).claudeConfigDir
+    ).toBeNull()
+  })
+
   it('clears repo memberships whose group no longer exists', () => {
     const groups = [createProjectGroup({ name: 'Known', createdFrom: 'manual', tabOrder: 0 })]
     const repos = clearMissingProjectGroupMemberships(

@@ -20,10 +20,13 @@ import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults
 import { resolveStructuredLaunchSeedOptions } from '../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  claudeChildLaunchEnv,
+  hasClaudeHomeBindingForSupport,
+  resolveClaudeStructuredAccountHome
+} from '../claude/claude-structured-account-home'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -63,6 +66,22 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
+      // The managed-account gate describes the ambient Claude config, which a bound group's chat
+      // does not launch against. Disagreeing with the acquisition gate would make a bound group
+      // unusable for exactly the users it exists for.
+      boundClaudeHome:
+        agent === 'claude' &&
+        hasClaudeHomeBindingForSupport({
+          store: this.store ?? null,
+          workspaceId: location.workspaceId,
+          executionHostId: location.executionHostId,
+          // A binding that resolves to the home the CLI would find anyway pins nothing, so it is
+          // not the custom home this gate may be skipped for — the same test the launch uses.
+          readChildEnv: () =>
+            claudeChildLaunchEnv(
+              resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv)
+            )
+        }),
       adapterSupportsCreate:
         agent === 'claude'
           ? supportsClaudeStructuredLocation(location)
@@ -130,29 +149,33 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
     if (input.agent === 'claude') {
-      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) => {
-        return (
-          launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
-          this.accounts
-            .getClaudeConfigDirectory(
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
+        resolveClaudeStructuredAccountHome({
+          store: this.store ?? null,
+          location,
+          launchEnv,
+          readSelectedConfigDir: () =>
+            this.accounts.getClaudeConfigDirectory(
               location.wslDistro
                 ? { runtime: 'wsl', wslDistro: location.wslDistro }
                 : { runtime: 'host' }
-            )
-            ?.trim() ||
-          join(homedir(), '.claude')
-        )
-      })
+            ),
+          assertBoundHomeUsable: this.assertClaudeBoundHomeUsableFn
+        })
+      )
     }
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
       // A create has no process yet, so the current selection is what it must follow.
       const preparedHome = await this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
       const configuredHome = launchEnv.CODEX_HOME
-      return (
-        preparedHome?.trim() ||
-        (this.prepareCodexStructuredLaunchFn ? getSystemCodexHomePath() : configuredHome?.trim()) ||
-        getSystemCodexHomePath()
-      )
+      return {
+        path:
+          preparedHome?.trim() ||
+          (this.prepareCodexStructuredLaunchFn
+            ? getSystemCodexHomePath()
+            : configuredHome?.trim()) ||
+          getSystemCodexHomePath()
+      }
     })
   }
 
@@ -164,7 +187,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       callerKey?: string
       resumeFrom?: { providerSessionId: string }
     },
-    resolveAccountHomePath: (context: {
+    resolveAccountHome: (context: {
       workspacePath: string
       launchEnv: NodeJS.ProcessEnv
       location: {
@@ -173,7 +196,10 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-    }) => string | Promise<string>
+    }) => Promise<{
+      path: string
+      binding?: { kind: 'project-group'; groupId: string }
+    }>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     if (!support.supported) {
@@ -197,11 +223,8 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     if (committedReplay) {
       return committedReplay
     }
-    const selectedAccountHomePath = await resolveAccountHomePath({
-      workspacePath,
-      launchEnv,
-      location
-    })
+    const selectedAccountHome = await resolveAccountHome({ workspacePath, launchEnv, location })
+    const selectedAccountHomePath = selectedAccountHome.path
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
     // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
@@ -213,9 +236,11 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
           agent: input.agent,
           providerSessionId: input.resumeFrom.providerSessionId,
           selfSessionId: input.envelope.sessionId,
-          selectedAccountHomePath
+          selectedAccountHomePath,
+          selectedAccountHomeBound: Boolean(selectedAccountHome.binding)
         })
       : null
+    const accountHomePath = adoption ? adoption.accountHomePath : selectedAccountHomePath
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -228,7 +253,12 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       agent: input.agent,
       accountHome: {
         variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
-        path: adoption ? adoption.accountHomePath : selectedAccountHomePath
+        path: accountHomePath,
+        // Only when the committed path is still the bound one: adoption may pin the home to
+        // wherever the resumed conversation actually lives, and that home is not the binding's.
+        ...(selectedAccountHome.binding && accountHomePath === selectedAccountHome.path
+          ? { binding: selectedAccountHome.binding }
+          : {})
       },
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption

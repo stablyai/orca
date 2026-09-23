@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { BoundClaudeHomeStatus, ProviderRateLimits } from '../../../shared/rate-limit-types'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
@@ -10,6 +10,8 @@ export type {
   RateLimitState,
   ProviderRateLimits,
   InactiveAccountUsage,
+  BoundClaudeHomeStatus,
+  BoundClaudeHomeUsage,
   RateLimitRuntimeTarget
 } from '../../../shared/rate-limit-types'
 export type { InactiveClaudeAccountInfo } from '../claude-fetcher'
@@ -27,6 +29,21 @@ export type {
 } from '../../codex-accounts/runtime-selection'
 export { normalizeCodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 export type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service'
+
+/** One group's bound CLAUDE_CONFIG_DIR, already resolved by `resolveClaudeHomeBindingForGroup`. */
+export type BoundClaudeHomeBinding = {
+  groupId: string
+  configDir: string
+}
+
+export type BoundClaudeHomeCacheRow = {
+  configDir: string
+  rateLimits: ProviderRateLimits | null
+  status: BoundClaudeHomeStatus
+  updatedAt: number
+}
+
+export type BoundClaudeHomesResolver = () => BoundClaudeHomeBinding[]
 
 export type InactiveCodexAccountInfo = {
   id: string

@@ -23,7 +23,8 @@ function createController(
     notifyReposChanged,
     resolveFolderConnectionId,
     teardownFolderWorkspacePtys,
-    cleanupRemovedFolderWorkspaceState
+    cleanupRemovedFolderWorkspaceState,
+    onClaudeHomeBindingChanged: vi.fn()
   })
   return {
     controller,

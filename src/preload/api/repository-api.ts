@@ -143,7 +143,9 @@ export type ProjectGroupsApi = {
   }) => Promise<ProjectGroup>
   update: (args: {
     groupId: string
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'claudeConfigDir'>
+    >
   }) => Promise<ProjectGroup | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {

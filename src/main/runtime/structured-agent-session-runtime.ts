@@ -48,7 +48,10 @@ import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import {
+  createStructuredClaudeRuntimeAdapter,
+  type StructuredClaudeRuntimeAdapterDeps
+} from './structured-claude-runtime-adapter'
 
 /** Sibling of the journal tree rather than inside it: one file adjudicates every
  *  session's lease, while a journal is per session. */
@@ -90,6 +93,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveCodexPermissionPolicy?: () => CodexStructuredPermissionPolicy
   /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
   getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
+  /** The workspace group's current Claude binding, for the "this chat predates the binding" check. */
+  readClaudeHomeBinding?: StructuredClaudeRuntimeAdapterDeps['readClaudeHomeBinding']
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveCodexOverrides?: () => NodeJS.ProcessEnv
   onError?: (input: { scope: string; error: unknown }) => void
@@ -284,6 +289,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
               readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
           }
         : {}),
+      ...(deps.readClaudeHomeBinding ? { readClaudeHomeBinding: deps.readClaudeHomeBinding } : {}),
       onUnexpectedExit: (event) => {
         recoveryChain = recoveryChain.then(async () => {
           try {

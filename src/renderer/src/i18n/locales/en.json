@@ -4065,6 +4065,13 @@
             "last_connected": "Last connected {{value0}}",
             "reconnect_attempt": "Attempt {{value0}}"
           },
+          "BoundClaudeHomesSection": {
+            "36b1b954e0": "Bound groups",
+            "cd0caf7de4": "Signed out",
+            "38a934f31f": "Session expired",
+            "cfcef0699a": "Directory unreadable",
+            "7b3c1d94ae": "Usage unavailable"
+          },
           "NativeChatResumeStatusSegment": {
             "labelOne": "1 chat to resume",
             "label": "{{value0}} chats to resume",
@@ -5739,7 +5746,12 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "projectGroupSettings": "Group settings…",
+          "groupSettingsSaveFailed": "Failed to save group settings",
+          "groupSettingsSaveFailedDesc": "Orca could not confirm the Claude config directory with the group's host. Check that the path is absolute and recheck the group after reconnecting.",
+          "groupSettingsUnresolvedHost": "Cannot open group settings",
+          "groupSettingsUnresolvedHostDesc": "Orca could not tell which host owns this group, and a Claude config directory means something different on each one. Reconnect the group's host and try again."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -6379,6 +6391,24 @@
           "architectureMismatch": "A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.",
           "copyCommand": "Copy command",
           "copyDiagnostics": "Copy diagnostics"
+        },
+        "ProjectGroupSettingsDialog": {
+          "title": "Group Settings",
+          "description": "Settings for {{value0}} and the groups nested inside it.",
+          "fieldLabel": "Claude config directory",
+          "fieldPlaceholder": "Claude’s default home",
+          "browse": "Browse",
+          "remoteHostPath": "This path is read on {{value0}}, so type it as that host spells it.",
+          "inherited": "Inherited from {{value0}}:",
+          "adviceNotAbsolute": "This is not an absolute path. Claude sessions in this group would resolve it differently each run.",
+          "adviceMissingDirectory": "That directory does not exist yet on this group’s host.",
+          "adviceSignedOut": "That directory has no Claude credentials yet, so sessions will start signed out.",
+          "externalChange": "Changed elsewhere to {{value0}}. Your edit is kept — saving replaces it.",
+          "externalCleared": "Cleared elsewhere. Your edit is kept — saving replaces it.",
+          "clear": "Clear",
+          "cancel": "Cancel",
+          "save": "Save",
+          "saving": "Saving..."
         }
       },
       "shared": {

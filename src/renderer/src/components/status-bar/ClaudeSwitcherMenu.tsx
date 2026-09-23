@@ -33,6 +33,7 @@ import {
 } from './status-bar-claude-accounts'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
+import { BoundClaudeHomesSection } from './BoundClaudeHomesSection'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 
@@ -67,6 +68,8 @@ export function ClaudeSwitcherMenu({
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
+  const boundClaudeHomes = useAppStore((s) => s.rateLimits.boundClaudeHomes)
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -298,6 +301,7 @@ export function ClaudeSwitcherMenu({
               'Restart live Claude terminals before continuing old conversations after switching.'
             )}
           </div>
+          <BoundClaudeHomesSection rows={boundClaudeHomes} groups={projectGroups} />
         </div>
       ) : null}
       <DropdownMenuSeparator />

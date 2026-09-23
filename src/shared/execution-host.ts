@@ -169,6 +169,15 @@ export function getRepoExecutionHostId(repo: {
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
+// Why the same resolution as a repo row: a project group's files — and any Claude config dir
+// bound to it — live on exactly one host, and a group carries the same two ownership spellings.
+export function getProjectGroupExecutionHostId(group: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): ExecutionHostId {
+  return getRepoExecutionHostId(group)
+}
+
 export function getSshTargetIdForExecutionHost(
   executionHostId: string | null | undefined
 ): string | null {

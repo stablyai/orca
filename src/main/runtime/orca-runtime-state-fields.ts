@@ -40,6 +40,10 @@ import { configureHostReadableTranscriptPathSources } from '../native-chat/host-
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
+import {
+  assertClaudeBoundHomeUsable,
+  type AssertClaudeBoundHomeUsable
+} from '../claude/claude-bound-home-refusal'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
@@ -94,6 +98,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         workspacePath: string
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
+      /** Seam for the bound-Claude-home usability check; defaults to the real filesystem probe. */
+      assertClaudeBoundHomeUsable?: AssertClaudeBoundHomeUsable
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
@@ -247,6 +253,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
+    this.assertClaudeBoundHomeUsableFn =
+      deps?.assertClaudeBoundHomeUsable ?? assertClaudeBoundHomeUsable
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
