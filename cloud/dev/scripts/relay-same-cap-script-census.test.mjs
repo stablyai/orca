@@ -292,7 +292,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
     assert.equal(resolveCellShape('production-gce-c12').status, 1)
-    assert.equal(resolveCellShape('production-gce-c30').status, 1)
+    assert.equal(resolveCellShape('production-gce-c31').status, 1)
   })
 
   it('passes the same-cap allowlist on every canary invocation the job runs', () => {
@@ -367,9 +367,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
     // the rest before it plans, and the next test covers them at protocol 0.
+    // C30 is already a rehome source but stays migration-only until its Asia canary promotes it.
     assert.deepEqual(
       SAME_CAP_CELLS.filter((cell) => !REHOME_SOURCE_CELLS.has(cell)),
-      SAME_CAP_MIGRATION_ONLY_CELLS
+      SAME_CAP_MIGRATION_ONLY_CELLS.filter((cell) => cell !== 'production-gce-c30')
     )
     for (const [cellId, protocol] of trusted.flatMap((cell) => [[cell, 1], [cell, 3]])) {
       const { cap, pool } = cellShape(cellId)

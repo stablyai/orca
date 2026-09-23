@@ -13,6 +13,7 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
@@ -72,7 +73,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
-  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
+  ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

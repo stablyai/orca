@@ -406,8 +406,14 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4212 -> 4213   (+1)
  *   local modules  1026 -> 1027   (+1)
+ *
+ * Muse then joined the mobile agent catalog with its bundled icon, one more local input to the
+ * shared agent picker.
+ *
+ *   modules        4213 -> 4214   (+1)
+ *   local modules  1027 -> 1028   (+1)
  */
-const SESSION_ROUTE_MODULES = 4213
+const SESSION_ROUTE_MODULES = 4214
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

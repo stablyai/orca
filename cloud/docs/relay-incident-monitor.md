@@ -330,7 +330,8 @@ without its segment is a compile error in relay-contract, not a silent gap.
   latest-sum over 24 healthy hours: mean ~100, 1-minute spikes to 216, with
   10 minutes over the old bar of 160 — enough to freeze roughly one in ten
   15-minute pre-drain gates on baseline noise. 250 cleared the healthy peaks
-  measured then and still fired well before the verified 400-connection ceiling;
+  measured then and still fired well before the 400-connection ceiling assumed at
+  the time (the live instance measured 500 on 2026-09-16);
   pool waiters and pool wait latency keep their strict thresholds. Superseded by
   the 2026-09-17 entry above, which re-measured a grown baseline against the
   490-connection budget.

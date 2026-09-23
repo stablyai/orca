@@ -110,6 +110,33 @@ export function buildSecondaryCommitMessageAgentSpecs({
       ],
       defaultModelId: 'default'
     },
+    muse: {
+      id: 'muse',
+      label: 'Muse',
+      binary: 'muse',
+      // Muse's `exec` subcommand accepts a positional prompt. Keep Source
+      // Control AI one-shot and workspace-read-only, matching the other text
+      // generators rather than launching the interactive TUI.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        'exec',
+        '--no-session-log',
+        '--approval-mode',
+        'never',
+        '--disable-sandbox',
+        '--disable-shell',
+        '--disable-write',
+        '--disable-web-tools',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--reasoning-effort', thinkingLevel] : []),
+        '--',
+        prompt
+      ],
+      singletonOptions: [['--model'], ['--reasoning-effort']],
+      modelSource: 'static',
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
     copilot: {
       id: 'copilot',
       label: 'GitHub Copilot',

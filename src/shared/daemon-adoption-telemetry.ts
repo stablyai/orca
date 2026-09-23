@@ -22,6 +22,21 @@ export type DaemonSpawnerPathClass = (typeof DAEMON_SPAWNER_PATH_CLASSES)[number
 
 export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'severed', 'unknown'] as const
 
+/**
+ * Where macOS says the daemon pid's own executable is now (#21826). Measurement only.
+ * `resolved`: an existing file outside a ShipIt directory (not a claim it is the installed app).
+ * `parked`: inside a Squirrel `…ShipIt…` directory, where an update moves the outgoing bundle.
+ * `unresolvable`: the file is gone, which is where tccd loses the daemon's code identity.
+ * `probe-failed`: not macOS, no pid, no codesign, timeout, or unrecognised output.
+ */
+export const DAEMON_CODE_IDENTITY_VALUES = [
+  'resolved',
+  'parked',
+  'unresolvable',
+  'probe-failed'
+] as const
+export type DaemonCodeIdentity = (typeof DAEMON_CODE_IDENTITY_VALUES)[number]
+
 /** Which macOS-protected folder class the denied cwd falls under. */
 export const DAEMON_PTY_CWD_CLASSES = [
   'documents',

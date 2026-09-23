@@ -273,7 +273,7 @@ jobs:
               EXPECTED_REGION=us-central1
               EXPECTED_DATABASE_POOL_MAX=
               ;;
-            c27|c28|c29)
+            c27|c28|c29|c30)
               EXPECTED_HARD_CAP=3000
               EXPECTED_REGION=asia-east2
               EXPECTED_DATABASE_POOL_MAX=16

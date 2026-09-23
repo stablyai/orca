@@ -22,6 +22,7 @@ import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
@@ -57,10 +58,7 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
     modes: new Map(),
     failRenameTo: new Set()
   }
-  const noEntryError = (path: string): { code: number; message: string } => ({
-    code: 2,
-    message: `ENOENT ${path}`
-  })
+  const noEntryError = (path: string) => ({ code: 2, message: `ENOENT ${path}` })
   const fakeStats = (mode: number): { mode: number } => ({ mode })
 
   const sftp = {
@@ -709,7 +707,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['muse', museHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
