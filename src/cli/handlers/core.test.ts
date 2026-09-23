@@ -169,12 +169,23 @@ describe('orca claude-teams CLI handler', () => {
     expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
   })
 
+  it('runs teammates in-process when the app cannot host native panes', async () => {
+    callMock.mockResolvedValueOnce({
+      result: {
+        launch: { env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }, mode: 'in-process' }
+      }
+    })
+
+    await runClaudeTeams()
+
+    expect(spawnMock.mock.calls.at(-1)?.[1]).toEqual(['--teammate-mode', 'in-process'])
+  })
+
   // A vitest worker's fd 0 is never a console, so this pins the fallback the
   // redirected case relies on: `orca claude-teams < file` must keep reading it.
   it('inherits stdin when there is no console input buffer to open', async () => {
     await runClaudeTeams()
 
-    const stdio = spawnMock.mock.calls.at(-1)?.[2].stdio as unknown[]
-    expect(stdio).toEqual(['inherit', 'inherit', 'inherit'])
+    expect(spawnMock.mock.calls.at(-1)?.[2].stdio).toEqual(['inherit', 'inherit', 'inherit'])
   })
 })

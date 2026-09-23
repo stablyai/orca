@@ -10,13 +10,12 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { supportsClaudeAgentTeamsPaneCommand } from '../../shared/claude-agent-teams-pane-command'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
 export type ClaudeAgentTeamsLaunchPlan = {
+  /** How teammates actually run; may be in-process even when native panes were requested. */
+  mode: Exclude<ClaudeAgentTeamsMode, 'off'>
   command: string
   env: Record<string, string>
   envToDelete?: string[]
@@ -66,21 +65,37 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
     return null
   }
-  const inProcess: ClaudeAgentTeamsLaunchPlan = {
-    command: addClaudeTeammateModeInProcess(args.command),
-    env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+  const shim = mode === 'in-process' ? null : await resolveClaudeAgentTeamsNativeShim(args)
+  if (!shim) {
+    return {
+      mode: 'in-process',
+      command: addClaudeTeammateModeInProcess(args.command),
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    }
   }
+  const env = args.createTeamEnv(shim.shimDir, shim.shimBin)
+  return {
+    mode: 'native-panes-shim',
+    command: addClaudeTeammateModeAuto(args.command),
+    env,
+    envToDelete: ['TERM_PROGRAM']
+  }
+}
+
+/** The shim native teammate panes need, or null when this host must run teammates in-process. */
+export async function resolveClaudeAgentTeamsNativeShim(args: {
+  baseEnv: Record<string, string | undefined>
+  paneShell?: AgentStartupShell
+  shimRoot?: string
+}): Promise<{ shimDir: string; shimBin: string } | null> {
   // Why: Claude Code writes pane commands for sh, and cmd.exe is the one pane shell Orca cannot re-spell them for.
-  if (
-    mode === 'in-process' ||
-    !supportsClaudeAgentTeamsPaneCommand(resolveStartupShell(process.platform, args.paneShell))
-  ) {
-    return inProcess
+  if (!supportsClaudeAgentTeamsPaneCommand(resolveStartupShell(process.platform, args.paneShell))) {
+    return null
   }
   const shimBin = resolveClaudeAgentTeamsShimBin(args.baseEnv)
   if (!shimBin) {
     // Why: without an absolute CLI path the shim would resolve a bare `orca` against the pane cwd, so degrade instead.
-    return inProcess
+    return null
   }
   const shimDir = await ensureClaudeAgentTeamsShimDir(args.shimRoot ?? defaultShimRoot())
   // Why: the .cmd shim is unspawnable from Claude Code, so without the executable the team would launch paneless.
@@ -88,14 +103,9 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
     process.platform === 'win32' &&
     !isExecutableFile(windowsClaudeAgentTeamsShimExecutablePath(shimDir))
   ) {
-    return inProcess
+    return null
   }
-  const env = args.createTeamEnv(shimDir, shimBin)
-  return {
-    command: addClaudeTeammateModeAuto(args.command),
-    env,
-    envToDelete: ['TERM_PROGRAM']
-  }
+  return { shimDir, shimBin }
 }
 
 /** Absolute path to the Orca CLI that backs the tmux shim, or null when none can be qualified. */

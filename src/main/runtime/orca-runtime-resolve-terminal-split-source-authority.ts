@@ -11,8 +11,8 @@ import type {
   AgentTeamsTmuxCompatResponse
 } from './claude-agent-teams-service'
 import {
-  ensureClaudeAgentTeamsShimDir,
-  resolveClaudeAgentTeamsShimBin
+  resolveClaudeAgentTeamsNativeShim,
+  type ClaudeAgentTeamsLaunchPlan
 } from './claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
@@ -128,8 +128,8 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       leafCoords = null
     }
     const close = await this.closeTerminal(handle)
-    if (close.ptyKilled && leafCoords) {
-      this.notifier?.closeTerminal(leafCoords.tabId, leafCoords.paneRuntimeId)
+    if (close.ptyKilled && leafCoords && this.notifier) {
+      this.notifier.closeTerminal(leafCoords.tabId, leafCoords.paneRuntimeId)
       await this.waitForLeafGoneFromTab(leafCoords.tabId, leafCoords.leafId)
     }
     return close
@@ -183,7 +183,11 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     handle: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
-  }): Promise<{ env: Record<string, string>; envToDelete?: string[] }> {
+  }): Promise<{
+    env: Record<string, string>
+    envToDelete?: string[]
+    mode: ClaudeAgentTeamsLaunchPlan['mode']
+  }> {
     const baseEnv = {
       ...process.env,
       ...args.baseEnv
@@ -196,22 +200,25 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     const envToDelete = auth?.stripAuthEnv
       ? [...inheritedEnvKeys].filter((key) => !(key in baseEnv))
       : undefined
-    const shimDir = await ensureClaudeAgentTeamsShimDir()
-    const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
-    const launch = this.claudeAgentTeams.createLaunchEnv({
-      leaderHandle: args.handle,
-      baseEnv,
-      shimDir,
-      shimBin,
-      // Why: teammate panes launch on the local host, so the local Windows shell preference decides their grammar.
-      paneShell: resolveLocalWindowsAgentStartupShell({
-        platform: process.platform,
-        isRemote: false,
-        terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null
-      })
+    // Why: teammate panes launch on the local host, so the local Windows shell preference decides their grammar.
+    const paneShell = resolveLocalWindowsAgentStartupShell({
+      platform: process.platform,
+      isRemote: false,
+      terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null
     })
-    const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
-    return envToDelete ? { env, envToDelete } : { env }
+    const shim = await resolveClaudeAgentTeamsNativeShim({ baseEnv, paneShell })
+    const mode = shim ? 'native-panes-shim' : 'in-process'
+    const launchEnv = shim
+      ? this.claudeAgentTeams.createLaunchEnv({
+          leaderHandle: args.handle,
+          baseEnv,
+          shimDir: shim.shimDir,
+          shimBin: shim.shimBin,
+          paneShell
+        }).env
+      : { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    const env = auth ? { ...auth.envPatch, ...launchEnv } : launchEnv
+    return envToDelete ? { env, envToDelete, mode } : { env, mode }
   }
 
   // Why: a leader handle that never binds to a PTY (lost pane race) has no exit

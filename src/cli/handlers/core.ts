@@ -17,14 +17,14 @@ function envRecord(): Record<string, string> {
   )
 }
 
-function withTeammateModeAuto(args: string[]): string[] {
+function withTeammateMode(args: string[], mode: 'auto' | 'in-process'): string[] {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === '--teammate-mode' || arg.startsWith('--teammate-mode=')) {
       return args
     }
   }
-  return ['--teammate-mode', 'auto', ...args]
+  return ['--teammate-mode', mode, ...args]
 }
 
 /**
@@ -59,7 +59,7 @@ async function runClaudeAgentTeams(env: Record<string, string>, args: string[]):
   const consoleStdin = openConsoleStdin()
   try {
     return await new Promise((resolve, reject) => {
-      const child = spawn('claude', withTeammateModeAuto(args), {
+      const child = spawn('claude', args, {
         stdio: [consoleStdin ?? 'inherit', 'inherit', 'inherit'],
         env
       })
@@ -105,7 +105,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const inheritedEnv = envRecord()
     const response = await client.call<{
-      launch: { env: Record<string, string>; envToDelete?: string[] }
+      // Why optional mode: an app that predates it only ever prepared native panes.
+      launch: { env: Record<string, string>; envToDelete?: string[]; mode?: string }
     }>('agentTeams.prepareLaunch', {
       paneKey,
       env: inheritedEnv,
@@ -119,7 +120,10 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...inheritedEnv,
         ...response.result.launch.env
       },
-      rawArgs ?? []
+      withTeammateMode(
+        rawArgs ?? [],
+        response.result.launch.mode === 'in-process' ? 'in-process' : 'auto'
+      )
     )
   },
   open: async ({ client, json }) => {
