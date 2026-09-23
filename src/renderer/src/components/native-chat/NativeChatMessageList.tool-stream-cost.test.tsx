@@ -49,7 +49,8 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
       isWorking
       expandSignal
       fontScale={1}
-      showTurnStatus={false}
+      providerTurnTiming={false}
+      structuredActivityUi={false}
     />
   )
 }

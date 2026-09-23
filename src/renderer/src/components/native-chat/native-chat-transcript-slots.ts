@@ -55,7 +55,9 @@ export type NativeChatTranscriptSlotsInput = {
     completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   }
   turnDiffs: ReadonlyMap<string, NativeChatTurnDiff>
-  showTurnStatus: boolean
+  /** The provider records per-turn durations, so settled turns get a status row
+   *  and fold behind it. A lane without them shows neither. */
+  providerTurnTiming: boolean
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
   isWorking: boolean
@@ -74,7 +76,7 @@ export function buildNativeChatTranscriptSlots(
     receipts,
     turnStatuses,
     turnDiffs,
-    showTurnStatus,
+    providerTurnTiming,
     expandedTurnKeys,
     isWorking,
     lifecycleWorking
@@ -95,7 +97,7 @@ export function buildNativeChatTranscriptSlots(
     }
   })
   const settledTurnKeys = new Set(
-    showTurnStatus
+    providerTurnTiming
       ? Object.entries(turnStatuses.completedByTurn)
           .filter(([, status]) => status.workedSeconds != null)
           .map(([turnKey]) => turnKey)
@@ -117,7 +119,7 @@ export function buildNativeChatTranscriptSlots(
           ? turnStatuses.completedByTurn[turnKey]
           : undefined
     const status =
-      showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
+      providerTurnTiming && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
     const folded = foldedRows.has(index)
     // Skipping a folded row entirely is what keeps windowing honest: a counted

@@ -21,7 +21,8 @@ type StructuredSessionMessageListProps = {
   allowFileUriLinks?: boolean
   isVisible?: boolean
   onLinkClick?: (...args: unknown[]) => void
-  showTurnStatus?: boolean
+  providerTurnTiming?: boolean
+  structuredActivityUi?: boolean
   showLiveTurnActivity?: boolean
   isWorking?: boolean
   runtimeContext?: unknown

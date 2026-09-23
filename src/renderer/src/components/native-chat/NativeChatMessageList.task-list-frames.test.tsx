@@ -69,7 +69,8 @@ function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
       isWorking={false}
       expandSignal
       fontScale={1}
-      showTurnStatus={false}
+      providerTurnTiming={false}
+      structuredActivityUi={false}
     />
   )
 }

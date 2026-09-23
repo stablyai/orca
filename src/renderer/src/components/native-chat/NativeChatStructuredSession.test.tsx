@@ -167,7 +167,8 @@ describe('NativeChatStructuredSession', () => {
         />
       )
 
-      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
+      expect(mocks.messageListProps?.providerTurnTiming).toBe(true)
+      expect(mocks.messageListProps?.structuredActivityUi).toBe(true)
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )

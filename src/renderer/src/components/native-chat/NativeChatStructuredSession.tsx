@@ -230,7 +230,8 @@ export function NativeChatStructuredSession(
             fontScale={fontScale.scale}
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
-            showTurnStatus
+            providerTurnTiming
+            structuredActivityUi
             showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}

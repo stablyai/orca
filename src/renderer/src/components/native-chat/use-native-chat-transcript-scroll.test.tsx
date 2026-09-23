@@ -21,7 +21,7 @@ function TranscriptHarness({
     contentRef,
     itemCount: 100,
     isWorking: false,
-    showTypingIndicator: false,
+    showAgentStateRow: false,
     isVisible,
     hasMore: false,
     loadingEarlier: false,

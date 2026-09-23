@@ -17410,7 +17410,8 @@
         "thinking": "Thinking",
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
-        "toggleDetails": "Toggle turn details"
+        "toggleDetails": "Toggle turn details",
+        "waitingForUser": "Waiting for your input"
       },
       "backgroundTasks": {
         "monitoring": "Monitoring background tasks",

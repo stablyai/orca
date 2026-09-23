@@ -9,6 +9,7 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
+import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -109,11 +110,11 @@ export function NativeChatResolvedView({
   const hookPreviewIsToolOutput = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
   )
-  // Why: Stop suppression must clear on a newer working epoch even when status
-  // never leaves 'working' (interrupt + immediate next turn coalesced).
-  const hookWorkingEpoch = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
-  )
+  // The pane's own coarse state and the epoch it started at. Freshness-gated, so
+  // a silent row stops speaking for the pane. `hookWorkingEpoch` also clears Stop
+  // suppression on a newer working epoch when status never leaves 'working'
+  // (interrupt + immediate next turn coalesced).
+  const [hookState, hookWorkingEpoch] = useNativeChatHookStatus(paneKey)
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
@@ -405,7 +406,9 @@ export function NativeChatResolvedView({
             expandSignal={false}
             fontScale={fontScale.scale}
             workingStartedAt={hookWorkingEpoch}
-            showTurnStatus={false}
+            agentState={hookState}
+            providerTurnTiming={false}
+            structuredActivityUi={false}
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}

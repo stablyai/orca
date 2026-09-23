@@ -52,7 +52,7 @@ export function useNativeChatTranscriptScroll({
   contentRef,
   itemCount,
   isWorking,
-  showTypingIndicator,
+  showAgentStateRow,
   isVisible,
   hasMore,
   loadingEarlier,
@@ -67,7 +67,8 @@ export function useNativeChatTranscriptScroll({
   contentRef: React.RefObject<HTMLDivElement | null>
   itemCount: number
   isWorking: boolean
-  showTypingIndicator: boolean
+  /** The transcript tail draws an agent-state row, which changes content height. */
+  showAgentStateRow: boolean
   isVisible: boolean
   hasMore: boolean
   loadingEarlier: boolean
@@ -180,7 +181,7 @@ export function useNativeChatTranscriptScroll({
     itemCount,
     isWorking,
     restoreScrollOffset,
-    showTypingIndicator,
+    showAgentStateRow,
     scrollToEndWhenMeasurable
   ])
 

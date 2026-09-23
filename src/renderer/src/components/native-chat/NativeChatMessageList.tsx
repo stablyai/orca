@@ -9,9 +9,9 @@ import { nativeChatTaskListState } from './native-chat-task-list-state'
 import { nativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
-import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
-import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
+import { NativeChatAgentWaitingRow } from './NativeChatAgentWaitingRow'
+import { resolveNativeChatAgentStateRow } from './native-chat-agent-state-row'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
@@ -32,6 +32,7 @@ import { NativeChatMessageRail } from './NativeChatMessageRail'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
@@ -61,7 +62,9 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   failedDeliveryMessageIds,
-  showTurnStatus = true,
+  agentState,
+  providerTurnTiming = true,
+  structuredActivityUi = true,
   showLiveTurnActivity = true,
   turnActivity,
   runtimeContext
@@ -80,8 +83,15 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
-  /** Turn timing and disclosure are available on structured agent sessions. */
-  showTurnStatus?: boolean
+  /** The pane's freshness-gated coarse agent state. Terminal-backed panes have
+   *  no provider turn record, but they do have this, and it is what lets the
+   *  transcript say the agent stopped and is waiting on the reader. */
+  agentState?: AgentStatusState | null
+  /** The provider attributes turn durations to specific turns (structured lane),
+   *  so settled turns carry a "Worked for N" row and fold behind it. */
+  providerTurnTiming?: boolean
+  /** Rows may draw structured tool-run affordances (structured lane). */
+  structuredActivityUi?: boolean
   /** Whether the active turn's foreground activity row should be visible. */
   showLiveTurnActivity?: boolean
   turnActivity?: NativeChatTurnActivity | null
@@ -140,9 +150,10 @@ export function NativeChatMessageList({
   )
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const taskListState = useMemo(() => nativeChatTaskListState(messages), [messages])
-  const showTypingIndicator = showTurnStatus
-    ? isWorking
-    : shouldShowNativeChatTypingIndicator({ messages, isWorking })
+  // One tail row, one decision. Lane-independent by construction: the working
+  // arm rides the reconciled turn truth both lanes already share, and the
+  // waiting arm rides the pane status the terminal-backed lane had all along.
+  const stateRow = resolveNativeChatAgentStateRow({ isWorking, agentState })
   const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
   const currentTurnKey =
     latestUserIndex === -1 ? undefined : (messages[latestUserIndex]?.id ?? undefined)
@@ -173,9 +184,11 @@ export function NativeChatMessageList({
   const turnStatuses = useNativeChatTurnStatus({
     messages,
     latestUserIndex,
-    isWorking: showTurnStatus && isWorking,
-    workingStartedAt: showTurnStatus ? workingStartedAt : null,
-    settledTurns: showTurnStatus ? settledTurns : null,
+    isWorking,
+    // The epoch is host-stamped on both lanes; only the per-turn durations the
+    // provider records are structured-only.
+    workingStartedAt,
+    settledTurns: providerTurnTiming ? settledTurns : null,
     thinking
   })
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
@@ -189,7 +202,7 @@ export function NativeChatMessageList({
         receipts,
         turnStatuses,
         turnDiffs,
-        showTurnStatus,
+        providerTurnTiming,
         expandedTurnKeys: expandedTurnIds,
         isWorking,
         lifecycleWorking
@@ -201,8 +214,8 @@ export function NativeChatMessageList({
       latestUserIndex,
       lifecycleWorking,
       messages,
+      providerTurnTiming,
       receipts,
-      showTurnStatus,
       turnDiffs,
       turnKeys,
       turnStatuses
@@ -221,7 +234,7 @@ export function NativeChatMessageList({
     contentRef,
     itemCount: slots.length,
     isWorking,
-    showTypingIndicator,
+    showAgentStateRow: stateRow !== null,
     isVisible,
     hasMore,
     loadingEarlier,
@@ -271,7 +284,7 @@ export function NativeChatMessageList({
   const rowContext = useMemo<NativeChatTranscriptRowContext>(
     () => ({
       expandSignal,
-      showTurnStatus,
+      structuredActivityUi,
       revealedDiff,
       taskListPredecessors,
       expandedTurnIds,
@@ -293,7 +306,7 @@ export function NativeChatMessageList({
       revealedDiff,
       runtimeContext,
       scrollMessageToTop,
-      showTurnStatus,
+      structuredActivityUi,
       taskListPredecessors,
       toggleExpandedTurn
     ]
@@ -345,13 +358,14 @@ export function NativeChatMessageList({
                   context={rowContext}
                   window={transcriptWindow}
                 />
-                {showTurnStatus && showLiveTurnActivity && isWorking ? (
+                {stateRow === 'working' && showLiveTurnActivity ? (
                   <NativeChatTurnActivityLine
                     activity={turnActivity}
                     status={turnStatuses.active}
                   />
+                ) : stateRow === 'waiting-for-user' ? (
+                  <NativeChatAgentWaitingRow />
                 ) : null}
-                {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
               </div>
             </div>
           </div>

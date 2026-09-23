@@ -10,16 +10,24 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 
+type CapturedMessageListProps = {
+  allowFileUriLinks?: boolean
+  onLinkClick?: (...args: unknown[]) => void
+  providerTurnTiming?: boolean
+  structuredActivityUi?: boolean
+  runtimeContext?: unknown
+}
+
+/** A mock's capture slot: null until the mock records the props it was given. */
+function captureSlot<T>(): T | null {
+  return null
+}
+
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   fileLinkClick: vi.fn(),
   mode: 'static' as 'static' | 'outbox',
-  messageListProps: null as null | {
-    allowFileUriLinks?: boolean
-    onLinkClick?: (...args: unknown[]) => void
-    showTurnStatus?: boolean
-    runtimeContext?: unknown
-  },
+  messageListProps: captureSlot<CapturedMessageListProps>(),
   composerProps: null as null | {
     structuredTransport?: Record<string, unknown>
     isWorking?: boolean

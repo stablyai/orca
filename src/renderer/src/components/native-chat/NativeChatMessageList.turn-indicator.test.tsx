@@ -274,7 +274,7 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(container.querySelector('.animate-spin')).toBeNull()
   })
 
-  it('keeps bridge chats on the legacy activity chrome', () => {
+  it('gives a terminal-backed chat the host-stamped clock and none of the structured chrome', () => {
     render(
       <NativeChatMessageList
         session={{
@@ -300,14 +300,16 @@ describe('NativeChatMessageList turn indicator', () => {
         isWorking
         expandSignal={false}
         fontScale={1}
-        showTurnStatus={false}
+        workingStartedAt={Date.now() - 75_000}
+        providerTurnTiming={false}
+        structuredActivityUi={false}
       />
     )
 
     expect(screen.queryByText('Thinking')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Toggle turn details' })).toBeNull()
     expect(screen.queryByText('Running sleep 5')).toBeNull()
-    expect(document.querySelectorAll('.animate-bounce')).toHaveLength(3)
+    expect(screen.getByText('Working for 1m 15s')).toBeInTheDocument()
   })
 
   it('replaces a bridge ask row and settles it from the FIFO tool result', () => {
@@ -343,7 +345,8 @@ describe('NativeChatMessageList turn indicator', () => {
         isWorking={false}
         expandSignal={false}
         fontScale={1}
-        showTurnStatus={false}
+        providerTurnTiming={false}
+        structuredActivityUi={false}
       />
     )
 
@@ -370,7 +373,8 @@ describe('NativeChatMessageList turn indicator', () => {
         isWorking={false}
         expandSignal={false}
         fontScale={1}
-        showTurnStatus={false}
+        providerTurnTiming={false}
+        structuredActivityUi={false}
       />
     )
 
