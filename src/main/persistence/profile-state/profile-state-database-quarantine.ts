@@ -1,10 +1,11 @@
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
+import { copyProfileStateRecoveryFile } from './profile-state-recovery-copy'
 
 export type ProfileStateDatabaseQuarantine = {
   directory: string
@@ -41,7 +42,7 @@ export function quarantineProfileStateDatabase(
           ? 'profile-state.db'
           : `profile-state.db${sourcePath.slice(databasePath.length)}`
       const targetPath = join(directory, targetName)
-      copyFileSync(sourcePath, targetPath)
+      copyProfileStateRecoveryFile(sourcePath, targetPath)
       hardenSqliteDatabaseFiles(targetPath)
       fsyncFileSync(targetPath)
       copiedFiles.push(targetPath)
@@ -51,7 +52,7 @@ export function quarantineProfileStateDatabase(
       if (existsSync(targetPath) || basename(sourcePath) === 'manifest.json') {
         throw new Error('Profile recovery artifact name conflicts with the quarantine manifest')
       }
-      copyFileSync(sourcePath, targetPath)
+      copyProfileStateRecoveryFile(sourcePath, targetPath)
       hardenSqliteDatabaseFiles(targetPath)
       fsyncFileSync(targetPath)
       copiedFiles.push(targetPath)

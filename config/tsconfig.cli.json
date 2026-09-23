@@ -57,6 +57,7 @@
     "../src/main/persistence/profile-state/profile-state-database-recovery.ts",
     "../src/main/persistence/profile-state/profile-state-recovery-required.ts",
     "../src/main/persistence/profile-state/profile-state-recovery.ts",
+    "../src/main/persistence/profile-state/profile-state-recovery-copy.ts",
     "../src/main/persistence/profile-state/profile-state-recovery-command.ts",
     "../src/main/persistence/profile-state/profile-state-active-location.ts",
     "../src/main/persistence/profile-state/profile-state-access.ts",

@@ -72,6 +72,14 @@ fs.rmSync = (target, ...rest) => {
   rm(target, ...rest)
   barrier('removed:' + target)
 }
+let clone = 0
+const link = fs.linkSync
+fs.linkSync = (from, to) => {
+  const isClone = from.includes('.orca-recovery-clone-')
+  if (isClone) barrier('clone:' + (++clone) + ':before')
+  link(from, to)
+  if (isClone) barrier('clone:' + clone + ':after')
+}
 const fsync = fs.fsyncSync
 fs.fsyncSync = descriptor => {
   fsync(descriptor)

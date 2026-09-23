@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
@@ -62,13 +62,18 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
     const databasePath = path.join(profileDirectory, 'profile-state.db')
     const dataFile = path.join(profileDirectory, 'orca-data.json')
     const marker = `automatic-backup-${Date.now()}`
+    const recoveryMarker = {
+      marker,
+      // Exercise native cloning in the Electron recovery process on macOS.
+      payload: recoveryRuntime === 'electron' ? 'retained recovery data'.repeat(450_000) : ''
+    }
     const seed = getE2ECompletedOnboardingProfile()
     writeFileSync(
       rootJson,
       JSON.stringify({
         ...seed,
         settings: { ...seed.settings, terminalFontSize: 19, theme: 'light' },
-        backupRecoveryMarker: { marker }
+        backupRecoveryMarker: recoveryMarker
       })
     )
     let firstApp: ElectronApplication | null = null
@@ -98,8 +103,11 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
       const chosen = readSnapshot(backup.path)
       expect(JSON.parse(chosen.json)).toMatchObject({
         settings: { terminalFontSize: 19 },
-        backupRecoveryMarker: { marker }
+        backupRecoveryMarker: recoveryMarker
       })
+      if (recoveryRuntime === 'electron') {
+        expect(statSync(backup.path).size).toBeGreaterThan(8 * 1024 * 1024)
+      }
       const backupBytes = readFileSync(backup.path)
       await first.page.evaluate(async () => {
         const update = window.__store?.getState().updateSettingsOrThrow
@@ -111,7 +119,7 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
       await expect
         .poll(() => JSON.parse(readSnapshot(databasePath).json).settings.terminalFontSize)
         .toBe(23)
-      expect(readFileSync(backup.path)).toEqual(backupBytes)
+      expect(readFileSync(backup.path).equals(backupBytes)).toBe(true)
       const beforeRefusal = readSnapshot(databasePath)
       const recoveryExecutable =
         recoveryRuntime === 'electron'
@@ -127,7 +135,7 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
         recoveryRuntime === 'electron' ? 'Stop Orca' : 'in use'
       )
       expect(readSnapshot(databasePath)).toEqual(beforeRefusal)
-      expect(readFileSync(backup.path)).toEqual(backupBytes)
+      expect(readFileSync(backup.path).equals(backupBytes)).toBe(true)
       await session.close(firstApp)
       firstApp = null
       await cleanupE2EDaemons(session.userDataDir)
@@ -164,7 +172,12 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
           relaunched.page.evaluate(() => window.__store?.getState().settings?.terminalFontSize)
         )
         .toBe(19)
-      expect(JSON.parse(readSnapshot(databasePath).json).backupRecoveryMarker).toEqual({ marker })
+      await expect(relaunched.page.locator('html')).toHaveClass(
+        JSON.parse(chosen.json).settings.theme === 'dark' ? /\bdark\b/ : /\blight\b/
+      )
+      expect(JSON.parse(readSnapshot(databasePath).json).backupRecoveryMarker).toEqual(
+        recoveryMarker
+      )
       expect(
         await relaunched.app.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows().every((window) => !window.isVisible())
