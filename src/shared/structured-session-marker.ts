@@ -1,11 +1,12 @@
 /**
- * The marker a structured chat session's child carried when it had NO orchestration identity.
+ * Marks a structured session's child. It names nothing — no handle, no pane key, no token.
  *
- * Current hosts no longer write it: every structured child carries its injected session id, which
- * the CLI checks first. The reader stays for a child spawned by an Orca that predates injection,
- * which can still reach a newer CLI through a global install — it must refuse, not guess, because a
- * structured session has no pane, so every implicit-terminal guess resolves to a sibling and
- * `orchestration check` is destructive by default.
+ * Every structured child now also carries its injected session id, and a current CLI checks the id
+ * first, so for it the marker only matters when the id is absent: a child spawned by an Orca that
+ * predates injection. The marker is still written for the opposite case, a CLI that predates the
+ * id, which refuses on it. Either way the answer is refuse, never guess: a structured session has
+ * no pane, so every implicit-terminal guess resolves to a sibling, and `orchestration check` is
+ * destructive by default.
  */
 export const ORCA_STRUCTURED_SESSION_ENV = 'ORCA_STRUCTURED_SESSION'
 
