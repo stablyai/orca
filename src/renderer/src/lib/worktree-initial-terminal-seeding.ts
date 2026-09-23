@@ -138,8 +138,11 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
+  const hasPendingDefaultTabs = Boolean(
+    defaultTabs?.tabs.length && !store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]
+  )
   const hasExplicitLaunchWork = Boolean(
-    sequencedStartup || setup || issueCommand || defaultTabs?.tabs.length
+    sequencedStartup || setup || issueCommand || hasPendingDefaultTabs
   )
   // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
   // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
@@ -153,7 +156,7 @@ export function ensureWorktreeHasInitialTerminal(
     !sequencedStartup &&
     !issueCommand &&
     !setupNeedsHostTerminal &&
-    !defaultTabs?.tabs.length &&
+    !hasPendingDefaultTabs &&
     opts?.createNewTerminalForStartup !== true
   ) {
     queueSetupAndIssueCommands(

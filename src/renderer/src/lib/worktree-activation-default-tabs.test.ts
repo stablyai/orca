@@ -216,6 +216,28 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('does not create a fallback for applied default tabs when automatic creation is disabled', () => {
+    const store = createMockStore({
+      defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+      },
+      { automaticCreationEnabled: false }
+    )
+
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+  })
+
   it('does not create or queue anything when the worktree already has renderable content', () => {
     const store = createMockStore({
       reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))

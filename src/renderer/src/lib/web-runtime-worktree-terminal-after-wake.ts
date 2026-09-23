@@ -60,7 +60,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     return
   }
 
-  if (!launchAgent && !opts?.startup) {
+  if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
       return
@@ -79,6 +79,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
     if (tabs.length === 0) {
       if (
+        !opts?.startup &&
         !shouldAutoCreateInitialTerminal(
           renderableTabCount,
           Object.hasOwn(state.tabsByWorktree, worktreeId),

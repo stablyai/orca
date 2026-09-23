@@ -220,6 +220,64 @@ describe('empty remote worktree activation', () => {
     )
   })
 
+  it('does not repeat non-agent startup work when a terminal is already live', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn()
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: callRuntimeEnvironment,
+          subscribe: vi.fn()
+        }
+      }
+    })
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: REPO_PATH,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {
+        [worktree.id]: [
+          {
+            id: 'live-tab',
+            ptyId: 'pty-1',
+            worktreeId: worktree.id,
+            title: 'Dev',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'live-tab': ['pty-1'] },
+      settings: {
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 1,
+        activeRenderableTabId: 'live-tab'
+      }))
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      startup: { command: 'pnpm dev' },
+      automaticCreationEnabled: false
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(callRuntimeEnvironment).not.toHaveBeenCalled()
+  })
+
   it('surfaces a failed host terminal request without retrying ambiguously', async () => {
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
