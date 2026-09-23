@@ -1,16 +1,5 @@
 export function getOpenCode2SetupSource(): string[] {
   return String.raw`
-const admittedQuestionFormIDs = new Set();
-
-// Why: a long session can raise unboundedly many forms; only the unresolved tail
-// can still need retiring, so evict oldest-first rather than retaining them all.
-function admitQuestionForm(formID) {
-  if (admittedQuestionFormIDs.size >= 64) {
-    admittedQuestionFormIDs.delete(admittedQuestionFormIDs.values().next().value);
-  }
-  admittedQuestionFormIDs.add(formID);
-}
-
 async function setupOpenCode2Status(ctx) {
   const controller = new AbortController();
   const client = { session: { get: (input, options) => ctx.session.get(input, options) } };
@@ -40,7 +29,6 @@ async function setupOpenCode2Status(ctx) {
         // elicitations; only its question tool stamps kind "question", and only
         // that form is a question the pane owner was actually asked.
         if (!form || !form.metadata || form.metadata.kind !== "question") continue;
-        admitQuestionForm(form.id);
         type = "question.asked";
         properties = {
           ...form,
@@ -52,9 +40,8 @@ async function setupOpenCode2Status(ctx) {
           })),
         };
       } else if (type === "form.replied" || type === "form.cancelled") {
-        // Why: a resolution for a form Orca never admitted shares the attention
-        // key shape, so forwarding it would retire an unrelated live blocker.
-        if (!admittedQuestionFormIDs.delete(properties.id)) continue;
+        // A resolution for an ignored form is inert: the blocker key carries the
+        // form id, so it simply matches nothing.
         type = type === "form.replied" ? "question.replied" : "question.rejected";
         properties = { ...properties, requestID: properties.id };
       } else if (type === "session.text.started" || type === "session.text.delta" || type === "session.text.ended") {
