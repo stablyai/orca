@@ -30,6 +30,10 @@ import {
   resolveOrcaSessionParty,
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
+import {
+  lookupOrcaAgentSession,
+  type AgentSessionRecordReader
+} from '../orchestration/structured-session-mail-address'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 
@@ -163,16 +167,15 @@ async function readSessionRecord(
       NO_EFFECTS
     )
   }
-  const record = store.getRecord(sessionId)
-  if (record) {
-    return record
+  const found = lookupOrcaAgentSession(store, sessionId)
+  if (found.kind === 'found') {
+    return found.record
   }
-  const owner = store.listRecords().find((candidate) => namesProviderSession(candidate, sessionId))
-  if (owner) {
+  if (found.kind === 'provider-id') {
     throw new OrchestrationError(
       CODES.providerId,
-      `${sessionId} is the provider's own session id, which changes on /clear. This session's Orca id is ${owner.sessionId}; use that instead. No effects were applied.`,
-      { ...NO_EFFECTS, orcaSessionId: owner.sessionId }
+      `${sessionId} is the provider's own session id, which changes on /clear. This session's Orca id is ${found.orcaSessionId}; use that instead. No effects were applied.`,
+      { ...NO_EFFECTS, orcaSessionId: found.orcaSessionId }
     )
   }
   throw new OrchestrationError(
@@ -182,17 +185,8 @@ async function readSessionRecord(
   )
 }
 
-function sessionRecordStore(): {
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords: () => AgentSessionRecord[]
-} | null {
+function sessionRecordStore(): AgentSessionRecordReader | null {
   return getStructuredAgentSessionHost()?.deps.store ?? null
-}
-
-function namesProviderSession(record: AgentSessionRecord, id: string): boolean {
-  return record.providerHandleChain.some(({ handle }) =>
-    handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
-  )
 }
 
 function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): void {

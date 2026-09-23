@@ -1,5 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import type { OrchestrationDb } from './db'
+import type { OrchestrationCallerIdentity } from './orchestration-caller-identity'
+import { sessionOrchestrationIdentity } from './structured-session-mail-address'
 
 export type OrchestrationMailboxLeaf = {
   tabId: string
@@ -30,6 +32,8 @@ type OrchestrationMailboxOwnerDependencies = {
   getTerminalProcessIncarnation: (terminalHandle: string) => string | null
   onRoutedMessageTypes: (mailboxHandle: string, types: readonly string[]) => void
   onForeignMailboxRouted: (mailboxHandle: string, messageType: string) => void
+  /** The structured session a PTY is the terminal view of, if any. */
+  getBoundSessionIdForPty?: (ptyId: string) => string | null
 }
 
 export class OrchestrationMailboxOwner {
@@ -57,17 +61,23 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const paneKey = `${leaf.tabId}:${leaf.leafId}`
-    const run = db.getCurrentRunForPane?.(paneKey)
+    const session = this.sessionMailOwner(db, leaf)
+    const sessionRun = session ? db.getCurrentRunForCoordinator?.(session) : null
+    const run = sessionRun ?? db.getCurrentRunForPane?.(paneKey)
     if (run) {
-      return this.resolveRunMailbox(db, leaf, terminalHandle, run.id, requestedMailbox, options)
+      const address = sessionRun && session ? session.address : terminalHandle
+      return this.resolveRunMailbox(db, leaf, address, run.id, requestedMailbox, options)
     }
 
-    const dispatch = db.getActiveDispatchForIdentity?.(terminalHandle, paneKey)
+    const sessionDispatch = session
+      ? db.getActiveDispatchForIdentity?.(session.address, session.paneKey ?? undefined)
+      : null
+    const dispatch = sessionDispatch ?? db.getActiveDispatchForIdentity?.(terminalHandle, paneKey)
     if (dispatch) {
       return this.resolveDispatchMailbox(
         db,
         leaf,
-        terminalHandle,
+        sessionDispatch && session ? session.address : terminalHandle,
         dispatch.id,
         dispatch.run_id,
         requestedMailbox,
@@ -92,6 +102,19 @@ export class OrchestrationMailboxOwner {
     return !requestedMailbox || requestedMailbox === terminalHandle ? terminalHandle : null
   }
 
+  /**
+   * A terminal view speaks for its session (the CLI there acts as the session), so its Run and
+   * Dispatch are the session's. A PTY-born worker adopted into a session still owns its mail by
+   * terminal, which is why callers fall back to the pane when the session owns nothing.
+   */
+  private sessionMailOwner(
+    db: OrchestrationDb,
+    leaf: OrchestrationMailboxLeaf
+  ): OrchestrationCallerIdentity | null {
+    const sessionId = leaf.ptyId ? this.deps.getBoundSessionIdForPty?.(leaf.ptyId) : null
+    return sessionId ? sessionOrchestrationIdentity(sessionId, db) : null
+  }
+
   routeForeignDirectMessages(leaf: OrchestrationMailboxLeaf): RoutedOrchestrationMailbox[] {
     const db = this.deps.getDb()
     if (!db) {
@@ -112,10 +135,13 @@ export class OrchestrationMailboxOwner {
     if (!ownerRunId) {
       return []
     }
+    const session = this.sessionMailOwner(db, leaf)
+    const sessionOwnsRun =
+      session !== null && db.getCurrentRunForCoordinator?.(session)?.id === ownerRunId
     const routed = db.routeForeignDirectMessagesToOwnedMailboxes?.(
-      terminalHandle,
+      sessionOwnsRun ? session.address : terminalHandle,
       ownerRunId,
-      paneKey
+      sessionOwnsRun ? (session.paneKey ?? undefined) : paneKey
     )
     if (routed?.hasMore) {
       this.scheduleDirectReconciliation(leaf)

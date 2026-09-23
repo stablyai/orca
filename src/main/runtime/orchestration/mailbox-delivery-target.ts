@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from './db'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
+import { handleLessCoordinatorSessionId } from './structured-session-mail-target'
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
@@ -10,6 +11,8 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
   canProbePtyLiveness: () => boolean
   controllerKnowsPtyIsLive: (ptyId: string) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  /** The terminal of a structured session's terminal view, while a TUI owns that session. */
+  getTerminalViewHandleForSession?: (sessionId: string) => string | null
 }
 
 export class OrchestrationMailboxDeliveryTarget {
@@ -31,8 +34,12 @@ export class OrchestrationMailboxDeliveryTarget {
     const remote =
       dispatchId && !dispatch ? db?.getRemoteDispatchAttachment?.(dispatchId) : undefined
     const paneKey = dispatch?.assignee_pane_key ?? remote?.pane_key
+    const run = runId ? db?.getRun(runId) : undefined
+    const coordinatorSessionId = run ? handleLessCoordinatorSessionId(run) : null
     const ownerHandle = runId
-      ? db?.getRun(runId)?.coordinator_handle
+      ? coordinatorSessionId
+        ? this.deps.getTerminalViewHandleForSession?.(coordinatorSessionId)
+        : run?.coordinator_handle
       : ((paneKey ? this.deps.getTerminalHandleForPaneKey(paneKey) : null) ??
         dispatch?.assignee_handle ??
         remote?.terminal_handle)

@@ -2,6 +2,7 @@
 import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
 import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
 import { isStructuredWorkerHandle } from './structured-worker-identity'
+import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
 import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
@@ -183,7 +184,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     onRoutedMessageTypes: (mailboxHandle, types) =>
       this.messageWaiters.notifyRouted(mailboxHandle, types),
     onForeignMailboxRouted: (mailboxHandle, messageType) =>
-      this.notifyMessageArrived(mailboxHandle, messageType)
+      this.notifyMessageArrived(mailboxHandle, messageType),
+    getBoundSessionIdForPty: (ptyId) => agentSessionPtyWriteGate.boundSessionId(ptyId)
   })
 
   protected readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
@@ -193,7 +195,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     isStructuredWorkerHandle: (handle) => isStructuredWorkerHandle(handle),
     canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
     controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
-    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
+    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+    getTerminalViewHandleForSession: (sessionId) => this.getTerminalViewHandleForSession(sessionId)
   })
 
   protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({

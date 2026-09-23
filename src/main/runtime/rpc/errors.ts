@@ -4,6 +4,7 @@
 // auditable in one place instead of spread across per-method branches.
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_RECIPIENT_ERROR_CODES } from '../../../shared/orchestration-session-recipient-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -155,7 +156,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
-  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
+  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES),
+  ...Object.values(ORCHESTRATION_SESSION_RECIPIENT_ERROR_CODES)
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
