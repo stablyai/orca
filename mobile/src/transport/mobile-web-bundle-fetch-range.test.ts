@@ -1,15 +1,17 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { gzipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
+
+/** The grids this fake host names on its manifest reply. The phone pages whatever grid the host
+ *  names, so a few KiB exercises the same shapes as the real 384 KiB range and 48 KiB chunk; the
+ *  desktop suite pins that the real host names `MOBILE_WEB_BUNDLE_RANGE_BYTES`. */
+const RANGE_GRID = 4096
+const CHUNK_GRID = 1024
 
 type Inflation = { readonly outLength: number; readonly resultLength: number }
 type LoggedInflation = Inflation & { readonly body: Uint8Array }
@@ -76,10 +78,13 @@ function rangeHost(
   files: Record<string, Uint8Array>,
   options: { ranges?: boolean; tamper?: (call: HostCall, body: string) => string } = {}
 ) {
+  const digests = new Map(
+    Object.entries(files).map(([path, content]) => [path, toHex(sha256(content))])
+  )
   const assets = Object.entries(files)
     .map(([path, content]) => ({
       path,
-      sha256: toHex(sha256(content)),
+      sha256: digests.get(path)!,
       byteLength: content.byteLength,
       contentType: 'text/javascript'
     }))
@@ -104,27 +109,24 @@ function rangeHost(
   const answer = (call: HostCall): unknown => {
     if (call.method === 'mobileWeb.bundle.manifest') {
       return options.ranges === false
-        ? { manifest, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
+        ? { manifest, chunkBytes: CHUNK_GRID }
         : {
             manifest,
-            chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-            rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
+            chunkBytes: CHUNK_GRID,
+            rangeBytes: RANGE_GRID
           }
     }
     const path = String(call.params.path)
     const offset = Number(call.params.offset)
     const content = files[path]!
-    const grid =
-      call.method === 'mobileWeb.bundle.range'
-        ? MOBILE_WEB_BUNDLE_RANGE_BYTES
-        : MOBILE_WEB_BUNDLE_CHUNK_BYTES
+    const grid = call.method === 'mobileWeb.bundle.range' ? RANGE_GRID : CHUNK_GRID
     const slice = content.subarray(offset, offset + grid)
     const header = {
       buildId,
       path,
       offset,
       assetByteLength: content.byteLength,
-      sha256: toHex(sha256(content)),
+      sha256: digests.get(path)!,
       eof: offset + slice.byteLength >= content.byteLength
     }
     if (call.method === 'mobileWeb.bundle.chunk') {
@@ -193,9 +195,9 @@ const NOISE = 'assets/noise.bin'
 const EMPTY = 'assets/empty.txt'
 /** One asset over a range, one an exact multiple of it, one incompressible, one empty. */
 const FILES: Record<string, Uint8Array> = {
-  'assets/app.js': scriptBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2 + 5000, 1),
-  [EXACT]: scriptBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2, 4),
-  [NOISE]: noiseBytes(70_000),
+  'assets/app.js': scriptBytes(RANGE_GRID * 2 + 500, 1),
+  [EXACT]: scriptBytes(RANGE_GRID * 2, 4),
+  [NOISE]: noiseBytes(3000),
   [EMPTY]: new Uint8Array(0),
   'index.html': scriptBytes(600, 3)
 }
@@ -230,10 +232,10 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     }
     expect(readsOf(host.calls, 'mobileWeb.bundle.chunk')).toHaveLength(0)
     const ranges = readsOf(host.calls, 'mobileWeb.bundle.range')
-    expect(ranges).toHaveLength(slotsOn(MOBILE_WEB_BUNDLE_RANGE_BYTES))
+    expect(ranges).toHaveLength(slotsOn(RANGE_GRID))
     for (const range of ranges) {
       expect(Object.keys(range.params).sort()).toEqual(['buildId', 'offset', 'path'])
-      expect(Number(range.params.offset) % MOBILE_WEB_BUNDLE_RANGE_BYTES).toBe(0)
+      expect(Number(range.params.offset) % RANGE_GRID).toBe(0)
     }
     expect(host.peakInFlight()).toBe(4)
   })
@@ -248,7 +250,7 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     const exact = readsOf(host.calls, 'mobileWeb.bundle.range').filter(
       (call) => call.params.path === EXACT
     )
-    expect(exact.map((call) => call.params.offset)).toEqual([0, MOBILE_WEB_BUNDLE_RANGE_BYTES])
+    expect(exact.map((call) => call.params.offset)).toEqual([0, RANGE_GRID])
   })
 
   it('pages a host whose manifest names no range grid in chunks, as before', async () => {
@@ -257,9 +259,7 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
 
     expect(fetched.assets.get('assets/app.js')).toEqual(FILES['assets/app.js'])
     expect(readsOf(host.calls, 'mobileWeb.bundle.range')).toHaveLength(0)
-    expect(readsOf(host.calls, 'mobileWeb.bundle.chunk')).toHaveLength(
-      slotsOn(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
-    )
+    expect(readsOf(host.calls, 'mobileWeb.bundle.chunk')).toHaveLength(slotsOn(CHUNK_GRID))
   })
 
   it('carries the same bundle in fewer reads and fewer bytes than chunks', async () => {
@@ -285,14 +285,14 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('range-undecodable')
   })
 
-  // A 4 MiB inflation answering the first 384 KiB window: fflate fills the bounded buffer and stops
+  // A 4 MiB inflation answering the first window: fflate fills the bounded buffer and stops
   // there. Twenty reads are planned, so a fetch that kept going after the refusal is visible.
   it('refuses a gzip bomb at one byte over the window and sends little after it', async () => {
     const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
     const many = Object.fromEntries(
       Array.from({ length: 10 }, (_, index) => [
         `assets/part-${String(index)}.js`,
-        scriptBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2, index)
+        scriptBytes(RANGE_GRID * 2, index)
       ])
     )
     const host = rangeHost(many, {
@@ -302,7 +302,7 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
 
     expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('chunk-oversize')
     await host.drain()
-    const window = MOBILE_WEB_BUNDLE_RANGE_BYTES + 1
+    const window = RANGE_GRID + 1
     // Exactly one body filled the spare byte: the bomb, stopped there.
     expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
       { outLength: window, resultLength: window }
