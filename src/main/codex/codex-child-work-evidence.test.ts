@@ -237,6 +237,14 @@ describe('Codex child-work evidence', () => {
     expect(byKind('agent')[0]?.operation).toBeUndefined()
   })
 
+  it("never carries a run's open call into the next run when its ending was lost", () => {
+    const { send, byKind } = runningChild()
+    send(item('item/started', CHILD, 'c1', shell('cmd-1', 'npm test')))
+    send(turn('turn/started', CHILD, 'c2'))
+    expect(byKind('agent')[0]).toMatchObject({ invocation: { invocationId: 'c2', generation: 2 } })
+    expect(byKind('agent')[0]?.operation).toBeUndefined()
+  })
+
   it('keeps what the child said last, and its usage, through to how it ended', () => {
     const { send, byKind } = runningChild()
     send(
