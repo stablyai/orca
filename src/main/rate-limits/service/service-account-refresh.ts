@@ -43,11 +43,10 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Why: weekly-only plans report no session window, so gating on session alone
-    // dropped their snapshot and left the switcher's inline bars empty.
+    // Why: weekly-only and unlimited plans can lack a session window but still hold a valid snapshot for the outgoing account.
     if (
       outgoingAccountId &&
-      (this.state.codex?.session || this.state.codex?.weekly) &&
+      (this.state.codex?.isUnlimited || this.state.codex?.session || this.state.codex?.weekly) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
