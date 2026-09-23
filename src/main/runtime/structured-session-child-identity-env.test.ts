@@ -5,7 +5,10 @@ import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-p
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
 
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import {
+  structuredSessionChildIdentityEnv,
+  withStructuredSessionTerminalViewEnv
+} from './structured-session-child-identity-env'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -57,60 +60,95 @@ afterEach(() => {
 })
 
 describe('structuredSessionChildIdentityEnv', () => {
-  it('marks an ordinary chat session as having NO identity, and grants it nothing', () => {
-    // The marker names nothing — no handle, no pane key, no session id, no token — so it cannot be
-    // replayed or impersonated, and it does not reach the hook, agent-row or mobile-projection
-    // pipelines a pane key would. Its only job is to let the CLI REFUSE instead of guessing: this
-    // session has no pane, so every implicit-terminal guess resolved to a sibling, and a
-    // destructive `check` then consumed that sibling's mail.
+  it("gives an ordinary chat session its own id and this app's CLI, and no terminal identity", () => {
+    // The id names the caller, so a bare `orca orchestration check` acts as this session instead of
+    // guessing a terminal — every guess landed on a sibling pane, and `check` consumed its mail.
     pinPlatform('linux')
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     const childEnv = { PATH: '/usr/bin' }
     const env = structuredSessionChildIdentityEnv(SESSION_ID, childEnv)
-    expect(env).toEqual({ PATH: '/usr/bin', ORCA_STRUCTURED_SESSION: '1' })
+    expect(env).toEqual({
+      PATH: `${SHIM_DIR}:/usr/bin`,
+      ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_CLI_COMMAND: 'orca'
+    })
+    // A chat names itself by its id alone: no handle, no pane key, no identity-less marker.
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
     expect(env.ORCA_PANE_KEY).toBeUndefined()
-    expect(env.ORCA_CLI_COMMAND).toBeUndefined()
-    // Still no CLI reachability granted, so packaged builds keep today's exposure.
-    expect(childEnv.PATH).toBe('/usr/bin')
-    expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
+    expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    expect(childEnv).toEqual({ PATH: '/usr/bin' })
   })
 
-  it('gives a packaged-Linux worker the bare-orca shim its ORCA_CLI_COMMAND assumes', () => {
-    // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
-    // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
-    pinPlatform('linux')
-    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-    const handle = registerWorker()
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
-    expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-    expect(env.ORCA_CLI_COMMAND).toBe('orca')
-    expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
-  })
-
-  it('gives a packaged-macOS worker the bundled CLI dir', () => {
-    pinPlatform('darwin')
-    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-    registerWorker()
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
-    expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
-  })
-
-  it('gives a packaged-Windows worker the bundled CLI dir under the env block spelling', () => {
-    pinPlatform('win32')
-    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
-    registerWorker()
-    const env = structuredSessionChildIdentityEnv(SESSION_ID, { Path: 'C:\\Windows' })
-    expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows`)
-    expect(env.PATH).toBeUndefined()
-  })
-
-  it('gives an unpackaged worker the dev launcher dir', () => {
-    pinPlatform('darwin')
+  it('replaces an id inherited from an Orca launched inside another session', () => {
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
-    registerWorker()
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, {
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+      PATH: '/usr/bin'
+    })
+    expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+  })
+
+  it('gives a structured worker its id and keeps the handle it was minted', () => {
+    // For orchestration the id wins and the host maps it back to this handle, so the worker keeps
+    // one identity; the handle stays for the handle-based surfaces outside orchestration.
+    installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
+    const handle = registerWorker()
     const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
-    expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+    expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+    expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
+  })
+
+  describe.each(['chat', 'worker'] as const)("reaches this app's CLI as a %s", (kind) => {
+    beforeEach(() => {
+      if (kind === 'worker') {
+        registerWorker()
+      }
+    })
+
+    it('on packaged Linux, through the bare-orca shim its ORCA_CLI_COMMAND assumes', () => {
+      // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
+      // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
+      pinPlatform('linux')
+      installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
+      expect(env.ORCA_CLI_COMMAND).toBe('orca')
+      expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
+    })
+
+    it('on packaged macOS, through the bundled CLI dir', () => {
+      pinPlatform('darwin')
+      installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+      expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
+    })
+
+    it('on packaged Windows, through the bundled CLI dir under the env block spelling', () => {
+      pinPlatform('win32')
+      installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { Path: 'C:\\Windows' })
+      expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows`)
+      expect(env.PATH).toBeUndefined()
+    })
+
+    it('unpackaged, through the dev launcher dir', () => {
+      pinPlatform('darwin')
+      installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
+      expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+    })
+  })
+
+  it("gives the terminal view the same id, and leaves any other terminal's env as given", () => {
+    expect(withStructuredSessionTerminalViewEnv({ CLAUDE_CONFIG_DIR: '/c' }, SESSION_ID)).toEqual({
+      CLAUDE_CONFIG_DIR: '/c',
+      ORCA_AGENT_SESSION_ID: SESSION_ID
+    })
+    expect(withStructuredSessionTerminalViewEnv(undefined, SESSION_ID)).toEqual({
+      ORCA_AGENT_SESSION_ID: SESSION_ID
+    })
+    const plain = { CLAUDE_CONFIG_DIR: '/c' }
+    expect(withStructuredSessionTerminalViewEnv(plain, undefined)).toBe(plain)
+    expect(withStructuredSessionTerminalViewEnv(undefined, undefined)).toBeUndefined()
   })
 
   it('never puts a pane key in the child environment', () => {

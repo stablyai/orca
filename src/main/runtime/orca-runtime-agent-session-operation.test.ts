@@ -266,6 +266,40 @@ describe('agent-session create operation ledger', () => {
     )
   })
 
+  it("spawns a structured session's terminal view with its session id, never persisting it", async () => {
+    // Switching a chat to terminal view must not change who it is as an orchestration caller. The
+    // id rides the spawn env only: the launch config persists, and a relaunch from it would replay
+    // the id without the handoff that binds the terminal to the session.
+    const sessionId = 'f7a1c0de-1111-4222-8333-444455556666'
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const resume = {
+      kind: 'explicit' as const,
+      worktree: 'id:worktree-1',
+      agent: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'provider-session-1' }
+    }
+
+    await runtime.ensureAgentSession(
+      resume,
+      {},
+      {
+        spawnToken: 'spawn-9',
+        providerRoot: '/accounts/claude',
+        sessionId
+      }
+    )
+    await runtime.ensureAgentSession(resume)
+
+    const [handoff, plain] = createTerminal.mock.calls.map(([, opts]) => opts)
+    expect(handoff).toMatchObject({
+      structuredAgentSessionId: sessionId,
+      env: expect.objectContaining({ ORCA_AGENT_SESSION_ID: sessionId })
+    })
+    expect(handoff?.launchConfig?.agentEnv).not.toHaveProperty('ORCA_AGENT_SESSION_ID')
+    expect(plain?.env ?? {}).not.toHaveProperty('ORCA_AGENT_SESSION_ID')
+  })
+
   it('selects nested SSH legacy fallback before reading a Pi transcript path locally', async () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {

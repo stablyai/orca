@@ -161,6 +161,19 @@ describe('claude structured launch resolution', () => {
     expect(launch.options.sessionId).toBeUndefined()
   })
 
+  it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
+    // The Orca-minted id, never the provider's: the provider id rotates on /clear.
+    const launch = await resolverFor(record(), () => ({
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+    }))({ identity: IDENTITY })
+
+    expect(launch.env).toMatchObject({
+      ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_CLI_COMMAND: 'orca'
+    })
+    expect(launch.env?.ORCA_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
+  })
+
   it('forces session-state events on when the inherited overlay disables them', async () => {
     const launch = await resolverFor(record(), () => ({
       [CLAUDE_SESSION_STATE_EVENTS_ENV]: '0'

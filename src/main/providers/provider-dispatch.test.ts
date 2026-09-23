@@ -155,8 +155,8 @@ describe('PTY provider dispatch', () => {
     })) as { id: string }
 
     expect(result.id).toBe('ssh-pty-1')
-    // Why: the relay host can be launched from a Claude session too, so the stamps are
-    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
+    // Why: the relay host can be launched from a Claude or structured session too, so the
+    // stamps are stripped on the SSH path as well; a remote pane never names a local session. Compared as a set — envToDelete is consumed by
     // membership only, so a reordering of the merge sources must not fail this.
     const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
     expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
@@ -167,7 +167,9 @@ describe('PTY provider dispatch', () => {
         'CLAUDE_CODE_BRIDGE_SESSION_ID',
         'ORCA_PI_STATUS_OWNED',
         'ORCA_PRIME_AGENT_STATUS_OWNED',
-        'ORCA_PI_TITLE_MARKER_OWNED'
+        'ORCA_PI_TITLE_MARKER_OWNED',
+        'ORCA_AGENT_SESSION_ID',
+        'ORCA_STRUCTURED_SESSION'
       ].sort()
     )
     expect(mockSshProvider.spawn).toHaveBeenCalledWith(
