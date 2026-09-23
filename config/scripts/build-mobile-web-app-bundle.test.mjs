@@ -339,6 +339,18 @@ describeBundling('the app bundle', () => {
     }
   }, 120_000)
 
+  it("ships react-native-web's hairline at one device pixel, whichever of its builds resolves", async () => {
+    const sources = allScriptSource(await bundleMobileWebApp())
+    // Minified, so the assignment reads `<name>.hairlineWidth=`; RNW's own value is the literal 1.
+    const assignments = sources.flatMap(
+      (source) => source.match(/\.hairlineWidth=[^;]{0,120}/g) ?? []
+    )
+    expect(assignments.length).toBeGreaterThan(0)
+    for (const assignment of assignments) {
+      expect(assignment).toContain('devicePixelRatio')
+    }
+  }, 120_000)
+
   it('embeds no absolute path from this checkout', async () => {
     // Every chunk, not only the entry: the route manifest names each route by absolute path, and
     // the chunk that import resolves to is where such a path would survive.

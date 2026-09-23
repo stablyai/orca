@@ -22,10 +22,12 @@ const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 // Playwright's emulated scale: under emulation Chromium floors borders to CSS px, which no phone does.
 const DEVICE_SCALE_FLAG = '--force-device-scale-factor=3'
 
+// Required, not imported: the page's own dependencies require react-native, and esbuild then
+// resolves every importer to the package's CommonJS build, so that is the copy the page ships.
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-import { StyleSheet, TextInput, View } from 'react-native'
+const { StyleSheet, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
   hairline: { height: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#222222' },
   input: { height: 40 }

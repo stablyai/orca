@@ -237,7 +237,8 @@ const hairlineDevicePixelPlugin = {
   name: HAIRLINE_PLUGIN_NAME,
   setup(build) {
     build.onLoad(
-      { filter: /react-native-web[\\/]dist[\\/]exports[\\/]StyleSheet[\\/]index\.js$/ },
+      // Both builds: once any dependency requires the package, esbuild resolves every importer to cjs.
+      { filter: /react-native-web[\\/]dist[\\/](cjs[\\/])?exports[\\/]StyleSheet[\\/]index\.js$/ },
       async (args) => {
         const source = await readFile(args.path, 'utf8')
         if (!source.includes(RNW_HAIRLINE_ASSIGNMENT)) {
