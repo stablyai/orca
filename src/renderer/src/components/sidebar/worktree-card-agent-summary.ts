@@ -14,6 +14,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'working',
   'monitoring',
   'interrupted',
+  'failed',
   'done',
   // Why: below every reporting state, above true idle — the pane is still held.
   'unverifiable',

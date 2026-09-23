@@ -2,6 +2,7 @@ import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
+  agentChildRowContextForParent,
   buildAgentChildRowModels,
   buildLegacyAgentChildRowModels,
   flattenAgentChildRowModels,
@@ -104,11 +105,7 @@ export function buildSubagentChildRows(args: {
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
   const { parentEntry } = args
-  const context = {
-    parentEvidenceFresh: args.parentIsFresh,
-    transportObservation: parentEntry.subagentObservation ?? 'live',
-    parentObservedAt: parentEntry.updatedAt
-  }
+  const context = agentChildRowContextForParent(parentEntry, args.parentIsFresh)
   const rows =
     parentEntry.children !== undefined
       ? buildAgentChildRowModels(parentEntry.children, context)

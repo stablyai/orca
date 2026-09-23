@@ -15,6 +15,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { agentChildRowMessageLine } from '@/components/agent-child-row-text'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -130,7 +131,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
+  const displayLabel =
+    prompt ||
+    agentStateLabel(
+      agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
+    )
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
@@ -140,7 +145,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
+  const lastAssistantMessage = agent.childRow
+    ? agentChildRowMessageLine(agent.childRow)
+    : (agent.entry.lastAssistantMessage?.trim() ?? '')
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1

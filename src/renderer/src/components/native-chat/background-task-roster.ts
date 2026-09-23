@@ -132,8 +132,8 @@ export function buildBackgroundTaskGroups(
   return groupRosterEntries([...owners.values()])
 }
 
-// The strip reads a live session channel; contact loss is not yet a verdict it receives.
-const STRIP_ROW_CONTEXT: AgentChildRowContext = {
+// Until a caller passes the session's parent-row context, every live claim stands as reported.
+const REPORTED_ROW_CONTEXT: AgentChildRowContext = {
   parentEvidenceFresh: true,
   transportObservation: 'live',
   parentObservedAt: 0
@@ -158,12 +158,14 @@ function headerRunState(displayState: AgentChildDisplayState): RunState {
 }
 
 /** Kind groups from the host's child views: the main agent's work at the top, each child's own
- *  work nested beneath it rather than counted again in its kind's group. */
+ *  work nested beneath it rather than counted again in its kind's group. Pass the context the
+ *  sidebar builds for the same parent (`agentChildRowContextForParent`) so both read one verdict. */
 export function buildBackgroundTaskGroupsFromViews(
-  views: readonly AgentChildWorkView[]
+  views: readonly AgentChildWorkView[],
+  context: AgentChildRowContext = REPORTED_ROW_CONTEXT
 ): BackgroundTaskGroup[] {
   return groupRosterEntries(
-    buildAgentChildRowModels(views, STRIP_ROW_CONTEXT).map((row) => ({
+    buildAgentChildRowModels(views, context).map((row) => ({
       row,
       state: headerRunState(row.displayState)
     }))

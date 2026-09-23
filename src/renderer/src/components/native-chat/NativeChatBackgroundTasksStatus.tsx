@@ -1,7 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
-import type { AgentChildRowModel } from '../../../../shared/agent-child-row-model'
+import type {
+  AgentChildRowContext,
+  AgentChildRowModel
+} from '../../../../shared/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowEndedLabel, agentChildRowName } from '@/components/agent-child-row-text'
@@ -160,6 +163,9 @@ export function NativeChatBackgroundTasksStatus(props: {
   settledTasks: readonly AgentSessionBackgroundTask[]
   /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
   childViews?: readonly AgentChildWorkView[]
+  /** The session's parent-row context for those views, the one its sidebar rows read; without
+   *  it every live claim stands as reported. */
+  childRowContext?: AgentChildRowContext
   supportsTaskStop: boolean
   /** False when the provider exposes no honest stop at all; the fallback
    *  control is hidden rather than offering a button that cannot act. */
@@ -187,9 +193,9 @@ export function NativeChatBackgroundTasksStatus(props: {
   const groups: BackgroundTaskGroup[] = useMemo(
     () =>
       props.childViews !== undefined
-        ? buildBackgroundTaskGroupsFromViews(props.childViews)
+        ? buildBackgroundTaskGroupsFromViews(props.childViews, props.childRowContext)
         : buildBackgroundTaskGroups(props.tasks, props.settledTasks),
-    [props.childViews, props.tasks, props.settledTasks]
+    [props.childViews, props.childRowContext, props.tasks, props.settledTasks]
   )
   const singleLiveCommand =
     groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1

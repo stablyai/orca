@@ -41,6 +41,14 @@ export function agentChildRowDetailText(row: AgentChildRowModel, now: number): s
   }
 }
 
+/** The line beneath a full-width row: what the child said, or that it ended; '' otherwise. */
+export function agentChildRowMessageLine(row: AgentChildRowModel): string {
+  if (row.detail?.kind === 'message') {
+    return row.detail.text
+  }
+  return row.detail?.kind === 'ended' ? translate('components.agentChildRow.ended', 'Ended') : ''
+}
+
 /** The row's name, or its state when the child reported none. */
 export function agentChildRowName(row: AgentChildRowModel): string {
   return row.name.trim() || agentStateLabel(row.displayState)

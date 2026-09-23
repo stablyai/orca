@@ -6,7 +6,7 @@ import {
   type AgentChildDisplayState
 } from './agent-status-child-work-display'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from './agent-status-types'
+import type { AgentStatusEntry, AgentSubagentSnapshot } from './agent-status-types'
 
 /** What a child row says beside its name. Surfaces format it; they never decide it. */
 export type AgentChildRowDetail =
@@ -57,6 +57,19 @@ export type AgentChildRowContext = {
   transportObservation: 'live' | 'unverifiable'
   /** The parent's evidence clock: recency for a child whose host reports no clock of its own. */
   parentObservedAt: number
+}
+
+/** The context a parent row gives its children. Every surface that lists one parent's children
+ *  builds it here, from the same parent row, so a lost child reads the same everywhere. */
+export function agentChildRowContextForParent(
+  parent: Pick<AgentStatusEntry, 'updatedAt' | 'subagentObservation'>,
+  parentEvidenceFresh: boolean
+): AgentChildRowContext {
+  return {
+    parentEvidenceFresh,
+    transportObservation: parent.subagentObservation ?? 'live',
+    parentObservedAt: parent.updatedAt
+  }
 }
 
 /** Provider strings that carry no identity; the next label wins. */

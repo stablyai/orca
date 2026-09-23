@@ -1,6 +1,10 @@
 /** @vitest-environment happy-dom */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  agentChildRowContextForParent,
+  type AgentChildRowContext
+} from '../../../shared/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -127,13 +131,17 @@ function sidebarRows(parent: AgentStatusEntry, parentIsFresh = true): RenderedRo
   )
 }
 
-function stripRows(children: AgentChildWorkView[]): RenderedRow[] {
+function stripRows(
+  children: AgentChildWorkView[],
+  childRowContext?: AgentChildRowContext
+): RenderedRow[] {
   const root = mount(
     renderToStaticMarkup(
       <NativeChatBackgroundTasksStatus
         tasks={[]}
         settledTasks={[]}
         childViews={children}
+        childRowContext={childRowContext}
         supportsTaskStop
         supportsStopAll
         stoppingTaskIds={new Set()}
@@ -149,6 +157,31 @@ function stripRows(children: AgentChildWorkView[]): RenderedRow[] {
   return [...root.querySelectorAll('li')]
     .filter((row) => row.querySelector(':scope > span.truncate'))
     .map((row) => readRow(row, ' · '))
+}
+
+/** The full sidebar row: every dot label it carries, and its whole text. */
+function fullRow(parent: AgentStatusEntry): { labels: string[]; text: string } {
+  const [agent] = buildSubagentChildRows({ parentEntry: parent, tab, parentIsFresh: true })
+  const root = mount(
+    renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={agent}
+          now={NOW}
+          onActivate={() => {}}
+          onDismiss={() => {}}
+          stateDotSize="sm"
+          hideExpand
+        />
+      </TooltipProvider>
+    )
+  )
+  return {
+    labels: [...root.querySelectorAll('[aria-label]')].map(
+      (element) => element.getAttribute('aria-label') ?? ''
+    ),
+    text: root.textContent ?? ''
+  }
 }
 
 const SCENARIOS: [string, AgentChildWorkView[], RenderedRow][] = [
@@ -223,15 +256,56 @@ const SCENARIOS: [string, AgentChildWorkView[], RenderedRow][] = [
     'unverifiable',
     [view('child', { state: 'unverifiable' })],
     { dot: 'No recent update', lead: 'Audit the parser', trail: 'No update in 2m' }
+  ],
+  [
+    'parked, still live',
+    [view('child', { state: 'idle' })],
+    { dot: 'Idle', lead: 'Audit the parser', trail: 'general-purpose' }
   ]
 ]
 
+/** What the full sidebar row, the CLI row's own layout, shows of the same detail. */
+const FULL_ROW_DETAIL: Record<string, { shows: string[]; hides?: string[] }> = {
+  'working, no known operation': { shows: [] },
+  'working with a tool': { shows: ['Read', 'src/parser.ts'] },
+  'running a shell in the foreground': { shows: ['Bash', 'npm test'] },
+  'finished, while a shell it launched still runs': { shows: [], hides: ['All green'] },
+  'waiting on an approval': { shows: ['Edit', 'src/parser.ts'] },
+  blocked: { shows: ['Rate limited, retrying'] },
+  finished: { shows: ['Found 3 call sites'] },
+  failed: { shows: ['Exit code 1'] },
+  cancelled: { shows: [] },
+  'ended, outcome unknown': { shows: ['Ended'] },
+  unverifiable: { shows: ['No update in 2m'] },
+  'parked, still live': { shows: [] }
+}
+
 describe('a child reads the same in the sidebar and the chat strip', () => {
-  it.each(SCENARIOS)('%s', (_name, children, expected) => {
+  it.each(SCENARIOS)('%s', (name, children, expected) => {
     const [sidebar] = sidebarRows(parentWith(children))
     const [strip] = stripRows(children)
     expect(sidebar).toEqual(expected)
     expect(strip).toEqual(expected)
+    const full = fullRow(parentWith(children))
+    expect(full.labels).toContain(expected.dot)
+    expect(full.text).toContain(expected.lead === expected.dot ? expected.trail : expected.lead)
+    for (const text of FULL_ROW_DETAIL[name].shows) {
+      expect(full.text).toContain(text)
+    }
+    for (const text of FULL_ROW_DETAIL[name].hides ?? []) {
+      expect(full.text).not.toContain(text)
+    }
+  })
+
+  it('names an unlabeled child by the same state on every surface', () => {
+    const children = [
+      settled('failed', { description: undefined, agentType: undefined, lastMessage: 'Exit 2' })
+    ]
+    const [sidebar] = sidebarRows(parentWith(children))
+    const [strip] = stripRows(children)
+    expect(sidebar.lead).toBe('Failed')
+    expect(strip.lead).toBe('Failed')
+    expect(fullRow(parentWith(children)).text).toContain('Failed')
   })
 
   it('shows the monitoring icon on the full sidebar row too', () => {
@@ -272,6 +346,40 @@ describe('a child reads the same in the sidebar and the chat strip', () => {
       expect(row.dot).toBe('Monitoring background tasks')
       expect(`${row.lead} ${row.trail}`).not.toContain('npm test')
     }
+  })
+})
+
+describe('a lost or stale parent reads the same on both surfaces', () => {
+  const children = [
+    view('child', {
+      operation: { toolName: 'Bash', input: 'npm test', basis: 'open', observedAt: NOW }
+    })
+  ]
+  const lost: RenderedRow = {
+    dot: 'No recent update',
+    lead: 'Audit the parser',
+    trail: 'No update in 2m'
+  }
+
+  it('when the transport to the host is lost', () => {
+    const parent = { ...parentWith(children), subagentObservation: 'unverifiable' as const }
+    const [sidebar] = sidebarRows(parent)
+    const [strip] = stripRows(children, agentChildRowContextForParent(parent, true))
+    expect(sidebar).toEqual(lost)
+    expect(strip).toEqual(lost)
+  })
+
+  it('when the parent row has gone stale', () => {
+    const parent = parentWith([settled('succeeded'), OWNED_SHELL], NOW - 40 * MINUTE)
+    const [sidebar] = sidebarRows(parent, false)
+    const [strip] = stripRows(parent.children ?? [], agentChildRowContextForParent(parent, false))
+    const stale = { dot: 'No recent update', lead: 'Audit the parser', trail: 'No update in 2m' }
+    expect(sidebar).toEqual(stale)
+    expect(strip).toEqual(stale)
+  })
+
+  it('without a context the strip reports what the host last said', () => {
+    expect(stripRows(children)[0].dot).toBe('Working')
   })
 })
 

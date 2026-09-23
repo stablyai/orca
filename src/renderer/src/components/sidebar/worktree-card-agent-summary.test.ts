@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { CompactAgentRow, getCompactAgentSecondary } from './worktree-card-compact-agent-row'
-import { getAgentDotState, summarizeAgents } from './worktree-card-agent-summary'
+import {
+  buildSummaryAgentGroups,
+  getAgentDotState,
+  summarizeAgents
+} from './worktree-card-agent-summary'
 
 function monitoringAgent(): DashboardAgentRowData {
   return {
@@ -45,6 +49,30 @@ function renderCompactAgentRow(props: React.ComponentProps<typeof CompactAgentRo
 }
 
 describe('worktree card agent summary', () => {
+  it('keeps a failed child in the groups and the counts', () => {
+    const failed: DashboardAgentRowData = {
+      ...monitoringAgent(),
+      paneKey: 'tab-1:leaf-1\u0000subagent:child',
+      rowSource: 'subagent',
+      state: 'blocked',
+      childRow: {
+        id: 'child',
+        kind: 'agent',
+        displayState: 'failed',
+        name: 'Fuzz the tokenizer',
+        detail: null,
+        firstObservedAt: 1,
+        recencyAt: 1,
+        canStop: false,
+        settled: true,
+        owned: []
+      }
+    }
+    expect(getAgentDotState(failed)).toBe('failed')
+    expect(buildSummaryAgentGroups([failed]).map((group) => group.state)).toEqual(['failed'])
+    expect(summarizeAgents([failed], 'Agent')).toBe('Agent failed')
+  })
+
   it('presents passive working as monitoring', () => {
     const agent = monitoringAgent()
 
