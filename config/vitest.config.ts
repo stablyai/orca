@@ -26,7 +26,8 @@ export default defineConfig({
     setupFiles: [
       resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
       resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-      resolve('config/scripts/vitest-host-ports-setup.ts')
+      resolve('config/scripts/vitest-host-ports-setup.ts'),
+      resolve('config/scripts/vitest-caller-identity-env-setup.ts')
     ],
     include: [
       'src/**/*.test.ts',

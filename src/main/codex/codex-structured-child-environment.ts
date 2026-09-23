@@ -1,6 +1,6 @@
 import type { CodexStructuredLaunch } from './codex-structured-session-state'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { structuredWorkerChildIdentityEnv } from '../runtime/structured-worker-child-identity-env'
+import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
 
 export function buildCodexStructuredChildEnvironment(
   launch: CodexStructuredLaunch,
@@ -8,9 +8,8 @@ export function buildCodexStructuredChildEnvironment(
   sessionId: string
 ): Record<string, string> {
   return {
-    // Only a dispatched structured worker gets the orchestration identity and the Orca CLI on
-    // PATH; an ordinary chat session's env passes through untouched.
-    ...structuredWorkerChildIdentityEnv(sessionId, {
+    // Every structured session speaks orchestration as itself: its injected id and the Orca CLI.
+    ...structuredSessionChildIdentityEnv(sessionId, {
       ...launch.env,
       ...(launch.codexHome ? { CODEX_HOME: launch.codexHome } : {})
     }),

@@ -9,6 +9,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
@@ -74,6 +75,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    // Why: a structured session's terminal view in a WSL shell must still present its id, so the
+    // host refuses the cross-host claim instead of the pane handle silently becoming its caller.
+    `${ORCA_AGENT_SESSION_ID_ENV}/u`,
     'ORCA_USER_DATA_PATH/p',
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.

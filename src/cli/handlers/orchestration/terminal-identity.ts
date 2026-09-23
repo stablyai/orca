@@ -3,14 +3,25 @@ import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { isStructuredSessionWithoutIdentity } from '../../../shared/structured-session-marker'
+import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
+import { normalizeOrchestrationActor } from '../../../shared/orchestration-actor'
+import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 
+/**
+ * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:
+ * the orchestration envelope carries that id and the host binds the caller param to it, so nothing
+ * is resolved or guessed here.
+ */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient,
   flagName: 'from' | 'terminal',
   options: { validateEnvHandle?: boolean } = {}
-): Promise<string> {
+): Promise<string | undefined> {
+  if (resolveInjectedSessionCaller(flags, flagName)) {
+    return undefined
+  }
   const explicit = getOptionalStringFlag(flags, flagName)
   if (explicit) {
     return explicit
@@ -157,11 +168,51 @@ function getClientErrorMessage(err: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined
 }
 
+/**
+ * The injected session id when this command runs as an agent session. The id wins over every other
+ * identity this process carries; a caller flag may restate that same session but never name
+ * another, and a conflicting one is refused here, before any request is sent.
+ */
+export function resolveInjectedSessionCaller(
+  flags: Map<string, string | boolean>,
+  flagName: 'from' | 'terminal'
+): string | undefined {
+  const sessionId = readInjectedAgentSessionId()
+  if (!sessionId) {
+    return undefined
+  }
+  const declared = getOptionalStringFlag(flags, flagName)
+  if (declared !== undefined && !namesInjectedSession(declared, sessionId)) {
+    throw new RuntimeClientError(
+      'consumer_fenced',
+      `This command runs as agent session ${sessionId}, so --${flagName} ${declared} would act as a ` +
+        `different caller. Drop --${flagName}: this session's orchestration commands already act as ` +
+        `session:${sessionId}. No request was sent.`
+    )
+  }
+  return sessionId
+}
+
+/** The session's own spellings, plus the handle a structured worker session was minted. */
+function namesInjectedSession(value: string, sessionId: string): boolean {
+  if (normalizeOrchestrationActor(value)?.id === sessionId) {
+    return true
+  }
+  const ownHandle = process.env.ORCA_TERMINAL_HANDLE
+  return isStructuredWorkerHandle(ownHandle) && value === ownHandle
+}
+
+/** How check output names its caller: the handle, or the session's address. */
+export function orchestrationCallerLabel(handle: string | undefined): string {
+  const sessionId = handle === undefined ? readInjectedAgentSessionId() : undefined
+  return handle ?? (sessionId ? `session:${sessionId}` : 'unknown')
+}
+
 export async function resolveCoordinatorTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
-): Promise<string> {
+): Promise<string | undefined> {
   return await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from', {
     validateEnvHandle: true
   })

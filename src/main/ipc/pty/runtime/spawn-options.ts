@@ -9,7 +9,7 @@ import {
   mergePtyEnvDeletions,
   removeCodexHomeDeletionRequests,
   getInheritedAgentHookEnvKeysToDelete,
-  getInheritedClaudeSessionStampEnvKeysToDelete
+  getInheritedAgentSessionStampEnvKeysToDelete
 } from '../host-env/pi-agent'
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
 import {
@@ -73,7 +73,7 @@ export async function buildRuntimePtySpawnOptions(
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
     ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.env) : [],
     // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
-    getInheritedClaudeSessionStampEnvKeysToDelete(ctx.env)
+    getInheritedAgentSessionStampEnvKeysToDelete(ctx.env)
   )
   if (ctx.skipCodexHomeEnv) {
     ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
