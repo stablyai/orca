@@ -27,7 +27,8 @@ export const MOBILE_WEB_BUNDLE_RANGE_METHOD = 'mobileWeb.bundle.range'
 export const MOBILE_WEB_BUNDLE_RANGE_ENCODINGS = ['gzip', 'identity'] as const
 export type MobileWebBundleRangeEncoding = (typeof MOBILE_WEB_BUNDLE_RANGE_ENCODINGS)[number]
 
-const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
+/** Exact base64 lengths of a full window: these bound only what this host produces. */
+const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4
 export const MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH =
   Math.ceil(MOBILE_WEB_BUNDLE_RANGE_BYTES / 3) * 4
 
@@ -74,7 +75,7 @@ const windowParamsShape = {
 export const MobileWebBundleChunkParamsSchema = z.object(windowParamsShape).strict()
 
 /** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised. */
-export const MobileWebBundleRangeParamsSchema = z.object(windowParamsShape).strict()
+export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 
 /** What every chunk or range reply restates about the window it answers. */
 const windowHeaderShape = {

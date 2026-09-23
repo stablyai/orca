@@ -16,29 +16,32 @@ export type MobileWebBundleWindowHeader = {
 
 export type MobileWebBundleWindowReply = {
   readonly header: MobileWebBundleWindowHeader
-  /** Decoded on demand, so a reply the fetch discards or refuses by its header is never inflated. */
-  readonly bytes: () => Uint8Array
+  /** Decoded on demand, so a reply the fetch discards or refuses by its header is never inflated.
+   *  `expected` is the slot length on the grid; a range inflates into at most one byte past it. */
+  readonly bytes: (expected: number) => Uint8Array
 }
 
-/** One grid and one read method, fixed for a whole fetch by what the manifest reply named. */
+/** One client, one grid and one read method, fixed for a whole fetch by the manifest reply. */
 export type MobileWebBundleWindowReader = {
   readonly windowBytes: number
-  read(
-    client: RpcClient,
-    window: { buildId: string; path: string; offset: number }
-  ): Promise<MobileWebBundleWindowReply>
+  read(window: {
+    buildId: string
+    path: string
+    offset: number
+  }): Promise<MobileWebBundleWindowReply>
 }
 
 /** Ranges when the host named a range grid, chunks otherwise: a host that predates the range
  *  method names none, and every bundle host serves chunks. */
 export function mobileWebBundleWindowReader(
+  client: RpcClient,
   opened: Pick<MobileWebBundleManifestReply, 'chunkBytes' | 'rangeBytes'>
 ): MobileWebBundleWindowReader {
   const { rangeBytes } = opened
   if (rangeBytes === undefined) {
     return {
       windowBytes: opened.chunkBytes,
-      read: async (client, window) => {
+      read: async (window) => {
         const { dataBase64, ...header } = await runRpcOperation(
           client,
           mobileWebBundleChunkRead,
@@ -50,16 +53,15 @@ export function mobileWebBundleWindowReader(
   }
   return {
     windowBytes: rangeBytes,
-    read: async (client, window) => {
+    read: async (window) => {
       const { dataBase64, encoding, ...header } = await runRpcOperation(
         client,
         mobileWebBundleRangeRead,
         window
       )
-      const expected = Math.max(0, Math.min(rangeBytes, header.assetByteLength - header.offset))
       return {
         header,
-        bytes: () =>
+        bytes: (expected) =>
           decodeMobileWebBundleRange(
             { path: header.path, offset: header.offset, encoding },
             decodeBase64(dataBase64),

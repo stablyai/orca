@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { gzipSync } from 'fflate'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_BYTES
@@ -11,7 +11,13 @@ import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 
-const inflations = vi.hoisted(() => ({ outLengths: [] as number[], resultLengths: [] as number[] }))
+type Inflation = { readonly outLength: number; readonly resultLength: number }
+
+/** Every inflation in the process, keyed by the gzip body it was handed; a host reads back only
+ *  the bodies it sent, so a read left running by an earlier test's fetch never lands in its sink. */
+const inflationLog = vi.hoisted(
+  () => [] as { body: Uint8Array; outLength: number; resultLength: number }[]
+)
 
 // Observes the bound the decoder hands fflate, and what fflate hands back inside it.
 vi.mock('fflate', async (importOriginal) => {
@@ -19,9 +25,12 @@ vi.mock('fflate', async (importOriginal) => {
   return {
     ...fflate,
     gunzipSync: (data: Uint8Array, options?: { out?: Uint8Array }) => {
-      inflations.outLengths.push(options?.out?.byteLength ?? -1)
       const result = fflate.gunzipSync(data, options)
-      inflations.resultLengths.push(result.byteLength)
+      inflationLog.push({
+        body: data,
+        outLength: options?.out?.byteLength ?? -1,
+        resultLength: result.byteLength
+      })
       return result
     }
   }
@@ -88,6 +97,7 @@ function rangeHost(
     assets
   }
   const calls: HostCall[] = []
+  const sentGzipBodies = new Set<string>()
   let wireBase64Bytes = 0
   let inFlight = 0
   let peakInFlight = 0
@@ -124,7 +134,11 @@ function rangeHost(
     const gzipped = gzipSync(slice, { level: 6 })
     const encoding = gzipped.byteLength < slice.byteLength ? 'gzip' : 'identity'
     const body = encodeBase64(encoding === 'gzip' ? gzipped : slice)
-    return { ...header, encoding, dataBase64: options.tamper?.(call, body) ?? body }
+    const dataBase64 = options.tamper?.(call, body) ?? body
+    if (encoding === 'gzip') {
+      sentGzipBodies.add(dataBase64)
+    }
+    return { ...header, encoding, dataBase64 }
   }
 
   const client: RpcClient = {
@@ -156,7 +170,22 @@ function rangeHost(
     client,
     calls,
     wireBase64Bytes: () => wireBase64Bytes,
-    peakInFlight: () => peakInFlight
+    peakInFlight: () => peakInFlight,
+    /** Waits until nothing is in flight and nothing new was sent for a few ticks, so a read a
+     *  missing sibling stop would still send is counted instead of left pending. */
+    drain: async (): Promise<void> => {
+      let quiet = 0
+      for (let tick = 0; tick < 2000 && quiet < 10; tick += 1) {
+        const sent = calls.length
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        quiet = inFlight === 0 && calls.length === sent ? quiet + 1 : 0
+      }
+    },
+    /** This host's inflations only: those whose body is one it sent. */
+    inflations: (): Inflation[] =>
+      inflationLog
+        .filter((entry) => sentGzipBodies.has(encodeBase64(entry.body)))
+        .map(({ outLength, resultLength }) => ({ outLength, resultLength }))
   }
 }
 
@@ -191,11 +220,6 @@ async function refusalOf(failed: Promise<unknown>): Promise<string | null> {
   )
   return error instanceof MobileWebBundleFetchError ? error.refusal : null
 }
-
-beforeEach(() => {
-  inflations.outLengths.length = 0
-  inflations.resultLengths.length = 0
-})
 
 describe('fetchMobileWebBundle from a host whose manifest names a range grid', () => {
   it('pages every asset in ranges on that grid and returns the verified bytes', async () => {
@@ -262,19 +286,30 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('range-undecodable')
   })
 
-  // A 4 MiB inflation answering a 600-byte window: fflate fills the bounded buffer and stops there.
-  it('refuses a gzip bomb as overlong without inflating past one byte over the window', async () => {
-    const bomb = gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 })
-    const host = rangeHost(FILES, {
-      tamper: (call, body) => (call.params.path === 'index.html' ? encodeBase64(bomb) : body)
+  // A 4 MiB inflation answering the first 384 KiB window: fflate fills the bounded buffer and stops
+  // there. Twenty reads are planned, so a fetch that kept going after the refusal is visible.
+  it('refuses a gzip bomb at one byte over the window and sends little after it', async () => {
+    const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
+    const many = Object.fromEntries(
+      Array.from({ length: 10 }, (_, index) => [
+        `assets/part-${String(index)}.js`,
+        scriptBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2, index)
+      ])
+    )
+    const host = rangeHost(many, {
+      tamper: (call, body) =>
+        call.params.path === 'assets/part-0.js' && call.params.offset === 0 ? bomb : body
     })
 
-    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('asset-overlong')
-    // Order-free: a stray read from an earlier test may inflate into this test's record too.
-    expect(inflations.resultLengths).toContain(601)
-    for (const [call, resultLength] of inflations.resultLengths.entries()) {
-      expect(resultLength).toBeLessThanOrEqual(inflations.outLengths[call]!)
-    }
+    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('chunk-oversize')
+    await host.drain()
+    const window = MOBILE_WEB_BUNDLE_RANGE_BYTES + 1
+    // Exactly one body filled the spare byte: the bomb, stopped there.
+    expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
+      { outLength: window, resultLength: window }
+    ])
+    // The sibling stop: at most the four in flight and one more each, never all twenty.
+    expect(readsOf(host.calls, 'mobileWeb.bundle.range').length).toBeLessThanOrEqual(8)
   })
 
   it('refuses a range that inflates short of its window as short', async () => {

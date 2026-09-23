@@ -59,13 +59,13 @@ export async function fetchMobileWebBundle(args: {
   throwIfCallerAborted(args.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
-  const reader = mobileWebBundleWindowReader(opened)
+  const reader = mobileWebBundleWindowReader(args.client, opened)
   const queue = planWindowReads(manifest.assets, reader.windowBytes)
   const assets = new Map<string, Uint8Array>()
   let receivedBytes = 0
 
   const readWindow = async ({ asset, offset }: WindowRead): Promise<void> => {
-    const reply = await reader.read(args.client, {
+    const reply = await reader.read({
       buildId: manifest.buildId,
       path: asset.entry.path,
       offset
@@ -75,7 +75,7 @@ export async function fetchMobileWebBundle(args: {
       return
     }
     assertWindowDescribesAsset(reply.header, asset.entry, manifest.buildId, offset)
-    const bytes = reply.bytes()
+    const bytes = reply.bytes(windowSlotBytes(asset.entry, offset, reader.windowBytes))
     assertWindowFillsItsSlot(
       asset.entry,
       offset,
@@ -141,6 +141,15 @@ function planWindowReads(
   })
 }
 
+/** The bytes the grid slot at `offset` holds: a whole window, or the asset's tail. */
+function windowSlotBytes(
+  entry: MobileWebBundleAssetRead,
+  offset: number,
+  windowBytes: number
+): number {
+  return Math.min(windowBytes, entry.byteLength - offset)
+}
+
 /** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
 function assertWindowFillsItsSlot(
   entry: MobileWebBundleAssetRead,
@@ -150,7 +159,7 @@ function assertWindowFillsItsSlot(
   windowBytes: number
 ): void {
   const { path, byteLength: declared } = entry
-  const expected = Math.min(windowBytes, declared - offset)
+  const expected = windowSlotBytes(entry, offset, windowBytes)
   if (byteLength === expected && eof === offset + windowBytes >= declared) {
     return
   }

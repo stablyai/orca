@@ -32,7 +32,7 @@ import {
 import { isClientDisconnectedError } from '../../orca-runtime-core'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import {
-  readMobileWebBundleAssetChunk,
+  readMobileWebBundleAssetWindow,
   verifyMobileWebBundleAsset
 } from './mobile-web-bundle-asset-reader'
 import {
@@ -132,7 +132,12 @@ async function readVerifiedWindow<T>(
       throw bundleError('mobile_web_bundle_asset_changed')
     }
     abortIfDisconnected(ctx)
-    const data = await readMobileWebBundleAssetChunk(bundle.root, asset, params.offset, windowBytes)
+    const data = await readMobileWebBundleAssetWindow(
+      bundle.root,
+      asset,
+      params.offset,
+      windowBytes
+    )
     abortIfDisconnected(ctx)
     return await encode({
       header: {
