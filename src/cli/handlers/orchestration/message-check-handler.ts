@@ -13,7 +13,7 @@ import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
-import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { orchestrationCallerLabel, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 type CheckResult = {
   messages: MessageSummary[]
@@ -41,12 +41,16 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    // Why: a session names itself by its id alone; a terminal view's pane is not its identity.
+    const paneKey =
+      explicitTerminal || terminal === undefined ? undefined : process.env.ORCA_PANE_KEY
+    const callerLabel = orchestrationCallerLabel(terminal)
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
       result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
-        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
+        terminalPaneKey: paneKey || undefined,
         // Why: old runtimes degrade peek to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
@@ -68,9 +72,9 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
+      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
     }
-    printResult(result, json, (value) => formatOrchestrationCheckText(value, terminal))
+    printResult(result, json, (value) => formatOrchestrationCheckText(value, callerLabel))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()
