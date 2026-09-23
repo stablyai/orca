@@ -3,7 +3,7 @@
   "family": "transport.pairing-race",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "f4f0915e7087f687def144373eafc11dc061dbb2",
+  "baseline": "d4d6aadea298cdfe0ced348923d2f39d37a90371",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
