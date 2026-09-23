@@ -7,6 +7,12 @@ import {
   runPreflightCheck
 } from '../../../preflight/agent-detection'
 import {
+  probeAgentHealth,
+  probeAgentProviderHealth,
+  updateAgent
+} from '../../../ipc/agent-health-probe'
+import {
+  PreflightAgentHealthProvider,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -37,5 +43,20 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.refreshAgents',
     params: null,
     handler: async () => refreshShellPathAndDetectAgents()
+  }),
+  defineMethod({
+    name: 'preflight.probeAgentHealth',
+    params: null,
+    handler: async () => probeAgentHealth()
+  }),
+  defineMethod({
+    name: 'preflight.probeAgentHealthProvider',
+    params: PreflightAgentHealthProvider,
+    handler: async (params) => probeAgentProviderHealth(params.provider)
+  }),
+  defineMethod({
+    name: 'preflight.updateAgent',
+    params: PreflightAgentHealthProvider,
+    handler: async (params) => updateAgent(params.provider)
   })
 ]

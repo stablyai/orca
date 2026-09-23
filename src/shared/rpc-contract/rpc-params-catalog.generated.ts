@@ -405,6 +405,7 @@ import {
   PluginsPanelActionParams
 } from './plugins-params'
 import {
+  PreflightAgentHealthProvider,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -1027,7 +1028,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
+  'preflight.probeAgentHealth': null,
+  'preflight.probeAgentHealthProvider': PreflightAgentHealthProvider,
   'preflight.refreshAgents': null,
+  'preflight.updateAgent': PreflightAgentHealthProvider,
   'project.list': null,
   'project.update': ProjectUpdate,
   'projectGroup.create': ProjectGroupCreate,
