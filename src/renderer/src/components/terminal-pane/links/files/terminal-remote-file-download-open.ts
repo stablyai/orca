@@ -48,8 +48,9 @@ export async function downloadAndOpenRemoteTerminalFile(
       : granted
         ? await downloadGrantedRuntimeFile(granted, name)
         : await downloadRuntimeFile(fileContext, filePath, name)
-    // Why: cancelling the native save dialog is a deliberate no-op, not a failure.
-    if (!result.canceled) {
+    // Why: cancelling the native save dialog is a deliberate no-op, not a failure; a newer link
+    // click during the download supersedes this one.
+    if (!result.canceled && isCurrent()) {
       await window.api.shell.openFilePath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
     }
   } catch (error) {
