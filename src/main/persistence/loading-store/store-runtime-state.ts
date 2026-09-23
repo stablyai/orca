@@ -19,10 +19,13 @@ import type {
   AutomationListProjectionCache,
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
+import type { ProfileStateAuthority } from './profile-state-authority'
+import type { AutomationRun } from '../../../shared/automations-types'
 
 export type StoreRuntimeOptions = {
   dataFile?: string
   storageAuthority?: AutomationStorageAuthority
+  profileStateAuthority?: ProfileStateAuthority
 }
 
 /** Mutable coordination state shared only with this Store's private collaborators. */
@@ -30,6 +33,7 @@ export class StoreRuntimeState {
   state!: PersistedState
   readonly dataFile: string
   readonly storageAuthority: AutomationStorageAuthority
+  readonly profileStateAuthority: ProfileStateAuthority | undefined
   automationListProjectionCache: AutomationListProjectionCache | null = null
   activeViewPreference!: ActiveViewPreference
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
@@ -46,6 +50,9 @@ export class StoreRuntimeState {
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
   firstPendingSaveAt: number | null = null
+  /** Known dirty domains, or null when a caller requires a complete-document fallback. */
+  dirtyProfileStateDomains: Set<string> | null = new Set()
+  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
   githubCacheGeneration = 0
   pendingGithubCacheWrite: Promise<void> | null = null
@@ -72,6 +79,7 @@ export class StoreRuntimeState {
   constructor(options: StoreRuntimeOptions = {}) {
     this.dataFile = options.dataFile ?? getDataFile()
     this.storageAuthority = options.storageAuthority ?? 'desktop'
+    this.profileStateAuthority = options.profileStateAuthority
     this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
       minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
     })

@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => {
       events.push(`set-name:${name}`)
     })
   }
-  return { app, events, userAgent: () => userAgent }
+  return { app, events, userAgent: () => userAgent, admission: vi.fn() }
 })
 
 vi.mock('electron', () => ({
@@ -127,6 +127,12 @@ vi.mock('../persistence', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
+vi.mock('../persistence/profile-state/profile-state-access', () => ({
+  acquireProfileStateRuntimeAdmission: (root: string) => {
+    mocks.events.push(`admission:${root}`)
+    return mocks.admission()
+  }
+}))
 vi.mock('../macos-press-and-hold-default')
 vi.mock('../ai-vault/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store')
@@ -180,6 +186,10 @@ describe('browser process user-agent startup ordering', () => {
     const writeIndex = mocks.events.indexOf('write-user-agent')
     const continuationIndex = mocks.events.indexOf('continued-after-browser-identity')
     expect(mocks.events.indexOf('init-data-path')).toBeLessThan(nameIndex)
+    expect(mocks.events.indexOf('init-data-path')).toBeLessThan(
+      mocks.events.indexOf('admission:/canonical-user-data')
+    )
+    expect(mocks.events.indexOf('admission:/canonical-user-data')).toBeLessThan(modeIndex)
     expect(nameIndex).toBeLessThan(modeIndex)
     expect(modeIndex).toBeLessThan(writeIndex)
     expect(writeIndex).toBeLessThan(continuationIndex)
@@ -190,5 +200,25 @@ describe('browser process user-agent startup ordering', () => {
     // Both app-name words must be gone, not just the last: a single \S+ would have left "Orca".
     expect(mocks.userAgent()).not.toMatch(/Electron/)
     expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
+  })
+
+  it('exits without reading profile state or revealing a window when recovery holds admission', async () => {
+    const { runMainProcessPreflight } = await import('./main-process-preflight')
+    mocks.events.length = 0
+    mocks.admission.mockImplementationOnce(() => {
+      throw new Error('Profile recovery is in progress')
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const focusExistingWindow = vi.fn()
+    const requestDesktopActivation = vi.fn()
+    try {
+      expect(runMainProcessPreflight({ focusExistingWindow, requestDesktopActivation })).toBe(false)
+      expect(mocks.app.exit).toHaveBeenCalledWith(1)
+      expect(mocks.events).toEqual(['init-data-path', 'admission:/canonical-user-data'])
+      expect(focusExistingWindow).not.toHaveBeenCalled()
+      expect(requestDesktopActivation).not.toHaveBeenCalled()
+    } finally {
+      error.mockRestore()
+    }
   })
 })

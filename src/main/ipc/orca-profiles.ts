@@ -33,6 +33,7 @@ import {
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
+import { transferActiveProfileProject } from '../orca-profiles/profile-active-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
 import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
@@ -47,6 +48,7 @@ import {
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
 import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
 import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
+import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -67,26 +69,6 @@ function profileIdFromArgs(args: unknown): string {
     throw new Error('invalid_orca_profile_id')
   }
   return profileId
-}
-
-function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProjectArgs {
-  if (!args || typeof args !== 'object') {
-    throw new Error('invalid_orca_profile_project_transfer')
-  }
-  const candidate = args as TransferOrcaProfileProjectArgs
-  const sourceProfileId = candidate.sourceProfileId?.trim()
-  const targetProfileId = candidate.targetProfileId?.trim()
-  const repoId = candidate.repoId?.trim()
-  const mode = candidate.mode
-  if (!sourceProfileId || !targetProfileId || !repoId || (mode !== 'move' && mode !== 'copy')) {
-    throw new Error('invalid_orca_profile_project_transfer')
-  }
-  return {
-    sourceProfileId,
-    targetProfileId,
-    repoId,
-    mode
-  }
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
@@ -242,7 +224,15 @@ export function registerOrcaProfileHandlers(
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
         await flushActiveProfileBeforeFileMutation(store)
-        const result = transferOrcaProfileProject(args, getProfileUserDataPath())
+        const result = await transferActiveProfileProject(
+          args,
+          getProfileUserDataPath(),
+          store,
+          async () => {
+            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+            scheduleProfileRelaunch('profile-transfer')
+          }
+        )
         if (result.status === 'transferred') {
           store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)

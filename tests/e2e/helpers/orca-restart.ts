@@ -190,17 +190,21 @@ export function createRestartSession(
     }
     try {
       const resolvedHome = await retryTransientMainEvaluate(() =>
-        app.evaluate(({ app }) => app.getPath('home'))
+        app.evaluate(({ app }) => {
+          // This fixture owns every launch; native relaunch leaves an unattached Playwright child.
+          app.relaunch = () => {}
+          return app.getPath('home')
+        })
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+      return { app, page }
     } catch (error) {
       await closeElectronAppForE2E(app)
       throw error
     }
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    return { app, page }
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {

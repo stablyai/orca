@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import {
@@ -13,6 +13,12 @@ import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
 import { resolveOpenedMarkdownDocuments } from './startup/os-opened-markdown-files'
+import {
+  formatProfileStateStartupFailure,
+  profileStateStartupFailureClass
+} from './persistence/profile-state/profile-state-startup-failure'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+import { presentProfileStateStartupRecoveryDialog } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -107,9 +113,38 @@ if (preflightReady) {
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
-    await initializeMainProcessReady({
-      openMainWindow,
-      handleMacAppActivation
-    })
+    try {
+      await initializeMainProcessReady({
+        openMainWindow,
+        handleMacAppActivation
+      })
+    } catch (error) {
+      const message = formatProfileStateStartupFailure(error)
+      if (message === undefined) {
+        throw error
+      }
+      const failureClass = profileStateStartupFailureClass(error)
+      if (failureClass !== undefined) {
+        recordDurableCrashBreadcrumb('profile_state_startup_failed', {
+          failure_class: failureClass
+        })
+      }
+      console.error(`[profile-state] ${message}`)
+      if (!state.isServeMode && process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
+        try {
+          await presentProfileStateStartupRecoveryDialog({
+            message,
+            ...(failureClass === 'recovery-required'
+              ? { recoveryCommand: 'orca profile state exports' }
+              : {}),
+            showMessageBox: (options) => dialog.showMessageBox(options),
+            copyToClipboard: (text) => clipboard.writeText(text)
+          })
+        } catch (dialogError) {
+          console.warn('[profile-state] Recovery dialog failed; exiting safely:', dialogError)
+        }
+      }
+      app.exit(1)
+    }
   })
 }

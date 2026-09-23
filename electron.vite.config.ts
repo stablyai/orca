@@ -246,6 +246,9 @@ export const electronViteConfig: UserConfig = {
           // corpora and read SQLite synchronously; a worker thread keeps that
           // off the main-process event loop.
           'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
+          'profile-state-backup-worker-entry': resolve(
+            'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+          ),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
@@ -263,7 +266,29 @@ export const electronViteConfig: UserConfig = {
             'src/main/codex/managed-home-shell-preflight.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
+          // Why: the dev CLI's offline profile-state commands load these paths after
+          // electron-vite cleans out/main; keep them as stable sidecar entries.
+          ...Object.fromEntries(
+            [
+              'access',
+              'active-location',
+              'storage-classification',
+              'offline-settings',
+              'export-path',
+              'backup-path',
+              'database-recovery',
+              'domain-reader',
+              'recovery',
+              'recovery-command'
+            ].map((module) => [
+              `persistence/profile-state/profile-state-${module}`,
+              resolve(`src/main/persistence/profile-state/profile-state-${module}.ts`)
+            ])
+          ),
+          'startup/http1-compatibility-marker': resolve(
+            'src/main/startup/http1-compatibility-marker.ts'
+          )
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.

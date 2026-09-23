@@ -33,3 +33,14 @@ export async function startOrcadWithLifecycle<T extends object>(
     throw error
   }
 }
+
+export async function flushOrcadProfileStoreForShutdown(store: {
+  flushPendingOrThrowAsync(): Promise<void>
+  freezeWrites(): void
+}): Promise<void> {
+  try {
+    await store.flushPendingOrThrowAsync()
+  } finally {
+    store.freezeWrites()
+  }
+}

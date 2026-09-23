@@ -6,12 +6,14 @@ import { DeviceRegistry } from '../runtime/device-registry'
 import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
+import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 
 const state = vi.hoisted(() => ({
   root: '',
   controller: null as RuntimeMobileNotificationController | null,
   registry: null as DeviceRegistry | null,
   rpcStarted: false,
+  browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] }))
 }))
@@ -20,7 +22,7 @@ vi.mock('./orcad-app-paths', () => ({
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
-vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: async () => null }))
+vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
 vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: async () => {},
@@ -38,11 +40,19 @@ vi.mock('../persistence/loading-store/store', () => ({
     getSettings() {
       return {}
     }
+
+    async flushPendingOrThrowAsync() {}
+
+    freezeWrites() {}
   }
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
-  ensureActiveOrcaProfile: () => ({ dataFile: join(state.root, 'profile.json') })
+  ensureActiveOrcaProfile: () => ({
+    dataFile: join(state.root, 'profile.json'),
+    stateDatabaseFile: join(state.root, 'profile-state.db'),
+    profile: { id: 'headless-profile' }
+  })
 }))
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
 vi.mock('../server/serve-readiness', () => ({
@@ -107,6 +117,19 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true })
   vi.clearAllMocks()
+})
+
+it('refuses recovery overlap before initializing the browser provider or runtime', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-recovery-'))
+  const maintenance = acquireProfileStateMaintenance(state.root)
+  const { startOrcad } = await import('./orcad-entry')
+  try {
+    await expect(startOrcad({ noPairing: true, json: true })).rejects.toThrow()
+    expect(state.browserProvider).not.toHaveBeenCalled()
+    expect(state.rpcStarted).toBe(false)
+  } finally {
+    maintenance.release()
+  }
 })
 
 it('starts push after RPC identity is available and stops dispatch on shutdown', async () => {

@@ -34,10 +34,16 @@ type ProtectedSecretEncryption = {
 export class ProtectedSecretPersistence {
   private readonly retainedBlobs = new Map<string, string>()
   private readonly sealedSlots = new Set<string>()
+  private readonly pendingEncryption = new Set<string>()
+
+  hasPendingEncryption(): boolean {
+    return this.pendingEncryption.size > 0
+  }
 
   removeRetainedBlob(slot: string): void {
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
+    this.pendingEncryption.delete(slot)
   }
 
   isSealed(slot: string, value: string): boolean {
@@ -46,6 +52,7 @@ export class ProtectedSecretPersistence {
 
   commitRetentionUpdates(updates: readonly ProtectedSecretRetentionUpdate[]): void {
     for (const update of updates) {
+      this.pendingEncryption.delete(update.slot)
       if (update.blob === null) {
         this.removeRetainedBlob(update.slot)
       } else {
@@ -58,9 +65,16 @@ export class ProtectedSecretPersistence {
   encrypt(slot: string, plaintext: string): ProtectedSecretEncryption {
     const retained = this.retainedBlobs.get(slot) ?? ''
     if (!plaintext && !retained) {
-      return { blob: '', degraded: false }
+      return {
+        blob: '',
+        degraded: false,
+        ...(this.pendingEncryption.has(slot) ? { retentionUpdate: { slot, blob: null } } : {})
+      }
     }
     if (!this.encryptionAvailable()) {
+      if (!this.isSealed(slot, plaintext) && (plaintext || !this.sealedSlots.has(slot))) {
+        this.pendingEncryption.add(slot)
+      }
       return {
         blob: retained,
         degraded: true,
@@ -85,6 +99,7 @@ export class ProtectedSecretPersistence {
         retentionUpdate: { slot, blob }
       }
     } catch (err) {
+      this.pendingEncryption.add(slot)
       console.error('[persistence] Encryption failed; retaining the prior protected value:', err)
       return { blob: retained, degraded: true }
     }

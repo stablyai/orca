@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
+import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
   RuntimeClientError,
   type RuntimeClient,
@@ -16,6 +17,16 @@ import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { prepareManagedCodexHomeBeforeShellLaunch } from '../../main/codex/managed-home-shell-preflight'
+import {
+  readAgentHookSettingsFromProfileState,
+  updateAgentHookSettingsFromProfileState,
+  type ProfileStateOfflineLocation
+} from '../../main/persistence/profile-state/profile-state-offline-settings'
+import { getActiveProfileStateLocation } from '../profile-state-location'
+import {
+  acquireProfileStateMaintenance,
+  acquireProfileStateRuntimeAdmission
+} from '../../main/persistence/profile-state/profile-state-access'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -28,27 +39,11 @@ type AgentHookCommandResult = {
 const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
 
 function getDataPath(): string {
-  const userDataPath = getDefaultUserDataPath()
-  const indexPath = join(userDataPath, 'orca-profile-index.json')
-  for (const candidate of [indexPath, `${indexPath}.bak`]) {
-    try {
-      const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf-8'))
-      if (!isRecord(parsed) || !Array.isArray(parsed.profiles)) {
-        continue
-      }
-      const profileId = parsed.activeProfileId
-      if (
-        typeof profileId === 'string' &&
-        /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(profileId) &&
-        parsed.profiles.some((profile) => isRecord(profile) && profile.id === profileId)
-      ) {
-        return join(userDataPath, 'profiles', profileId, 'orca-data.json')
-      }
-    } catch {
-      // Try the profile-index backup, then the legacy pre-profile path.
-    }
-  }
-  return join(userDataPath, 'orca-data.json')
+  return getProfileStateLocation()?.dataFile ?? join(getDefaultUserDataPath(), 'orca-data.json')
+}
+
+function getProfileStateLocation(): ProfileStateOfflineLocation | undefined {
+  return getActiveProfileStateLocation()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,6 +91,22 @@ function readHookSettingsFromDisk(): Pick<
   GlobalSettings,
   'agentStatusHooksEnabled' | 'disabledTuiAgents'
 > {
+  const admission = acquireProfileStateRuntimeAdmission(getDefaultUserDataPath())
+  try {
+    return readAdmittedHookSettingsFromDisk()
+  } finally {
+    admission.release()
+  }
+}
+
+function readAdmittedHookSettingsFromDisk(): Pick<
+  GlobalSettings,
+  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+> {
+  const profileStateLocation = getProfileStateLocation()
+  if (profileStateLocation) {
+    return readAgentHookSettingsFromProfileState(profileStateLocation)
+  }
   const state = readPersistedState(getDataPath())
   return {
     agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
@@ -127,6 +138,23 @@ function updateEnabledOnDisk(enabled: boolean): {
   settingsPath: string
   settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
 } {
+  // A stopped-status response cannot exclude first migration racing this JSON write.
+  const maintenance = acquireProfileStateMaintenance(getDefaultUserDataPath())
+  try {
+    return updateAdmittedEnabledOnDisk(enabled)
+  } finally {
+    maintenance.release()
+  }
+}
+
+function updateAdmittedEnabledOnDisk(enabled: boolean): {
+  settingsPath: string
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+} {
+  const profileStateLocation = getProfileStateLocation()
+  if (profileStateLocation) {
+    return updateAgentHookSettingsFromProfileState(profileStateLocation, enabled)
+  }
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
   state.settings = {
@@ -145,20 +173,18 @@ function updateEnabledOnDisk(enabled: boolean): {
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  try {
-    const status = await client.getCliStatus()
-    if (!status.result.runtime.reachable) {
-      return false
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
+    if (status.result.app.running) {
+      throw new RuntimeClientError(
+        'runtime_error',
+        'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
+      )
     }
-    await client.call(
-      'settings.update',
-      { agentStatusHooksEnabled: enabled },
-      { timeoutMs: 10_000 }
-    )
-    return true
-  } catch {
     return false
   }
+  await client.call('settings.update', { agentStatusHooksEnabled: enabled }, { timeoutMs: 10_000 })
+  return true
 }
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
@@ -207,7 +233,8 @@ async function setAgentHooksEnabled(
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
-  'agent hooks prepare-codex': async ({ client }) => {
+  'agent hooks prepare-codex': async ({ client, flags }) => {
+    rejectRemoteHookSelection(flags)
     if (process.env.WSL_DISTRO_NAME?.trim()) {
       try {
         await client.call(
@@ -231,7 +258,8 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
     })
   },
-  'agent hooks status': async ({ json }) => {
+  'agent hooks status': async ({ json, flags }) => {
+    rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
@@ -242,12 +270,21 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
-  'agent hooks off': async ({ client, json }) => {
+  'agent hooks off': async ({ client, json, flags }) => {
+    rejectRemoteHookSelection(flags)
     const result = await setAgentHooksEnabled(client, false)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
-  'agent hooks on': async ({ client, json }) => {
+  'agent hooks on': async ({ client, json, flags }) => {
+    rejectRemoteHookSelection(flags)
     const result = await setAgentHooksEnabled(client, true)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   }
+}
+
+function rejectRemoteHookSelection(flags: ReadonlyMap<string, string | boolean>): void {
+  rejectRemoteSelectionFlags(
+    flags,
+    'agent hooks; run this command on the machine whose hooks you want to manage.'
+  )
 }

@@ -6,7 +6,7 @@
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
+import { publishFileWithoutOverwrite, renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -41,6 +41,22 @@ function syncDirectorySync(directory: string): void {
       }
     }
   }
+}
+
+/** Rename an already-fsynced file and make the containing directory durable. */
+export function renameDurableSync(tmpPath: string, finalPath: string): void {
+  renameFileWithWindowsRetry(tmpPath, finalPath)
+  syncDirectorySync(dirname(finalPath))
+}
+
+/** Publish an already-fsynced file without replacing a concurrently created destination. */
+export function publishFileDurableSync(tmpPath: string, finalPath: string): boolean {
+  if (!publishFileWithoutOverwrite(tmpPath, finalPath)) {
+    return false
+  }
+  syncDirectorySync(dirname(finalPath))
+  rmSync(tmpPath)
+  return true
 }
 
 /**
@@ -202,9 +218,8 @@ export function writeFileDurableSync(
     } finally {
       closeSync(fd)
     }
-    renameFileWithWindowsRetry(tmpPath, finalPath)
+    renameDurableSync(tmpPath, finalPath)
     renamed = true
-    syncDirectorySync(dirname(finalPath))
   } finally {
     if (!renamed) {
       rmSync(tmpPath, { force: true })

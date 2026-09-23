@@ -9,6 +9,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'automationListProjectionCache'
+  | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
   | 'pendingWrite'
   | 'quitFlushStarted'
@@ -37,8 +38,19 @@ export class WriteSchedulingOperations {
   }
 }
 
-export function scheduleSave(owner: WriteSchedulingOperations): void {
+export function scheduleSave(
+  owner: WriteSchedulingOperations,
+  dirtyDomains?: readonly string[]
+): void {
   owner[writeSchedulingOperationsContext].runtime.automationListProjectionCache = null
+  const trackedDomains = owner[writeSchedulingOperationsContext].runtime.dirtyProfileStateDomains
+  if (dirtyDomains === undefined) {
+    owner[writeSchedulingOperationsContext].runtime.dirtyProfileStateDomains = null
+  } else if (trackedDomains !== null) {
+    for (const domain of dirtyDomains) {
+      trackedDomains.add(domain)
+    }
+  }
   // Why: once the quit flush has snapshotted, a newly debounced write would fire during
   // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
   // flush is the last write by construction.

@@ -17,6 +17,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'githubCacheGeneration'
   | 'lastDurableWriteGeneration'
   | 'pendingGithubCacheWrite'
+  | 'profileStateAuthority'
   | 'quitFlushPromise'
   | 'quitFlushStarted'
   | 'staleGithubCacheTempCleanup'
@@ -57,16 +58,20 @@ export class WriteFlushBarrierOperations {
     writeGithubCacheSnapshotSync(this)
   }
 
-  flushAsync(): Promise<void> {
-    if (this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise) {
-      return this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise
+  flushAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+    const { runtime } = this[writeFlushBarrierOperationsContext]
+    if (runtime.quitFlushPromise) {
+      return runtime.quitFlushPromise
     }
-    this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted = true
-    this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise = flushCurrentStateAsync(
-      this,
-      true
-    ).catch(() => {})
-    return this[writeFlushBarrierOperationsContext].runtime.quitFlushPromise
+    runtime.quitFlushStarted = true
+    runtime.quitFlushPromise = flushCurrentStateAsync(this, true)
+      .then(async () => {
+        if (options.exportJsonCompatibility) {
+          await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
+        }
+      })
+      .catch((error) => console.error('[persistence] Failed to flush final state:', error))
+    return runtime.quitFlushPromise
   }
 
   flushPendingAsync(): Promise<void> {
@@ -137,22 +142,22 @@ export async function flushCurrentStateAsync(
     owner[writeFlushBarrierOperationsContext].runtime.firstPendingSaveAt = null
     const generation = owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
     try {
-      await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes)
-    } catch (error) {
+      await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes, {
+        fullCheckpoint: final
+      })
+    } finally {
       await (final
         ? owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushAsync()
         : owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushPendingAsync(
             signal
           ))
       await writeGithubCacheSnapshotAsync(owner, final, signal)
-      throw error
+      if (final || drainToStableGeneration) {
+        await owner[
+          writeFlushBarrierOperationsContext
+        ].runtime.profileStateAuthority?.drainBackups?.()
+      }
     }
-    await (final
-      ? owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushAsync()
-      : owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushPendingAsync(
-          signal
-        ))
-    await writeGithubCacheSnapshotAsync(owner, final, signal)
     if (signal?.aborted) {
       throw new Error('Persistence flush aborted')
     }

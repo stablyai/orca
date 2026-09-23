@@ -1,11 +1,7 @@
-/**
- * The bar for this change is "the bytes on disk did not move". Every case below runs the exact
- * loop `applySecretSentinelSubstitutions` replaced — reproduced in `previousImplementation` — and
- * compares payload bytes and guard hash, because a drifting hash silently disables the no-op write
- * guard and a drifting payload is corrupted persisted state.
- */
+/** Full serialization retains its bytes/hash; domain serialization preserves bytes and equality. */
 import { createHash, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
 import {
   applySecretSentinelSubstitutions,
   type SecretSentinelSubstitution
@@ -43,6 +39,65 @@ function expectIdenticalToPrevious(
 function sentinel(): string {
   return `orca-secret-slot-${randomUUID()}`
 }
+
+describe('complete profile domain serialization', () => {
+  it('preserves escaped domain names, omission and the keys passed to toJSON', () => {
+    const domain = '雪"\\\ud800'
+    const state = {
+      [domain]: {
+        toJSON(key: string) {
+          return { key, nested: { toJSON: (nestedKey: string) => nestedKey } }
+        }
+      },
+      omitted: undefined,
+      nullable: null,
+      history: [{ id: 'z' }, { id: 'a' }]
+    }
+
+    const serialized = serializeCompleteProfileStateDomains(state, [], '')
+
+    expect(serialized.payload.toString('utf8')).toBe(JSON.stringify(state))
+    expect(serialized.domains.map(({ domain }) => domain)).toEqual([domain, 'nullable', 'history'])
+    expect(JSON.parse(serialized.payload.toString('utf8'))).toMatchObject({
+      [domain]: { key: domain, nested: 'nested' },
+      nullable: null
+    })
+  })
+
+  it('keeps the complete hash stable across ciphertext changes and sensitive to plaintext and absence', () => {
+    const slot = sentinel()
+    const state = {
+      settings: { cookie: slot },
+      future: { shadow: 'ciphertext-one' },
+      nullable: null
+    }
+    const firstSub = [{ sentinel: slot, blob: 'ciphertext-one', hashValue: 'secret' }]
+    const first = serializeCompleteProfileStateDomains(state, firstSub, '')
+    const second = serializeCompleteProfileStateDomains(
+      state,
+      [{ sentinel: slot, blob: 'ciphertext-two', hashValue: 'secret' }],
+      ''
+    )
+
+    expect(first.payload).toEqual(
+      applySecretSentinelSubstitutions(JSON.stringify(state), firstSub, '').payload
+    )
+    expect(second.payload).not.toEqual(first.payload)
+    expect(second.stateHash).toBe(first.stateHash)
+    expect(JSON.parse(second.payload.toString('utf8')).future).toEqual({ shadow: 'ciphertext-one' })
+    expect(
+      serializeCompleteProfileStateDomains(
+        state,
+        [{ sentinel: slot, blob: 'ciphertext-one', hashValue: 'changed-secret' }],
+        ''
+      ).stateHash
+    ).not.toBe(first.stateHash)
+    expect(
+      serializeCompleteProfileStateDomains({ ...state, nullable: undefined }, firstSub, '')
+        .stateHash
+    ).not.toBe(first.stateHash)
+  })
+})
 
 describe('applySecretSentinelSubstitutions', () => {
   it('produces bytes and a hash identical to the previous implementation', () => {

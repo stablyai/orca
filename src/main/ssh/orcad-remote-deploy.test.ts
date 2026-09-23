@@ -82,6 +82,9 @@ type HostScript = {
   /** Readiness content per version dir, keyed by the version in the path. */
   readiness: Record<string, string>
   log: string[]
+  snapshotResult?: string
+  comparisonResult?: string
+  candidateStopResult?: string
 }
 
 function scriptHost(script: HostScript): void {
@@ -100,11 +103,15 @@ function scriptHost(script: HostScript): void {
     }
     if (text.includes('kill -TERM')) {
       script.log.push(`stop:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
-      return 'STOPPED'
+      return text.includes(NEW_VERSION) ? (script.candidateStopResult ?? 'STOPPED') : 'STOPPED'
     }
     if (text.includes('tar -C') && text.includes('-cf')) {
       script.log.push('snapshot')
-      return 'CAPTURED'
+      return script.snapshotResult ?? 'CAPTURED'
+    }
+    if (text.includes('verdict=UNCHANGED')) {
+      script.log.push('compare-state')
+      return script.comparisonResult ?? 'UNCHANGED'
     }
     return ''
   })
@@ -218,7 +225,7 @@ describe('deployOrcad', () => {
     })
   })
 
-  it('snapshots the shared data root before the candidate ever runs', async () => {
+  it('stops the incumbent before snapshotting, so SQLite WAL files are quiescent', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({}) },
@@ -228,6 +235,7 @@ describe('deployOrcad', () => {
     await deployOrcad(options())
     expect(script.log.indexOf('snapshot')).toBeGreaterThan(-1)
     expect(script.log.indexOf('snapshot')).toBeLessThan(script.log.indexOf(`launch:${NEW_VERSION}`))
+    expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
   })
 
   it('installs but does not activate when terminals are running', async () => {
@@ -278,16 +286,85 @@ describe('deployOrcad', () => {
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-not-activated' })
     expect(script.log).toEqual([
-      'snapshot',
       `stop:${OLD_VERSION}`,
+      'snapshot',
       `launch:${NEW_VERSION}`,
       `stop:${NEW_VERSION}`,
+      'compare-state',
       `launch:${OLD_VERSION}`
     ])
     expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
       `orcad ${OLD_VERSION} was restarted and is serving again`
     )
   })
+
+  it.each(['CHANGED', 'UNKNOWN', ''])(
+    'preserves rejected candidate state when comparison is %s',
+    async (comparisonResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({ selfTestOk: false }) },
+        log: [],
+        comparisonResult
+      }
+      scriptHost(script)
+
+      const result = await deployOrcad(options())
+
+      expect(result).toMatchObject({ outcome: 'installed-not-activated' })
+      expect(script.log).toEqual([
+        `stop:${OLD_VERSION}`,
+        'snapshot',
+        `launch:${NEW_VERSION}`,
+        `stop:${NEW_VERSION}`,
+        'compare-state'
+      ])
+      expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
+        'recovery requires a fresh host terminal census'
+      )
+      expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
+        '/home/u/.orca-remote/orcad-state-snapshots/'
+      )
+      expect(mockExec.mock.calls.some(([, command]) => command.includes('echo RESTORED'))).toBe(
+        false
+      )
+    }
+  )
+
+  it('restarts the incumbent when a quiescent snapshot cannot be captured', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [OLD_VERSION]: readyLine({}) },
+      log: [],
+      snapshotResult: 'tar: write failed'
+    }
+    scriptHost(script)
+
+    await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
+    expect(script.log).toEqual([`stop:${OLD_VERSION}`, 'snapshot', `launch:${OLD_VERSION}`])
+  })
+
+  it.each(['NO_PID', 'STILL_RUNNING', 'SIGNAL_FAILED', ''])(
+    'does not inspect or replace state without confirmed candidate exit: %s',
+    async (candidateStopResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({ selfTestOk: false }) },
+        log: [],
+        candidateStopResult
+      }
+      scriptHost(script)
+
+      await deployOrcad(options())
+
+      expect(script.log).toEqual([
+        `stop:${OLD_VERSION}`,
+        'snapshot',
+        `launch:${NEW_VERSION}`,
+        `stop:${NEW_VERSION}`
+      ])
+    }
+  )
 
   it('refuses to activate when a different build answered the port', async () => {
     const script: HostScript = {
