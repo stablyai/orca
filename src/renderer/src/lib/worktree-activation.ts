@@ -188,12 +188,10 @@ export function activateAndRevealWorktree(
     return false
   }
   const hasActivationWork = Boolean(
-    opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
+    opts?.startup || opts?.setup || opts?.defaultTabs?.tabs.length || opts?.issueCommand
   )
   const automaticCreationEnabled =
-    hasActivationWork ||
-    Boolean(opts?.initialCwd) ||
-    state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+    hasActivationWork || state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
   const isPlainAlreadyActiveTerminal =

@@ -110,7 +110,7 @@ describe('activateAndRevealWorktree', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toBeUndefined()
   })
 
-  it('still creates a terminal when activation requests an initial directory', () => {
+  it('does not create a terminal for an initial directory when automatic creation is disabled', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
     useAppStore.setState({
@@ -124,12 +124,31 @@ describe('activateAndRevealWorktree', () => {
       initialCwd: '/workspace/feature/packages/app',
       notifyHostRuntime: false
     })
-    const tabId = result === false ? null : result.primaryTabId
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toBeUndefined()
+    expect(useAppStore.getState().pendingInitialCwdByTabId).toEqual({})
+  })
 
-    expect(tabId).not.toBeNull()
-    expect(useAppStore.getState().pendingInitialCwdByTabId[tabId!]).toBe(
-      '/workspace/feature/packages/app'
-    )
+  it('does not treat an empty default-tabs payload as terminal launch work', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        autoCreateTerminalOnWorkspaceActivation: false
+      }
+    })
+
+    const result = activateAndRevealWorktree(worktree.id, {
+      defaultTabs: { tabs: [], runCommands: false },
+      notifyHostRuntime: false
+    })
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toBeUndefined()
+    expect(
+      useAppStore.getState().defaultTerminalTabsAppliedByWorktreeId[worktree.id]
+    ).toBeUndefined()
   })
 
   it('does not relaunch on repeated activate/close cycles', () => {
