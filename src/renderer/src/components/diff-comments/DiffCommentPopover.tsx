@@ -9,6 +9,7 @@ import {
 } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import { useClaudeSubmitGestureMatch } from '../native-chat/use-claude-submit-gesture'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: a DOM sibling overlay rather than a Monaco content widget, so it can own a React auto-resizing textarea.
@@ -101,6 +102,8 @@ export function DiffCommentPopover({
     observer.observe(container)
     return () => observer.disconnect()
   }, [measureResolvedTop])
+
+  const matchesSubmitGesture = useClaudeSubmitGestureMatch()
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
     // Why: focus on mount via the ref callback so no post-render Effect is needed.
@@ -213,8 +216,8 @@ export function DiffCommentPopover({
               onCancel()
               return
             }
-            // Why: Shift+Enter inserts a newline; skip isComposing so IME composition Enter doesn't submit a half-typed CJK note.
-            if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+            // Why: skip isComposing so an IME composition Enter doesn't submit a half-typed CJK note.
+            if (!e.nativeEvent.isComposing && matchesSubmitGesture(e)) {
               e.preventDefault()
               if (submitting) {
                 return

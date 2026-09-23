@@ -23,6 +23,7 @@ import {
   _getNativeChatSenderCleanupCountForTest,
   clearNativeChatSubscriptions,
   clearNativeChatTranscriptCache,
+  readClaudeChatKeybindings,
   registerNativeChatHandlers
 } from './native-chat'
 
@@ -51,6 +52,32 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
       throw new Error('timed out waiting for condition')
     }
     await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+async function withClaudeConfigEnv(
+  env: { home?: string; configDir?: string },
+  fn: () => Promise<void>
+): Promise<void> {
+  const previous = { HOME: process.env.HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }
+  if (env.home !== undefined) {
+    process.env.HOME = env.home
+  }
+  if (env.configDir !== undefined) {
+    process.env.CLAUDE_CONFIG_DIR = env.configDir
+  } else {
+    delete process.env.CLAUDE_CONFIG_DIR
+  }
+  try {
+    await fn()
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
   }
 }
 
@@ -378,5 +405,39 @@ describe('nativeChat:readSession handler', () => {
         process.env.HOME = previousHome
       }
     }
+  })
+})
+
+describe('readClaudeChatKeybindings', () => {
+  it('returns the keybindings.json under ~/.claude', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-claude-keybindings-'))
+    tempRoots.push(root)
+    await mkdir(join(root, '.claude'), { recursive: true })
+    const content = JSON.stringify({
+      bindings: [{ context: 'Chat', bindings: { 'meta+enter': 'chat:submit' } }]
+    })
+    await writeFile(join(root, '.claude', 'keybindings.json'), content)
+    await withClaudeConfigEnv({ home: root }, async () => {
+      expect(await readClaudeChatKeybindings()).toBe(content)
+    })
+  })
+
+  it('returns null when the file is absent (default installs)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-claude-keybindings-none-'))
+    tempRoots.push(root)
+    await withClaudeConfigEnv({ home: root }, async () => {
+      expect(await readClaudeChatKeybindings()).toBeNull()
+    })
+  })
+
+  it('honors CLAUDE_CONFIG_DIR over ~/.claude', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-claude-keybindings-cfgdir-'))
+    tempRoots.push(root)
+    const configDir = join(root, 'pinned-claude-home')
+    await mkdir(configDir, { recursive: true })
+    await writeFile(join(configDir, 'keybindings.json'), 'PINNED')
+    await withClaudeConfigEnv({ home: root, configDir }, async () => {
+      expect(await readClaudeChatKeybindings()).toBe('PINNED')
+    })
   })
 })

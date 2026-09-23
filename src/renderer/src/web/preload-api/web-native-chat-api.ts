@@ -19,6 +19,9 @@ export function createWebNativeChatApi(): NativeChatApi {
           transcriptPath
         })
       ),
+    // Web client has no local ~/.claude; default to Enter (the submit gesture is
+    // resolved from the host's keybindings only on the desktop app).
+    readClaudeKeybindings: async () => null,
     subscribe: (args, onFrame) => {
       // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
       const environment = requireActiveEnvironmentOrNull()
