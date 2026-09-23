@@ -23,13 +23,16 @@ export type RuntimeDesktopSurface = {
   findWindowById(id: number): BrowserWindow | null
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
+  /** The OS process id of the WebContents backing this id, or null when there is no desktop/webContents. */
+  getWebContentsOSProcessId?(webContentsId: number): number | null
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {
   showNotification: () => false,
   findWindowById: () => null,
   onIpc: () => {},
-  removeIpcListener: () => {}
+  removeIpcListener: () => {},
+  getWebContentsOSProcessId: () => null
 }
 
 let current: RuntimeDesktopSurface = inertDesktopSurface

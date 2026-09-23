@@ -1,4 +1,5 @@
 import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import type { OrchestrationTaskStatus } from '../../../shared/orchestration-task-status'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -17,7 +18,8 @@ export type MessagePriority = 'normal' | 'high' | 'urgent'
 
 export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only'
 
-export type TaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'blocked'
+// Canonical in shared so the `serve.stats` per-status histogram keys on the same six values.
+export type TaskStatus = OrchestrationTaskStatus
 
 export type DispatchStatus = 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
 

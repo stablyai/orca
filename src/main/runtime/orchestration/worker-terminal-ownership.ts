@@ -1,4 +1,5 @@
 import type { WorkerDispatchState } from './types'
+import type { WorkerTerminalListState as SharedWorkerTerminalListState } from '../../../shared/worker-terminal-list-state'
 
 export type WorkerTerminalOwnershipState =
   | 'owned'
@@ -54,13 +55,8 @@ export type WorkerTerminalResourceRow = {
 }
 
 // Terminal state exposed by worker-list; process accounting, never Task/Dispatch outcome.
-export type WorkerTerminalListState =
-  | 'active'
-  | 'reclaimable'
-  | 'retained'
-  | 'release_pending'
-  | 'release_unknown'
-  | 'released'
+// Canonical in shared (worker-terminal-list-state.ts) so `serve.stats` can key a histogram on it.
+export type WorkerTerminalListState = SharedWorkerTerminalListState
 
 export type WorkerDispatchListState = WorkerDispatchState | 'unsupervised'
 
