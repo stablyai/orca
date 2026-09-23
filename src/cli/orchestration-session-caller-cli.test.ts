@@ -20,6 +20,8 @@ vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 import { createOrchestrationCompatibilityEnvelope } from './runtime/orchestration-compatibility-envelope'
+import { formatCliError, reportCliError } from './cli-error'
+import { RuntimeRpcFailureError } from './runtime/types'
 
 const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
 const IDENTITY_ENV = [
@@ -375,6 +377,55 @@ describe('the identity a session presents', () => {
     const advice = errors.mock.calls.map(([line]) => String(line)).join('\n')
     expect(advice).toContain('--resume msg_1')
     expect(advice).not.toContain('--from')
+  })
+})
+
+describe('a host refusal of the session', () => {
+  const WORKER_GONE = new RuntimeRpcFailureError({
+    id: 'rpc_1',
+    ok: false,
+    error: {
+      code: 'session_caller_not_live',
+      message: `Agent session ${SESSION} is a structured worker whose worker identity this host no longer has, so it cannot act in orchestration. No effects were applied.`,
+      data: { effectsApplied: false }
+    },
+    _meta: { runtimeId: 'runtime_1' }
+  })
+
+  it.each(['check', 'run-current', 'worker-list'])(
+    'surfaces from %s verbatim, never widened, retried or turned into a terminal guess',
+    async (command) => {
+      asSessionInTerminalView()
+      callMock.mockRejectedValue(WORKER_GONE)
+
+      await expect(invoke(command, flagMap({}))).rejects.toBe(WORKER_GONE)
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
+      expect(formatCliError(WORKER_GONE)).toBe(WORKER_GONE.message)
+    }
+  )
+
+  it('keeps the Orca id a provider-id refusal names, for a JSON reader to branch on', () => {
+    const providerId = new RuntimeRpcFailureError({
+      id: 'rpc_1',
+      ok: false,
+      error: {
+        code: 'session_caller_provider_id',
+        message: 'provider id',
+        data: { effectsApplied: false, orcaSessionId: SESSION }
+      },
+      _meta: { runtimeId: 'runtime_1' }
+    })
+    const printed: string[] = []
+    vi.mocked(console.log).mockImplementation((line: string) => {
+      printed.push(line)
+    })
+
+    reportCliError(providerId, true)
+
+    expect(JSON.parse(printed.join('\n'))).toMatchObject({
+      ok: false,
+      error: { code: 'session_caller_provider_id', data: { orcaSessionId: SESSION } }
+    })
   })
 })
 
