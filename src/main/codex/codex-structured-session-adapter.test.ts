@@ -6,7 +6,6 @@ import {
 } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
@@ -35,7 +34,10 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].launch.env).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
       CODEX_HOME: '/codex/home',
-      [ORCA_STRUCTURED_SESSION_ENV]: '1'
+      ORCA_AGENT_SESSION_ID: 'session-1',
+      ORCA_CLI_COMMAND: 'orca',
+      // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
+      PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })
     expect(codex.connections[0].launch.cwd).toBe('/work/repo')
     expect(codex.connections[0].calls[0]).toEqual({

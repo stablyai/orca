@@ -55,11 +55,13 @@ export function structuredSessionChildIdentityEnv(
 /**
  * The same session id for its terminal view, so switching views never changes who the session is.
  * Same-host only, as above: the host refuses the claim from a terminal that runs in WSL or over SSH.
+ * A terminal that is not a session's view keeps its env exactly as given.
  */
-export function structuredSessionTerminalViewEnv(
+export function withStructuredSessionTerminalViewEnv(
+  env: Record<string, string> | undefined,
   sessionId: string | undefined
-): Record<string, string> {
-  return sessionId ? { [ORCA_AGENT_SESSION_ID_ENV]: sessionId } : {}
+): Record<string, string> | undefined {
+  return sessionId ? { ...env, [ORCA_AGENT_SESSION_ID_ENV]: sessionId } : env
 }
 
 /**

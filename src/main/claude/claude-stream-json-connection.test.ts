@@ -163,9 +163,12 @@ describe('Claude stream-json connection', () => {
     // An inherited value wins over the SDK's default, so clear it to pin the default.
     vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
     vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
+    // An Orca launched inside another structured session inherits that session's id.
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(
       launchFor(scenario, {
+        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
         CLAUDE_CONFIG_DIR: '/accounts/managed/home',
         ANTHROPIC_AUTH_TOKEN: 'configured-token',
         ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
@@ -184,6 +187,8 @@ describe('Claude stream-json connection', () => {
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('configured-token')
     expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
     expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
+    // The session's own id reaches the spawned child over the inherited one.
+    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
     expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
