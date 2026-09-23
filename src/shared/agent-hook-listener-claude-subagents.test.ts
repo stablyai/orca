@@ -42,7 +42,7 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.turnCompletedAt).toBeUndefined()
     })
 
-    it('stamps turnCompletedAt on a gated lead Stop and repeats it on the all-clear', () => {
+    it('keeps turnCompletedAt when a runtime child stop wakes the parent', () => {
       vi.useFakeTimers()
       try {
         vi.setSystemTime(1_700_000_005_000)
@@ -71,7 +71,7 @@ describe('shared agent-hook-listener', () => {
 
         vi.setSystemTime(1_700_000_055_000)
         const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-        expect(drained?.payload.state).toBe('done')
+        expect(drained?.payload.state).toBe('working')
         expect(drained?.payload.turnCompletedAt).toBe(1_700_000_005_000)
 
         claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'next turn' })
@@ -81,6 +81,28 @@ describe('shared agent-hook-listener', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('wakes the parent when a runtime child stops after a gated lead boundary', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const gatedStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      expect(gatedStop?.payload.state).toBe('working')
+
+      const childStop = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(childStop?.payload.state).toBe('working')
+
+      const duplicateChildStop = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(duplicateChildStop?.payload.state).toBe('working')
+
+      const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(finalStop?.payload.state).toBe('done')
     })
 
     it('does not stamp an interrupted Stop even while a child still gates the pane', () => {
@@ -181,9 +203,10 @@ describe('shared agent-hook-listener', () => {
       ])
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
-      expect(stopped?.payload.state).toBe('done')
       // Why: a finished one-shot leaves the sidebar instead of squatting as a
-      // permanent idle row for the rest of the session.
+      // permanent idle row, while its stop wakes the parent until the lead's
+      // next authoritative boundary.
+      expect(stopped?.payload.state).toBe('working')
       expect(stopped?.payload.subagents).toBeUndefined()
     })
 
@@ -217,9 +240,9 @@ describe('shared agent-hook-listener', () => {
       ])
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a9' })
-      // Why: the lead's own last state was done, so with no working children
-      // the pane settles back to done rather than a phantom working spinner.
-      expect(stopped?.payload.state).toBe('done')
+      // Why: a current-runtime child ending resumes the parent, which can
+      // generate without another hook until its next tool or turn boundary.
+      expect(stopped?.payload.state).toBe('working')
     })
 
     it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
@@ -295,8 +318,8 @@ describe('shared agent-hook-listener', () => {
       // Why: teammate name and agent type are separate Agent-tool inputs; the
       // lifecycle id embeds the former while the hook reports the latter.
       // TeammateIdle keyed by name parks it via the id prefix (fallback when
-      // its SubagentStop was lost), so the pane settles back to the lead's
-      // done state while the row stays visible as idle.
+      // its SubagentStop was lost) and wakes the parent while the row remains
+      // visible as idle.
       const idled = claudeEvent({
         hook_event_name: 'TeammateIdle',
         teammate_name: 'reviewer',
@@ -305,7 +328,7 @@ describe('shared agent-hook-listener', () => {
       expect(idled?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
       ])
-      expect(idled?.payload.state).toBe('done')
+      expect(idled?.payload.state).toBe('working')
     })
 
     it('scopes subagent rosters per pane', () => {
@@ -421,7 +444,7 @@ describe('shared agent-hook-listener', () => {
       expect(stopped?.payload.state).toBe('working')
     })
 
-    it('restores a finished lead to done after a child permission wait clears', () => {
+    it('wakes a finished lead after a child permission wait clears and the child stops', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -449,13 +472,13 @@ describe('shared agent-hook-listener', () => {
       })
       expect(approved?.payload.state).toBe('working')
 
-      // Why: the lead already stopped before the wait; draining the child
-      // must resolve to done, not pin the pane on an invented 'working'.
+      // Why: even though the lead stopped before the wait, a current-runtime
+      // child ending resumes the parent until its next authoritative boundary.
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      expect(drained?.payload.state).toBe('done')
+      expect(drained?.payload.state).toBe('working')
     })
 
-    it('resolves to done when a blocked child dies after the lead finished', () => {
+    it('wakes the parent when a blocked child dies after the lead finished', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -474,7 +497,7 @@ describe('shared agent-hook-listener', () => {
       })
 
       const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      expect(stopped?.payload.state).toBe('done')
+      expect(stopped?.payload.state).toBe('working')
     })
 
     it('removes a snapshot-seeded child missing from a present background_tasks list', () => {
@@ -722,7 +745,7 @@ describe('shared agent-hook-listener', () => {
       })
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-      expect(drained?.payload.state).toBe('done')
+      expect(drained?.payload.state).toBe('working')
     })
 
     it('falls back to working when no lead record exists', () => {
