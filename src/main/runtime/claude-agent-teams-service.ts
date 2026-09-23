@@ -103,8 +103,9 @@ export class ClaudeAgentTeamsService {
     try {
       const team = this.resolveTeam(request)
       const { command, args } = splitTmuxCommand(request.argv)
+      // Why re-resolve: the team can be torn down while this command waits in the queue.
       const stdout = await this.runSerialized(team, () =>
-        this.dispatcher.dispatch(team, command, args, request.envPane, api)
+        this.dispatcher.dispatch(this.resolveTeam(request), command, args, request.envPane, api)
       )
       return { ok: true, stdout, stderr: '', exitCode: 0 }
     } catch (error) {

@@ -392,6 +392,44 @@ describe('ClaudeAgentTeamsService', () => {
     ])
   })
 
+  it('does not dispatch a queued command after its team is torn down', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    const queued = request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    service.removeTeamForLeaderHandle('leader-handle')
+
+    await expect(queued).resolves.toMatchObject({
+      ok: false,
+      stderr: 'tmux: stale or unauthorized agent team\n'
+    })
+    expect(api.closeTerminal).not.toHaveBeenCalled()
+    expect(splitCalls.map((call) => call.command)).toEqual(['cat'])
+  })
+
+  it('does not launch a replacement when the placeholder handle goes stale unconfirmed', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', 'cat'])
+    vi.mocked(api.closeTerminal)
+      .mockResolvedValueOnce({
+        handle: 'teammate-1',
+        tabId: 'tab-1',
+        ptyKilled: false,
+        ptyStopVerdict: 'unverifiable'
+      })
+      .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(splitCalls).toHaveLength(1)
+  })
+
   it('refuses to respawn the leader pane', async () => {
     const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
 
