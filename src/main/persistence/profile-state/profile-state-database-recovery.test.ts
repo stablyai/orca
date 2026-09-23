@@ -43,7 +43,7 @@ afterEach(() => {
   }
 })
 
-async function fixture(options: { profileId?: string; empty?: boolean } = {}) {
+async function fixture(options: { profileId?: string; empty?: boolean; json?: string } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-database-recovery-'))
   directories.push(root)
   const directory = join(root, 'profiles', profileId)
@@ -62,7 +62,7 @@ async function fixture(options: { profileId?: string; empty?: boolean } = {}) {
   )
   try {
     if (!options.empty) {
-      importProfileStateJson(source.db, savedJson)
+      importProfileStateJson(source.db, options.json ?? savedJson)
     }
     await writeProfileStateDatabaseSnapshotAsync(source.db, backupPath)
   } finally {
@@ -95,6 +95,27 @@ function expectOriginals(options: Awaited<ReturnType<typeof fixture>>): void {
 }
 
 describe('profile state database backup recovery', () => {
+  it('rejects corruption in a large cloned staging file before changing recovery state', async () => {
+    const options = await fixture({
+      json: JSON.stringify({ opaqueExtension: 'x'.repeat(8 * 1024 * 1024) })
+    })
+    const backup = new Database(options.backupPath)
+    try {
+      backup.exec("UPDATE profile_state_documents SET content_hash = printf('%064d', 0)")
+    } finally {
+      backup.close()
+    }
+    const originalBackup = readFileSync(options.backupPath)
+    expect(() => restoreProfileStateDatabaseBackup(options)).toThrow()
+    expectOriginals(options)
+    expect(readFileSync(options.backupPath).equals(originalBackup)).toBe(true)
+    expect(
+      readdirSync(dirname(options.databasePath)).some((name) =>
+        name.startsWith('.orca-recovery-clone-')
+      )
+    ).toBe(false)
+  })
+
   it.each([true, false])(
     'restores SQLite authority with the old database present=%s',
     async (hasDatabase) => {
