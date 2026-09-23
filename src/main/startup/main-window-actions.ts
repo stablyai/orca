@@ -70,8 +70,8 @@ export function quitFromSystemTray(): void {
   app.quit()
 }
 
-export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
-  ensureAutoUpdaterConfigured()
+export async function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): Promise<void> {
+  await ensureAutoUpdaterConfigured()
   checkForUpdatesFromMenu(options)
 }
 
@@ -88,7 +88,9 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
     onOpenSettings: openSettingsFromSystemMenu,
     onCheckForUpdates: () => {
       showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
+      void runUserInitiatedUpdateCheck().catch((error: unknown) => {
+        console.error('[updater] Failed to start update check:', error)
+      })
     },
     onQuit: quitFromSystemTray
   }

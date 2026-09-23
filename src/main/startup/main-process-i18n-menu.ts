@@ -15,7 +15,6 @@ import {
   sendOpenFeatureTour,
   sendOpenSetupGuide
 } from './main-window-actions'
-import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
@@ -29,8 +28,9 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     onCheckForUpdates: (options) => {
-      ensureAutoUpdaterConfigured()
-      runUserInitiatedUpdateCheck(options)
+      void runUserInitiatedUpdateCheck(options).catch((error: unknown) => {
+        console.error('[updater] Failed to start update check:', error)
+      })
     },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (state.mainWindow?.webContents.id === webContentsId) {

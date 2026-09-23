@@ -55,6 +55,7 @@ const {
 
 vi.mock('electron', () => ({
   app: {},
+  session: { fromPartition: vi.fn(() => ({})) },
   clipboard: {},
   systemPreferences: {
     askForMediaAccess: systemPreferencesAskForMediaAccessMock,
@@ -67,10 +68,7 @@ vi.mock('electron', () => ({
     removeHandler: removeHandlerMock,
     handle: handleMock
   },
-  powerMonitor: {
-    on: vi.fn(),
-    off: vi.fn()
-  }
+  powerMonitor: { on: vi.fn(), off: vi.fn() }
 }))
 
 vi.mock('../ipc/repos', () => ({
@@ -120,18 +118,16 @@ vi.mock('../updater', () => ({
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock
 }))
-
+vi.mock('../network/proxy-settings', () => import('./attach-main-window-services-proxy-mock'))
 vi.mock('../macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: acknowledgePendingTccPromptNoticeMock,
   consumePendingTccPromptNotice: consumePendingTccPromptNoticeMock,
   dismissTccPromptNotice: dismissTccPromptNoticeMock,
   releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
 }))
-
 import { attachMainWindowServices } from './attach-main-window-services'
 
 type MockFn = ReturnType<typeof vi.fn>
-
 type MainWindowStub = {
   id?: number
   isDestroyed?: MockFn
@@ -151,7 +147,6 @@ type MainWindowStub = {
     }
   }
 }
-
 type RuntimeStub = {
   attachWindow: MockFn
   setNotifier: MockFn
@@ -160,7 +155,6 @@ type RuntimeStub = {
   markGraphReloadFailed: MockFn
   markGraphUnavailable: MockFn
 }
-
 function createMainWindow(
   extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {}
 ): MainWindowStub {
@@ -188,7 +182,9 @@ function createMainWindow(
 function createStore(): Store & { flushPendingAsync: MockFn } {
   return {
     getProfileStorageDirectory: vi.fn(() => '/profile-a'),
-    flushPendingAsync: vi.fn(() => Promise.resolve())
+    flushPendingAsync: vi.fn(() => Promise.resolve()),
+    getSettings: vi.fn(() => ({})),
+    getUI: vi.fn(() => ({}))
   } as unknown as Store & { flushPendingAsync: MockFn }
 }
 

@@ -51,6 +51,9 @@ vi.mock('../warp-themes', () => ({
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
+vi.mock('../electron-updater-loader', () => ({
+  getElectronUpdaterSession: vi.fn(() => ({}) as never)
+}))
 
 vi.mock('../browser/browser-session-proxy', () => ({
   applyBrowserSessionProxies: applyBrowserSessionProxiesMock
@@ -758,10 +761,11 @@ describe('registerSettingsHandlers', () => {
     releaseHookReconciliation()
     await first
 
-    expect(applyElectronProxySettingsMock.mock.calls.map((call) => call[0].httpProxyUrl)).toEqual([
-      'http://old.example:8080',
-      'http://new.example:8080'
-    ])
+    expect(
+      applyElectronProxySettingsMock.mock.calls
+        .filter((call) => !call[1])
+        .map((call) => call[0].httpProxyUrl)
+    ).toEqual(['http://old.example:8080', 'http://new.example:8080'])
   })
 
   it('drops invalid proxy URLs at the settings boundary', async () => {
