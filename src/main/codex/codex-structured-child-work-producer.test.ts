@@ -29,6 +29,7 @@ const parent = makeStructuredAgentStatusSubject(
 )
 const REVIEWER = 'thread-reviewer'
 const TESTER = 'thread-tester'
+const LINTER = 'thread-linter'
 
 type Frame = { method: string; params: Record<string, unknown> }
 type Delivery = { kind: 'journal' | 'legacy' | 'evidence'; detail: string }
@@ -248,6 +249,18 @@ describe('Codex structured child-work producer', () => {
       },
       { frame: spawned(TESTER, 'test', 'p2'), lead: 'working' },
       { frame: turn('turn/started', TESTER, 't1'), lead: 'working' },
+      { frame: spawned(LINTER, 'lint', 'p2'), lead: 'working' },
+      { frame: turn('turn/started', LINTER, 'l1'), lead: 'working' },
+      // Codex ends this child's turn with an error it will not retry, and no turn/completed.
+      {
+        frame: {
+          method: 'error',
+          params: { threadId: LINTER, turnId: 'l1', willRetry: false, error: { message: 'boom' } }
+        },
+        lead: 'working',
+        check: () =>
+          expect(byDescription('lint')).toMatchObject({ membership: 'settled', outcome: 'failed' })
+      },
       {
         frame: turn('turn/completed', REVIEWER, 'r2', 'interrupted'),
         lead: 'working',

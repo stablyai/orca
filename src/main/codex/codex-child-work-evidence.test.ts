@@ -159,6 +159,59 @@ describe('Codex child-work evidence', () => {
     expect(tracker.state).toBeNull()
   })
 
+  const childError = (
+    turnId: string | undefined,
+    willRetry: boolean
+  ): CodexBackgroundTaskEvent => ({
+    method: 'error',
+    threadId: CHILD,
+    params: {
+      threadId: CHILD,
+      ...(turnId ? { turnId } : {}),
+      willRetry,
+      error: { message: 'boom' }
+    }
+  })
+  const childClosed: CodexBackgroundTaskEvent = {
+    method: 'thread/closed',
+    threadId: CHILD,
+    params: { threadId: CHILD }
+  }
+
+  it.each([
+    ['an error naming its turn that Codex will not retry', childError('c1', false), 'failed'],
+    ['an error naming no turn that Codex will not retry', childError(undefined, false), 'failed'],
+    ['its thread closing', childClosed, 'unknown']
+  ])(
+    'settles a working child whose turn ended with no turn/completed, by %s, in the strip and the record together',
+    (_label, ending, outcome) => {
+      const { send, tracker, records } = runningChild()
+      expect(tracker.state?.tasks).toHaveLength(1)
+      send(ending)
+      expect(records()).toEqual([
+        expect.objectContaining({ membership: 'settled', state: 'done', outcome })
+      ])
+      expect(tracker.state).toBeNull()
+      // The first ending a turn gets stands.
+      send(turn('turn/completed', CHILD, 'c1', 'completed'))
+      expect(records()).toEqual([expect.objectContaining({ outcome })])
+    }
+  )
+
+  it('keeps a child working through a retried error and a systemError status: its turn runs on', () => {
+    const { send, tracker, records } = runningChild()
+    send(childError('c1', true), {
+      method: 'thread/status/changed',
+      threadId: CHILD,
+      params: { threadId: CHILD, status: { type: 'systemError' } }
+    })
+    expect(records()).toEqual([expect.objectContaining({ membership: 'live', state: 'working' })])
+    expect(tracker.state?.tasks).toHaveLength(1)
+    // A fatal error naming a turn the child already finished ends nothing.
+    send(turn('turn/completed', CHILD, 'c1'), childError('c1', false))
+    expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
+  })
+
   it('never settles a child on its PARENT turn ending: children outlive the turn', () => {
     const { send, records } = runningChild()
     send(turn('turn/completed', PRIMARY, PARENT_TURN))
@@ -274,6 +327,20 @@ describe('Codex child-work evidence', () => {
     })
     // A new run has said nothing yet.
     send(turn('turn/started', CHILD, 'c2'))
+    expect(byKind('agent')[0]).not.toHaveProperty('lastMessage')
+  })
+
+  it('files a message whose frame names no turn under the run that said it, never the next', () => {
+    const { send, byKind } = runningChild()
+    send({
+      method: 'item/completed',
+      threadId: CHILD,
+      params: { threadId: CHILD, item: { type: 'agentMessage', id: 'msg-1', text: 'Done' } }
+    })
+    expect(byKind('agent')[0]?.lastMessage).toBe('Done')
+    send(turn('turn/completed', CHILD, 'c1'), turn('turn/started', CHILD, 'c2'))
+    send(turn('turn/completed', CHILD, 'c2'))
+    expect(byKind('agent')[0]).toMatchObject({ outcome: 'succeeded' })
     expect(byKind('agent')[0]).not.toHaveProperty('lastMessage')
   })
 
