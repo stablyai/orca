@@ -1,5 +1,20 @@
 import React from 'react'
 import minimaxIconUrl from '../../../../../resources/minimax-icon.svg?url'
+import antigravityIconUrl from '../../../../shared/agent-icons/antigravity.png?url'
+
+export function AntigravityIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <img
+      src={antigravityIconUrl}
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      className="block shrink-0 rounded-sm"
+      style={{ width: size, height: size }}
+    />
+  )
+}
 
 export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
