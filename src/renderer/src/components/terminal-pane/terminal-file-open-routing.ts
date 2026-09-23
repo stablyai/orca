@@ -18,7 +18,7 @@ import {
   shouldOpenTerminalFileWithSystemDefault,
   terminalLinkWslDistro
 } from './terminal-file-path-mapping'
-import { hasBinaryFileExtensionWithoutEditorViewer } from '../../../../shared/binary-file-extensions'
+import { hasOsViewerOnlyFileExtension } from '../../../../shared/binary-file-extensions'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
@@ -230,7 +230,7 @@ export function openDetectedFilePath(
     // Why: a granted file is readable only through its grant, so it opens in Orca, never as a download.
     if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrant === null) {
       // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, isCurrentRequest)
       return
     }
 
@@ -264,9 +264,9 @@ export function openDetectedFilePath(
 
     // Why: the editor can only say "Binary file — cannot display" for these, so an ordinary
     // click takes the Shift+Cmd/Ctrl route to the app the OS registers for the file type.
-    if (!openWithSystemDefault && hasBinaryFileExtensionWithoutEditorViewer(mappedFilePath)) {
+    if (!openWithSystemDefault && hasOsViewerOnlyFileExtension(mappedFilePath)) {
       if (!canOpenWithSystemDefault) {
-        await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+        await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, isCurrentRequest)
         return
       }
       const openedWithSystemDefault = await window.api.shell.openFilePath(

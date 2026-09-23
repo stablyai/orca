@@ -220,12 +220,12 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     openFilePathMock.mockResolvedValueOnce(false)
 
-    openDetectedFilePath('/tmp/dist/bundle.wasm', null, null, deps)
+    openDetectedFilePath('/tmp/dist/assets.7z', null, null, deps)
     await flushAsyncWork()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/dist/bundle.wasm')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/dist/assets.7z')
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/dist/bundle.wasm' }),
+      expect.objectContaining({ filePath: '/tmp/dist/assets.7z' }),
       { forceContentReload: true }
     )
   })
@@ -245,6 +245,22 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledTimes(1)
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
+      { forceContentReload: true }
+    )
+  })
+
+  it('never hands executables or loadable code to the OS on a plain click', async () => {
+    setPlatform('Macintosh')
+
+    for (const filePath of ['/tmp/bin/tool.exe', '/tmp/bin/app.jar', '/tmp/bin/lib.dylib']) {
+      openDetectedFilePath(filePath, null, null, deps)
+      await flushAsyncWork()
+    }
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledTimes(3)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/bin/tool.exe' }),
       { forceContentReload: true }
     )
   })

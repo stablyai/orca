@@ -232,7 +232,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
-      '/home/me/repo/report.html'
+      '/home/me/repo/report.html',
+      expect.any(Function)
     )
   })
 
@@ -297,8 +298,23 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
-      '/home/me/repo/renders/clip.mp4'
+      '/home/me/repo/renders/clip.mp4',
+      expect.any(Function)
     )
+  })
+
+  it('marks a plain-click SSH binary download stale once a newer click starts', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    const sshDeps = { worktreeId: 'wt-1', worktreePath: '/home/me/repo' }
+
+    openDetectedFilePath('/home/me/repo/renders/clip.mp4', null, null, sshDeps)
+    await flushAsyncWork()
+    const isRequestCurrent = vi.mocked(downloadAndOpenRemoteTerminalFile).mock.calls[0]?.[2]
+    expect(isRequestCurrent?.()).toBe(true)
+
+    openDetectedFilePath('/home/me/repo/src/main.ts', null, null, sshDeps)
+    expect(isRequestCurrent?.()).toBe(false)
   })
 
   it('keeps plain-click SSH images in the editor viewer', async () => {
