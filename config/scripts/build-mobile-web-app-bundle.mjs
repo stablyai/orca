@@ -93,6 +93,13 @@ export const MOBILE_WEB_APP_SHIMS = [
       options.alias?.['@react-native-async-storage/async-storage'] === PAGE_ASYNC_STORAGE_MODULE
   },
   {
+    // react-native-web pins StyleSheet.hairlineWidth to 1 CSS px, three device px on a phone.
+    // Native's value is one device px, so the page takes native's formula at that assignment.
+    name: 'hairline-device-pixel',
+    appliesTo: (options) =>
+      options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
+  },
+  {
     // esbuild has no require.context, so the route tree is generated and injected.
     name: 'route-manifest',
     appliesTo: (options) =>
@@ -184,6 +191,7 @@ const ZOD_JITLESS_BANNER =
 
 const ROUTE_MANIFEST_PLUGIN_NAME = 'orca-route-manifest'
 const LUCIDE_PLUGIN_NAME = 'orca-lucide-barrel-provider'
+const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 
 /** The entry output's name, so classifying the outputs never has to guess which one it is. */
 const ENTRY_CHUNK_NAME = 'entry'
@@ -214,6 +222,33 @@ export const lucideBarrelPlugin = {
       contents: `${await readFile(args.path, 'utf8')}\nexport const LucideProvider = ({ children }) => children;\n`,
       loader: 'js'
     }))
+  }
+}
+
+// react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
+const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
+// React Native's formula (Libraries/StyleSheet/StyleSheetExports.js): roundToNearestPixel(0.4),
+// else one device pixel. Chromium at a real device scale paints that as one device pixel.
+const DEVICE_PIXEL_HAIRLINE_ASSIGNMENT =
+  'StyleSheet.hairlineWidth = (function (ratio) { return Math.round(0.4 * ratio) / ratio || 1 / ratio; })' +
+  "(typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);"
+
+const hairlineDevicePixelPlugin = {
+  name: HAIRLINE_PLUGIN_NAME,
+  setup(build) {
+    build.onLoad(
+      { filter: /react-native-web[\\/]dist[\\/]exports[\\/]StyleSheet[\\/]index\.js$/ },
+      async (args) => {
+        const source = await readFile(args.path, 'utf8')
+        if (!source.includes(RNW_HAIRLINE_ASSIGNMENT)) {
+          throw new Error(`${HAIRLINE_PLUGIN_NAME}: ${args.path} no longer assigns hairlineWidth`)
+        }
+        return {
+          contents: source.replace(RNW_HAIRLINE_ASSIGNMENT, DEVICE_PIXEL_HAIRLINE_ASSIGNMENT),
+          loader: 'js'
+        }
+      }
+    )
   }
 }
 
@@ -258,7 +293,11 @@ export function mobileWebAppBuildOptions(routes) {
       '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE,
       zod: MOBILE_ZOD_PACKAGE
     },
-    plugins: [routeManifestPlugin(renderMobileWebAppRouteManifest(routes)), lucideBarrelPlugin],
+    plugins: [
+      routeManifestPlugin(renderMobileWebAppRouteManifest(routes)),
+      lucideBarrelPlugin,
+      hairlineDevicePixelPlugin
+    ],
     resolveExtensions: [
       '.web.tsx',
       '.web.ts',
