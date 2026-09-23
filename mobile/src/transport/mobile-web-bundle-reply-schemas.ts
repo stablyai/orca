@@ -130,7 +130,7 @@ export const MobileWebBundleManifestReplySchema = z.looseObject({
 /** Self-describing on purpose: `buildId`, `path` and `offset` are echoed so a reassembler cannot
  *  misplace a reply, and `sha256`/`assetByteLength` describe the whole asset rather than this
  *  window, which is what lets the fetch verify without a second index. Shared by both read replies. */
-const windowHeaderShape = {
+const windowHeaderFields = {
   buildId: z.string().regex(SHA256_PATTERN),
   path: MobileWebBundleAssetPathSchema,
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
@@ -140,7 +140,7 @@ const windowHeaderShape = {
 }
 
 export const MobileWebBundleChunkReplySchema = z.looseObject({
-  ...windowHeaderShape,
+  ...windowHeaderFields,
   dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH)
 })
 
@@ -148,7 +148,7 @@ export const MobileWebBundleChunkReplySchema = z.looseObject({
  *  enum: an encoding this build cannot decode is a typed refusal at the decoder, which names it,
  *  rather than a reply-shape failure that names nothing. */
 export const MobileWebBundleRangeReplySchema = z.looseObject({
-  ...windowHeaderShape,
+  ...windowHeaderFields,
   encoding: z.string().min(1).max(32),
   dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
 })

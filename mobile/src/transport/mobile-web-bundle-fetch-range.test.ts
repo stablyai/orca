@@ -12,12 +12,11 @@ import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 
 type Inflation = { readonly outLength: number; readonly resultLength: number }
+type LoggedInflation = Inflation & { readonly body: Uint8Array }
 
 /** Every inflation in the process, keyed by the gzip body it was handed; a host reads back only
  *  the bodies it sent, so a read left running by an earlier test's fetch never lands in its sink. */
-const inflationLog = vi.hoisted(
-  () => [] as { body: Uint8Array; outLength: number; resultLength: number }[]
-)
+const inflationLog = vi.hoisted((): LoggedInflation[] => [])
 
 // Observes the bound the decoder hands fflate, and what fflate hands back inside it.
 vi.mock('fflate', async (importOriginal) => {

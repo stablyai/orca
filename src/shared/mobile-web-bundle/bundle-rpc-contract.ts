@@ -64,7 +64,7 @@ export const MobileWebBundleManifestResultSchema = z
   })
   .strict()
 
-const windowParamsShape = {
+const windowParamsFields = {
   buildId: z.string().regex(SHA256_PATTERN),
   path: MobileWebBundleAssetPathSchema,
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
@@ -72,14 +72,14 @@ const windowParamsShape = {
 
 /** No `multipleOf` pin on `offset`: alignment is against the host's advertised `chunkBytes`, which
  *  may be smaller than the constant, so the host rejects a misaligned offset instead. */
-export const MobileWebBundleChunkParamsSchema = z.object(windowParamsShape).strict()
+export const MobileWebBundleChunkParamsSchema = z.object(windowParamsFields).strict()
 
 /** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised. */
 export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 
 /** What every chunk or range reply restates about the window it answers. */
-const windowHeaderShape = {
-  ...windowParamsShape,
+const windowHeaderFields = {
+  ...windowParamsFields,
   /** The whole asset, not this window: named for it so a reassembler cannot misread the two, and
    *  paired with `sha256` it describes the asset without a second index. */
   assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
@@ -90,14 +90,14 @@ const windowHeaderShape = {
 /** Strict, so a later `contentEncoding` is only a Rule 1 optional-field addition for clients whose
  *  own reply readers are not strict. */
 export const MobileWebBundleChunkResultSchema = z
-  .object({ ...windowHeaderShape, dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) })
+  .object({ ...windowHeaderFields, dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH) })
   .strict()
 
 /** A chunk result plus the encoding of `dataBase64`, whose decoded length is
  *  `min(rangeBytes, assetByteLength - offset)`. */
 export const MobileWebBundleRangeResultSchema = z
   .object({
-    ...windowHeaderShape,
+    ...windowHeaderFields,
     encoding: z.enum(MOBILE_WEB_BUNDLE_RANGE_ENCODINGS),
     dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
   })
