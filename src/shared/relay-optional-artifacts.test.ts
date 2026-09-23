@@ -16,7 +16,7 @@ describe('optional relay artifacts', () => {
 
   it('never offers it to a non-Windows host', () => {
     expect(relayOptionalArtifactFilenames(false)).not.toContain(RELAY_WINDOWS_PROCESS_TREE_FILENAME)
-    expect(relayOptionalArtifactFilenames(false)).toEqual([])
+    expect(relayOptionalArtifactFilenames(false)).toEqual(['orca-workspace-cow'])
   })
 
   it('keeps required and optional sets disjoint', () => {
@@ -24,6 +24,13 @@ describe('optional relay artifacts', () => {
       const required = relayArtifactFilenames(isWindows)
       const optional = relayOptionalArtifactFilenames(isWindows)
       expect(optional.filter((name) => required.includes(name))).toEqual([])
+    }
+  })
+
+  it('allows relay installs without a cross-compiled APFS helper', () => {
+    for (const isWindows of [true, false]) {
+      expect(relayArtifactFilenames(isWindows)).not.toContain('orca-workspace-cow')
+      expect(relayOptionalArtifactFilenames(isWindows)).toContain('orca-workspace-cow')
     }
   })
 

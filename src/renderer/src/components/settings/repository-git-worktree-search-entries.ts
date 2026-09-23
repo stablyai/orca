@@ -120,13 +120,10 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.repository.search.01b3377ebc',
-        'Worktree Shared Paths'
-      ),
+      title: translate('worktreeCopies.title', 'Files to copy'),
       description: translate(
-        'auto.components.settings.repository.search.ed885e589f',
-        'Paths to materialize from the primary checkout into newly created worktrees.'
+        'worktreeCopies.description',
+        'Personal files to copy for this repository and host, in addition to .worktreeinclude.'
       ),
       keywords: [
         repo.displayName,

@@ -9,6 +9,7 @@
  * gracefully degraded.
  */
 import { build } from 'esbuild'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   copyFileSync,
@@ -110,12 +111,25 @@ const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 
+const workspaceCloneHelper =
+  process.platform === 'darwin'
+    ? join(ROOT, 'native/workspace-cow-macos/.build/release/orca-workspace-cow')
+    : null
+if (workspaceCloneHelper) {
+  execFileSync(process.execPath, [join(ROOT, 'config/scripts/build-workspace-cow-macos.mjs')], {
+    stdio: 'inherit'
+  })
+}
+
 for (const platform of RELAY_BUILD_PLATFORMS) {
   const outDir = join(OUT_ROOT, platform)
   // Why: a stale companion left by an earlier build would otherwise satisfy the
   // manifest check and be hashed into .version, shipping mixed-generation bytes.
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
+  if (workspaceCloneHelper) {
+    copyFileSync(workspaceCloneHelper, join(outDir, 'orca-workspace-cow'))
+  }
 
   await build({
     entryPoints: [RELAY_ENTRY],
@@ -264,6 +278,15 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
 // so a single platform-independent bundle suffices; it ships inside the
 // Windows app via the same out/relay extraResources mapping.
 {
+  await build({
+    entryPoints: [join(ROOT, 'src', 'relay', 'wsl-worktree-materialization-entry.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(OUT_ROOT, 'wsl', 'worktree-materialization.js'),
+    minify: true
+  })
   const wslHookEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
   const wslBrowserNetworkEntry = join(ROOT, 'src', 'relay', 'wsl-browser-network-relay.ts')
   const outDir = join(OUT_ROOT, 'wsl')

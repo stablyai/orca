@@ -1,3 +1,4 @@
+import { WORKTREE_COPY_PATHS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -9,7 +10,11 @@ import {
   getRepoHostIdentityForParts,
   repoMatchesHostIdentity
 } from '../slices/repo-host-identity'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  assertRuntimeEnvironmentCapability
+} from '../../runtime/runtime-rpc-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -93,12 +98,14 @@ export function getRepoUpdateChains(get: () => AppState): Map<string, Promise<bo
   return chains
 }
 
+type RepoUpdateInput = RepoUpdate | ((repo: Repo) => RepoUpdate)
+
 export function createRepoUpdateActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'updateRepo'> {
   return {
-    updateRepo: async (projectId, updates, options) => {
+    updateRepo: async (projectId, updates: RepoUpdateInput, options) => {
       const updateRepoChains = getRepoUpdateChains(get)
       // Why: pass options.hostId so a duplicate repo id across hosts resolves to the intended row, not the settings-focused fallback.
       const ownerRepo = findRepoForHost(get().repos, projectId, {
@@ -122,8 +129,22 @@ export function createRepoUpdateActions(
       const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
       const applyRepoUpdate = async () => {
         try {
-          const sanitizedUpdates = sanitizeRepoUpdate(updates)
+          const latestOwnerRepo =
+            findRepoForHost(get().repos, projectId, {
+              settings: get().settings,
+              hostId: options?.hostId
+            }) ?? ownerRepo
+          const sanitizedUpdates = sanitizeRepoUpdate(
+            typeof updates === 'function' ? updates(latestOwnerRepo) : updates
+          )
           const target = ownerTarget
+          if (target.kind === 'environment' && 'worktreeCopyPaths' in sanitizedUpdates) {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              WORKTREE_COPY_PATHS_RUNTIME_CAPABILITY,
+              'Repository copy settings require a newer Orca server. Update the host before changing or converting paths.'
+            )
+          }
           const updatedRepo =
             target.kind === 'local'
               ? await window.api.repos.update({

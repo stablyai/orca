@@ -68,3 +68,14 @@ export function probeSshPathExistenceBatchCapability(mux: SshChannelMultiplexer)
     (capabilities) => capabilities?.pathExistenceBatchVersion === 1
   )
 }
+
+export function probeSshWorktreeMaterializationCapability(
+  mux: SshChannelMultiplexer,
+  version = 1
+): Promise<boolean> {
+  return readSshFsCapabilities(mux).then(
+    (capabilities) =>
+      typeof capabilities?.worktreeMaterializationVersion === 'number' &&
+      capabilities.worktreeMaterializationVersion >= version
+  )
+}

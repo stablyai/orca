@@ -8918,15 +8918,15 @@
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
-          "b814c618e2": "Linked paths",
-          "31ebab5403": "No shared paths configured for this repository.",
+          "b814c618e2": "Configured paths",
+          "31ebab5403": "No paths configured for this repository.",
           "ea06227efa": "added",
           "b2429aeb31": "Add",
           "ab40b8a5f1": "No matches. Keep typing to add a custom path.",
           "4cd2a4c077": "Type a path (e.g. .env or node_modules)…",
           "241325302c": "Add Path",
-          "7ff265071d": "When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.",
-          "4755f120b6": "Worktree Shared Paths",
+          "7ff265071d": "New worktrees get private copy-on-write copies when supported by their host filesystem. Otherwise, these paths link to the primary checkout and share edits.",
+          "4755f120b6": "Paths for New Worktrees",
           "b07ef5a8b6": "Paths to materialize from the primary checkout into newly created worktrees.",
           "d72ba8dc68": "{{value0}} paths",
           "9ea912d811": "1 path"
@@ -18105,6 +18105,7 @@
       "stopped": "stopped",
       "finished": "finished"
     }
+
   },
   "sessionSearch": {
     "panel": {
@@ -18190,5 +18191,40 @@
   },
   "common": {
     "retry": "Retry"
+
+
+  },
+  "worktreeCopies": {
+    "projectUnavailable": "Could not read the project list from this host.",
+    "project": ".worktreeinclude",
+    "openProject": "Open file",
+    "projectDescription": "Added by the project. Edit this file to change these paths.",
+    "noProject": "No project paths listed.",
+    "loading": "Reading project list…",
+    "legacyIneligible": "This path cannot be converted: copies require a literal path ignored by Git. The legacy entry is unchanged.",
+    "validationFailed": "Could not validate this path on its host. Check the connection and try again.",
+    "legacy": "Legacy paths",
+    "legacyDescription": "These older settings may share edits with the primary checkout. Switch to copies to keep future worktrees independent.",
+    "convert": "Use copies…",
+    "removeLegacy": "Remove legacy {{path}}",
+    "confirm": "Move {{path}} to your copy list? It must be ignored by Git. Future worktrees will copy it or report why they cannot; existing worktrees stay unchanged.",
+    "confirmConvert": "Copy in future worktrees",
+    "cancel": "Cancel",
+    "invalid": "Use a literal path inside this repository, such as .env. Patterns and parent paths are not supported.",
+    "notIgnored": "Choose a file or folder ignored by Git. Tracked files already come from the chosen branch.",
+    "title": "Files to copy",
+    "description": "Personal files to copy for this repository and host, in addition to .worktreeinclude.",
+    "explanation": "Bring ignored files and folders from your primary checkout into each new worktree.",
+    "add": "Add path",
+    "source": "Source: {{path}}",
+    "empty": "No additions yet. Add a path such as .env.local.",
+    "personal": "Your additions",
+    "remove": "Remove {{path}}",
+    "limits": "Ordinary copying is limited to 2 GiB; all copies share a 50,000-entry limit. Use setup to install larger dependencies. Links inside copied folders keep their targets.",
+    "saveFailed": "Could not save these paths. Check the connection and update the Orca host if needed.",
+    "scope": "Saved in Orca for this repository and host only.",
+    "summary": "Both lists are copied together. Fast copying is automatic.",
+    "details": "How copying works",
+    "behavior": "Only future worktrees are affected. Copies use copy-on-write when available, or ordinary copying otherwise. They never fall back to shared links."
   }
 }

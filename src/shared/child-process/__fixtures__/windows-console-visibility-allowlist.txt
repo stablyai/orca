@@ -27,7 +27,6 @@ main/ipc/app.ts
 main/ipc/developer-permissions.ts
 main/ipc/macos-keyboard-layout-snapshot.ts
 main/ipc/notification-authorization-status.ts
-main/ipc/worktree-apfs-clone.ts
 main/local-builds/local-build-candidate.ts
 main/macos-tcc-prompt-watch.ts
 main/memory/collector.ts

@@ -1,3 +1,5 @@
+import { parseWorktreeIncludeFile } from '../../shared/worktree-copy-paths'
+export { parseWorktreeIncludeFile } from '../../shared/worktree-copy-paths'
 import { lstat, readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
@@ -25,23 +27,6 @@ const WORKTREE_INCLUDE_PATH_STAT_CONCURRENCY = 8
  *  Blank lines and `#` comments are skipped; `\` is normalized to `/`, a `./`
  *  prefix and trailing `/` are stripped. Each entry is anchored to the repo
  *  root (no implicit match-at-any-depth). */
-export function parseWorktreeIncludeFile(content: string): string[] {
-  const seen = new Set<string>()
-  const entries: string[] = []
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) {
-      continue
-    }
-    const normalized = line.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
-    if (!normalized || seen.has(normalized)) {
-      continue
-    }
-    seen.add(normalized)
-    entries.push(normalized)
-  }
-  return entries
-}
 
 function isUnsupportedPattern(entry: string): boolean {
   return entry.startsWith('!') || entry.includes('*') || entry.includes('?')

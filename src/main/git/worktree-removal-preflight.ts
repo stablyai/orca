@@ -1,3 +1,4 @@
+import { getBlockingUntrackedStatusEntries } from '../../shared/worktree-removal-status'
 import { gitExecFileAsync } from './runner'
 import type { WorktreeRemovalPreflightOptions } from './worktree-operation-options'
 import { WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS, gitExecOptions } from './worktree-operation-options'
@@ -41,28 +42,4 @@ export async function assertWorktreeCleanForRemoval(
     ? blockingEntries.join('\n')
     : stdout
   throw error
-}
-
-/** The `git status --porcelain -z` entries that genuinely block removal:
- *  everything except the untracked shared links the caller tolerates. */
-function getBlockingUntrackedStatusEntries(
-  status: string,
-  ignoredUntrackedPaths: readonly string[]
-): string[] {
-  const ignored = new Set(
-    ignoredUntrackedPaths
-      .map((entry) =>
-        entry
-          .trim()
-          .replace(/^[\\/]+/, '')
-          .replace(/\\/g, '/')
-      )
-      .filter((entry) => entry && !entry.split('/').includes('..'))
-  )
-  return status
-    .split('\0')
-    .filter(Boolean)
-    .filter(
-      (entry) => !(entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
-    )
 }

@@ -9,28 +9,19 @@ import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 
 export type SafeRelativePathResult = { safe: true; rel: string } | { safe: false }
 
-// Why a regex rather than `path.isAbsolute`: the strip below already removed
-// every leading `/` and `\`, so the only rooted spelling that can still reach
-// the guard is a Windows drive designator — and `win32.isAbsolute` misses the
-// drive-RELATIVE form (`C:foo`), which `win32.resolve` still resolves against
-// that drive's current directory instead of the worktree root.
+// Drive-relative paths (C:foo) must also stay outside repository-relative input.
 const WINDOWS_DRIVE_DESIGNATOR = /^[a-zA-Z]:/
 
 export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
-  // Why: strip leading separators (both `/` and `\`) before the guard so
-  // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
-  // is, and the traversal check below sees the already-relative form.
-  const rel = rawPath.trim().replace(/^[\\/]+/, '')
-  // Why: split on both separators so a Windows-authored `..\escape` is
-  // rejected the same way POSIX `../escape` is; the split catches relative
-  // backslash traversal that `.split('/')` would otherwise miss.
-  // Why the drive check runs on every host: the same entry — per-user Shared
-  // Paths setting or repo `orca.yaml` — is evaluated on every host Orca runs
-  // on, so the verdict must not depend on which one is asking.
-  if (!rel || WINDOWS_DRIVE_DESIGNATOR.test(rel) || rel.split(/[\\/]/).includes('..')) {
+  const parts = rawPath
+    .trim()
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((part) => part && part !== '.')
+  if (!parts[0] || WINDOWS_DRIVE_DESIGNATOR.test(parts[0]) || parts.includes('..')) {
     return { safe: false }
   }
-  return { safe: true, rel }
+  return { safe: true, rel: parts.join('/') }
 }
 
 export type WorktreeSymlinkDetectionOptions = {

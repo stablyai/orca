@@ -1,3 +1,5 @@
+import { resolveRelayRemovableSharedLinks } from './worktree-shared-link-removal'
+import { getBlockingUntrackedStatusEntries } from '../shared/worktree-removal-status'
 import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
@@ -150,6 +152,21 @@ export async function worktreeIsCleanOp(
   params: Record<string, unknown>
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
+  const links =
+    params.includeUntracked === false
+      ? []
+      : await resolveRelayRemovableSharedLinks(git, worktreePath, params.sharedLinks)
+  if (links.length > 0) {
+    const { stdout } = await git(
+      ['status', '--porcelain', '-z', '--untracked-files=all'],
+      worktreePath
+    )
+    const blocking = getBlockingUntrackedStatusEntries(stdout, links)
+    return {
+      clean: blocking.length === 0,
+      stdout: blocking.length ? blocking.join('\n') : undefined
+    }
+  }
   const includeUntracked = params.includeUntracked !== false
   const { stdout } = await git(
     ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],

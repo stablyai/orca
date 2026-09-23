@@ -1,3 +1,4 @@
+import { isWorktreeCopyPathList } from '../../../shared/worktree-copy-paths'
 import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
@@ -76,6 +77,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'upstream'
       | 'gitRemoteIdentity'
       | 'worktreeBasePath'
+      | 'worktreeCopyPaths'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
       | 'customWorktreeVisibilitySources'
@@ -86,6 +88,9 @@ export function sanitizeRepoUpdatesForPersistence<
   }
 >(updates: T): T {
   const sanitized = { ...updates }
+  if ('worktreeCopyPaths' in sanitized && !isWorktreeCopyPathList(sanitized.worktreeCopyPaths)) {
+    throw new Error('Files to copy must be at most 1,000 literal repository-relative paths.')
+  }
   if ('badgeColor' in sanitized) {
     const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
     if (!badgeColor) {

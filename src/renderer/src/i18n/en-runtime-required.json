@@ -1547,6 +1547,18 @@
           "import_theme_one": "Import 1 Theme",
           "import_theme_other": "Import {{value0}} Themes"
         },
+        "WorktreeSymlinksSection": {
+          "1c1e35b219": "Remove {{value0}}",
+          "241325302c": "Add Path",
+          "31ebab5403": "No paths configured for this repository.",
+          "4755f120b6": "Paths for New Worktrees",
+          "7ff265071d": "New worktrees get private copy-on-write copies when supported by their host filesystem. Otherwise, these paths link to the primary checkout and share edits.",
+          "9ea912d811": "1 path",
+          "b07ef5a8b6": "Paths to materialize from the primary checkout into newly created worktrees.",
+          "b814c618e2": "Configured paths",
+          "d72ba8dc68": "{{value0}} paths",
+          "ea06227efa": "added"
+        },
         "WslCliRegistration": {
           "41a1480d3e": "install",
           "7c3bb36706": "remove",
@@ -1742,8 +1754,10 @@
         },
         "repository": {
           "search": {
+            "01b3377ebc": "Worktree Shared Paths",
             "availableHosts": "Available Hosts",
             "availableHostsDescription": "Hosts where this project is set up.",
+            "ed885e589f": "Paths to materialize from the primary checkout into newly created worktrees.",
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",

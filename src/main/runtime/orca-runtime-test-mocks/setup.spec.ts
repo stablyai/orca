@@ -18,8 +18,14 @@ const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() =>
 const findExistingWorktreeSymlinkPathsMock: TestMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock: TestMock = vi.hoisted(() => vi.fn(async () => ''))
 
+vi.mock('../../ipc/wsl-worktree-path-materialization', () => ({
+  materializeWslWorktreePaths: vi.fn(async () => undefined),
+  inspectWslWorktreeSharedLinks: vi.fn(async () => []),
+  removeWslWorktreeSharedLinks: vi.fn(async () => [])
+}))
+
 vi.mock('../../ipc/worktree-symlinks', () => ({
-  createWorktreeCopiedPaths: vi.fn(),
+  createWorktreeCopiedPaths: vi.fn(async () => []),
   createWorktreeLinkedPaths: vi.fn(),
   createWorktreeSharedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,

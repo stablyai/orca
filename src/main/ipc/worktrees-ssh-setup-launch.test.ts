@@ -97,112 +97,133 @@ describe('registerWorktreeHandlers', () => {
     setupWorktreeHandlers()
   })
 
-  it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: 'origin/main'
-    }
-    const provider = {
-      exec: vi.fn().mockImplementation(async (args: string[]) => {
-        if (args[0] === 'remote') {
-          return { stdout: 'origin\n', stderr: '' }
-        }
-        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-          return {
-            stdout: '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh\n',
-            stderr: ''
+  it.each([false, true])(
+    'prepares SSH setup only after materialization completes (interrupted=%s)',
+    async (interrupted) => {
+      const repo = {
+        id: 'repo-ssh',
+        path: '/remote/repo',
+        displayName: 'ssh',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'conn-1',
+        worktreeBaseRef: 'origin/main'
+      }
+      const provider = {
+        exec: vi.fn().mockImplementation(async (args: string[]) => {
+          if (args[0] === 'remote') {
+            return { stdout: 'origin\n', stderr: '' }
           }
-        }
-        if (args[0] === 'rev-parse') {
-          throw new Error('missing local branch')
-        }
-        if (args[0] === 'show-ref') {
-          throw Object.assign(new Error('missing exact ref'), { code: 1 })
-        }
-        return { stdout: '', stderr: '' }
-      }),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/old-improve-dashboard',
-          head: 'old123',
-          branch: 'refs/heads/archive/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        },
-        {
-          path: '/remote/repo-improve-dashboard',
-          head: 'abc123',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    }
-    const fsProvider = {
-      readFile: vi.fn().mockResolvedValue({
-        content: 'setupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: pnpm install\n',
-        isBinary: false
-      }),
-      createDir: vi.fn().mockResolvedValue(undefined),
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    }
-    const mux = {
-      request: vi.fn().mockResolvedValue(undefined),
-      notify: vi.fn()
-    }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
-    getSshGitProviderMock.mockReturnValue(provider)
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
-    getActiveMultiplexerMock.mockReturnValue(mux)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
-    parseOrcaYamlMock.mockReturnValue({
-      scripts: { setup: 'pnpm install' },
-      setupAgentStartupPolicy: 'wait-for-setup'
-    })
-    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    shouldRunSetupForCreateMock.mockReturnValue(true)
-
-    const result = await handlers['worktrees:create'](null, {
-      repoId: 'repo-ssh',
-      name: 'improve-dashboard',
-      setupDecision: 'run'
-    })
-
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo-improve-dashboard/orca.yaml')
-    expect(provider.exec).toHaveBeenCalledWith(
-      ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
-      '/remote/repo-improve-dashboard'
-    )
-    expect(fsProvider.createDir).toHaveBeenCalledWith(
-      '/remote/repo/.git/worktrees/repo-improve-dashboard/orca'
-    )
-    expect(fsProvider.writeFile).toHaveBeenCalledWith(
-      '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh',
-      '#!/usr/bin/env bash\nset -e\npnpm install\n'
-    )
-    expect(result).toEqual(
-      expect.objectContaining({
-        setup: {
-          runnerScriptPath:
-            '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh',
-          envVars: expect.objectContaining({
-            ORCA_ROOT_PATH: '/remote/repo',
-            ORCA_WORKTREE_PATH: '/remote/repo-improve-dashboard'
-          }),
-          waitForAgentStartup: true
-        }
+          if (args[0] === 'rev-parse' && args[1] === '--git-path') {
+            return {
+              stdout: '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh\n',
+              stderr: ''
+            }
+          }
+          if (args[0] === 'rev-parse') {
+            throw new Error('missing local branch')
+          }
+          if (args[0] === 'show-ref') {
+            throw Object.assign(new Error('missing exact ref'), { code: 1 })
+          }
+          return { stdout: '', stderr: '' }
+        }),
+        fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+        addWorktree: vi.fn().mockResolvedValue(undefined),
+        listWorktrees: vi.fn().mockResolvedValue([
+          {
+            path: '/remote/old-improve-dashboard',
+            head: 'old123',
+            branch: 'refs/heads/archive/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          },
+          {
+            path: '/remote/repo-improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+      }
+      const fsProvider = {
+        materializeWorktreePaths: vi.fn(async () => {
+          if (interrupted) {
+            throw new Error('connection closed during clone')
+          }
+          return { supported: true }
+        }),
+        readFile: vi.fn().mockResolvedValue({
+          content: 'setupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: pnpm install\n',
+          isBinary: false
+        }),
+        createDir: vi.fn().mockResolvedValue(undefined),
+        writeFile: vi.fn().mockResolvedValue(undefined)
+      }
+      const mux = {
+        request: vi.fn().mockResolvedValue(undefined),
+        notify: vi.fn()
+      }
+      store.getRepos.mockReturnValue([repo])
+      store.getRepo.mockReturnValue(repo)
+      getSshGitProviderMock.mockReturnValue(provider)
+      getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+      getActiveMultiplexerMock.mockReturnValue(mux)
+      store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+      parseOrcaYamlMock.mockReturnValue({
+        scripts: { setup: 'pnpm install' },
+        setupAgentStartupPolicy: 'wait-for-setup'
       })
-    )
-  })
+      getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      shouldRunSetupForCreateMock.mockReturnValue(true)
+
+      const pending = handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard',
+        setupDecision: 'run'
+      })
+
+      if (interrupted) {
+        await expect(pending).rejects.toThrow('materialization is unverifiable')
+        expect(fsProvider.writeFile).not.toHaveBeenCalled()
+        expect(fsProvider.readFile).not.toHaveBeenCalledWith(
+          '/remote/repo-improve-dashboard/orca.yaml'
+        )
+        expect(provider.addWorktree).toHaveBeenCalled()
+        expect(store.setWorktreeMeta).toHaveBeenCalled()
+        return
+      }
+      const result = await pending
+
+      expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
+      expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo-improve-dashboard/orca.yaml')
+      expect(provider.exec).toHaveBeenCalledWith(
+        ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        '/remote/repo-improve-dashboard'
+      )
+      expect(fsProvider.createDir).toHaveBeenCalledWith(
+        '/remote/repo/.git/worktrees/repo-improve-dashboard/orca'
+      )
+      expect(fsProvider.writeFile).toHaveBeenCalledWith(
+        '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh',
+        '#!/usr/bin/env bash\nset -e\npnpm install\n'
+      )
+      expect(result).toEqual(
+        expect.objectContaining({
+          setup: {
+            runnerScriptPath:
+              '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh',
+            envVars: expect.objectContaining({
+              ORCA_ROOT_PATH: '/remote/repo',
+              ORCA_WORKTREE_PATH: '/remote/repo-improve-dashboard'
+            }),
+            waitForAgentStartup: true
+          }
+        })
+      )
+    }
+  )
 
   it('keeps Windows SSH setup runners independent from the local Git Bash setting', async () => {
     const repo = {

@@ -35,9 +35,12 @@ export async function removeRegisteredRemoteWorktree(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const remoteConnectionId = repo.connectionId!
+  const sharedLinks = { source: repo.path, paths: repo.symlinkPaths ?? [] }
   // Why: SSH deletion mirrors the local flow — hooks run while the directory is intact, then the clean check guards removal.
   if (!args.force) {
-    const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+    const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath, {
+      sharedLinks
+    })
     if (!clean) {
       const error = new Error('Worktree has uncommitted or untracked changes.')
       ;(error as Error & { stdout?: string }).stdout = stdout
@@ -45,7 +48,7 @@ export async function removeRegisteredRemoteWorktree(
     }
   }
 
-  const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
+  const remoteRemoveOptions = { sharedLinks, ...(!deleteBranch ? { deleteBranch } : {}) }
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'remote', async () =>
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath, remoteConnectionId)
   )
