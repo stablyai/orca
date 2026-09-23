@@ -139,7 +139,7 @@ export function GeneralPane({
           )}
           description={translate(
             'auto.components.settings.GeneralPane.editor_preview_tabs_description',
-            'Single-clicking a file in the Explorer, or following a Markdown link, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+            'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
           )}
           keywords={['preview', 'tab', 'editor', 'explorer', 'reuse', 'replace', 'italic']}
         >
@@ -150,7 +150,7 @@ export function GeneralPane({
             )}
             description={translate(
               'auto.components.settings.GeneralPane.editor_preview_tabs_description',
-              'Single-clicking a file in the Explorer, or following a Markdown link, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+              'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
             )}
             checked={settings.editorPreviewTabsEnabled ?? true}
             onChange={() =>

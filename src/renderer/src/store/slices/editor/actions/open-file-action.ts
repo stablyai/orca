@@ -1,6 +1,5 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import {
   EDITOR_FOCUS_REQUEST_TTL_MS,
@@ -26,7 +25,8 @@ export function createOpenFileAction(
               : 'editor'
       const scratch = {
         editorItemFileId: file.filePath,
-        editorItemTargetGroupId: options?.targetGroupId
+        editorItemTargetGroupId: options?.targetGroupId,
+        editorItemIsPreview: false
       }
       set((s) => applyOpenFileToState(s, file, options, scratch))
       const editorItemViewStateId = openWorkspaceEditorItem(
@@ -35,7 +35,7 @@ export function createOpenFileAction(
         editorItemWorktreeId,
         editorItemLabel,
         editorItemContentType,
-        resolveEditorPreviewIntent(get(), options?.preview),
+        scratch.editorItemIsPreview,
         scratch.editorItemTargetGroupId
       )
       if (options?.focusEditor) {

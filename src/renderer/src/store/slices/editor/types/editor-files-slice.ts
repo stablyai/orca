@@ -71,8 +71,6 @@ export type EditorFilesSlice = {
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
-  /** Clears every preview flag at once, e.g. after preview tabs are turned off in settings. */
-  makeAllPreviewFilesPermanent: () => void
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void

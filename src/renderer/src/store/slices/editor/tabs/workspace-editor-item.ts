@@ -41,7 +41,7 @@ export function getReplaceablePreviewFileId(
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
-  // Why: a restored session can carry preview flags from before the setting was turned off; never evict on those.
+  // Why: callers resolve intent first, but this helper is shared by five open paths — keep it correct for a caller that doesn't.
   if (!areEditorPreviewTabsEnabled(state)) {
     return null
   }

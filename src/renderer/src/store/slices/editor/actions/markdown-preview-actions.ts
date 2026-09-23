@@ -21,7 +21,6 @@ export function createMarkdownPreviewActions(
   | 'openNewMarkdownInActiveWorkspace'
   | 'openMarkdownPreview'
   | 'makePreviewFilePermanent'
-  | 'makeAllPreviewFilesPermanent'
   | 'pinFile'
 > {
   return {
@@ -176,30 +175,6 @@ export function createMarkdownPreviewActions(
         for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
           unifiedTabsByWorktree[worktreeId] = tabs.map((tab) => {
             if (tab.entityId !== fileId || (tabId && tab.id !== tabId) || !tab.isPreview) {
-              return tab
-            }
-            changed = true
-            return { ...tab, isPreview: false }
-          })
-        }
-        return changed ? { openFiles, unifiedTabsByWorktree } : s
-      })
-    },
-
-    makeAllPreviewFilesPermanent: () => {
-      set((s) => {
-        let changed = false
-        const openFiles = s.openFiles.map((file) => {
-          if (!file.isPreview) {
-            return file
-          }
-          changed = true
-          return { ...file, isPreview: undefined }
-        })
-        const unifiedTabsByWorktree: typeof s.unifiedTabsByWorktree = {}
-        for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
-          unifiedTabsByWorktree[worktreeId] = tabs.map((tab) => {
-            if (!tab.isPreview) {
               return tab
             }
             changed = true

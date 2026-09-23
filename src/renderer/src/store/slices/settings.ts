@@ -132,16 +132,6 @@ function normalizeSettingsUpdates(
   return sanitizedUpdates
 }
 
-/** An already-open preview tab has no way back once previews are off, so promote it in place. */
-function pinPreviewTabsWhenPreviewDisabled(
-  get: () => AppState,
-  updates: Partial<GlobalSettings>
-): void {
-  if (updates.editorPreviewTabsEnabled === false) {
-    get().makeAllPreviewFilesPermanent()
-  }
-}
-
 async function persistSettingsUpdates(
   set: ownerHydration.SettingsStateSetter,
   updates: Partial<GlobalSettings>,
@@ -230,7 +220,6 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('worktreeVisibilityDefaults' in updates) {
         await get().fetchAllWorktrees({ visibilityOwnerHostId })
       }
-      pinPreviewTabsWhenPreviewDisabled(get, updates)
     } catch (err) {
       console.error('Failed to update settings:', err)
     }
@@ -252,7 +241,6 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     if ('worktreeVisibilityDefaults' in updates) {
       await get().fetchAllWorktrees({ visibilityOwnerHostId })
     }
-    pinPreviewTabsWhenPreviewDisabled(get, updates)
   },
 
   setActiveRuntimeEnvironmentPreference: async (environmentId) => {
