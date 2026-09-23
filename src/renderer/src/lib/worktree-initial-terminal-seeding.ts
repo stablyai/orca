@@ -64,6 +64,7 @@ export function reseedGatedEmptyWorkspace(
   )
 }
 
+/** Seed the terminal surfaces required by explicit launch work or automatic activation policy. */
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
@@ -137,7 +138,9 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  const hasExplicitLaunchWork = Boolean(
+    sequencedStartup || setup || issueCommand || defaultTabs?.tabs.length
+  )
   // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
   // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
   // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.

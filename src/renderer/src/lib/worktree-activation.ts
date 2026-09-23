@@ -71,6 +71,7 @@ function ensureFolderWorkspaceInitialTerminal(
   return primaryTabId
 }
 
+/** Activate a folder workspace and reveal or seed its primary surface when appropriate. */
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: WorktreeActivationSurfaceSelection & {
@@ -178,6 +179,7 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
+/** Activate a managed worktree and return the primary terminal selected or created for it. */
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: WorktreeActivationOptions

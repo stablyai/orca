@@ -1,3 +1,4 @@
+/** Decide whether activation should seed a terminal for an otherwise empty workspace. */
 export function shouldAutoCreateInitialTerminal(
   renderableTabCount: number,
   hasPersistedTerminalState = false,

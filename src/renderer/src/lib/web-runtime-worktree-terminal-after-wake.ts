@@ -23,6 +23,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
+/** Restore a required web-runtime terminal after wake while avoiding passive duplicate creation. */
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
   opts?: {
@@ -59,7 +60,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     return
   }
 
-  if (!launchAgent) {
+  if (!launchAgent && !opts?.startup) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
       return

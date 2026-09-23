@@ -55,6 +55,36 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'codex' })
   })
 
+  it('preserves configured default tabs when automatic creation is disabled', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+      },
+      { automaticCreationEnabled: false, activateCreatedTabs: false }
+    )
+
+    expect(store.createTab).toHaveBeenCalledOnce()
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      activate: false
+    })
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Dev', {
+      recordInteraction: false
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'pnpm dev'
+    })
+  })
+
   it('creates a terminal when explicit launch work targets an empty workspace', () => {
     const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
 

@@ -11,6 +11,7 @@ type WorkspaceEmptyStateActionProps = {
   contextualTourTarget?: string
 }
 
+/** Render a keyboard-aware action in a workspace empty-state surface. */
 export function WorkspaceEmptyStateAction({
   icon,
   label,

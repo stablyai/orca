@@ -24,11 +24,13 @@ import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-br
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 import { TabGroupEmptyState } from './TabGroupEmptyState'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
+/** Render one workspace tab group, including its strip, content, and empty-state actions. */
 export default function TabGroupPanel({
   groupId,
   worktreeId,
@@ -66,6 +68,10 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const autoCreateTerminalOnWorkspaceActivation = useAppStore(
     (state) => state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  )
+  const managedBrowserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state === 'enabled'
   )
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
@@ -387,6 +393,7 @@ export default function TabGroupPanel({
             onNewTerminal={commands.newTerminalTab}
             onNewMarkdown={commands.newFileTab}
             onNewBrowser={commands.newBrowserTab}
+            showNewBrowser={managedBrowserCreationEnabled}
           />
         ) : null}
       </div>

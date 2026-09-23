@@ -8,12 +8,15 @@ type TabGroupEmptyStateProps = {
   onNewTerminal: () => void
   onNewMarkdown: () => void
   onNewBrowser: () => void
+  showNewBrowser: boolean
 }
 
+/** Render creation actions for a tab group whose workspace has no open content. */
 export const TabGroupEmptyState = memo(function TabGroupEmptyState({
   onNewTerminal,
   onNewMarkdown,
-  onNewBrowser
+  onNewBrowser,
+  showNewBrowser
 }: TabGroupEmptyStateProps): React.JSX.Element {
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -40,15 +43,17 @@ export const TabGroupEmptyState = memo(function TabGroupEmptyState({
           shortcut={newMarkdownShortcut}
           onClick={onNewMarkdown}
         />
-        <WorkspaceEmptyStateAction
-          icon={<Globe className="size-3.5 opacity-90" />}
-          label={translate(
-            'auto.components.tab.group.TabGroupEmptyState.8b07759314',
-            'New Browser'
-          )}
-          shortcut={newBrowserShortcut}
-          onClick={onNewBrowser}
-        />
+        {showNewBrowser ? (
+          <WorkspaceEmptyStateAction
+            icon={<Globe className="size-3.5 opacity-90" />}
+            label={translate(
+              'auto.components.tab.group.TabGroupEmptyState.8b07759314',
+              'New Browser'
+            )}
+            shortcut={newBrowserShortcut}
+            onClick={onNewBrowser}
+          />
+        ) : null}
       </div>
     </div>
   )

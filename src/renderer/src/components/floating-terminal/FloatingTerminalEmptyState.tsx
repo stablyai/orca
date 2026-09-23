@@ -18,6 +18,7 @@ type FloatingTerminalEmptyStateProps = {
   closeShortcut: ShortcutKeyComboDetails
 }
 
+/** Render the available creation and close actions for an empty floating workspace. */
 export function FloatingTerminalEmptyState({
   onNewTerminal,
   onNewMarkdown,

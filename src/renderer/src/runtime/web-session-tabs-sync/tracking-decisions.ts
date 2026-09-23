@@ -132,6 +132,7 @@ export function decideWebSessionTabsSnapshot(
   return WEB_SESSION_TABS_FRAME_APPLIED
 }
 
+/** Decide whether an empty web-runtime session needs its initial terminal bootstrapped. */
 export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   event: SessionTabsStreamEvent
   activeWorktreeId: string

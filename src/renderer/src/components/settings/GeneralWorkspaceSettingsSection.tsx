@@ -16,6 +16,7 @@ type GeneralWorkspaceSettingsSectionProps = {
   sourceDefaultsSupported?: boolean
 }
 
+/** Render workspace-related general settings and persist changes through the supplied updater. */
 export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings,
@@ -103,22 +104,22 @@ export function GeneralWorkspaceSettingsSection({
 
       <SearchableSetting
         title={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.f0ab824a1c',
+          'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivation',
           'Open a Terminal When Selecting a Workspace'
         )}
         description={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.d73aa3e205',
+          'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivationDescription',
           'Automatically open the first terminal when selecting a workspace with no open tabs.'
         )}
         keywords={['terminal', 'automatic', 'select', 'workspace', 'worktree']}
       >
         <SettingsSwitchRow
           label={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.f0ab824a1c',
+            'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivation',
             'Open a Terminal When Selecting a Workspace'
           )}
           description={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.d73aa3e205',
+            'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivationDescription',
             'Automatically open the first terminal when selecting a workspace with no open tabs.'
           )}
           checked={settings.autoCreateTerminalOnWorkspaceActivation !== false}

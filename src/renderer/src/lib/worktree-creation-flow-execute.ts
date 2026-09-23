@@ -33,6 +33,7 @@ function isPendingCreationSurfaceVisible(creationId: string): boolean {
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
 }
 
+/** Complete a prepared worktree creation request and hand its resulting surfaces to the UI. */
 export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest

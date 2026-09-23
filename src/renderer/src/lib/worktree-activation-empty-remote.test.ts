@@ -166,6 +166,60 @@ describe('empty remote worktree activation', () => {
     expect(callRuntimeEnvironment).not.toHaveBeenCalled()
   })
 
+  it('preserves non-agent startup work when automatic creation is disabled', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({ ok: true, result: {} })
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: callRuntimeEnvironment,
+          subscribe: vi.fn()
+        }
+      }
+    })
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: REPO_PATH,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      settings: {
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 0,
+        activeRenderableTabId: null
+      }))
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      startup: { command: 'pnpm dev' },
+      automaticCreationEnabled: false,
+      activate: false
+    })
+
+    await vi.waitFor(() => expect(callRuntimeEnvironment).toHaveBeenCalled())
+    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.createTerminal',
+        params: expect.objectContaining({
+          command: 'pnpm dev',
+          activate: false
+        })
+      })
+    )
+  })
+
   it('surfaces a failed host terminal request without retrying ambiguously', async () => {
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
