@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { useAppStore } from '../store'
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
@@ -242,15 +243,22 @@ export async function selectClaudeProviderAccount(
   selection: ProviderAccountSelection
 ): Promise<ClaudeRateLimitAccountsState> {
   const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
-      target,
-      'accounts.selectClaude',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.select(selection)
+  const result =
+    target.kind === 'environment'
+      ? await callRuntimeRpc<ClaudeRateLimitAccountsState>(
+          target,
+          'accounts.selectClaude',
+          { accountId: selection.accountId },
+          { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+        )
+      : await window.api.claudeAccounts.select(selection)
+  // Why: the active-account rate-limit snapshot is keyed by runtime target, not
+  // account (see rate-limits.ts), so every caller that can change the active
+  // Claude account must go through this one place to invalidate it. Without
+  // this, a same-target switch keeps showing the previous account's usage as
+  // "ready" on the newly active row until the next background poll.
+  useAppStore.getState().clearActiveClaudeRateLimits()
+  return result
 }
 
 export async function selectCodexProviderAccount(

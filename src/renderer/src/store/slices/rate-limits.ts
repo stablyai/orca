@@ -14,6 +14,7 @@ export type RateLimitSlice = {
   fetchInactiveClaudeAccountUsage: () => Promise<void>
   fetchInactiveCodexAccountUsage: () => Promise<void>
   setRateLimitsFromPush: (state: RateLimitState) => void
+  clearActiveClaudeRateLimits: () => void
 }
 
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
@@ -134,5 +135,14 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
 
   setRateLimitsFromPush: (state) => {
     set({ rateLimits: state })
+  },
+
+  // Why: `claude` is keyed by runtime target, not account, so switching the
+  // active account on the same target leaves the previous account's numbers
+  // in place. Selection call sites clear it so the row falls back to
+  // `loading` instead of showing a stale, misattributed "ready" snapshot
+  // until the next background poll lands.
+  clearActiveClaudeRateLimits: () => {
+    set({ rateLimits: { ...get().rateLimits, claude: null } })
   }
 })
