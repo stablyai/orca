@@ -5,6 +5,7 @@ import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
@@ -499,50 +500,55 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('keeps a full-fetch retry on the 5-minute cadence for a provider without a dedicated fetch cycle', async () => {
-    vi.useFakeTimers()
-    try {
-      // Kimi has no individual fetch cycle, so recovering it re-runs fetchAll
-      // (which hits Claude's tight-budget endpoint). A durable Kimi error must
-      // not drive that full fetch every 30s — it stays on the 5-minute cadence.
-      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
-      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
-      vi.mocked(fetchKimiRateLimits).mockResolvedValue(errorProvider('kimi', 'token expired'))
+  it.each([
+    { provider: 'kimi', fetcher: fetchKimiRateLimits },
+    { provider: 'antigravity', fetcher: fetchAntigravityRateLimits }
+  ] as const)(
+    'keeps a full-fetch retry on the 5-minute cadence for $provider, which has no dedicated fetch cycle',
+    async ({ provider, fetcher }) => {
+      vi.useFakeTimers()
+      try {
+        // Without an individual fetch cycle, recovery re-runs fetchAll (which hits
+        // Claude's tight-budget endpoint), so a durable error stays on the 5-minute cadence.
+        vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+        vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+        vi.mocked(fetcher).mockResolvedValue(errorProvider(provider, 'token expired'))
 
-      const service = new RateLimitService()
-      const window = new FakeRateLimitWindow()
-      service.attach(asRateLimitWindow(window))
-      service.start({ fetchImmediately: false })
+        const service = new RateLimitService()
+        const window = new FakeRateLimitWindow()
+        service.attach(asRateLimitWindow(window))
+        service.start({ fetchImmediately: false })
 
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
-      expect(service.getState().kimi?.status).toBe('error')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(fetcher).toHaveBeenCalledTimes(1)
+        expect(service.getState()[provider]?.status).toBe('error')
 
-      // First activation recovers immediately (retry timestamps start at 0).
-      window.emit('focus')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
-      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+        // First activation recovers immediately (retry timestamps start at 0).
+        window.emit('focus')
+        await vi.advanceTimersByTimeAsync(0)
+        expect(fetcher).toHaveBeenCalledTimes(2)
+        expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Well past the 30s failure throttle but inside the 5-minute window: the
-      // full fetch (and the Claude read it entails) must not fire again.
-      await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
-      window.emit('show')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
-      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+        // Well past the 30s failure throttle but inside the 5-minute window: the
+        // full fetch (and the Claude read it entails) must not fire again.
+        await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+        window.emit('show')
+        await vi.advanceTimersByTimeAsync(0)
+        expect(fetcher).toHaveBeenCalledTimes(2)
+        expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // After the full 5-minute window the retry fires again.
-      await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
-      window.emit('restore')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fetchKimiRateLimits).toHaveBeenCalledTimes(3)
+        // After the full 5-minute window the retry fires again.
+        await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
+        window.emit('restore')
+        await vi.advanceTimersByTimeAsync(0)
+        expect(fetcher).toHaveBeenCalledTimes(3)
 
-      service.stop()
-    } finally {
-      vi.useRealTimers()
+        service.stop()
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it('debounces unavailable providers on active window events', async () => {
     vi.useFakeTimers()

@@ -37,12 +37,12 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>
   ]
   grokResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
   >
+  antigravityPromise: Promise<ProviderRateLimits>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -135,55 +135,58 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    // Why: a slow agy CLI must not hold back the other providers, so it applies on its own like Grok.
+    const antigravityPromise = fetchAntigravityRateLimits(signal).catch(
+      (error): ProviderRateLimits => ({
+        provider: 'antigravity',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'error'
+      })
+    )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [
-      claudeResult,
-      codexResult,
-      geminiResult,
-      antigravityResult,
-      opencodeGoResult,
-      kimiResult,
-      miniMaxResult
-    ] = await Promise.allSettled([
-      claudeFetchGated
-        ? Promise.resolve(previousState.claude as ProviderRateLimits)
-        : fetchClaudeRateLimits({
-            authPreparation: claudeAuthPreparation,
-            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-            networkProxySettings: this.networkProxySettingsResolver?.(),
-            signal
-          }),
-      codexFetchGated
-        ? Promise.resolve(previousState.codex as ProviderRateLimits)
-        : (missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
-          })),
-      fetchGeminiRateLimits(geminiCliOAuthEnabled),
-      fetchAntigravityRateLimits(signal),
-      fetchOpenCodeGoRateLimits(
-        cookie,
-        workspaceIdOverride || undefined,
-        this.networkProxySettingsResolver?.()
-      ),
-      this.fetchKimiWithResolvedHome(),
-      miniMaxConfigResult.error
-        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-        : fetchMiniMaxRateLimits({
-            cookie: miniMaxCookie,
-            groupId: miniMaxGroupId,
-            models: miniMaxModels,
-            endpointMode: miniMaxEndpoint,
-            apiKey: miniMaxApiKey
-          })
-    ])
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
+      await Promise.allSettled([
+        claudeFetchGated
+          ? Promise.resolve(previousState.claude as ProviderRateLimits)
+          : fetchClaudeRateLimits({
+              authPreparation: claudeAuthPreparation,
+              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            }),
+        codexFetchGated
+          ? Promise.resolve(previousState.codex as ProviderRateLimits)
+          : (missingWslCodexHome ??
+            fetchCodexRateLimits({
+              codexHomePath,
+              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+              signal
+            })),
+        fetchGeminiRateLimits(geminiCliOAuthEnabled),
+        fetchOpenCodeGoRateLimits(
+          cookie,
+          workspaceIdOverride || undefined,
+          this.networkProxySettingsResolver?.()
+        ),
+        this.fetchKimiWithResolvedHome(),
+        miniMaxConfigResult.error
+          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+          : fetchMiniMaxRateLimits({
+              cookie: miniMaxCookie,
+              groupId: miniMaxGroupId,
+              models: miniMaxModels,
+              endpointMode: miniMaxEndpoint,
+              apiKey: miniMaxApiKey
+            })
+      ])
 
     if (signal.aborted) {
       return null
@@ -208,12 +211,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         claudeResult,
         codexResult,
         geminiResult,
-        antigravityResult,
         opencodeGoResult,
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      antigravityPromise
     }
   }
 }

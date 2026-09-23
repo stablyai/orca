@@ -29,12 +29,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         claudeResult,
         codexResult,
         geminiResult,
-        antigravityResult,
         opencodeGoResult,
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      antigravityPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -76,22 +76,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             updatedAt: Date.now(),
             error:
               geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    const antigravity =
-      antigravityResult.status === 'fulfilled'
-        ? antigravityResult.value
-        : ({
-            provider: 'antigravity',
-            session: null,
-            weekly: null,
-            buckets: [],
-            updatedAt: Date.now(),
-            error:
-              antigravityResult.reason instanceof Error
-                ? antigravityResult.reason.message
-                : 'Antigravity usage could not be read.',
             status: 'error'
           } satisfies ProviderRateLimits)
 
@@ -169,7 +153,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -196,7 +179,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -223,6 +205,16 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const antigravity = await antigravityPromise
+    if (signal.aborted) {
+      return
+    }
+    this.trackActiveFailureStreak('antigravity', antigravity)
+    this.updateState({
+      ...this.state,
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }
 }
