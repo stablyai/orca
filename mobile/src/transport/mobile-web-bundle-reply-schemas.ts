@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
-import { MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH } from '../../../src/shared/mobile-web-bundle/bundle-range-rpc-contract'
+import {
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH
+} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
   MobileWebBundleAssetPathSchema,
@@ -8,7 +10,8 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
-  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
+  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
+  SHA256_PATTERN
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
 // Hoisted, never built inside a reader: a schema constructed per parse cost 2275 ns against 156 ns
@@ -18,10 +21,6 @@ import {
 // own schemas describe what it produces and stay `.strict()`; a phone that rejected an unknown
 // member would turn a later optional field into a released-client break instead of the Rule 1
 // addition `docs/reference/remote-wire-compatibility.md` allows.
-
-/** Lowercase hex digest. The shared contract keeps its copy private, so this is the one place the
- *  client states the shape it accepts. */
-const SHA256_PATTERN = /^[a-f0-9]{64}$/
 
 /** Base64 of one chunk, bounded by the same arithmetic as `skill-upload-session-contract.ts`, so a
  *  host that overshoots is refused at the boundary instead of at reassembly. */

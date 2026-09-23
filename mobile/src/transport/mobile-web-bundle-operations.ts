@@ -2,9 +2,9 @@ import {
   MobileWebBundleErrorCodeSchema,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+  MOBILE_WEB_BUNDLE_RANGE_METHOD,
   type MobileWebBundleErrorCode
 } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
-import { MOBILE_WEB_BUNDLE_RANGE_METHOD } from '../../../src/shared/mobile-web-bundle/bundle-range-rpc-contract'
 import {
   MobileWebBundleChunkReplySchema,
   MobileWebBundleManifestReplySchema,
@@ -39,8 +39,8 @@ export const mobileWebBundleChunkRead = defineRpcOperation({
   read: rpcResultVariant('mobile-web-bundle-chunk', MobileWebBundleChunkReplySchema)
 })
 
-/** Up to 384 KiB of one asset, gzipped when that shrinks it. Only sent to a host that advertised
- *  `mobileWeb.bundle.range.v1`; see `mobile-web-bundle-read-method.ts`. */
+/** One 384 KiB window of an asset, gzipped when that shrinks it. Only sent to a host whose manifest
+ *  reply named `rangeBytes`. */
 export const mobileWebBundleRangeRead = defineRpcOperation({
   name: 'mobileWeb.bundle-range',
   method: MOBILE_WEB_BUNDLE_RANGE_METHOD,

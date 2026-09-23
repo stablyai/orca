@@ -1,6 +1,5 @@
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
 import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-operations'
-import { mobileWebBundleReadMethodFor } from '../transport/mobile-web-bundle-read-method'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
@@ -92,8 +91,6 @@ export async function readManifest(
 
 export async function download(args: {
   client: RpcClient | null
-  /** The capabilities the gates proved for this connection, which name the read method. */
-  hostCapabilities: readonly string[]
   store: GenerationStore
   hostKey: string
   flow: number
@@ -114,7 +111,6 @@ export async function download(args: {
   try {
     const fetched = await fetchMobileWebBundle({
       client,
-      readMethod: mobileWebBundleReadMethodFor(args.hostCapabilities),
       signal: controller.signal,
       onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress })
     })

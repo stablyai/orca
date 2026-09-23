@@ -2,14 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
-} from '../../../src/shared/mobile-web-bundle/bundle-range-rpc-contract'
-import {
-  MOBILE_WEB_BUNDLE_CAPABILITY,
-  MOBILE_WEB_BUNDLE_RANGE_CAPABILITY
-} from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import { MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { mobileWebBundleRangeRead } from './mobile-web-bundle-operations'
-import { mobileWebBundleReadMethodFor } from './mobile-web-bundle-read-method'
 
 function rangeReply(overrides: Record<string, unknown> = {}) {
   return {
@@ -70,27 +65,5 @@ describe('mobile web bundle range reply reader', () => {
     expect(mobileWebBundleRangeRead.method).toBe(MOBILE_WEB_BUNDLE_RANGE_METHOD)
     expect(mobileWebBundleRangeRead.acceptance).toBe('require-result-or-throw')
     expect(mobileWebBundleRangeRead.barrier).toBe('on-settle')
-  })
-})
-
-describe('which read method a host is paged with', () => {
-  const NEW_DESKTOP = [
-    'files.pathsExist',
-    MOBILE_WEB_BUNDLE_CAPABILITY,
-    MOBILE_WEB_BUNDLE_RANGE_CAPABILITY,
-    'terminal.quick-commands.v1'
-  ]
-  /** Derived, never written down: the one string removed from what the new desktop sends. */
-  const OLD_DESKTOP = NEW_DESKTOP.filter(
-    (capability) => capability !== MOBILE_WEB_BUNDLE_RANGE_CAPABILITY
-  )
-
-  it('pages a new client against a new host in ranges', () => {
-    expect(mobileWebBundleReadMethodFor(NEW_DESKTOP)).toBe('range')
-  })
-
-  it('pages a new client against an old host in chunks', () => {
-    expect(mobileWebBundleReadMethodFor(OLD_DESKTOP)).toBe('chunk')
-    expect(mobileWebBundleReadMethodFor([])).toBe('chunk')
   })
 })

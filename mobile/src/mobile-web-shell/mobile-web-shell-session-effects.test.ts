@@ -4,7 +4,7 @@ import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-cont
 /** Each place a read of the host's generation can fail, and the cause it reports. */
 const doubles = vi.hoisted(() => ({
   manifest: (): Promise<unknown> => Promise.reject(new Error('no manifest staged')),
-  fetch: (_args: unknown): Promise<unknown> => Promise.reject(new Error('no fetch staged'))
+  fetch: (): Promise<unknown> => Promise.reject(new Error('no fetch staged'))
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
@@ -13,13 +13,9 @@ vi.mock('../transport/rpc-operation', () => ({
   runRpcOperation: () => doubles.manifest()
 }))
 vi.mock('../transport/mobile-web-bundle-fetch', () => ({
-  fetchMobileWebBundle: (args: unknown) => doubles.fetch(args)
+  fetchMobileWebBundle: () => doubles.fetch()
 }))
 
-import {
-  MOBILE_WEB_BUNDLE_CAPABILITY,
-  MOBILE_WEB_BUNDLE_RANGE_CAPABILITY
-} from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
@@ -81,15 +77,10 @@ function collect(): {
   return { events, send: (event) => events.push(event) }
 }
 
-async function runDownload(
-  client: RpcClient | null,
-  store: GenerationStore,
-  hostCapabilities: readonly string[] = [MOBILE_WEB_BUNDLE_CAPABILITY]
-) {
+async function runDownload(client: RpcClient | null, store: GenerationStore) {
   const { events, send } = collect()
   await download({
     client,
-    hostCapabilities,
     store,
     hostKey: 'k',
     flow: 3,
@@ -176,20 +167,5 @@ describe('the download', () => {
 
   it('that lands whole reports no failure', async () => {
     expect(await runDownload(CLIENT, storeThat(null))).toEqual([])
-  })
-
-  it('pages a host that advertised ranges in ranges, and any other in chunks', async () => {
-    const seen: unknown[] = []
-    const landed = doubles.fetch
-    doubles.fetch = (args) => {
-      seen.push(args)
-      return landed(args)
-    }
-    await runDownload(CLIENT, storeThat(null), [
-      MOBILE_WEB_BUNDLE_CAPABILITY,
-      MOBILE_WEB_BUNDLE_RANGE_CAPABILITY
-    ])
-    await runDownload(CLIENT, storeThat(null))
-    expect(seen).toMatchObject([{ readMethod: 'range' }, { readMethod: 'chunk' }])
   })
 })
