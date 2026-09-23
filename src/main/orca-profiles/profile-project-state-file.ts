@@ -114,11 +114,16 @@ export function readProfileStateWithRevision(
 }
 
 function parseProfileState(rawJson: string | undefined): TransferProfileState {
-  const defaults = getDefaultPersistedState(homedir())
   if (rawJson === undefined) {
-    return structuredClone(defaults)
+    return structuredClone(getDefaultPersistedState(homedir()))
   }
-  const parsed: Partial<PersistedState> = JSON.parse(rawJson)
+  return normalizeProfileProjectState(JSON.parse(rawJson))
+}
+
+export function normalizeProfileProjectState(
+  parsed: Partial<PersistedState>
+): TransferProfileState {
+  const defaults = getDefaultPersistedState(homedir())
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,

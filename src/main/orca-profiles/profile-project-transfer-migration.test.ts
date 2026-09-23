@@ -23,7 +23,7 @@ import {
 import { transferOrcaProfileProject } from './profile-project-transfer'
 import { readProfileStateWithRevision } from './profile-project-state-file'
 import { recoverPendingProfileProjectMoves } from './profile-project-move-intent'
-import * as profileProjectStateFile from './profile-project-state-file'
+import * as profileProjectDomainState from './profile-project-domain-state'
 
 vi.mock('../persistence/loading-store/store', () => {
   throw new Error('Profile transfers must not load inactive Stores')
@@ -256,9 +256,9 @@ describe('profile transfer migration', () => {
     (sourceJson) => {
       writeState('source', !sourceJson, [repo])
       writeState('target', sourceJson)
-      const originalWrite = profileProjectStateFile.writeProfileState
+      const originalWrite = profileProjectDomainState.writeProfileProjectDomainChanges
       const write = vi
-        .spyOn(profileProjectStateFile, 'writeProfileState')
+        .spyOn(profileProjectDomainState, 'writeProfileProjectDomainChanges')
         .mockImplementation((profileId, ...rest) => {
           if (profileId === 'source') {
             throw new Error('source commit interrupted')

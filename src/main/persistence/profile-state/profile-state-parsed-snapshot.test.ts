@@ -9,7 +9,8 @@ import {
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateDocuments,
   readProfileStateParsedSnapshot,
-  readProfileStateSnapshot
+  readProfileStateSnapshot,
+  validateProfileStateSnapshot
 } from './profile-state-documents'
 
 const directories: string[] = []
@@ -54,6 +55,7 @@ describe('checked profile state values', () => {
       db.exec(sql)
       expect(() => readProfileStateParsedSnapshot(db)).toThrow(message)
       expect(() => readProfileStateSnapshot(db)).toThrow(message)
+      expect(() => validateProfileStateSnapshot(db)).toThrow(message)
     } finally {
       db.close()
     }
@@ -70,6 +72,7 @@ describe('checked profile state values', () => {
       )
       expect(() => readProfileStateParsedSnapshot(db)).toThrow('identity is corrupt')
       expect(() => readProfileStateSnapshot(db)).toThrow('identity is corrupt')
+      expect(() => validateProfileStateSnapshot(db)).toThrow('identity is corrupt')
     } finally {
       db.close()
     }

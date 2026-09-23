@@ -1,6 +1,6 @@
 /** Full serialization retains its bytes/hash; domain serialization preserves bytes and equality. */
 import { createHash, randomUUID } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
 import {
   applySecretSentinelSubstitutions,
@@ -32,8 +32,11 @@ function expectIdenticalToPrevious(
 ): void {
   const before = previousImplementation(serialized, subs, degradedPrefix)
   const after = applySecretSentinelSubstitutions(serialized, subs, degradedPrefix)
+  const text = applySecretSentinelSubstitutions(serialized, subs, degradedPrefix, 'text')
   expect(after.payload.equals(before.payload)).toBe(true)
   expect(after.stateHash).toBe(before.stateHash)
+  expect(text.payload).toBe(before.payload.toString('utf8'))
+  expect(text.stateHash).toBe(before.stateHash)
 }
 
 function sentinel(): string {
@@ -96,6 +99,31 @@ describe('complete profile domain serialization', () => {
       serializeCompleteProfileStateDomains({ ...state, nullable: undefined }, firstSub, '')
         .stateHash
     ).not.toBe(first.stateHash)
+  })
+
+  it('retains unknown own keys and encodes bytes only when a complete payload is requested', () => {
+    const state = Object.fromEntries([
+      ['9', 9],
+      ['3', 3],
+      ['z', null],
+      ['__proto__', { own: true }],
+      ['constructor', false],
+      ['future', { text: '雪😀\ud800', absent: undefined }]
+    ])
+    const expected = JSON.stringify(state)
+    const encode = vi.spyOn(Buffer, 'from')
+    try {
+      const serialized = serializeCompleteProfileStateDomains(state, [], 'safeStorage-degraded\0')
+      expect(serialized.domains.map(({ domain }) => domain)).toEqual(Object.keys(state))
+      expect(serialized.domains.find(({ domain }) => domain === '__proto__')?.payload).toBe(
+        '{"own":true}'
+      )
+      expect(encode).not.toHaveBeenCalled()
+      expect(serialized.payload.toString('utf8')).toBe(expected)
+      expect(encode).toHaveBeenCalledExactlyOnceWith(expected, 'utf8')
+    } finally {
+      encode.mockRestore()
+    }
   })
 })
 
@@ -172,6 +200,39 @@ describe('applySecretSentinelSubstitutions', () => {
     expect(payload.toString('utf8')).not.toContain(subs[0].sentinel)
   })
 
+  it.each(['', 'safeStorage-degraded\0'])(
+    'keeps the first duplicate and handles adjacent escaped sentinels with prefix %j',
+    (prefix) => {
+      const slot = 'orca-$a/.*+?^${}()|[]\\"雪'
+      const subs = [
+        { sentinel: slot, blob: 'cipher-other-token-"\\\n雪\ud800', hashValue: 'plain-😀' },
+        { sentinel: slot, blob: 'duplicate-must-not-win', hashValue: 'wrong-plain' },
+        { sentinel: 'other-token', blob: 'last', hashValue: 'last-plain' }
+      ]
+      const serialized = JSON.stringify({ nested: { [slot]: `${slot}${slot}other-token` } })
+      const expectedPayload = JSON.stringify({
+        nested: { [subs[0].blob]: subs[0].blob + subs[0].blob + subs[2].blob }
+      })
+      const expectedHashInput = JSON.stringify({
+        nested: { [subs[0].hashValue]: subs[0].hashValue + subs[0].hashValue + subs[2].hashValue }
+      })
+      const expectedHash = createHash('sha1').update(prefix).update(expectedHashInput).digest('hex')
+      for (const actual of [
+        applySecretSentinelSubstitutions(serialized, subs, prefix),
+        applySecretSentinelSubstitutions(serialized, subs, prefix, 'text')
+      ]) {
+        expect(actual.payload.toString()).toBe(expectedPayload)
+        expect(actual.stateHash).toBe(expectedHash)
+      }
+    }
+  )
+
+  it('leaves domains without matching sentinels byte-identical', () => {
+    const serialized = JSON.stringify({ future: { output: '雪😀\ud800', present: null } })
+    const subs = [{ sentinel: 'missing-slot', blob: 'cipher', hashValue: 'plain' }]
+    expectIdenticalToPrevious(serialized, subs, 'safeStorage-degraded\0')
+  })
+
   it('copies and UTF-8 encodes the full state once, not once per sentinel per side', () => {
     const subs: SecretSentinelSubstitution[] = Array.from({ length: 3 }, () => ({
       sentinel: sentinel(),
@@ -227,13 +288,17 @@ describe('applySecretSentinelSubstitutions', () => {
 
     const before = counted(() => previousImplementation(serialized, subs, ''))
     const after = counted(() => applySecretSentinelSubstitutions(serialized, subs, ''))
+    const text = counted(() => applySecretSentinelSubstitutions(serialized, subs, '', 'text'))
 
     // Two `String.replace` calls over the whole state per sentinel — payload and hash input.
     expect(before.fullStateReplaces).toBe(subs.length * 2)
     expect(after.fullStateReplaces).toBe(0)
+    expect(text.fullStateReplaces).toBe(0)
     // The old path encoded the state twice: once for sha1, once for the file write.
     expect(before.encodedChars).toBeGreaterThan(serialized.length * 1.9)
     expect(after.encodedChars).toBeLessThan(serialized.length * 1.1)
     expect(after.encodedChars).toBeGreaterThan(serialized.length * 0.9)
+    expect(text.encodedChars).toBeLessThan(serialized.length * 1.1)
+    expect(text.encodedChars).toBeGreaterThan(serialized.length * 0.9)
   })
 })

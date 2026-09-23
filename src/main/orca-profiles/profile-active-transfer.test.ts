@@ -8,6 +8,7 @@ import { openProfileStateDatabase } from '../persistence/profile-state/profile-s
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import * as stateFiles from './profile-project-state-file'
+import * as domainState from './profile-project-domain-state'
 import * as moveIntents from './profile-project-move-intent'
 import { transferActiveProfileProject } from './profile-active-transfer'
 import { transferOrcaProfileProject } from './profile-project-transfer'
@@ -63,13 +64,15 @@ function openStore() {
 }
 
 function interruptSourceCommit() {
-  const originalWrite = stateFiles.writeProfileState
-  return vi.spyOn(stateFiles, 'writeProfileState').mockImplementation((profileId, ...rest) => {
-    if (profileId === 'source') {
-      throw new Error('source commit interrupted')
-    }
-    return originalWrite(profileId, ...rest)
-  })
+  const originalWrite = domainState.writeProfileProjectDomainChanges
+  return vi
+    .spyOn(domainState, 'writeProfileProjectDomainChanges')
+    .mockImplementation((profileId, ...rest) => {
+      if (profileId === 'source') {
+        throw new Error('source commit interrupted')
+      }
+      return originalWrite(profileId, ...rest)
+    })
 }
 
 beforeEach(() => {

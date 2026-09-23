@@ -5,7 +5,7 @@ import { durableWriteTempPath, renameDurableSync } from '../../durable-file-writ
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
-import { readProfileStateSnapshot } from './profile-state-documents'
+import { validateProfileStateSnapshot } from './profile-state-documents'
 import {
   profileStateDatabaseBackups,
   profileStateDatabaseBackupFiles
@@ -101,11 +101,11 @@ function validateRecoverySnapshot(path: string, profileId: string): number {
     if (opened.db.pragma('journal_mode', { simple: true }) !== 'delete') {
       throw new Error('Profile state database backup must use a self-contained journal mode')
     }
-    const snapshot = readProfileStateSnapshot(opened.db)
-    if (snapshot.revision === 0) {
+    const revision = validateProfileStateSnapshot(opened.db)
+    if (revision === 0) {
       throw new Error('Profile state database backup contains no committed profile state')
     }
-    return snapshot.revision
+    return revision
   } finally {
     opened.db.close()
   }

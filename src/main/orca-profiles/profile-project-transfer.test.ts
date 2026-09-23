@@ -26,10 +26,43 @@ import {
 } from '../persistence/profile-state/profile-state-documents'
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import {
-  createProfileProjectMoveIntent,
   persistProfileProjectMoveIntent,
-  recoverPendingProfileProjectMoves
+  recoverPendingProfileProjectMoves,
+  type ProfileProjectMoveIntent
 } from './profile-project-move-intent'
+import type { ReadProfileStateResult } from './profile-project-state-file'
+
+function createProfileProjectMoveIntent(args: {
+  sourceProfileId: string
+  targetProfileId: string
+  source: ReadProfileStateResult
+  target: ReadProfileStateResult
+  sourceAfterJson: string
+  targetAfterJson: string
+}): Extract<ProfileProjectMoveIntent, { version: 1 }> {
+  if (
+    args.source.revision === undefined ||
+    args.target.revision === undefined ||
+    args.source.serialized === undefined ||
+    args.target.serialized === undefined
+  ) {
+    throw new Error('Legacy move fixture requires two serialized SQLite snapshots')
+  }
+  return {
+    version: 1,
+    id: '11111111-1111-1111-1111-111111111111',
+    sourceProfileId: args.sourceProfileId,
+    targetProfileId: args.targetProfileId,
+    expectedSourceRevision: args.source.revision,
+    expectedTargetRevision: args.target.revision,
+    sourceBeforeHash: hashProfileStateJson(args.source.serialized),
+    targetBeforeHash: hashProfileStateJson(args.target.serialized),
+    sourceAfterHash: hashProfileStateJson(args.sourceAfterJson),
+    targetAfterHash: hashProfileStateJson(args.targetAfterJson),
+    sourceAfterJson: args.sourceAfterJson,
+    targetAfterJson: args.targetAfterJson
+  }
+}
 
 const testState = { dir: '' }
 
