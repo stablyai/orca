@@ -217,6 +217,57 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.composerProps?.isWorking).toBe(true)
   })
 
+  it('keeps compacting and goal status visible while a question owns the input area', () => {
+    const payload = JSON.stringify({
+      goal: {
+        objective: 'Ship the parser',
+        status: 'active',
+        updatedAt: 1_789_067_988
+      }
+    })
+    mocks.journalItems = [
+      {
+        itemId: 'goal-active',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1_789_067_988_000,
+        body: {
+          kind: 'status',
+          text: 'Goal set: Ship the parser',
+          providerFrame: {
+            provider: 'codex',
+            kind: 'notification:thread/goal/updated',
+            payload: {
+              head: payload,
+              byteLength: payload.length,
+              digest: 'goal-digest',
+              truncated: false
+            }
+          }
+        }
+      }
+    ]
+    mocks.turnActivity = { kind: 'description', text: 'Compacting the conversation' }
+    mocks.promptItems = legacySingleQuestionPromptItems
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-status-question"
+        sessionId="session-status-question"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    expect(screen.getByRole('status').textContent).toContain('Compacting the conversation')
+    expect(screen.getByText('Ship the parser')).toBeTruthy()
+    expect(screen.getByText('Active')).toBeTruthy()
+    expect(mocks.questionCardProps).not.toBeNull()
+    expect(screen.queryByTestId('structured-composer')).toBeNull()
+  })
+
   it('suppresses live turn activity for a pending approval but keeps background work visible', () => {
     const approvalItems: AgentJournalRenderItem[] = [
       {

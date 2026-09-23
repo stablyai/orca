@@ -23,6 +23,8 @@ import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-a
 import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
+import { isNativeChatCompacting, selectNativeChatGoal } from './native-chat-runtime-status'
+import { NativeChatRuntimeStatus } from './NativeChatRuntimeStatus'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -104,6 +106,10 @@ export function NativeChatStructuredSession(
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
   const prompt = controller.prompts[0] ?? null
+  const goal = useMemo(
+    () => selectNativeChatGoal(controller.journalItems),
+    [controller.journalItems]
+  )
   const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
   const approval = approvalBody
     ? {
@@ -239,6 +245,10 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
+      <NativeChatRuntimeStatus
+        goal={goal}
+        compacting={isNativeChatCompacting(controller.turnActivity)}
+      />
       {prompt && approval ? (
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}

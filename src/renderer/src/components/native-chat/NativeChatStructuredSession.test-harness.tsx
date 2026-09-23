@@ -54,6 +54,7 @@ export function createStructuredSessionMocks() {
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
+    journalItems: Array<AgentJournalRenderItem>(),
     respond: vi.fn<(...args: never[]) => unknown>(),
     cancel: vi.fn<(...args: never[]) => unknown>(),
     handlePasteEvent: vi.fn<(...args: never[]) => unknown>(),
@@ -63,6 +64,7 @@ export function createStructuredSessionMocks() {
     showBackgroundTasks: false,
     isWorking: false,
     turnId: null as string | null,
+    turnActivity: nullable<{ kind: 'description'; text: string }>(),
     supportsBackgroundTaskStop: false,
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
@@ -115,11 +117,13 @@ export function createStructuredSessionMocks() {
             loadingOlder: false,
             loadOlder: vi.fn<() => Promise<void>>(),
             prompts: mocks.promptItems,
+            journalItems: mocks.journalItems,
             outbox: outbox.outbox,
             blockedClientMessageId: outbox.blockedClientMessageId,
             send: outbox.send,
             retry: outbox.retry,
             isWorking: mocks.isWorking,
+            turnActivity: mocks.turnActivity,
             backgroundTasks: {
               show: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
               isMonitoring: mocks.monitoringBackgroundTasks,
@@ -228,6 +232,7 @@ export function createStructuredSessionMocks() {
     mocks.approvalCardProps = null
     mocks.questionCardProps = null
     mocks.promptItems = []
+    mocks.journalItems = []
     mocks.respond.mockReset()
     mocks.cancel.mockReset()
     mocks.handlePasteEvent.mockReset()
@@ -237,6 +242,7 @@ export function createStructuredSessionMocks() {
     mocks.showBackgroundTasks = false
     mocks.isWorking = false
     mocks.turnId = null
+    mocks.turnActivity = null
     mocks.supportsBackgroundTaskStop = false
     mocks.supportsBackgroundTaskStopAll = true
     mocks.stopBackgroundTask.mockReset()
