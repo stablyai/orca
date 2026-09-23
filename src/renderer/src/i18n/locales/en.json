@@ -10723,8 +10723,8 @@
             }
           },
           "history": {
-            "scopeTitle": "Scope shell history to each workspace",
-            "scopeDescription": "Keep Arrow Up, reverse search, and shell autosuggestions isolated between workspaces. Changes apply to new terminal sessions.",
+            "scopeTitle": "Scope bash, zsh, and fish history by workspace",
+            "scopeDescription": "Keeps command history separate between workspaces for bash, zsh, and fish. PowerShell and Command Prompt are unaffected. Changes apply to new terminal sessions.",
             "search": {
               "shell": "shell",
               "history": "history",

@@ -7,11 +7,11 @@ export const getTerminalShellHistorySearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
       'auto.components.settings.terminal.history.scopeTitle',
-      'Scope shell history to each workspace'
+      'Scope bash, zsh, and fish history by workspace'
     ),
     description: translate(
       'auto.components.settings.terminal.history.scopeDescription',
-      'Keep Arrow Up, reverse search, and shell autosuggestions isolated between workspaces. Changes apply to new terminal sessions.'
+      'Keeps command history separate between workspaces for bash, zsh, and fish. PowerShell and Command Prompt are unaffected. Changes apply to new terminal sessions.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.history.search.shell', 'shell'),

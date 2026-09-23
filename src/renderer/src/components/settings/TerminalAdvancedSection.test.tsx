@@ -121,7 +121,7 @@ describe('TerminalAdvancedSection scrollback rows', () => {
       (heading) => heading.textContent
     )
     const toggle = container.querySelector<HTMLButtonElement>(
-      'button[role="switch"][aria-label="Scope shell history to each workspace"]'
+      'button[role="switch"][aria-label="Scope bash, zsh, and fish history by workspace"]'
     )
 
     expect(headings).toEqual(['Advanced'])

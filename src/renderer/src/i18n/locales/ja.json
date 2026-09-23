@@ -9316,8 +9316,8 @@
             }
           },
           "history": {
-            "scopeTitle": "ワークスペースごとにシェル履歴を分離",
-            "scopeDescription": "上矢印で呼び出す履歴、逆方向検索、シェルの自動候補をワークスペース間で分離します。変更は新しいターミナルセッションに適用されます。",
+            "scopeTitle": "ワークスペースごとに bash・zsh・fish の履歴を分離",
+            "scopeDescription": "bash、zsh、fish のコマンド履歴をワークスペースごとに分離します。PowerShell とコマンド プロンプトには影響しません。変更は新しいターミナルセッションに適用されます。",
             "search": {
               "shell": "シェル",
               "history": "履歴",

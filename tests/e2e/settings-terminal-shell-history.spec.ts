@@ -31,12 +31,13 @@ test('finds and persists the shell history opt-out', async ({ orcaPage }) => {
   await getSettingsSearch(orcaPage).fill('HISTFILE')
 
   const toggle = orcaPage.getByRole('switch', {
-    name: 'Scope shell history to each workspace'
+    name: 'Scope bash, zsh, and fish history by workspace'
   })
   await expect(orcaPage.getByRole('heading', { name: 'Advanced', exact: true })).toBeVisible()
   await expect(orcaPage.getByRole('heading', { name: 'Shell History', exact: true })).toHaveCount(0)
   await expect(toggle).toBeVisible()
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await expect(orcaPage.getByText('PowerShell and Command Prompt are unaffected.')).toBeVisible()
   await expect(orcaPage.getByText('Changes apply to new terminal sessions.')).toBeVisible()
 
   await toggle.click()

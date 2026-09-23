@@ -4,10 +4,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 const LOCALIZED_HISTORY = [
-  ['es', 'Limitar el historial del shell a cada espacio de trabajo'],
-  ['ja', 'ワークスペースごとにシェル履歴を分離'],
-  ['ko', '워크스페이스별로 셸 기록 분리'],
-  ['zh', '按工作区隔离 Shell 历史记录']
+  ['es', 'Separar el historial de bash, zsh y fish por espacio de trabajo'],
+  ['ja', 'ワークスペースごとに bash・zsh・fish の履歴を分離'],
+  ['ko', '워크스페이스별로 bash·zsh·fish 기록 분리'],
+  ['zh', '按工作区隔离 bash、zsh 和 fish 历史记录']
 ] as const
 
 describe('terminal shell history localization', () => {
@@ -19,6 +19,7 @@ describe('terminal shell history localization', () => {
     await i18n.changeLanguage(locale)
 
     expect(getTerminalShellHistorySearchEntry().title).toBe(controlTitle)
+    expect(getTerminalShellHistorySearchEntry().description).toContain('PowerShell')
   })
 
   it.each([

@@ -44,7 +44,7 @@ describe('TerminalShellHistorySetting', () => {
       )
     })
     const toggle = container.querySelector<HTMLButtonElement>(
-      'button[role="switch"][aria-label="Scope shell history to each workspace"]'
+      'button[role="switch"][aria-label="Scope bash, zsh, and fish history by workspace"]'
     )
     if (!toggle) {
       throw new Error('shell history toggle not found')
@@ -56,6 +56,7 @@ describe('TerminalShellHistorySetting', () => {
     const toggle = renderSetting(true)
 
     expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(container.textContent).toContain('PowerShell and Command Prompt are unaffected.')
     expect(container.textContent).toContain('Changes apply to new terminal sessions.')
   })
 

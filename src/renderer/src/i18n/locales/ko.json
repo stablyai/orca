@@ -9284,8 +9284,8 @@
             }
           },
           "history": {
-            "scopeTitle": "워크스페이스별로 셸 기록 분리",
-            "scopeDescription": "위쪽 화살표로 불러오는 기록, 역방향 검색, 셸 자동 제안을 워크스페이스 간에 분리합니다. 변경 사항은 새 터미널 세션부터 적용됩니다.",
+            "scopeTitle": "워크스페이스별로 bash·zsh·fish 기록 분리",
+            "scopeDescription": "bash, zsh, fish의 명령 기록을 워크스페이스별로 분리합니다. PowerShell과 명령 프롬프트에는 적용되지 않습니다. 변경 사항은 새 터미널 세션부터 적용됩니다.",
             "search": {
               "shell": "셸",
               "history": "기록",
