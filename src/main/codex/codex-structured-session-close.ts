@@ -52,6 +52,8 @@ export function handleCodexSessionExit(input: {
   session.dispatchEchoes.clear()
   session.backgroundTasks.clear()
   input.onBackgroundTasksChanged?.(input.sessionId, null)
+  // Every close path funnels here, so the session's children end with it on each one.
+  session.backgroundTasks.publishChildWork()
   session.unbindReadingControl?.()
   input.onEvent?.(event)
   session.prompts.clear()

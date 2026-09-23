@@ -11,6 +11,7 @@ import type {
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
@@ -75,6 +76,8 @@ export type CodexStructuredSessionAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
+  /** What the session's child work did, delivered after the journal handled the frame. */
+  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** Identity for a send admitted earlier, once Codex echoes the user message. */
   onDispatchSettledLate?: (input: {
     sessionId: string

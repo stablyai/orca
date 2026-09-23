@@ -109,6 +109,11 @@ export class CodexSubagentExecutions {
     return this.children.get(agentThreadId)?.turnOrdinals.get(turnId) ?? null
   }
 
+  /** The child as last observed, without creating one. */
+  find(agentThreadId: string): Readonly<CodexExecutionChild> | undefined {
+    return this.children.get(agentThreadId)
+  }
+
   workingChildren(): CodexExecutionChild[] {
     return [...this.children.values()].filter(
       (child) => child.registered && child.execution?.state === 'working'

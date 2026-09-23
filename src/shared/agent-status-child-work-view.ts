@@ -60,7 +60,8 @@ export type AgentChildWorkViewAlias = Pick<
 const PROVIDER_ID_ALIAS_RANK: Record<AgentChildWorkAliasKind, number> = {
   task_id: 0,
   thread_id: 1,
-  tool_use_id: 2
+  tool_use_id: 2,
+  turn_id: 3
 }
 const PROVIDER_ID_ALIAS_ORDER = [...AGENT_CHILD_WORK_ALIAS_KINDS].sort(
   (left, right) => PROVIDER_ID_ALIAS_RANK[left] - PROVIDER_ID_ALIAS_RANK[right]

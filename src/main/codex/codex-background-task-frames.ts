@@ -15,6 +15,8 @@ export type CodexBackgroundTaskFrame =
       agentThreadId: string
       label: string | null
       parentTurnId: string | null | undefined
+      /** The reporting thread, for a `started` activity: the agent that spawned the child. */
+      spawnerThreadId: string | undefined
     }
   | {
       kind: 'turn'
@@ -67,6 +69,8 @@ export function readCodexBackgroundTaskFrame(
     parentTurnId:
       activity.kind === 'started' || activity.kind === 'interacted'
         ? readCodexTurnId(event.params)
-        : undefined
+        : undefined,
+    // Only `started` names the spawner: other kinds ride whichever agent acted.
+    spawnerThreadId: activity.kind === 'started' ? event.threadId : undefined
   }
 }

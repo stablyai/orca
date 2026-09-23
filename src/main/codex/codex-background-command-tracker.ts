@@ -2,13 +2,18 @@ import type { AgentSessionBackgroundTask } from '../../shared/agent-session-wire
 import type { CodexBackgroundTaskEvent } from './codex-background-task-frames'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import { readRecord, readString } from './codex-item-field-readers'
-import { readCodexThreadItem } from './codex-structured-item-translation'
+import { readCodexThreadItem, type CodexThreadItem } from './codex-structured-item-translation'
 import { MAX_CODEX_ITEM_STREAM_METADATA_BYTES } from './codex-item-stream-retention'
 
 const MAX_SETTLED_COMMANDS = 128
 const MAX_DESCRIPTION_CHARS = 512
 
 type Command = { threadId: string; task: AgentSessionBackgroundTask; bytes: number }
+
+/** What one frame did to a persistent command: it started, or its process exited with `item`. */
+export type CodexBackgroundCommandChange =
+  | { type: 'started'; threadId: string; task: AgentSessionBackgroundTask }
+  | { type: 'ended'; threadId: string; taskId: string; item: CodexThreadItem }
 
 /** The label's reserved share of the description. Reserved, not merely capped:
  *  a label free to spend the whole budget clips away the command it qualifies,
@@ -65,12 +70,12 @@ export class CodexBackgroundCommandTracker {
     )
   }
 
-  observe(event: CodexBackgroundTaskEvent): void {
+  observe(event: CodexBackgroundTaskEvent): CodexBackgroundCommandChange | null {
     const parsed = this.parse(event)
     if (!parsed || this.settled.has(parsed.key)) {
-      return
+      return null
     }
-    const { key, command, completed } = parsed
+    const { key, command, completed, item } = parsed
     const existing = this.commands.get(key)
     if (completed) {
       if (existing) {
@@ -83,10 +88,12 @@ export class CodexBackgroundCommandTracker {
         this.settledBytes += bytes
       }
       this.trimSettled()
-      return
+      return existing
+        ? { type: 'ended', threadId: existing.threadId, taskId: existing.task.id, item }
+        : null
     }
     if (existing) {
-      return
+      return null
     }
     if (this.liveBytes + command.bytes > this.maxMetadataBytes) {
       throw new Error('Codex command metadata was not admitted before observation')
@@ -94,6 +101,7 @@ export class CodexBackgroundCommandTracker {
     this.commands.set(key, command)
     this.liveBytes += command.bytes
     this.trimSettled()
+    return { type: 'started', threadId: command.threadId, task: command.task }
   }
 
   tasks(
@@ -111,6 +119,13 @@ export class CodexBackgroundCommandTracker {
           ? { ...task, description: qualifiedDescription(label, task.description) }
           : task
       })
+  }
+
+  /** The live persistent commands one thread launched, as the strip would publish them. */
+  threadTasks(threadId: string): AgentSessionBackgroundTask[] {
+    return [...this.commands.values()]
+      .filter((command) => command.threadId === threadId)
+      .map((command) => command.task)
   }
 
   clear(): void {
@@ -136,7 +151,7 @@ export class CodexBackgroundCommandTracker {
 
   private parse(
     event: CodexBackgroundTaskEvent
-  ): { key: string; command: Command; completed: boolean } | null {
+  ): { key: string; command: Command; completed: boolean; item: CodexThreadItem } | null {
     if (event.method !== 'item/started' && event.method !== 'item/completed') {
       return null
     }
@@ -163,6 +178,7 @@ export class CodexBackgroundCommandTracker {
     return {
       key,
       completed,
+      item,
       command: {
         ...value,
         bytes:

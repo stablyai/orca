@@ -245,6 +245,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     modelCatalog: agentModelCatalogStore,
     onBackgroundTasksChanged: (sessionId, state) =>
       host?.publishBackgroundTaskState(sessionId, state),
+    onChildWorkEvidence: (sessionId, evidence) =>
+      host?.publishChildWorkEvidence(sessionId, evidence),
     onDispatchSettledLate,
     onPrimaryThreadStoppedRunning: ({ sessionId }) => {
       void host
