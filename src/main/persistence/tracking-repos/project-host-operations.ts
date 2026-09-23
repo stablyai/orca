@@ -1,3 +1,4 @@
+import { applyProjectCoordinationUpdate } from '../../../shared/project-coordination'
 import type {
   Project,
   ProjectHostSetup,
@@ -86,6 +87,12 @@ export class ProjectHostPersistenceOperations {
     const project = this.state.projects.find((entry) => entry.id === id)
     if (!project) {
       return null
+    }
+    if (updates.coordination) {
+      project.coordination = applyProjectCoordinationUpdate(
+        project.coordination,
+        updates.coordination
+      )
     }
     if ('localWindowsRuntimePreference' in updates) {
       for (const repoId of project.sourceRepoIds) {

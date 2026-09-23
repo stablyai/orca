@@ -49,6 +49,19 @@ function makeState(overrides: Partial<PersistedState>): PersistedState {
 }
 
 describe('rebuildRepoBackedProjectState', () => {
+  it('preserves saved project context when rebuilding transferred profile state', () => {
+    const coordination = { goal: 'Ship', instructions: 'Review first', revision: 3 }
+    const rebuilt = rebuildRepoBackedProjectState(
+      makeState({
+        repos: [makeRepo()],
+        projects: [makeProject({ id: 'repo:r1', sourceRepoIds: ['r1'], coordination })]
+      })
+    )
+    expect(
+      rebuilt.projects?.find((project) => project.sourceRepoIds.includes('r1'))?.coordination
+    ).toEqual(coordination)
+  })
+
   it('carries project state and independent setups across a repo remote identity change', () => {
     const originProjectId = 'git:git.example.com/acme/app'
     const rebuilt = rebuildRepoBackedProjectState(

@@ -1,3 +1,4 @@
+import { ProjectCoordinationConflictError } from '../../../shared/project-coordination'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {
@@ -24,6 +25,12 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('preserves a project context revision conflict across RPC', () => {
+    expect(
+      mapRuntimeError('request', { runtimeId: 'host' }, new ProjectCoordinationConflictError())
+    ).toMatchObject({ ok: false, error: { code: 'project_coordination_conflict' } })
+  })
+
   it('preserves the stable skill failure category and retryability across RPC', () => {
     expect(
       mapRuntimeError(

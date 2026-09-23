@@ -18155,5 +18155,35 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "projectHome": {
+    "saved": "Saved.",
+    "reloaded": "Latest saved context loaded below. Your draft is preserved; compare it before saving again.",
+    "loadedLatest": "Loaded latest saved context.",
+    "context": "Project context",
+    "goal": "Goal",
+    "goalPlaceholder": "What should this project accomplish?",
+    "instructions": "Instructions",
+    "instructionsPlaceholder": "Conventions, constraints, and context for the coordinator",
+    "save": "Save context",
+    "loadLatest": "Load latest saved context",
+    "discardDraft": "Discard draft",
+    "savedContext": "Saved context used for new coordinators",
+    "coordinator": "Coordinator",
+    "launchHelp": "Open a new agent with a draft of your saved goal and instructions. Review and send the draft to begin a run.",
+    "saveBeforeLaunch": "Save your goal and instructions before opening a coordinator. Unsaved drafts are kept while you navigate within Orca.",
+    "workspace": "Workspace",
+    "noWorkspace": "Open a workspace in this project first",
+    "agent": "Agent",
+    "noAgent": "No enabled agents detected",
+    "preview": "Preview coordinator draft",
+    "opening": "Opening…",
+    "launch": "Open coordinator draft",
+    "title": "Project home",
+    "back": "Back to workspace",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "choose": "Choose a project",
+    "open": "Project home"
   }
 }

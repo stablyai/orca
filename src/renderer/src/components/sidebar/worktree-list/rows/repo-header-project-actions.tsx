@@ -1,6 +1,8 @@
+import { useAppStore } from '@/store'
 import React from 'react'
 import {
   CircleX,
+  MessagesSquare,
   Ellipsis,
   Eye,
   FolderInput,
@@ -119,6 +121,10 @@ export function RepoHeaderProjectActionsMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        <DropdownMenuItem onSelect={() => useAppStore.getState().openProjectHome(repo)}>
+          <MessagesSquare className="size-3.5" />
+          {translate('projectHome.open', 'Project home')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => actions.onOpenRepoSettings(repo.id)}>
           <SlidersHorizontal className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
