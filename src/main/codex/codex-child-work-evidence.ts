@@ -62,7 +62,7 @@ export type CodexPendingChildWork = (observedAt: number) => AgentChildWorkEviden
 
 /** Evidence from a run only counts for that run: a fact recorded under another turn is stale. */
 function ofTurn<T extends { turnId: string | null }>(fact: T | undefined, turnId: string) {
-  return fact && (fact.turnId === null || fact.turnId === turnId) ? fact : undefined
+  return fact?.turnId === turnId ? fact : undefined
 }
 
 function commandLive(task: AgentSessionBackgroundTask, ownerId: string | null) {
@@ -139,7 +139,7 @@ export class CodexChildWorkEvidence {
     const threadId =
       frame?.kind === 'subagent'
         ? frame.agentThreadId
-        : frame?.kind === 'turn' || CHILD_FRAME_METHODS.has(event.method)
+        : frame || CHILD_FRAME_METHODS.has(event.method)
           ? event.threadId
           : null
     return threadId === this.primaryThreadId ? null : threadId
@@ -163,7 +163,11 @@ export class CodexChildWorkEvidence {
     if (!item || codexCommandOutlivesTurn(item)) {
       return
     }
-    const turnId = readCodexTurnId(event.params)
+    // A frame that names no turn belongs to the one the child is running.
+    const turnId =
+      readCodexTurnId(event.params) ??
+      this.executions.find(event.threadId)?.execution?.turnId ??
+      null
     const text = event.method === 'item/completed' ? codexChildMessageText(item) : undefined
     if (text) {
       facts.lastMessage = { turnId, text }

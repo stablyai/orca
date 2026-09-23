@@ -67,6 +67,8 @@ export class CodexBackgroundTaskTracker {
         frame.parentTurnId,
         frame.spawnerThreadId
       )
+    } else if (frame?.kind === 'turn-ended') {
+      this.executions.endTurn(frame.threadId, frame.turnId, frame.state)
     } else if (frame && frame.threadId !== this.primaryThreadId) {
       this.executions.observeTurn(frame.threadId, frame.turnId, frame.state)
     }
