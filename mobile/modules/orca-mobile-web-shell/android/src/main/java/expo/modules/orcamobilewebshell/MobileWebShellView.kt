@@ -15,6 +15,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.view.ViewCompat
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
@@ -265,6 +266,10 @@ internal class OrcaMobileWebShellView(
       ): Boolean = false
     }
     view.setDownloadListener { _, _, _, _, _ -> }
+    // A listener replaces the WebView's own onApplyWindowInsets, so the zeroed set is fed back in.
+    ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
+      ViewCompat.onApplyWindowInsets(target, insetsForShellPage(insets))
+    }
     return view
   }
 
