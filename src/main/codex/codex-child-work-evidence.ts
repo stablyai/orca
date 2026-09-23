@@ -168,13 +168,13 @@ export class CodexChildWorkEvidence {
     if (text) {
       facts.lastMessage = { turnId, text }
     }
-    const call = codexChildToolCall(item)
-    if (!call) {
-      return
-    }
+    // An end closes the call by id alone: its closing frame need not restate what it ran.
     if (codexToolCallEnded(event.method, item)) {
       facts.openCalls.delete(item.id)
-    } else if (!facts.openCalls.has(item.id)) {
+      return
+    }
+    const call = codexChildToolCall(item)
+    if (call && !facts.openCalls.has(item.id)) {
       facts.openCalls.set(item.id, { ...call, turnId })
       for (const stale of [...facts.openCalls.keys()].slice(0, -MAX_OPEN_CALLS_PER_CHILD)) {
         facts.openCalls.delete(stale)
