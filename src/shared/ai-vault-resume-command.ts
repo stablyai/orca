@@ -219,6 +219,7 @@ function buildAgentResumeInvocation(
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
     case 'claude':
+    case 'openclaude':
     case 'cursor':
     case 'gemini':
     case 'grok':

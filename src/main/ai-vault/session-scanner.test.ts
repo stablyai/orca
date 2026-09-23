@@ -400,7 +400,11 @@ describe('scanAiVaultSessions', () => {
       await writeEveryAgentVault(root)
     await writeMuseScannerFixture(roots.museSessionsDir)
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'darwin',
+      limit: AI_VAULT_AGENTS.length
+    })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(

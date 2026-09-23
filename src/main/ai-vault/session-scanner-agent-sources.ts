@@ -16,6 +16,7 @@ import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
+  openclaudeProjectsRootDirs,
   ompSessionsRootDirs,
   sessionRootDirs
 } from './session-scanner-roots'
@@ -112,6 +113,17 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // sessionId and aren't independently resumable, so they'd just duplicate the
     // parent as untitled rows; prune the subtree and read them on demand under
     // their parent instead.
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
+  },
+  // Why: OpenClaude is a Claude Code fork with the same transcript layout, so
+  // the source shape is Claude's with its own root.
+  openclaude: {
+    rootDirs: (options, wslHomeDirs) =>
+      openclaudeProjectsRootDirs({
+        openclaudeProjectsDir: options.openclaudeProjectsDir,
+        wslHomeDirs
+      }),
+    extensions: ['.jsonl'],
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
   codex: {

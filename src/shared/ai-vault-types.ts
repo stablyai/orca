@@ -3,6 +3,7 @@ import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
+  'openclaude',
   'codex',
   'hermes',
   'pi',
@@ -50,6 +51,7 @@ export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
+  openclaude: 'OpenClaude',
   codex: 'Codex',
   hermes: 'Hermes',
   pi: 'Pi',

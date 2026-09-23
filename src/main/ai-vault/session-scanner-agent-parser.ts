@@ -66,6 +66,8 @@ export async function parseAgentSessionFile(
   switch (candidate.agent) {
     case 'claude':
       return parseClaudeSessionFile(candidate.file, platform, messages)
+    case 'openclaude':
+      return parseClaudeSessionFile(candidate.file, platform, messages, 'openclaude')
     case 'codex':
       return parseCodexSessionFile(
         candidate.file,

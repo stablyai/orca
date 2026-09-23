@@ -13,6 +13,7 @@ import type { SessionSidecarObservation } from './session-sidecar-stat'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  openclaudeProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
   // Why: tests inject a sandbox "real ~/.codex" so real-home attribution

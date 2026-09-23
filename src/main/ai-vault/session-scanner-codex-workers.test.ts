@@ -199,6 +199,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
 
     const result = await scanAiVaultSessions({
       claudeProjectsDir: join(root, 'claude-projects'),
+      openclaudeProjectsDir: join(root, 'openclaude-projects'),
       codexSessionsDir,
       geminiSessionsDir: join(root, 'gemini-sessions'),
       antigravityBrainDir: join(root, 'antigravity-brain'),
