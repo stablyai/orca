@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  refreshGiteaStatus: vi.fn(),
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
@@ -65,7 +66,8 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
-  }
+  },
+  GiteaSetupSteps: () => <div data-testid="gitea-setup">Gitea setup</div>
 }))
 
 vi.mock('@/store', () => ({
@@ -76,6 +78,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: () => void
       checkLinearConnection: () => void
       checkJiraConnection: () => void
+      refreshGiteaStatus: () => void
       settingsSearchQuery: string
     }) => unknown
   ) =>
@@ -85,6 +88,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: mocks.refreshPreflightStatus,
       checkLinearConnection: mocks.checkLinearConnection,
       checkJiraConnection: mocks.checkJiraConnection,
+      refreshGiteaStatus: mocks.refreshGiteaStatus,
       settingsSearchQuery: ''
     })
 }))
@@ -137,7 +141,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      gitea: { connected: false, checking: false, visible: false }
     }
   })
 

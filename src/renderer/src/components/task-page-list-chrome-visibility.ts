@@ -30,5 +30,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    // Why: Gitea has no inline detail surface yet, so its list chrome always shows.
+    case 'gitea':
+      return false
   }
 }

@@ -16,6 +16,7 @@ import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
+import { createGiteaSlice } from './gitea'
 import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
@@ -74,6 +75,7 @@ export function createTestStore() {
     ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
     ...createJiraSlice(...a),
+    ...createGiteaSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
