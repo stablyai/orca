@@ -67,6 +67,8 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
   `ORCA` literally. If it fails, report that exact error instead of switching.
   When `ORCA_CLI_COMMAND` is set, that executable is its value: Orca sets it for
   its chat sessions, where bare `orca` in a login shell can reach another Orca.
+  Invoke it as `"$ORCA_CLI_COMMAND"` in a POSIX shell (including Git Bash) and
+  as `& $env:ORCA_CLI_COMMAND` in PowerShell.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
 
@@ -175,10 +177,10 @@ this chat once you are idle, saying `You have <n> orchestration message(s)`.
 
 1. Bind one Run and start the full independent wave, as above.
 2. End your turn.
-3. On each such turn run `ORCA orchestration check --json`, without `--wait`.
-   Process every message as above, then `ORCA orchestration check --ack
-   <delivery_id> --json`, which also returns the next batch. Repeat until it
-   returns no Delivery.
+3. On each such turn run the `check` it names, without `--wait`. Process every
+   message as above, then acknowledge with `ORCA orchestration check --ack
+   <delivery_id> --json`, which also returns the next batch. Repeat until no
+   Delivery is returned.
 4. End your turn again. When every expected Dispatch has settled, report.
 
 A turn with no new Delivery is a checkpoint, not a failure. The empty-wait
